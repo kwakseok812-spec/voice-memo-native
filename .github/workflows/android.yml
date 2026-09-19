@@ -26,15 +26,30 @@ jobs:
         run: echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
         env:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      # 고정 release keystore 를 Secret(base64)에서 복원한다.
+      # 이 키로 서명해야 새 버전 설치 때 "패키지 충돌" 없이 덮어설치가 된다.
+      # 복원한 keystore 는 커밋되지 않으며(빌드 순간에만 존재), 로그에도 노출하지 않는다.
+      - name: Restore release keystore (from secret)
+        run: echo "$ANDROID_KEYSTORE_B64" | base64 -d > android/app/smart-assistant-release.keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
       - name: Install JS deps
         run: npm ci
       - name: Capacitor sync (copy web + plugins into android)
         run: npx cap sync android
-      - name: Build debug APK
+      - name: Build debug APK (signed with fixed release key)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace \
+            -PsmartStoreFile=smart-assistant-release.keystore \
+            -PsmartStorePassword="$ANDROID_KEYSTORE_PASSWORD" \
+            -PsmartKeyAlias="$ANDROID_KEY_ALIAS" \
+            -PsmartKeyPassword="$ANDROID_KEY_PASSWORD"
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

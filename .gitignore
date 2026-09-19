@@ -8,3 +8,7 @@ android/capacitor-cordova-android-plugins/build/
 .env
 dist/
 android/app/google-services.json
+# release 서명키는 절대 저장소(공개!)에 올리지 않는다. Secret 으로만 관리.
+*.keystore
+*.jks
+android/app/smart-assistant-release.keystore

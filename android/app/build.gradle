@@ -16,10 +16,35 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // 고정 release 서명키 설정.
+    // gradle property(smartStoreFile 등)가 주어졌을 때만 채워지고,
+    // 없으면(로컬 개발) 비어 있는 채로 두어 어떤 buildType 에도 적용하지 않는다.
+    signingConfigs {
+        release {
+            if (project.hasProperty('smartStoreFile')) {
+                storeFile file(project.property('smartStoreFile'))
+                storePassword project.property('smartStorePassword')
+                keyAlias project.property('smartKeyAlias')
+                keyPassword project.property('smartKeyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // property 가 있으면 고정키로, 없으면 기본(설정 안 함) 동작.
+            if (project.hasProperty('smartStoreFile')) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            // 현재 CI 는 assembleDebug 를 쓴다. property 가 주어지면 debug APK 도
+            // 고정 release 키로 서명해 덮어설치가 매끄럽게 되도록 한다.
+            // property 가 없으면 이 줄을 건너뛰어 기존 debug.keystore 자동 서명을 유지한다.
+            if (project.hasProperty('smartStoreFile')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
