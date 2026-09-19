@@ -589,7 +589,9 @@
   // 답은 각 질문의 (id,token)으로 RPC 재조회 → 화면을 나갔다 와도, 앱을 껐다 켜도 복원된다.
   var chatView = $('chatView'), chatLog = $('chatLog'), chatInput = $('chatInput'), chatSend = $('chatSend');
   var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
+  var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
+  var officeLoading = false;
 
   function getChatThread() {
     try {
@@ -612,7 +614,7 @@
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
           ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up }
-          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null }; });
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
   }
@@ -679,6 +681,7 @@
     openScreen(chatView);
     chatUnseen = 0; updateChatBadge();
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
+    loadOfficePushes();                          // 케이가 먼저 보낸 방송(새벽에 조용히 쌓인 것 포함)도 당겨온다
     if (anyAwaiting()) startChatReconcile();
     // 진입 시 입력창 자동 포커스 안 함(교수님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
@@ -734,6 +737,57 @@
       }).catch(function () { m._polling = false; });
     });
   }
+  /* ---- 케이가 먼저 보낸 사무소 방송(office_broadcast) 되읽기 ----
+   * PC(notify_app.py)가 넣은 방송 행을 list_office_pushes RPC 로 가져와 케이 말풍선으로 추가한다.
+   * · 중복방지: 이미 그린 방송은 bid(=행 id)로 걸러 다시 안 그린다(앱 재시작 후에도 유지).
+   * · 표식(since): 마지막으로 가져온 ts 를 localStorage 에 저장 → 그 이후 방송만 다음에 가져온다.
+   *   첫 실행이면 '지금'으로 잡아 과거·시험 행을 쏟아내지 않는다(이후 쌓이는 것만 순차로 보임).
+   * · 기존 대화(교수님↔케이)와 공존: 병합 후 ts 순으로 정렬해 시간순을 유지한다. */
+  function officeSince() {
+    try {
+      var s = localStorage.getItem(OFFICE_SINCE_KEY);
+      if (!s) { s = new Date().toISOString(); localStorage.setItem(OFFICE_SINCE_KEY, s); }
+      return s;
+    } catch (e) { return new Date().toISOString(); }
+  }
+  function hasBroadcast(bid) {
+    for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].bid && chatMsgs[i].bid === bid) return true;
+    return false;
+  }
+  function sortChatByTime() {
+    chatMsgs.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+  }
+  function loadOfficePushes() {
+    if (officeLoading || !(window.OfficeBridge && OfficeBridge.listOfficePushes)) return;
+    officeLoading = true;
+    var since = officeSince();
+    OfficeBridge.listOfficePushes(since).then(function (rows) {
+      officeLoading = false;
+      if (!rows || !rows.length) return;
+      var added = 0, maxTs = since;
+      rows.forEach(function (row) {
+        if (!row || !row.id) return;
+        if (row.ts && row.ts > maxTs) maxTs = row.ts;
+        if (hasBroadcast(row.id)) return;                      // 이미 그린 방송 — 건너뜀
+        var reply = row.content_md || (row.summary_json && row.summary_json.reply) || '';
+        var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });   // 첨부칩(PDF 등)
+        if (!reply && !atts.length) return;                    // 본문·첨부 모두 없으면 표시할 것 없음
+        var ts = row.ts ? Date.parse(row.ts) : Date.now();
+        var kmsg = { role: 'k', text: reply, ts: (isNaN(ts) ? Date.now() : ts), bid: row.id };
+        if (atts.length) kmsg.files = atts;
+        chatMsgs.push(kmsg);
+        added++;
+      });
+      if (added) {
+        sortChatByTime();
+        saveChatMsgs();
+        if (isOpen(chatView)) renderChat();
+        else { chatUnseen += added; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
+      }
+      try { localStorage.setItem(OFFICE_SINCE_KEY, maxTs); } catch (e) {}   // 표식 전진(가져온 것 중 최신 ts)
+    }).catch(function () { officeLoading = false; });
+  }
+
   if ($('btnChat')) $('btnChat').addEventListener('click', openChat);
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);
   if (chatInput) {
@@ -848,6 +902,7 @@
   });
   // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
   if (anyAwaiting()) startChatReconcile();
+  loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
 
   /* ---- 건강 탭: 화면 열기/연결(로직은 health.js) ---- */
   var healthView = $('healthView');
@@ -863,6 +918,7 @@
   window.addEventListener('smartOpenHealth', function () { openHealth(); });       // 건강 리마인더 탭 → 건강 탭 열기
   window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
     startChatReconcile(); reconcileChat();
+    loadOfficePushes();                                                           // 케이 방송 푸시일 수도 있으니 함께 확인
   });
   if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
 })();

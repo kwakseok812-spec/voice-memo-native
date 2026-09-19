@@ -325,6 +325,21 @@
     return out;
   }
 
+  /* ---------- 사무소 정보발송(케이가 먼저 보낸 방송) 되읽기 ----------
+   * 케이(PC)가 notify_app.py 로 넣은 kind='chat', meta.thread='office_broadcast' 행들을
+   * 전용 RPC(list_office_pushes)로 되읽는다. 이 RPC 는 broadcast 행의 필요한 필드만
+   * (id, content_md, summary_json, ts) 시간순으로 돌려준다 — voice_memos 전체를 열지 않으므로
+   * 다른 채팅·음성·건강 데이터는 새지 않는다. 토큰 불필요(교수님 1인 앱, broadcast 전용).
+   *   since : ISO 문자열(그 시각 '이후'에 처리된 방송만). 반환: [{id, content_md, summary_json, ts}] */
+  function listOfficePushes(since) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_office_pushes', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_since: since || null })
+    }).then(function (r) { if (!r.ok) throw new Error('방송 조회 실패(HTTP ' + r.status + ')'); return r.json(); })
+      .then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -361,6 +376,7 @@
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
     createSearch: createSearch, sendChat: sendChat, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
+    listOfficePushes: listOfficePushes,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });
