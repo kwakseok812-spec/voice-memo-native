@@ -640,7 +640,17 @@
       .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')   // **강조** → 굵게
       .replace(/\n/g, '<br>');
   }
-  function chatScrollBottom() { setTimeout(function () { if (chatLog) chatLog.scrollTop = chatLog.scrollHeight; }, 30); }
+  function chatScrollBottom() {
+    // chatLog는 자체 높이 제약이 없어 실제로는 window(문서)가 스크롤된다 →
+    // chatLog.scrollTop과 window 스크롤을 함께 맨 아래로 내린다(포커스는 건드리지 않음).
+    function doScroll() {
+      if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+      try { window.scrollTo(0, document.documentElement.scrollHeight); } catch (e) {}
+    }
+    // 레이아웃이 아직 반영되지 않았을 수 있어 한 프레임 뒤 실행 + 짧은 지연으로 한 번 더(이미지·첨부 등 늦게 커지는 콘텐츠 대비)
+    requestAnimationFrame(function () { requestAnimationFrame(doScroll); });
+    setTimeout(doScroll, 80);
+  }
   function updateSendEnabled() { if (chatSend) chatSend.disabled = anyAwaiting(); }
   function updateChatBadge() {
     var b = $('chatBadge'); if (!b) return;
@@ -670,7 +680,7 @@
     chatUnseen = 0; updateChatBadge();
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
     if (anyAwaiting()) startChatReconcile();
-    setTimeout(function () { chatInput && chatInput.focus(); }, 80);
+    // 진입 시 입력창 자동 포커스 안 함(교수님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
   function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
   function sendChatMsg() {
