@@ -55,9 +55,21 @@
     <div class="btnrow">
       <button id="btnSearchToggle" class="accent">🔎 명함 검색</button>
     </div>
-    <label class="cardhint"><input type="checkbox" id="isCard"> 사진이 <b>명함</b>이면 체크(명함으로 등록)</label>
-    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
-    <input type="file" id="videoInput" accept="video/*" style="display:none">
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
+    <input type="file" id="videoInput" accept="video/*" multiple style="display:none">
+
+    <!-- 파일 미리보기 + 설명 입력 → 보내기 -->
+    <div id="filePanel" style="display:none;">
+      <div class="label">보낼 파일 <span id="fileKindLabel" class="hint"></span></div>
+      <div id="filePreview" class="filepreview"></div>
+      <div class="label">제목 <span class="hint">(결과 구분용)</span></div>
+      <input id="fileTitle" class="titleinput" type="text" maxlength="40" placeholder="예: 방부형 명함 / 회의 화이트보드">
+      <div class="label">설명·지시 <span class="hint">(어떻게 처리할지 · 없으면 자동)</span></div>
+      <textarea id="fileNote" class="titlenote" placeholder="예: 이건 명함이야 / 이 스크린샷에서 표만 정리해줘 / 이 화이트보드 회의록으로 정리"></textarea>
+      <label id="cardCheckWrap" class="cardhint"><input type="checkbox" id="isCard"> 이 사진은 <b>명함</b>이에요(명함으로 등록)</label>
+      <button id="fileSend" class="savebtn send big">🖥️ 이 파일 PC로 보내기</button>
+      <button id="fileCancel" class="savebtn">취소</button>
+    </div>
 
     <!-- 명함 검색 패널 -->
     <div id="searchPanel" style="display:none;">

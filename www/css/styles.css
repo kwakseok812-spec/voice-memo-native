@@ -255,3 +255,16 @@ footer {
 .cr-line a { color:var(--primary-dark); text-decoration:none; }
 .cr-note { font-size:12px; color:var(--muted); margin-top:6px; white-space:pre-wrap; }
 .cardphoto { margin-top:10px; }
+
+/* 파일 미리보기 + 설명 입력 */
+.filepreview { text-align:center; margin:6px 0; }
+.filepreview img { max-width:100%; max-height:320px; border-radius:12px; border:1px solid var(--line); }
+.filemeta { font-size:15px; color:var(--text); background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
+.titlenote { width:100%; box-sizing:border-box; min-height:70px; resize:vertical; padding:12px 14px;
+  font-size:16px; line-height:1.6; font-family:inherit; border:1px solid var(--line); border-radius:12px; background:#fff; color:var(--text); }
+
+/* 여러 장 썸네일 */
+.thumbs { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
+.morethumb { display:inline-flex; align-items:center; justify-content:center; width:72px; height:72px;
+  border-radius:8px; background:#eef2ff; color:var(--primary-dark); font-weight:700; }

@@ -131,6 +131,48 @@
       });
   }
 
+  function extForFile(file, kind) {
+    var e = ((file.name || '').split('.').pop() || '').toLowerCase();
+    if (!e || e.length > 5) e = (kind === 'video' ? 'mp4' : 'jpg');
+    return e;
+  }
+  function uploadObject(key, blob) {
+    return fetch(CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + key, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
+                 'Content-Type': (blob && blob.type) || 'application/octet-stream' },
+      body: blob
+    }).then(function (r) { if (!r.ok) throw new Error('파일 업로드 실패(HTTP ' + r.status + ')'); return key; });
+  }
+  function _insertBatchRow(memo, filesMeta) {
+    return _insertRow({
+      id: memo.id, title: memo.title, status: 'pending', kind: memo.kind, note: memo.note || null,
+      client_token: memo.token, meta: { app: 'voice-memo-test', files: filesMeta }
+    });
+  }
+  // memo.kind photo/video, files: [File] (1장 이상). onProgress(done,total) 선택.
+  function sendBatch(memo, files, onProgress) {
+    var filesMeta = [], idx = 0;
+    function step() {
+      if (idx >= files.length) {
+        return _insertBatchRow(memo, filesMeta).then(function () { return idbDel(memo.id); });
+      }
+      var file = files[idx];
+      var ext = extForFile(file, memo.kind);
+      var key = memo.id + '/' + idx + '.' + ext;
+      return uploadObject(key, file).then(function () {
+        filesMeta.push({ key: key, ext: ext });
+        idx++; onProgress && onProgress(idx, files.length);
+        return step();
+      });
+    }
+    return step().catch(function (e) {
+      return idbPut({ id: memo.id, kind: memo.kind, note: memo.note, title: memo.title,
+                      token: memo.token, files: files, date: memo.date, time: memo.time })
+        .then(function () { throw e; });
+    });
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null.
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -148,10 +190,11 @@
       function next() {
         if (i >= list.length) return Promise.resolve();
         var rec = list[i++];
-        var memo = { id: rec.id, title: rec.title, token: rec.token, ext: rec.ext, date: rec.date, time: rec.time };
-        return uploadAudio(memo.id, memo.ext, rec.blob)
-          .then(function (p) { return createMemo(memo, p); })
-          .then(function () { return idbDel(memo.id); })
+        var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext, date: rec.date, time: rec.time };
+        var p = rec.files
+          ? sendBatch(memo, rec.files)                 // 사진/영상 묶음 재업로드
+          : uploadAudio(memo.id, memo.ext, rec.blob).then(function (k) { return createMemo(memo, k); }).then(function () { return idbDel(memo.id); });
+        return p
           .then(function () { onEach && onEach(memo); })
           .catch(function () { /* 다음 기회 */ })
           .then(next);
@@ -163,7 +206,7 @@
 
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
-    send: send, createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount
+    send: send, sendBatch: sendBatch, createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount
   };
   global.addEventListener('online', function () { flush(); });
 })(window);

@@ -286,35 +286,88 @@
   function hideBanner() { if (RecordingModule.isSupported()) banner.style.display = 'none'; }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-  /* ===================== 사진 · 영상 보내기 ===================== */
-  function sendFile(file, kind) {
-    if (!file) return;
+  /* ===================== 사진 · 영상: 여러 개 미리보기 + 설명 → 묶음 전송 ===================== */
+  var filePanel = $('filePanel'), pendingFiles = [], pendingKind = null;
+  var MAX_MB = 45;   // Storage 무료 한도(파일당 ~50MB) 안전선
+
+  function reviewFiles(fileList, kind) {
+    var arr = Array.prototype.slice.call(fileList || []);
+    if (!arr.length) return;
+    // 용량 초과 파일은 걸러내고 안내(조용히 실패 금지)
+    var tooBig = arr.filter(function (f) { return (f.size || 0) > MAX_MB * 1024 * 1024; });
+    arr = arr.filter(function (f) { return (f.size || 0) <= MAX_MB * 1024 * 1024; });
+    if (tooBig.length) {
+      showBanner('⚠️ ' + tooBig.length + '개 파일이 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요. ' +
+        (kind === 'video' ? '영상은 1분 내외로 짧게 찍어 주세요.' : ''));
+    }
+    if (!arr.length) { hide(filePanel); return; }
+    pendingFiles = arr; pendingKind = kind;
     var t = now();
-    var ext = ((file.name || '').split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg')).toLowerCase();
-    if (!ext || ext.length > 5) ext = (kind === 'video' ? 'mp4' : 'jpg');
+    $('fileTitle').value = (kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time + (arr.length > 1 ? (' 외 ' + (arr.length) + '개') : '');
+    $('fileNote').value = '';
+    $('fileKindLabel').textContent = '(' + (kind === 'photo' ? '사진' : '영상') + ' ' + arr.length + '개)';
+    $('cardCheckWrap').style.display = kind === 'photo' ? 'block' : 'none';
+    if ($('isCard')) $('isCard').checked = false;
+    var prev = $('filePreview');
+    if (kind === 'photo') {
+      prev.innerHTML = '<div class="thumbs"></div>';
+      var box = prev.querySelector('.thumbs');
+      arr.slice(0, 8).forEach(function (f) {
+        var im = document.createElement('img'); im.className = 'thumb';
+        var r = new FileReader(); r.onload = function () { im.src = r.result; }; r.readAsDataURL(f);
+        box.appendChild(im);
+      });
+      if (arr.length > 8) box.insertAdjacentHTML('beforeend', '<span class="morethumb">+' + (arr.length - 8) + '</span>');
+    } else {
+      prev.innerHTML = arr.map(function (f) {
+        var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
+        return '<div class="filemeta">🎬 ' + esc(f.name || '영상') + (mb ? ' · ' + mb + 'MB' : '') + '</div>';
+      }).join('');
+    }
+    hide(resultWrap); hide(processing); show(filePanel);
+    try { filePanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  }
+  $('fileCancel').addEventListener('click', function () { pendingFiles = []; pendingKind = null; hide(filePanel); });
+  $('fileSend').addEventListener('click', function () {
+    if (!pendingFiles.length) { hide(filePanel); return; }
+    var files = pendingFiles, kind = pendingKind;
+    var title = ($('fileTitle').value || '').trim();
+    var note = ($('fileNote').value || '').trim();
     var isCard = kind === 'photo' && $('isCard') && $('isCard').checked;
+    pendingFiles = []; pendingKind = null; hide(filePanel);
+    sendFiles(files, kind, title, note, isCard);
+  });
+
+  function sendFiles(files, kind, title, note, isCard) {
+    if (!files || !files.length) return;
+    var t = now();
+    var noteFull = note || '';
+    if (isCard) noteFull = noteFull ? ('명함. ' + noteFull) : '명함';
     var memo = {
       id: OfficeBridge.uuid(), token: OfficeBridge.token(),
-      title: (kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time,
-      kind: kind, ext: ext, note: isCard ? '명함' : null, date: t.date, time: t.time
+      title: title || ((kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time),
+      kind: kind, note: noteFull || null, date: t.date, time: t.time
     };
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
     renderHistory();
     hide(resultWrap); show(processing);
-    setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록해요)' : '🎬 영상 분석 중… (조금 걸릴 수 있어요)');
-    OfficeBridge.send(memo, file).then(function () {
+    setProcessing('⬆️ 올리는 중… (' + files.length + '개)');
+    OfficeBridge.sendBatch(memo, files, function (done, total) {
+      setProcessing('⬆️ 올리는 중… ' + done + '/' + total);
+    }).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
+      setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록해요)' : '🎬 영상 분석 중… (조금 걸릴 수 있어요)');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
       renderHistory(); hide(processing);
-      showBanner('⚠️ 업로드 실패(오프라인일 수 있어요). 목록에서 [재시도]를 눌러 주세요.');
+      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. 목록에서 [재시도]를 눌러 주세요.');
     });
   }
   $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
   $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
-  $('photoInput').addEventListener('change', function () { if (this.files && this.files[0]) sendFile(this.files[0], 'photo'); this.value = ''; });
-  $('videoInput').addEventListener('change', function () { if (this.files && this.files[0]) sendFile(this.files[0], 'video'); this.value = ''; });
+  $('photoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'photo'); this.value = ''; });
+  $('videoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'video'); this.value = ''; });
 
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
