@@ -1,0 +1,238 @@
+:root {
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --rec: #dc2626;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --ok: #16a34a;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  padding: 0 16px 48px;
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+header {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 22px 0 10px;
+  text-align: center;
+}
+header h1 { font-size: 22px; margin: 0 0 4px; }
+header p { margin: 0; color: var(--muted); font-size: 14px; }
+
+main { max-width: 640px; margin: 0 auto; }
+
+/* 설치 안내 배너 (맨 위, 잘 보이게) */
+.installbar {
+  margin: 12px 0 6px; padding: 16px; border-radius: 16px;
+  background: #eef2ff; border: 2px solid #a5b4fc; text-align: center;
+}
+.installtitle { font-size: 17px; font-weight: 700; color: var(--primary-dark); margin-bottom: 10px; }
+.installbtn {
+  display: block; width: 100%; padding: 16px; font-size: 18px; font-weight: 700;
+  color: #fff; background: var(--primary); border: none; border-radius: 12px; cursor: pointer;
+  margin-bottom: 8px;
+}
+.installbtn:active { transform: translateY(1px); }
+.installhelp { display: inline-block; font-size: 15px;
+  color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+.installhelp-box { margin-top: 10px; font-size: 16px; color: var(--text); text-align: left;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; line-height: 1.8; }
+.installnote { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+/* 저장/전송 큰 버튼 */
+.savebtn {
+  display: block; width: 100%; padding: 15px; font-size: 17px; font-weight: 700;
+  border-radius: 12px; cursor: pointer; margin: 8px 0; border: 1px solid var(--line); background: #fff;
+}
+.savebtn:active { transform: translateY(1px); }
+.savebtn.primary { background: var(--primary); color: #fff; border-color: var(--primary);
+  box-shadow: 0 3px 10px rgba(37,99,235,.22); }
+.savebtn.send { background: #ecfdf5; color: #047857; border-color: #6ee7b7; }
+.savebtn.send.done { background: #f3f4f6; color: var(--muted); border-color: var(--line); }
+.savebtn:disabled { cursor: default; transform: none; }
+
+/* 지난 메모의 PC로 보내기 버튼 */
+.hsend { border: 1px solid #6ee7b7; background: #ecfdf5; color: #047857;
+  border-radius: 16px; padding: 5px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.hsend.retry { border-color: #fca5a5; background: #fef2f2; color: var(--rec); }
+
+/* 안내 배너 */
+#banner {
+  display: none;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+/* 상태 표시 */
+.statusrow {
+  display: flex; align-items: center; gap: 8px;
+  margin: 14px 0 6px; font-size: 15px; color: var(--muted);
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; background: #9ca3af; flex: none; }
+.dot.rec { background: var(--rec); animation: pulse 1s infinite; }
+.dot.err { background: #f59e0b; }
+.dot.idle { background: #9ca3af; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+/* 마이크 세기 막대 */
+.level { height: 8px; background: var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
+#levelBar { height: 100%; width: 0; background: var(--primary); transition: width .1s linear; }
+
+/* 큰 버튼 */
+.bigbtn {
+  display: block; width: 100%;
+  padding: 20px; font-size: 20px; font-weight: 700;
+  color: #fff; background: var(--primary);
+  border: none; border-radius: 16px; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37,99,235,.25);
+}
+.bigbtn:active { transform: translateY(1px); }
+.bigbtn.recording { background: var(--rec); box-shadow: 0 4px 12px rgba(220,38,38,.3); }
+.bigbtn.disabled { background: #9ca3af; box-shadow: none; cursor: not-allowed; }
+
+/* 보조 버튼 줄 */
+.btnrow { display: flex; gap: 10px; margin: 12px 0 4px; flex-wrap: wrap; }
+.btnrow button {
+  flex: 1 1 auto; min-width: 130px;
+  padding: 13px 10px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: #fff; color: var(--text); cursor: pointer;
+}
+.btnrow button:active { background: #f3f4f6; }
+.btnrow button.accent { border-color: var(--primary); color: var(--primary); }
+
+/* 제목 입력칸 */
+.titleinput {
+  width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 17px; font-weight: 600;
+  border: 2px solid var(--primary); border-radius: 12px; font-family: inherit; color: var(--text);
+  background: #fff;
+}
+.savehint { font-size: 13px; color: var(--muted); text-align: center; margin: 4px 0 8px; line-height: 1.6; }
+.savehint.warn { color: #92400e; background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 10px; padding: 10px 12px; text-align: left; }
+.savebtn.primary.big { padding: 20px; font-size: 19px; }
+.savebtn.big { padding: 18px; font-size: 18px; }
+
+/* 전사 원문 보기 */
+.transcriptview {
+  border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff;
+  font-size: 15px; line-height: 1.7; white-space: pre-wrap; color: var(--text);
+}
+
+/* PPT·Word 묶음(폰에선 접힘) */
+details.office { margin: 6px 0; }
+details.office > summary {
+  cursor: pointer; list-style: none; text-align: center;
+  font-size: 14px; font-weight: 600; color: var(--primary-dark);
+  padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+}
+details.office > summary::-webkit-details-marker { display: none; }
+details.office[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+details.office .btnrow { margin-top: 0; }
+
+/* 처리 중(변환·정리) 표시 */
+.processing {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 0; padding: 16px; border-radius: 14px;
+  background: #eef2ff; border: 1px solid #c7d2fe; color: var(--primary-dark);
+  font-size: 16px; font-weight: 600;
+}
+.spinner {
+  width: 22px; height: 22px; flex: none; border-radius: 50%;
+  border: 3px solid #c7d2fe; border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+.btnrow.subtle button { font-size: 14px; padding: 11px 8px; color: var(--muted); }
+.btnrow.subtle button.danger { color: var(--rec); border-color: #fca5a5; }
+
+/* 전사 영역 */
+.label { font-size: 14px; font-weight: 700; color: var(--muted); margin: 20px 0 6px; }
+#interim { min-height: 20px; color: #9ca3af; font-style: italic; padding: 0 2px; }
+#transcript {
+  width: 100%; min-height: 84px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px; font-size: 16px; line-height: 1.7;
+  font-family: inherit; background: #fff; color: var(--text);
+}
+
+/* 결과 카드 */
+#resultArea { margin-top: 8px; }
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px 18px; margin: 12px 0;
+}
+.card h3 { margin: 0 0 10px; font-size: 17px; }
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin: 6px 0; font-size: 16px; }
+.card .empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  background: #eef2ff; color: var(--primary-dark);
+  border-radius: 20px; padding: 5px 12px; font-size: 14px;
+}
+.chip b { font-weight: 700; }
+
+.btnrow button.danger { border-color: #fca5a5; color: var(--rec); }
+
+/* 내보내기 안내 메시지 */
+.exportmsg { min-height: 20px; font-size: 14px; margin: 4px 2px 0; }
+.exportmsg.ok { color: var(--ok); }
+.exportmsg.err { color: var(--rec); }
+.exportmsg.work { color: var(--primary); }
+
+/* 지난 메모 목록 */
+.cnt { color: var(--muted); font-weight: 400; font-size: 13px; }
+.histitem {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin: 8px 0; cursor: pointer;
+}
+.histitem:active { background: #f3f4f6; }
+.histitem .htitle { font-size: 15px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 78%; }
+.histitem .hmeta { display: flex; align-items: center; gap: 8px; flex: none; }
+.histitem .hdate { font-size: 12px; color: var(--muted); flex: none; }
+.sent { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.sent.ok { background: #dcfce7; color: #15803d; }
+.sent.wait { background: #fef3c7; color: #b45309; }
+.sent.proc { background: #dbeafe; color: #1d4ed8; }
+
+/* 모달 */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+}
+.modal-box {
+  background: #fff; width: 100%; max-width: 640px; max-height: 88vh;
+  overflow-y: auto; border-radius: 18px 18px 0 0; padding: 16px 16px 24px;
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between;
+  font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.xbtn { border: none; background: #f3f4f6; border-radius: 50%; width: 34px; height: 34px;
+  font-size: 15px; cursor: pointer; color: var(--muted); }
+.modal-body .card { margin: 10px 0; }
+
+footer {
+  max-width: 640px; margin: 30px auto 0; text-align: center;
+  color: var(--muted); font-size: 12px; line-height: 1.7;
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 음성 메모 정리 앱 아이콘 원본 (SVG). PNG는 make_icons.py(Pillow)로 생성. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 파랑 배경(둥근 사각). maskable 버전은 이 rx를 0으로 두고 심볼을 65%로 축소해 안전영역 확보 -->
+  <rect x="0" y="0" width="512" height="512" rx="115" fill="url(#bg)"/>
+
+  <!-- 마이크 (흰색) -->
+  <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round">
+    <!-- 몸통(세로 알약) -->
+    <rect x="212" y="116" width="88" height="170" rx="44" fill="#ffffff" stroke="none"/>
+    <!-- 크래들(U자 아치) -->
+    <path d="M182 258 A74 74 0 0 0 330 258"/>
+    <!-- 스탠드 -->
+    <path d="M256 320 L256 372"/>
+    <!-- 받침 -->
+    <path d="M216 374 L296 374"/>
+  </g>
+
+  <!-- 정리/완료 체크 배지 -->
+  <circle cx="330" cy="338" r="74" fill="#ffffff"/>
+  <path d="M300 340 L323 366 L372 305" fill="none" stroke="#22c55e"
+        stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

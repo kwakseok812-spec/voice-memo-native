@@ -1,0 +1,12 @@
+{
+  "name": "voice-memo-native",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capawesome-team/capacitor-android-foreground-service": "^8.1.0",
+    "@capgo/capacitor-audio-recorder": "^8.2.9"
+  }
+}

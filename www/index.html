@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <title>음성 메모 정리 (테스트)</title>
+
+  <!-- PWA: 홈 화면 설치용 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="음성메모">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header>
+    <h1>🎙️ 음성 메모 정리</h1>
+    <p>녹음해서 PC로 보내면, PC가 정확히 받아쓰고 정리해 돌려줘요</p>
+  </header>
+
+  <main>
+    <!-- 홈 화면 설치 안내 -->
+    <div id="installBar" class="installbar" style="display:none;">
+      <div class="installtitle">📲 홈 화면에 설치하기</div>
+      <button id="installBtn" class="installbtn" style="display:none;">이 앱 홈 화면에 설치</button>
+      <a id="installHelpLink" class="installhelp" href="#">설치 방법 보기</a>
+      <div id="installHelp" class="installhelp-box" style="display:none;"></div>
+      <div class="installnote">설치가 안 돼도 <b>이 주소로 그냥 쓸 수 있어요.</b></div>
+    </div>
+
+    <div id="banner"></div>
+
+    <div class="statusrow">
+      <span id="statusDot" class="dot idle"></span>
+      <span id="statusText">대기 중</span>
+    </div>
+    <div class="level"><div id="levelBar"></div></div>
+
+    <!-- 큰 녹음 버튼 -->
+    <button id="btnRecord" class="bigbtn">🎙️&nbsp;&nbsp;녹음 시작</button>
+
+    <!-- 녹음 완료 → 제목 정하고 보내기 -->
+    <div id="recordedPanel" style="display:none;">
+      <div class="label">제목 <span class="hint">(PC에 저장될 파일 이름이 돼요)</span></div>
+      <input id="memoTitle" class="titleinput" type="text" maxlength="40" placeholder="메모 제목">
+      <button id="btnSend" class="savebtn send big">🖥️ PC로 보내 정리하기</button>
+      <button id="btnRetake" class="savebtn">🔄 다시 녹음</button>
+    </div>
+
+    <!-- 처리 중 -->
+    <div id="processing" class="processing" style="display:none;">
+      <span class="spinner"></span>
+      <span id="processingText">PC에서 정리 중…</span>
+    </div>
+
+    <!-- 결과 -->
+    <div id="resultWrap" style="display:none;">
+      <div class="label">정리 결과</div>
+      <div id="resultArea"></div>
+
+      <div class="label">전사 원문</div>
+      <div id="transcriptView" class="transcriptview"></div>
+
+      <div id="docBtns"></div>
+      <div id="exportMsg" class="exportmsg"></div>
+      <div class="btnrow subtle"><button id="btnDelete" class="danger">🗑 이 메모 삭제</button></div>
+    </div>
+
+    <!-- 지난 메모 -->
+    <div class="label">지난 메모 <span id="historyCount" class="cnt"></span></div>
+    <div id="historyList">
+      <p class="empty" style="color:#6b7280;font-size:14px;">녹음한 메모가 여기에 쌓입니다.</p>
+    </div>
+  </main>
+
+  <!-- 지난 메모 상세(모달) -->
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-head"><span id="modalTitle">메모</span><button id="modalClose" class="xbtn">✕</button></div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <footer>
+    폰은 녹음만, 정확한 받아쓰기·정리는 PC가 해요 · 오디오는 정리 후 삭제됩니다.<br>
+    처음 보낸 메모는 PC 준비에 1~2분 걸릴 수 있어요 · 인터넷 연결 필요.
+  </footer>
+
+  <!-- 모듈: 녹음 → 우편함(업로드/폴링) → 기록 → 화면 -->
+  <!-- ※ 폰 내 전사(transcriber.js)·정리(analyzer.js)·문서생성(exporter.js)은
+       PC-중심 개편으로 비활성(파일은 보존). 이제 전사·정리·문서는 PC가 한다. -->
+  <script src="js/recorder.js"></script>
+  <script src="js/recorder-native.js"></script>
+  <script src="js/office-bridge.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/install.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW 등록 실패:', e); });
+      });
+    }
+  </script>
+</body>
+</html>
