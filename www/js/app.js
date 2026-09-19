@@ -62,7 +62,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), processing, resultWrap];
+  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('healthView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   function showHome() {
@@ -812,7 +812,7 @@
     if (isOpen(modal)) { closeModal(); return true; }
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
-    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView)) {
+    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('healthView'))) {
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     return false;
@@ -849,8 +849,18 @@
   // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
   if (anyAwaiting()) startChatReconcile();
 
+  /* ---- 건강 탭: 화면 열기/연결(로직은 health.js) ---- */
+  var healthView = $('healthView');
+  function openHealth() {
+    openScreen(healthView);
+    if (window.HealthTab && HealthTab.open) { try { HealthTab.open(); } catch (e) {} }
+  }
+  if (window.HealthTab && HealthTab.init) { try { HealthTab.init({ toast: toast }); } catch (e) {} }
+  if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
+
   /* ---- 푸시 알림(FCM): 등록·수신은 push.js. 여기선 대화 화면과 연결만 한다 ---- */
   window.addEventListener('smartOpenChat', function () { openChat(); });          // 알림 탭 → 대화 열기
+  window.addEventListener('smartOpenHealth', function () { openHealth(); });       // 건강 리마인더 탭 → 건강 탭 열기
   window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
     startChatReconcile(); reconcileChat();
   });

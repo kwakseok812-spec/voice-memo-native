@@ -67,9 +67,11 @@
     PN.addListener('pushNotificationReceived', function () {
       try { global.dispatchEvent(new CustomEvent('smartChatPush')); } catch (e) {}
     });
-    // 알림 탭 → 케이 대화 열기
-    PN.addListener('pushNotificationActionPerformed', function () {
-      try { global.dispatchEvent(new CustomEvent('smartOpenChat')); } catch (e) {}
+    // 알림 탭 → 화면 열기. data.screen 으로 분기(건강 리마인더 → 건강 탭, 그 외 → 케이 대화)
+    PN.addListener('pushNotificationActionPerformed', function (a) {
+      var scr = '';
+      try { scr = (a && a.notification && a.notification.data && a.notification.data.screen) || ''; } catch (e) {}
+      try { global.dispatchEvent(new CustomEvent(scr === 'health' ? 'smartOpenHealth' : 'smartOpenChat')); } catch (e) {}
     });
 
     // 권한 확인 → 없으면 요청 → 허용 시 등록

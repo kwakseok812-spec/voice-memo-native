@@ -349,3 +349,80 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .chat-entry .ic{background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
 .chat-entry .ic svg{color:#fff}
 .chat-entry .tx b{font-size:19px}
+
+/* ===== 건강 탭 (당뇨 관리 자가기록) ===== */
+/* 세그먼트(오늘 기록 / 기록 보기) */
+.hseg{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;border-radius:16px;background:var(--glass);border:1px solid var(--glass-b);margin:4px 0 14px;backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
+.hseg-btn{height:44px;border:0;border-radius:12px;background:transparent;color:var(--muted);font-family:inherit;font-size:16px;font-weight:800;cursor:pointer}
+.hseg-btn.on{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));box-shadow:var(--glow-s)}
+.hseg-btn:active{transform:scale(.98)}
+
+/* 오늘 머리글 */
+.hhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.hdate{font-size:20px;font-weight:800;letter-spacing:-.3px}
+.hsave{font-size:13px;font-weight:700;color:var(--dim)}
+.hsave.ok{color:var(--ok)} .hsave.work{color:var(--p1)} .hsave.err{color:var(--rec)}
+.hprog{font-size:14.5px;color:var(--muted);font-weight:600;margin-bottom:14px}
+.hprog b{color:var(--cyan);font-size:17px;font-weight:800}
+.hprog-sub{color:var(--dim);font-weight:500}
+.hsec{font-size:15px;font-weight:800;color:var(--muted);margin:18px 2px 8px}
+
+/* 항목 묶음(카드) */
+.hgroup{display:flex;flex-direction:column;gap:2px;background:var(--glass);border:1px solid var(--glass-b);border-radius:22px;padding:6px 16px;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));box-shadow:var(--card-sh)}
+.hitem{padding:14px 0;border-bottom:1px solid var(--frame-b)}
+.hitem:last-child{border-bottom:0}
+.hitem-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hlab{font-size:16.5px;font-weight:700;color:var(--text)}
+.hlab small{font-size:13px;font-weight:600;color:var(--dim);margin-left:3px}
+/* 기록됨 체크 */
+.hchk{width:26px;height:26px;border-radius:50%;border:2px solid var(--glass-b2);display:grid;place-items:center;flex:none;color:transparent}
+.hchk svg{width:15px;height:15px}
+.hchk.on{background:var(--ok-bg);border-color:transparent;color:var(--ok)}
+
+/* 숫자 스텝퍼 */
+.hstep{display:flex;align-items:center;gap:10px;margin-top:10px}
+.hstepbtn{width:52px;height:52px;flex:none;border-radius:16px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-size:28px;font-weight:800;line-height:1;cursor:pointer;display:grid;place-items:center}
+.hstepbtn:active{transform:scale(.94);background:var(--glass2)}
+.hval{flex:1;min-width:0;height:52px;border-radius:16px;border:1.5px solid var(--p1);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:24px;font-weight:800;text-align:center;outline:0}
+.hval::placeholder{color:var(--dim);font-weight:600}
+.hval:focus{box-shadow:0 0 0 4px var(--focus)}
+
+/* 식단 칩 + 직접입력 */
+.hchips{margin-top:10px}
+.chip.hchip{height:40px;padding:0 15px;font-size:15px;cursor:pointer;font-family:inherit}
+.chip.hchip:active{transform:scale(.96)}
+.hcustom{margin-top:10px;min-height:50px}
+.hcustom .hcustomin{flex:1;border:0;outline:0;background:transparent;color:var(--text);font-family:inherit;font-size:16px;font-weight:600;width:100%}
+.hcustom .hcustomin::placeholder{color:var(--dim);font-weight:500}
+
+/* 복약·영양제 원탭 토글 */
+.htog{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.htogbtn{min-width:130px;height:48px;padding:0 18px;border-radius:14px;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;border:1.5px dashed var(--glass-b2);background:transparent;color:var(--dim)}
+.htogbtn:active{transform:scale(.97)}
+.htogbtn.on{border-style:solid;border-color:transparent;background:var(--ok-bg);color:var(--ok)}
+.htogbtn.off{border-style:solid;border-color:var(--glass-b);background:var(--glass);color:var(--muted)}
+
+/* 기록 보기 — 그래프 */
+.hchart{padding:16px;margin-bottom:12px}
+.hchart-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.hchart-h span{font-size:15px;font-weight:800;color:var(--text)}
+.hchart-h small{font-size:12.5px;font-weight:600;color:var(--dim)}
+.hchart-last{font-size:22px;font-weight:800;color:var(--cyan)}
+.hchart-last small{font-size:12px;color:var(--dim);font-weight:600}
+.hsvg{width:100%;height:120px;display:block}
+.hsvg .hgrid{stroke:var(--frame-b);stroke-width:1}
+.hsvg .hax{fill:var(--dim);font-size:9px;font-weight:600}
+.hchart-foot{font-size:12px;color:var(--dim);font-weight:500;margin-top:6px;text-align:right}
+.hchart-empty{font-size:14px;color:var(--dim);font-weight:500;padding:0 2px 14px}
+
+/* 기록 보기 — 날짜별 */
+.hlist{gap:10px}
+.hday{padding:14px 16px}
+.hday-top{display:flex;align-items:center;justify-content:space-between}
+.hday-top b{font-size:16px;font-weight:800}
+.hbadges{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.hb{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--glass2);border:1px solid var(--glass-b);color:var(--muted)}
+.hb.glu{color:var(--cyan);border-color:transparent;background:rgba(34,211,238,.14)}
+.hb.wt{color:var(--p2);border-color:transparent;background:rgba(139,92,246,.14)}
+.hb.ok{color:var(--ok);border-color:transparent;background:var(--ok-bg)}
+.hday-meal{font-size:13.5px;color:var(--muted);font-weight:500;margin-top:8px;line-height:1.5}

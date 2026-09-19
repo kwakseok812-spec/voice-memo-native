@@ -48,6 +48,7 @@
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
 </svg>
 
 <!-- ===== 배경 (그라데이션 + 오브 + 격자) ===== -->
@@ -95,6 +96,7 @@
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
       <div class="sec-title">지난 메모 <span id="historyCount"></span></div>
@@ -179,6 +181,17 @@
       <input type="file" id="chatFileInput" multiple style="display:none">
     </section>
 
+    <!-- ===================== 건강 ===================== -->
+    <section id="healthView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">건강</span><span class="spacer"></span></div>
+      <div class="hseg">
+        <button type="button" class="hseg-btn on" id="hTabToday">오늘 기록</button>
+        <button type="button" class="hseg-btn" id="hTabHistory">기록 보기</button>
+      </div>
+      <div id="hToday"></div>
+      <div id="hHistory" style="display:none;"></div>
+    </section>
+
     <!-- ===================== 처리 중 ===================== -->
     <section id="processing" class="processing" style="display:none;">
       <span class="spinner"></span>
@@ -219,6 +232,7 @@
 <script src="js/office-bridge.js"></script>
 <script src="js/history.js"></script>
 <script src="js/push.js"></script>
+<script src="js/health.js"></script>
 <script src="js/app.js"></script>
 <!-- install.js (홈 화면 설치 배너)는 2026-09-19 교수님 지시로 제거됨 -->
 <script>
