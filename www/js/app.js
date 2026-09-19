@@ -431,6 +431,51 @@
     }).catch(function () { btn.textContent = '📇 명함 사진 보기'; btn.disabled = false; });
   }
 
+  /* ===================== 뒤로가기(back) 처리 ===================== */
+  var toastEl = $('toast'), toastTimer = null;
+  function toast(msg) {
+    if (!toastEl) return;
+    toastEl.textContent = msg; toastEl.style.display = 'block';
+    requestAnimationFrame(function () { toastEl.classList.add('show'); });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastEl.classList.remove('show');
+      setTimeout(function () { toastEl.style.display = 'none'; }, 250);
+    }, 1800);
+  }
+  function isOpen(el) { return el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
+
+  // 열린 하위 화면을 닫아 이전으로. 닫을 게 있으면 true(=처리함), 없으면 false(=홈).
+  function goBack() {
+    if (isRecording) { toast('녹음 중이에요. 정지를 먼저 눌러 주세요.'); return true; }
+    if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
+    if (isOpen(modal)) { closeModal(); return true; }
+    if (isOpen(filePanel)) { pendingFiles = []; pendingKind = null; hide(filePanel); setStatus('대기 중', 'idle'); return true; }
+    if (isOpen(searchPanel)) { hide(searchPanel); return true; }
+    if (isOpen(resultWrap)) { hide(resultWrap); return true; }
+    if (isOpen(recordedPanel)) { pendingBlob = null; hide(recordedPanel); setStatus('대기 중', 'idle'); return true; }
+    return false;   // 홈(루트)
+  }
+  // 화면 안 [← 뒤로] 버튼들
+  Array.prototype.forEach.call(document.querySelectorAll('[data-back]'), function (b) {
+    b.addEventListener('click', function () { goBack(); });
+  });
+  // 안드로이드 하드웨어/제스처 back
+  var backExitArmed = false, backExitTimer = null;
+  if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
+    Capacitor.Plugins.App.addListener('backButton', function () {
+      if (goBack()) return;                 // 하위 화면 닫음 → 앱 유지
+      if (backExitArmed) {                  // 홈에서 한 번 더 → 종료
+        try { Capacitor.Plugins.App.exitApp(); } catch (e) {}
+      } else {
+        backExitArmed = true;
+        toast('한 번 더 누르면 나갑니다');
+        if (backExitTimer) clearTimeout(backExitTimer);
+        backExitTimer = setTimeout(function () { backExitArmed = false; }, 2000);
+      }
+    });
+  }
+
   setStatus('대기 중', 'idle');
   renderHistory();
 
