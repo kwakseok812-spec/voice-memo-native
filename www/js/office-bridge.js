@@ -173,7 +173,66 @@
     });
   }
 
-  // 결과 조회(RPC). 결과 객체 또는 null.
+  /* ---------- 긴 영상: 조각 업로드 + 핸드셰이크(무료 50MB/1GB 한도 우회) ---------- */
+  var CHUNK_SIZE = 40 * 1024 * 1024;   // 40MB 조각(단일 50MB 한도 안전선)
+  var MAX_INFLIGHT = 2;                // PC가 소비하기 전 최대 2조각만 앞서 올림 → 저장소 최고점 ~80MB
+
+  function _insertChunkedVideoRow(memo, total, ext) {
+    return _insertRow({
+      id: memo.id, title: memo.title, status: 'pending', kind: 'video', note: memo.note || null,
+      client_token: memo.token,
+      meta: { app: 'voice-memo-test', chunked: true, ext: ext, total: total }
+    });
+  }
+  function uploadPart(id, k, ext, blob) {
+    return uploadObject(id + '/part_' + k + '.' + ext, blob);
+  }
+  function uploadPartWithRetry(id, k, ext, blob, tries) {
+    return uploadPart(id, k, ext, blob).catch(function (e) {
+      if (tries <= 1) throw e;
+      return new Promise(function (res) { setTimeout(res, 3000); }).then(function () {
+        return uploadPartWithRetry(id, k, ext, blob, tries - 1);
+      });
+    });
+  }
+  // progress(=PC가 소비한 조각 수) >= need 될 때까지 대기(최대 30분).
+  function waitConsumed(id, tok, need) {
+    var start = Date.now();
+    return new Promise(function (resolve, reject) {
+      (function loop() {
+        poll(id, tok).then(function (r) {
+          var consumed = (r && r.progress) || 0;
+          if (consumed >= need) return resolve();
+          if (Date.now() - start > 30 * 60 * 1000) return reject(new Error('PC가 조각을 받지 못했어요(PC가 꺼져 있나요?).'));
+          setTimeout(loop, 2500);
+        }).catch(function () { setTimeout(loop, 3000); });
+      })();
+    });
+  }
+  // 큰 영상 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
+  function sendVideoChunked(memo, file, onProgress) {
+    var ext = extForFile(file, 'video');
+    var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    return _insertChunkedVideoRow(memo, total, ext).then(function () {
+      var k = 0;
+      function step() {
+        if (k >= total) return Promise.resolve();
+        var pacing = (k >= MAX_INFLIGHT)
+          ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
+          : Promise.resolve();
+        return pacing.then(function () {
+          var blob = file.slice(k * CHUNK_SIZE, Math.min(file.size, (k + 1) * CHUNK_SIZE));
+          return uploadPartWithRetry(memo.id, k, ext, blob, 3);
+        }).then(function () {
+          k++; onProgress && onProgress('upload', k, total);
+          return step();
+        });
+      }
+      return step();
+    });
+  }
+
+  // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
       method: 'POST',
@@ -206,7 +265,9 @@
 
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
-    send: send, sendBatch: sendBatch, createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount
+    send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
+    createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount,
+    CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });
 })(window);

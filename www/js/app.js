@@ -295,9 +295,11 @@
       if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
       else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
       else { badge = '정리중'; cls = 'b-proc'; }
+      var vp = (videoProg && videoProg[e.id]) || '';
+      var sub = (vp && e.status !== 'done') ? vp : (e.date || '');
       return '<button class="card item" data-id="' + e.id + '">' +
         '<span class="ic"><svg><use href="#' + iconFor(e.kind) + '"/></svg></span>' +
-        '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(e.date || '') + '</small></span>' +
+        '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(sub) + '</small></span>' +
         '<span class="badge ' + cls + '">' + badge + '</span>' +
         '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
     }).join('');
@@ -346,11 +348,11 @@
   function reviewFiles(fileList, kind) {
     var arr = Array.prototype.slice.call(fileList || []);
     if (!arr.length) return;
-    var tooBig = arr.filter(function (f) { return (f.size || 0) > MAX_MB * 1024 * 1024; });
-    arr = arr.filter(function (f) { return (f.size || 0) <= MAX_MB * 1024 * 1024; });
-    if (tooBig.length) {
-      toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요. ' +
-        (kind === 'video' ? '긴 영상은 곧 지원 예정이에요.' : ''));
+    // 사진만 용량 제한(각 45MB). 영상은 큰 것도 허용(큰 영상은 조각으로 나눠 전송).
+    if (kind === 'photo') {
+      var tooBig = arr.filter(function (f) { return (f.size || 0) > MAX_MB * 1024 * 1024; });
+      arr = arr.filter(function (f) { return (f.size || 0) <= MAX_MB * 1024 * 1024; });
+      if (tooBig.length) toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요.');
     }
     if (!arr.length) return;
     pendingFiles = arr; pendingKind = kind;
@@ -392,7 +394,76 @@
     sendFiles(files, kind, title, note, isCard);
   });
 
+  // 라우터: 영상 중 큰 것(>45MB)은 조각 전송(백그라운드), 나머지는 묶음 전송(포그라운드)
+  var VIDEO_CHUNK_LIMIT = 45 * 1024 * 1024;
   function sendFiles(files, kind, title, note, isCard) {
+    if (!files || !files.length) return;
+    if (kind === 'video') {
+      var big = [], small = [];
+      Array.prototype.forEach.call(files, function (f) { ((f.size || 0) > VIDEO_CHUNK_LIMIT ? big : small).push(f); });
+      if (small.length) sendBatchMemo(small, 'video', title, note, false);
+      if (big.length) sendChunkedVideos(big, title, note);
+      if (!small.length) showHome();
+      return;
+    }
+    sendBatchMemo(files, kind, title, note, isCard);
+  }
+
+  /* 긴 영상: 조각 전송 + 백그라운드 진행(다른 기능 안 막음 — 대원칙) */
+  var videoProg = {}, videoPollers = {};
+  function sendChunkedVideos(list, title, note) {
+    Array.prototype.forEach.call(list, function (file, idx) {
+      var t = now();
+      var mb = Math.round((file.size || 0) / 1024 / 1024);
+      var memo = {
+        id: OfficeBridge.uuid(), token: OfficeBridge.token(),
+        title: (title || '긴 영상') + (list.length > 1 ? (' (' + (idx + 1) + ')') : ''),
+        kind: 'video', note: note || null, date: t.date, time: t.time
+      };
+      HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'video' });
+      videoProg[memo.id] = '올릴 준비 중… (' + mb + 'MB)';
+      renderHistory();
+      OfficeBridge.sendVideoChunked(memo, file, function (phase, done, total) {
+        videoProg[memo.id] = '올리는 중 ' + done + '/' + total + ' 조각';
+        renderHistory();
+      }).then(function () {
+        HistoryModule.update(memo.id, { status: 'processing' });
+        videoProg[memo.id] = 'PC에서 분석 준비 중…';
+        renderHistory();
+        startVideoPolling(memo.id, memo.token);
+      }).catch(function (e) {
+        HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
+        delete videoProg[memo.id]; renderHistory();
+        toast('긴 영상 업로드 실패 — 지난 메모에서 다시 시도해 주세요.');
+      });
+    });
+    toast('긴 영상은 시간이 걸려요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
+    showHome();
+  }
+  function startVideoPolling(id, token) {
+    if (videoPollers[id]) return;
+    var started = Date.now();
+    videoPollers[id] = setInterval(function () {
+      OfficeBridge.poll(id, token).then(function (res) {
+        if (!res) return;
+        if (res.status === 'done') {
+          clearInterval(videoPollers[id]); delete videoPollers[id]; delete videoProg[id];
+          HistoryModule.update(id, {
+            status: 'done', kind: res.kind, transcript: res.transcript, summary_json: res.summary_json,
+            content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
+            title: res.title, error: res.error || null
+          });
+          renderHistory();
+          toast('🎬 영상 정리 완료 — 지난 메모에서 볼 수 있어요.');
+        } else {
+          if (res.progress_msg) { videoProg[id] = res.progress_msg; renderHistory(); }
+          if (Date.now() - started > 3 * 60 * 60 * 1000) { clearInterval(videoPollers[id]); delete videoPollers[id]; }  // 최장 3시간
+        }
+      }).catch(function () {});
+    }, 5000);
+  }
+
+  function sendBatchMemo(files, kind, title, note, isCard) {
     if (!files || !files.length) return;
     var t = now();
     var noteFull = note || '';
@@ -562,7 +633,10 @@
   showHome();
   OfficeBridge.flush(function () { renderHistory(); });
   HistoryModule.list().forEach(function (e) {
-    if ((e.status === 'pending' || e.status === 'processing') && e.token && !pollTimer) {
+    if (!e.token) return;
+    if (e.kind === 'video' && e.status === 'processing') {
+      startVideoPolling(e.id, e.token);   // 긴 영상: 백그라운드로 이어서 진행 확인
+    } else if ((e.status === 'pending' || e.status === 'processing') && e.kind !== 'video' && !pollTimer) {
       startPolling(e.id, e.token);
     }
   });
