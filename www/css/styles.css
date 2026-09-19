@@ -236,3 +236,9 @@ footer {
   max-width: 640px; margin: 30px auto 0; text-align: center;
   color: var(--muted); font-size: 12px; line-height: 1.7;
 }
+
+/* 녹음 경과/녹음된 길이 표시(진단) */
+.rectimer {
+  text-align: center; font-size: 22px; font-weight: 700; color: #dc2626;
+  margin: 10px 0; font-variant-numeric: tabular-nums; letter-spacing: 0.5px;
+}

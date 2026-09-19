@@ -18,6 +18,19 @@
   var modal = $('modal'), modalTitle = $('modalTitle'), modalBody = $('modalBody'), modalClose = $('modalClose');
 
   var pendingBlob = null, pollTimer = null, pollingId = null, viewId = null;
+  var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtSec(s) { s = Math.max(0, Math.floor(s)); return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60); }
+  function startRecTimer() {
+    recStart = Date.now();
+    if (recTimerEl) { recTimerEl.style.display = 'block'; recTimerEl.textContent = '녹음 시간 00:00'; }
+    if (recInterval) clearInterval(recInterval);
+    recInterval = setInterval(function () {
+      if (recTimerEl) recTimerEl.textContent = '녹음 시간 ' + fmtSec((Date.now() - recStart) / 1000);
+    }, 500);
+  }
+  function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
 
   if (!RecordingModule.isSupported()) {
     banner.style.display = 'block';
@@ -41,18 +54,26 @@
     if (btnRecord.disabled) return;
     if (!isRecording) {
       hideBanner(); hide(resultWrap); hide(processing);
-      recorder.start(); isRecording = true;
+      recorder.start(); isRecording = true; startRecTimer();
       btnRecord.textContent = '⏹️  녹음 정지'; btnRecord.classList.add('recording');
     } else {
-      recorder.stop(); isRecording = false;
+      recorder.stop(); isRecording = false; stopRecTimer();
       btnRecord.textContent = '🎙️  녹음 시작'; btnRecord.classList.remove('recording');
     }
   });
 
   function onRecorded(blob) {
+    stopRecTimer();
     pendingBlob = blob;
     memoTitle.value = defaultTitle();
     show(recordedPanel);
+    // 실제 "녹음된 길이"를 보여준다(네이티브가 알려줌) — 몇 초가 담겼는지 즉시 확인
+    var durMs = (recorder && recorder.lastDurationMs) || 0;
+    if (recTimerEl) {
+      if (durMs > 0) recTimerEl.textContent = '✅ 녹음된 길이 ' + fmtSec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)';
+      // durMs 0(웹 등)이면 마지막 경과시간 표시 유지
+      recTimerEl.style.display = 'block';
+    }
     setStatus('녹음 완료 — 제목 정하고 PC로 보내세요', 'idle');
   }
   btnRetake.addEventListener('click', function () {

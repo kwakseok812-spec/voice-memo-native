@@ -24,6 +24,12 @@
 
         </activity>
 
+        <!-- 녹음 소유 포그라운드 서비스(마이크). 화면 꺼짐/앱 전환에도 녹음 지속 -->
+        <service
+            android:name=".RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
