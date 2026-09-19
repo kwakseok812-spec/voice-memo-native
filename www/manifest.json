@@ -1,6 +1,6 @@
 {
-  "name": "음성 메모 정리",
-  "short_name": "음성메모",
+  "name": "스마트비서",
+  "short_name": "스마트비서",
   "description": "말하면 글자로 바꾸고 핵심·할 일·결정사항으로 정리하는 음성 메모 앱",
   "lang": "ko",
   "dir": "ltr",

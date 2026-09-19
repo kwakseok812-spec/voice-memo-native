@@ -1,13 +1,28 @@
 :root {
-  --bg: #f4f6fb;
+  --bg: #eef2f9;
+  --bg2: #f8fafc;
   --card: #ffffff;
   --primary: #2563eb;
   --primary-dark: #1d4ed8;
+  --primary-soft: #eef2ff;
   --rec: #dc2626;
-  --text: #1f2937;
+  --text: #111827;
   --muted: #6b7280;
-  --line: #e5e7eb;
+  --line: #e6e9ef;
   --ok: #16a34a;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.06);
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
+}
+/* 다크모드 (폰 설정 따라 자동) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220; --bg2: #0f172a; --card: #161f30;
+    --primary: #3b82f6; --primary-dark: #60a5fa; --primary-soft: #1e293b;
+    --text: #e5e7eb; --muted: #9aa4b2; --line: #26324a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  }
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -16,19 +31,23 @@ body {
   margin: 0;
   padding: 0 16px 48px;
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 400px at 50% -120px, rgba(37,99,235,.10), transparent 70%),
+    var(--bg);
   color: var(--text);
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 header {
   max-width: 640px;
   margin: 0 auto;
-  padding: 22px 0 10px;
+  padding: 26px 0 12px;
   text-align: center;
 }
-header h1 { font-size: 22px; margin: 0 0 4px; }
-header p { margin: 0; color: var(--muted); font-size: 14px; }
+header h1 { font-size: 26px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.02em; }
+header p { margin: 0; color: var(--muted); font-size: 14.5px; }
+.logo-spark { color: var(--primary); }
 
 main { max-width: 640px; margin: 0 auto; }
 
@@ -268,3 +287,47 @@ footer {
 .thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
 .morethumb { display:inline-flex; align-items:center; justify-content:center; width:72px; height:72px;
   border-radius:8px; background:#eef2ff; color:var(--primary-dark); font-weight:700; }
+
+/* ============ 디자인 폴리시 (스마트비서) + 다크모드 대응 ============ */
+.bigbtn { border-radius: 16px; background: linear-gradient(180deg, #3b82f6, var(--primary));
+  box-shadow: 0 8px 22px rgba(37,99,235,.30); letter-spacing: -0.01em; }
+.bigbtn.recording { background: linear-gradient(180deg,#ef4444,var(--rec)); box-shadow: 0 8px 22px rgba(220,38,38,.30); }
+
+.card { box-shadow: var(--shadow); border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.card h3 { color: var(--text); }
+
+.savebtn { box-shadow: var(--shadow-sm); background: var(--card); color: var(--text); border: 1px solid var(--line); }
+.savebtn.primary { background: linear-gradient(180deg,#3b82f6,var(--primary)); color:#fff; border-color: transparent;
+  box-shadow: 0 8px 20px rgba(37,99,235,.28); }
+.savebtn.send { background: linear-gradient(180deg,#10b981,#059669); color:#fff; border-color: transparent;
+  box-shadow: 0 6px 16px rgba(5,150,105,.25); }
+.savebtn.send.done { background: var(--card); color: var(--muted); border:1px solid var(--line); box-shadow:none; }
+
+.btnrow button { background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow-sm); border-radius: 12px; }
+.btnrow button.accent { color: var(--primary-dark); border-color: var(--primary); }
+.btnrow.subtle button { color: var(--muted); }
+
+.titleinput, .titlenote, .transcriptview { background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+.titleinput:focus, .titlenote:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+
+.histitem { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-sm); border-radius: 14px; }
+.modal-box { background: var(--card); box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
+.xbtn { background: var(--primary-soft); color: var(--muted); }
+
+.installbar { background: var(--primary-soft); border: 1px solid transparent; box-shadow: var(--shadow); border-radius: var(--radius); }
+.installhelp-box { background: var(--bg2); border: 1px solid var(--line); color: var(--text); }
+
+.processing { background: var(--primary-soft); border: 1px solid transparent; color: var(--primary-dark); box-shadow: var(--shadow-sm); }
+.spinner { border-color: rgba(37,99,235,.25); border-top-color: var(--primary); }
+
+.filemeta { background: var(--card); border: 1px solid var(--line); color: var(--text); }
+.chip { background: var(--primary-soft); color: var(--primary-dark); }
+.level { background: var(--line); }
+.transcriptview { line-height: 1.7; }
+.cr-line a { color: var(--primary-dark); }
+
+.label { color: var(--muted); font-weight: 700; letter-spacing: 0.01em; }
+footer { color: var(--muted); }
+
+/* 라운드·간격 소폭 정돈 */
+.rectimer { color: var(--primary-dark); }

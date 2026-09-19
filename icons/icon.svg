@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 스마트비서 아이콘 원본. PNG는 make_icons_smart.py(Pillow)로 생성. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="115" fill="url(#bg)"/>
+
+  <!-- 말풍선 -->
+  <g fill="#ffffff">
+    <rect x="120" y="150" width="272" height="196" rx="72"/>
+    <path d="M190 342 L250 342 L205 405 Z"/>
+  </g>
+  <!-- 말풍선 속 스파크(파랑) -->
+  <path fill="#2563eb"
+        d="M256 172 L278 226 L332 248 L278 270 L256 324 L234 270 L180 248 L234 226 Z"/>
+  <!-- 오른쪽 위 작은 흰 스파크 -->
+  <path fill="#ffffff"
+        d="M384 120 L394 150 L424 160 L394 170 L384 200 L374 170 L344 160 L374 150 Z"/>
+</svg>
