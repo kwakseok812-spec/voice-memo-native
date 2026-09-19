@@ -331,3 +331,13 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .chatintro-ic svg{width:30px;height:30px;color:#fff}
 .chatintro b{font-size:20px;color:var(--text);display:block;margin-bottom:6px}
 .chatintro p{font-size:15px;line-height:1.7}
+
+/* v0.9.1 케이 답 도착 배지 */
+.chatbadge{flex:none;min-width:22px;height:22px;padding:0 6px;margin-left:auto;border-radius:999px;background:var(--rec);color:#fff;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px var(--rec)}
+.action.wide #chatBadge + .chev{margin-left:8px}
+
+/* v0.9.1 소장 K 진입점(홈 최상단·중심 기능 강조) */
+.chat-entry{margin-top:16px;border:1.5px solid var(--p2);box-shadow:var(--glow-s)}
+.chat-entry .ic{background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
+.chat-entry .ic svg{color:#fff}
+.chat-entry .tx b{font-size:19px}

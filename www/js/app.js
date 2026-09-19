@@ -585,9 +585,11 @@
   }
 
   /* ===================== 케이와 대화 ===================== */
+  // 메시지 저장 형식: 질문 {role:'me', text, ts, id, token, answered} · 답 {role:'k', text, ts}
+  // 답은 각 질문의 (id,token)으로 RPC 재조회 → 화면을 나갔다 와도, 앱을 껐다 켜도 복원된다.
   var chatView = $('chatView'), chatLog = $('chatLog'), chatInput = $('chatInput'), chatSend = $('chatSend');
   var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
-  var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatBusy = false, chatPoll = null;
+  var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
 
   function getChatThread() {
     try {
@@ -599,65 +601,103 @@
   function loadChatMsgs() {
     try {
       var a = JSON.parse(localStorage.getItem(CHAT_MSGS_KEY) || '[]');
-      return a.filter(function (m) { return m && m.role !== 'typing'; });   // 중단된 typing 잔상 제거
+      a = a.filter(function (m) { return m && m.role !== 'typing'; });
+      // 옛 형식(질문에 answered/id 없음)은 이미 지난 것으로 간주 → 무한 대기 방지
+      a.forEach(function (m) { if (m.role === 'me' && m.answered === undefined) m.answered = true; });
+      return a;
     } catch (e) { return []; }
   }
   function saveChatMsgs() {
-    try { localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-100))); } catch (e) {}
+    try {
+      var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
+        .map(function (m) { return m.role === 'me'
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered }
+          : { role: 'k', text: m.text, ts: m.ts }; });
+      localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
+    } catch (e) {}
   }
-  function chatText(s) { return esc(s).replace(/\n/g, '<br>'); }
+  function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
+  function chatText(s) {
+    return esc(s)
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')   // **강조** → 굵게
+      .replace(/\n/g, '<br>');
+  }
   function chatScrollBottom() { setTimeout(function () { if (chatLog) chatLog.scrollTop = chatLog.scrollHeight; }, 30); }
+  function updateSendEnabled() { if (chatSend) chatSend.disabled = anyAwaiting(); }
+  function updateChatBadge() {
+    var b = $('chatBadge'); if (!b) return;
+    if (chatUnseen > 0) { b.textContent = chatUnseen > 9 ? '9+' : String(chatUnseen); b.style.display = 'inline-flex'; }
+    else b.style.display = 'none';
+  }
   function renderChat() {
     if (!chatMsgs.length) {
       chatLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
         '<b>안녕하세요, 교수님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
       return;
     }
-    chatLog.innerHTML = chatMsgs.map(function (m) {
-      if (m.role === 'typing') return '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+    var html = chatMsgs.map(function (m) {
+      if (m.role === 'typing') return '';
       return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + chatText(m.text) + '</div>';
     }).join('');
+    if (anyAwaiting()) html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+    chatLog.innerHTML = html;
     chatScrollBottom();
   }
-  function openChat() { openScreen(chatView); renderChat(); setTimeout(function () { chatInput && chatInput.focus(); }, 80); }
-  function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
-  function replaceTyping(text) {
-    for (var i = chatMsgs.length - 1; i >= 0; i--) { if (chatMsgs[i].role === 'typing') { chatMsgs[i] = { role: 'k', text: text, ts: Date.now() }; break; } }
-    saveChatMsgs(); renderChat();
+  function openChat() {
+    openScreen(chatView);
+    chatUnseen = 0; updateChatBadge();
+    renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
+    if (anyAwaiting()) startChatReconcile();
+    setTimeout(function () { chatInput && chatInput.focus(); }, 80);
   }
-  function chatDone() { chatBusy = false; if (chatSend) chatSend.disabled = false; }
+  function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
   function sendChatMsg() {
     if (!chatInput) return;
     var text = (chatInput.value || '').trim();
-    if (!text || chatBusy) return;
+    if (!text || anyAwaiting()) return;          // 앞 질문 답 오기 전엔 다음 전송 잠금(순서 유지)
     chatInput.value = ''; autoGrowChat();
-    chatMsgs.push({ role: 'me', text: text, ts: Date.now() });
-    chatMsgs.push({ role: 'typing' });
-    renderChat(); saveChatMsgs();
-    chatBusy = true; if (chatSend) chatSend.disabled = true;
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false });
+    saveChatMsgs(); renderChat(); updateSendEnabled();
     OfficeBridge.sendChat(id, tok, chatThread, text).then(function () {
-      pollChat(id, tok);
+      startChatReconcile();
     }).catch(function () {
-      replaceTyping('죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); chatDone();
+      // 전송 자체 실패 → 그 질문에 오류답 달고 잠금 해제
+      var m = findMsg(id); if (m) m.answered = true;
+      chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      saveChatMsgs(); renderChat(); updateSendEnabled();
     });
   }
-  function pollChat(id, tok) {
-    var started = Date.now();
-    if (chatPoll) clearInterval(chatPoll);
-    chatPoll = setInterval(function () {
-      OfficeBridge.poll(id, tok).then(function (res) {
+  function findMsg(id) { for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].id === id) return chatMsgs[i]; return null; }
+  function startChatReconcile() {
+    if (chatTimer) return;
+    reconcileChat();
+    chatTimer = setInterval(reconcileChat, 2500);
+  }
+  function stopChatReconcile() { if (chatTimer) { clearInterval(chatTimer); chatTimer = null; } }
+  // 대기 중인 질문들의 답을 RPC로 확인해 반영(화면 밖에서도 계속 — 대원칙: 다른 기능과 독립)
+  function reconcileChat() {
+    var pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
+    if (!pending.length) { stopChatReconcile(); updateSendEnabled(); return; }
+    pending.forEach(function (m) {
+      if (m._polling) return; m._polling = true;
+      OfficeBridge.poll(m.id, m.token).then(function (res) {
+        m._polling = false;
         if (res && res.status === 'done') {
-          clearInterval(chatPoll); chatPoll = null;
-          replaceTyping(res.content_md || (res.summary_json && res.summary_json.reply) || '(빈 응답)');
-          chatDone();
-        } else if (Date.now() - started > 5 * 60 * 1000) {
-          clearInterval(chatPoll); chatPoll = null;
-          replaceTyping('시간이 오래 걸리고 있어요. 큰 일은 시간이 걸릴 수 있어요 — 잠시 후 다시 여쭤봐 주세요. (PC가 켜져 있는지도 확인해 주세요.)');
-          chatDone();
+          m.answered = true;
+          var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
+          chatMsgs.push({ role: 'k', text: reply, ts: Date.now() });
+          saveChatMsgs();
+          if (isOpen(chatView)) renderChat();
+          else { chatUnseen++; updateChatBadge(); toast('케이 답장이 도착했어요.'); }
+          updateSendEnabled();
+        } else if (Date.now() - (m.ts || 0) > 6 * 60 * 1000) {
+          m.answered = true;
+          chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
+          saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
         }
-      }).catch(function () {});
-    }, 2000);
+      }).catch(function () { m._polling = false; });
+    });
   }
   if ($('btnChat')) $('btnChat').addEventListener('click', openChat);
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);
@@ -722,4 +762,6 @@
       startPolling(e.id, e.token);
     }
   });
+  // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
+  if (anyAwaiting()) startChatReconcile();
 })();

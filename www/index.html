@@ -83,6 +83,9 @@
 
       <div class="greet"><h1>안녕하세요, <em>교수님</em></h1><p>무엇을 도와드릴까요?</p></div>
 
+      <!-- 소장 K 대화 진입 (스마트비서의 중심 · 최상단) -->
+      <button class="card action wide chat-entry" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>소장 K</b><small>묻거나 일을 시켜 보세요</small></span><span id="chatBadge" class="chatbadge" style="display:none;">0</span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+
       <!-- 녹음 오브 -->
       <div class="orbwrap">
         <button class="orbbtn" id="btnRecord" aria-label="녹음 시작">
@@ -98,7 +101,6 @@
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
-      <button class="card action wide" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>케이와 대화</b><small>소장 케이에게 묻고 일 시키기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
@@ -173,7 +175,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이와 대화</span><span class="spacer"></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K</span><span class="spacer"></span></div>
       <div id="chatLog" class="chatlog"></div>
       <div class="chatbar">
         <button id="chatMic" class="iconbtn chatmic" disabled title="음성 대화는 준비 중이에요"><svg><use href="#i-mic"/></svg></button>
