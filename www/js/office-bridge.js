@@ -232,6 +232,15 @@
     });
   }
 
+  // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
+  function sendChat(id, token, thread, text) {
+    return _insertRow({
+      id: id, title: '채팅', status: 'pending', kind: 'chat',
+      note: text, client_token: token,
+      meta: { app: 'voice-memo-test', thread: thread }
+    });
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -266,7 +275,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
-    createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount,
+    createSearch: createSearch, sendChat: sendChat, poll: poll, flush: flush, pendingCount: pendingCount,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });

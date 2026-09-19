@@ -46,6 +46,8 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="currentColor"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
 <!-- ===== 배경 (그라데이션 + 오브 + 격자) ===== -->
@@ -96,6 +98,7 @@
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
+      <button class="card action wide" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>케이와 대화</b><small>소장 케이에게 묻고 일 시키기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
@@ -166,6 +169,17 @@
       </div>
       <div id="searchMsg" class="exportmsg"></div>
       <div id="searchResults"></div>
+    </section>
+
+    <!-- ===================== 케이와 대화 ===================== -->
+    <section id="chatView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이와 대화</span><span class="spacer"></span></div>
+      <div id="chatLog" class="chatlog"></div>
+      <div class="chatbar">
+        <button id="chatMic" class="iconbtn chatmic" disabled title="음성 대화는 준비 중이에요"><svg><use href="#i-mic"/></svg></button>
+        <div class="input chatinput"><textarea id="chatInput" rows="1" placeholder="케이에게 묻거나 일을 시켜 보세요"></textarea></div>
+        <button id="chatSend" class="chatsend" aria-label="보내기"><svg><use href="#i-send"/></svg></button>
+      </div>
     </section>
 
     <!-- ===================== 처리 중 ===================== -->

@@ -62,7 +62,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), processing, resultWrap];
+  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   function showHome() {
@@ -584,6 +584,88 @@
     modal.style.display = 'flex';
   }
 
+  /* ===================== 케이와 대화 ===================== */
+  var chatView = $('chatView'), chatLog = $('chatLog'), chatInput = $('chatInput'), chatSend = $('chatSend');
+  var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
+  var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatBusy = false, chatPoll = null;
+
+  function getChatThread() {
+    try {
+      var t = localStorage.getItem(CHAT_THREAD_KEY);
+      if (!t) { t = 'th_' + OfficeBridge.token().slice(0, 14); localStorage.setItem(CHAT_THREAD_KEY, t); }
+      return t;
+    } catch (e) { return 'th_' + Math.random().toString(16).slice(2, 16); }
+  }
+  function loadChatMsgs() {
+    try {
+      var a = JSON.parse(localStorage.getItem(CHAT_MSGS_KEY) || '[]');
+      return a.filter(function (m) { return m && m.role !== 'typing'; });   // 중단된 typing 잔상 제거
+    } catch (e) { return []; }
+  }
+  function saveChatMsgs() {
+    try { localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-100))); } catch (e) {}
+  }
+  function chatText(s) { return esc(s).replace(/\n/g, '<br>'); }
+  function chatScrollBottom() { setTimeout(function () { if (chatLog) chatLog.scrollTop = chatLog.scrollHeight; }, 30); }
+  function renderChat() {
+    if (!chatMsgs.length) {
+      chatLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
+        '<b>안녕하세요, 교수님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
+      return;
+    }
+    chatLog.innerHTML = chatMsgs.map(function (m) {
+      if (m.role === 'typing') return '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + chatText(m.text) + '</div>';
+    }).join('');
+    chatScrollBottom();
+  }
+  function openChat() { openScreen(chatView); renderChat(); setTimeout(function () { chatInput && chatInput.focus(); }, 80); }
+  function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
+  function replaceTyping(text) {
+    for (var i = chatMsgs.length - 1; i >= 0; i--) { if (chatMsgs[i].role === 'typing') { chatMsgs[i] = { role: 'k', text: text, ts: Date.now() }; break; } }
+    saveChatMsgs(); renderChat();
+  }
+  function chatDone() { chatBusy = false; if (chatSend) chatSend.disabled = false; }
+  function sendChatMsg() {
+    if (!chatInput) return;
+    var text = (chatInput.value || '').trim();
+    if (!text || chatBusy) return;
+    chatInput.value = ''; autoGrowChat();
+    chatMsgs.push({ role: 'me', text: text, ts: Date.now() });
+    chatMsgs.push({ role: 'typing' });
+    renderChat(); saveChatMsgs();
+    chatBusy = true; if (chatSend) chatSend.disabled = true;
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    OfficeBridge.sendChat(id, tok, chatThread, text).then(function () {
+      pollChat(id, tok);
+    }).catch(function () {
+      replaceTyping('죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); chatDone();
+    });
+  }
+  function pollChat(id, tok) {
+    var started = Date.now();
+    if (chatPoll) clearInterval(chatPoll);
+    chatPoll = setInterval(function () {
+      OfficeBridge.poll(id, tok).then(function (res) {
+        if (res && res.status === 'done') {
+          clearInterval(chatPoll); chatPoll = null;
+          replaceTyping(res.content_md || (res.summary_json && res.summary_json.reply) || '(빈 응답)');
+          chatDone();
+        } else if (Date.now() - started > 5 * 60 * 1000) {
+          clearInterval(chatPoll); chatPoll = null;
+          replaceTyping('시간이 오래 걸리고 있어요. 큰 일은 시간이 걸릴 수 있어요 — 잠시 후 다시 여쭤봐 주세요. (PC가 켜져 있는지도 확인해 주세요.)');
+          chatDone();
+        }
+      }).catch(function () {});
+    }, 2000);
+  }
+  if ($('btnChat')) $('btnChat').addEventListener('click', openChat);
+  if (chatSend) chatSend.addEventListener('click', sendChatMsg);
+  if (chatInput) {
+    chatInput.addEventListener('input', autoGrowChat);
+    chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); } });
+  }
+
   /* ===================== 테마 토글 ===================== */
   if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
     var cur = document.documentElement.getAttribute('data-style') || 'dark';
@@ -606,7 +688,7 @@
     if (isOpen(modal)) { closeModal(); return true; }
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
-    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap)) {
+    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView)) {
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     return false;
