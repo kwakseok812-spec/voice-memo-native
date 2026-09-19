@@ -47,6 +47,29 @@
     <!-- 녹음 경과 시간(진단용): 몇 초에 끊기는지 바로 보임 -->
     <div id="recTimer" class="rectimer" style="display:none;">녹음 시간 00:00</div>
 
+    <!-- 사진·영상 보내기 / 명함 검색 -->
+    <div class="btnrow" style="margin-top:10px;">
+      <button id="btnPhoto">📷 사진 보내기</button>
+      <button id="btnVideo">🎬 영상 보내기</button>
+    </div>
+    <div class="btnrow">
+      <button id="btnSearchToggle" class="accent">🔎 명함 검색</button>
+    </div>
+    <label class="cardhint"><input type="checkbox" id="isCard"> 사진이 <b>명함</b>이면 체크(명함으로 등록)</label>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="videoInput" accept="video/*" style="display:none">
+
+    <!-- 명함 검색 패널 -->
+    <div id="searchPanel" style="display:none;">
+      <div class="label">명함 검색 <span class="hint">(이름·기관을 한글로)</span></div>
+      <div class="searchrow">
+        <input id="searchInput" class="titleinput" type="text" placeholder="예: 방부형 / 연성대학교" style="flex:1;">
+        <button id="searchGo" class="savebtn primary" style="width:auto;padding:13px 18px;margin:0;">검색</button>
+      </div>
+      <div id="searchMsg" class="exportmsg"></div>
+      <div id="searchResults"></div>
+    </div>
+
     <!-- 녹음 완료 → 제목 정하고 보내기 -->
     <div id="recordedPanel" style="display:none;">
       <div class="label">제목 <span class="hint">(PC에 저장될 파일 이름이 돼요)</span></div>
@@ -66,7 +89,7 @@
       <div class="label">정리 결과</div>
       <div id="resultArea"></div>
 
-      <div class="label">전사 원문</div>
+      <div class="label" id="transcriptLabel">전사 원문</div>
       <div id="transcriptView" class="transcriptview"></div>
 
       <div id="docBtns"></div>

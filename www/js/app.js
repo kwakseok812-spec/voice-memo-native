@@ -115,8 +115,9 @@
         if (res.status === 'done') {
           stopPolling();
           HistoryModule.update(id, {
-            status: 'done', transcript: res.transcript, summary_json: res.summary_json,
-            pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url, title: res.title, error: res.error || null
+            status: 'done', kind: res.kind, transcript: res.transcript, summary_json: res.summary_json,
+            content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
+            title: res.title, error: res.error || null
           });
           renderHistory(); hide(processing); showResult(id);
           setStatus('정리 완료', 'idle');
@@ -139,10 +140,29 @@
   function showResult(id) {
     var e = HistoryModule.get(id); if (!e) return;
     viewId = id;
-    resultArea.innerHTML = renderCards(e.summary_json);
-    transcriptView.textContent = (e.transcript || '(전사 내용이 비어 있어요)');
-    docBtns.innerHTML = renderDocButtons(e);
-    wireDocButtons(docBtns, e);
+    var tl = $('transcriptLabel');
+    if (e.kind === 'photo' || e.kind === 'video') {
+      // 사진/영상: 분석 결과 텍스트만(문서 버튼 없음)
+      var result = (e.summary_json && e.summary_json.result) || '(결과 없음)';
+      var detail = e.content_md || '';
+      resultArea.innerHTML =
+        '<div class="card"><h3>🔍 분석 결과</h3><p style="white-space:pre-wrap;font-size:16px">' + esc(result) + '</p></div>' +
+        (detail ? '<div class="card"><h3>📄 상세</h3><p style="white-space:pre-wrap;font-size:14px;color:#374151">' + esc(detail) + '</p></div>' : '');
+      // 영상만 전사 표시, 사진은 전사칸 숨김
+      if (e.kind === 'video' && e.transcript) {
+        if (tl) tl.style.display = 'block'; transcriptView.style.display = 'block';
+        transcriptView.textContent = e.transcript;
+      } else {
+        if (tl) tl.style.display = 'none'; transcriptView.style.display = 'none';
+      }
+      docBtns.innerHTML = '';
+    } else {
+      if (tl) tl.style.display = 'block'; transcriptView.style.display = 'block';
+      resultArea.innerHTML = renderCards(e.summary_json);
+      transcriptView.textContent = (e.transcript || '(전사 내용이 비어 있어요)');
+      docBtns.innerHTML = renderDocButtons(e);
+      wireDocButtons(docBtns, e);
+    }
     setExportMsg('', '');
     show(resultWrap);
   }
@@ -219,7 +239,10 @@
   }
   function onHistoryClick(id) {
     var e = HistoryModule.get(id); if (!e) return;
-    if (e.status === 'done') { openModal(e); }
+    if (e.status === 'done') {
+      if (e.kind === 'photo' || e.kind === 'video') showResult(id);   // 사진/영상은 결과화면으로
+      else openModal(e);
+    }
     else if (e.status === 'failed') {
       // 재시도: IndexedDB에 보관된 오디오를 다시 업로드
       setStatus('재시도 중…', 'rec');
@@ -262,6 +285,98 @@
   function showBanner(m) { banner.style.display = 'block'; banner.innerHTML = m; }
   function hideBanner() { if (RecordingModule.isSupported()) banner.style.display = 'none'; }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  /* ===================== 사진 · 영상 보내기 ===================== */
+  function sendFile(file, kind) {
+    if (!file) return;
+    var t = now();
+    var ext = ((file.name || '').split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg')).toLowerCase();
+    if (!ext || ext.length > 5) ext = (kind === 'video' ? 'mp4' : 'jpg');
+    var isCard = kind === 'photo' && $('isCard') && $('isCard').checked;
+    var memo = {
+      id: OfficeBridge.uuid(), token: OfficeBridge.token(),
+      title: (kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time,
+      kind: kind, ext: ext, note: isCard ? '명함' : null, date: t.date, time: t.time
+    };
+    HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
+    renderHistory();
+    hide(resultWrap); show(processing);
+    setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록해요)' : '🎬 영상 분석 중… (조금 걸릴 수 있어요)');
+    OfficeBridge.send(memo, file).then(function () {
+      HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
+      startPolling(memo.id, memo.token);
+    }).catch(function (e) {
+      HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
+      renderHistory(); hide(processing);
+      showBanner('⚠️ 업로드 실패(오프라인일 수 있어요). 목록에서 [재시도]를 눌러 주세요.');
+    });
+  }
+  $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
+  $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
+  $('photoInput').addEventListener('change', function () { if (this.files && this.files[0]) sendFile(this.files[0], 'photo'); this.value = ''; });
+  $('videoInput').addEventListener('change', function () { if (this.files && this.files[0]) sendFile(this.files[0], 'video'); this.value = ''; });
+
+  /* ===================== 명함 검색 ===================== */
+  var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
+  $('btnSearchToggle').addEventListener('click', function () {
+    var vis = searchPanel.style.display !== 'none';
+    searchPanel.style.display = vis ? 'none' : 'block';
+    if (!vis && searchInput) searchInput.focus();
+  });
+  function setSearchMsg(m, k) { searchMsg.textContent = m || ''; searchMsg.className = 'exportmsg ' + (k || ''); }
+  function doSearch() {
+    var q = (searchInput.value || '').trim();
+    if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하세요.', 'err'); return; }
+    setSearchMsg('🔎 검색 중…', 'work'); searchResults.innerHTML = '';
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    OfficeBridge.createSearch({ id: id, token: tok, note: q }).then(function () {
+      pollSearch(id, tok, function (res) {
+        var sj = res.summary_json || {};
+        renderSearchResults(sj.matches || [], sj.count || 0, q);
+      });
+    }).catch(function (e) { setSearchMsg('검색 요청 실패: ' + (e && e.message || e), 'err'); });
+  }
+  $('searchGo').addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
+
+  function pollSearch(id, tok, onDone) {
+    var started = Date.now();
+    var t = setInterval(function () {
+      OfficeBridge.poll(id, tok).then(function (res) {
+        if (res && res.status === 'done') { clearInterval(t); onDone(res); }
+        else if (Date.now() - started > 60000) { clearInterval(t); setSearchMsg('시간이 걸려요. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
+      }).catch(function () {});
+    }, 2000);
+  }
+  function renderSearchResults(matches, count, q) {
+    if (!matches.length) { setSearchMsg('"' + esc(q) + '" 결과가 없어요.', ''); searchResults.innerHTML = ''; return; }
+    setSearchMsg(count + '건 찾음', 'ok');
+    searchResults.innerHTML = matches.map(function (m) {
+      var h = '<div class="card cardresult">';
+      h += '<div class="cr-name">' + esc(m.name) + ' <span class="cr-org">' + esc(m.org) + '</span></div>';
+      if (m.dept || m.title) h += '<div class="cr-sub">' + esc([m.dept, m.title].filter(Boolean).join(' · ')) + '</div>';
+      if (m.mobile) h += '<div class="cr-line">📱 <a href="tel:' + esc(m.mobile) + '">' + esc(m.mobile) + '</a></div>';
+      if (m.office) h += '<div class="cr-line">☎️ <a href="tel:' + esc(m.office) + '">' + esc(m.office) + '</a></div>';
+      if (m.email) h += '<div class="cr-line">✉️ <a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></div>';
+      if (m.note) h += '<div class="cr-note">' + esc(m.note) + '</div>';
+      if (m.photo_path) h += '<button class="hsend cardphoto" data-photo="' + esc(m.photo_path) + '">📇 명함 사진 보기</button>';
+      return h + '</div>';
+    }).join('');
+    Array.prototype.forEach.call(searchResults.querySelectorAll('[data-photo]'), function (b) {
+      b.addEventListener('click', function () { openCardPhoto(b.getAttribute('data-photo'), b); });
+    });
+  }
+  function openCardPhoto(path, btn) {
+    btn.textContent = '불러오는 중…'; btn.disabled = true;
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    OfficeBridge.createSearch({ id: id, token: tok, note: 'photo:' + path }).then(function () {
+      pollSearch(id, tok, function (res) {
+        var url = res.summary_json && res.summary_json.photo_url;
+        btn.textContent = '📇 명함 사진 보기'; btn.disabled = false;
+        if (url) window.open(url, '_blank'); else setSearchMsg('사진을 찾지 못했어요.', 'err');
+      });
+    }).catch(function () { btn.textContent = '📇 명함 사진 보기'; btn.disabled = false; });
+  }
 
   setStatus('대기 중', 'idle');
   renderHistory();

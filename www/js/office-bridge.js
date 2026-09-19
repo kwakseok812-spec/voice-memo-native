@@ -93,12 +93,7 @@
       body: blob
     }).then(function (r) { if (!r.ok) throw new Error('오디오 업로드 실패(HTTP ' + r.status + ')'); return path; });
   }
-  function createMemo(memo, audioPath) {
-    var body = {
-      id: memo.id, title: memo.title, status: 'pending',
-      audio_path: audioPath, client_token: memo.token,
-      meta: { app: 'voice-memo-test', ext: memo.ext }
-    };
+  function _insertRow(body) {
     return fetch(CONFIG.url + '/rest/v1/' + CONFIG.table, {
       method: 'POST',
       headers: {
@@ -107,6 +102,22 @@
       },
       body: JSON.stringify(body)
     }).then(function (r) { if (!r.ok) throw new Error('메모 등록 실패(HTTP ' + r.status + ')'); return true; });
+  }
+  function createMemo(memo, audioPath) {
+    return _insertRow({
+      id: memo.id, title: memo.title, status: 'pending',
+      kind: memo.kind || 'audio', note: memo.note || null,
+      audio_path: audioPath, client_token: memo.token,
+      meta: { app: 'voice-memo-test', ext: memo.ext }
+    });
+  }
+  // 파일 없이 등록하는 메모(명함 검색 / 사진 온디맨드). kind='search'.
+  function createSearch(memo) {
+    return _insertRow({
+      id: memo.id, title: memo.title || '검색', status: 'pending',
+      kind: 'search', note: memo.note || '', client_token: memo.token,
+      meta: { app: 'voice-memo-test' }
+    });
   }
 
   // 오디오 업로드 + 메모 등록. 실패하면 IndexedDB에 오디오를 넣고 throw.
@@ -152,7 +163,7 @@
 
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
-    send: send, poll: poll, flush: flush, pendingCount: pendingCount
+    send: send, createSearch: createSearch, poll: poll, flush: flush, pendingCount: pendingCount
   };
   global.addEventListener('online', function () { flush(); });
 })(window);

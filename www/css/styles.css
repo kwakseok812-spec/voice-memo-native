@@ -242,3 +242,16 @@ footer {
   text-align: center; font-size: 22px; font-weight: 700; color: #dc2626;
   margin: 10px 0; font-variant-numeric: tabular-nums; letter-spacing: 0.5px;
 }
+
+/* 사진/영상/검색 UI */
+.cardhint { display:block; font-size:13px; color:var(--muted); margin:2px 4px 8px; }
+.cardhint input { vertical-align:middle; margin-right:6px; }
+.searchrow { display:flex; gap:8px; align-items:center; }
+.cardresult { text-align:left; }
+.cr-name { font-size:17px; font-weight:700; color:var(--text); }
+.cr-org { font-size:14px; font-weight:600; color:var(--primary-dark); }
+.cr-sub { font-size:14px; color:var(--muted); margin:3px 0 6px; }
+.cr-line { font-size:15px; margin:3px 0; }
+.cr-line a { color:var(--primary-dark); text-decoration:none; }
+.cr-note { font-size:12px; color:var(--muted); margin-top:6px; white-space:pre-wrap; }
+.cardphoto { margin-top:10px; }
