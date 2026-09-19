@@ -7,3 +7,4 @@ android/capacitor-cordova-android-plugins/build/
 .DS_Store
 .env
 dist/
+android/app/google-services.json

@@ -611,10 +611,28 @@
     try {
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered }
-          : { role: 'k', text: m.text, ts: m.ts }; });
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up }
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
+  }
+  /* ---- 채팅 첨부 파일 유틸(업로드·다운로드 공용 렌더) ---- */
+  function fmtBytes(b) { b = b || 0; if (b < 1024) return b + 'B'; if (b < 1024 * 1024) return Math.round(b / 1024) + 'KB'; return (Math.round(b / 1024 / 1024 * 10) / 10) + 'MB'; }
+  function fileKindOf(mime, name) {
+    var m = (mime || '').toLowerCase(), n = (name || '').toLowerCase();
+    if (/^image\//.test(m) || /\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(n)) return 'image';
+    if (/^video\//.test(m) || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/.test(n)) return 'video';
+    return 'document';
+  }
+  function attachIcon(f) { var k = f.kind || fileKindOf(f.mime, f.name); return k === 'image' ? 'i-image' : k === 'video' ? 'i-video' : 'i-note'; }
+  function attachChips(files, isUp) {
+    if (!files || !files.length) return '';
+    return '<div class="attachlist">' + files.map(function (f) {
+      var sz = f.size ? '<span class="asz">' + esc(fmtBytes(f.size)) + '</span>' : '';
+      var attrs = (!isUp && f.url) ? (' data-att-url="' + esc(f.url) + '"') : ' disabled';
+      return '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
+        '<svg><use href="#' + attachIcon(f) + '"/></svg><span class="an">' + esc(f.name || '파일') + '</span>' + sz + '</button>';
+    }).join('') + '</div>';
   }
   function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
   function chatText(s) {
@@ -637,7 +655,11 @@
     }
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + chatText(m.text) + '</div>';
+      var inner = m.text ? chatText(m.text) : '';
+      if (m.role === 'me' && m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
+      inner += attachChips(m.files, m.role === 'me');
+      if (!inner) return '';
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + inner + '</div>';
     }).join('');
     if (anyAwaiting()) html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
     chatLog.innerHTML = html;
@@ -686,12 +708,15 @@
         if (res && res.status === 'done') {
           m.answered = true;
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
-          chatMsgs.push({ role: 'k', text: reply, ts: Date.now() });
+          var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
+          var kmsg = { role: 'k', text: reply, ts: Date.now() };
+          if (atts.length) kmsg.files = atts;
+          chatMsgs.push(kmsg);
           saveChatMsgs();
           if (isOpen(chatView)) renderChat();
-          else { chatUnseen++; updateChatBadge(); toast('케이 답장이 도착했어요.'); }
+          else { chatUnseen++; updateChatBadge(); toast(atts.length ? '케이가 파일을 보냈어요.' : '케이 답장이 도착했어요.'); }
           updateSendEnabled();
-        } else if (Date.now() - (m.ts || 0) > 6 * 60 * 1000) {
+        } else if (Date.now() - (m.ts || 0) > (m.files ? 20 : 6) * 60 * 1000) {   // 파일 첨부는 여유롭게
           m.answered = true;
           chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
           saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
@@ -705,6 +730,55 @@
     chatInput.addEventListener('input', autoGrowChat);
     chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); } });
   }
+
+  /* ---- 채팅 파일 첨부(교수님 → 케이, 상향) ---- */
+  var CHAT_CHUNK_LIMIT = 45 * 1024 * 1024;   // 이보다 큰 파일은 청크 업로드(단일 50MB 한도 우회)
+  function pushChatFileMsg(files, chunked) {
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var upFiles = Array.prototype.map.call(files, function (f) {
+      return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) };
+    });
+    var names = upFiles.map(function (f) { return f.name; });
+    var note = '[파일 첨부] ' + names.join(', ') + ' — 교수님이 이 파일을 보내셨어요. 확인해 주세요.';
+    var msg = { role: 'me', text: '', ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true };
+    chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
+    var memo = { id: id, token: tok, thread: chatThread, title: names[0] || '파일', note: note };
+    var work = chunked ? OfficeBridge.sendChatChunked(memo, files[0]) : OfficeBridge.sendChatBatch(memo, files);
+    work.then(function () {
+      msg.uploading = false; saveChatMsgs();
+      if (isOpen(chatView)) renderChat();
+      startChatReconcile();
+    }).catch(function (e) {
+      msg.answered = true; msg.uploading = false;
+      chatMsgs.push({ role: 'k', text: '파일 전송이 안 됐어요(' + (e && e.message || e) + '). 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+    });
+  }
+  function onChatFilesPicked(fileList) {
+    var arr = Array.prototype.slice.call(fileList || []);
+    if (!arr.length) return;
+    var big = arr.filter(function (f) { return (f.size || 0) > CHAT_CHUNK_LIMIT; });
+    var small = arr.filter(function (f) { return (f.size || 0) <= CHAT_CHUNK_LIMIT; });
+    if (small.length) pushChatFileMsg(small, false);       // 작은 파일들: 한 번에(한 말풍선)
+    big.forEach(function (f) { pushChatFileMsg([f], true); });   // 큰 파일: 각각 청크로(개별 말풍선)
+    if (big.length) toast('큰 파일은 나눠 올려요 — 시간이 걸릴 수 있어요.');
+  }
+  if ($('chatAttach')) $('chatAttach').addEventListener('click', function () {
+    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }
+    $('chatFileInput').click();
+  });
+  if ($('chatFileInput')) $('chatFileInput').addEventListener('change', function () {
+    if (this.files && this.files.length) onChatFilesPicked(this.files);
+    this.value = '';
+  });
+  // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
+  if (chatLog) chatLog.addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
+    if (!b) return;
+    var url = b.getAttribute('data-att-url');
+    var w = window.open(url, '_blank');
+    if (!w) toast('파일을 열지 못했어요 — 다시 눌러 주세요.');
+  });
 
   /* ===================== 테마 토글 ===================== */
   if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
@@ -764,4 +838,11 @@
   });
   // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
   if (anyAwaiting()) startChatReconcile();
+
+  /* ---- 푸시 알림(FCM): 등록·수신은 push.js. 여기선 대화 화면과 연결만 한다 ---- */
+  window.addEventListener('smartOpenChat', function () { openChat(); });          // 알림 탭 → 대화 열기
+  window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
+    startChatReconcile(); reconcileChat();
+  });
+  if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
 })();

@@ -241,6 +241,90 @@
     });
   }
 
+  /* ---------- 채팅 파일 첨부(교수님 → 케이, 상향) ----------
+   * 사진/영상 파이프라인과 같은 방식으로 파일을 voice-audio 버킷에 올리고,
+   * kind='chat' 행을 만들어 chat_responder.py 가 채팅 맥락(thread)과 함께 집어가게 한다.
+   *
+   * ▶ 앱→워커 규약(상향):
+   *   - 파일 실체: 버킷 voice-audio, 경로 `{id}/{idx}.{ext}`(묶음) 또는 `{id}/part_{k}.{ext}`(청크).
+   *   - 행: kind='chat', note=케이에게 보일 안내문(파일 목록 포함), client_token, status='pending'.
+   *   - meta: { app, thread, from:'phone', files:[{key,ext,name,size,mime}], (청크면 chunked:true,total,ext) }.
+   *   - chat_responder.py 는 note 로 오늘도 케이에게 전달되므로 텍스트 답은 즉시 동작하고,
+   *     meta.files 를 내려받아 케이가 실제로 파일을 쓰게 하려면 워커에 다운로드 단계 추가 필요(보고 참조).
+   */
+  function _insertChatFileRow(memo, filesMeta, extra) {
+    var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', files: filesMeta };
+    if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) meta[k] = extra[k];
+    return _insertRow({
+      id: memo.id, title: memo.title || '파일', status: 'pending', kind: 'chat',
+      note: memo.note || null, client_token: memo.token, meta: meta
+    });
+  }
+  // 여러 파일(각 ≤ 단일 업로드 한도)을 한 채팅 행으로. onProgress(done,total).
+  function sendChatBatch(memo, files, onProgress) {
+    var filesMeta = [], idx = 0;
+    function step() {
+      if (idx >= files.length) { return _insertChatFileRow(memo, filesMeta); }
+      var file = files[idx];
+      var ext = extForFile(file, 'file');
+      var key = memo.id + '/' + idx + '.' + ext;
+      return uploadObject(key, file).then(function () {
+        filesMeta.push({ key: key, ext: ext, name: file.name || ('file' + idx + '.' + ext),
+                         size: file.size || 0, mime: file.type || '' });
+        idx++; onProgress && onProgress(idx, files.length);
+        return step();
+      });
+    }
+    return step();
+  }
+  // 큰 파일 1개: 청크로 나눠 페이싱 업로드(영상 청크와 동일 규약). onProgress('upload',done,total).
+  function sendChatChunked(memo, file, onProgress) {
+    var ext = extForFile(file, 'file');
+    var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    var fileMeta = { name: file.name || ('file.' + ext), size: file.size || 0, mime: file.type || '', ext: ext };
+    return _insertChatFileRow(memo, [fileMeta], { chunked: true, ext: ext, total: total }).then(function () {
+      var k = 0;
+      function step() {
+        if (k >= total) return Promise.resolve();
+        var pacing = (k >= MAX_INFLIGHT)
+          ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
+          : Promise.resolve();
+        return pacing.then(function () {
+          var blob = file.slice(k * CHUNK_SIZE, Math.min(file.size, (k + 1) * CHUNK_SIZE));
+          return uploadPartWithRetry(memo.id, k, ext, blob, 3);
+        }).then(function () {
+          k++; onProgress && onProgress('upload', k, total);
+          return step();
+        });
+      }
+      return step();
+    });
+  }
+
+  /* ---------- 케이 답장의 첨부(케이 → 교수님, 하향) ----------
+   * ▶ 워커→앱 규약(하향): 케이(chat_responder/워커)가 산출물을 voice-docs 버킷에 올리고
+   *   7일 서명URL 을 만든 뒤, 채팅 답장 행에 아래 중 하나로 기록하면 앱이 첨부로 렌더링한다.
+   *     (1) summary_json.attachments = [{ name, url, mime, size, kind }]   ← 권장(여러 개·임의 형식)
+   *     (2) 기존 top-level 필드 pdf_url / docx_url / pptx_url               ← 기존 문서 생성기 그대로 호환
+   *   앱은 poll() 결과에서 이 둘을 모두 읽어 말풍선 아래 파일 칩으로 보여주고,
+   *   탭하면 서명URL 을 연다(문서는 다운로드, PDF/이미지는 열람). 물리적 한계: 서명URL 7일 만료.
+   * 아래 헬퍼는 poll() 결과 한 건에서 첨부 목록을 정규화한다. */
+  function attachmentsFrom(res) {
+    var out = [];
+    var sj = res && res.summary_json;
+    if (sj && sj.attachments && sj.attachments.length) {
+      sj.attachments.forEach(function (a) {
+        if (a && a.url) out.push({ name: a.name || '파일', url: a.url, mime: a.mime || '', size: a.size || 0, kind: a.kind || '' });
+      });
+    }
+    // 기존 문서 생성 필드도 첨부로 흡수(있을 때만)
+    [['pdf_url', 'PDF', 'application/pdf'], ['docx_url', 'Word 문서', ''], ['pptx_url', 'PPT', '']].forEach(function (d) {
+      var u = res && res[d[0]];
+      if (u && !out.some(function (x) { return x.url === u; })) out.push({ name: d[1], url: u, mime: d[2], size: 0, kind: 'document' });
+    });
+    return out;
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -276,6 +360,7 @@
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
     createSearch: createSearch, sendChat: sendChat, poll: poll, flush: flush, pendingCount: pendingCount,
+    sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });

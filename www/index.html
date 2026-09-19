@@ -72,14 +72,7 @@
       <!-- 안내 배너 -->
       <div id="banner"></div>
 
-      <!-- 설치 안내 -->
-      <div id="installBar" class="installbar" style="display:none;">
-        <div class="installtitle">📲 홈 화면에 설치하기</div>
-        <button id="installBtn" class="btn primary" style="display:none;">이 앱 홈 화면에 설치</button>
-        <a id="installHelpLink" class="installhelp" href="#">설치 방법 보기</a>
-        <div id="installHelp" class="installhelp-box" style="display:none;"></div>
-        <div class="installnote">설치가 안 돼도 <b>이 주소로 그냥 쓸 수 있어요.</b></div>
-      </div>
+      <!-- (설치 안내 배너는 2026-09-19 교수님 지시로 삭제됨) -->
 
       <div class="greet"><h1>안녕하세요, <em>교수님</em></h1><p>무엇을 도와드릴까요?</p></div>
 
@@ -178,10 +171,12 @@
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K</span><span class="spacer"></span></div>
       <div id="chatLog" class="chatlog"></div>
       <div class="chatbar">
-        <button id="chatMic" class="iconbtn chatmic" disabled title="음성 대화는 준비 중이에요"><svg><use href="#i-mic"/></svg></button>
+        <button id="chatAttach" class="iconbtn chatattach" aria-label="파일 첨부" title="파일 보내기"><svg><use href="#i-plus"/></svg></button>
         <div class="input chatinput"><textarea id="chatInput" rows="1" placeholder="케이에게 묻거나 일을 시켜 보세요"></textarea></div>
         <button id="chatSend" class="chatsend" aria-label="보내기"><svg><use href="#i-send"/></svg></button>
       </div>
+      <!-- 채팅 첨부: 거의 모든 형식 허용(accept 생략) · 여러 개 선택 가능 -->
+      <input type="file" id="chatFileInput" multiple style="display:none">
     </section>
 
     <!-- ===================== 처리 중 ===================== -->
@@ -223,8 +218,9 @@
 <script src="js/recorder-native.js"></script>
 <script src="js/office-bridge.js"></script>
 <script src="js/history.js"></script>
+<script src="js/push.js"></script>
 <script src="js/app.js"></script>
-<script src="js/install.js"></script>
+<!-- install.js (홈 화면 설치 배너)는 2026-09-19 교수님 지시로 제거됨 -->
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

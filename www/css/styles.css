@@ -268,12 +268,7 @@ html[data-style="light"] #themeToggle .ic-sun{display:block}
 .exportmsg{font-size:14px;font-weight:600;margin:10px 0 0;min-height:1px}
 .exportmsg.ok{color:var(--ok)} .exportmsg.err{color:var(--rec)} .exportmsg.work{color:var(--p1)}
 
-/* 설치 안내 */
-.installbar{margin:12px 0 6px;padding:16px;border-radius:22px;background:var(--glass);border:1px solid var(--glass-b);text-align:center;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
-.installtitle{font-size:16px;font-weight:800;color:var(--text);margin-bottom:10px}
-.installhelp{display:inline-block;font-size:15px;color:var(--p1);text-decoration:underline;cursor:pointer;margin-top:6px}
-.installhelp-box{margin-top:10px;font-size:15px;color:var(--text);text-align:left;background:var(--in-bg);border:1px solid var(--glass-b);border-radius:12px;padding:14px;line-height:1.8}
-.installnote{margin-top:10px;font-size:13px;color:var(--dim);line-height:1.6}
+/* (설치 안내 배너 스타일은 2026-09-19 제거됨) */
 
 /* 토스트 */
 .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(12px);max-width:86%;padding:14px 20px;font-size:14.5px;line-height:1.5;text-align:center;font-weight:600;color:#fff;background:rgba(10,14,30,.94);border:1px solid var(--glass-b);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:9999;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -325,7 +320,20 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .chatsend:disabled{opacity:.5;cursor:default}
 .chatsend svg{width:24px;height:24px}
 .chatsend:active{transform:scale(.95)}
-.chatmic{flex:none;opacity:.55}
+/* 채팅 파일 첨부 버튼(마이크 자리 대체) */
+.chatattach{width:52px;height:52px;flex:none;border-radius:16px;background:var(--glass);border:1px solid var(--glass-b);color:var(--p1);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+.chatattach svg{width:24px;height:24px}
+.chatattach:active{transform:scale(.95)}
+.chatattach:disabled{opacity:.5;cursor:default}
+/* 채팅 말풍선 안 첨부 파일 칩(업로드/다운로드 공용) */
+.attachlist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.attach{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;background:var(--in-bg);border:1px solid var(--glass-b);cursor:pointer;text-align:left;width:100%;color:inherit;font:inherit}
+.bubble.me .attach{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.28)}
+.attach svg{width:20px;height:20px;flex:none;opacity:.9}
+.attach .an{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:14.5px}
+.attach .asz{flex:none;font-size:12px;opacity:.7}
+.attach:active{transform:scale(.985)}
+.attach.up{opacity:.7;cursor:default}
 .chatintro{text-align:center;color:var(--muted);padding:38px 20px;margin:auto 0}
 .chatintro-ic{width:56px;height:56px;margin:0 auto 14px;border-radius:18px;background:linear-gradient(135deg,var(--p1),var(--p2));display:grid;place-items:center;box-shadow:var(--glow-s)}
 .chatintro-ic svg{width:30px;height:30px;color:#fff}

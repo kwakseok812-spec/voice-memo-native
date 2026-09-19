@@ -20,6 +20,12 @@ jobs:
       # 라이선스만 수락하고 gradle 이 필요한 build-tools/platform 을 알아서 받게 한다.
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+      # google-services.json 은 공개 저장소에 올리지 않고 암호화 Secret 에 보관한다.
+      # 빌드할 때만 복원한다(없으면 FCM 초기화가 안 돼 푸시 알림이 죽는다).
+      - name: Restore google-services.json (from secret)
+        run: echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Install JS deps
         run: npm ci
       - name: Capacitor sync (copy web + plugins into android)
