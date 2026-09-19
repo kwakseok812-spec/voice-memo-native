@@ -16,7 +16,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # ubuntu-latest 러너엔 Android SDK 가 이미 설치돼 있음(ANDROID_HOME 세팅됨).
+      # 라이선스만 수락하고 gradle 이 필요한 build-tools/platform 을 알아서 받게 한다.
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
       - name: Install JS deps
         run: npm ci
       - name: Capacitor sync (copy web + plugins into android)
@@ -25,7 +28,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
