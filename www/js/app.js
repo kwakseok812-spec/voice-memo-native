@@ -53,7 +53,7 @@
   btnRecord.addEventListener('click', function () {
     if (btnRecord.disabled) return;
     if (!isRecording) {
-      hideBanner(); hide(resultWrap); hide(processing);
+      hideBanner(); hide(processing); hideTransient(null);
       recorder.start(); isRecording = true; startRecTimer();
       btnRecord.textContent = '⏹️  녹음 정지'; btnRecord.classList.add('recording');
     } else {
@@ -66,6 +66,7 @@
     stopRecTimer();
     pendingBlob = blob;
     memoTitle.value = defaultTitle();
+    hideTransient(recordedPanel);
     show(recordedPanel);
     // 실제 "녹음된 길이"를 보여준다(네이티브가 알려줌) — 몇 초가 담겼는지 즉시 확인
     var durMs = (recorder && recorder.lastDurationMs) || 0;
@@ -164,7 +165,9 @@
       wireDocButtons(docBtns, e);
     }
     setExportMsg('', '');
+    hideTransient(resultWrap);
     show(resultWrap);
+    try { resultWrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
   }
 
   function renderCards(sj) {
@@ -324,7 +327,7 @@
         return '<div class="filemeta">🎬 ' + esc(f.name || '영상') + (mb ? ' · ' + mb + 'MB' : '') + '</div>';
       }).join('');
     }
-    hide(resultWrap); hide(processing); show(filePanel);
+    hide(processing); hideTransient(filePanel); show(filePanel);
     try { filePanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
   }
   $('fileCancel').addEventListener('click', function () { pendingFiles = []; pendingKind = null; hide(filePanel); });
@@ -371,10 +374,19 @@
 
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
+  // 검색 화면의 잔상 제거 — 결과·안내·입력을 모두 비운다
+  function clearSearch() {
+    if (searchResults) searchResults.innerHTML = '';
+    setSearchMsg('', '');
+    if (searchInput) searchInput.value = '';
+  }
   $('btnSearchToggle').addEventListener('click', function () {
     var vis = searchPanel.style.display !== 'none';
-    searchPanel.style.display = vis ? 'none' : 'block';
-    if (!vis && searchInput) searchInput.focus();
+    if (vis) { clearSearch(); hide(searchPanel); return; }   // 닫을 땐 깨끗이 정리
+    hideTransient(searchPanel); clearSearch();               // 열 땐 다른 화면 닫고 새로 시작
+    show(searchPanel);
+    if (searchInput) searchInput.focus();
+    try { searchPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
   });
   function setSearchMsg(m, k) { searchMsg.textContent = m || ''; searchMsg.className = 'exportmsg ' + (k || ''); }
   function doSearch() {
@@ -402,7 +414,12 @@
     }, 2000);
   }
   function renderSearchResults(matches, count, q) {
-    if (!matches.length) { setSearchMsg('"' + esc(q) + '" 결과가 없어요.', ''); searchResults.innerHTML = ''; return; }
+    if (!matches.length) {
+      setSearchMsg('', '');
+      searchResults.innerHTML = '<div class="card"><p class="empty">🔍 <b>"' + esc(q) + '"</b> 결과가 없어요.<br>' +
+        '이름이나 기관 이름의 <b>일부만</b> 넣어도 돼요. 예: 방부형 → 방부, 연성대학교 → 연성</p></div>';
+      return;
+    }
     setSearchMsg(count + '건 찾음', 'ok');
     searchResults.innerHTML = matches.map(function (m) {
       var h = '<div class="card cardresult">';
@@ -426,9 +443,23 @@
       pollSearch(id, tok, function (res) {
         var url = res.summary_json && res.summary_json.photo_url;
         btn.textContent = '📇 명함 사진 보기'; btn.disabled = false;
-        if (url) window.open(url, '_blank'); else setSearchMsg('사진을 찾지 못했어요.', 'err');
+        if (url) showCardPhotoModal(url);   // 새 탭이 아니라 앱 안에서 보기(닫으면 검색결과로)
+        else setSearchMsg('사진을 찾지 못했어요.', 'err');
       });
-    }).catch(function () { btn.textContent = '📇 명함 사진 보기'; btn.disabled = false; });
+    }).catch(function () {
+      btn.textContent = '📇 명함 사진 보기'; btn.disabled = false;
+      setSearchMsg('사진을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.', 'err');
+    });
+  }
+  // 명함 사진을 앱 안 모달로 표시 — 닫으면(✕·뒤로가기) 검색 결과가 그대로 남아 있음
+  function showCardPhotoModal(url) {
+    modalTitle.textContent = '명함 사진';
+    modalBody.innerHTML =
+      '<div class="cardphotowrap"><img src="' + esc(url) + '" alt="명함 사진" class="cardphotoimg"></div>' +
+      '<p class="savehint">닫으면 검색 결과로 돌아가요. 사진을 눌러 새 창에서 크게 볼 수 있어요.</p>';
+    var im = modalBody.querySelector('.cardphotoimg');
+    if (im) im.addEventListener('click', function () { window.open(url, '_blank'); });
+    modal.style.display = 'flex';
   }
 
   /* ===================== 뒤로가기(back) 처리 ===================== */
@@ -445,13 +476,22 @@
   }
   function isOpen(el) { return el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
 
+  // 화면 겹침(잔상) 방지 — 입력·결과·검색 화면은 한 번에 하나만 보이게. except 는 남겨 둘 화면.
+  function hideTransient(except) {
+    [recordedPanel, filePanel, searchPanel, resultWrap].forEach(function (el) {
+      if (!el || el === except) return;
+      if (el === searchPanel) clearSearch();
+      hide(el);
+    });
+  }
+
   // 열린 하위 화면을 닫아 이전으로. 닫을 게 있으면 true(=처리함), 없으면 false(=홈).
   function goBack() {
     if (isRecording) { toast('녹음 중이에요. 정지를 먼저 눌러 주세요.'); return true; }
     if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
     if (isOpen(modal)) { closeModal(); return true; }
     if (isOpen(filePanel)) { pendingFiles = []; pendingKind = null; hide(filePanel); setStatus('대기 중', 'idle'); return true; }
-    if (isOpen(searchPanel)) { hide(searchPanel); return true; }
+    if (isOpen(searchPanel)) { clearSearch(); hide(searchPanel); return true; }
     if (isOpen(resultWrap)) { hide(resultWrap); return true; }
     if (isOpen(recordedPanel)) { pendingBlob = null; hide(recordedPanel); setStatus('대기 중', 'idle'); return true; }
     return false;   // 홈(루트)

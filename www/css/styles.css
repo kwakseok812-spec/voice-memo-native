@@ -357,3 +357,11 @@ footer { color: var(--muted); }
 @media (prefers-color-scheme: dark) {
   :root .toast { background: rgba(226,232,240,.96); color: #0b1220; }
 }
+
+/* ===== v0.6 명함 사진(앱 안 모달) ===== */
+.cardphotowrap { text-align: center; }
+.cardphotoimg {
+  max-width: 100%; max-height: 62vh; border-radius: 12px;
+  border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+  cursor: zoom-in; background: #fff;
+}
