@@ -1,16 +1,40 @@
 /* ============================================================================
- * app.js  —  화면 연결(글루)  [PC-중심 개편판]
- * ----------------------------------------------------------------------------
- * 흐름: 🎙️녹음 → ⏹️정지 → 제목 입력 → 🖥️PC로 보내기(오디오 업로드)
- *       → PC가 전사·정리·문서생성 → 결과 폴링 → 정리 내용 + PDF/Word/PPT 표시
- *   - 폰은 전사하지 않는다(정확도 위해 PC가 함). 폰은 "녹음·전송·표시"만.
+ * app.js — 화면 연결(글루)  [v0.7 디자인 적용판]
+ *  - 흐름/로직은 그대로(PC-중심): 폰은 녹음·전송·표시만, 전사·정리·문서는 PC.
+ *  - 화면 전환식(홈 ↔ 서브화면), 다크/라이트 토글, 저사양 blur 폴백.
  * ==========================================================================*/
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var btnRecord = $('btnRecord'), statusText = $('statusText'), statusDot = $('statusDot');
-  var levelBar = $('levelBar'), banner = $('banner');
+
+  /* ---------- 테마 + 저사양 폴백 (가장 먼저) ---------- */
+  (function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem('smart_theme'); } catch (e) {}
+    var prefersLight = false;
+    try { prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches; } catch (e) {}
+    var mode = saved || (prefersLight ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-style', mode);
+    // 저사양(코어/메모리 적음) 기기: 유리 blur 끄고 반투명만
+    try {
+      var lc = navigator.hardwareConcurrency || 8, dm = navigator.deviceMemory || 8;
+      if (lc <= 4 || dm <= 3) document.documentElement.classList.add('no-blur');
+    } catch (e) {}
+  })();
+  function applyTheme(mode) {
+    document.documentElement.setAttribute('data-style', mode);
+    try { localStorage.setItem('smart_theme', mode); } catch (e) {}
+    var mt = document.querySelector('meta[name="theme-color"]');
+    if (mt) mt.setAttribute('content', mode === 'light' ? '#F7F9FF' : '#070B1D');
+  }
+
+  var btnRecord = $('btnRecord'), btnStop = $('btnStop'), btnCancelRec = $('btnCancelRec');
+  var statusText = $('statusText'), statusDot = $('statusDot'), banner = $('banner');
+  var levelBar = $('levelBar');   // (디자인에선 파형 CSS 애니메이션 — 없을 수 있음)
+  var orbLabel = $('orbLabel'), orbHint = $('orbHint');
+  var homeView = $('homeView'), recView = $('recView');
   var recordedPanel = $('recordedPanel'), memoTitle = $('memoTitle'), btnSend = $('btnSend'), btnRetake = $('btnRetake');
+  var recDoneBadge = $('recDoneBadge');
   var processing = $('processing'), processingText = $('processingText');
   var resultWrap = $('resultWrap'), resultArea = $('resultArea'), transcriptView = $('transcriptView');
   var docBtns = $('docBtns'), exportMsg = $('exportMsg'), btnDelete = $('btnDelete');
@@ -19,69 +43,101 @@
 
   var pendingBlob = null, pollTimer = null, pollingId = null, viewId = null;
   var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
+  var isRecording = false, recCancelled = false;
 
+  /* ---------- 유틸 ---------- */
+  function show(el) { if (el) el.style.display = ''; }
+  function hide(el) { if (el) el.style.display = 'none'; }
+  function isOpen(el) { return el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
+  function scrollTop() { try { window.scrollTo(0, 0); } catch (e) {} }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function setStatus(t, k) { if (statusText) statusText.textContent = t; if (statusDot) statusDot.className = 'dot ' + (k || 'idle'); }
+  function setExportMsg(m, k) { if (exportMsg) { exportMsg.textContent = m || ''; exportMsg.className = 'exportmsg ' + (k || ''); } }
+  function setProcessing(t) { if (processingText) processingText.textContent = t; }
+  function showBanner(m) { if (banner) { banner.style.display = 'block'; banner.innerHTML = m; } }
+  function hideBanner() { if (banner && RecordingModule.isSupported()) banner.style.display = 'none'; }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function fmtSec(s) { s = Math.max(0, Math.floor(s)); return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60); }
+  function defaultTitle() { var d = new Date(); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
+  function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
+
+  /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
+  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), processing, resultWrap];
+  function filePanelRef() { return $('filePanel'); }
+  function searchPanelRef() { return $('searchPanel'); }
+  function showHome() {
+    SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
+  }
+  function openScreen(el) {
+    hide(homeView);
+    SUBS.forEach(function (x) { if (x !== el) hide(x); });
+    if (el !== searchPanelRef()) clearSearch();
+    show(el); scrollTop();
+  }
+
+  /* ---------- 녹음 ---------- */
   function startRecTimer() {
     recStart = Date.now();
-    if (recTimerEl) { recTimerEl.style.display = 'block'; recTimerEl.textContent = '녹음 시간 00:00'; }
+    if (recTimerEl) recTimerEl.textContent = '00:00';
     if (recInterval) clearInterval(recInterval);
     recInterval = setInterval(function () {
-      if (recTimerEl) recTimerEl.textContent = '녹음 시간 ' + fmtSec((Date.now() - recStart) / 1000);
+      if (recTimerEl) recTimerEl.textContent = fmtSec((Date.now() - recStart) / 1000);
     }, 500);
   }
   function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
 
   if (!RecordingModule.isSupported()) {
-    banner.style.display = 'block';
-    banner.innerHTML = '⚠️ 이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 <b>Chrome</b>에서 열어 주세요.';
-    btnRecord.disabled = true; btnRecord.classList.add('disabled');
+    showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 <b>Chrome</b>에서 열어 주세요.');
+    if (btnRecord) { btnRecord.disabled = true; btnRecord.style.opacity = '.5'; }
   }
 
   var recorder = new RecordingModule({
     onStatus: function (s) {
-      if (s === 'recording') setStatus('녹음 중… 끝나면 정지', 'rec');
+      if (s === 'recording') setStatus('녹음 중', 'rec');
       else if (s === 'stopped') setStatus('녹음 완료', 'idle');
       else if (s === 'error') setStatus('오류', 'err');
     },
-    onLevel: function (v) { levelBar.style.width = Math.round(v * 100) + '%'; },
+    onLevel: function (v) { if (levelBar) levelBar.style.width = Math.round(v * 100) + '%'; },
     onError: function (m) { showBanner('⚠️ ' + m); },
     onAudio: function (blob) { onRecorded(blob); }
   });
 
-  var isRecording = false;
-  btnRecord.addEventListener('click', function () {
-    if (btnRecord.disabled) return;
-    if (!isRecording) {
-      hideBanner(); hide(processing); hideTransient(null);
-      recorder.start(); isRecording = true; startRecTimer();
-      btnRecord.textContent = '⏹️  녹음 정지'; btnRecord.classList.add('recording');
-    } else {
-      recorder.stop(); isRecording = false; stopRecTimer();
-      btnRecord.textContent = '🎙️  녹음 시작'; btnRecord.classList.remove('recording');
-    }
+  if (btnRecord) btnRecord.addEventListener('click', function () {
+    if (btnRecord.disabled || isRecording) return;
+    hideBanner();
+    recCancelled = false; isRecording = true;
+    openScreen(recView); startRecTimer();
+    recorder.start();
+  });
+  if (btnStop) btnStop.addEventListener('click', function () {
+    if (!isRecording) return;
+    isRecording = false; stopRecTimer();
+    recorder.stop();   // → onAudio → onRecorded
+  });
+  if (btnCancelRec) btnCancelRec.addEventListener('click', function () {
+    if (!isRecording) { showHome(); return; }
+    recCancelled = true; isRecording = false; stopRecTimer();
+    try { recorder.stop(); } catch (e) {}
+    pendingBlob = null; showHome(); setStatus('대기 중', 'idle');
   });
 
   function onRecorded(blob) {
-    stopRecTimer();
+    stopRecTimer(); isRecording = false;
+    if (recCancelled) { recCancelled = false; pendingBlob = null; showHome(); return; }
     pendingBlob = blob;
-    memoTitle.value = defaultTitle();
-    hideTransient(recordedPanel);
-    show(recordedPanel);
-    // 실제 "녹음된 길이"를 보여준다(네이티브가 알려줌) — 몇 초가 담겼는지 즉시 확인
+    if (memoTitle) memoTitle.value = defaultTitle();
     var durMs = (recorder && recorder.lastDurationMs) || 0;
-    if (recTimerEl) {
-      if (durMs > 0) recTimerEl.textContent = '✅ 녹음된 길이 ' + fmtSec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)';
-      // durMs 0(웹 등)이면 마지막 경과시간 표시 유지
-      recTimerEl.style.display = 'block';
-    }
-    setStatus('녹음 완료 — 제목 정하고 PC로 보내세요', 'idle');
+    if (recDoneBadge) recDoneBadge.textContent = durMs > 0
+      ? '✅ 녹음됐어요 · ' + fmtSec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)'
+      : '✅ 녹음됐어요';
+    openScreen(recordedPanel);
+    setStatus('녹음 완료 — 제목 정하고 보내기', 'idle');
   }
-  btnRetake.addEventListener('click', function () {
-    pendingBlob = null; hide(recordedPanel); setStatus('대기 중', 'idle');
+  if (btnRetake) btnRetake.addEventListener('click', function () {
+    pendingBlob = null; showHome(); setStatus('대기 중', 'idle');
   });
 
-  btnSend.addEventListener('click', function () {
+  if (btnSend) btnSend.addEventListener('click', function () {
     if (!pendingBlob) { showBanner('먼저 녹음해 주세요.'); return; }
     var t = now();
     var memo = {
@@ -91,22 +147,21 @@
     };
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending' });
     renderHistory();
-    hide(recordedPanel); show(processing); setProcessing('🖥️ PC로 보내는 중…');
+    openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
     var blob = pendingBlob; pendingBlob = null;
     OfficeBridge.send(memo, blob).then(function () {
-      HistoryModule.update(memo.id, { status: 'processing' });
-      renderHistory();
+      HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
       setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
-      renderHistory(); hide(processing);
-      showBanner('⚠️ 전송 실패(오프라인일 수 있어요). 녹음은 안전하게 보관됐어요 — 인터넷 되면 목록에서 [재시도]를 누르세요.');
+      renderHistory(); showHome();
+      showBanner('⚠️ 전송 실패(오프라인일 수 있어요). 녹음은 안전하게 보관됐어요 — 인터넷 되면 <b>지난 메모</b>에서 다시 눌러 보세요.');
       setStatus('전송 실패', 'err');
     });
   });
 
-  /* --- 결과 폴링 --- */
+  /* ---------- 결과 폴링 ---------- */
   function startPolling(id, token) {
     stopPolling(); pollingId = id;
     var started = Date.now();
@@ -120,88 +175,98 @@
             content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
             title: res.title, error: res.error || null
           });
-          renderHistory(); hide(processing); showResult(id);
-          setStatus('정리 완료', 'idle');
+          renderHistory(); showResult(id); setStatus('정리 완료', 'idle');
         } else if (res.status === 'processing') {
           setProcessing('🖨️ PC에서 정리 중… 잠시만요');
         } else if (res.error) {
           setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…');
         }
-        // 너무 오래 걸리면(5분) 폴링만 멈추고 목록에서 나중에 확인
         if (Date.now() - started > 5 * 60 * 1000) {
-          stopPolling(); hide(processing);
+          stopPolling(); showHome();
           showBanner('아직 정리 중이에요. PC가 켜져 있는지 확인하고, 잠시 후 <b>지난 메모</b>에서 다시 확인해 주세요.');
         }
-      }).catch(function () { /* 네트워크 일시 오류 → 다음 주기 */ });
+      }).catch(function () {});
     }, 5000);
   }
   function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; pollingId = null; }
 
-  /* --- 결과 표시 --- */
+  /* ---------- 결과 표시 ---------- */
   function showResult(id) {
     var e = HistoryModule.get(id); if (!e) return;
     viewId = id;
     var tl = $('transcriptLabel');
     if (e.kind === 'photo' || e.kind === 'video') {
-      // 사진/영상: 분석 결과 텍스트만(문서 버튼 없음)
       var result = (e.summary_json && e.summary_json.result) || '(결과 없음)';
       var detail = e.content_md || '';
       resultArea.innerHTML =
-        '<div class="card"><h3>🔍 분석 결과</h3><p style="white-space:pre-wrap;font-size:16px">' + esc(result) + '</p></div>' +
-        (detail ? '<div class="card"><h3>📄 상세</h3><p style="white-space:pre-wrap;font-size:14px;color:#374151">' + esc(detail) + '</p></div>' : '');
-      // 영상만 전사 표시, 사진은 전사칸 숨김
+        rtitle(e, e.kind === 'photo' ? '사진 분석' : '영상 분석') +
+        rcard('i-note', '분석 결과', '<p>' + esc(result) + '</p>') +
+        (detail ? rcard('i-list', '상세', '<p>' + esc(detail) + '</p>') : '');
       if (e.kind === 'video' && e.transcript) {
         if (tl) tl.style.display = 'block'; transcriptView.style.display = 'block';
         transcriptView.textContent = e.transcript;
       } else {
         if (tl) tl.style.display = 'none'; transcriptView.style.display = 'none';
       }
-      docBtns.innerHTML = '';
+      docBtns.innerHTML = (e.pdf_url || e.docx_url || e.pptx_url) ? renderDocButtons(e) : '';
+      if (docBtns.innerHTML) wireDocButtons(docBtns, e);
     } else {
       if (tl) tl.style.display = 'block'; transcriptView.style.display = 'block';
-      resultArea.innerHTML = renderCards(e.summary_json);
+      resultArea.innerHTML = rtitle(e, '정리 결과') + renderCards(e.summary_json);
       transcriptView.textContent = (e.transcript || '(전사 내용이 비어 있어요)');
       docBtns.innerHTML = renderDocButtons(e);
       wireDocButtons(docBtns, e);
     }
     setExportMsg('', '');
-    hideTransient(resultWrap);
-    show(resultWrap);
-    try { resultWrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+    openScreen(resultWrap);
   }
 
+  function rtitle(e, fallback) {
+    return '<div class="rtitle"><h2>' + esc(e.title || fallback) + '</h2><div class="rmeta">' +
+      (e.date ? '<span class="chip">' + esc(e.date) + '</span>' : '') +
+      '<span class="chip on">완료</span></div></div>';
+  }
+  function rcard(icon, title, inner) {
+    return '<div class="card rcard"><div class="h"><svg><use href="#' + icon + '"/></svg>' + esc(title) + '</div>' + inner + '</div>';
+  }
+  function checkList(arr, empty, dec) {
+    if (!arr || !arr.length) return '<p class="empty">' + empty + '</p>';
+    return '<div class="check' + (dec ? ' dec' : '') + '">' + arr.map(function (s) {
+      return '<div><i>' + (dec ? '<svg><use href="#i-check"/></svg>' : '') + '</i>' + esc(s) + '</div>';
+    }).join('') + '</div>';
+  }
   function renderCards(sj) {
     sj = sj || {};
     var html = '';
-    html += section('📌 핵심 요약', sj.summary, '핵심 문장을 찾지 못했어요.');
-    html += section('✅ 할 일', sj.todos, '할 일로 보이는 내용이 없어요.');
-    html += section('📖 결정사항', sj.decisions, '결정/합의로 보이는 내용이 없어요.');
+    var sum = (sj.summary && sj.summary.length) ? sj.summary.join(' ') : '';
+    html += '<div class="card rcard"><div class="h"><svg><use href="#i-note"/></svg>요약</div>' +
+      (sum ? '<p>' + esc(sum) + '</p>' : '<p class="empty">핵심 문장을 찾지 못했어요.</p>') + '</div>';
+    html += '<div class="card rcard todo"><div class="h"><svg><use href="#i-list"/></svg>할 일</div>' +
+      checkList(sj.todos, '할 일로 보이는 내용이 없어요.', false) + '</div>';
+    html += '<div class="card rcard dec"><div class="h"><svg><use href="#i-flag"/></svg>결정 사항</div>' +
+      checkList(sj.decisions, '결정·합의로 보이는 내용이 없어요.', true) + '</div>';
     if (sj.keywords && sj.keywords.length) {
-      html += '<div class="card"><h3>🔑 자주 나온 단어</h3><div class="chips">';
-      sj.keywords.forEach(function (k) { html += '<span class="chip">' + esc(k.word) + ' <b>' + k.count + '</b></span>'; });
-      html += '</div></div>';
+      html += '<div class="card rcard"><div class="h"><svg><use href="#i-search"/></svg>자주 나온 단어</div><div class="chips">' +
+        sj.keywords.map(function (k) { return '<span class="chip">' + esc(k.word) + ' <b>' + k.count + '</b></span>'; }).join('') +
+        '</div></div>';
     }
-    return html || '<p class="empty">정리 결과가 없어요.</p>';
-  }
-  function section(title, arr, empty) {
-    var h = '<div class="card"><h3>' + title + '</h3>';
-    if (arr && arr.length) { h += '<ul>'; arr.forEach(function (s) { h += '<li>' + esc(s) + '</li>'; }); h += '</ul>'; }
-    else h += '<p class="empty">' + empty + '</p>';
-    return h + '</div>';
+    return html;
   }
 
   function renderDocButtons(e) {
-    var pdf = e.pdf_url, docx = e.docx_url, pptx = e.pptx_url;
-    var h = '';
-    h += pdf
-      ? '<button class="savebtn primary big" data-open="' + esc(pdf) + '">📄 폰에서 바로 보기 (PDF)</button>'
-      : '<button class="savebtn primary big" disabled>📄 PDF (생성 대기/실패)</button>';
-    h += '<p class="savehint">폰에서는 이 <b>PDF</b>로 보세요. 앱 없이 바로 열려요.</p>';
-    h += '<details id="officeExport" class="office"><summary>📊 PPT · 📄 Word (PC·편집용)</summary><div class="btnrow subtle">';
-    h += pptx ? '<button data-open="' + esc(pptx) + '">📊 PPT</button>' : '<button disabled>📊 PPT</button>';
-    h += docx ? '<button data-open="' + esc(docx) + '">📄 Word</button>' : '<button disabled>📄 Word</button>';
-    h += '</div></details>';
-    h += '<p class="savehint warn">⚠️ PPT·Word는 <b>PC(또는 오피스 앱)</b>에서 열려요. 폰에서는 <b>압축파일(zip)</b>로 보일 수 있어요 — 폰에선 위 <b>PDF</b>로 보세요.</p>';
+    var defs = [
+      ['pdf', 'PDF', 'PDF', '바로 보기', e.pdf_url],
+      ['word', 'W', 'Word', '편집용', e.docx_url],
+      ['ppt', 'P', 'PPT', '발표용', e.pptx_url]
+    ];
+    var h = '<div class="docs-label">문서로 받기</div><div class="docs">';
+    defs.forEach(function (d) {
+      h += d[4]
+        ? '<button class="card doc ' + d[0] + '" data-open="' + esc(d[4]) + '"><span class="badge">' + d[1] + '</span><b>' + d[2] + '</b><small>' + d[3] + '</small></button>'
+        : '<button class="card doc ' + d[0] + '" disabled><span class="badge">' + d[1] + '</span><b>' + d[2] + '</b><small>대기</small></button>';
+    });
+    h += '</div>';
+    h += '<p class="savehint warn">폰에서는 <b>PDF</b>로 바로 보세요. Word·PPT는 PC(또는 오피스 앱)에서 열려요.</p>';
     return h;
   }
   function wireDocButtons(host, e) {
@@ -212,132 +277,118 @@
         setExportMsg(w ? '새 탭에서 열었어요.' : '팝업이 막혔어요 — 다시 눌러 주세요.', w ? 'ok' : 'err');
       });
     });
-    var oe = host.querySelector('#officeExport');
-    var isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
-    if (oe && !isPhone) oe.open = true;
   }
 
-  btnDelete.addEventListener('click', function () {
+  if (btnDelete) btnDelete.addEventListener('click', function () {
     if (viewId) HistoryModule.remove(viewId);
-    viewId = null; hide(resultWrap); renderHistory(); setStatus('대기 중', 'idle');
+    viewId = null; showHome(); renderHistory(); setStatus('대기 중', 'idle');
   });
 
-  /* --- 지난 메모 --- */
+  /* ---------- 지난 메모 ---------- */
+  function iconFor(kind) { return kind === 'photo' ? 'i-image' : kind === 'video' ? 'i-video' : kind === 'search' ? 'i-card' : 'i-mic'; }
   function renderHistory() {
     var list = HistoryModule.list();
-    historyCount.textContent = list.length ? '(' + list.length + '건)' : '';
-    if (!list.length) { historyList.innerHTML = '<p class="empty" style="color:#6b7280;font-size:14px;">녹음한 메모가 여기에 쌓입니다.</p>'; return; }
+    if (historyCount) historyCount.textContent = list.length ? list.length + '건' : '';
+    if (!list.length) { historyList.innerHTML = '<div class="empty-note">녹음·사진·영상·명함을 보내면 여기에 쌓여요.</div>'; return; }
     historyList.innerHTML = list.map(function (e) {
       var badge, cls;
-      if (e.status === 'done') { badge = '완료'; cls = 'ok'; }
-      else if (e.status === 'failed') { badge = '재시도'; cls = 'wait'; }
-      else { badge = '정리 중…'; cls = 'proc'; }
-      return '<div class="histitem" data-id="' + e.id + '"><span class="htitle">' + esc(e.title) + '</span>' +
-        '<span class="hmeta"><span class="sent ' + cls + '" data-badge="' + e.status + '">' + badge + '</span>' +
-        '<span class="hdate">' + e.date + '</span></span></div>';
+      if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
+      else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
+      else { badge = '정리중'; cls = 'b-proc'; }
+      return '<button class="card item" data-id="' + e.id + '">' +
+        '<span class="ic"><svg><use href="#' + iconFor(e.kind) + '"/></svg></span>' +
+        '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(e.date || '') + '</small></span>' +
+        '<span class="badge ' + cls + '">' + badge + '</span>' +
+        '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
     }).join('');
-    Array.prototype.forEach.call(historyList.querySelectorAll('.histitem'), function (el) {
+    Array.prototype.forEach.call(historyList.querySelectorAll('.item'), function (el) {
       el.addEventListener('click', function () { onHistoryClick(el.getAttribute('data-id')); });
     });
   }
   function onHistoryClick(id) {
     var e = HistoryModule.get(id); if (!e) return;
     if (e.status === 'done') {
-      if (e.kind === 'photo' || e.kind === 'video') showResult(id);   // 사진/영상은 결과화면으로
+      if (e.kind === 'photo' || e.kind === 'video') showResult(id);
       else openModal(e);
-    }
-    else if (e.status === 'failed') {
-      // 재시도: IndexedDB에 보관된 오디오를 다시 업로드
+    } else if (e.status === 'failed') {
       setStatus('재시도 중…', 'rec');
       OfficeBridge.flush(function (memo) {
-        if (memo.id === id) { HistoryModule.update(id, { status: 'processing', error: null }); renderHistory(); show(processing); setProcessing('🖨️ PC에서 정리 중…'); startPolling(id, e.token); }
+        if (memo.id === id) { HistoryModule.update(id, { status: 'processing', error: null }); renderHistory(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중…'); startPolling(id, e.token); }
       }).then(function () {
         var cur = HistoryModule.get(id);
         if (cur && cur.status === 'failed') showBanner('재시도 실패 — 인터넷 연결을 확인해 주세요.');
       });
     } else {
-      // pending/processing → 폴링 재개
-      show(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(id, e.token);
+      openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(id, e.token);
     }
   }
 
-  /* --- 지난 메모 상세(모달) --- */
+  /* ---------- 상세 모달 ---------- */
   function openModal(e) {
     modalTitle.textContent = e.title + '  ·  ' + e.date;
     var html = renderCards(e.summary_json);
-    html += '<div class="card"><h3>📝 전사 원문</h3><p style="white-space:pre-wrap;font-size:15px">' + esc(e.transcript || '(없음)') + '</p></div>';
+    html += rcard('i-note', '전사 원문', '<p>' + esc(e.transcript || '(없음)') + '</p>');
     html += '<div id="mDocBtns">' + renderDocButtons(e) + '</div>';
-    html += '<div class="btnrow"><button id="mDelete" class="danger">🗑 삭제</button></div>';
+    html += '<div class="btnrow"><button id="mDelete" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button></div>';
     modalBody.innerHTML = html;
     wireDocButtons($('mDocBtns'), e);
     $('mDelete').addEventListener('click', function () { HistoryModule.remove(e.id); closeModal(); renderHistory(); });
     modal.style.display = 'flex';
   }
   function closeModal() { modal.style.display = 'none'; }
-  modalClose.addEventListener('click', closeModal);
-  modal.addEventListener('click', function (ev) { if (ev.target === modal) closeModal(); });
+  if (modalClose) modalClose.addEventListener('click', closeModal);
+  if (modal) modal.addEventListener('click', function (ev) { if (ev.target === modal) closeModal(); });
 
-  /* --- 유틸 --- */
-  function defaultTitle() { var d = new Date(); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
-  function now() { var d = new Date(); var p = function (n) { return (n < 10 ? '0' : '') + n; }; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
-  function setStatus(t, k) { statusText.textContent = t; statusDot.className = 'dot ' + (k || 'idle'); }
-  function setExportMsg(m, k) { exportMsg.textContent = m || ''; exportMsg.className = 'exportmsg ' + (k || ''); }
-  function setProcessing(t) { processingText.textContent = t; }
-  function show(el) { el.style.display = 'block'; }
-  function hide(el) { el.style.display = 'none'; }
-  function showBanner(m) { banner.style.display = 'block'; banner.innerHTML = m; }
-  function hideBanner() { if (RecordingModule.isSupported()) banner.style.display = 'none'; }
-  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-
-  /* ===================== 사진 · 영상: 여러 개 미리보기 + 설명 → 묶음 전송 ===================== */
+  /* ===================== 사진·영상: 미리보기 + 설명 → 묶음 전송 ===================== */
   var filePanel = $('filePanel'), pendingFiles = [], pendingKind = null;
-  var MAX_MB = 45;   // Storage 무료 한도(파일당 ~50MB) 안전선
+  var MAX_MB = 45;
 
   function reviewFiles(fileList, kind) {
     var arr = Array.prototype.slice.call(fileList || []);
     if (!arr.length) return;
-    // 용량 초과 파일은 걸러내고 안내(조용히 실패 금지)
     var tooBig = arr.filter(function (f) { return (f.size || 0) > MAX_MB * 1024 * 1024; });
     arr = arr.filter(function (f) { return (f.size || 0) <= MAX_MB * 1024 * 1024; });
     if (tooBig.length) {
-      showBanner('⚠️ ' + tooBig.length + '개 파일이 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요. ' +
-        (kind === 'video' ? '영상은 1분 내외로 짧게 찍어 주세요.' : ''));
+      toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요. ' +
+        (kind === 'video' ? '긴 영상은 곧 지원 예정이에요.' : ''));
     }
-    if (!arr.length) { hide(filePanel); return; }
+    if (!arr.length) return;
     pendingFiles = arr; pendingKind = kind;
     var t = now();
-    $('fileTitle').value = (kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time + (arr.length > 1 ? (' 외 ' + (arr.length) + '개') : '');
+    if ($('filePanelTitle')) $('filePanelTitle').textContent = (kind === 'photo' ? '사진 보내기' : '영상 보내기');
+    $('fileTitle').value = (kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time + (arr.length > 1 ? (' 외 ' + arr.length + '개') : '');
     $('fileNote').value = '';
-    $('fileKindLabel').textContent = '(' + (kind === 'photo' ? '사진' : '영상') + ' ' + arr.length + '개)';
-    $('cardCheckWrap').style.display = kind === 'photo' ? 'block' : 'none';
+    $('fileKindLabel').textContent = (kind === 'photo' ? '사진' : '영상') + ' ' + arr.length + '개';
+    $('cardCheckWrap').style.display = kind === 'photo' ? 'flex' : 'none';
     if ($('isCard')) $('isCard').checked = false;
     var prev = $('filePreview');
     if (kind === 'photo') {
       prev.innerHTML = '<div class="thumbs"></div>';
       var box = prev.querySelector('.thumbs');
-      arr.slice(0, 8).forEach(function (f) {
-        var im = document.createElement('img'); im.className = 'thumb';
+      arr.slice(0, 8).forEach(function (f, i) {
+        var t2 = document.createElement('div'); t2.className = 'thumb';
+        t2.innerHTML = '<span class="n">' + (i + 1) + '</span>';
+        var im = document.createElement('img');
         var r = new FileReader(); r.onload = function () { im.src = r.result; }; r.readAsDataURL(f);
-        box.appendChild(im);
+        t2.appendChild(im); box.appendChild(t2);
       });
-      if (arr.length > 8) box.insertAdjacentHTML('beforeend', '<span class="morethumb">+' + (arr.length - 8) + '</span>');
+      if (arr.length > 8) box.insertAdjacentHTML('beforeend', '<div class="morethumb">+' + (arr.length - 8) + '</div>');
     } else {
-      prev.innerHTML = arr.map(function (f) {
+      prev.innerHTML = '<div class="vfiles">' + arr.map(function (f) {
         var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
-        return '<div class="filemeta">🎬 ' + esc(f.name || '영상') + (mb ? ' · ' + mb + 'MB' : '') + '</div>';
-      }).join('');
+        return '<div class="filemeta"><svg><use href="#i-video"/></svg>' + esc(f.name || '영상') + (mb ? ' · ' + mb + 'MB' : '') + '</div>';
+      }).join('') + '</div>';
     }
-    hide(processing); hideTransient(filePanel); show(filePanel);
-    try { filePanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+    openScreen(filePanel);
   }
-  $('fileCancel').addEventListener('click', function () { pendingFiles = []; pendingKind = null; hide(filePanel); });
-  $('fileSend').addEventListener('click', function () {
-    if (!pendingFiles.length) { hide(filePanel); return; }
+  if ($('fileCancel')) $('fileCancel').addEventListener('click', function () { pendingFiles = []; pendingKind = null; showHome(); });
+  if ($('fileSend')) $('fileSend').addEventListener('click', function () {
+    if (!pendingFiles.length) { showHome(); return; }
     var files = pendingFiles, kind = pendingKind;
     var title = ($('fileTitle').value || '').trim();
     var note = ($('fileNote').value || '').trim();
     var isCard = kind === 'photo' && $('isCard') && $('isCard').checked;
-    pendingFiles = []; pendingKind = null; hide(filePanel);
+    pendingFiles = []; pendingKind = null;
     sendFiles(files, kind, title, note, isCard);
   });
 
@@ -353,8 +404,7 @@
     };
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
     renderHistory();
-    hide(resultWrap); show(processing);
-    setProcessing('⬆️ 올리는 중… (' + files.length + '개)');
+    openScreen(processing); setProcessing('⬆️ 올리는 중… (' + files.length + '개)');
     OfficeBridge.sendBatch(memo, files, function (done, total) {
       setProcessing('⬆️ 올리는 중… ' + done + '/' + total);
     }).then(function () {
@@ -363,32 +413,27 @@
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
-      renderHistory(); hide(processing);
-      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. 목록에서 [재시도]를 눌러 주세요.');
+      renderHistory(); showHome();
+      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. <b>지난 메모</b>에서 다시 눌러 주세요.');
     });
   }
-  $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
-  $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
+  if ($('btnPhoto')) $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
+  if ($('btnVideo')) $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
   $('photoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'photo'); this.value = ''; });
   $('videoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'video'); this.value = ''; });
 
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
-  // 검색 화면의 잔상 제거 — 결과·안내·입력을 모두 비운다
   function clearSearch() {
     if (searchResults) searchResults.innerHTML = '';
     setSearchMsg('', '');
     if (searchInput) searchInput.value = '';
   }
-  $('btnSearchToggle').addEventListener('click', function () {
-    var vis = searchPanel.style.display !== 'none';
-    if (vis) { clearSearch(); hide(searchPanel); return; }   // 닫을 땐 깨끗이 정리
-    hideTransient(searchPanel); clearSearch();               // 열 땐 다른 화면 닫고 새로 시작
-    show(searchPanel);
-    if (searchInput) searchInput.focus();
-    try { searchPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  if ($('btnSearchToggle')) $('btnSearchToggle').addEventListener('click', function () {
+    openScreen(searchPanel); clearSearch();
+    if (searchInput) setTimeout(function () { searchInput.focus(); }, 60);
   });
-  function setSearchMsg(m, k) { searchMsg.textContent = m || ''; searchMsg.className = 'exportmsg ' + (k || ''); }
+  function setSearchMsg(m, k) { if (searchMsg) { searchMsg.textContent = m || ''; searchMsg.className = 'exportmsg ' + (k || ''); } }
   function doSearch() {
     var q = (searchInput.value || '').trim();
     if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하세요.', 'err'); return; }
@@ -401,8 +446,8 @@
       });
     }).catch(function (e) { setSearchMsg('검색 요청 실패: ' + (e && e.message || e), 'err'); });
   }
-  $('searchGo').addEventListener('click', doSearch);
-  searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
+  if ($('searchGo')) $('searchGo').addEventListener('click', doSearch);
+  if (searchInput) searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
 
   function pollSearch(id, tok, onDone) {
     var started = Date.now();
@@ -416,53 +461,65 @@
   function renderSearchResults(matches, count, q) {
     if (!matches.length) {
       setSearchMsg('', '');
-      searchResults.innerHTML = '<div class="card"><p class="empty">🔍 <b>"' + esc(q) + '"</b> 결과가 없어요.<br>' +
-        '이름이나 기관 이름의 <b>일부만</b> 넣어도 돼요. 예: 방부형 → 방부, 연성대학교 → 연성</p></div>';
+      searchResults.innerHTML = '<div class="card"><p class="empty">🔍 <b>"' + esc(q) + '"</b> 결과가 없어요.<br>이름·기관의 <b>일부만</b> 넣어도 돼요. 예: 방부형 → 방부, 연성대학교 → 연성</p></div>';
       return;
     }
-    setSearchMsg(count + '건 찾음', 'ok');
-    searchResults.innerHTML = matches.map(function (m) {
-      var h = '<div class="card cardresult">';
-      h += '<div class="cr-name">' + esc(m.name) + ' <span class="cr-org">' + esc(m.org) + '</span></div>';
-      if (m.dept || m.title) h += '<div class="cr-sub">' + esc([m.dept, m.title].filter(Boolean).join(' · ')) + '</div>';
-      if (m.mobile) h += '<div class="cr-line">📱 <a href="tel:' + esc(m.mobile) + '">' + esc(m.mobile) + '</a></div>';
-      if (m.office) h += '<div class="cr-line">☎️ <a href="tel:' + esc(m.office) + '">' + esc(m.office) + '</a></div>';
-      if (m.email) h += '<div class="cr-line">✉️ <a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></div>';
-      if (m.note) h += '<div class="cr-note">' + esc(m.note) + '</div>';
-      if (m.photo_path) h += '<button class="hsend cardphoto" data-photo="' + esc(m.photo_path) + '">📇 명함 사진 보기</button>';
-      return h + '</div>';
-    }).join('');
+    setSearchMsg('', '');
+    var html = '<div class="count"><b>' + count + '명</b> 찾았어요</div><div class="list">';
+    matches.forEach(function (m, idx) {
+      var name = (m.name || '').trim();
+      var av = name ? name.charAt(0) : '·';
+      html += '<div class="card person">';
+      html += '<div class="head"><span class="avatar' + (idx % 2 ? ' c' : '') + '">' + esc(av) + '</span>' +
+        '<div><div class="nm">' + esc(name) + (m.title ? '<span>' + esc(m.title) + '</span>' : '') + '</div>' +
+        '<div class="org">' + esc([m.org, m.dept].filter(Boolean).join(' · ')) + '</div></div></div>';
+      var meta = '';
+      if (m.mobile) meta += '<div><svg><use href="#i-phone"/></svg><a href="tel:' + esc(m.mobile) + '">' + esc(m.mobile) + '</a></div>';
+      if (m.office) meta += '<div><svg><use href="#i-phone"/></svg><a href="tel:' + esc(m.office) + '">' + esc(m.office) + '</a></div>';
+      if (m.email) meta += '<div><svg><use href="#i-mail"/></svg><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></div>';
+      if (meta) html += '<div class="meta">' + meta + '</div>';
+      if (m.note) html += '<div class="savehint" style="text-align:left;margin:0">' + esc(m.note) + '</div>';
+      if (m.photo_path) html += '<button class="btn ghost sm cardphoto" data-photo="' + esc(m.photo_path) + '"><svg><use href="#i-card"/></svg>명함 사진 보기</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+    searchResults.innerHTML = html;
     Array.prototype.forEach.call(searchResults.querySelectorAll('[data-photo]'), function (b) {
       b.addEventListener('click', function () { openCardPhoto(b.getAttribute('data-photo'), b); });
     });
   }
   function openCardPhoto(path, btn) {
+    var label = btn.innerHTML;
     btn.textContent = '불러오는 중…'; btn.disabled = true;
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     OfficeBridge.createSearch({ id: id, token: tok, note: 'photo:' + path }).then(function () {
       pollSearch(id, tok, function (res) {
         var url = res.summary_json && res.summary_json.photo_url;
-        btn.textContent = '📇 명함 사진 보기'; btn.disabled = false;
-        if (url) showCardPhotoModal(url);   // 새 탭이 아니라 앱 안에서 보기(닫으면 검색결과로)
+        btn.innerHTML = label; btn.disabled = false;
+        if (url) showCardPhotoModal(url);
         else setSearchMsg('사진을 찾지 못했어요.', 'err');
       });
     }).catch(function () {
-      btn.textContent = '📇 명함 사진 보기'; btn.disabled = false;
+      btn.innerHTML = label; btn.disabled = false;
       setSearchMsg('사진을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.', 'err');
     });
   }
-  // 명함 사진을 앱 안 모달로 표시 — 닫으면(✕·뒤로가기) 검색 결과가 그대로 남아 있음
   function showCardPhotoModal(url) {
     modalTitle.textContent = '명함 사진';
-    modalBody.innerHTML =
-      '<div class="cardphotowrap"><img src="' + esc(url) + '" alt="명함 사진" class="cardphotoimg"></div>' +
+    modalBody.innerHTML = '<div class="cardphotowrap"><img src="' + esc(url) + '" alt="명함 사진" class="cardphotoimg"></div>' +
       '<p class="savehint">닫으면 검색 결과로 돌아가요. 사진을 눌러 새 창에서 크게 볼 수 있어요.</p>';
     var im = modalBody.querySelector('.cardphotoimg');
     if (im) im.addEventListener('click', function () { window.open(url, '_blank'); });
     modal.style.display = 'flex';
   }
 
-  /* ===================== 뒤로가기(back) 처리 ===================== */
+  /* ===================== 테마 토글 ===================== */
+  if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
+    var cur = document.documentElement.getAttribute('data-style') || 'dark';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ===================== 뒤로가기 ===================== */
   var toastEl = $('toast'), toastTimer = null;
   function toast(msg) {
     if (!toastEl) return;
@@ -474,52 +531,35 @@
       setTimeout(function () { toastEl.style.display = 'none'; }, 250);
     }, 1800);
   }
-  function isOpen(el) { return el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
-
-  // 화면 겹침(잔상) 방지 — 입력·결과·검색 화면은 한 번에 하나만 보이게. except 는 남겨 둘 화면.
-  function hideTransient(except) {
-    [recordedPanel, filePanel, searchPanel, resultWrap].forEach(function (el) {
-      if (!el || el === except) return;
-      if (el === searchPanel) clearSearch();
-      hide(el);
-    });
-  }
-
-  // 열린 하위 화면을 닫아 이전으로. 닫을 게 있으면 true(=처리함), 없으면 false(=홈).
   function goBack() {
-    if (isRecording) { toast('녹음 중이에요. 정지를 먼저 눌러 주세요.'); return true; }
-    if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
     if (isOpen(modal)) { closeModal(); return true; }
-    if (isOpen(filePanel)) { pendingFiles = []; pendingKind = null; hide(filePanel); setStatus('대기 중', 'idle'); return true; }
-    if (isOpen(searchPanel)) { clearSearch(); hide(searchPanel); return true; }
-    if (isOpen(resultWrap)) { hide(resultWrap); return true; }
-    if (isOpen(recordedPanel)) { pendingBlob = null; hide(recordedPanel); setStatus('대기 중', 'idle'); return true; }
-    return false;   // 홈(루트)
+    if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
+    if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
+    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap)) {
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
+    return false;
   }
-  // 화면 안 [← 뒤로] 버튼들
   Array.prototype.forEach.call(document.querySelectorAll('[data-back]'), function (b) {
     b.addEventListener('click', function () { goBack(); });
   });
-  // 안드로이드 하드웨어/제스처 back
   var backExitArmed = false, backExitTimer = null;
   if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
     Capacitor.Plugins.App.addListener('backButton', function () {
-      if (goBack()) return;                 // 하위 화면 닫음 → 앱 유지
-      if (backExitArmed) {                  // 홈에서 한 번 더 → 종료
-        try { Capacitor.Plugins.App.exitApp(); } catch (e) {}
-      } else {
-        backExitArmed = true;
-        toast('한 번 더 누르면 나갑니다');
+      if (goBack()) return;
+      if (backExitArmed) { try { Capacitor.Plugins.App.exitApp(); } catch (e) {} }
+      else {
+        backExitArmed = true; toast('한 번 더 누르면 나갑니다');
         if (backExitTimer) clearTimeout(backExitTimer);
         backExitTimer = setTimeout(function () { backExitArmed = false; }, 2000);
       }
     });
   }
 
+  /* ===================== 시작 ===================== */
   setStatus('대기 중', 'idle');
   renderHistory();
-
-  // 시작 시: 밀렸던 업로드 재시도 + 처리 중이던 메모 폴링 재개
+  showHome();
   OfficeBridge.flush(function () { renderHistory(); });
   HistoryModule.list().forEach(function (e) {
     if ((e.status === 'pending' || e.status === 'processing') && e.token && !pollTimer) {
