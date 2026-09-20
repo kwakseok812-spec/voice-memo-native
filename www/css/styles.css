@@ -426,3 +426,63 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .hb.wt{color:var(--p2);border-color:transparent;background:rgba(139,92,246,.14)}
 .hb.ok{color:var(--ok);border-color:transparent;background:var(--ok-bg)}
 .hday-meal{font-size:13.5px;color:var(--muted);font-weight:500;margin-top:8px;line-height:1.5}
+
+/* ============================================================
+   음성 대화 + 카메라 (2026-09-20 신규)
+   ============================================================ */
+/* 홈: 오브 2개(녹음 / 음성 대화) 나란히 · 폭 좁아도 균형 */
+.orbrow{display:flex;gap:16px;justify-content:center;align-items:flex-start;margin-top:22px}
+.orbrow .orbwrap{margin-top:0;flex:0 1 auto;max-width:48%}
+.orbrow .orbbtn{width:130px;height:130px}
+.orbrow .orbbtn .core{width:102px;height:102px}
+.orbrow .orbbtn .core svg{width:46px;height:46px}
+.orbrow .orbbtn .ring.r2{inset:-9px;opacity:.5}
+.orbrow .orbbtn .ring.r3{inset:-20px;opacity:.24}
+.orbrow .orblabel{margin-top:16px;font-size:18px}
+.orbrow .orbhint{font-size:12.5px;text-align:center}
+/* 음성 대화 오브: 시안 계열로 구분(녹음 오브와 균형) */
+.orbbtn.voice .core{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.35),transparent 45%),linear-gradient(135deg,var(--cyan) 0%,var(--p1) 70%,var(--p2) 135%)}
+@media (max-width:360px){
+  .orbrow{gap:10px}
+  .orbrow .orbbtn{width:110px;height:110px}
+  .orbrow .orbbtn .core{width:86px;height:86px}
+  .orbrow .orbbtn .core svg{width:40px;height:40px}
+  .orbrow .orblabel{font-size:16px}
+}
+
+/* 채팅: 읽어주기(케이 목소리) 토글 — 상단바 오른쪽 */
+.speaktog{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--glass-b);background:var(--glass);color:var(--dim);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.speaktog svg{width:18px;height:18px}
+.speaktog .ic-on{display:none}
+.speaktog .ic-off{display:block}
+.speaktog[aria-pressed="true"]{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
+.speaktog[aria-pressed="true"] .ic-on{display:block}
+.speaktog[aria-pressed="true"] .ic-off{display:none}
+.speaktog:active{transform:scale(.96)}
+
+/* 채팅: 음성 대화 도구(말하기 + 카메라) */
+.voicetools{display:flex;gap:8px;align-items:stretch;margin:2px 0 8px}
+.micbtn{flex:1;min-height:56px;display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:18px;background:linear-gradient(135deg,var(--cyan),var(--p1));color:#fff;font-family:inherit;font-size:18px;font-weight:800;cursor:pointer;box-shadow:var(--glow-s)}
+.micbtn svg{width:26px;height:26px}
+.micbtn:active{transform:scale(.98)}
+.micbtn.rec{background:linear-gradient(135deg,#F43F5E,#A855F7);box-shadow:0 8px 30px rgba(244,63,94,.45);animation:micpulse 1.3s ease-in-out infinite}
+@keyframes micpulse{0%,100%{opacity:1}50%{opacity:.82}}
+.cambtn{width:56px;flex:none;border:1px solid var(--glass-b);border-radius:18px;background:var(--glass);color:var(--p1);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
+.cambtn svg{width:26px;height:26px}
+.cambtn:active{transform:scale(.96)}
+
+/* 채팅: 케이에게 보여줄 사진 미리보기 줄 */
+.pendstrip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px}
+.pendstrip .pend{position:relative;width:66px;height:66px;flex:none;border-radius:12px;overflow:hidden;border:1px solid var(--glass-b);background:var(--in-bg)}
+.pendstrip .pend img{width:100%;height:100%;object-fit:cover;display:block}
+.pendstrip .pend .rm{position:absolute;top:2px;right:2px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
+.pendstrip .pend .rm svg{width:13px;height:13px}
+
+/* 채팅: 케이 답 말풍선의 "다시 듣기" */
+.voiceplay{display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:7px 13px;border-radius:12px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--p1);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer}
+.voiceplay svg{width:18px;height:18px}
+.voiceplay:active{transform:scale(.97)}
+.voiceplay.playing{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
+/* 음성 me 말풍선(전사 대기) 표시 */
+.bubble.me .voicemark{display:inline-flex;align-items:center;gap:6px;font-weight:700;opacity:.95}
+.bubble.me .voicemark svg{width:17px;height:17px}

@@ -65,14 +65,17 @@
   var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('healthView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
+  var homeFooter = $('homeFooter');
   function showHome() {
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
+    if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
   }
   function openScreen(el) {
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
     if (el !== searchPanelRef()) clearSearch();
     show(el); scrollTop();
+    if (homeFooter) homeFooter.style.display = 'none';   // 다른 화면에선 숨김
   }
 
   /* ---------- 녹음 ---------- */
@@ -588,10 +591,79 @@
   // 메시지 저장 형식: 질문 {role:'me', text, ts, id, token, answered} · 답 {role:'k', text, ts}
   // 답은 각 질문의 (id,token)으로 RPC 재조회 → 화면을 나갔다 와도, 앱을 껐다 켜도 복원된다.
   var chatView = $('chatView'), chatLog = $('chatLog'), chatInput = $('chatInput'), chatSend = $('chatSend');
-  var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
+  var chatMic = $('chatMic'), chatMicLabel = $('chatMicLabel'), chatCam = $('chatCam'), chatCamInput = $('chatCamInput');
+  var chatSpeakToggle = $('chatSpeakToggle'), chatSpeakLabel = $('chatSpeakLabel'), chatPendingStrip = $('chatPendingStrip');
+  var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs', CHAT_SPEAK_KEY = 'smart_chat_speak';
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
   var officeLoading = false;
+  // ── 음성 대화 + 카메라 상태 ──
+  var chatSpeak = loadChatSpeak();          // 케이 답을 목소리로 읽어줄지(localStorage 기억)
+  var chatPendingImages = [];               // 케이에게 보여줄 사진(전송 전 대기)
+  var chatRecording = false, chatRecorder = null;
+  var kaiAudio = null, kaiAudioUnlocked = false, playingBubbleEl = null, silentWavCache = null;
+
+  function loadChatSpeak() { try { return localStorage.getItem(CHAT_SPEAK_KEY) === '1'; } catch (e) { return false; } }
+  function saveChatSpeak() { try { localStorage.setItem(CHAT_SPEAK_KEY, chatSpeak ? '1' : '0'); } catch (e) {} }
+  function updateSpeakToggle() {
+    if (!chatSpeakToggle) return;
+    chatSpeakToggle.setAttribute('aria-pressed', chatSpeak ? 'true' : 'false');
+    if (chatSpeakLabel) chatSpeakLabel.textContent = chatSpeak ? '읽기 켬' : '읽기 끔';
+  }
+
+  /* ---- 케이 목소리 재생(안드로이드 자동재생 언락 + 수동 재생 폴백) ----
+   * 안드로이드 WebView 는 사용자 제스처 없이 소리 재생을 막는다. 그래서
+   *  (1) 교수님이 마이크/카메라/보내기를 '탭'하는 그 순간(제스처)에 무음을 한번 재생해 오디오를 '깨우고',
+   *  (2) 케이 답 mp3 가 도착하면 그 깨워둔 <audio> 로 재생한다.
+   * 그래도 막히면 말풍선의 "다시 듣기"(그 자체가 제스처)로 언제든 들으실 수 있다. */
+  function silentWav() {
+    if (silentWavCache) return silentWavCache;
+    try {
+      var sr = 8000, n = 400, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+      function ws(o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+      ws(0, 'RIFF'); v.setUint32(4, 36 + n, true); ws(8, 'WAVE'); ws(12, 'fmt '); v.setUint32(16, 16, true);
+      v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+      v.setUint16(32, 1, true); v.setUint16(34, 8, true); ws(36, 'data'); v.setUint32(40, n, true);
+      for (var i = 0; i < n; i++) v.setUint8(44 + i, 128);
+      var bytes = new Uint8Array(buf), bin = '';
+      for (var j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+      silentWavCache = 'data:audio/wav;base64,' + btoa(bin);
+    } catch (e) { silentWavCache = ''; }
+    return silentWavCache;
+  }
+  function ensureKaiAudio() {
+    if (!kaiAudio) {
+      try {
+        kaiAudio = new Audio(); kaiAudio.preload = 'auto';
+        kaiAudio.addEventListener('ended', function () {
+          if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
+        });
+      } catch (e) {}
+    }
+    return kaiAudio;
+  }
+  function unlockKaiAudio() {
+    var a = ensureKaiAudio(); if (!a || kaiAudioUnlocked) return;
+    try {
+      a.src = silentWav();
+      var p = a.play();
+      if (p && p.then) p.then(function () { try { a.pause(); a.currentTime = 0; } catch (e) {} kaiAudioUnlocked = true; }).catch(function () {});
+      else kaiAudioUnlocked = true;
+    } catch (e) {}
+  }
+  function playKaiVoice(url, bubbleEl) {
+    var a = ensureKaiAudio(); if (!a || !url) return;
+    try {
+      if (playingBubbleEl && playingBubbleEl !== bubbleEl) playingBubbleEl.classList.remove('playing');
+      a.src = url; a.currentTime = 0;
+      if (bubbleEl) { playingBubbleEl = bubbleEl; bubbleEl.classList.add('playing'); }
+      var p = a.play();
+      if (p && p.then) p.catch(function () {
+        if (bubbleEl) bubbleEl.classList.remove('playing'); playingBubbleEl = null;
+        toast('🔊 소리를 들으려면 "다시 듣기"를 눌러 주세요.');
+      });
+    } catch (e) {}
+  }
 
   function getChatThread() {
     try {
@@ -613,8 +685,8 @@
     try {
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up }
-          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null }; });
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin }
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
   }
@@ -667,9 +739,11 @@
     }
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
-      var inner = m.text ? chatText(m.text) : '';
+      var inner = m.text ? chatText(m.text)
+        : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
       if (m.role === 'me' && m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
       inner += attachChips(m.files, m.role === 'me');
+      if (m.role === 'k' && m.vurl) inner += '<button type="button" class="voiceplay" data-vurl="' + esc(m.vurl) + '"><svg><use href="#i-sound"/></svg>다시 듣기</button>';
       if (!inner) return '';
       return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + inner + '</div>';
     }).join('');
@@ -677,9 +751,12 @@
     chatLog.innerHTML = html;
     chatScrollBottom();
   }
-  function openChat() {
+  function openChat(opts) {
+    opts = opts || {};
     openScreen(chatView);
     chatUnseen = 0; updateChatBadge();
+    if (opts.voice) { chatSpeak = true; saveChatSpeak(); }   // 음성 대화로 들어오면 읽어주기 자동 켜기
+    updateSpeakToggle(); renderPending();
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
     loadOfficePushes();                          // 케이가 먼저 보낸 방송(새벽에 조용히 쌓인 것 포함)도 당겨온다
     if (anyAwaiting()) startChatReconcile();
@@ -688,13 +765,22 @@
   function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
   function sendChatMsg() {
     if (!chatInput) return;
+    if (anyAwaiting()) return;                    // 앞 질문 답 오기 전엔 다음 전송 잠금(순서 유지)
     var text = (chatInput.value || '').trim();
-    if (!text || anyAwaiting()) return;          // 앞 질문 답 오기 전엔 다음 전송 잠금(순서 유지)
+    var imgs = chatPendingImages.slice();
+    if (!text && !imgs.length) return;
+    unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
+    if (imgs.length) {                            // 사진이 붙어 있으면 통합 전송(케이가 사진을 보고 답)
+      chatPendingImages = []; renderPending();
+      sendChatTurnUI({ text: text, files: imgs, audioBlob: null });
+      return;
+    }
+    // 순수 텍스트: 기존 경로(+ 읽어주기 옵션)
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false });
     saveChatMsgs(); renderChat(); updateSendEnabled();
-    OfficeBridge.sendChat(id, tok, chatThread, text).then(function () {
+    OfficeBridge.sendChat(id, tok, chatThread, text, { speak: chatSpeak }).then(function () {
       startChatReconcile();
     }).catch(function () {
       // 전송 자체 실패 → 그 질문에 오류답 달고 잠금 해제
@@ -702,6 +788,90 @@
       chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); renderChat(); updateSendEnabled();
     });
+  }
+
+  /* ---- 통합 전송: (선택)음성 + (선택)사진 + 텍스트 한 턴 → 케이가 보고/듣고 답 ---- */
+  function sendChatTurnUI(o) {
+    o = o || {};
+    var text = (o.text || '').trim(), imgs = o.files || [], blob = o.audioBlob || null;
+    if (!text && !imgs.length && !blob) return;
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var dispFiles = imgs.map(function (f) { return { name: f.name || '사진', size: f.size || 0, mime: f.type || '', kind: 'image' }; });
+    var meMsg = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false,
+                  files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob };
+    chatMsgs.push(meMsg); saveChatMsgs(); renderChat(); updateSendEnabled();
+    var note = text;                              // 사진만 있고 말/글이 없으면 기본 질문
+    if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주세요.';
+    var memo = { id: id, token: tok, thread: chatThread,
+                 title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
+    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: chatSpeak }).then(function () {
+      meMsg.uploading = false; saveChatMsgs();
+      if (isOpen(chatView)) renderChat();
+      startChatReconcile();
+    }).catch(function (e) {
+      meMsg.answered = true; meMsg.uploading = false;
+      chatMsgs.push({ role: 'k', text: '전송이 안 됐어요(' + (e && e.message || e) + '). 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+    });
+  }
+
+  /* ---- 음성 입력: 홈 녹음과 같은 네이티브 녹음기 재사용(별도 인스턴스) ----
+   * 이 기기 WebView 는 브라우저 실시간 받아쓰기(SpeechRecognition)를 못 쓰므로(안드로이드 WebView 미지원·
+   * 기존에 삑소리/끊김으로 폐기), 검증된 "녹음→업로드→PC whisper 전사" 경로를 그대로 쓴다. */
+  function ensureChatRecorder() {
+    if (chatRecorder) return chatRecorder;
+    chatRecorder = new RecordingModule({
+      onError: function (m) { toast('🎤 ' + m); chatRecording = false; setChatMic(false); },
+      onAudio: function (blob) { chatRecording = false; setChatMic(false); onChatVoiceRecorded(blob); }
+    });
+    return chatRecorder;
+  }
+  function setChatMic(rec) {
+    if (!chatMic) return;
+    chatMic.classList.toggle('rec', rec);
+    if (chatMicLabel) chatMicLabel.textContent = rec ? '듣는 중… 끝나면 누르기' : '눌러서 말하기';
+  }
+  function toggleChatMic() {
+    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 말할 수 있어요.'); return; }
+    if (isRecording) { toast('먼저 홈의 녹음을 마쳐 주세요.'); return; }
+    if (!RecordingModule.isSupported()) { toast('이 기기에서는 음성 입력을 쓸 수 없어요.'); return; }
+    unlockKaiAudio();
+    var r = ensureChatRecorder();
+    if (!chatRecording) { chatRecording = true; setChatMic(true); r.start(); }
+    else { chatRecording = false; try { r.stop(); } catch (e) {} }   // → onAudio → onChatVoiceRecorded
+  }
+  function onChatVoiceRecorded(blob) {
+    if (!blob) { toast('녹음이 비었어요. 다시 말씀해 주세요.'); return; }
+    var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
+    sendChatTurnUI({ text: '', files: imgs, audioBlob: blob });   // 음성(+있으면 사진)을 함께 전송
+  }
+
+  /* ---- 카메라/갤러리: 케이에게 보여줄 사진 붙이기(전송 전 대기) ---- */
+  function renderPending() {
+    if (!chatPendingStrip) return;
+    if (!chatPendingImages.length) { chatPendingStrip.style.display = 'none'; chatPendingStrip.innerHTML = ''; return; }
+    chatPendingStrip.style.display = 'flex';
+    chatPendingStrip.innerHTML = '';
+    chatPendingImages.forEach(function (f, i) {
+      var d = document.createElement('div'); d.className = 'pend';
+      var im = document.createElement('img');
+      try { var rd = new FileReader(); rd.onload = function () { im.src = rd.result; }; rd.readAsDataURL(f); } catch (e) {}
+      var b = document.createElement('button'); b.className = 'rm'; b.type = 'button';
+      b.innerHTML = '<svg><use href="#i-x"/></svg>';
+      b.addEventListener('click', function () { chatPendingImages.splice(i, 1); renderPending(); });
+      d.appendChild(im); d.appendChild(b); chatPendingStrip.appendChild(d);
+    });
+  }
+  function onChatCamPicked(fileList) {
+    var arr = Array.prototype.slice.call(fileList || []);
+    if (!arr.length) return;
+    arr = arr.filter(function (f) { return (f.size || 0) <= 45 * 1024 * 1024; });   // 각 45MB 이하
+    var room = Math.max(0, 6 - chatPendingImages.length);
+    if (arr.length > room) { arr = arr.slice(0, room); toast('사진은 한 번에 최대 6장까지예요.'); }
+    if (!arr.length) return;
+    chatPendingImages = chatPendingImages.concat(arr);
+    renderPending();
+    toast('사진을 붙였어요. 말하거나 질문을 적어 보내세요.');
   }
   function findMsg(id) { for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].id === id) return chatMsgs[i]; return null; }
   function startChatReconcile() {
@@ -720,14 +890,23 @@
         m._polling = false;
         if (res && res.status === 'done') {
           m.answered = true;
+          if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
+          var vurl = res.summary_json && res.summary_json.voice_url;   // 케이 목소리(mp3)
           var kmsg = { role: 'k', text: reply, ts: Date.now() };
           if (atts.length) kmsg.files = atts;
+          if (vurl) kmsg.vurl = vurl;
           chatMsgs.push(kmsg);
           saveChatMsgs();
-          if (isOpen(chatView)) renderChat();
-          else { chatUnseen++; updateChatBadge(); toast(atts.length ? '케이가 파일을 보냈어요.' : '케이 답장이 도착했어요.'); }
+          if (isOpen(chatView)) {
+            renderChat();
+            if (vurl) setTimeout(function () {   // 도착 즉시 목소리 자동재생(막히면 "다시 듣기"로)
+              var ks = chatLog.querySelectorAll('.bubble.k .voiceplay');
+              playKaiVoice(vurl, ks.length ? ks[ks.length - 1] : null);
+            }, 80);
+          }
+          else { chatUnseen++; updateChatBadge(); toast(vurl ? '케이가 음성으로 답했어요.' : (atts.length ? '케이가 파일을 보냈어요.' : '케이 답장이 도착했어요.')); }
           updateSendEnabled();
         } else if (Date.now() - (m.ts || 0) > (m.files ? 20 : 6) * 60 * 1000) {   // 파일 첨부는 여유롭게
           m.answered = true;
@@ -788,8 +967,24 @@
     }).catch(function () { officeLoading = false; });
   }
 
-  if ($('btnChat')) $('btnChat').addEventListener('click', openChat);
+  if ($('btnChat')) $('btnChat').addEventListener('click', function () { openChat(); });
+  if ($('btnVoiceChat')) $('btnVoiceChat').addEventListener('click', function () { openChat({ voice: true }); });
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);
+  // 음성 대화 도구 연결
+  if (chatMic) chatMic.addEventListener('click', toggleChatMic);
+  if (chatCam) chatCam.addEventListener('click', function () {
+    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }
+    if (chatCamInput) chatCamInput.click();
+  });
+  if (chatCamInput) chatCamInput.addEventListener('change', function () {
+    if (this.files && this.files.length) onChatCamPicked(this.files);
+    this.value = '';
+  });
+  if (chatSpeakToggle) chatSpeakToggle.addEventListener('click', function () {
+    chatSpeak = !chatSpeak; saveChatSpeak(); updateSpeakToggle();
+    toast(chatSpeak ? '켜짐 — 케이가 목소리로도 답해요.' : '꺼짐 — 글로만 답해요.');
+  });
+  updateSpeakToggle();
   if (chatInput) {
     chatInput.addEventListener('input', autoGrowChat);
     chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); } });
@@ -837,6 +1032,8 @@
   });
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
+    var vp = ev.target.closest ? ev.target.closest('[data-vurl]') : null;
+    if (vp) { playKaiVoice(vp.getAttribute('data-vurl'), vp); return; }
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     var url = b.getAttribute('data-att-url');
@@ -864,6 +1061,7 @@
   }
   function goBack() {
     if (isOpen(modal)) { closeModal(); return true; }
+    if (chatRecording) { toast('음성 대화 녹음 중이에요. 마이크를 다시 눌러 멈춰 주세요.'); return true; }
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
     if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('healthView'))) {

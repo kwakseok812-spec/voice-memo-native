@@ -233,11 +233,58 @@
   }
 
   // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
-  function sendChat(id, token, thread, text) {
+  //   opts.speak=true 면 케이 답을 목소리(mp3)로도 만들게 요청(meta.speak).
+  function sendChat(id, token, thread, text, opts) {
+    opts = opts || {};
     return _insertRow({
       id: id, title: '채팅', status: 'pending', kind: 'chat',
       note: text, client_token: token,
-      meta: { app: 'voice-memo-test', thread: thread }
+      meta: { app: 'voice-memo-test', thread: thread, speak: !!opts.speak }
+    });
+  }
+
+  /* ---------- 음성/사진 대화 한 턴(통합) ----------
+   * (선택) 음성 오디오 + (선택) 사진 여러 장 + 텍스트를 **한 chat 행**으로 보낸다.
+   * chat_responder.py 가:
+   *   - meta.voice 면 오디오를 whisper 로 전사해 질문으로 삼고(transcript 회신),
+   *   - meta.files(사진)면 로컬로 내려받아 케이가 이미지를 직접 보고 답하며(기존 채팅 첨부 통로 재사용),
+   *   - meta.speak 면 답을 1번 목소리(ko-KR-SunHiNeural) mp3 로 만들어 summary_json.voice_url 에 첨부.
+   * ▶ 규약(상향):
+   *   - 음성: voice-audio 버킷 `{id}/voice.{ext}`, meta.audio={key,ext}, meta.voice=true.
+   *   - 사진: voice-audio 버킷 `{id}/img_{i}.{ext}`, meta.files=[{key,ext,name,size,mime,kind:'image'}].
+   *   - 사진/음성 워커·명함 등록(collect.py)과는 kind='chat' 로 완전히 분리 — 충돌 없음. */
+  function sendChatTurn(memo, opts) {
+    opts = opts || {};
+    var files = opts.files || [];
+    var audioBlob = opts.audioBlob || null;
+    var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', speak: !!opts.speak };
+    var imgMeta = [];
+    function uploadImages(i) {
+      if (i >= files.length) return Promise.resolve();
+      var f = files[i];
+      var ext = extForFile(f, 'photo');
+      var key = memo.id + '/img_' + i + '.' + ext;
+      return uploadObject(key, f).then(function () {
+        imgMeta.push({ key: key, ext: ext, name: f.name || ('img' + i + '.' + ext),
+                       size: f.size || 0, mime: f.type || '', kind: 'image' });
+        opts.onProgress && opts.onProgress(i + 1, files.length);
+        return uploadImages(i + 1);
+      });
+    }
+    function uploadVoice() {
+      if (!audioBlob) return Promise.resolve();
+      var ext = extFromBlob(audioBlob);
+      var key = memo.id + '/voice.' + ext;
+      return uploadObject(key, audioBlob).then(function () {
+        meta.voice = true; meta.audio = { key: key, ext: ext };
+      });
+    }
+    return uploadImages(0).then(uploadVoice).then(function () {
+      if (imgMeta.length) meta.files = imgMeta;
+      return _insertRow({
+        id: memo.id, title: memo.title || '음성대화', status: 'pending', kind: 'chat',
+        note: memo.note || null, client_token: memo.token, meta: meta
+      });
     });
   }
 
@@ -374,7 +421,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
-    createSearch: createSearch, sendChat: sendChat, poll: poll, flush: flush, pendingCount: pendingCount,
+    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     listOfficePushes: listOfficePushes,
     CHUNK_SIZE: CHUNK_SIZE

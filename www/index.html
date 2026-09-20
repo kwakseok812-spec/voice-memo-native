@@ -49,6 +49,8 @@
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.8a4 4 0 0 1 0 6.4M19 6.2a7.5 7.5 0 0 1 0 11.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-soundoff" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M17 9.5l5 5M22 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
 <!-- ===== 배경 (그라데이션 + 오브 + 격자) ===== -->
@@ -78,16 +80,26 @@
       <div class="greet"><h1>안녕하세요, <em>교수님</em></h1><p>무엇을 도와드릴까요?</p></div>
 
       <!-- 소장 K 대화 진입 (스마트비서의 중심 · 최상단) -->
-      <button class="card action wide chat-entry" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>소장 K</b><small>묻거나 일을 시켜 보세요</small></span><span id="chatBadge" class="chatbadge" style="display:none;">0</span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide chat-entry" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>소장 K(케이)</b><small>묻거나 일을 시켜 보세요</small></span><span id="chatBadge" class="chatbadge" style="display:none;">0</span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
-      <!-- 녹음 오브 -->
-      <div class="orbwrap">
-        <button class="orbbtn" id="btnRecord" aria-label="녹음 시작">
-          <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
-          <span class="core"><svg><use href="#i-mic"/></svg></span>
-        </button>
-        <div class="orblabel" id="orbLabel">녹음 시작</div>
-        <div class="orbhint" id="orbHint">누르면 바로 녹음돼요</div>
+      <!-- 홈 오브 2개: 녹음(음성메모) / 케이와 음성 대화 -->
+      <div class="orbrow">
+        <div class="orbwrap">
+          <button class="orbbtn" id="btnRecord" aria-label="녹음 시작">
+            <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
+            <span class="core"><svg><use href="#i-mic"/></svg></span>
+          </button>
+          <div class="orblabel" id="orbLabel">녹음</div>
+          <div class="orbhint" id="orbHint">눌러서 음성메모</div>
+        </div>
+        <div class="orbwrap">
+          <button class="orbbtn voice" id="btnVoiceChat" aria-label="케이와 음성 대화">
+            <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
+            <span class="core"><svg><use href="#i-chat"/></svg></span>
+          </button>
+          <div class="orblabel">음성 대화</div>
+          <div class="orbhint">케이와 말로 대화</div>
+        </div>
       </div>
 
       <!-- 액션 카드 -->
@@ -170,15 +182,24 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K</span><span class="spacer"></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이</span><span class="spacer"></span><button type="button" id="chatSpeakToggle" class="speaktog" aria-pressed="false" title="케이 답을 목소리로 읽어줄지"><svg class="ic-on"><use href="#i-sound"/></svg><svg class="ic-off"><use href="#i-soundoff"/></svg><span id="chatSpeakLabel">읽기 끔</span></button></div>
       <div id="chatLog" class="chatlog"></div>
+      <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->
+      <div id="chatPendingStrip" class="pendstrip" style="display:none;"></div>
+      <!-- 음성 대화 도구: 말하기 + 카메라로 보여주기 -->
+      <div class="voicetools">
+        <button type="button" id="chatMic" class="micbtn" aria-label="눌러서 말하기"><svg><use href="#i-mic"/></svg><span id="chatMicLabel">눌러서 말하기</span></button>
+        <button type="button" id="chatCam" class="cambtn" aria-label="카메라로 보여주기" title="사진을 찍거나 골라 케이에게 보여주기"><svg><use href="#i-cam"/></svg></button>
+      </div>
       <div class="chatbar">
         <button id="chatAttach" class="iconbtn chatattach" aria-label="파일 첨부" title="파일 보내기"><svg><use href="#i-plus"/></svg></button>
-        <div class="input chatinput"><textarea id="chatInput" rows="1" placeholder="케이에게 묻거나 일을 시켜 보세요"></textarea></div>
+        <div class="input chatinput"><textarea id="chatInput" rows="1" placeholder="메시지 입력"></textarea></div>
         <button id="chatSend" class="chatsend" aria-label="보내기"><svg><use href="#i-send"/></svg></button>
       </div>
       <!-- 채팅 첨부: 거의 모든 형식 허용(accept 생략) · 여러 개 선택 가능 -->
       <input type="file" id="chatFileInput" multiple style="display:none">
+      <!-- 카메라·갤러리 사진(케이에게 보여주며 대화) · 여러 장 가능 -->
+      <input type="file" id="chatCamInput" accept="image/*" multiple style="display:none">
     </section>
 
     <!-- ===================== 건강 ===================== -->
@@ -222,7 +243,7 @@
   </div>
 </div>
 
-<footer>
+<footer id="homeFooter">
   폰은 녹음만, 정확한 받아쓰기·정리는 PC가 해요 · 오디오는 정리 후 삭제됩니다.<br>
   처음 보낸 메모는 PC 준비에 1~2분 걸릴 수 있어요 · 인터넷 연결 필요.
 </footer>
