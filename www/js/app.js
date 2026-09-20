@@ -504,7 +504,8 @@
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
   function clearSearch() {
-    if (searchResults) searchResults.innerHTML = '';
+    // 검색 전 빈 화면: 무엇을 하는 화면인지 예시로 안내(2026-09-20)
+    if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하세요.<br>예: 홍길동, 셀트리온</div>';
     setSearchMsg('', '');
     if (searchInput) searchInput.value = '';
   }
@@ -694,7 +695,7 @@
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
           ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null }
-          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null }; });
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
   }
@@ -841,9 +842,11 @@
         inner += '<button type="button" class="voiceplay" data-lid="' + m.lid + '"><svg><use href="#i-sound"/></svg>' + (m.vurl ? '다시 듣기' : '듣기') + '</button>';
       }
       if (!inner) return '';
+      // 단순 알림성 방송(건강 리마인더·매시간 확인·봇 경보 등)은 「🔔 알림」 배지로 대화와 구분(2026-09-20)
+      if (m.role === 'k' && m.notice) inner = '<div class="noticerow"><span class="noticebadge">🔔 알림</span></div>' + inner;
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner +
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + (m.notice ? ' notice' : '') + '" data-uid="' + msgUid(m) + '">' + inner +
         '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
@@ -854,7 +857,12 @@
       try { window.scrollTo(0, 0); } catch (e) {}
       return;
     }
-    if (anyAwaiting()) html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+    if (anyAwaiting()) {
+      html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+      // 답이 늦으면(약 35초 이상) "멈춘 것처럼" 보이지 않게 안내를 함께 띄운다
+      var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
+      if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
+    }
     chatLog.innerHTML = html;
     chatScrollBottom();
   }
@@ -1179,6 +1187,10 @@
   function reconcileChat() {
     var pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
     if (!pending.length) { stopChatReconcile(); updateSendEnabled(); return; }
+    // 답이 늦어지면(약 35초) 한 번만 재렌더 → "케이가 PC에서 확인 중이에요" 안내가 뜨게 한다
+    var nowT = Date.now(), slowChanged = false;
+    pending.forEach(function (m) { if (!m._slowShown && (nowT - (m.ts || 0)) > 35000) { m._slowShown = true; slowChanged = true; } });
+    if (slowChanged && isOpen(chatView)) renderChat();
     pending.forEach(function (m) {
       if (m._polling) return; m._polling = true;
       OfficeBridge.poll(m.id, m.token).then(function (res) {
@@ -1256,6 +1268,8 @@
         var ts = row.ts ? Date.parse(row.ts) : Date.now();
         var kmsg = { role: 'k', text: reply, ts: (isNaN(ts) ? Date.now() : ts), bid: row.id };
         if (atts.length) kmsg.files = atts;
+        // 단순 알림성 방송이면 표식(앱이 「🔔 알림」 배지 표시) — notify_app --kind notice 가 넣어준다
+        if (row.summary_json && row.summary_json.notice) kmsg.notice = true;
         chatMsgs.push(kmsg);
         added++;
       });
@@ -1363,6 +1377,7 @@
   var sheetEl = $('chatSheet'), sheetTitle = $('chatSheetTitle'), sheetMsg = $('chatSheetMsg');
   var sheetConfirm = $('chatSheetConfirm'), sheetConfirmLabel = $('chatSheetConfirmLabel'), sheetCancel = $('chatSheetCancel');
   var sheetCopyBtn = $('chatSheetCopy');
+  var sheetHintEl = $('chatSheetHint');  // 부분 복사 힌트(복사 가능한 메시지 시트에서만 표시)
   var sheetAction = null;               // 확인(삭제 등) 시 실행할 함수
   var sheetCopyVal = null;              // 이 시트의 [복사] 대상 텍스트(null이면 복사 버튼 숨김)
 
@@ -1375,6 +1390,7 @@
     sheetAction = action || null;
     sheetCopyVal = (copyText != null && copyText !== '') ? copyText : null;
     if (sheetCopyBtn) sheetCopyBtn.style.display = sheetCopyVal ? 'flex' : 'none';
+    if (sheetHintEl) sheetHintEl.style.display = sheetCopyVal ? 'block' : 'none';   // 복사 가능한 메시지 시트에서만 힌트
     sheetEl.style.display = 'flex';
   }
   function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; }

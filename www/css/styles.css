@@ -132,7 +132,7 @@ html[data-style="light"] #themeToggle .ic-sun{display:block}
 .action .ic.blue svg{color:var(--p1)} .action .ic.cyan svg{color:var(--cyan)}
 .action .tx{min-width:0}
 .action .tx b{font-size:18px;font-weight:800;display:block;line-height:1.25}
-.action .tx small{font-size:13.5px;color:var(--dim);font-weight:500;display:block;margin-top:3px}
+.action .tx small{font-size:13.5px;color:var(--dim);font-weight:500;display:block;margin-top:3px;word-break:keep-all;overflow-wrap:break-word}
 .action .chev{width:20px;height:20px;color:var(--dim);margin-left:auto;flex:none}
 .action:active{transform:scale(.98)}
 
@@ -291,12 +291,19 @@ html[data-style="light"] .modal-box{background:var(--bg0)}
 html[data-style="light"] .sheet-box{background:var(--bg0)}
 .sheet-head{font-size:18px;font-weight:800;color:var(--text);text-align:center;padding:2px 0 2px}
 .sheet-msg{font-size:14.5px;line-height:1.6;color:var(--muted);text-align:center;padding:0 6px 6px;max-height:120px;overflow:hidden}
+/* [⋯] 시트: 부분 복사 힌트(2026-09-20) */
+.sheet-hint{font-size:13px;line-height:1.5;color:var(--dim);text-align:center;padding:0 6px 6px}
 .sheet-btn{width:100%;height:54px;border-radius:16px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-size:16.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
 .sheet-btn svg{width:20px;height:20px}
 .sheet-btn:active{transform:scale(.98)}
-.sheet-btn.danger{color:#fff;background:var(--rec);border-color:transparent}
+/* 자주 쓰는 [복사]를 눈에 띄게(2026-09-20) */
+#chatSheetCopy{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
+/* [삭제]는 차분하게 — 빨강 배경 대신 빨강 글자+테두리(실수 방지, 2026-09-20) */
+.sheet-btn.danger{color:var(--rec);background:var(--glass);border-color:rgba(251,113,133,.45)}
 
-footer{max-width:520px;margin:24px auto 0;padding:0 22px;color:var(--dim);font-size:12.5px;text-align:center;line-height:1.7;position:relative;z-index:1}
+footer{max-width:520px;margin:24px auto 0;padding:0 22px;color:var(--dim);font-size:12.5px;text-align:center;line-height:1.7;position:relative;z-index:1;word-break:keep-all;overflow-wrap:break-word}
+/* 홈 오브 힌트·문서 안내 등 짧은 안내문도 단어 중간이 쪼개지지 않게(2026-09-20) */
+.orbhint,.doc-open-hint,.proc-hint,.empty-note{word-break:keep-all;overflow-wrap:break-word}
 
 /* ===== 저사양 폴백: blur 끄고 반투명만 (폴드8 성능 대비) ===== */
 html.no-blur *{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
@@ -336,6 +343,12 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .bubble.typing span:nth-child(2){animation-delay:.2s}
 .bubble.typing span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+/* 답이 늦을 때 뜨는 안내(약 35초 후) — "멈춘 것처럼" 보이지 않게(2026-09-20) */
+.waitnote{align-self:flex-start;max-width:84%;margin:-2px 0 2px;padding:9px 13px;border-radius:14px;background:var(--warn-bg);border:1px solid var(--glass-b);color:var(--muted);font-size:13.5px;line-height:1.5;word-break:keep-all;overflow-wrap:break-word}
+/* 🔔 알림 배지: 답이 필요 없는 단순 알림성 방송(건강 리마인더·매시간 확인·봇 경보)을 대화와 구분(2026-09-20) */
+.noticerow{margin:0 0 7px}
+.noticebadge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 11px;border-radius:999px;background:var(--warn-bg);color:var(--warn);border:1px solid var(--glass-b);font-size:12.5px;font-weight:800;letter-spacing:-.2px}
+.bubble.k.notice{border-color:var(--warn)}
 /* 입력 한 줄: [+] 첨부 · 입력창 · 📷 카메라 · 전송 — 좁은 폰(375px)에서도 한 줄 */
 .chatbar{position:sticky;bottom:0;display:flex;align-items:flex-end;gap:7px;padding:8px 0 calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg1) 34%)}
 .chatinput{flex:1;min-width:0;min-height:50px;padding:6px 13px;align-items:center}

@@ -313,7 +313,7 @@
 
       var html = '';
       html += chartCard('공복혈당', 'mg/dL', gluc, '#22D3EE', [70, 140]);
-      html += chartCard('체중', 'kg', wt, '#8B5CF6', null);
+      html += chartCard('체중', 'kg', wt, '#8B5CF6', null, 4);   // 최소 y축 폭 4kg: 미세 변동이 절벽처럼 과장되지 않게
       html += '<div class="hsec">날짜별 기록</div><div class="list hlist">';
       rows.forEach(function (r) { html += dayRow(r); });
       html += '</div>';
@@ -337,7 +337,7 @@
       mealLine + '</div>';
   }
   // 순수 SVG 라인 차트(외부 라이브러리 없음). pts: [{d,v}], fixRange: [min,max] 또는 null(자동).
-  function chartCard(title, unit, pts, color, fixRange) {
+  function chartCard(title, unit, pts, color, fixRange, minSpan) {
     var head = '<div class="hchart-h"><span>' + title + ' <small>' + unit + '</small></span>';
     if (!pts.length) return '<div class="card hchart">' + head + '</div><div class="hchart-empty">아직 ' + title + ' 기록이 없어요.</div></div>';
     var last = pts[pts.length - 1];
@@ -347,6 +347,8 @@
     var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
     if (fixRange) { mn = Math.min(mn, fixRange[0]); mx = Math.max(mx, fixRange[1]); }
     if (mn === mx) { mn -= 1; mx += 1; }
+    // 최소 y축 폭 확보: 데이터 변동이 아주 작아도 절벽처럼 과장돼 보이지 않게(2026-09-20)
+    if (minSpan && (mx - mn) < minSpan) { var mid = (mn + mx) / 2; mn = mid - minSpan / 2; mx = mid + minSpan / 2; }
     var pad = (mx - mn) * 0.12; mn -= pad; mx += pad;
     var n = pts.length;
     function X(i) { return PADL + (n === 1 ? (W - PADL - PADR) / 2 : (i * (W - PADL - PADR) / (n - 1))); }

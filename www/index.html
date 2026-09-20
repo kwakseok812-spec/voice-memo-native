@@ -73,7 +73,7 @@
   <header class="topbar">
     <div class="brand"><span class="mark"><svg><use href="#i-spark"/></svg></span>스마트비서</div>
     <div class="top-right">
-      <span class="pill" id="connPill"><i class="dot idle" id="statusDot"></i><span id="statusText">대기 중</span></span>
+      <!-- 상단 "대기 중" 상태 표시는 2026-09-20 대표님 지시로 제거(무슨 뜻인지 알기 어렵고 화면만 복잡) -->
       <button class="iconbtn" id="themeToggle" aria-label="화면 밝기 전환" title="다크/라이트 전환"><svg class="ic-moon"><use href="#i-moon"/></svg><svg class="ic-sun"><use href="#i-sun"/></svg></button>
     </div>
   </header>
@@ -116,7 +116,7 @@
       </div>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF를 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
       <div class="sec-title">지난 메모 <span id="historyCount"></span></div>
@@ -352,6 +352,7 @@
   <div class="sheet-box">
     <div class="sheet-head" id="chatSheetTitle">삭제</div>
     <div class="sheet-msg" id="chatSheetMsg"></div>
+    <div class="sheet-hint" id="chatSheetHint" style="display:none;">💡 글자를 길게 누르면 원하는 부분만 복사할 수 있어요.</div>
     <button type="button" class="sheet-btn" id="chatSheetCopy" style="display:none;"><svg><use href="#i-copy"/></svg><span>복사</span></button>
     <button type="button" class="sheet-btn danger" id="chatSheetConfirm"><svg><use href="#i-trash"/></svg><span id="chatSheetConfirmLabel">삭제</span></button>
     <button type="button" class="sheet-btn" id="chatSheetCancel">취소</button>
