@@ -1134,17 +1134,26 @@
       b.addEventListener('click', function () { chatPendingImages.splice(i, 1); renderPending(); });
       d.appendChild(im); d.appendChild(b); chatPendingStrip.appendChild(d);
     });
-    // 파일 칩(문서 등) — 이름 + 크기 + x
+    // 첨부 파일 — 그림이면 썸네일, 그 밖은 이름칩(고른 순서 그대로)
     chatPendingFiles.forEach(function (f, i) {
-      var d = document.createElement('div'); d.className = 'pend pendfile';
-      var ic = document.createElement('span'); ic.className = 'pf-ic';
-      ic.innerHTML = '<svg><use href="#' + attachIcon({ mime: f.type, name: f.name }) + '"/></svg>';
-      var nm = document.createElement('span'); nm.className = 'pf-name'; nm.textContent = f.name || '파일';
-      var sz = document.createElement('span'); sz.className = 'pf-sz'; sz.textContent = f.size ? fmtBytes(f.size) : '';
+      var isImg = fileKindOf(f.type, f.name) === 'image';
       var b = document.createElement('button'); b.className = 'rm'; b.type = 'button';
       b.innerHTML = '<svg><use href="#i-x"/></svg>';
       b.addEventListener('click', function () { chatPendingFiles.splice(i, 1); renderPending(); });
-      d.appendChild(ic); d.appendChild(nm); if (sz.textContent) d.appendChild(sz); d.appendChild(b);
+      var d = document.createElement('div');
+      if (isImg) {
+        d.className = 'pend';
+        var im = document.createElement('img');
+        try { var rd = new FileReader(); rd.onload = function () { im.src = rd.result; }; rd.readAsDataURL(f); } catch (e) {}
+        d.appendChild(im); d.appendChild(b);
+      } else {
+        d.className = 'pend pendfile';
+        var ic = document.createElement('span'); ic.className = 'pf-ic';
+        ic.innerHTML = '<svg><use href="#' + attachIcon({ mime: f.type, name: f.name }) + '"/></svg>';
+        var nm = document.createElement('span'); nm.className = 'pf-name'; nm.textContent = f.name || '파일';
+        var sz = document.createElement('span'); sz.className = 'pf-sz'; sz.textContent = f.size ? fmtBytes(f.size) : '';
+        d.appendChild(ic); d.appendChild(nm); if (sz.textContent) d.appendChild(sz); d.appendChild(b);
+      }
       chatPendingStrip.appendChild(d);
     });
   }
