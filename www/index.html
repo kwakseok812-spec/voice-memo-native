@@ -117,6 +117,7 @@
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide" id="btnLocker"><span class="ic cyan"><svg><use href="#i-copy"/></svg></span><span class="tx"><b>PC↔폰 공유함</b><small>케이 없이 두 기기끼리 글·파일 공유</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
       <div class="sec-title">지난 메모 <span id="historyCount"></span></div>
@@ -219,6 +220,20 @@
       <input type="file" id="chatFileInput" multiple style="display:none">
       <!-- 카메라·갤러리 사진(케이에게 보여주며 대화) · 여러 장 가능 -->
       <input type="file" id="chatCamInput" accept="image/*" multiple style="display:none">
+    </section>
+
+    <!-- ===================== PC↔폰 공유함(케이 미개입) ===================== -->
+    <section id="lockerView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">PC↔폰 공유함</span><span class="spacer end"><button class="iconbtn" id="lockerMenuBtn" aria-label="공유함 메뉴" title="공유함 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
+      <div class="chatsearchinfo" style="display:block">🔒 케이는 이 방을 보지 않아요 — 폰과 PC끼리만 글·파일을 공유해요.</div>
+      <div id="lockerLog" class="chatlog"></div>
+      <div id="lockerPendingStrip" class="pendstrip" style="display:none;"></div>
+      <div class="chatbar">
+        <button id="lockerAttach" class="iconbtn chatattach" aria-label="파일 올리기" title="파일 올리기"><svg><use href="#i-plus"/></svg></button>
+        <div class="input chatinput"><textarea id="lockerInput" rows="1" placeholder="여기에 글을 쓰거나 파일을 올리세요"></textarea></div>
+        <button id="lockerSend" class="chatsend" aria-label="올리기"><svg><use href="#i-send"/></svg></button>
+      </div>
+      <input type="file" id="lockerFileInput" multiple style="display:none">
     </section>
 
     <!-- ===================== 건강 ===================== -->

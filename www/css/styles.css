@@ -300,6 +300,10 @@ html[data-style="light"] .sheet-box{background:var(--bg0)}
 #chatSheetCopy{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
 /* [삭제]는 차분하게 — 빨강 배경 대신 빨강 글자+테두리(실수 방지, 2026-09-20) */
 .sheet-btn.danger{color:var(--rec);background:var(--glass);border-color:rgba(251,113,133,.45)}
+/* 공유함 첨부 대기 칩 */
+#lockerPendingStrip.pendstrip{display:flex;flex-wrap:wrap;gap:8px;padding:8px 2px}
+.pendchip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:7px 10px;border-radius:12px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pendchip button{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
 /* PC 연동 암호 입력칸 */
 #syncGate{z-index:1200}
 .sync-input{width:100%;height:52px;border-radius:16px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-size:17px;font-weight:700;text-align:center;letter-spacing:2px;padding:0 14px;box-sizing:border-box}

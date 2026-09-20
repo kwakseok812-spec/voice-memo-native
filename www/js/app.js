@@ -1421,6 +1421,188 @@
   });
   if ($('syncGateLater')) $('syncGateLater').addEventListener('click', function () { hideSyncGate(); });
 
+  /* ===================== PC↔폰 공유함(locker) =====================
+   * 카카오톡 「나와의 채팅」처럼, 케이(chat_responder)는 개입하지 않고 대표님 기기끼리만
+   * 글·파일을 올려두고 서로 보는 방. 케이 답변 없음. 순수 보관·기기간 공유.
+   *   · 서버: kind='locker' 로 저장 → 어떤 워커도 처리 안 함(collect 는 명시 스킵, 나머지는 kind 필터로 자동 제외).
+   *   · 동기화: list_locker RPC 를 방 열렸을 때 폴링(같은 연동 암호 재사용). 채팅과 완전히 별도 스트림.
+   *   · 파일: 공개 버킷 locker 에 올려 공개 URL 로 상대 기기서 다운로드(변환 없음). */
+  var LOCKER_MSGS_KEY = 'smart_locker_msgs', LOCKER_SINCE_KEY = 'smart_locker_since';
+  var lockerView = $('lockerView'), lockerLog = $('lockerLog'), lockerInput = $('lockerInput');
+  var lockerLoading = false, lockerTimer = null, lockerPendingFiles = [];
+  var lockerMsgs = loadLockerMsgs();
+
+  function loadLockerMsgs() { try { var a = JSON.parse(localStorage.getItem(LOCKER_MSGS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveLockerMsgs() {
+    try {
+      lockerMsgs.forEach(function (m) { if (!m.uid) m.uid = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); });
+      localStorage.setItem(LOCKER_MSGS_KEY, JSON.stringify(lockerMsgs.slice(-500)));
+    } catch (e) {}
+  }
+  function lockerSince() {
+    try { var s = localStorage.getItem(LOCKER_SINCE_KEY); if (!s) { s = new Date().toISOString(); localStorage.setItem(LOCKER_SINCE_KEY, s); } return s; }
+    catch (e) { return new Date().toISOString(); }
+  }
+  function hasLockerRow(cid) {
+    for (var i = 0; i < lockerMsgs.length; i++) {
+      if ((lockerMsgs[i].id && lockerMsgs[i].id === cid) || (lockerMsgs[i].cid && lockerMsgs[i].cid === cid)) return true;
+    }
+    return false;
+  }
+  function lockerScroll() { try { if (lockerLog) lockerLog.scrollTop = lockerLog.scrollHeight; window.scrollTo(0, document.body.scrollHeight); } catch (e) {} }
+  function lockerUid(m) { if (!m.uid) m.uid = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); return m.uid; }
+
+  function renderLocker() {
+    if (!lockerLog) return;
+    if (!lockerMsgs.length) {
+      lockerLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-copy"/></svg></div>' +
+        '<b>PC↔폰 공유함</b><p>여기에 올린 글·파일은 <b>케이가 보지 않고</b> 폰과 PC에서 함께 보여요.<br>한쪽에서 올리면 다른 쪽에도 떠요.</p></div>';
+      return;
+    }
+    lockerLog.innerHTML = lockerMsgs.map(function (m) {
+      var inner = m.text ? chatText(m.text) : '';
+      if (m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
+      if (m.error) inner += (inner ? '<br>' : '') + '<span style="color:var(--rec)">올리지 못했어요</span>';
+      inner += attachChips(m.files, false);                 // 항상 다운로드 가능(공개 url)
+      if (!inner) inner = '<span style="opacity:.6">(빈 메모)</span>';
+      return '<div class="bubble me" data-uid="' + lockerUid(m) + '">' + inner +
+        '<button type="button" class="bmenu" aria-label="메뉴(복사·삭제)">⋯</button></div>';
+    }).join('');
+    lockerScroll();
+  }
+  function renderLockerPending() {
+    var strip = $('lockerPendingStrip'); if (!strip) return;
+    if (!lockerPendingFiles.length) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+    strip.style.display = 'flex';
+    strip.innerHTML = lockerPendingFiles.map(function (f, i) {
+      return '<span class="pendchip">' + esc(f.name || '파일') + '<button type="button" data-i="' + i + '" aria-label="빼기">×</button></span>';
+    }).join('');
+    Array.prototype.forEach.call(strip.querySelectorAll('button[data-i]'), function (b) {
+      b.addEventListener('click', function () { lockerPendingFiles.splice(+b.getAttribute('data-i'), 1); renderLockerPending(); });
+    });
+  }
+  function autoGrowLocker() { if (!lockerInput) return; lockerInput.style.height = 'auto'; lockerInput.style.height = Math.min(120, lockerInput.scrollHeight) + 'px'; }
+
+  function openLocker() {
+    openScreen(lockerView);
+    renderLocker(); renderLockerPending();
+    loadLockerSync(); startLockerSync();
+    if (!getSyncPass()) { try { if (!localStorage.getItem(SYNC_PROMPTED_KEY)) showSyncGate(false); } catch (e) {} }
+  }
+  function sendLockerMsg() {
+    if (!lockerInput) return;
+    var text = (lockerInput.value || '').trim();
+    var files = lockerPendingFiles.slice();
+    if (!text && !files.length) return;
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var disp = files.map(function (f) { return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) }; });
+    var item = { id: id, text: text, ts: Date.now(), files: disp.length ? disp : null, up: !!files.length, uploading: !!files.length };
+    lockerMsgs.push(item); saveLockerMsgs();
+    lockerInput.value = ''; autoGrowLocker(); lockerPendingFiles = []; renderLockerPending(); renderLocker();
+    var memo = { id: id, token: tok, text: text };
+    OfficeBridge.sendLocker(memo, files).then(function (savedFiles) {
+      item.uploading = false;
+      if (savedFiles && savedFiles.length) item.files = savedFiles;   // 공개 url 채워 내 기기서도 다운로드칩 표시
+      saveLockerMsgs(); if (isOpen(lockerView)) renderLocker();
+    }).catch(function (e) {
+      item.uploading = false; item.error = true; saveLockerMsgs();
+      if (isOpen(lockerView)) renderLocker();
+      toast('올리지 못했어요 (' + (e && e.message || e) + '). 다시 시도해 주세요.');
+    });
+  }
+  function loadLockerSync() {
+    if (lockerLoading || !(window.OfficeBridge && OfficeBridge.listLocker)) return;
+    var pass = getSyncPass(); if (!pass) return;
+    lockerLoading = true;
+    var since = lockerSince();
+    OfficeBridge.listLocker(since, pass).then(function (rows) {
+      lockerLoading = false;
+      if (!rows || !rows.length) return;
+      var added = 0, maxTs = since;
+      rows.forEach(function (row) {
+        if (!row || !row.id) return;
+        if (row.ts && row.ts > maxTs) maxTs = row.ts;
+        if (hasLockerRow(row.id)) return;               // 내가 올린 것/이미 받은 것 → 건너뜀
+        var meta = row.meta || {};
+        var files = (meta.files || []).map(function (f) {
+          return { name: f.name || '파일', url: f.url || '', size: f.size || 0, mime: f.mime || '', kind: f.kind || '' };
+        }).filter(function (f) { return f.url; });
+        var ts = row.ts ? Date.parse(row.ts) : Date.now(); if (isNaN(ts)) ts = Date.now();
+        lockerMsgs.push({ text: (row.note || '').trim(), ts: ts, files: files.length ? files : null, cid: row.id, remote: true });
+        added++;
+      });
+      if (added) {
+        lockerMsgs.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+        saveLockerMsgs();
+        if (isOpen(lockerView)) renderLocker();
+        else toast('공유함에 새 자료가 도착했어요.');
+      }
+      try { localStorage.setItem(LOCKER_SINCE_KEY, maxTs); } catch (e) {}
+    }).catch(function (e) {
+      lockerLoading = false;
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(lockerView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+    });
+  }
+  function startLockerSync() {
+    if (lockerTimer) return;
+    lockerTimer = setInterval(function () {
+      if (!isOpen(lockerView)) { stopLockerSync(); return; }
+      loadLockerSync();
+    }, 3500);
+  }
+  function stopLockerSync() { if (lockerTimer) { clearInterval(lockerTimer); lockerTimer = null; } }
+
+  function openLockerActionSheet(uid) {
+    var m = null;
+    for (var i = 0; i < lockerMsgs.length; i++) { if (lockerMsgs[i].uid === uid) { m = lockerMsgs[i]; break; } }
+    if (!m) return;
+    var copyText = (m.text || '').trim() || (m.files && m.files.length ? m.files.map(function (f) { return f.url; }).filter(Boolean).join('\n') : '');
+    var title = (m.text ? (m.text.length > 60 ? m.text.slice(0, 60) + '…' : m.text) : (m.files && m.files.length ? '(첨부 파일)' : '(빈 메모)'));
+    openSheet('이 항목', title, '삭제', function () { deleteLocker(uid); }, copyText || null);
+  }
+  function deleteLocker(uid) {
+    for (var i = 0; i < lockerMsgs.length; i++) { if (lockerMsgs[i].uid === uid) { lockerMsgs.splice(i, 1); break; } }
+    saveLockerMsgs(); renderLocker(); toast('항목을 삭제했어요.');
+  }
+  function clearAllLocker() {
+    if (!lockerMsgs.length) { toast('지울 자료가 없어요.'); return; }
+    openSheet('공유함을 모두 지울까요?', '이 기기 화면의 목록만 지워져요(다른 기기·서버에 올린 파일은 그대로 남아요).', '전체 삭제', function () {
+      lockerMsgs = []; saveLockerMsgs();
+      try { localStorage.setItem(LOCKER_SINCE_KEY, new Date().toISOString()); } catch (e) {}   // 옛 항목 다시 안 당겨옴
+      renderLocker(); toast('공유함 목록을 지웠어요.');
+    });
+  }
+
+  if ($('btnLocker')) $('btnLocker').addEventListener('click', openLocker);
+  if ($('lockerSend')) $('lockerSend').addEventListener('click', sendLockerMsg);
+  if (lockerInput) {
+    lockerInput.addEventListener('input', autoGrowLocker);
+    lockerInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLockerMsg(); } });
+  }
+  if ($('lockerAttach')) $('lockerAttach').addEventListener('click', function () { var fi = $('lockerFileInput'); if (fi) fi.click(); });
+  if ($('lockerFileInput')) $('lockerFileInput').addEventListener('change', function () {
+    var fs = Array.prototype.slice.call(this.files || []);
+    if (fs.length) { lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending(); }
+    this.value = '';
+  });
+  if ($('lockerMenuBtn')) $('lockerMenuBtn').addEventListener('click', function () {
+    var linked = !!getSyncPass();
+    openSheet('공유함 메뉴',
+      linked ? 'PC와 폰이 연동되어 있어요.' : 'PC(크롬)에서도 같은 공유함을 보려면 연동하세요.',
+      '공유함 전체 삭제', clearAllLocker, null,
+      { label: linked ? 'PC 연동 암호 변경' : 'PC 연동 암호 설정', action: function () { showSyncGate(true); } });
+  });
+  if (lockerLog) lockerLog.addEventListener('click', function (ev) {
+    var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
+    if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
+    var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
+    if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openLockerActionSheet(bub.getAttribute('data-uid')); return; }
+    var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
+    if (!b) return;
+    var url = b.getAttribute('data-att-url'); var w = window.open(url, '_blank');
+    if (!w) toast('파일을 열지 못했어요 — 다시 눌러 주세요.');
+  });
+
   // 홈 소장 K 오브 → 케이 채팅(옛 가로 카드 대체, 진입 경로 일원화)
   if ($('btnVoiceChat')) $('btnVoiceChat').addEventListener('click', function () { openChat(); });
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);

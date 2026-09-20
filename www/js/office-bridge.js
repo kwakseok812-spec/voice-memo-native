@@ -524,6 +524,58 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* ---------- PC↔폰 공유함(locker): 케이 없이 두 기기끼리 글·파일 보관 ----------
+   * 케이(chat_responder)·어떤 워커도 이 종류(kind='locker')를 처리하지 않는다(순수 보관).
+   * 파일은 "공개 버킷 locker"에 올려 공개 URL 로 상대 기기에서 다운로드한다(service_role 서명 불필요).
+   *   - 경로가 무작위 UUID 라 링크를 모르면 접근 불가(개인 보관함 수준). 만료 없음(보관함 성격에 맞음).
+   *   - 조회는 list_locker(since, pass) — list_chat_history 와 같은 암호 잠금 패턴. */
+  var LOCKER_BUCKET = 'locker';
+  function lockerPublicUrl(key) { return CONFIG.url + '/storage/v1/object/public/' + LOCKER_BUCKET + '/' + key; }
+  function uploadLockerObject(key, blob) {
+    return fetch(CONFIG.url + '/storage/v1/object/' + LOCKER_BUCKET + '/' + key, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
+                 'Content-Type': (blob && blob.type) || 'application/octet-stream' },
+      body: blob
+    }).then(function (r) { if (!r.ok) throw new Error('파일 올리기 실패(HTTP ' + r.status + ')'); return key; });
+  }
+  // memo:{id,token,text}, files:[File]. 파일을 공개 버킷에 올리고 kind='locker' 행을 만든다.
+  // 반환: files 메타(공개 url 포함) — 앱이 내 기기 화면에도 다운로드칩을 표시하게.
+  function sendLocker(memo, files) {
+    files = files || [];
+    var filesMeta = [], idx = 0;
+    function step() {
+      if (idx >= files.length) {
+        return _insertRow({
+          id: memo.id, title: '공유함', status: 'pending', kind: 'locker',
+          note: memo.text || null, client_token: memo.token,
+          meta: { app: 'voice-memo-test', from: 'device', files: filesMeta }
+        }).then(function () { return filesMeta; });
+      }
+      var f = files[idx];
+      var ext = extForFile(f, 'file');
+      var key = memo.id + '/' + idx + '.' + ext;
+      return uploadLockerObject(key, f).then(function () {
+        filesMeta.push({ key: key, ext: ext, name: f.name || ('file' + idx + '.' + ext),
+                         size: f.size || 0, mime: f.type || '', url: lockerPublicUrl(key) });
+        idx++;
+        return step();
+      });
+    }
+    return step();
+  }
+  function listLocker(since, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_locker', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_since: since || null, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('공유함 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -567,6 +619,7 @@
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory,
+    sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });
