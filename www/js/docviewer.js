@@ -31,9 +31,10 @@
   var DPR = Math.min(global.devicePixelRatio || 1, 2.5);
   var opToken = 0;
   var viewMode = 'scroll';      // 'scroll'(연속) | 'page'(한 장씩)
-  var fitMode = 'width';        // 'width'(폭 맞춤) | 'page'(페이지 맞춤)
+  var fitMode = 'width';        // 'width'(폭 맞춤) | 'page'(페이지 맞춤=한 페이지 전체가 화면에 딱)
   var rotation = 0;             // 0/90/180/270
   var night = false, flip = true, fullscreen = false;
+  var prevMode = 'scroll', prevFit = 'width';   // 전체화면 진입 전 상태(이탈 시 복원)
   var curPage = 1;             // page 모드 현재 쪽
   var recents = [];            // {name, buf}(세션 기억, 메모리)
   var VIEWABLE = ['hwp', 'hwpx', 'doc', 'docx', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pdf'];
@@ -111,6 +112,7 @@
   // ============ 다시 그리기(모드 분기) ============
   function rebuild() {
     if (!pdfDoc) return;
+    applyPageCenter();
     if (viewMode === 'page') { if (pageNav) pageNav.style.display = 'flex'; renderPage(); }
     else { if (pageNav) pageNav.style.display = 'none'; buildSlots(); }
     updateBadge();
@@ -221,24 +223,29 @@
   }
 
   // ============ 줌 ============
-  function applyZoom() { if (!pdfDoc) return; if (viewMode === 'page') renderPage(); else buildSlots(); updateBadge(); }
+  function applyZoom() { if (!pdfDoc) return; applyPageCenter(); if (viewMode === 'page') renderPage(); else buildSlots(); updateBadge(); }
   function stepZoom(f) { userZoom = Math.max(0.4, Math.min(6, userZoom * f)); applyZoom(); }
   function livePreview() { pagesEl.style.transform = 'scale(' + (userZoom / renderedZoom) + ')'; }
 
   // ============ 보기 옵션 ============
-  function toggleFit() {
-    fitMode = (fitMode === 'width') ? 'page' : 'width';
-    userZoom = 1;
-    var b = $('docFitToggle'); if (b) b.textContent = (fitMode === 'width') ? '폭' : '쪽';
-    computeBaseScale().then(applyZoom);
-  }
-  function toggleMode() {
-    viewMode = (viewMode === 'scroll') ? 'page' : 'scroll';
+  function updateModeUI() {
     var lb = $('docModeLabel'); if (lb) lb.textContent = (viewMode === 'page') ? '한 장씩' : '연속';
     var ic = $('docModeToggle'); if (ic) { var u = ic.querySelector('use'); if (u) u.setAttribute('href', viewMode === 'page' ? '#i-onepage' : '#i-scroll'); }
     setOptActive('docModeToggle', viewMode === 'page');
-    userZoom = 1;
-    rebuild();
+  }
+  function updateFitUI() { var b = $('docFitToggle'); if (b) b.textContent = (fitMode === 'width') ? '폭' : '쪽'; }
+  // 한 장씩 + 페이지 맞춤 + 확대 안 함일 때만 한 페이지를 화면 정중앙에 배치(화면에 딱)
+  function applyPageCenter() {
+    if (scroller) scroller.classList.toggle('fitcenter', viewMode === 'page' && fitMode === 'page' && userZoom <= 1.02);
+  }
+  function toggleFit() {
+    fitMode = (fitMode === 'width') ? 'page' : 'width';
+    userZoom = 1; updateFitUI();
+    computeBaseScale().then(function () { applyPageCenter(); applyZoom(); });
+  }
+  function toggleMode() {
+    viewMode = (viewMode === 'scroll') ? 'page' : 'scroll';
+    updateModeUI(); userZoom = 1; applyPageCenter(); rebuild();
   }
   function toggleFlip() { flip = !flip; setOptActive('docFlipToggle', flip); toast(flip ? '책 넘김 모션 켬' : '책 넘김 모션 끔'); }
   function rotate90() { rotation = (rotation + 90) % 360; computeBaseScale().then(applyZoom); }
@@ -247,12 +254,24 @@
   function setOptActive(id, on) { var b = $(id); if (b) b.classList.toggle('on', !!on); }
 
   // ============ 전체화면 ============
+  // 전체화면 = 한 페이지가 화면에 정확히 가득(원본 doc-viewer 감성 + 대표님 요청):
+  //   진입 시 '한 장씩(page) + 페이지 맞춤(page-fit)'으로 전환 → 한 페이지 전체가 화면에 딱,
+  //   중앙 정렬. 넘기면 다음 페이지도 같은 방식. 이탈 시 이전 보기(연속/폭)로 복원.
   function setFullscreen(on) {
+    var was = fullscreen;
     fullscreen = !!on;
     document.body.classList.toggle('doc-fs', fullscreen);
     var b = $('docFull'); if (b) { var u = b.querySelector('use'); if (u) u.setAttribute('href', fullscreen ? '#i-shrink' : '#i-expand'); b.title = fullscreen ? '전체화면 끄기' : '전체화면'; }
-    // 레이아웃이 바뀌므로 스케일 재계산
-    if (pdfDoc) setTimeout(function () { computeBaseScale().then(applyZoom); }, 60);
+    if (fullscreen && !was) {
+      prevMode = viewMode; prevFit = fitMode;
+      viewMode = 'page'; fitMode = 'page'; userZoom = 1;
+      updateModeUI(); updateFitUI();
+    } else if (!fullscreen && was) {
+      viewMode = prevMode; fitMode = prevFit; userZoom = 1; updateModeUI(); updateFitUI();
+    }
+    applyPageCenter();
+    // 레이아웃(전체화면 CSS)이 반영된 뒤 실제 화면 크기로 스케일 재계산 + 모드에 맞게 다시 그림
+    if (pdfDoc) setTimeout(function () { if (!pdfDoc) return; computeBaseScale().then(function () { applyPageCenter(); rebuild(); }); }, 90);
   }
   function toggleFullscreen() { setFullscreen(!fullscreen); }
 
