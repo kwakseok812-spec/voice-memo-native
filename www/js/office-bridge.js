@@ -243,6 +243,18 @@
     });
   }
 
+  /* ---------- 온디맨드 TTS 요청(답변별 [듣기]) ----------
+   * 특정 답의 텍스트만 케이 목소리 mp3 로 만들어 달라는 요청. chat_responder 가 meta.tts_only 를 보면
+   * 케이(LLM)를 호출하지 않고 곧장 edge-tts 로만 생성 → summary_json.voice_url 회신(빠름·낭비 없음).
+   * ⚠️ meta.thread 를 넣지 않는다 → 대화 기억(load_history)에 이 행이 섞이지 않게(맥락 오염 방지). */
+  function requestTts(id, token, text) {
+    return _insertRow({
+      id: id, title: '읽기', status: 'pending', kind: 'chat',
+      note: text, client_token: token,
+      meta: { app: 'voice-memo-test', tts_only: true }
+    });
+  }
+
   /* ---------- 음성/사진 대화 한 턴(통합) ----------
    * (선택) 음성 오디오 + (선택) 사진 여러 장 + 텍스트를 **한 chat 행**으로 보낸다.
    * chat_responder.py 가:
@@ -421,7 +433,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
-    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, poll: poll, flush: flush, pendingCount: pendingCount,
+    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     listOfficePushes: listOfficePushes,
     CHUNK_SIZE: CHUNK_SIZE

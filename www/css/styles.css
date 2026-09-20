@@ -450,15 +450,15 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
   .orbrow .orblabel{font-size:16px}
 }
 
-/* 채팅: 읽어주기(케이 목소리) 토글 — 상단바 오른쪽 */
-.speaktog{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--glass-b);background:var(--glass);color:var(--dim);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
-.speaktog svg{width:18px;height:18px}
-.speaktog .ic-on{display:none}
-.speaktog .ic-off{display:block}
-.speaktog[aria-pressed="true"]{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
-.speaktog[aria-pressed="true"] .ic-on{display:block}
-.speaktog[aria-pressed="true"] .ic-off{display:none}
-.speaktog:active{transform:scale(.96)}
+/* 홈: 소장 K 오브 위 안읽음 배지 */
+.orbbadge{position:absolute;top:2px;right:6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--rec);color:#fff;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px var(--rec);z-index:2}
+
+/* 채팅: 음성 대화 모드 토글(켜면 핸즈프리 연속 대화 + 음성 답) */
+.convotog{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:50px;margin:2px 0 8px;border:1.5px solid var(--glass-b);border-radius:16px;background:var(--glass);color:var(--muted);font-family:inherit;font-size:16.5px;font-weight:800;cursor:pointer;backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
+.convotog svg{width:22px;height:22px}
+.convotog[aria-pressed="true"]{color:#fff;background:linear-gradient(135deg,#F43F5E,#A855F7);border-color:transparent;box-shadow:0 8px 26px rgba(244,63,94,.4)}
+.convotog:active{transform:scale(.99)}
+.convostatus{font-size:14px;font-weight:700;color:var(--cyan);text-align:center;margin:-2px 0 8px;min-height:18px}
 
 /* 채팅: 음성 대화 도구(말하기 + 카메라) */
 .voicetools{display:flex;gap:8px;align-items:stretch;margin:2px 0 8px}
@@ -466,6 +466,7 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .micbtn svg{width:26px;height:26px}
 .micbtn:active{transform:scale(.98)}
 .micbtn.rec{background:linear-gradient(135deg,#F43F5E,#A855F7);box-shadow:0 8px 30px rgba(244,63,94,.45);animation:micpulse 1.3s ease-in-out infinite}
+.micbtn:disabled{opacity:.45;cursor:default;box-shadow:none;animation:none}
 @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.82}}
 .cambtn{width:56px;flex:none;border:1px solid var(--glass-b);border-radius:18px;background:var(--glass);color:var(--p1);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
 .cambtn svg{width:26px;height:26px}
@@ -483,6 +484,8 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .voiceplay svg{width:18px;height:18px}
 .voiceplay:active{transform:scale(.97)}
 .voiceplay.playing{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
+.voiceplay.loading{opacity:.7;cursor:default}
+.voiceplay[disabled]{opacity:.6;cursor:default}
 /* 음성 me 말풍선(전사 대기) 표시 */
 .bubble.me .voicemark{display:inline-flex;align-items:center;gap:6px;font-weight:700;opacity:.95}
 .bubble.me .voicemark svg{width:17px;height:17px}

@@ -35,7 +35,11 @@
     this._audioCtx = null;
     this._levelRAF = null;
     this._mime = '';
+    this._lastLevel = 0;   // 무음 자동 감지용(0~1) — 레벨미터 tick 이 갱신
   }
+
+  // 최근 마이크 세기(0~1). 네이티브 recorder-native 와 인터페이스 일치.
+  RecordingModule.prototype.getAmplitude = function () { return Promise.resolve(this._lastLevel || 0); };
 
   RecordingModule.isSupported = function () {
     return !!(global.navigator && navigator.mediaDevices &&
@@ -120,7 +124,9 @@
         analyser.getByteTimeDomainData(data);
         var sum = 0;
         for (var i = 0; i < data.length; i++) { var v = (data[i] - 128) / 128; sum += v * v; }
-        self.onLevel(Math.min(1, Math.sqrt(sum / data.length) * 3));
+        var lvl = Math.min(1, Math.sqrt(sum / data.length) * 3);
+        self._lastLevel = lvl;
+        self.onLevel(lvl);
         self._levelRAF = requestAnimationFrame(tick);
       };
       tick();
@@ -130,6 +136,7 @@
   RecordingModule.prototype._stopLevelMeter = function () {
     if (this._levelRAF) cancelAnimationFrame(this._levelRAF);
     this._levelRAF = null;
+    this._lastLevel = 0;
     this.onLevel(0);
     if (this._audioCtx) { try { this._audioCtx.close(); } catch (e) {} this._audioCtx = null; }
   };

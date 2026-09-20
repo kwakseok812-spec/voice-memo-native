@@ -79,10 +79,7 @@
 
       <div class="greet"><h1>안녕하세요, <em>교수님</em></h1><p>무엇을 도와드릴까요?</p></div>
 
-      <!-- 소장 K 대화 진입 (스마트비서의 중심 · 최상단) -->
-      <button class="card action wide chat-entry" id="btnChat"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>소장 K(케이)</b><small>묻거나 일을 시켜 보세요</small></span><span id="chatBadge" class="chatbadge" style="display:none;">0</span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-
-      <!-- 홈 오브 2개: 녹음(음성메모) / 케이와 음성 대화 -->
+      <!-- 홈 오브 2개: 녹음(음성메모) / 소장 K(케이) 대화 -->
       <div class="orbrow">
         <div class="orbwrap">
           <button class="orbbtn" id="btnRecord" aria-label="녹음 시작">
@@ -93,12 +90,13 @@
           <div class="orbhint" id="orbHint">눌러서 음성메모</div>
         </div>
         <div class="orbwrap">
-          <button class="orbbtn voice" id="btnVoiceChat" aria-label="케이와 음성 대화">
+          <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
             <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
             <span class="core"><svg><use href="#i-chat"/></svg></span>
+            <span id="chatBadge" class="chatbadge orbbadge" style="display:none;">0</span>
           </button>
-          <div class="orblabel">음성 대화</div>
-          <div class="orbhint">케이와 말로 대화</div>
+          <div class="orblabel">소장 K</div>
+          <div class="orbhint">케이와 대화</div>
         </div>
       </div>
 
@@ -182,11 +180,16 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이</span><span class="spacer"></span><button type="button" id="chatSpeakToggle" class="speaktog" aria-pressed="false" title="케이 답을 목소리로 읽어줄지"><svg class="ic-on"><use href="#i-sound"/></svg><svg class="ic-off"><use href="#i-soundoff"/></svg><span id="chatSpeakLabel">읽기 끔</span></button></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer"></span></div>
       <div id="chatLog" class="chatlog"></div>
       <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->
       <div id="chatPendingStrip" class="pendstrip" style="display:none;"></div>
-      <!-- 음성 대화 도구: 말하기 + 카메라로 보여주기 -->
+      <!-- 음성 대화 모드: 켜면 핸즈프리(말→자동전송→음성답→자동 다시 듣기) -->
+      <button type="button" id="chatConvoToggle" class="convotog" aria-pressed="false">
+        <svg><use href="#i-refresh"/></svg><span id="chatConvoLabel">음성 대화 시작</span>
+      </button>
+      <div id="chatConvoStatus" class="convostatus" style="display:none;"></div>
+      <!-- 음성 대화 도구: 말하기(한 번 누르면 말 끝날 때 자동 전송) + 카메라로 보여주기 -->
       <div class="voicetools">
         <button type="button" id="chatMic" class="micbtn" aria-label="눌러서 말하기"><svg><use href="#i-mic"/></svg><span id="chatMicLabel">눌러서 말하기</span></button>
         <button type="button" id="chatCam" class="cambtn" aria-label="카메라로 보여주기" title="사진을 찍거나 골라 케이에게 보여주기"><svg><use href="#i-cam"/></svg></button>

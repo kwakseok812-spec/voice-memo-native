@@ -30,6 +30,15 @@
   NativeRecorder.isSupported = function () { return !!NR; };
   NativeRecorder.prototype.isRecording = function () { return this._active; };
 
+  // 현재 녹음의 최대 진폭을 0~1 로 정규화해 반환(무음 자동 감지용). 실패/미지원 시 0.
+  NativeRecorder.prototype.getAmplitude = function () {
+    if (!NR || !NR.getAmplitude) return Promise.resolve(0);
+    return NR.getAmplitude().then(function (r) {
+      var v = (r && typeof r.value === 'number') ? r.value : 0;
+      return Math.max(0, Math.min(1, v / 32767));
+    }).catch(function () { return 0; });
+  };
+
   NativeRecorder.prototype.start = function () {
     var self = this;
     (async function () {

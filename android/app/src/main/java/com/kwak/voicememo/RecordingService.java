@@ -120,6 +120,18 @@ public class RecordingService extends Service {
     public boolean isRecording() { return recording; }
     public long getElapsedMs() { return startedAtMs > 0 ? System.currentTimeMillis() - startedAtMs : 0; }
 
+    /**
+     * 현재 녹음 중인 MediaRecorder 의 "직전 호출 이후 최대 진폭"(0~32767).
+     * 무음 자동 감지(핸즈프리 음성 대화)에 쓴다. 이미 녹음 중인 같은 recorder 에서 읽으므로
+     * 두 번째 마이크 접근(경합) 없이 안전하다. 녹음 중이 아니면 0.
+     */
+    public int getMaxAmplitude() {
+        try {
+            if (recorder != null && recording) return recorder.getMaxAmplitude();
+        } catch (Exception e) {}
+        return 0;
+    }
+
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);

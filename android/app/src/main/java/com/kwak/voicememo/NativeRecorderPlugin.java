@@ -81,4 +81,13 @@ public class NativeRecorderPlugin extends Plugin {
         o.put("value", svc != null && svc.isRecording());
         call.resolve(o);
     }
+
+    /** 현재 녹음의 최대 진폭(0~32767) — 무음 자동 감지(핸즈프리)용. 녹음 중 아니면 0. */
+    @PluginMethod
+    public void getAmplitude(PluginCall call) {
+        JSObject o = new JSObject();
+        RecordingService svc = RecordingService.instance;
+        o.put("value", svc != null ? svc.getMaxAmplitude() : 0);
+        call.resolve(o);
+    }
 }
