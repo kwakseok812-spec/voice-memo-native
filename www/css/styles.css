@@ -508,3 +508,42 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 /* 음성 me 말풍선(전사 대기) 표시 */
 .bubble.me .voicemark{display:inline-flex;align-items:center;gap:6px;font-weight:700;opacity:.95}
 .bubble.me .voicemark svg{width:17px;height:17px}
+
+/* ===================== 문서 뷰어 (SmartDocs) ===================== */
+.doc-open{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;margin-top:14px;padding:26px 20px}
+.doc-open-ic{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;background:var(--ic-bg);border:1px solid var(--glass-b)}
+.doc-open-ic svg{width:34px;height:34px;color:var(--p1)}
+.doc-open .btn.primary{width:100%}
+.doc-chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.doc-open-hint{font-size:13.5px;color:var(--dim);line-height:1.6;font-weight:500}
+.doc-status{margin-top:14px;padding:16px 18px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:12px;line-height:1.5;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+.doc-status .spinner{flex:none}
+.doc-status .ds-tx small{color:var(--dim);font-weight:500}
+.doc-status.err{color:var(--warn);background:var(--warn-bg);border-color:var(--warn)}
+.doc-status.err small{color:var(--muted)}
+.doc-note{margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--warn-bg);border:1px solid var(--glass-b);color:var(--muted);font-size:13px;line-height:1.6}
+/* 뷰어(PDF.js) */
+#docViewer{display:flex;flex-direction:column;height:calc(100dvh - 84px);min-height:340px}
+.doctoolbar{display:flex;align-items:center;gap:7px;padding:8px 0;position:sticky;top:0;z-index:2}
+.doctoolbar .docfname{flex:1;min-width:0;font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.doctoolbar .docpage{flex:none;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--glass);border:1px solid var(--glass-b);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.doctoolbar .docz{width:40px;height:40px;font-size:19px;font-weight:800}
+.doctoolbar .docz.wfit{width:auto;padding:0 12px;font-size:14px;font-weight:800}
+#docScroller{flex:1;overflow:auto;background:#3a4152;border-radius:16px;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+#docPages{transform-origin:50% 0;will-change:transform;padding:10px 0 40px}
+.doc-slot{display:block;margin:0 auto 12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.35);max-width:100%;overflow:hidden}
+.doc-slot canvas{display:block;width:100%;height:100%}
+
+/* ===================== 대화 검색(🔍) ===================== */
+.chatsearchbar{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
+.chatsearchbar .chatsearchinput{flex:1;min-height:48px}
+.chatsearchinfo{font-size:13.5px;font-weight:700;color:var(--muted);margin:0 2px 8px;line-height:1.5}
+.bubble mark{background:var(--warn);color:#1a1a1a;border-radius:4px;padding:0 2px;font-weight:800}
+.bubble.me mark{background:#FDE68A;color:#1a1a1a}
+
+/* 채팅 첨부: [뷰어로 보기] 버튼 */
+.attachitem{display:flex;flex-direction:column;gap:5px}
+.attach-view{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 11px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border:0;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:800;box-shadow:var(--glow-s)}
+.attach-view svg{width:17px;height:17px}
+.attach-view:active{transform:scale(.985)}
+.bubble.me .attach-view{background:rgba(255,255,255,.22);box-shadow:none}

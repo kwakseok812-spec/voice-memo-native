@@ -62,7 +62,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('healthView'), processing, resultWrap];
+  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('healthView'), $('docsView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -598,9 +598,9 @@
   var chatConvoToggle = $('chatConvoToggle'), chatConvoLabel = $('chatConvoLabel'), chatConvoStatus = $('chatConvoStatus');
   var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
-  var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 교수님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
+  var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 대표님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
-  var deletedBids = loadDeletedBids();          // 교수님이 지운 방송 id 목록(재출현 방지)
+  var deletedBids = loadDeletedBids();          // 대표님이 지운 방송 id 목록(재출현 방지)
   var officeLoading = false;
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
@@ -615,7 +615,7 @@
 
   /* ---- 케이 목소리 재생(안드로이드 자동재생 언락 + 수동 재생 폴백) ----
    * 안드로이드 WebView 는 사용자 제스처 없이 소리 재생을 막는다. 그래서
-   *  (1) 교수님이 마이크/카메라/보내기를 '탭'하는 그 순간(제스처)에 무음을 한번 재생해 오디오를 '깨우고',
+   *  (1) 대표님이 마이크/카메라/보내기를 '탭'하는 그 순간(제스처)에 무음을 한번 재생해 오디오를 '깨우고',
    *  (2) 케이 답 mp3 가 도착하면 그 깨워둔 <audio> 로 재생한다.
    * 그래도 막히면 말풍선의 "다시 듣기"(그 자체가 제스처)로 언제든 들으실 수 있다. */
   function silentWav() {
@@ -699,7 +699,7 @@
     if (!m.uid) m.uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     return m.uid;
   }
-  // 교수님이 지운 케이 방송(bid) 무덤 — list_office_pushes가 다시 내려줘도 안 그리게
+  // 대표님이 지운 케이 방송(bid) 무덤 — list_office_pushes가 다시 내려줘도 안 그리게
   function loadDeletedBids() {
     try { var a = JSON.parse(localStorage.getItem(DELETED_BIDS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
     catch (e) { return []; }
@@ -717,13 +717,29 @@
     return 'document';
   }
   function attachIcon(f) { var k = f.kind || fileKindOf(f.mime, f.name); return k === 'image' ? 'i-image' : k === 'video' ? 'i-video' : 'i-note'; }
+  var DOC_VIEW_EXTS = ['hwp', 'hwpx', 'doc', 'docx', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pdf'];
+  function isViewableDoc(f) {
+    if (!f || !f.url) return false;
+    var k = f.kind || fileKindOf(f.mime, f.name);
+    if (k === 'image' || k === 'video') return false;
+    var ext = ((String(f.name || '').split('.').pop()) || '').toLowerCase();
+    if (DOC_VIEW_EXTS.indexOf(ext) !== -1) return true;
+    return /pdf|word|excel|spreadsheet|presentation|officedocument|hwp/i.test(f.mime || '');
+  }
   function attachChips(files, isUp) {
     if (!files || !files.length) return '';
     return '<div class="attachlist">' + files.map(function (f) {
       var sz = f.size ? '<span class="asz">' + esc(fmtBytes(f.size)) + '</span>' : '';
       var attrs = (!isUp && f.url) ? (' data-att-url="' + esc(f.url) + '"') : ' disabled';
-      return '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
+      var chip = '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
         '<svg><use href="#' + attachIcon(f) + '"/></svg><span class="an">' + esc(f.name || '파일') + '</span>' + sz + '</button>';
+      // 케이가 보낸 문서(하향)면 [뷰어로 보기] 버튼을 함께 — 폰에서 PC와 똑같이 열람
+      if (!isUp && isViewableDoc(f)) {
+        chip += '<button type="button" class="attach-view" data-view-url="' + esc(f.url) +
+          '" data-view-name="' + esc(f.name || '문서') + '" data-view-mime="' + esc(f.mime || '') + '">' +
+          '<svg><use href="#i-doc"/></svg>뷰어로 보기</button>';
+      }
+      return '<div class="attachitem">' + chip + '</div>';
     }).join('') + '</div>';
   }
   function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
@@ -749,15 +765,39 @@
     if (chatUnseen > 0) { b.textContent = chatUnseen > 9 ? '9+' : String(chatUnseen); b.style.display = 'inline-flex'; }
     else b.style.display = 'none';
   }
+  /* ---- 대화 검색(순수 로컬 · 필터 방식) ----
+   * 원본은 localStorage(chatMsgs). 검색어가 있으면 '일치하는 말풍선만' 남기고 일치 부분을 강조한다.
+   * 닫으면(X) 전체 대화로 정확히 복귀. 대소문자 무시·부분일치. 서버 재조회 없음. */
+  var chatSearchOn = false, chatSearchQuery = '';
+  function msgMatches(m, q) {
+    if ((m.text || '').toLowerCase().indexOf(q) !== -1) return true;
+    if (m.files && m.files.length) {
+      for (var i = 0; i < m.files.length; i++) {
+        if ((m.files[i].name || '').toLowerCase().indexOf(q) !== -1) return true;
+      }
+    }
+    return false;
+  }
+  function chatTextHL(s, q) {
+    var out = esc(s);
+    if (q) {
+      var qe = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      try { out = out.replace(new RegExp('(' + qe + ')', 'gi'), '<mark>$1</mark>'); } catch (e) {}
+    }
+    return out.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  }
   function renderChat() {
-    if (!chatMsgs.length) {
+    var q = chatSearchOn ? chatSearchQuery.trim().toLowerCase() : '';
+    if (!chatMsgs.length && !q) {
       chatLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
-        '<b>안녕하세요, 교수님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
+        '<b>안녕하세요, 대표님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
       return;
     }
+    var shown = 0;
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
-      var inner = m.text ? chatText(m.text)
+      if (q && !msgMatches(m, q)) return '';                // 검색 중이면 일치하는 말풍선만
+      var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText(m.text))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
       if (m.role === 'me' && m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
       inner += attachChips(m.files, m.role === 'me');
@@ -766,21 +806,48 @@
         inner += '<button type="button" class="voiceplay" data-lid="' + m.lid + '"><svg><use href="#i-sound"/></svg>' + (m.vurl ? '다시 듣기' : '듣기') + '</button>';
       }
       if (!inner) return '';
+      shown++;
       return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner + '</div>';
     }).join('');
+    if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
+      var info = $('chatSearchInfo');
+      if (info) { info.style.display = 'block'; info.textContent = shown ? ('“' + chatSearchQuery.trim() + '” 검색 결과 ' + shown + '개') : '“' + chatSearchQuery.trim() + '”에 일치하는 대화가 없어요.'; }
+      chatLog.innerHTML = html || '';
+      chatLog.scrollTop = 0;
+      try { window.scrollTo(0, 0); } catch (e) {}
+      return;
+    }
     if (anyAwaiting()) html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
     chatLog.innerHTML = html;
     chatScrollBottom();
   }
+  function openChatSearch() {
+    chatSearchOn = true;
+    var bar = $('chatSearchBar'); if (bar) bar.style.display = 'flex';
+    var inp = $('chatSearchInput'); if (inp) { setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60); }
+    renderChat();
+  }
+  function closeChatSearch() {
+    chatSearchOn = false; chatSearchQuery = '';
+    var bar = $('chatSearchBar'); if (bar) bar.style.display = 'none';
+    var inp = $('chatSearchInput'); if (inp) inp.value = '';
+    var info = $('chatSearchInfo'); if (info) { info.style.display = 'none'; info.textContent = ''; }
+    renderChat();
+  }
   function openChat(opts) {
     opts = opts || {};
     openScreen(chatView);
+    // 검색 상태는 대화에 들어올 때 항상 닫힌 상태로 시작(바·안내·검색어 초기화)
+    chatSearchOn = false; chatSearchQuery = '';
+    if ($('chatSearchBar')) $('chatSearchBar').style.display = 'none';
+    if ($('chatSearchInput')) $('chatSearchInput').value = '';
+    if ($('chatSearchInfo')) { $('chatSearchInfo').style.display = 'none'; $('chatSearchInfo').textContent = ''; }
     chatUnseen = 0; updateChatBadge();
     renderPending(); updateConvoToggle();        // 기본: 조용한 텍스트(음성 대화 모드 꺼짐)
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
     loadOfficePushes();                          // 케이가 먼저 보낸 방송(새벽에 조용히 쌓인 것 포함)도 당겨온다
     if (anyAwaiting()) startChatReconcile();
-    // 진입 시 입력창 자동 포커스 안 함(교수님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
+    // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
   function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
   function sendChatMsg() {
@@ -847,7 +914,7 @@
     chatRecorder = new RecordingModule({
       onError: function (m) {
         toast('🎤 ' + m); stopAmpPoll(); chatRecording = false; setChatMic(false);
-        if (convoOn) stopConvo(true);   // 마이크 시작 실패 → 무한 재시도 말고 대화 멈춤(교수님이 다시 시작)
+        if (convoOn) stopConvo(true);   // 마이크 시작 실패 → 무한 재시도 말고 대화 멈춤(대표님이 다시 시작)
       },
       onAudio: function (blob) { chatRecording = false; setChatMic(false); onListenAudio(blob); }
     });
@@ -1081,7 +1148,7 @@
    * · 중복방지: 이미 그린 방송은 bid(=행 id)로 걸러 다시 안 그린다(앱 재시작 후에도 유지).
    * · 표식(since): 마지막으로 가져온 ts 를 localStorage 에 저장 → 그 이후 방송만 다음에 가져온다.
    *   첫 실행이면 '지금'으로 잡아 과거·시험 행을 쏟아내지 않는다(이후 쌓이는 것만 순차로 보임).
-   * · 기존 대화(교수님↔케이)와 공존: 병합 후 ts 순으로 정렬해 시간순을 유지한다. */
+   * · 기존 대화(대표님↔케이)와 공존: 병합 후 ts 순으로 정렬해 시간순을 유지한다. */
   function officeSince() {
     try {
       var s = localStorage.getItem(OFFICE_SINCE_KEY);
@@ -1107,7 +1174,7 @@
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
-        if (isDeletedBid(row.id)) return;                      // 교수님이 지운 방송 — 다시 안 그림
+        if (isDeletedBid(row.id)) return;                      // 대표님이 지운 방송 — 다시 안 그림
         if (hasBroadcast(row.id)) return;                      // 이미 그린 방송 — 건너뜀
         var reply = row.content_md || (row.summary_json && row.summary_json.reply) || '';
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });   // 첨부칩(PDF 등)
@@ -1150,7 +1217,7 @@
     chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); } });
   }
 
-  /* ---- 채팅 파일 첨부(교수님 → 케이, 상향) ---- */
+  /* ---- 채팅 파일 첨부(대표님 → 케이, 상향) ---- */
   var CHAT_CHUNK_LIMIT = 45 * 1024 * 1024;   // 이보다 큰 파일은 청크 업로드(단일 50MB 한도 우회)
   function pushChatFileMsg(files, chunked) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
@@ -1158,7 +1225,7 @@
       return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) };
     });
     var names = upFiles.map(function (f) { return f.name; });
-    var note = '[파일 첨부] ' + names.join(', ') + ' — 교수님이 이 파일을 보내셨어요. 확인해 주세요.';
+    var note = '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨어요. 확인해 주세요.';
     var msg = { role: 'me', text: '', ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true };
     chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var memo = { id: id, token: tok, thread: chatThread, title: names[0] || '파일', note: note };
@@ -1195,6 +1262,11 @@
     if (suppressNextClick) { suppressNextClick = false; return; }   // 길게 누른 직후의 클릭은 무시
     var vp = ev.target.closest ? ev.target.closest('[data-lid]') : null;
     if (vp) { onListenBtn(vp.getAttribute('data-lid'), vp); return; }
+    var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
+    if (dv) {                                        // [뷰어로 보기] → 문서 뷰어로 표시
+      openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' });
+      return;
+    }
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     var url = b.getAttribute('data-att-url');
@@ -1317,6 +1389,16 @@
   if (sheetEl) sheetEl.addEventListener('click', function (ev) { if (ev.target === sheetEl) closeSheet(); });
   if ($('chatMenuBtn')) $('chatMenuBtn').addEventListener('click', openClearAllSheet);
 
+  /* ===================== 대화 검색(🔍) ===================== */
+  if ($('chatSearchBtn')) $('chatSearchBtn').addEventListener('click', function () {
+    if (chatSearchOn) closeChatSearch(); else openChatSearch();
+  });
+  if ($('chatSearchClose')) $('chatSearchClose').addEventListener('click', closeChatSearch);
+  if ($('chatSearchInput')) {
+    $('chatSearchInput').addEventListener('input', function () { chatSearchQuery = this.value || ''; renderChat(); });
+    $('chatSearchInput').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChatSearch(); });
+  }
+
   /* ===================== 테마 토글 ===================== */
   if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
     var cur = document.documentElement.getAttribute('data-style') || 'dark';
@@ -1342,6 +1424,12 @@
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
+    if (isOpen($('docsView'))) {
+      // 뷰어(PDF)를 보는 중이면 먼저 문서 고르기 화면으로, 이미 고르기 화면이면 홈으로
+      if (window.SmartDocs && isOpen($('docViewer'))) { try { SmartDocs.showPick(); } catch (e) {} return true; }
+      if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('healthView'))) {
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
@@ -1388,6 +1476,20 @@
   }
   if (window.HealthTab && HealthTab.init) { try { HealthTab.init({ toast: toast }); } catch (e) {} }
   if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
+
+  /* ---- 문서 뷰어: 화면 열기/연결(로직은 docviewer.js) ---- */
+  var docsView = $('docsView');
+  function openDocs() {
+    openScreen(docsView);
+    if (window.SmartDocs && SmartDocs.showPick) { try { SmartDocs.showPick(); } catch (e) {} }
+  }
+  if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast }); } catch (e) {} }
+  if ($('btnDocs')) $('btnDocs').addEventListener('click', openDocs);
+  // 채팅 첨부(케이가 보낸 문서)의 [뷰어로 보기] → 문서 뷰어 화면으로 바로 표시
+  function openDocFromChat(att) {
+    openScreen(docsView);
+    if (window.SmartDocs && SmartDocs.viewChatAttachment) { try { SmartDocs.viewChatAttachment(att); } catch (e) { toast('문서를 여는 데 실패했어요.'); } }
+  }
 
   /* ---- 푸시 알림(FCM): 등록·수신은 push.js. 여기선 대화 화면과 연결만 한다 ---- */
   window.addEventListener('smartOpenChat', function () { openChat(); });          // 알림 탭 → 대화 열기

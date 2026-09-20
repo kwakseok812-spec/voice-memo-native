@@ -60,7 +60,7 @@
   }
 
   // 파일 전달: 공유창(Web Share)을 쓰지 않고 "바로 다운로드"한다.
-  //  - 폰에서 공유 시트가 뜨면 어디에 저장할지 헷갈린다는 교수님 피드백(2026-09-19).
+  //  - 폰에서 공유 시트가 뜨면 어디에 저장할지 헷갈린다는 대표님 피드백(2026-09-19).
   //  - 안드로이드 크롬은 a.download + blob URL 이면 Downloads 폴더에 저장된다.
   function deliver(blob, name, mime) {
     return new Promise(function (resolve, reject) {

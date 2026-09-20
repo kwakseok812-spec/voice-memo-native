@@ -300,7 +300,7 @@
     });
   }
 
-  /* ---------- 채팅 파일 첨부(교수님 → 케이, 상향) ----------
+  /* ---------- 채팅 파일 첨부(대표님 → 케이, 상향) ----------
    * 사진/영상 파이프라인과 같은 방식으로 파일을 voice-audio 버킷에 올리고,
    * kind='chat' 행을 만들어 chat_responder.py 가 채팅 맥락(thread)과 함께 집어가게 한다.
    *
@@ -360,7 +360,68 @@
     });
   }
 
-  /* ---------- 케이 답장의 첨부(케이 → 교수님, 하향) ----------
+  /* ---------- 문서 뷰어: 폰 문서 → PC 변환(PDF) → 폰 표시 ----------
+   * 사진/영상/채팅파일과 완전히 분리된 kind='doc' 통로. 전용 상주 워커(doc_worker.py)가 처리한다.
+   * ▶ 앱→워커 규약(상향):
+   *   (A) 폰에서 고른 파일: voice-audio 버킷 `{id}/src.{ext}`(작은 파일) 또는
+   *       `{id}/part_{k}.{ext}`(큰 파일, 청크·페이싱). row.kind='doc',
+   *       meta={app,from:'phone', file:{key?,ext,name,size,mime}, (청크면 chunked:true,ext,total)}.
+   *   (B) 이미 케이가 보낸 문서(채팅 첨부)를 뷰어로: 업로드 없이 그 서명URL만 넘긴다.
+   *       meta={app,from:'phone', source_url:<voice-docs 서명URL>, name, ext}.
+   * ▶ 워커→앱 규약(하향): 결과 PDF 를 voice-docs `{id}/view.pdf` 로 올리고 7일 서명URL(inline) 을
+   *   summary_json.doc={pdf_url,name,pages?} 에 기록. 실패 시 summary_json.doc={error:"..."}.
+   *   앱은 poll() → docResultFrom() 로 읽어 PDF.js 로 표시. (PDF 원본이면 변환 없이 그대로 전달.) */
+  function _insertDocRow(memo, meta) {
+    var m = { app: 'voice-memo-test', from: 'phone' };
+    for (var k in meta) if (meta.hasOwnProperty(k)) m[k] = meta[k];
+    return _insertRow({
+      id: memo.id, title: memo.title || '문서', status: 'pending', kind: 'doc',
+      note: memo.note || null, client_token: memo.token, meta: m
+    });
+  }
+  // (A) 폰에서 고른 문서 1개 업로드 + kind='doc' 행. 큰 파일은 청크·페이싱. onProgress('upload',done,total).
+  function sendDoc(memo, file, onProgress) {
+    var ext = extForFile(file, 'file');
+    var fileMeta = { ext: ext, name: file.name || ('doc.' + ext), size: file.size || 0, mime: file.type || '' };
+    if ((file.size || 0) <= CHUNK_SIZE) {
+      var key = memo.id + '/src.' + ext;
+      return uploadObject(key, file).then(function () {
+        fileMeta.key = key;
+        return _insertDocRow(memo, { file: fileMeta });
+      });
+    }
+    // 큰 파일: 청크로 나눠 올리고 워커가 소비하는 속도에 맞춰 페이싱(영상/채팅 청크와 동일 규약)
+    var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    return _insertDocRow(memo, { file: fileMeta, chunked: true, ext: ext, total: total }).then(function () {
+      var k = 0;
+      function step() {
+        if (k >= total) return Promise.resolve();
+        var pacing = (k >= MAX_INFLIGHT)
+          ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
+          : Promise.resolve();
+        return pacing.then(function () {
+          var blob = file.slice(k * CHUNK_SIZE, Math.min(file.size, (k + 1) * CHUNK_SIZE));
+          return uploadPartWithRetry(memo.id, k, ext, blob, 3);
+        }).then(function () {
+          k++; onProgress && onProgress('upload', k, total);
+          return step();
+        });
+      }
+      return step();
+    });
+  }
+  // (B) 이미 우편함(voice-docs)에 있는 문서(케이가 보낸 첨부)를 업로드 없이 변환 요청.
+  function convertDoc(memo, sourceUrl, name, ext) {
+    return _insertDocRow(memo, { source_url: sourceUrl, name: name || '문서', ext: (ext || '').toLowerCase() });
+  }
+  // poll() 결과에서 문서 변환 결과를 정규화. {pdf_url, name, pages, error} 또는 null.
+  function docResultFrom(res) {
+    var d = res && res.summary_json && res.summary_json.doc;
+    if (!d) return null;
+    return { pdf_url: d.pdf_url || null, name: d.name || '', pages: d.pages || 0, error: d.error || null };
+  }
+
+  /* ---------- 케이 답장의 첨부(케이 → 대표님, 하향) ----------
    * ▶ 워커→앱 규약(하향): 케이(chat_responder/워커)가 산출물을 voice-docs 버킷에 올리고
    *   7일 서명URL 을 만든 뒤, 채팅 답장 행에 아래 중 하나로 기록하면 앱이 첨부로 렌더링한다.
    *     (1) summary_json.attachments = [{ name, url, mime, size, kind }]   ← 권장(여러 개·임의 형식)
@@ -388,7 +449,7 @@
    * 케이(PC)가 notify_app.py 로 넣은 kind='chat', meta.thread='office_broadcast' 행들을
    * 전용 RPC(list_office_pushes)로 되읽는다. 이 RPC 는 broadcast 행의 필요한 필드만
    * (id, content_md, summary_json, ts) 시간순으로 돌려준다 — voice_memos 전체를 열지 않으므로
-   * 다른 채팅·음성·건강 데이터는 새지 않는다. 토큰 불필요(교수님 1인 앱, broadcast 전용).
+   * 다른 채팅·음성·건강 데이터는 새지 않는다. 토큰 불필요(대표님 1인 앱, broadcast 전용).
    *   since : ISO 문자열(그 시각 '이후'에 처리된 방송만). 반환: [{id, content_md, summary_json, ts}] */
   function listOfficePushes(since) {
     return fetch(CONFIG.url + '/rest/v1/rpc/list_office_pushes', {
@@ -435,6 +496,7 @@
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
+    sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     listOfficePushes: listOfficePushes,
     CHUNK_SIZE: CHUNK_SIZE
   };
