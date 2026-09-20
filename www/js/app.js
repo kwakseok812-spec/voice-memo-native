@@ -747,10 +747,41 @@
     }).join('') + '</div>';
   }
   function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
+  // 이스케이프된 문자열에서 http/https URL을 파랑+밑줄 링크로. data-link엔 원래 URL(&amp;→&) 보관.
+  function linkify(escaped) {
+    return escaped.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]}"'])/g, function (m) {
+      var raw = m.replace(/&amp;/g, '&').replace(/"/g, '%22');
+      return '<a class="chatlink" data-link="' + raw + '" target="_blank" rel="noopener">' + m + '</a>';
+    });
+  }
   function chatText(s) {
-    return esc(s)
+    return linkify(esc(s))
       .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')   // **강조** → 굵게
       .replace(/\n/g, '<br>');
+  }
+  /* ---- 클립보드 복사(전체 복사) ---- */
+  function copyToClipboard(text) {
+    text = String(text == null ? '' : text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('복사됐어요.'); }).catch(function () { fallbackCopy(text); });
+    } else fallbackCopy(text);
+  }
+  function fallbackCopy(text) {
+    try {
+      var ta = document.createElement('textarea'); ta.value = text;
+      ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      var ok = document.execCommand && document.execCommand('copy');
+      document.body.removeChild(ta); toast(ok ? '복사됐어요.' : '복사하지 못했어요. 글자를 길게 눌러 직접 복사해 주세요.');
+    } catch (e) { toast('복사하지 못했어요. 글자를 길게 눌러 직접 복사해 주세요.'); }
+  }
+  // 말풍선 하나를 통째로 복사할 텍스트(본문 + 첨부 이름·링크)
+  function msgCopyText(m) {
+    var parts = [];
+    if (m.text) parts.push(m.text);
+    if (m.files && m.files.length) m.files.forEach(function (f) { parts.push((f.name || '파일') + (f.url ? (' ' + f.url) : '')); });
+    if (!parts.length && m.vin) parts.push('(음성 메시지)');
+    return parts.join('\n');
   }
   function chatScrollBottom() {
     // chatLog는 자체 높이 제약이 없어 실제로는 window(문서)가 스크롤된다 →
@@ -788,7 +819,7 @@
       var qe = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       try { out = out.replace(new RegExp('(' + qe + ')', 'gi'), '<mark>$1</mark>'); } catch (e) {}
     }
-    return out.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+    return linkify(out).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
   }
   function renderChat() {
     var q = chatSearchOn ? chatSearchQuery.trim().toLowerCase() : '';
@@ -811,7 +842,9 @@
       }
       if (!inner) return '';
       shown++;
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner + '</div>';
+      // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner +
+        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
       var info = $('chatSearchInfo');
@@ -1292,7 +1325,12 @@
   });
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
-    if (suppressNextClick) { suppressNextClick = false; return; }   // 길게 누른 직후의 클릭은 무시
+    // 링크 탭 → 외부로 열기(선택 복사와 별개)
+    var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
+    if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
+    // ⋯ 메뉴 → 복사·삭제 시트
+    var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
+    if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openMsgActionSheet(bub.getAttribute('data-uid')); return; }
     var vp = ev.target.closest ? ev.target.closest('[data-lid]') : null;
     if (vp) { onListenBtn(vp.getAttribute('data-lid'), vp); return; }
     var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
@@ -1307,83 +1345,41 @@
     if (!w) toast('파일을 열지 못했어요 — 다시 눌러 주세요.');
   });
 
-  /* ===================== 메시지 삭제(개별 길게누르기 · 전체 지우기) =====================
-   * 원본은 localStorage(chatMsgs)다. 삭제 = 그 배열에서 해당 메시지를 빼고 다시 그린다(로컬 삭제).
-   *  · 개별: 말풍선을 0.5초 길게 누르면 확인 시트 → [삭제].
+  /* ===================== 메시지 복사·삭제(⋯ 메뉴) · 전체 지우기 =====================
+   * 원본은 localStorage(chatMsgs)다. 각 말풍선의 [⋯] → 시트에서 [복사]/[삭제].
+   *  · 텍스트는 이제 드래그/길게눌러 「부분 선택 복사」가 되고(user-select:text),
+   *    「전체 복사」는 [⋯]→[복사](클립보드). 길게누르기=삭제는 선택을 가로채서 폐지했다.
    *  · 전체: 헤더의 ⋮ → [대화 전체 삭제].
    *  · 폴링/새 메시지 수신은 그대로 — 삭제는 과거 이력만 지운다(케이 방송은 무덤으로 재출현 방지). */
-  var suppressNextClick = false;        // 길게 누른 뒤 따라오는 click 삼키기
-  var lpTimer = null, lpEl = null, lpStartX = 0, lpStartY = 0;
-  var LONGPRESS_MS = 480, LP_MOVE_TOL = 12;
   var sheetEl = $('chatSheet'), sheetTitle = $('chatSheetTitle'), sheetMsg = $('chatSheetMsg');
   var sheetConfirm = $('chatSheetConfirm'), sheetConfirmLabel = $('chatSheetConfirmLabel'), sheetCancel = $('chatSheetCancel');
-  var sheetAction = null;               // 확인 시 실행할 함수
+  var sheetCopyBtn = $('chatSheetCopy');
+  var sheetAction = null;               // 확인(삭제 등) 시 실행할 함수
+  var sheetCopyVal = null;              // 이 시트의 [복사] 대상 텍스트(null이면 복사 버튼 숨김)
 
-  function clearLongPress() {
-    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
-    if (lpEl) { lpEl.classList.remove('pressing'); lpEl = null; }
-  }
-  function beginLongPress(el, x, y) {
-    clearLongPress();
-    lpEl = el; lpStartX = x; lpStartY = y;
-    el.classList.add('pressing');
-    lpTimer = setTimeout(function () {
-      lpTimer = null;
-      var uid = el.getAttribute('data-uid');
-      el.classList.remove('pressing');
-      suppressNextClick = true;         // 손을 떼면 click이 오는데, 그건 무시
-      openDeleteOneSheet(uid);
-    }, LONGPRESS_MS);
-  }
-  function moveCancel(x, y) {
-    if (!lpEl) return;
-    if (Math.abs(x - lpStartX) > LP_MOVE_TOL || Math.abs(y - lpStartY) > LP_MOVE_TOL) clearLongPress();
-  }
-  if (chatLog) {
-    // 터치(폰) — 길게누르기
-    chatLog.addEventListener('touchstart', function (ev) {
-      var el = ev.target.closest ? ev.target.closest('.bubble[data-uid]') : null;
-      if (!el || el.classList.contains('typing')) return;
-      var t = ev.touches && ev.touches[0]; if (!t) return;
-      beginLongPress(el, t.clientX, t.clientY);
-    }, { passive: true });
-    chatLog.addEventListener('touchmove', function (ev) {
-      var t = ev.touches && ev.touches[0]; if (t) moveCancel(t.clientX, t.clientY);
-    }, { passive: true });
-    chatLog.addEventListener('touchend', clearLongPress);
-    chatLog.addEventListener('touchcancel', clearLongPress);
-    // 마우스(PC 테스트) — 눌러서 홀드
-    chatLog.addEventListener('mousedown', function (ev) {
-      if (ev.button !== 0) return;
-      var el = ev.target.closest ? ev.target.closest('.bubble[data-uid]') : null;
-      if (!el || el.classList.contains('typing')) return;
-      beginLongPress(el, ev.clientX, ev.clientY);
-    });
-    chatLog.addEventListener('mousemove', function (ev) { moveCancel(ev.clientX, ev.clientY); });
-    chatLog.addEventListener('mouseup', clearLongPress);
-    chatLog.addEventListener('mouseleave', clearLongPress);
-  }
-
-  function openSheet(title, msg, confirmLabel, action) {
+  function openSheet(title, msg, confirmLabel, action, copyText) {
     if (!sheetEl) return;
     sheetTitle.textContent = title;
     sheetMsg.textContent = msg || '';
     sheetMsg.style.display = msg ? 'block' : 'none';
     if (sheetConfirmLabel) sheetConfirmLabel.textContent = confirmLabel || '삭제';
     sheetAction = action || null;
+    sheetCopyVal = (copyText != null && copyText !== '') ? copyText : null;
+    if (sheetCopyBtn) sheetCopyBtn.style.display = sheetCopyVal ? 'flex' : 'none';
     sheetEl.style.display = 'flex';
   }
-  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; }
+  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; }
   function snippet(m) {
     var t = (m && m.text ? m.text : '').replace(/\s+/g, ' ').trim();
     if (!t) { if (m && m.files && m.files.length) return '(첨부 파일)'; if (m && m.vin) return '(음성 메시지)'; return '(내용 없음)'; }
     return t.length > 60 ? t.slice(0, 60) + '…' : t;
   }
-  function openDeleteOneSheet(uid) {
+  // 말풍선 [⋯] → 복사·삭제 시트
+  function openMsgActionSheet(uid) {
     var m = null;
     for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
     if (!m) return;
-    openSheet('이 메시지를 삭제할까요?', snippet(m), '삭제', function () { deleteMessage(uid); });
+    openSheet('이 메시지', snippet(m), '삭제', function () { deleteMessage(uid); }, msgCopyText(m));
   }
   function deleteMessage(uid) {
     var idx = -1;
@@ -1417,6 +1413,9 @@
   }
   if (sheetConfirm) sheetConfirm.addEventListener('click', function () {
     var act = sheetAction; closeSheet(); if (act) act();
+  });
+  if (sheetCopyBtn) sheetCopyBtn.addEventListener('click', function () {
+    var v = sheetCopyVal; closeSheet(); if (v != null) copyToClipboard(v);
   });
   if (sheetCancel) sheetCancel.addEventListener('click', closeSheet);
   if (sheetEl) sheetEl.addEventListener('click', function (ev) { if (ev.target === sheetEl) closeSheet(); });

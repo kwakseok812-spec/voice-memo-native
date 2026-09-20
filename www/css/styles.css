@@ -318,11 +318,16 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 /* ===== v0.9 케이와 대화 ===== */
 #chatView{display:flex;flex-direction:column;min-height:calc(100vh - 150px)}
 .chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px}
-.bubble{max-width:84%;padding:12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-/* 링크·전화·메일은 그대로 눌리게(선택만 막고 탭은 허용) */
+.bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
+/* 링크·전화·메일은 그대로 눌리게 */
 .bubble a{-webkit-user-select:auto;user-select:auto}
-/* 길게 누르는 중: 살짝 눌린 느낌으로 "삭제할 수 있어요" 신호 */
-.bubble.pressing{transform:scale(.97);opacity:.85;transition:transform .12s,opacity .12s}
+/* 말풍선 링크: 파랑+밑줄, 탭하면 열림 */
+.chatlink{text-decoration:underline;word-break:break-all}
+.bubble.k .chatlink{color:var(--p1)}
+.bubble.me .chatlink{color:#fff}
+/* 말풍선 메뉴(⋯) 버튼: 복사·삭제 시트 열기 — 선택/복사를 방해하지 않게 텍스트 흐름 밖 우상단 */
+.bmenu{position:absolute;top:2px;right:4px;width:26px;height:24px;border:0;background:transparent;color:inherit;opacity:.5;font-size:19px;font-weight:900;line-height:1;cursor:pointer;padding:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;display:flex;align-items:center;justify-content:center}
+.bmenu:active{opacity:.95;transform:scale(.9)}
 .subbar .spacer.end{display:flex;align-items:center;justify-content:flex-end}
 .bubble.me{align-self:flex-end;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border-bottom-right-radius:6px;box-shadow:var(--glow-s)}
 .bubble.k{align-self:flex-start;background:var(--glass);border:1px solid var(--glass-b);color:var(--text);border-bottom-left-radius:6px;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
