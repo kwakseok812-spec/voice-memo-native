@@ -86,6 +86,29 @@
     return (v || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
+  /* ---------- 수면시간: 소수(시간) ↔ 시/분 변환 ---------- */
+  // 저장 컬럼(sleep_hours)은 그대로 소수 시간. 7시간30분 → 7.5, 7시간20분 → 7.333.
+  // 과거에 소수로 저장된 값도 그대로 시/분으로 풀어서 보여준다(하위호환, 데이터 안 건드림).
+  function hoursToHM(v) {
+    if (v === null || v === undefined || v === '' || isNaN(+v)) return null;
+    var h = Math.floor(+v + 1e-9);
+    var m = Math.round((+v - h) * 60);
+    if (m >= 60) { h += 1; m -= 60; }
+    if (h < 0) h = 0;
+    return { h: h, m: m };
+  }
+  function hmToHours(h, m) {
+    h = parseInt(h, 10) || 0; m = parseInt(m, 10) || 0;
+    return Math.round((h + m / 60) * 1000) / 1000;   // 소수 3자리 반올림(부동소수 잡음 제거)
+  }
+  function fmtSleep(v) {
+    var hm = hoursToHM(v); if (!hm) return '';
+    if (hm.h === 0 && hm.m === 0) return '0분';
+    if (hm.m === 0) return hm.h + '시간';
+    if (hm.h === 0) return hm.m + '분';
+    return hm.h + '시간 ' + hm.m + '분';
+  }
+
   /* ---------- 네트워크(Supabase, publishable 키) ---------- */
   function upsertToday() {
     var c = cfg(); if (!c) return Promise.resolve(false);
@@ -143,6 +166,28 @@
   function chk(k) {
     return '<i class="hchk' + (isSet(today[k]) ? ' on' : '') + '"><svg><use href="#i-check"/></svg></i>';
   }
+  // 수면시간: 「시간」 + 「분」 두 드롭다운. 내부 저장은 소수 시간(sleep_hours)으로 그대로.
+  function sleepRow() {
+    var v = isSet(today.sleep_hours) ? +today.sleep_hours : null;
+    var hm = hoursToHM(v);
+    var curH = hm ? hm.h : '';
+    var curM = hm ? hm.m : 0;
+    var hopts = '<option value=""' + (curH === '' ? ' selected' : '') + '>—</option>';
+    for (var i = 0; i <= 14; i++) {
+      hopts += '<option value="' + i + '"' + (curH === i ? ' selected' : '') + '>' + i + '</option>';
+    }
+    var mins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    if (hm && mins.indexOf(curM) < 0) { mins.push(curM); mins.sort(function (a, b) { return a - b; }); }  // 과거값이 5분 배수가 아니어도 표시
+    var mopts = mins.map(function (m) {
+      return '<option value="' + m + '"' + (curM === m ? ' selected' : '') + '>' + m + '</option>';
+    }).join('');
+    return '<div class="hitem hsleep" data-k="sleep_hours">' +
+      '<div class="hitem-top"><span class="hlab">수면시간</span>' + chk('sleep_hours') + '</div>' +
+      '<div class="hsleep-row">' +
+      '<select class="hsel hsel-h" aria-label="수면 시간">' + hopts + '</select><span class="hsel-u">시간</span>' +
+      '<select class="hsel hsel-m" aria-label="수면 분">' + mopts + '</select><span class="hsel-u">분</span>' +
+      '</div></div>';
+  }
   function mealBlock(k, label, withNone) {
     var sel = mealTokens(today[k]);
     var selSet = {}; sel.forEach(function (t) { selSet[t] = 1; });
@@ -179,7 +224,7 @@
       '<div class="hgroup">' +
       numRow('fasting_glucose', '공복혈당', 'mg/dL', 1) +
       numRow('weight', '체중', 'kg', 0.1) +
-      numRow('sleep_hours', '수면시간', '시간', 0.5) +
+      sleepRow() +
       '</div>' +
 
       '<div class="hsec">식단</div>' +
@@ -239,6 +284,23 @@
       input.addEventListener('change', function () { commit(true); });
       input.addEventListener('blur', function () { commit(true); });
     });
+
+    // 수면시간: 시/분 드롭다운 → 소수 시간으로 저장
+    var sleepBlock = host.querySelector('.hsleep');
+    if (sleepBlock) {
+      var selH = sleepBlock.querySelector('.hsel-h');
+      var selM = sleepBlock.querySelector('.hsel-m');
+      var commitSleep = function () {
+        if (selH.value === '') { today.sleep_hours = null; }
+        else {
+          var total = hmToHours(selH.value, selM.value);
+          today.sleep_hours = total > 0 ? total : null;
+        }
+        refreshChk('sleep_hours'); scheduleSave();
+      };
+      selH.addEventListener('change', commitSleep);
+      selM.addEventListener('change', commitSleep);
+    }
 
     // 식단 칩 + 직접입력
     Array.prototype.forEach.call(host.querySelectorAll('.hmeal'), function (block) {
@@ -324,7 +386,7 @@
     var bits = [];
     if (isSet(r.fasting_glucose)) bits.push('<span class="hb glu">혈당 ' + esc(r.fasting_glucose) + '</span>');
     if (isSet(r.weight)) bits.push('<span class="hb wt">체중 ' + esc(r.weight) + '</span>');
-    if (isSet(r.sleep_hours)) bits.push('<span class="hb">수면 ' + esc(r.sleep_hours) + 'h</span>');
+    if (isSet(r.sleep_hours)) bits.push('<span class="hb">수면 ' + esc(fmtSleep(+r.sleep_hours)) + '</span>');
     var med = [];
     if (r.med_morning === true) med.push('아침'); if (r.med_evening === true) med.push('저녁');
     if (med.length) bits.push('<span class="hb ok">약 ' + med.join('·') + '</span>');

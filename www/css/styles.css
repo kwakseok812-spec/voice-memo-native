@@ -428,6 +428,12 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .hval::placeholder{color:var(--dim);font-weight:600}
 .hval:focus{box-shadow:0 0 0 4px var(--focus)}
 
+/* 수면시간: 시/분 드롭다운 */
+.hsleep-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.hsel{flex:1;min-width:0;height:52px;border-radius:16px;border:1.5px solid var(--p1);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:22px;font-weight:800;text-align:center;text-align-last:center;padding:0 8px;outline:0;-webkit-appearance:none;appearance:none;cursor:pointer}
+.hsel:focus{box-shadow:0 0 0 4px var(--focus)}
+.hsel-u{flex:none;font-size:16px;font-weight:700;color:var(--dim)}
+
 /* 식단 칩 + 직접입력 */
 .hchips{margin-top:10px}
 .chip.hchip{height:40px;padding:0 15px;font-size:15px;cursor:pointer;font-family:inherit}
