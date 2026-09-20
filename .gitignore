@@ -1,4 +1,7 @@
 node_modules/
+_backup_*/
+_uiux_backup_*/
+_design_review_*/
 android/app/build/
 android/build/
 android/.gradle/

@@ -354,8 +354,21 @@
     <div class="sheet-msg" id="chatSheetMsg"></div>
     <div class="sheet-hint" id="chatSheetHint" style="display:none;">💡 글자를 길게 누르면 원하는 부분만 복사할 수 있어요.</div>
     <button type="button" class="sheet-btn" id="chatSheetCopy" style="display:none;"><svg><use href="#i-copy"/></svg><span>복사</span></button>
+    <button type="button" class="sheet-btn" id="chatSheetExtra" style="display:none;"><span id="chatSheetExtraLabel">PC 연동</span></button>
     <button type="button" class="sheet-btn danger" id="chatSheetConfirm"><svg><use href="#i-trash"/></svg><span id="chatSheetConfirmLabel">삭제</span></button>
     <button type="button" class="sheet-btn" id="chatSheetCancel">취소</button>
+  </div>
+</div>
+
+<!-- PC 연동 암호 게이트(폰↔PC 대화 동기화) -->
+<div id="syncGate" class="sheet" style="display:none;">
+  <div class="sheet-box">
+    <div class="sheet-head">PC와 폰 연동</div>
+    <div class="sheet-msg">PC(크롬)에서도 같은 대화를 보려면 연동 암호를 입력하세요. 폰과 PC에 <b>같은 암호</b>를 넣으면 서로 연결됩니다.</div>
+    <input type="password" inputmode="numeric" id="syncGateInput" class="sync-input" placeholder="연동 암호" autocomplete="off">
+    <div id="syncGateErr" class="sheet-hint" style="display:none;color:var(--rec)"></div>
+    <button type="button" class="sheet-btn" id="syncGateSave" style="color:var(--p1);border-color:var(--glass-b2)"><span>연동하기</span></button>
+    <button type="button" class="sheet-btn" id="syncGateLater">나중에</button>
   </div>
 </div>
 

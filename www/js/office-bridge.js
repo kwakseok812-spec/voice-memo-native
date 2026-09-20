@@ -503,6 +503,27 @@
       .then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* ---------- PC↔폰 채팅 동기화(1단계) 되읽기 ----------
+   * 이 사용자의 채팅 대화 줄(kind='chat')을 시간순으로 되읽는다. 전용 RPC(list_chat_history)가
+   * 필요한 칸만(id, note=질문, content_md=답, summary_json=첨부, ts) 돌려준다 —
+   * transcript/client_token 등 개인·보안 필드는 서버에서 제외한다.
+   *   since : ISO 문자열(그 시각 '이후'에 처리된 대화만).  pass : 연동 암호(서버 대조).
+   *   반환: [{id, note, content_md, summary_json, ts}]
+   * 암호가 틀리면 서버가 예외(BAD_PASSCODE)→여기서 err.badpass=true 로 표시해 앱이 재입력하게 한다. */
+  function listChatHistory(since, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_chat_history', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_since: since || null, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) {
+        var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;   // 암호 불일치(또는 미설정)
+      }
+      if (!r.ok) throw new Error('대화 동기화 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
   function poll(id, tok) {
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
@@ -545,7 +566,7 @@
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
-    listOfficePushes: listOfficePushes,
+    listOfficePushes: listOfficePushes, listChatHistory: listChatHistory,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });

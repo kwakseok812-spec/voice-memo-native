@@ -1,0 +1,49 @@
+# ============================================================================
+# GitHub Pages 배포 — www 폴더를 그대로 웹에 게시(PC용 스마트비서 PWA)
+# ----------------------------------------------------------------------------
+# 왜 Actions 방식인가:
+#   GitHub Pages 의 "브랜치+폴더" 설정은 루트(/) 또는 /docs 만 고를 수 있어
+#   /www 를 직접 못 고른다. 그래서 Actions 로 www 만 업로드해 게시한다(파일 이동 불필요).
+#
+# 소장이 할 일(한 번만):
+#   1) 이 파일을 커밋(main)한다.
+#   2) GitHub 저장소 → Settings → Pages → Build and deployment → Source = "GitHub Actions" 선택.
+#   3) 이후 www 안 파일을 바꿔 push 하면 자동으로 다시 게시된다(수동: Actions 탭 → Run workflow).
+#   → 게시 주소: https://kwakseok812-spec.github.io/voice-memo-native/
+#     (대표님은 PC 크롬으로 이 주소 접속 → 주소창 오른쪽 [설치] 아이콘 → 바탕화면 아이콘)
+#
+# ⚠️ 이 저장소는 PUBLIC 이다 → www 안에 비밀키를 두지 않는다(현재 공개 anon 키만 있어 안전).
+#    연동 암호는 서버(app_config)에만 있고 코드엔 없다.
+# ============================================================================
+name: Deploy www to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'www/**', '.github/workflows/pages.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시에 여러 배포가 겹치지 않게(마지막 것만 반영)
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www          # ← www 폴더 전체를 사이트 루트로 게시
+      - id: deployment
+        uses: actions/deploy-pages@v4

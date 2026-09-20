@@ -631,6 +631,11 @@
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
   var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 대표님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
+  // ── PC↔폰 채팅 동기화(1단계) ───────────────────────────────────────────────
+  var SYNC_SINCE_KEY = 'smart_chat_sync_since';   // 대화 동기화를 어디까지 가져왔는지 표식
+  var SYNC_PASS_KEY = 'smart_sync_pass';          // 이 기기에 저장한 연동 암호
+  var SYNC_PROMPTED_KEY = 'smart_sync_prompted';  // 첫 안내를 이미 띄웠는지(반복 안내 방지)
+  var syncLoading = false, syncTimer = null;
   var deletedBids = loadDeletedBids();          // 대표님이 지운 방송 id 목록(재출현 방지)
   var officeLoading = false;
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
@@ -918,6 +923,10 @@
     renderPending(); updateConvoToggle();        // 기본: 조용한 텍스트(음성 대화 모드 꺼짐)
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
     loadOfficePushes();                          // 케이가 먼저 보낸 방송(새벽에 조용히 쌓인 것 포함)도 당겨온다
+    startChatSync();                              // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 조용히 대기)
+    if (!getSyncPass()) {                         // 아직 연동 안 했으면 첫 진입 때 한 번만 안내
+      try { if (!localStorage.getItem(SYNC_PROMPTED_KEY)) showSyncGate(false); } catch (e) {}
+    }
     if (anyAwaiting()) startChatReconcile();
     // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
@@ -1310,6 +1319,108 @@
     }).catch(function () { officeLoading = false; });
   }
 
+  /* ===================== PC↔폰 채팅 동기화(1단계) =====================
+   * 목적: "지금부터" 폰에서 보낸 글/케이 답이 PC에, PC에서 보낸 것이 폰에 뜨게 한다.
+   * 방식: 전용 조회 RPC(list_chat_history)를 채팅 화면 열려 있을 때 몇 초마다 부른다.
+   *   · 서버는 대화 줄(질문 note + 답 content_md + 첨부)만 시간순으로 돌려준다(방송·개인필드 제외).
+   *   · 이 기기가 "직접 보낸" 줄(chatMsgs 에 이미 .id 로 있음)과 이미 받은 줄(.cid)은 건너뛴다 → 중복 없음.
+   *   · 과거 전체 재구성은 하지 않는다(2단계). 첫 실행 표식을 '지금'으로 잡아 새로 생기는 것만 얹는다.
+   * 보안: 공개 저장소라 anon 키가 노출되므로, 조회 RPC 는 연동 암호(passcode)로 잠근다.
+   *   암호는 기기에 1회 저장(localStorage) — 서버 대조값과 맞을 때만 대화가 내려온다. */
+  function getSyncPass() { try { return localStorage.getItem(SYNC_PASS_KEY) || ''; } catch (e) { return ''; } }
+  function setSyncPass(p) { try { if (p) localStorage.setItem(SYNC_PASS_KEY, p); else localStorage.removeItem(SYNC_PASS_KEY); } catch (e) {} }
+  function syncSince() {
+    try {
+      var s = localStorage.getItem(SYNC_SINCE_KEY);
+      if (!s) { s = new Date().toISOString(); localStorage.setItem(SYNC_SINCE_KEY, s); }
+      return s;
+    } catch (e) { return new Date().toISOString(); }
+  }
+  // 이 대화 줄(행 id)을 이미 갖고 있나? (내가 보낸 것 .id / 이미 받은 것 .cid 둘 다 검사)
+  function hasChatRow(cid) {
+    for (var i = 0; i < chatMsgs.length; i++) {
+      if ((chatMsgs[i].id && chatMsgs[i].id === cid) || (chatMsgs[i].cid && chatMsgs[i].cid === cid)) return true;
+    }
+    return false;
+  }
+  function loadChatSync() {
+    if (syncLoading || !(window.OfficeBridge && OfficeBridge.listChatHistory)) return;
+    var pass = getSyncPass();
+    if (!pass) return;                              // 암호 미설정 → 동기화 꺼짐(조용히, 에러 없음)
+    syncLoading = true;
+    var since = syncSince();
+    OfficeBridge.listChatHistory(since, pass).then(function (rows) {
+      syncLoading = false;
+      if (!rows || !rows.length) return;
+      var added = 0, maxTs = since;
+      rows.forEach(function (row) {
+        if (!row || !row.id) return;
+        if (row.ts && row.ts > maxTs) maxTs = row.ts;
+        if (hasChatRow(row.id)) return;             // 내가 보낸 것/이미 받은 것 → 건너뜀(중복 방지)
+        if (isDeletedBid(row.id)) return;           // (혹시) 지운 것
+        var q = (row.note || '').trim();
+        var a = (row.content_md || (row.summary_json && row.summary_json.reply) || '').trim();
+        var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });
+        var ts = row.ts ? Date.parse(row.ts) : Date.now(); if (isNaN(ts)) ts = Date.now();
+        // 다른 기기에서 온 질문(내 말풍선). token 이 없으니 reconcile 이 다시 폴링하지 않는다(answered=true).
+        chatMsgs.push({ role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true });
+        if (a || atts.length) {                     // 케이 답(있으면)
+          var km = { role: 'k', text: a, ts: ts, cid: row.id };
+          if (atts.length) km.files = atts;
+          var v = row.summary_json && row.summary_json.voice_url; if (v) km.vurl = v;
+          chatMsgs.push(km);
+        }
+        added++;
+      });
+      if (added) {
+        sortChatByTime();
+        saveChatMsgs();
+        if (isOpen(chatView)) renderChat();
+        else { chatUnseen += added; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
+      }
+      try { localStorage.setItem(SYNC_SINCE_KEY, maxTs); } catch (e) {}
+    }).catch(function (e) {
+      syncLoading = false;
+      if (e && e.badpass) {                          // 암호가 틀림(또는 서버 미설정) → 저장한 암호 지우고 재입력 유도
+        setSyncPass('');
+        if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.');
+      }
+    });
+  }
+  function startChatSync() {
+    if (syncTimer) return;
+    loadChatSync();
+    syncTimer = setInterval(function () {
+      if (!isOpen(chatView)) { stopChatSync(); return; }   // 채팅을 벗어나면 스스로 멈춤
+      loadChatSync();
+    }, 3500);
+  }
+  function stopChatSync() { if (syncTimer) { clearInterval(syncTimer); syncTimer = null; } }
+
+  // 연동 암호 게이트
+  function showSyncGate(force, errMsg) {
+    var g = $('syncGate'); if (!g) return;
+    if (getSyncPass() && !force) return;             // 이미 설정됨 → 강제 아니면 안 띄움
+    var er = $('syncGateErr');
+    if (er) { if (errMsg) { er.textContent = errMsg; er.style.display = 'block'; } else { er.style.display = 'none'; } }
+    var inp = $('syncGateInput'); if (inp) inp.value = '';
+    g.style.display = 'flex';
+    setTimeout(function () { if (inp) try { inp.focus(); } catch (e) {} }, 60);
+  }
+  function hideSyncGate() {
+    var g = $('syncGate'); if (g) g.style.display = 'none';
+    try { localStorage.setItem(SYNC_PROMPTED_KEY, '1'); } catch (e) {}   // 안내는 한 번만
+  }
+  if ($('syncGateSave')) $('syncGateSave').addEventListener('click', function () {
+    var p = (($('syncGateInput') && $('syncGateInput').value) || '').trim();
+    if (!p) { showSyncGate(true, '암호를 입력해 주세요.'); return; }
+    setSyncPass(p); hideSyncGate();
+    try { localStorage.setItem(SYNC_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 지금부터 동기화(과거 안 쏟음)
+    toast('PC 연동 암호를 저장했어요.');
+    startChatSync();                                  // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
+  });
+  if ($('syncGateLater')) $('syncGateLater').addEventListener('click', function () { hideSyncGate(); });
+
   // 홈 소장 K 오브 → 케이 채팅(옛 가로 카드 대체, 진입 경로 일원화)
   if ($('btnVoiceChat')) $('btnVoiceChat').addEventListener('click', function () { openChat(); });
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);
@@ -1407,8 +1518,11 @@
   var sheetHintEl = $('chatSheetHint');  // 부분 복사 힌트(복사 가능한 메시지 시트에서만 표시)
   var sheetAction = null;               // 확인(삭제 등) 시 실행할 함수
   var sheetCopyVal = null;              // 이 시트의 [복사] 대상 텍스트(null이면 복사 버튼 숨김)
+  var sheetExtraBtn = $('chatSheetExtra'), sheetExtraLabel = $('chatSheetExtraLabel');
+  var sheetExtraAction = null;          // 보조 버튼(예: PC 연동) 실행 함수
 
-  function openSheet(title, msg, confirmLabel, action, copyText) {
+  // extra: { label, action } — 있으면 보조 버튼 하나 더 표시(선택)
+  function openSheet(title, msg, confirmLabel, action, copyText, extra) {
     if (!sheetEl) return;
     sheetTitle.textContent = title;
     sheetMsg.textContent = msg || '';
@@ -1418,9 +1532,14 @@
     sheetCopyVal = (copyText != null && copyText !== '') ? copyText : null;
     if (sheetCopyBtn) sheetCopyBtn.style.display = sheetCopyVal ? 'flex' : 'none';
     if (sheetHintEl) sheetHintEl.style.display = sheetCopyVal ? 'block' : 'none';   // 복사 가능한 메시지 시트에서만 힌트
+    if (sheetExtraBtn) {
+      if (extra && extra.label) { if (sheetExtraLabel) sheetExtraLabel.textContent = extra.label; sheetExtraBtn.style.display = 'flex'; sheetExtraAction = extra.action || null; }
+      else { sheetExtraBtn.style.display = 'none'; sheetExtraAction = null; }
+    }
     sheetEl.style.display = 'flex';
   }
-  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; }
+  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; sheetExtraAction = null; }
+  if (sheetExtraBtn) sheetExtraBtn.addEventListener('click', function () { var a = sheetExtraAction; closeSheet(); if (a) a(); });
   function snippet(m) {
     var t = (m && m.text ? m.text : '').replace(/\s+/g, ' ').trim();
     if (!t) { if (m && m.files && m.files.length) return '(첨부 파일)'; if (m && m.vin) return '(음성 메시지)'; return '(내용 없음)'; }
@@ -1471,7 +1590,13 @@
   });
   if (sheetCancel) sheetCancel.addEventListener('click', closeSheet);
   if (sheetEl) sheetEl.addEventListener('click', function (ev) { if (ev.target === sheetEl) closeSheet(); });
-  if ($('chatMenuBtn')) $('chatMenuBtn').addEventListener('click', openClearAllSheet);
+  if ($('chatMenuBtn')) $('chatMenuBtn').addEventListener('click', function () {
+    var linked = !!getSyncPass();
+    openSheet('대화 메뉴',
+      linked ? 'PC와 폰이 연동되어 있어요.' : 'PC(크롬)에서도 같은 대화를 보려면 연동하세요.',
+      '대화 전체 삭제', openClearAllSheet, null,
+      { label: linked ? 'PC 연동 암호 변경' : 'PC 연동 암호 설정', action: function () { showSyncGate(true); } });
+  });
 
   /* ===================== 대화 검색(🔍) ===================== */
   if ($('chatSearchBtn')) $('chatSearchBtn').addEventListener('click', function () {
@@ -1549,6 +1674,7 @@
   // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
   if (anyAwaiting()) startChatReconcile();
   loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
+  loadChatSync();       // 시작 시, 다른 기기에서 온 대화도 한 번 확인(암호 설정돼 있을 때만)
 
   /* ---- 건강 탭: 화면 열기/연결(로직은 health.js) ---- */
   var healthView = $('healthView');
@@ -1579,6 +1705,7 @@
   window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
     startChatReconcile(); reconcileChat();
     loadOfficePushes();                                                           // 케이 방송 푸시일 수도 있으니 함께 확인
+    loadChatSync();                                                               // 다른 기기에서 온 대화도 함께 확인
   });
   if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
 })();
