@@ -42,6 +42,7 @@
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 12h9M17 12v4M20 12v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="19" r="1.9" fill="currentColor"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.5 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="currentColor"/></symbol>
@@ -180,7 +181,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer"></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer end"><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
       <div id="chatLog" class="chatlog"></div>
       <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->
       <div id="chatPendingStrip" class="pendstrip" style="display:none;"></div>
@@ -237,6 +238,16 @@
 
 <!-- 토스트 -->
 <div id="toast" class="toast" style="display:none;"></div>
+
+<!-- 삭제 확인 시트(개별 메시지 삭제 / 대화 전체 삭제 공용) -->
+<div id="chatSheet" class="sheet" style="display:none;">
+  <div class="sheet-box">
+    <div class="sheet-head" id="chatSheetTitle">삭제</div>
+    <div class="sheet-msg" id="chatSheetMsg"></div>
+    <button type="button" class="sheet-btn danger" id="chatSheetConfirm"><svg><use href="#i-trash"/></svg><span id="chatSheetConfirmLabel">삭제</span></button>
+    <button type="button" class="sheet-btn" id="chatSheetCancel">취소</button>
+  </div>
+</div>
 
 <!-- 상세(모달) -->
 <div id="modal" class="modal" style="display:none;">

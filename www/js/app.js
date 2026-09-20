@@ -596,7 +596,9 @@
   var chatConvoToggle = $('chatConvoToggle'), chatConvoLabel = $('chatConvoLabel'), chatConvoStatus = $('chatConvoStatus');
   var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
+  var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 교수님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
+  var deletedBids = loadDeletedBids();          // 교수님이 지운 방송 id 목록(재출현 방지)
   var officeLoading = false;
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
@@ -685,11 +687,25 @@
     try {
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin }
-          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null }; });
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null }
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
   }
+  // 각 말풍선을 지목·삭제하기 위한 안정적 고유 id(없으면 만들어 준다)
+  function msgUid(m) {
+    if (!m.uid) m.uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    return m.uid;
+  }
+  // 교수님이 지운 케이 방송(bid) 무덤 — list_office_pushes가 다시 내려줘도 안 그리게
+  function loadDeletedBids() {
+    try { var a = JSON.parse(localStorage.getItem(DELETED_BIDS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function saveDeletedBids() {
+    try { localStorage.setItem(DELETED_BIDS_KEY, JSON.stringify(deletedBids.slice(-500))); } catch (e) {}
+  }
+  function isDeletedBid(bid) { return !!bid && deletedBids.indexOf(bid) !== -1; }
   /* ---- 채팅 첨부 파일 유틸(업로드·다운로드 공용 렌더) ---- */
   function fmtBytes(b) { b = b || 0; if (b < 1024) return b + 'B'; if (b < 1024 * 1024) return Math.round(b / 1024) + 'KB'; return (Math.round(b / 1024 / 1024 * 10) / 10) + 'MB'; }
   function fileKindOf(mime, name) {
@@ -748,7 +764,7 @@
         inner += '<button type="button" class="voiceplay" data-lid="' + m.lid + '"><svg><use href="#i-sound"/></svg>' + (m.vurl ? '다시 듣기' : '듣기') + '</button>';
       }
       if (!inner) return '';
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '">' + inner + '</div>';
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner + '</div>';
     }).join('');
     if (anyAwaiting()) html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
     chatLog.innerHTML = html;
@@ -1024,6 +1040,7 @@
       if (m._polling) return; m._polling = true;
       OfficeBridge.poll(m.id, m.token).then(function (res) {
         m._polling = false;
+        if (chatMsgs.indexOf(m) === -1) return;    // 사이에 이 질문이 삭제됐으면 답을 붙이지 않음
         if (res && res.status === 'done') {
           m.answered = true;
           if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
@@ -1088,6 +1105,7 @@
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
+        if (isDeletedBid(row.id)) return;                      // 교수님이 지운 방송 — 다시 안 그림
         if (hasBroadcast(row.id)) return;                      // 이미 그린 방송 — 건너뜀
         var reply = row.content_md || (row.summary_json && row.summary_json.reply) || '';
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });   // 첨부칩(PDF 등)
@@ -1172,6 +1190,7 @@
   });
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
+    if (suppressNextClick) { suppressNextClick = false; return; }   // 길게 누른 직후의 클릭은 무시
     var vp = ev.target.closest ? ev.target.closest('[data-lid]') : null;
     if (vp) { onListenBtn(vp.getAttribute('data-lid'), vp); return; }
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
@@ -1180,6 +1199,121 @@
     var w = window.open(url, '_blank');
     if (!w) toast('파일을 열지 못했어요 — 다시 눌러 주세요.');
   });
+
+  /* ===================== 메시지 삭제(개별 길게누르기 · 전체 지우기) =====================
+   * 원본은 localStorage(chatMsgs)다. 삭제 = 그 배열에서 해당 메시지를 빼고 다시 그린다(로컬 삭제).
+   *  · 개별: 말풍선을 0.5초 길게 누르면 확인 시트 → [삭제].
+   *  · 전체: 헤더의 ⋮ → [대화 전체 삭제].
+   *  · 폴링/새 메시지 수신은 그대로 — 삭제는 과거 이력만 지운다(케이 방송은 무덤으로 재출현 방지). */
+  var suppressNextClick = false;        // 길게 누른 뒤 따라오는 click 삼키기
+  var lpTimer = null, lpEl = null, lpStartX = 0, lpStartY = 0;
+  var LONGPRESS_MS = 480, LP_MOVE_TOL = 12;
+  var sheetEl = $('chatSheet'), sheetTitle = $('chatSheetTitle'), sheetMsg = $('chatSheetMsg');
+  var sheetConfirm = $('chatSheetConfirm'), sheetConfirmLabel = $('chatSheetConfirmLabel'), sheetCancel = $('chatSheetCancel');
+  var sheetAction = null;               // 확인 시 실행할 함수
+
+  function clearLongPress() {
+    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+    if (lpEl) { lpEl.classList.remove('pressing'); lpEl = null; }
+  }
+  function beginLongPress(el, x, y) {
+    clearLongPress();
+    lpEl = el; lpStartX = x; lpStartY = y;
+    el.classList.add('pressing');
+    lpTimer = setTimeout(function () {
+      lpTimer = null;
+      var uid = el.getAttribute('data-uid');
+      el.classList.remove('pressing');
+      suppressNextClick = true;         // 손을 떼면 click이 오는데, 그건 무시
+      openDeleteOneSheet(uid);
+    }, LONGPRESS_MS);
+  }
+  function moveCancel(x, y) {
+    if (!lpEl) return;
+    if (Math.abs(x - lpStartX) > LP_MOVE_TOL || Math.abs(y - lpStartY) > LP_MOVE_TOL) clearLongPress();
+  }
+  if (chatLog) {
+    // 터치(폰) — 길게누르기
+    chatLog.addEventListener('touchstart', function (ev) {
+      var el = ev.target.closest ? ev.target.closest('.bubble[data-uid]') : null;
+      if (!el || el.classList.contains('typing')) return;
+      var t = ev.touches && ev.touches[0]; if (!t) return;
+      beginLongPress(el, t.clientX, t.clientY);
+    }, { passive: true });
+    chatLog.addEventListener('touchmove', function (ev) {
+      var t = ev.touches && ev.touches[0]; if (t) moveCancel(t.clientX, t.clientY);
+    }, { passive: true });
+    chatLog.addEventListener('touchend', clearLongPress);
+    chatLog.addEventListener('touchcancel', clearLongPress);
+    // 마우스(PC 테스트) — 눌러서 홀드
+    chatLog.addEventListener('mousedown', function (ev) {
+      if (ev.button !== 0) return;
+      var el = ev.target.closest ? ev.target.closest('.bubble[data-uid]') : null;
+      if (!el || el.classList.contains('typing')) return;
+      beginLongPress(el, ev.clientX, ev.clientY);
+    });
+    chatLog.addEventListener('mousemove', function (ev) { moveCancel(ev.clientX, ev.clientY); });
+    chatLog.addEventListener('mouseup', clearLongPress);
+    chatLog.addEventListener('mouseleave', clearLongPress);
+  }
+
+  function openSheet(title, msg, confirmLabel, action) {
+    if (!sheetEl) return;
+    sheetTitle.textContent = title;
+    sheetMsg.textContent = msg || '';
+    sheetMsg.style.display = msg ? 'block' : 'none';
+    if (sheetConfirmLabel) sheetConfirmLabel.textContent = confirmLabel || '삭제';
+    sheetAction = action || null;
+    sheetEl.style.display = 'flex';
+  }
+  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; }
+  function snippet(m) {
+    var t = (m && m.text ? m.text : '').replace(/\s+/g, ' ').trim();
+    if (!t) { if (m && m.files && m.files.length) return '(첨부 파일)'; if (m && m.vin) return '(음성 메시지)'; return '(내용 없음)'; }
+    return t.length > 60 ? t.slice(0, 60) + '…' : t;
+  }
+  function openDeleteOneSheet(uid) {
+    var m = null;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
+    if (!m) return;
+    openSheet('이 메시지를 삭제할까요?', snippet(m), '삭제', function () { deleteMessage(uid); });
+  }
+  function deleteMessage(uid) {
+    var idx = -1;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { idx = i; break; } }
+    if (idx < 0) return;
+    var m = chatMsgs[idx];
+    if (m.role === 'k' && m.bid) {                 // 케이 방송이면 무덤에 넣어 다시 안 뜨게
+      if (deletedBids.indexOf(m.bid) === -1) { deletedBids.push(m.bid); saveDeletedBids(); }
+    }
+    chatMsgs.splice(idx, 1);
+    saveChatMsgs();
+    renderChat();
+    updateSendEnabled();                            // 대기 중이던 질문을 지웠다면 입력 잠금 해제
+    toast('메시지를 삭제했어요.');
+  }
+  function openClearAllSheet() {
+    if (!chatMsgs.length) { toast('지울 대화가 없어요.'); return; }
+    openSheet('대화를 모두 삭제할까요?', '이 기기의 대화 내용이 모두 지워져요. 되돌릴 수 없어요.', '전체 삭제', clearAllChat);
+  }
+  function clearAllChat() {
+    // 화면에 남아 있는 케이 방송은 무덤에 넣어 재출현 방지
+    chatMsgs.forEach(function (m) { if (m.role === 'k' && m.bid && deletedBids.indexOf(m.bid) === -1) deletedBids.push(m.bid); });
+    saveDeletedBids();
+    chatMsgs = [];
+    saveChatMsgs();
+    try { localStorage.setItem(OFFICE_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 표식을 '지금'으로: 옛 방송 다시 안 당겨옴
+    stopChatReconcile();
+    renderChat();
+    updateSendEnabled();
+    toast('대화를 모두 삭제했어요.');
+  }
+  if (sheetConfirm) sheetConfirm.addEventListener('click', function () {
+    var act = sheetAction; closeSheet(); if (act) act();
+  });
+  if (sheetCancel) sheetCancel.addEventListener('click', closeSheet);
+  if (sheetEl) sheetEl.addEventListener('click', function (ev) { if (ev.target === sheetEl) closeSheet(); });
+  if ($('chatMenuBtn')) $('chatMenuBtn').addEventListener('click', openClearAllSheet);
 
   /* ===================== 테마 토글 ===================== */
   if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
@@ -1200,6 +1334,7 @@
     }, 1800);
   }
   function goBack() {
+    if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if (isOpen(modal)) { closeModal(); return true; }
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
