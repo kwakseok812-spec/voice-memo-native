@@ -178,7 +178,9 @@
             content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
             title: res.title, error: res.error || null
           });
-          renderHistory(); showResult(id); setStatus('정리 완료', 'idle');
+          renderHistory(); setStatus('정리 완료', 'idle');
+          if (isOpen(processing)) showResult(id);            // 기다리는 중이면 결과로 이동
+          else toast('✅ 정리 완료 — 지난 메모에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
         } else if (res.status === 'processing') {
           setProcessing('🖨️ PC에서 정리 중… 잠시만요');
         } else if (res.error) {
@@ -854,7 +856,7 @@
   function setChatMic(rec) {
     if (!chatMic) return;
     chatMic.classList.toggle('rec', rec);
-    if (chatMicLabel) chatMicLabel.textContent = rec ? '듣는 중… (말 끝나면 자동 전송)' : '눌러서 말하기';
+    if (chatMicLabel) chatMicLabel.textContent = rec ? '듣는 중…' : '눌러서 말하기';
   }
   function setConvoStatus(t) {
     if (!chatConvoStatus) return;
@@ -949,7 +951,7 @@
   function updateConvoToggle() {
     if (chatConvoToggle) {
       chatConvoToggle.setAttribute('aria-pressed', convoOn ? 'true' : 'false');
-      if (chatConvoLabel) chatConvoLabel.textContent = convoOn ? '● 음성 대화 중 · 끝내기' : '음성 대화 시작';
+      if (chatConvoLabel) chatConvoLabel.textContent = convoOn ? '대화 끝내기' : '음성 대화 시작';
     }
     if (chatMic) chatMic.disabled = convoOn;      // 연속 대화 중엔 단발 마이크 비활성(루프가 제어)
     if (!convoOn) setConvoStatus(null);
@@ -1339,7 +1341,7 @@
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
-    if (isOpen(processing)) { toast('처리 중이에요. 잠시만요.'); return true; }
+    if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
     if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('healthView'))) {
       showHome(); setStatus('대기 중', 'idle'); return true;
     }

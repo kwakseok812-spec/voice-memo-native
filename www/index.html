@@ -185,19 +185,19 @@
       <div id="chatLog" class="chatlog"></div>
       <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->
       <div id="chatPendingStrip" class="pendstrip" style="display:none;"></div>
-      <!-- 음성 대화 모드: 켜면 핸즈프리(말→자동전송→음성답→자동 다시 듣기) -->
-      <button type="button" id="chatConvoToggle" class="convotog" aria-pressed="false">
-        <svg><use href="#i-refresh"/></svg><span id="chatConvoLabel">음성 대화 시작</span>
-      </button>
-      <div id="chatConvoStatus" class="convostatus" style="display:none;"></div>
-      <!-- 음성 대화 도구: 말하기(한 번 누르면 말 끝날 때 자동 전송) + 카메라로 보여주기 -->
-      <div class="voicetools">
-        <button type="button" id="chatMic" class="micbtn" aria-label="눌러서 말하기"><svg><use href="#i-mic"/></svg><span id="chatMicLabel">눌러서 말하기</span></button>
-        <button type="button" id="chatCam" class="cambtn" aria-label="카메라로 보여주기" title="사진을 찍거나 골라 케이에게 보여주기"><svg><use href="#i-cam"/></svg></button>
+      <!-- 음성 버튼 2개(작게 나란히): 켜면 핸즈프리 연속 대화 토글 + 한 번 말하기 -->
+      <div class="voicerow">
+        <button type="button" id="chatConvoToggle" class="vpill convotog" aria-pressed="false" title="켜면 핸즈프리: 말→자동전송→음성답→자동 다시 듣기">
+          <svg><use href="#i-refresh"/></svg><span id="chatConvoLabel">음성 대화 시작</span>
+        </button>
+        <button type="button" id="chatMic" class="vpill micbtn" aria-label="눌러서 말하기" title="한 번 누르면 말 끝날 때 자동 전송"><svg><use href="#i-mic"/></svg><span id="chatMicLabel">눌러서 말하기</span></button>
       </div>
+      <div id="chatConvoStatus" class="convostatus" style="display:none;"></div>
+      <!-- 입력 한 줄: [+] 첨부 · 입력창 · 📷 카메라 · 전송 -->
       <div class="chatbar">
         <button id="chatAttach" class="iconbtn chatattach" aria-label="파일 첨부" title="파일 보내기"><svg><use href="#i-plus"/></svg></button>
         <div class="input chatinput"><textarea id="chatInput" rows="1" placeholder="메시지 입력"></textarea></div>
+        <button id="chatCam" class="iconbtn chatcam" aria-label="카메라로 보여주기" title="사진을 찍거나 골라 케이에게 보여주기"><svg><use href="#i-cam"/></svg></button>
         <button id="chatSend" class="chatsend" aria-label="보내기"><svg><use href="#i-send"/></svg></button>
       </div>
       <!-- 채팅 첨부: 거의 모든 형식 허용(accept 생략) · 여러 개 선택 가능 -->
@@ -218,9 +218,13 @@
     </section>
 
     <!-- ===================== 처리 중 ===================== -->
-    <section id="processing" class="processing" style="display:none;">
-      <span class="spinner"></span>
-      <span id="processingText">PC에서 정리 중…</span>
+    <section id="processing" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>홈으로</button><span class="title">보내는 중</span><span class="spacer"></span></div>
+      <div class="processing">
+        <span class="spinner"></span>
+        <span id="processingText">PC에서 정리 중…</span>
+      </div>
+      <div class="proc-hint">정리는 뒤에서 계속돼요. <b>홈으로</b> 나가 다른 일을 하셔도 되고,<br>다 되면 <b>지난 메모</b>에서 확인할 수 있어요.</div>
     </section>
 
     <!-- ===================== 결과 ===================== -->
