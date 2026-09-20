@@ -1,0 +1,142 @@
+/* ============================================================================
+ * docviewer.css — 배포본(doc-viewer-ho30.onrender.com) 뷰어를 스마트비서에 이식
+ * 모든 규칙을 #docRoot 아래로 스코프해 스마트비서 본체 테마(:root)와 충돌하지 않게 한다.
+ * #docRoot 는 문서를 열면 화면 전체(position:fixed)를 차지하는 뷰어 컨테이너다.
+ * #slideshow(전체화면 오버레이)는 id 고유라 그대로 둔다(브라우저 Fullscreen API 대상).
+ * ==========================================================================*/
+#docRoot{
+  --bg:#f4f5f7; --card:#ffffff; --ink:#1a1a1a; --sub:#5b6470;
+  --brand:#2563eb; --brand-d:#1d4ed8; --line:#e2e5ea; --ok:#16a34a; --warn:#b45309;
+  --bar:#ffffff; --scroll-bg:#5a6270; --icon-bg:#f0f2f5; --icon-bg-a:#e2e6ea; --icon-ink:#1a1a1a;
+  display:none;
+}
+#docRoot.dark{
+  --bg:#15171c; --card:#1e2128; --ink:#e8eaed; --sub:#9aa3af;
+  --line:#2c313a; --bar:#1a1d23; --scroll-bg:#0c0d10;
+  --icon-bg:#2a2f38; --icon-bg-a:#353c47; --icon-ink:#e8eaed;
+}
+/* 문서가 열리면 화면 전체를 덮는 뷰어(스마트비서 상단바 위로) */
+#docRoot.on{
+  display:flex; flex-direction:column; position:fixed; inset:0; z-index:120;
+  background:var(--bg); color:var(--ink);
+  font-family:"Pretendard",-apple-system,"Segoe UI","Malgun Gothic","맑은 고딕",sans-serif;
+}
+#docRoot *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+
+/* 공통 버튼 — ⚠️ 스마트비서 본체 .btn(width:100%;height:62px) 누수를 반드시 덮어쓴다 */
+#docRoot .btn{border:none; border-radius:14px; font-size:18px; font-weight:700; padding:16px 20px;
+  cursor:pointer; background:var(--brand); color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:inherit;
+  width:auto; height:auto; letter-spacing:0; box-shadow:none;}
+#docRoot .btn svg{width:22px; height:22px;}
+#docRoot .btn:active{background:var(--brand-d);}
+#docRoot .btn.icon{background:var(--icon-bg); color:var(--icon-ink); font-size:23px; padding:12px 14px; min-width:56px; min-height:52px; font-weight:800; white-space:nowrap; flex-shrink:0;}
+#docRoot .btn.icon:active{background:var(--icon-bg-a);}
+#docRoot .btn.icon:disabled{opacity:.35;}
+
+/* 뷰어 화면 */
+#docRoot #viewer{flex:1; display:flex; flex-direction:column; min-height:0; position:relative;}
+#docRoot .toolbar{background:var(--bar); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:6px;
+  padding:8px 10px; padding-top:calc(8px + env(safe-area-inset-top));}
+#docRoot .toolbar .fname{flex:1; font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink);}
+#docRoot .toolbar .ss-enter{background:var(--brand); color:#fff; font-size:15px; font-weight:800; gap:6px; padding:12px 15px;
+  border-radius:14px; min-height:52px; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 8px rgba(37,99,235,.35); border:none; cursor:pointer;}
+#docRoot .toolbar .ss-enter:active{background:var(--brand-d);}
+#docRoot .toolbar .fs-enter{background:var(--brand); color:#fff; border:none; font-size:14px; font-weight:800; gap:5px; padding:0 12px;
+  border-radius:14px; min-height:50px; white-space:nowrap; flex-shrink:0; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(37,99,235,.35);}
+#docRoot .toolbar .fs-enter:active{background:var(--brand-d);}
+#docRoot .toolbar .btn.icon{min-width:48px; min-height:50px; padding:10px 10px;}
+#docRoot .toolbar .xl-toggle{background:var(--brand); color:#fff; font-size:14px; font-weight:800; gap:5px; padding:0 11px;
+  border-radius:14px; min-height:50px; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 8px rgba(37,99,235,.35); border:none; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;}
+#docRoot .toolbar .xl-toggle:active{background:var(--brand-d);}
+
+#docRoot #scroller{flex:1; overflow:auto; background:var(--scroll-bg); -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y;}
+#docRoot #pages{transform-origin:50% 0; will-change:transform; padding:10px 0 40px; width:max-content; min-width:100%; margin:0 auto;}
+#docRoot.dark #pages{filter:invert(1) hue-rotate(180deg);}
+#docRoot .page-slot{display:block; margin:0 auto 12px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.35);}
+#docRoot .page-slot canvas{display:block; width:100%; height:100%;}
+
+/* 엑셀 표 보기 */
+#docRoot #tableview{display:none; padding:0 0 calc(48px + env(safe-area-inset-bottom)); font-size:15px; font-family:inherit;}
+#docRoot #tableview table{border-collapse:collapse; background:var(--card); color:var(--ink); font-size:inherit;}
+#docRoot #tableview td{border:1px solid var(--line); padding:.42em .62em; white-space:nowrap; vertical-align:middle; text-align:left; line-height:1.4;}
+#docRoot #tableview tr:first-child td{position:sticky; top:0; z-index:2; background:var(--icon-bg); font-weight:700; box-shadow:0 1px 0 var(--line);}
+#docRoot #sheetBar{display:none; align-items:center; gap:9px; background:var(--bar); border-bottom:1px solid var(--line); padding:8px 10px;}
+#docRoot #sheetBar .lbl{font-size:13px; font-weight:800; color:var(--sub); flex-shrink:0;}
+#docRoot #sheetSel{flex:1; font-size:16px; font-weight:700; padding:11px 10px; border-radius:12px; border:1px solid var(--line);
+  background:var(--card); color:var(--ink); font-family:inherit; min-height:46px; outline:none;}
+
+/* 하단 컨트롤 바 */
+#docRoot #bottombar{background:var(--bar); border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between;
+  gap:3px; padding:9px 8px; padding-bottom:calc(9px + env(safe-area-inset-bottom));}
+#docRoot #bottombar .grp{display:flex; align-items:center; gap:3px;}
+#docRoot #bottombar .btn.icon{min-width:42px; min-height:54px; font-size:24px; border-radius:15px; padding:12px 6px;}
+#docRoot #bottombar .btn.icon#zoomFit{min-width:48px; padding:12px 4px; font-size:15px;}
+#docRoot .pagebadge{font-size:16px; font-weight:800; color:var(--ink); background:var(--icon-bg); border-radius:12px; padding:0 6px;
+  min-width:46px; min-height:54px; flex-shrink:0; display:flex; align-items:center; justify-content:center; white-space:nowrap; cursor:pointer;}
+#docRoot .pagebadge:active{background:var(--icon-bg-a);}
+#docRoot #layoutBtn{background:#0d9488; color:#fff; border:none; border-radius:15px; font-size:13.5px; font-weight:800; padding:0 9px;
+  min-height:54px; white-space:nowrap; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:3px; flex-shrink:0; box-shadow:0 2px 8px rgba(13,148,136,.35);}
+#docRoot #layoutBtn:active{background:#0b7e73;}
+
+/* 진행/오류 오버레이 */
+#docOverlay{position:fixed; inset:0; background:rgba(20,24,31,.72); display:none; align-items:center; justify-content:center; z-index:130; padding:24px;}
+#docOverlay.on{display:flex;}
+#docOverlay .panel{background:#fff; border-radius:18px; padding:28px 24px; text-align:center; max-width:340px; width:100%; font-family:"Pretendard",sans-serif;}
+#docOverlay .spinner{width:52px; height:52px; border:5px solid #e3e8f0; border-top-color:#2563eb; border-radius:50%; margin:0 auto 16px; animation:docspin 1s linear infinite;}
+@keyframes docspin{to{transform:rotate(360deg);}}
+#docOverlay .msg{font-size:17px; font-weight:700; color:#1a1a1a;}
+#docOverlay .sub{font-size:14px; color:#5b6470; margin-top:8px; line-height:1.5;}
+#docOverlay .err-emoji{font-size:44px; margin-bottom:6px;}
+#docOverlay .btn{margin-top:20px; border:none; border-radius:14px; font-size:18px; font-weight:700; padding:16px 20px; cursor:pointer; background:#2563eb; color:#fff; width:100%; font-family:inherit;}
+#docOverlay .btn.ghost{background:#eef2ff; color:#1d4ed8;}
+#docOverlay .bar-wrap{height:9px; background:#eaeef4; border-radius:999px; overflow:hidden; margin-top:18px;}
+#docOverlay .bar-fill{height:100%; width:0%; background:#2563eb; transition:width .2s;}
+
+/* 전체화면 / 슬라이드쇼 오버레이 (브라우저 Fullscreen API 대상) */
+#slideshow{position:fixed; inset:0; z-index:140; background:#000; display:none; overflow:hidden; touch-action:none;}
+#slideshow.on{display:block;}
+#ssStage{position:absolute; inset:0; overflow:hidden; cursor:pointer; -webkit-overflow-scrolling:touch;}
+#ssStage.zoomed{overflow:auto; touch-action:pan-x pan-y;}
+#ssWrap{min-width:100%; min-height:100%; width:max-content; display:flex; align-items:center; justify-content:center; margin:auto;}
+#ssCanvas{display:block; box-shadow:0 0 40px rgba(0,0,0,.55); transform-origin:center center;}
+#ssTop, #ssBottom{position:absolute; left:0; right:0; z-index:3; display:flex; align-items:center; gap:10px; transition:opacity .3s;
+  font-family:"Pretendard",-apple-system,"Segoe UI","Malgun Gothic",sans-serif;}
+#ssTop{top:0; padding:calc(10px + env(safe-area-inset-top)) 14px 14px; background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,0));}
+#ssBottom{bottom:0; justify-content:center; padding:14px 12px calc(14px + env(safe-area-inset-bottom)); background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0));}
+#slideshow.controls-hidden #ssTop, #slideshow.controls-hidden #ssBottom{opacity:0; pointer-events:none;}
+#slideshow .ss-btn{background:rgba(255,255,255,.16); color:#fff; border:none; border-radius:13px; font-size:20px; font-weight:800; padding:12px 16px;
+  min-width:54px; min-height:54px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; flex-shrink:0; font-family:inherit;}
+#slideshow .ss-btn:active{background:rgba(255,255,255,.32);}
+#slideshow .ss-btn:disabled{opacity:.35;}
+#slideshow .ss-btn.on{background:rgba(37,99,235,.85);}
+#slideshow .ss-badge{color:#fff; font-size:16px; font-weight:800; min-width:74px; text-align:center; flex-shrink:0;}
+#slideshow .ss-title{flex:1; color:#fff; font-size:14px; font-weight:700; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+#slideshow .ss-sel{background:rgba(255,255,255,.16); color:#fff; border:none; border-radius:13px; font-size:16px; font-weight:700; padding:12px 8px; min-height:54px; cursor:pointer; flex-shrink:0; font-family:inherit;}
+#slideshow .ss-sel option{color:#000;}
+#ssCtlShow, #ssCtlPage{display:flex; align-items:center; gap:10px;}
+
+/* 책 넘김(StPageFlip) */
+.stf__parent{position:relative;display:block;box-sizing:border-box;transform:translateZ(0);-ms-touch-action:pan-y;touch-action:pan-y;}
+.sft__wrapper{position:relative;width:100%;box-sizing:border-box;}
+.stf__block{position:absolute;width:100%;height:100%;box-sizing:border-box;perspective:2000px;}
+.stf__item{display:none;position:absolute;transform-style:preserve-3d;}
+.stf__outerShadow,.stf__innerShadow,.stf__hardShadow,.stf__hardInnerShadow{position:absolute;left:0;top:0;}
+#flipStage{position:absolute; inset:0; z-index:2; display:none; align-items:center; justify-content:center; overflow:hidden; touch-action:none;}
+#slideshow.book #flipStage{display:flex;}
+#flipBook{user-select:none; -webkit-user-select:none;}
+.flip-page{position:relative; width:100%; height:100%; background:#fff; overflow:hidden;}
+.flip-page canvas{position:absolute; left:0; top:0; width:100%; height:100%; display:block;}
+.flip-page[data-rendered="0"]::before{content:"⏳"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px; opacity:.35;}
+#flipHint{position:absolute; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:5;
+  background:rgba(0,0,0,.66); color:#fff; font-size:12.5px; font-weight:700; padding:8px 14px; border-radius:999px; white-space:nowrap;
+  opacity:0; transition:opacity .3s; pointer-events:none; max-width:88vw; font-family:"Pretendard",sans-serif;}
+#flipHint.show{opacity:1;}
+
+/* 변환 엔진 안내 토스트 */
+#docEngineToast{position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(8px);
+  z-index:150; opacity:0; pointer-events:none; background:rgba(20,24,31,.9); color:#fff; font-size:13px; font-weight:700; padding:9px 15px;
+  border-radius:999px; transition:opacity .25s, transform .25s; white-space:nowrap; box-shadow:0 4px 14px rgba(0,0,0,.25); font-family:"Pretendard",sans-serif;}
+#docEngineToast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+#docEngineToast.pc{background:rgba(22,101,52,.94);}
+#docEngineToast.srv{background:rgba(120,53,15,.94);}

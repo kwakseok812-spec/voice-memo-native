@@ -527,6 +527,10 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .doc-status .ds-tx small{color:var(--dim);font-weight:500}
 .doc-status.err{color:var(--warn);background:var(--warn-bg);border-color:var(--warn)}
 .doc-status.err small{color:var(--muted)}
+/* 엑셀 '변환해서 보기' 확인 카드 */
+.doc-status.ask{display:block}
+.doc-status.ask .ds-tx small{color:var(--dim);font-weight:500;line-height:1.5}
+.doc-status .ds-btn{margin-top:13px;width:100%}
 .doc-note{margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--warn-bg);border:1px solid var(--glass-b);color:var(--muted);font-size:13px;line-height:1.6}
 /* 뷰어(PDF.js) */
 #docViewer{display:flex;flex-direction:column;height:calc(100dvh - 84px);min-height:340px}
@@ -557,22 +561,37 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .docnav svg{width:20px;height:20px}
 .docnav.mid{flex:none;min-width:92px;color:var(--muted);font-size:14px}
 .docnav:active{transform:scale(.98)}
-/* 페이지 넘김(플립) 모션 — 끌 수 있음 */
-@keyframes docFlipNext{from{opacity:.15;transform:translateX(46px)}to{opacity:1;transform:none}}
-@keyframes docFlipPrev{from{opacity:.15;transform:translateX(-46px)}to{opacity:1;transform:none}}
-.doc-slot.flip-next{animation:docFlipNext .28s ease}
-.doc-slot.flip-prev{animation:docFlipPrev .28s ease}
 /* 최근 본 문서 */
 .doc-recent{display:flex;flex-direction:column;gap:8px;margin-top:2px}
 .doc-recent-item{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-b);color:var(--text);font-family:inherit;font-size:15px;font-weight:600;text-align:left;cursor:pointer;width:100%}
 .doc-recent-item svg{width:22px;height:22px;flex:none;color:var(--p1)}
 .doc-recent-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-recent-item:active{transform:scale(.99)}
-/* 전체화면 보기 — 앱 크롬을 숨기고 화면 가득 */
+/* ===== 전체화면(몰입형) — 오직 문서만 화면 가득, 앱 메뉴 전부 숨김 ===== */
 body.doc-fs .topbar{display:none}
 body.doc-fs #docsView .subbar{display:none}
-body.doc-fs #docsView{position:fixed;inset:0;z-index:200;margin:0;padding:calc(6px + env(safe-area-inset-top)) 10px calc(6px + env(safe-area-inset-bottom));background:var(--page-bg);display:flex;flex-direction:column}
-body.doc-fs #docViewer{flex:1;height:auto}
+body.doc-fs #docsView .doctoolbar{display:none}
+body.doc-fs #docsView .docoptions{display:none}
+body.doc-fs #docsView #docPageNav{display:none !important}
+body.doc-fs #docsView{position:fixed;inset:0;z-index:200;margin:0;padding:0;background:#000;display:flex;flex-direction:column}
+body.doc-fs #docViewer{flex:1;height:auto;display:flex;flex-direction:column}
+body.doc-fs #docScroller{border-radius:0;background:#000;flex:1}
+/* 전체화면 컨트롤(탭하면 잠깐) */
+#docFsBar{position:absolute;top:0;left:0;right:0;z-index:210;display:none;align-items:center;justify-content:space-between;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 12px;gap:12px;
+  background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,0));opacity:0;transition:opacity .2s;pointer-events:none}
+body.doc-fs #docFsBar{display:flex}
+#docFsBar.show{opacity:1;pointer-events:auto}
+#docFsBar .docfs-page{color:#fff;font-size:15px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#docFsBar .docfs-exit{display:inline-flex;align-items:center;gap:6px;height:42px;padding:0 16px;border:0;border-radius:14px;
+  background:rgba(255,255,255,.16);color:#fff;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#docFsBar .docfs-exit svg{width:18px;height:18px}
+#docFsBar .docfs-exit:active{transform:scale(.97)}
+/* 진입 안내(잠깐) */
+#docFsHint{position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));z-index:210;text-align:center;
+  color:#fff;font-size:13.5px;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none;display:none}
+body.doc-fs #docFsHint{display:block}
+#docFsHint.show{opacity:.92}
 
 /* ===================== 대화 검색(🔍) ===================== */
 .chatsearchbar{display:flex;align-items:center;gap:8px;margin:2px 0 8px}

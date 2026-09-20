@@ -17,6 +17,7 @@
   <!-- 글꼴: Pretendard(시안 기준) — 없으면 맑은 고딕 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/docviewer.css">
 </head>
 <body>
 
@@ -42,7 +43,6 @@
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5S9 3 4 3v15c5 0 8 2 8 2s3-2 8-2V3c-5 0-8 2-8 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 5v15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-onepage" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="6" y="14" width="12" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></symbol>
@@ -231,11 +231,9 @@
       <div id="hHistory" style="display:none;"></div>
     </section>
 
-    <!-- ===================== 문서 뷰어 ===================== -->
+    <!-- ===================== 문서 뷰어(고르기) ===================== -->
     <section id="docsView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">문서 뷰어</span><span class="spacer"></span></div>
-
-      <!-- 문서 고르기 화면 -->
       <div id="docPick">
         <div class="card doc-open">
           <div class="doc-open-ic"><svg><use href="#i-doc"/></svg></div>
@@ -246,45 +244,81 @@
           </div>
           <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르시면<br>PC와 똑같은 모습으로 보여드려요. (보기 전용 · 편집 없음)</div>
         </div>
-        <div id="docStatus" class="doc-status" style="display:none;"></div>
-        <div id="docRecent" style="display:none;">
-          <div class="sec-title">최근 본 문서</div>
-          <div id="docRecentList" class="doc-recent"></div>
-        </div>
         <div class="doc-note">🔒 올리신 문서는 화면에 보여드리기 위해 잠깐 변환에만 쓰고, 변환이 끝나면 원본은 지워집니다. 계약서·주민번호 등 민감 문서는 올리지 않으시길 권해요.</div>
-      </div>
-
-      <!-- 뷰어(PDF.js) 화면 -->
-      <div id="docViewer" style="display:none;">
-        <!-- 1행: 목록·파일명·페이지·줌·전체화면 -->
-        <div class="doctoolbar">
-          <button class="iconbtn" id="docToList" title="목록"><svg><use href="#i-chev-l"/></svg></button>
-          <div class="docfname" id="docFname">문서</div>
-          <button class="docpage" id="docPageBadge" title="페이지 이동">– / –</button>
-          <button class="iconbtn docz" id="docZoomOut" title="축소">－</button>
-          <button class="iconbtn docz" id="docZoomIn" title="확대">＋</button>
-          <button class="iconbtn docz wfit" id="docFitToggle" title="폭 맞춤 / 페이지 맞춤">폭</button>
-          <button class="iconbtn" id="docFull" title="전체화면"><svg><use href="#i-expand"/></svg></button>
-        </div>
-        <!-- 2행: 보기 옵션 -->
-        <div class="docoptions">
-          <button class="docopt" id="docModeToggle" title="한 장씩 / 연속 보기"><svg><use href="#i-onepage"/></svg><span id="docModeLabel">한 장씩</span></button>
-          <button class="docopt" id="docFlipToggle" title="책 넘김 모션 켜기/끄기"><svg><use href="#i-book"/></svg><span>책넘김</span></button>
-          <button class="docopt" id="docRotate" title="회전"><svg><use href="#i-rotate"/></svg><span>회전</span></button>
-          <button class="docopt" id="docNight" title="야간 보기"><svg><use href="#i-moon"/></svg><span>야간</span></button>
-        </div>
-        <div id="docScroller"><div id="docPages"></div></div>
-        <!-- 한 장씩 보기일 때 아래 페이지 이동 바 -->
-        <div id="docPageNav" style="display:none;">
-          <button class="docnav" id="docPrev" title="이전 쪽"><svg><use href="#i-chev-l"/></svg>이전</button>
-          <button class="docnav mid" id="docJump" title="페이지 이동">1 / 1</button>
-          <button class="docnav" id="docNext" title="다음 쪽">다음<svg><use href="#i-chev-r"/></svg></button>
-        </div>
       </div>
     </section>
 
     <!-- 숨은 문서 입력(뷰어용) · 여러 형식 허용 -->
-    <input type="file" id="docFileInput" accept=".hwp,.hwpx,.doc,.docx,.rtf,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.pdf,application/pdf" style="display:none">
+    <input type="file" id="docFileInput" accept=".xls,.xlsx,.csv,.hwp,.hwpx,.doc,.docx,.rtf,.ppt,.pptx,.odt,.ods,.odp,.pdf,application/pdf" style="display:none">
+
+    <!-- ===================== 문서 뷰어(배포본 이식 · #docRoot) ===================== -->
+    <div id="docRoot">
+      <div id="viewer">
+        <div class="toolbar">
+          <button class="btn icon" id="dvBack" title="목록">←</button>
+          <div class="fname" id="dvFname">문서</div>
+          <button class="xl-toggle" id="dvXlToggle" title="표 보기 / PDF 보기 전환" style="display:none;">📄 PDF로 보기</button>
+          <button class="btn ss-enter" id="dvSlideshow" title="슬라이드쇼로 보기" style="display:none;">▶ 슬라이드쇼</button>
+          <button class="btn fs-enter" id="dvFullscreen" title="전체화면으로 한 장씩 크게 보기" style="display:none;">⛶ 전체화면</button>
+          <button class="btn icon" id="dvRotate" title="회전" style="font-size:22px;">⟳</button>
+          <button class="btn icon" id="dvDark" title="야간 보기" style="font-size:22px;">🌙</button>
+        </div>
+        <div id="sheetBar"><span class="lbl">시트</span><select id="sheetSel"></select></div>
+        <div id="scroller">
+          <div id="pages"></div>
+          <div id="tableview"></div>
+        </div>
+        <div id="bottombar">
+          <div class="grp" id="pageNavGrp">
+            <button class="btn icon" id="dvPrev" title="이전 쪽">◀</button>
+            <div class="pagebadge" id="dvBadge" title="쪽 이동">– / –</div>
+            <button class="btn icon" id="dvNext" title="다음 쪽">▶</button>
+          </div>
+          <button id="layoutBtn" title="한 장씩 좌우로 넘겨 보기" style="display:none;">📖 넘김</button>
+          <div class="grp">
+            <button class="btn icon" id="dvZoomOut" title="축소">－</button>
+            <button class="btn icon" id="zoomFit" title="폭 맞춤" style="font-size:15px;">폭맞춤</button>
+            <button class="btn icon" id="dvZoomIn" title="확대">＋</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 전체화면 / PPT 슬라이드쇼 오버레이 (브라우저 Fullscreen API) -->
+    <div id="slideshow">
+      <div id="ssStage"><div id="ssWrap"><canvas id="ssCanvas"></canvas></div></div>
+      <div id="flipStage"></div>
+      <div id="flipHint"></div>
+      <div id="ssTop">
+        <div class="ss-title" id="ssTitle">전체화면</div>
+        <div class="ss-badge" id="ssBadge">– / –</div>
+        <button class="ss-btn" id="ssFlip" title="책 넘김 (종이 접힘 모션)" style="display:none;">📖</button>
+        <button class="ss-btn" id="ssRotate" title="회전 (세로 화면에서 크게 보기)">⟳</button>
+        <button class="ss-btn" id="ssExit" title="나가기">✕</button>
+      </div>
+      <div id="ssBottom">
+        <div id="ssCtlShow">
+          <button class="ss-btn" id="ssPrev" title="이전 슬라이드">◀</button>
+          <button class="ss-btn" id="ssPlay" title="자동 재생">▶</button>
+          <select class="ss-sel" id="ssInterval" title="자동 재생 간격">
+            <option value="3000">3초</option>
+            <option value="5000" selected>5초</option>
+            <option value="10000">10초</option>
+          </select>
+          <button class="ss-btn" id="ssLoop" title="반복">🔁</button>
+          <button class="ss-btn" id="ssNext" title="다음 슬라이드">▶</button>
+        </div>
+        <div id="ssCtlPage" style="display:none;">
+          <button class="ss-btn" id="ssPrevP" title="이전 쪽">◀</button>
+          <button class="ss-btn" id="ssZoomOut" title="축소">－</button>
+          <button class="ss-btn" id="ssFit" title="화면 맞춤" style="font-size:15px;">맞춤</button>
+          <button class="ss-btn" id="ssZoomIn" title="확대">＋</button>
+          <button class="ss-btn" id="ssNextP" title="다음 쪽">▶</button>
+        </div>
+      </div>
+    </div>
+    <div id="docOverlay"><div class="panel" id="docPanel"></div></div>
+    <div id="docEngineToast"></div>
 
     <!-- ===================== 처리 중 ===================== -->
     <section id="processing" style="display:none;">
@@ -335,8 +369,10 @@
   처음 보낸 메모는 PC 준비에 1~2분 걸릴 수 있어요 · 인터넷 연결 필요.
 </footer>
 
-<!-- PDF.js (앱에 번들 · 오프라인/CDN차단 대비) — 문서 뷰어용 -->
+<!-- 문서 뷰어용 라이브러리(앱에 번들 · 오프라인/CDN차단 대비) -->
 <script src="vendor/pdf.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/page-flip.browser.min.js"></script>
 <script src="js/recorder.js"></script>
 <script src="js/recorder-native.js"></script>
 <script src="js/office-bridge.js"></script>

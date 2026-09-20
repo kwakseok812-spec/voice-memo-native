@@ -67,10 +67,13 @@
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
   function showHome() {
+    if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
   }
   function openScreen(el) {
+    // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
+    if (window.SmartDocs && SmartDocs.leave && el !== $('docsView')) { try { SmartDocs.leave(); } catch (e) {} }
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
     if (el !== searchPanelRef()) clearSearch();
@@ -1454,13 +1457,10 @@
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
-    if (isOpen($('docsView'))) {
-      // 전체화면이면 먼저 전체화면 해제 → 뷰어(PDF) 중이면 문서 고르기 → 이미 고르기면 홈
-      if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.exitFullscreen(); } catch (e) {} return true; }
-      if (window.SmartDocs && isOpen($('docViewer'))) { try { SmartDocs.showPick(); } catch (e) {} return true; }
-      if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }
-      showHome(); setStatus('대기 중', 'idle'); return true;
-    }
+    // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
+    if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
+    if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
+    if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
     if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('healthView'))) {
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
