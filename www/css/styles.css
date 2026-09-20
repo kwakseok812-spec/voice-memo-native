@@ -497,6 +497,12 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .pendstrip .pend img{width:100%;height:100%;object-fit:cover;display:block}
 .pendstrip .pend .rm{position:absolute;top:2px;right:2px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
 .pendstrip .pend .rm svg{width:13px;height:13px}
+/* 첨부 파일(문서 등) 대기 칩 — 이름+크기, 사진 썸네일과 나란히 */
+.pendstrip .pend.pendfile{width:auto;max-width:200px;height:66px;display:flex;align-items:center;gap:8px;padding:0 30px 0 12px;background:var(--in-bg)}
+.pendstrip .pend.pendfile .pf-ic{flex:none;display:grid;place-items:center;color:var(--p1)}
+.pendstrip .pend.pendfile .pf-ic svg{width:22px;height:22px}
+.pendstrip .pend.pendfile .pf-name{min-width:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:700;color:var(--text)}
+.pendstrip .pend.pendfile .pf-sz{flex:none;font-size:11px;color:var(--dim)}
 
 /* 채팅: 케이 답 말풍선의 "다시 듣기" */
 .voiceplay{display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:7px 13px;border-radius:12px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--p1);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer}
@@ -529,10 +535,41 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .doctoolbar .docpage{flex:none;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--glass);border:1px solid var(--glass-b);border-radius:999px;padding:6px 10px;white-space:nowrap}
 .doctoolbar .docz{width:40px;height:40px;font-size:19px;font-weight:800}
 .doctoolbar .docz.wfit{width:auto;padding:0 12px;font-size:14px;font-weight:800}
+.doctoolbar .docpage{cursor:pointer;font-family:inherit}
+.doctoolbar .docpage:active{transform:scale(.97)}
 #docScroller{flex:1;overflow:auto;background:#3a4152;border-radius:16px;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
 #docPages{transform-origin:50% 0;will-change:transform;padding:10px 0 40px}
 .doc-slot{display:block;margin:0 auto 12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.35);max-width:100%;overflow:hidden}
 .doc-slot canvas{display:block;width:100%;height:100%}
+/* 야간 보기(색 반전) */
+#docPages.doc-night canvas{filter:invert(1) hue-rotate(180deg)}
+/* 보기 옵션 2행 */
+.docoptions{display:flex;gap:6px;padding:0 0 6px;flex-wrap:wrap}
+.docopt{display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 11px;border-radius:12px;background:var(--glass);border:1px solid var(--glass-b);color:var(--muted);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
+.docopt svg{width:16px;height:16px}
+.docopt.on{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
+/* 한 장씩 보기: 아래 페이지 이동 바 */
+#docPageNav{display:flex;align-items:center;gap:8px;padding:8px 0 calc(4px + env(safe-area-inset-bottom))}
+.docnav{flex:1;height:46px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-b);color:var(--text);font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+.docnav svg{width:20px;height:20px}
+.docnav.mid{flex:none;min-width:92px;color:var(--muted);font-size:14px}
+.docnav:active{transform:scale(.98)}
+/* 페이지 넘김(플립) 모션 — 끌 수 있음 */
+@keyframes docFlipNext{from{opacity:.15;transform:translateX(46px)}to{opacity:1;transform:none}}
+@keyframes docFlipPrev{from{opacity:.15;transform:translateX(-46px)}to{opacity:1;transform:none}}
+.doc-slot.flip-next{animation:docFlipNext .28s ease}
+.doc-slot.flip-prev{animation:docFlipPrev .28s ease}
+/* 최근 본 문서 */
+.doc-recent{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.doc-recent-item{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-b);color:var(--text);font-family:inherit;font-size:15px;font-weight:600;text-align:left;cursor:pointer;width:100%}
+.doc-recent-item svg{width:22px;height:22px;flex:none;color:var(--p1)}
+.doc-recent-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-recent-item:active{transform:scale(.99)}
+/* 전체화면 보기 — 앱 크롬을 숨기고 화면 가득 */
+body.doc-fs .topbar{display:none}
+body.doc-fs #docsView .subbar{display:none}
+body.doc-fs #docsView{position:fixed;inset:0;z-index:200;margin:0;padding:calc(6px + env(safe-area-inset-top)) 10px calc(6px + env(safe-area-inset-bottom));background:var(--page-bg);display:flex;flex-direction:column}
+body.doc-fs #docViewer{flex:1;height:auto}
 
 /* ===================== 대화 검색(🔍) ===================== */
 .chatsearchbar{display:flex;align-items:center;gap:8px;margin:2px 0 8px}

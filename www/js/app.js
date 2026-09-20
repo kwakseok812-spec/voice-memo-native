@@ -606,6 +606,7 @@
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
   var chatPendingImages = [];               // 케이에게 보여줄 사진(전송 전 대기)
+  var chatPendingFiles = [];                // 첨부 파일(문서 등, 전송 전 대기) — 일반 메신저처럼 붙여두고 계속 입력
   var chatRecording = false, chatRecorder = null;
   var kaiAudio = null, kaiAudioUnlocked = false, playingBubbleEl = null, silentWavCache = null;
   // 핸즈프리: 무음 자동 감지 → 자동 전송 → (음성)답 → 재생 끝나면 자동 다시 듣기
@@ -852,29 +853,43 @@
   function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
   function sendChatMsg() {
     if (!chatInput) return;
-    if (anyAwaiting()) return;                    // 앞 질문 답 오기 전엔 다음 전송 잠금(순서 유지)
     var text = (chatInput.value || '').trim();
     var imgs = chatPendingImages.slice();
-    if (!text && !imgs.length) return;
+    var files = chatPendingFiles.slice();
+    if (!text && !imgs.length && !files.length) return;
+    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }   // 순서 유지(입력·첨부는 계속 가능)
     unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
-    if (imgs.length) {                            // 사진이 붙어 있으면 통합 전송(케이가 사진을 보고 답)
-      chatPendingImages = []; renderPending();
+    var textUsed = false;
+    // (1) 사진이 붙어 있으면 통합 전송(케이가 사진을 보고 답) — 글은 사진과 함께 감
+    if (imgs.length) {
+      chatPendingImages = [];
       sendChatTurnUI({ text: text, files: imgs, audioBlob: null });
-      return;
+      textUsed = true;
     }
-    // 순수 텍스트: 기존 경로(음성 답은 음성 대화 모드일 때만 = convoOn)
-    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
-    chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false });
-    saveChatMsgs(); renderChat(); updateSendEnabled();
-    OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn }).then(function () {
-      startChatReconcile();
-    }).catch(function () {
-      // 전송 자체 실패 → 그 질문에 오류답 달고 잠금 해제
-      var m = findMsg(id); if (m) m.answered = true;
-      chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+    // (2) 파일이 붙어 있으면 파일 전송 — 글이 아직 안 쓰였으면 첫 파일 묶음에 함께 붙임
+    if (files.length) {
+      chatPendingFiles = [];
+      var big = files.filter(function (f) { return (f.size || 0) > CHAT_CHUNK_LIMIT; });
+      var small = files.filter(function (f) { return (f.size || 0) <= CHAT_CHUNK_LIMIT; });
+      if (small.length) { pushChatFileMsg(small, false, textUsed ? '' : text); textUsed = true; }
+      big.forEach(function (f) { pushChatFileMsg([f], true, textUsed ? '' : text); textUsed = true; });
+      if (big.length) toast('큰 파일은 나눠 올려요 — 시간이 걸릴 수 있어요.');
+    }
+    renderPending();
+    // (3) 남은 순수 텍스트(첨부가 하나도 없을 때) — 기존 경로(음성 답은 음성 대화 모드일 때만)
+    if (!textUsed && text) {
+      var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+      chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false });
       saveChatMsgs(); renderChat(); updateSendEnabled();
-    });
+      OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn }).then(function () {
+        startChatReconcile();
+      }).catch(function () {
+        var m = findMsg(id); if (m) m.answered = true;
+        chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+        saveChatMsgs(); renderChat(); updateSendEnabled();
+      });
+    }
   }
 
   /* ---- 통합 전송: (선택)음성 + (선택)사진 + 텍스트 한 턴 → 케이가 보고/듣고 답 ---- */
@@ -1070,9 +1085,10 @@
   /* ---- 카메라/갤러리: 케이에게 보여줄 사진 붙이기(전송 전 대기) ---- */
   function renderPending() {
     if (!chatPendingStrip) return;
-    if (!chatPendingImages.length) { chatPendingStrip.style.display = 'none'; chatPendingStrip.innerHTML = ''; return; }
+    if (!chatPendingImages.length && !chatPendingFiles.length) { chatPendingStrip.style.display = 'none'; chatPendingStrip.innerHTML = ''; return; }
     chatPendingStrip.style.display = 'flex';
     chatPendingStrip.innerHTML = '';
+    // 사진 미리보기(썸네일)
     chatPendingImages.forEach(function (f, i) {
       var d = document.createElement('div'); d.className = 'pend';
       var im = document.createElement('img');
@@ -1081,6 +1097,19 @@
       b.innerHTML = '<svg><use href="#i-x"/></svg>';
       b.addEventListener('click', function () { chatPendingImages.splice(i, 1); renderPending(); });
       d.appendChild(im); d.appendChild(b); chatPendingStrip.appendChild(d);
+    });
+    // 파일 칩(문서 등) — 이름 + 크기 + x
+    chatPendingFiles.forEach(function (f, i) {
+      var d = document.createElement('div'); d.className = 'pend pendfile';
+      var ic = document.createElement('span'); ic.className = 'pf-ic';
+      ic.innerHTML = '<svg><use href="#' + attachIcon({ mime: f.type, name: f.name }) + '"/></svg>';
+      var nm = document.createElement('span'); nm.className = 'pf-name'; nm.textContent = f.name || '파일';
+      var sz = document.createElement('span'); sz.className = 'pf-sz'; sz.textContent = f.size ? fmtBytes(f.size) : '';
+      var b = document.createElement('button'); b.className = 'rm'; b.type = 'button';
+      b.innerHTML = '<svg><use href="#i-x"/></svg>';
+      b.addEventListener('click', function () { chatPendingFiles.splice(i, 1); renderPending(); });
+      d.appendChild(ic); d.appendChild(nm); if (sz.textContent) d.appendChild(sz); d.appendChild(b);
+      chatPendingStrip.appendChild(d);
     });
   }
   function onChatCamPicked(fileList) {
@@ -1201,8 +1230,7 @@
   // 음성 대화 도구 연결
   if (chatMic) chatMic.addEventListener('click', toggleChatMic);
   if (chatCam) chatCam.addEventListener('click', function () {
-    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }
-    if (chatCamInput) chatCamInput.click();
+    if (chatCamInput) chatCamInput.click();                  // 사진도 붙여두고 계속 입력 가능
   });
   if (chatCamInput) chatCamInput.addEventListener('change', function () {
     if (this.files && this.files.length) onChatCamPicked(this.files);
@@ -1219,14 +1247,15 @@
 
   /* ---- 채팅 파일 첨부(대표님 → 케이, 상향) ---- */
   var CHAT_CHUNK_LIMIT = 45 * 1024 * 1024;   // 이보다 큰 파일은 청크 업로드(단일 50MB 한도 우회)
-  function pushChatFileMsg(files, chunked) {
+  function pushChatFileMsg(files, chunked, userText) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    userText = (userText || '').trim();
     var upFiles = Array.prototype.map.call(files, function (f) {
       return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) };
     });
     var names = upFiles.map(function (f) { return f.name; });
-    var note = '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨어요. 확인해 주세요.';
-    var msg = { role: 'me', text: '', ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true };
+    var note = (userText ? (userText + '\n\n') : '') + '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨어요. 확인해 주세요.';
+    var msg = { role: 'me', text: userText, ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true };
     chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var memo = { id: id, token: tok, thread: chatThread, title: names[0] || '파일', note: note };
     var work = chunked ? OfficeBridge.sendChatChunked(memo, files[0]) : OfficeBridge.sendChatBatch(memo, files);
@@ -1240,18 +1269,19 @@
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
+  // 파일을 고르면 '바로 보내지 않고' 대기줄(pending)에 붙인다 → 대표님이 계속 글을 쓸 수 있고, 전송 때 함께 나감.
   function onChatFilesPicked(fileList) {
     var arr = Array.prototype.slice.call(fileList || []);
     if (!arr.length) return;
-    var big = arr.filter(function (f) { return (f.size || 0) > CHAT_CHUNK_LIMIT; });
-    var small = arr.filter(function (f) { return (f.size || 0) <= CHAT_CHUNK_LIMIT; });
-    if (small.length) pushChatFileMsg(small, false);       // 작은 파일들: 한 번에(한 말풍선)
-    big.forEach(function (f) { pushChatFileMsg([f], true); });   // 큰 파일: 각각 청크로(개별 말풍선)
-    if (big.length) toast('큰 파일은 나눠 올려요 — 시간이 걸릴 수 있어요.');
+    var room = Math.max(0, 10 - chatPendingFiles.length);
+    if (arr.length > room) { arr = arr.slice(0, room); toast('파일은 한 번에 최대 10개까지예요.'); }
+    if (!arr.length) return;
+    chatPendingFiles = chatPendingFiles.concat(arr);
+    renderPending();
+    toast('파일을 붙였어요. 글을 더 쓰거나 전송을 누르세요.');
   }
   if ($('chatAttach')) $('chatAttach').addEventListener('click', function () {
-    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }
-    $('chatFileInput').click();
+    $('chatFileInput').click();                              // 첨부는 언제든 가능(붙여두고 계속 입력)
   });
   if ($('chatFileInput')) $('chatFileInput').addEventListener('change', function () {
     if (this.files && this.files.length) onChatFilesPicked(this.files);
@@ -1425,7 +1455,8 @@
     if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
     if (isOpen($('docsView'))) {
-      // 뷰어(PDF)를 보는 중이면 먼저 문서 고르기 화면으로, 이미 고르기 화면이면 홈으로
+      // 전체화면이면 먼저 전체화면 해제 → 뷰어(PDF) 중이면 문서 고르기 → 이미 고르기면 홈
+      if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.exitFullscreen(); } catch (e) {} return true; }
       if (window.SmartDocs && isOpen($('docViewer'))) { try { SmartDocs.showPick(); } catch (e) {} return true; }
       if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }
       showHome(); setStatus('대기 중', 'idle'); return true;
