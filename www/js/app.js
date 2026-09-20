@@ -151,10 +151,15 @@
       title: (memoTitle.value || '').trim() || defaultTitle(),
       ext: OfficeBridge.extFromBlob(pendingBlob), date: t.date, time: t.time
     };
+    var blob = pendingBlob; pendingBlob = null;
+    // 녹음이 길어 단일 업로드 한도(40MB)를 넘으면 → 조각 전송(백그라운드, 긴 영상과 동일 UX)
+    if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
+      sendChunkedAudioMemo(memo, blob);
+      return;
+    }
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending' });
     renderHistory();
     openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
-    var blob = pendingBlob; pendingBlob = null;
     OfficeBridge.send(memo, blob).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
       setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
@@ -448,6 +453,28 @@
     toast('긴 영상은 시간이 걸려요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
     showHome();
   }
+  /* 긴 음성(2시간 등): 조각 전송 + 백그라운드 진행(긴 영상과 동일 UX — 다른 기능 안 막음) */
+  function sendChunkedAudioMemo(memo, blob) {
+    var mb = Math.round((blob.size || 0) / 1024 / 1024);
+    HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: memo.date, time: memo.time, status: 'pending', kind: 'audio' });
+    videoProg[memo.id] = '올릴 준비 중… (' + mb + 'MB)';
+    renderHistory();
+    OfficeBridge.sendAudioChunked(memo, blob, function (phase, done, total) {
+      videoProg[memo.id] = '올리는 중 ' + done + '/' + total + ' 조각';
+      renderHistory();
+    }).then(function () {
+      HistoryModule.update(memo.id, { status: 'processing' });
+      videoProg[memo.id] = 'PC에서 정리 준비 중…';
+      renderHistory();
+      startVideoPolling(memo.id, memo.token);
+    }).catch(function (e) {
+      HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
+      delete videoProg[memo.id]; renderHistory();
+      toast('긴 음성 업로드 실패 — 지난 메모에서 다시 시도해 주세요.');
+    });
+    toast('긴 녹음은 조각으로 나눠 보내요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
+    showHome();
+  }
   function startVideoPolling(id, token) {
     if (videoPollers[id]) return;
     var started = Date.now();
@@ -462,7 +489,7 @@
             title: res.title, error: res.error || null
           });
           renderHistory();
-          toast('🎬 영상 정리 완료 — 지난 메모에서 볼 수 있어요.');
+          toast((res.kind === 'audio' ? '🎙️ 긴 녹음 정리 완료' : '🎬 영상 정리 완료') + ' — 지난 메모에서 볼 수 있어요.');
         } else {
           if (res.progress_msg) { videoProg[id] = res.progress_msg; renderHistory(); }
           if (Date.now() - started > 3 * 60 * 60 * 1000) { clearInterval(videoPollers[id]); delete videoPollers[id]; }  // 최장 3시간

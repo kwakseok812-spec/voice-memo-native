@@ -232,6 +232,49 @@
     });
   }
 
+  /* ---------- 긴 음성(2시간 등): 조각 업로드(영상과 동일 규약) ----------
+   * 녹음이 길어 blob 이 단일 업로드 한도(50MB)를 넘으면 이 경로로 보낸다.
+   *   - kind='audio', meta.chunked=true, meta.ext, meta.total (audio_path 는 넣지 않음).
+   *   - 조각 경로/페이싱/재시도는 영상 청크(sendVideoChunked)와 완전히 동일한 인프라 재사용.
+   *   - PC: video_worker.py 가 조각을 이어붙여 collect.py 의 전사·요약·문서 로직으로 처리.
+   * ▶ 행 INSERT 는 영상 청크(_insertChunkedVideoRow)와 동일하게 순수 INSERT.
+   *   (anon 키는 테이블 UPDATE 정책이 없어 upsert 를 못 쓴다 — uploadAudio 주석 참고.
+   *    흔한 오프라인 실패는 애초에 이 INSERT 전에 나므로 flush() 재시도가 새 행으로 정상 동작한다.) */
+  function _insertChunkedAudioRow(memo, total, ext) {
+    return _insertRow({
+      id: memo.id, title: memo.title, status: 'pending', kind: 'audio', note: memo.note || null,
+      client_token: memo.token,
+      meta: { app: 'voice-memo-test', chunked: true, ext: ext, total: total }
+    });
+  }
+  // 큰 오디오 blob 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
+  // 실패하면 blob 을 IndexedDB 에 넣고 throw → flush() 가 나중에 다시 시도.
+  function sendAudioChunked(memo, blob, onProgress) {
+    var ext = memo.ext || extFromBlob(blob);
+    var total = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
+    return _insertChunkedAudioRow(memo, total, ext).then(function () {
+      var k = 0;
+      function step() {
+        if (k >= total) return Promise.resolve();
+        var pacing = (k >= MAX_INFLIGHT)
+          ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
+          : Promise.resolve();
+        return pacing.then(function () {
+          var part = blob.slice(k * CHUNK_SIZE, Math.min(blob.size, (k + 1) * CHUNK_SIZE));
+          return uploadPartWithRetry(memo.id, k, ext, part, 3);
+        }).then(function () {
+          k++; onProgress && onProgress('upload', k, total);
+          return step();
+        });
+      }
+      return step();
+    }).then(function () { return idbDel(memo.id); })   // 성공 시 대기분 제거
+      .catch(function (e) {
+        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob, date: memo.date, time: memo.time })
+          .then(function () { throw e; });
+      });
+  }
+
   // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
   //   opts.speak=true 면 케이 답을 목소리(mp3)로도 만들게 요청(meta.speak).
   function sendChat(id, token, thread, text, opts) {
@@ -478,9 +521,14 @@
         if (i >= list.length) return Promise.resolve();
         var rec = list[i++];
         var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext, date: rec.date, time: rec.time };
-        var p = rec.files
-          ? sendBatch(memo, rec.files)                 // 사진/영상 묶음 재업로드
-          : uploadAudio(memo.id, memo.ext, rec.blob).then(function (k) { return createMemo(memo, k); }).then(function () { return idbDel(memo.id); });
+        var p;
+        if (rec.files) {
+          p = sendBatch(memo, rec.files);              // 사진/영상 묶음 재업로드
+        } else if (rec.blob && rec.blob.size > CHUNK_SIZE) {
+          p = sendAudioChunked(memo, rec.blob);        // 큰 음성(2시간 등): 조각으로 재업로드(성공 시 내부에서 idbDel)
+        } else {
+          p = uploadAudio(memo.id, memo.ext, rec.blob).then(function (k) { return createMemo(memo, k); }).then(function () { return idbDel(memo.id); });
+        }
         return p
           .then(function () { onEach && onEach(memo); })
           .catch(function () { /* 다음 기회 */ })
@@ -493,7 +541,7 @@
 
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
-    send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked,
+    send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
