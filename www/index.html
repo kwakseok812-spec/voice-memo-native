@@ -130,6 +130,27 @@
     <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
     <input type="file" id="videoInput" accept="video/*" multiple style="display:none">
 
+    <!-- ===================== 녹음 준비(시작 전) ===================== -->
+    <section id="recPrep" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 준비</span><span class="spacer"></span></div>
+      <div class="recdone-badge">🎙️ 준비되면 아래 <b>녹음 시작</b>을 눌러 주세요</div>
+      <div class="label">회의자료 <span class="hint">(선택 · 붙이면 자료 내용까지 반영해 정리해요)</span></div>
+      <div id="matList"></div>
+      <div class="btnrow">
+        <button id="matAttach" class="btn ghost sm"><svg><use href="#i-plus"/></svg>회의자료 첨부</button>
+      </div>
+      <div class="orbwrap" style="margin-top:16px">
+        <button class="orbbtn" id="btnStartRec" aria-label="녹음 시작">
+          <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
+          <span class="core"><svg><use href="#i-mic"/></svg></span>
+        </button>
+        <div class="orblabel">녹음 시작</div>
+        <div class="orbhint">누르면 그때부터 녹음돼요</div>
+      </div>
+      <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능 -->
+      <input type="file" id="matInput" accept=".ppt,.pptx,.doc,.docx,.pdf,.hwp,.hwpx,.rtf,.odt,.odp,.xls,.xlsx,.csv,.txt" multiple style="display:none">
+    </section>
+
     <!-- ===================== 녹음 중 ===================== -->
     <section id="recView" style="display:none;">
       <div class="rec-center">

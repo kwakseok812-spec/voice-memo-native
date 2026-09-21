@@ -104,12 +104,37 @@
     }).then(function (r) { if (!r.ok) throw new Error('메모 등록 실패(HTTP ' + r.status + ')'); return true; });
   }
   function createMemo(memo, audioPath) {
+    var meta = { app: 'voice-memo-test', ext: memo.ext };
+    if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending',
       kind: memo.kind || 'audio', note: memo.note || null,
       audio_path: audioPath, client_token: memo.token,
-      meta: { app: 'voice-memo-test', ext: memo.ext }
+      meta: meta
     });
+  }
+
+  /* ---------- 회의자료 첨부(녹음과 함께) — 2026-09-21 ----------
+   * 녹음(음성메모)에 회의자료(PPT/워드/PDF/한글 등)를 함께 보낸다. 자료는 voice-audio 버킷
+   * `{id}/mat_{i}.{ext}` 로 올리고, meta.materials=[{key,ext,name,size,mime}] 로 행에 싣는다.
+   * PC(collect.py) 가 이 목록을 내려받아 텍스트를 추출하고, 전사문과 함께 통합 회의록으로 정리한다.
+   * 반환: 업로드된 자료 메타 배열(없으면 []). */
+  function uploadMaterials(id, materials, onProgress) {
+    materials = materials || [];
+    var out = [], i = 0;
+    function step() {
+      if (i >= materials.length) return Promise.resolve(out);
+      var f = materials[i];
+      var ext = extForFile(f, 'file');
+      var key = id + '/mat_' + i + '.' + ext;
+      return uploadObject(key, f).then(function () {
+        out.push({ key: key, ext: ext, name: f.name || ('mat' + i + '.' + ext),
+                   size: f.size || 0, mime: f.type || '' });
+        i++; onProgress && onProgress(i, materials.length);
+        return step();
+      });
+    }
+    return step();
   }
   // 파일 없이 등록하는 메모(명함 검색 / 사진 온디맨드). kind='search'.
   function createSearch(memo) {
@@ -120,13 +145,15 @@
     });
   }
 
-  // 오디오 업로드 + 메모 등록. 실패하면 IndexedDB에 오디오를 넣고 throw.
+  // 회의자료(있으면) + 오디오 업로드 + 메모 등록. 실패하면 IndexedDB에 오디오·자료를 넣고 throw.
   function send(memo, blob) {
-    return uploadAudio(memo.id, memo.ext, blob)
+    return uploadMaterials(memo.id, memo.materials || [])
+      .then(function (matMeta) { memo.materialsMeta = matMeta; return uploadAudio(memo.id, memo.ext, blob); })
       .then(function (path) { return createMemo(memo, path); })
       .then(function () { return idbDel(memo.id); })   // 성공 시 대기분 제거
       .catch(function (e) {
-        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob, date: memo.date, time: memo.time })
+        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob,
+                        materials: memo.materials || [], date: memo.date, time: memo.time })
           .then(function () { throw e; });
       });
   }
@@ -241,10 +268,12 @@
    *   (anon 키는 테이블 UPDATE 정책이 없어 upsert 를 못 쓴다 — uploadAudio 주석 참고.
    *    흔한 오프라인 실패는 애초에 이 INSERT 전에 나므로 flush() 재시도가 새 행으로 정상 동작한다.) */
   function _insertChunkedAudioRow(memo, total, ext) {
+    var meta = { app: 'voice-memo-test', chunked: true, ext: ext, total: total };
+    if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending', kind: 'audio', note: memo.note || null,
       client_token: memo.token,
-      meta: { app: 'voice-memo-test', chunked: true, ext: ext, total: total }
+      meta: meta
     });
   }
   // 큰 오디오 blob 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
@@ -252,7 +281,9 @@
   function sendAudioChunked(memo, blob, onProgress) {
     var ext = memo.ext || extFromBlob(blob);
     var total = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
-    return _insertChunkedAudioRow(memo, total, ext).then(function () {
+    return uploadMaterials(memo.id, memo.materials || [])   // 회의자료 먼저(있으면) — 2026-09-21
+      .then(function (matMeta) { memo.materialsMeta = matMeta; return _insertChunkedAudioRow(memo, total, ext); })
+      .then(function () {
       var k = 0;
       function step() {
         if (k >= total) return Promise.resolve();
@@ -270,7 +301,8 @@
       return step();
     }).then(function () { return idbDel(memo.id); })   // 성공 시 대기분 제거
       .catch(function (e) {
-        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob, date: memo.date, time: memo.time })
+        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob,
+                        materials: memo.materials || [], date: memo.date, time: memo.time })
           .then(function () { throw e; });
       });
   }
@@ -593,14 +625,15 @@
       function next() {
         if (i >= list.length) return Promise.resolve();
         var rec = list[i++];
-        var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext, date: rec.date, time: rec.time };
+        var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
+                     materials: rec.materials || [], date: rec.date, time: rec.time };   // 회의자료도 함께 재시도
         var p;
         if (rec.files) {
           p = sendBatch(memo, rec.files);              // 사진/영상 묶음 재업로드
         } else if (rec.blob && rec.blob.size > CHUNK_SIZE) {
           p = sendAudioChunked(memo, rec.blob);        // 큰 음성(2시간 등): 조각으로 재업로드(성공 시 내부에서 idbDel)
         } else {
-          p = uploadAudio(memo.id, memo.ext, rec.blob).then(function (k) { return createMemo(memo, k); }).then(function () { return idbDel(memo.id); });
+          p = send(memo, rec.blob);                    // 일반 음성 + 회의자료 재업로드(성공 시 내부에서 idbDel)
         }
         return p
           .then(function () { onEach && onEach(memo); })

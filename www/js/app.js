@@ -32,7 +32,8 @@
   var statusText = $('statusText'), statusDot = $('statusDot'), banner = $('banner');
   var levelBar = $('levelBar');   // (디자인에선 파형 CSS 애니메이션 — 없을 수 있음)
   var orbLabel = $('orbLabel'), orbHint = $('orbHint');
-  var homeView = $('homeView'), recView = $('recView');
+  var homeView = $('homeView'), recView = $('recView'), recPrep = $('recPrep');
+  var btnStartRec = $('btnStartRec'), matAttach = $('matAttach'), matInput = $('matInput'), matList = $('matList');
   var recordedPanel = $('recordedPanel'), memoTitle = $('memoTitle'), btnSend = $('btnSend'), btnRetake = $('btnRetake');
   var recDoneBadge = $('recDoneBadge');
   var processing = $('processing'), processingText = $('processingText');
@@ -42,6 +43,8 @@
   var modal = $('modal'), modalTitle = $('modalTitle'), modalBody = $('modalBody'), modalClose = $('modalClose');
 
   var pendingBlob = null, pollTimer = null, pollingId = null, viewId = null;
+  var pendingMaterials = [];              // 녹음 준비 화면에서 붙인 회의자료(선택 · 2026-09-21)
+  var MAT_MAX_MB = 40;                    // 자료 1개 상한(단일 업로드 안전선)
   var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
   var isRecording = false, recCancelled = false;
 
@@ -62,7 +65,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('healthView'), $('docsView'), processing, resultWrap];
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('healthView'), $('docsView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -108,8 +111,49 @@
     onAudio: function (blob) { onRecorded(blob); }
   });
 
+  /* ---------- 회의자료 첨부(녹음 준비 화면) ---------- */
+  function renderMatList() {
+    if (!matList) return;
+    if (!pendingMaterials.length) {
+      matList.innerHTML = '<p class="empty" style="margin:4px 0">첨부한 회의자료가 없어요. (선택)</p>';
+      return;
+    }
+    matList.innerHTML = '<div class="vfiles">' + pendingMaterials.map(function (f, i) {
+      var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
+      return '<div class="filemeta"><svg><use href="#i-doc"/></svg>' + esc(f.name || '자료') +
+        (mb ? ' · ' + mb + 'MB' : '') +
+        ' <button type="button" class="matdel" data-i="' + i + '" aria-label="빼기" ' +
+        'style="margin-left:auto;background:none;border:0;color:inherit;font-size:16px;cursor:pointer">✕</button></div>';
+    }).join('') + '</div>';
+    Array.prototype.forEach.call(matList.querySelectorAll('.matdel'), function (b) {
+      b.addEventListener('click', function () {
+        pendingMaterials.splice(+b.getAttribute('data-i'), 1); renderMatList();
+      });
+    });
+  }
+  if (matAttach) matAttach.addEventListener('click', function () { if (matInput) matInput.click(); });
+  if (matInput) matInput.addEventListener('change', function () {
+    var arr = Array.prototype.slice.call(this.files || []);
+    var tooBig = arr.filter(function (f) { return (f.size || 0) > MAT_MAX_MB * 1024 * 1024; });
+    arr = arr.filter(function (f) { return (f.size || 0) <= MAT_MAX_MB * 1024 * 1024; });
+    if (tooBig.length) toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAT_MAX_MB + 'MB 초과) 제외했어요.');
+    pendingMaterials = pendingMaterials.concat(arr);
+    renderMatList();
+    this.value = '';
+  });
+
+  // 홈에서 녹음 오브 → 바로 녹음하지 않고 「준비 화면」으로(자료 첨부 + [녹음 시작])
   if (btnRecord) btnRecord.addEventListener('click', function () {
     if (btnRecord.disabled || isRecording) return;
+    hideBanner();
+    pendingMaterials = []; renderMatList();
+    openScreen(recPrep);
+    setStatus('녹음 준비 — 자료를 붙이고 시작하세요', 'idle');
+  });
+  // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
+  if (btnStartRec) btnStartRec.addEventListener('click', function () {
+    if (isRecording) return;
+    if (!RecordingModule.isSupported()) { showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다.'); return; }
     hideBanner();
     recCancelled = false; isRecording = true;
     openScreen(recView); startRecTimer();
@@ -124,7 +168,7 @@
     if (!isRecording) { showHome(); return; }
     recCancelled = true; isRecording = false; stopRecTimer();
     try { recorder.stop(); } catch (e) {}
-    pendingBlob = null; showHome(); setStatus('대기 중', 'idle');
+    pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
   });
 
   function onRecorded(blob) {
@@ -140,7 +184,7 @@
     setStatus('녹음 완료 — 제목 정하고 보내기', 'idle');
   }
   if (btnRetake) btnRetake.addEventListener('click', function () {
-    pendingBlob = null; showHome(); setStatus('대기 중', 'idle');
+    pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
   });
 
   if (btnSend) btnSend.addEventListener('click', function () {
@@ -149,9 +193,10 @@
     var memo = {
       id: OfficeBridge.uuid(), token: OfficeBridge.token(),
       title: (memoTitle.value || '').trim() || defaultTitle(),
-      ext: OfficeBridge.extFromBlob(pendingBlob), date: t.date, time: t.time
+      ext: OfficeBridge.extFromBlob(pendingBlob), date: t.date, time: t.time,
+      materials: (pendingMaterials && pendingMaterials.length) ? pendingMaterials.slice() : []
     };
-    var blob = pendingBlob; pendingBlob = null;
+    var blob = pendingBlob; pendingBlob = null; pendingMaterials = [];   // 자료는 memo 에 실었으니 초기화
     // 녹음이 길어 단일 업로드 한도(40MB)를 넘으면 → 조각 전송(백그라운드, 긴 영상과 동일 UX)
     if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
       sendChunkedAudioMemo(memo, blob);
@@ -224,9 +269,15 @@
       docBtns.innerHTML = (e.pdf_url || e.docx_url || e.pptx_url) ? renderDocButtons(e) : '';
       if (docBtns.innerHTML) wireDocButtons(docBtns, e);
     } else {
-      if (tl) tl.style.display = 'block'; transcriptView.style.display = 'block';
-      resultArea.innerHTML = rtitle(e, '정리 결과') + renderCards(e.summary_json);
-      transcriptView.textContent = (e.transcript || '(전사 내용이 비어 있어요)');
+      // 음성메모: 전사 원문은 PC(.md)에만 보관 — 앱은 정리본만 표시(2026-09-21)
+      if (tl) tl.style.display = 'none';
+      transcriptView.style.display = 'none'; transcriptView.textContent = '';
+      var sj = e.summary_json || {};
+      var html = rtitle(e, '정리 결과');
+      if (sj.integrated && sj.minutes)   // 회의자료를 함께 낸 경우: 통합 회의록 카드
+        html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
+      html += renderCards(sj);
+      resultArea.innerHTML = html;
       docBtns.innerHTML = renderDocButtons(e);
       wireDocButtons(docBtns, e);
     }
@@ -341,8 +392,12 @@
   /* ---------- 상세 모달 ---------- */
   function openModal(e) {
     modalTitle.textContent = e.title + '  ·  ' + e.date;
-    var html = renderCards(e.summary_json);
-    html += rcard('i-note', '전사 원문', '<p>' + esc(e.transcript || '(없음)') + '</p>');
+    var sj = e.summary_json || {};
+    var html = '';
+    if (sj.integrated && sj.minutes)   // 통합 회의록(회의자료 함께 낸 경우)
+      html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
+    html += renderCards(sj);
+    // 전사 원문은 PC(.md)에만 보관 — 앱 모달에는 표시하지 않음(2026-09-21)
     html += '<div id="mDocBtns">' + renderDocButtons(e) + '</div>';
     html += '<div class="btnrow"><button id="mDelete" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button></div>';
     modalBody.innerHTML = html;
@@ -1427,7 +1482,11 @@
    *   · 서버: kind='locker' 로 저장 → 어떤 워커도 처리 안 함(collect 는 명시 스킵, 나머지는 kind 필터로 자동 제외).
    *   · 동기화: list_locker RPC 를 방 열렸을 때 폴링(같은 연동 암호 재사용). 채팅과 완전히 별도 스트림.
    *   · 파일: 공개 버킷 locker 에 올려 공개 URL 로 상대 기기서 다운로드(변환 없음). */
-  var LOCKER_MSGS_KEY = 'smart_locker_msgs', LOCKER_SINCE_KEY = 'smart_locker_since';
+  // ⚠️ 공유함은 "완전 공유" — 모든 기기가 서버의 전체 목록을 똑같이 본다(채팅의 '지금부터'와 다름).
+  //    since 표식 키를 v2 로 바꿔(기존에 '지금'으로 굳어 있던 낡은 표식을 한 번 무시) 모든 기기가
+  //    처음 열 때 아주 과거부터(=서버 전체) 다시 받도록 한다. 이후엔 표식이 전진해 새 것만 증분 수신.
+  var LOCKER_MSGS_KEY = 'smart_locker_msgs', LOCKER_SINCE_KEY = 'smart_locker_since2';
+  var LOCKER_EPOCH = '1970-01-01T00:00:00.000Z';   // 처음 열 때 여기부터 = 서버 공유함 전체를 본다
   var lockerView = $('lockerView'), lockerLog = $('lockerLog'), lockerInput = $('lockerInput');
   var lockerLoading = false, lockerTimer = null, lockerPendingFiles = [];
   var lockerMsgs = loadLockerMsgs();
@@ -1440,8 +1499,9 @@
     } catch (e) {}
   }
   function lockerSince() {
-    try { var s = localStorage.getItem(LOCKER_SINCE_KEY); if (!s) { s = new Date().toISOString(); localStorage.setItem(LOCKER_SINCE_KEY, s); } return s; }
-    catch (e) { return new Date().toISOString(); }
+    // 처음(표식 없음)이면 아주 과거부터 → list_locker 가 서버 공유함 전체(최근 500)를 돌려준다(완전 공유).
+    try { var s = localStorage.getItem(LOCKER_SINCE_KEY); if (!s) { s = LOCKER_EPOCH; localStorage.setItem(LOCKER_SINCE_KEY, s); } return s; }
+    catch (e) { return LOCKER_EPOCH; }
   }
   function hasLockerRow(cid) {
     for (var i = 0; i < lockerMsgs.length; i++) {
@@ -1819,8 +1879,8 @@
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
-    if (isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
-      showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
+    if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
+      pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
     }
     return false;
   }
