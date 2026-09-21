@@ -200,8 +200,10 @@
         <button id="btnSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내 정리하기</button>
         <button id="btnRetake" class="btn ghost sm"><svg><use href="#i-mic"/></svg>다시 녹음</button>
       </div>
-      <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능(버튼 누르면 바로 열림) -->
-      <input type="file" id="matInput" accept=".ppt,.pptx,.doc,.docx,.pdf,.hwp,.hwpx,.rtf,.odt,.odp,.xls,.xlsx,.csv,.txt" multiple style="display:none">
+      <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능(버튼 누르면 바로 열림).
+           accept는 반드시 */* — 확장자 목록을 쓰면 Capacitor WebView가 안드로이드에 MIME 매핑이 없는
+           hwp/hwpx 등을 파일선택기에서 회색처리(안 보이게) 한다(뷰어 docFileInput과 동일 함정). -->
+      <input type="file" id="matInput" accept="*/*" multiple style="display:none">
     </section>
 
     <!-- ===================== 파일 보내기 ===================== -->
@@ -295,7 +297,7 @@
       <div id="docPick">
         <div class="card doc-open">
           <div class="doc-open-ic"><svg><use href="#i-doc"/></svg></div>
-          <button class="btn primary" id="docPickBtn"><svg><use href="#i-doc"/></svg>문서 고르기</button>
+          <button class="btn primary" id="docPickBtn"><svg><use href="#i-doc"/></svg>폰에서 문서 열기</button>
           <div class="doc-chips">
             <span class="chip">HWP</span><span class="chip">HWPX</span><span class="chip">워드</span>
             <span class="chip">엑셀</span><span class="chip">PPT</span><span class="chip">PDF</span>
@@ -306,8 +308,10 @@
       </div>
     </section>
 
-    <!-- 숨은 문서 입력(뷰어용) · 여러 형식 허용 -->
-    <input type="file" id="docFileInput" accept=".xls,.xlsx,.csv,.hwp,.hwpx,.doc,.docx,.rtf,.ppt,.pptx,.odt,.ods,.odp,.pdf,application/pdf" style="display:none">
+    <!-- 숨은 문서 입력(뷰어용). accept는 반드시 */* — 확장자 목록을 쓰면 Capacitor WebView가
+         안드로이드에 MIME 매핑이 없는 hwp/hwpx 등을 파일선택기에서 회색처리(안 보이게) 한다.
+         모든 파일을 보이게 한 뒤, 고른 파일은 handleLocalFile의 isViewable로 형식 검증한다. -->
+    <input type="file" id="docFileInput" accept="*/*" style="display:none">
 
     <!-- ===================== 문서 뷰어(배포본 이식 · #docRoot) ===================== -->
     <div id="docRoot">
