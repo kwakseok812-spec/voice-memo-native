@@ -35,7 +35,7 @@
   var homeView = $('homeView'), recView = $('recView'), recPrep = $('recPrep');
   var btnStartRec = $('btnStartRec'), matAttach = $('matAttach'), matInput = $('matInput'), matList = $('matList');
   var matAttachPrep = $('matAttachPrep'), matListPrep = $('matListPrep');   // 녹음 전(준비 화면) 첨부 UI(2026-09-21)
-  var recordedPanel = $('recordedPanel'), memoTitle = $('memoTitle'), btnSend = $('btnSend'), btnRetake = $('btnRetake');
+  var recordedPanel = $('recordedPanel'), memoTitle = $('memoTitle'), btnSend = $('btnSend'), btnRetake = $('btnRetake'), btnDraft = $('btnDraft');
   var recDoneBadge = $('recDoneBadge');
   var processing = $('processing'), processingText = $('processingText');
   var resultWrap = $('resultWrap'), resultArea = $('resultArea'), transcriptView = $('transcriptView');
@@ -242,6 +242,101 @@
     });
   });
 
+  /* ---------- v3.8 임시 저장(draft): 지금 안 보내고 폰에 보관 → 나중에 자료 붙여 발송 ----------
+   * 대표님 의도: 회의 중 녹음은 먼저, 회의자료(hwp 등)는 나중에 폰으로 옮겨 붙여 정리.
+   * 안전 핵심: draft 오디오는 IndexedDB 'drafts' 스토어(=flush 대상 아님)에 담겨
+   *   대표님이 [PC 보내기]를 누르기 전까지 절대 자동 발송되지 않는다. 앱을 껐다 켜도 유지. */
+  if (btnDraft) btnDraft.addEventListener('click', function () {
+    if (!pendingBlob) { showBanner('먼저 녹음해 주세요.'); return; }
+    var t = now();
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var title = (memoTitle.value || '').trim() || defaultTitle();
+    var rec = {
+      id: id, title: title, token: tok, ext: OfficeBridge.extFromBlob(pendingBlob), blob: pendingBlob,
+      materials: (pendingMaterials && pendingMaterials.length) ? pendingMaterials.slice() : [],
+      date: t.date, time: t.time
+    };
+    OfficeBridge.saveDraft(rec).then(function (ok) {
+      if (!ok) { showBanner('임시 저장에 실패했어요(저장 공간을 확인해 주세요). 녹음은 아직 화면에 있어요.'); return; }
+      HistoryModule.add({ id: id, token: tok, title: title, date: t.date, time: t.time, status: 'draft', kind: 'audio' });
+      pendingBlob = null; pendingMaterials = [];          // 저장 성공 후에만 비운다(실패 시 녹음 보존)
+      renderHistory(); showHome(); setStatus('임시 저장됨', 'idle');
+      toast('임시 저장했어요. 지난 메모에서 자료를 붙여 보낼 수 있어요.');
+    }).catch(function () { showBanner('임시 저장에 실패했어요. 녹음은 아직 화면에 있어요.'); });
+  });
+  // 지난 메모의 임시저장 항목 → 자료 붙이기 + 보내기 + 삭제
+  function openDraftModal(e) {
+    OfficeBridge.getDraft(e.id).then(function (rec) {
+      var matN = (rec && rec.materials && rec.materials.length) || 0;
+      modalTitle.textContent = (e.title || '메모') + '  ·  ' + (e.date || '');
+      var html = '<div class="card rcard"><div class="h"><svg><use href="#i-mic"/></svg>임시 저장된 녹음</div>' +
+        '<div style="padding:2px 2px 0;line-height:1.6">' +
+        '이 녹음은 폰에 임시 저장돼 있어요(<b>아직 PC로 안 보냈어요</b>).<br>' +
+        '회의자료(선택)를 붙이고 <b>PC로 보내기</b>를 누르면 녹음+자료를 함께 정리해 드려요.<br>' +
+        '<b>붙인 자료:</b> <span id="mDraftMatN">' + matN + '</span>개' +
+        '</div></div>' +
+        '<div class="btnrow">' +
+        '<button id="mDraftAttach" class="btn ghost"><svg><use href="#i-plus"/></svg>회의자료 붙이기</button>' +
+        '<button id="mDraftSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내기</button>' +
+        '</div>' +
+        '<div class="btnrow"><button id="mDraftDel" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button></div>';
+      modalBody.innerHTML = html;
+      $('mDraftAttach').addEventListener('click', function () { draftAttachId = e.id; if ($('draftMatInput')) $('draftMatInput').click(); });
+      $('mDraftSend').addEventListener('click', function () { closeModal(); resumeSendDraft(e.id); });
+      $('mDraftDel').addEventListener('click', function () {
+        OfficeBridge.delDraft(e.id); HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('임시 저장을 삭제했어요.');
+      });
+      modal.style.display = 'flex';
+    });
+  }
+  // 임시저장 재개 시 자료 첨부 전용 입력(모달에서 [회의자료 붙이기])
+  var draftAttachId = null;
+  if ($('draftMatInput')) $('draftMatInput').addEventListener('change', function () {
+    var fs = Array.prototype.slice.call(this.files || []); this.value = '';
+    var id = draftAttachId; if (!id || !fs.length) return;
+    OfficeBridge.getDraft(id).then(function (rec) {
+      if (!rec) { toast('임시 저장을 찾지 못했어요.'); return; }
+      rec.materials = (rec.materials || []).concat(fs);
+      OfficeBridge.saveDraft(rec).then(function (ok) {
+        if (!ok) { toast('자료 붙이기에 실패했어요.'); return; }
+        var span = $('mDraftMatN'); if (span) span.textContent = String(rec.materials.length);
+        toast('자료 ' + fs.length + '개를 붙였어요. [PC로 보내기]를 누르면 함께 정리돼요.');
+      });
+    });
+  });
+  // 임시저장 → 실제 발송(대표님이 [PC 보내기]를 눌렀을 때만 실행). 기존 send/sendAudioChunked 재사용.
+  //  실패 시: draft 는 그대로 두고(유실 방지), send 가 pending 에 남긴 잔재는 dropPending 으로 제거해 자동발송을 막는다.
+  function resumeSendDraft(id) {
+    OfficeBridge.getDraft(id).then(function (rec) {
+      if (!rec || !rec.blob) { showBanner('임시 저장한 녹음을 찾지 못했어요.'); renderHistory(); return; }
+      var memo = { id: rec.id, token: rec.token, title: rec.title, ext: rec.ext, date: rec.date, time: rec.time,
+                   materials: rec.materials || [] };
+      var blob = rec.blob;
+      if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
+        HistoryModule.update(id, { status: 'pending', kind: 'audio' });
+        videoProg[id] = '올릴 준비 중…'; renderHistory();
+        OfficeBridge.sendAudioChunked(memo, blob, function (phase, done, total) { videoProg[id] = '올리는 중 ' + done + '/' + total + ' 조각'; renderHistory(); })
+          .then(function () { OfficeBridge.delDraft(id); HistoryModule.update(id, { status: 'processing' }); videoProg[id] = 'PC에서 정리 준비 중…'; renderHistory(); startVideoPolling(id, memo.token); })
+          .catch(function () { OfficeBridge.dropPending(id); delete videoProg[id]; HistoryModule.update(id, { status: 'draft' }); renderHistory(); showHome(); showBanner('⚠️ 전송 실패 — 임시 저장은 그대로 있어요. 지난 메모에서 다시 보내세요.'); });
+        toast('긴 녹음은 조각으로 나눠 보내요. 지난 메모에서 진행 상태를 볼 수 있어요.'); showHome();
+      } else {
+        HistoryModule.update(id, { status: 'pending', kind: 'audio' }); renderHistory();
+        openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
+        OfficeBridge.send(memo, blob).then(function () {
+          OfficeBridge.delDraft(id);
+          HistoryModule.update(id, { status: 'processing' }); renderHistory();
+          setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
+          startPolling(id, memo.token);
+        }).catch(function () {
+          OfficeBridge.dropPending(id);                 // send 가 pending 에 넣은 잔재 제거 → 자동발송 방지
+          HistoryModule.update(id, { status: 'draft', error: null }); renderHistory(); showHome();
+          showBanner('⚠️ 전송 실패(오프라인일 수 있어요). 임시 저장은 그대로 있어요 — 지난 메모에서 다시 보내세요.');
+          setStatus('전송 실패', 'err');
+        });
+      }
+    });
+  }
+
   /* ---------- 결과 폴링 ---------- */
   function startPolling(id, token) {
     stopPolling(); pollingId = id;
@@ -382,6 +477,7 @@
     historyList.innerHTML = list.map(function (e) {
       var badge, cls;
       if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
+      else if (e.status === 'draft') { badge = '임시저장'; cls = 'b-draft'; }   // v3.8: 아직 안 보낸 녹음
       else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
       else { badge = '정리중'; cls = 'b-proc'; }
       var vp = (videoProg && videoProg[e.id]) || '';
@@ -401,6 +497,8 @@
     if (e.status === 'done') {
       if (e.kind === 'photo' || e.kind === 'video') showResult(id);
       else openModal(e);
+    } else if (e.status === 'draft') {
+      openDraftModal(e);           // v3.8 임시저장 — 자료 붙이기 + [PC 보내기] + 삭제
     } else if (e.status === 'failed') {
       openFailedModal(e);          // 실패 항목도 눌러서 열림 — 사유 안내 + [다시 보내기]/[삭제] (2026-09-21)
     } else {

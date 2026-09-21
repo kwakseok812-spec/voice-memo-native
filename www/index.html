@@ -200,10 +200,15 @@
         <button id="btnSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내 정리하기</button>
         <button id="btnRetake" class="btn ghost sm"><svg><use href="#i-mic"/></svg>다시 녹음</button>
       </div>
+      <!-- v3.8 임시 저장: 지금 보내지 않고 폰에 보관 → 나중에 회의자료를 붙여 보낼 수 있음 -->
+      <button id="btnDraft" class="btn ghost" type="button"><svg><use href="#i-note"/></svg>임시 저장 (나중에 자료 붙여 보내기)</button>
+      <div class="draft-hint">회의자료(hwp 등)를 나중에 폰으로 옮겨 붙일 때 쓰세요. 임시 저장한 녹음은 <b>지난 메모</b>에 남고, <b>대표님이 보내기를 누를 때만</b> PC로 갑니다.</div>
       <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능(버튼 누르면 바로 열림).
            accept는 반드시 */* — 확장자 목록을 쓰면 Capacitor WebView가 안드로이드에 MIME 매핑이 없는
            hwp/hwpx 등을 파일선택기에서 회색처리(안 보이게) 한다(뷰어 docFileInput과 동일 함정). -->
       <input type="file" id="matInput" accept="*/*" multiple style="display:none">
+      <!-- v3.8: 지난 메모의 임시저장 항목을 재개할 때 회의자료를 붙이는 전용 입력(accept */* — 뷰어와 동일 이유) -->
+      <input type="file" id="draftMatInput" accept="*/*" multiple style="display:none">
     </section>
 
     <!-- ===================== 파일 보내기 ===================== -->

@@ -42,16 +42,48 @@
   }
 
   /* ---------- IndexedDB: 업로드 못한 오디오 임시 보관 ---------- */
-  var DB_NAME = 'voice_memo_audio', STORE = 'pending';
+  var DB_NAME = 'voice_memo_audio', STORE = 'pending', DRAFT_STORE = 'drafts';
   function _db() {
     return new Promise(function (resolve, reject) {
       try {
-        var rq = indexedDB.open(DB_NAME, 1);
-        rq.onupgradeneeded = function () { rq.result.createObjectStore(STORE, { keyPath: 'id' }); };
+        // v3.8: 버전 2로 올려 'drafts'(임시 저장) 스토어를 추가한다.
+        //  ⚠️ 'drafts'는 flush()가 훑는 'pending'과 분리돼 있어 절대 자동 발송되지 않는다
+        //     (대표님이 [PC 보내기]를 누를 때만 발송). 기존 pending 데이터는 그대로 보존.
+        var rq = indexedDB.open(DB_NAME, 2);
+        rq.onupgradeneeded = function () {
+          var db = rq.result;
+          if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+          if (!db.objectStoreNames.contains(DRAFT_STORE)) db.createObjectStore(DRAFT_STORE, { keyPath: 'id' });
+        };
         rq.onsuccess = function () { resolve(rq.result); };
         rq.onerror = function () { reject(rq.error); };
       } catch (e) { reject(e); }
     });
+  }
+  // ---- 임시 저장(draft) 전용 스토어 헬퍼 (pending 과 물리적으로 분리 → flush 대상 아님) ----
+  function draftPut(rec) {
+    return _db().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction(DRAFT_STORE, 'readwrite'); tx.objectStore(DRAFT_STORE).put(rec);
+        tx.oncomplete = function () { res(true); }; tx.onerror = function () { rej(tx.error); };
+      });
+    }).catch(function () { return false; });
+  }
+  function draftGet(id) {
+    return _db().then(function (db) {
+      return new Promise(function (res) {
+        var tx = db.transaction(DRAFT_STORE, 'readonly'); var rq = tx.objectStore(DRAFT_STORE).get(id);
+        rq.onsuccess = function () { res(rq.result || null); }; rq.onerror = function () { res(null); };
+      });
+    }).catch(function () { return null; });
+  }
+  function draftDel(id) {
+    return _db().then(function (db) {
+      return new Promise(function (res) {
+        var tx = db.transaction(DRAFT_STORE, 'readwrite'); tx.objectStore(DRAFT_STORE).delete(id);
+        tx.oncomplete = function () { res(true); }; tx.onerror = function () { res(false); };
+      });
+    }).catch(function () { return false; });
   }
   function idbPut(rec) {
     return _db().then(function (db) {
@@ -653,6 +685,8 @@
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory,
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
+    // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
+    saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });

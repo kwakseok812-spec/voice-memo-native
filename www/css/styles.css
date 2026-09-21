@@ -149,6 +149,10 @@ html[data-style="light"] #themeToggle .ic-sun{display:block}
 .badge.b-ok{color:var(--ok);background:var(--ok-bg)}
 .badge.b-proc{color:var(--p1);background:rgba(59,130,246,.16)}
 .badge.b-wait{color:var(--rec);background:rgba(251,113,133,.16)}
+/* v3.8 임시저장 배지 — 정리중(파랑)·완료(초록)·재시도(빨강)와 뚜렷이 구분되게 보라(--p2) */
+.badge.b-draft{color:var(--p2);background:rgba(139,92,246,.16);border-color:rgba(139,92,246,.32)}
+/* v3.8 임시저장 버튼 아래 안내문 */
+.draft-hint{margin:8px 2px 0;color:var(--dim);font-size:12.5px;line-height:1.6;word-break:keep-all;overflow-wrap:break-word}
 .empty-note{color:var(--dim);font-size:15px;font-weight:500;padding:20px 4px;text-align:center}
 
 /* 버튼 */
