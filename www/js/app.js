@@ -861,8 +861,16 @@
   var SYNC_PASS_KEY = 'smart_sync_pass';          // 이 기기에 저장한 연동 암호
   var SYNC_PROMPTED_KEY = 'smart_sync_prompted';  // 첫 안내를 이미 띄웠는지(반복 안내 방지)
   var syncLoading = false, syncTimer = null;
-  var deletedBids = loadDeletedBids();          // 대표님이 지운 방송 id 목록(재출현 방지)
+  var deletedBids = loadDeletedBids();          // 대표님이 지운 방송/대화 행 id 목록(재출현 방지 · 로컬 tombstone)
   var officeLoading = false;
+  // ── v4.0 멀티기기 일관성 ──────────────────────────────────────────────────
+  //  마커를 localStorage 에 굳혀 두면(기기별·세션별로 '지금'에 멈춰) 다른 기기 이력이 안 보이고
+  //  꼬였다. 대신 채팅을 '열 때마다' 서버 전체(EPOCH)에서 재구성하고, 세션 중에는 메모리 상의
+  //  high-water(가장 최근 ts)로만 증분 조회한다 → 모든 기기가 열 때 같은 상태로 수렴, 마커 꼬임 없음.
+  var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
+  var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
+  var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
+  var APP_VERSION = 'v4.0';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -967,9 +975,14 @@
     catch (e) { return []; }
   }
   function saveDeletedBids() {
-    try { localStorage.setItem(DELETED_BIDS_KEY, JSON.stringify(deletedBids.slice(-500))); } catch (e) {}
+    try { localStorage.setItem(DELETED_BIDS_KEY, JSON.stringify(deletedBids.slice(-1000))); } catch (e) {}
   }
   function isDeletedBid(bid) { return !!bid && deletedBids.indexOf(bid) !== -1; }
+  // v4.0: 「전체 삭제」는 이 시각 이전 서버 대화/방송을 이 기기서 다시 안 그리게 하는 경계(로컬 뷰 정리).
+  //   개별 삭제(deletedBids tombstone)와 달리, 갯수 제한 없이 옛 이력 전체를 한 번에 가린다.
+  var CHAT_CLEARED_KEY = 'smart_chat_cleared_before';
+  function getChatClearedBefore() { try { return localStorage.getItem(CHAT_CLEARED_KEY) || ''; } catch (e) { return ''; } }
+  function isBeforeCleared(ts) { var c = getChatClearedBefore(); return !!c && !!ts && ts <= c; }
   /* ---- 채팅 첨부 파일 유틸(업로드·다운로드 공용 렌더) ---- */
   function fmtBytes(b) { b = b || 0; if (b < 1024) return b + 'B'; if (b < 1024 * 1024) return Math.round(b / 1024) + 'KB'; return (Math.round(b / 1024 / 1024 * 10) / 10) + 'MB'; }
   function fileKindOf(mime, name) {
@@ -1173,12 +1186,14 @@
     if ($('chatSearchInfo')) { $('chatSearchInfo').style.display = 'none'; $('chatSearchInfo').textContent = ''; }
     chatUnseen = 0; updateChatBadge();
     renderPending(); updateConvoToggle();        // 기본: 조용한 텍스트(음성 대화 모드 꺼짐)
+    // v4.0: 채팅을 열 때마다 서버 전체에서 재구성한다 → 어느 기기서 열어도 같은 대화가 보인다.
+    //   세션 high-water 를 EPOCH 로 리셋하면 다음 loadChatSync/loadOfficePushes 가 전체를 받아온다.
+    chatSyncHW = CHAT_EPOCH; officeHW = CHAT_EPOCH;
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
-    loadOfficePushes();                          // 케이가 먼저 보낸 방송(새벽에 조용히 쌓인 것 포함)도 당겨온다
-    startChatSync();                              // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 조용히 대기)
-    if (!getSyncPass()) {                         // 아직 연동 안 했으면 첫 진입 때 한 번만 안내
-      try { if (!localStorage.getItem(SYNC_PROMPTED_KEY)) showSyncGate(false); } catch (e) {}
-    }
+    loadOfficePushes();                          // 케이 방송 전체(삭제분 제외) 재구성
+    startChatSync();                              // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 게이트 안내)
+    // C4: 공유함과 동일 — 연동 암호가 없으면 조용히 넘기지 말고 매번 안내(암호 없으면 기기 간 대화가 안 보임).
+    if (!getSyncPass()) showSyncGate(true);
     if (anyAwaiting()) startChatReconcile();
     // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
@@ -1503,7 +1518,7 @@
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
           var vurl = res.summary_json && res.summary_json.voice_url;   // 케이 목소리(mp3)
-          var kmsg = { role: 'k', text: reply, ts: Date.now() };
+          var kmsg = { role: 'k', text: reply, ts: Date.now(), rid: m.id };   // v4.0: 답도 같은 행 id(삭제 시 함께 숨김)
           if (atts.length) kmsg.files = atts;
           if (vurl) kmsg.vurl = vurl;
           chatMsgs.push(kmsg);
@@ -1536,13 +1551,7 @@
    * · 표식(since): 마지막으로 가져온 ts 를 localStorage 에 저장 → 그 이후 방송만 다음에 가져온다.
    *   첫 실행이면 '지금'으로 잡아 과거·시험 행을 쏟아내지 않는다(이후 쌓이는 것만 순차로 보임).
    * · 기존 대화(대표님↔케이)와 공존: 병합 후 ts 순으로 정렬해 시간순을 유지한다. */
-  function officeSince() {
-    try {
-      var s = localStorage.getItem(OFFICE_SINCE_KEY);
-      if (!s) { s = new Date().toISOString(); localStorage.setItem(OFFICE_SINCE_KEY, s); }
-      return s;
-    } catch (e) { return new Date().toISOString(); }
-  }
+  function officeSince() { return officeHW; }   // v4.0: 메모리 high-water(열 때 EPOCH). 마커 localStorage 미사용
   function hasBroadcast(bid) {
     for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].bid && chatMsgs[i].bid === bid) return true;
     return false;
@@ -1562,6 +1571,7 @@
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
         if (isDeletedBid(row.id)) return;                      // 대표님이 지운 방송 — 다시 안 그림
+        if (isBeforeCleared(row.ts)) return;                   // 「전체 삭제」 경계 이전 방송은 안 그림
         if (hasBroadcast(row.id)) return;                      // 이미 그린 방송 — 건너뜀
         var reply = row.content_md || (row.summary_json && row.summary_json.reply) || '';
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });   // 첨부칩(PDF 등)
@@ -1571,6 +1581,7 @@
         if (atts.length) kmsg.files = atts;
         // 단순 알림성 방송이면 표식(앱이 「🔔 알림」 배지 표시) — notify_app --kind notice 가 넣어준다
         if (row.summary_json && row.summary_json.notice) kmsg.notice = true;
+        kmsg.rid = row.id;                                     // v4.0: 행 id(삭제 시 서버 숨김 대상)
         chatMsgs.push(kmsg);
         added++;
       });
@@ -1580,7 +1591,7 @@
         if (isOpen(chatView)) renderChat();
         else { chatUnseen += added; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
       }
-      try { localStorage.setItem(OFFICE_SINCE_KEY, maxTs); } catch (e) {}   // 표식 전진(가져온 것 중 최신 ts)
+      officeHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋되어 전체 재동기화됨
     }).catch(function () { officeLoading = false; });
   }
 
@@ -1594,13 +1605,7 @@
    *   암호는 기기에 1회 저장(localStorage) — 서버 대조값과 맞을 때만 대화가 내려온다. */
   function getSyncPass() { try { return localStorage.getItem(SYNC_PASS_KEY) || ''; } catch (e) { return ''; } }
   function setSyncPass(p) { try { if (p) localStorage.setItem(SYNC_PASS_KEY, p); else localStorage.removeItem(SYNC_PASS_KEY); } catch (e) {} }
-  function syncSince() {
-    try {
-      var s = localStorage.getItem(SYNC_SINCE_KEY);
-      if (!s) { s = new Date().toISOString(); localStorage.setItem(SYNC_SINCE_KEY, s); }
-      return s;
-    } catch (e) { return new Date().toISOString(); }
-  }
+  function syncSince() { return chatSyncHW; }   // v4.0: 메모리 high-water(열 때 EPOCH → 서버 전체 재구성)
   // 이 대화 줄(행 id)을 이미 갖고 있나? (내가 보낸 것 .id / 이미 받은 것 .cid 둘 다 검사)
   function hasChatRow(cid) {
     for (var i = 0; i < chatMsgs.length; i++) {
@@ -1622,15 +1627,16 @@
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
         if (hasChatRow(row.id)) return;             // 내가 보낸 것/이미 받은 것 → 건너뜀(중복 방지)
-        if (isDeletedBid(row.id)) return;           // (혹시) 지운 것
+        if (isDeletedBid(row.id)) return;           // 개별 삭제한 것(tombstone)
+        if (isBeforeCleared(row.ts)) return;        // 「전체 삭제」 경계 이전은 이 기기서 안 그림
         var q = (row.note || '').trim();
         var a = (row.content_md || (row.summary_json && row.summary_json.reply) || '').trim();
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });
         var ts = row.ts ? Date.parse(row.ts) : Date.now(); if (isNaN(ts)) ts = Date.now();
         // 다른 기기에서 온 질문(내 말풍선). token 이 없으니 reconcile 이 다시 폴링하지 않는다(answered=true).
-        chatMsgs.push({ role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true });
+        chatMsgs.push({ role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true, rid: row.id });
         if (a || atts.length) {                     // 케이 답(있으면)
-          var km = { role: 'k', text: a, ts: ts, cid: row.id };
+          var km = { role: 'k', text: a, ts: ts, cid: row.id, rid: row.id };
           if (atts.length) km.files = atts;
           var v = row.summary_json && row.summary_json.voice_url; if (v) km.vurl = v;
           chatMsgs.push(km);
@@ -1643,7 +1649,7 @@
         if (isOpen(chatView)) renderChat();
         else { chatUnseen += added; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
       }
-      try { localStorage.setItem(SYNC_SINCE_KEY, maxTs); } catch (e) {}
+      chatSyncHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋됨
     }).catch(function (e) {
       syncLoading = false;
       if (e && e.badpass) {                          // 암호가 틀림(또는 서버 미설정) → 저장한 암호 지우고 재입력 유도
@@ -1700,6 +1706,14 @@
   var lockerView = $('lockerView'), lockerLog = $('lockerLog'), lockerInput = $('lockerInput');
   var lockerLoading = false, lockerTimer = null, lockerPendingFiles = [];
   var lockerMsgs = loadLockerMsgs();
+  // v4.0: 공유함도 삭제를 서버 반영 + 로컬 tombstone. v3.9(전체 재조회) 뒤로 "지워도 다시 뜸"을 막는다.
+  var LOCKER_DELETED_KEY = 'smart_locker_deleted';       // 개별 삭제한 행 id(재출현 방지)
+  var LOCKER_CLEARED_KEY = 'smart_locker_cleared_before'; // 「전체 삭제」 경계(이 시각 이전은 이 기기서 안 그림)
+  function loadLockerDeleted() { try { var a = JSON.parse(localStorage.getItem(LOCKER_DELETED_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  var lockerDeleted = loadLockerDeleted();
+  function saveLockerDeleted() { try { localStorage.setItem(LOCKER_DELETED_KEY, JSON.stringify(lockerDeleted.slice(-1000))); } catch (e) {} }
+  function isLockerDeleted(id) { return !!id && lockerDeleted.indexOf(id) !== -1; }
+  function isLockerBeforeCleared(ts) { var c = ''; try { c = localStorage.getItem(LOCKER_CLEARED_KEY) || ''; } catch (e) {} return !!c && !!ts && ts <= c; }
 
   function loadLockerMsgs() { try { var a = JSON.parse(localStorage.getItem(LOCKER_MSGS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function saveLockerMsgs() {
@@ -1797,6 +1811,8 @@
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (hasLockerRow(row.id)) return;               // 내가 올린 것/이미 받은 것 → 건너뜀(중복 방지)
+        if (isLockerDeleted(row.id)) return;            // v4.0: 개별 삭제한 것 — 다시 안 그림(재출현 방지)
+        if (isLockerBeforeCleared(row.ts)) return;      // v4.0: 「전체 삭제」 경계 이전은 이 기기서 안 그림
         var meta = row.meta || {};
         var files = (meta.files || []).map(function (f) {
           return { name: f.name || '파일', url: f.url || '', size: f.size || 0, mime: f.mime || '', kind: f.kind || '' };
@@ -1834,14 +1850,24 @@
     openSheet('이 항목', title, '삭제', function () { deleteLocker(uid); }, copyText || null);
   }
   function deleteLocker(uid) {
-    for (var i = 0; i < lockerMsgs.length; i++) { if (lockerMsgs[i].uid === uid) { lockerMsgs.splice(i, 1); break; } }
-    saveLockerMsgs(); renderLocker(); toast('항목을 삭제했어요.');
+    var target = null;
+    for (var i = 0; i < lockerMsgs.length; i++) { if (lockerMsgs[i].uid === uid) { target = lockerMsgs[i]; break; } }
+    if (!target) return;
+    var rid = target.cid || target.id || null;     // 서버 행 id(있으면 서버에서도 숨김)
+    if (rid) {
+      if (lockerDeleted.indexOf(rid) === -1) { lockerDeleted.push(rid); saveLockerDeleted(); }   // 로컬 tombstone(재출현 방지)
+      var pass = getSyncPass();
+      if (pass && window.OfficeBridge && OfficeBridge.hideMemo) OfficeBridge.hideMemo(rid, pass).catch(function () {});   // 다른 기기서도 삭제
+    }
+    lockerMsgs = lockerMsgs.filter(function (x) { return x.uid !== uid; });
+    saveLockerMsgs(); renderLocker(); toast('삭제했어요.');
   }
   function clearAllLocker() {
     if (!lockerMsgs.length) { toast('지울 자료가 없어요.'); return; }
     openSheet('공유함을 모두 지울까요?', '이 기기 화면의 목록만 지워져요(다른 기기·서버에 올린 파일은 그대로 남아요).', '전체 삭제', function () {
+      // v4.0: 경계 마커로 '이 시각 이전' 서버 항목을 이 기기서 다시 안 그리게(v3.9 전체 재조회로 되살아나던 것 방지)
+      try { localStorage.setItem(LOCKER_CLEARED_KEY, new Date().toISOString()); } catch (e) {}
       lockerMsgs = []; saveLockerMsgs();
-      try { localStorage.setItem(LOCKER_SINCE_KEY, new Date().toISOString()); } catch (e) {}   // 옛 항목 다시 안 당겨옴
       renderLocker(); toast('공유함 목록을 지웠어요.');
     });
   }
@@ -2045,35 +2071,45 @@
     if (!m) return;
     openSheet('이 메시지', snippet(m), '삭제', function () { deleteMessage(uid); }, msgCopyText(m));
   }
+  // v4.0: 한 메시지를 지우면 그 "대화 줄(turn) 전체"(질문+답)를 지우고, 서버에도 숨김 반영해 모든 기기서 사라지게.
+  function rowIdOf(m) { return (m && (m.rid || m.id || m.cid || m.bid)) || null; }
   function deleteMessage(uid) {
-    var idx = -1;
-    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { idx = i; break; } }
-    if (idx < 0) return;
-    var m = chatMsgs[idx];
-    if (m.role === 'k' && m.bid) {                 // 케이 방송이면 무덤에 넣어 다시 안 뜨게
-      if (deletedBids.indexOf(m.bid) === -1) { deletedBids.push(m.bid); saveDeletedBids(); }
+    var target = null;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { target = chatMsgs[i]; break; } }
+    if (!target) return;
+    var rid = rowIdOf(target);
+    if (rid) {
+      if (deletedBids.indexOf(rid) === -1) { deletedBids.push(rid); saveDeletedBids(); }   // 로컬 tombstone(즉시·재구성에도 유지)
+      var pass = getSyncPass();
+      if (pass && window.OfficeBridge && OfficeBridge.hideMemo) {
+        OfficeBridge.hideMemo(rid, pass).catch(function () {});   // 다른 기기서도 사라지게(실패해도 이 기기엔 이미 사라짐)
+      }
+      // 같은 줄의 모든 말풍선(질문+답) 제거
+      chatMsgs = chatMsgs.filter(function (x) { return rowIdOf(x) !== rid; });
+    } else {
+      // 서버 행이 없는 로컬 전용 메시지(미발송 등) → 이 항목만 제거
+      chatMsgs = chatMsgs.filter(function (x) { return x.uid !== uid; });
     }
-    chatMsgs.splice(idx, 1);
     saveChatMsgs();
     renderChat();
     updateSendEnabled();                            // 대기 중이던 질문을 지웠다면 입력 잠금 해제
-    toast('메시지를 삭제했어요.');
+    toast('삭제했어요.');
   }
   function openClearAllSheet() {
     if (!chatMsgs.length) { toast('지울 대화가 없어요.'); return; }
-    openSheet('대화를 모두 삭제할까요?', '이 기기의 대화 내용이 모두 지워져요. 되돌릴 수 없어요.', '전체 삭제', clearAllChat);
+    openSheet('대화를 모두 삭제할까요?', '이 기기 화면의 대화가 모두 지워져요(다른 기기·서버 기록은 그대로). 되돌릴 수 없어요.', '전체 삭제', clearAllChat);
   }
   function clearAllChat() {
-    // 화면에 남아 있는 케이 방송은 무덤에 넣어 재출현 방지
-    chatMsgs.forEach(function (m) { if (m.role === 'k' && m.bid && deletedBids.indexOf(m.bid) === -1) deletedBids.push(m.bid); });
-    saveDeletedBids();
+    // v4.0: 「전체 삭제」는 이 기기 뷰 정리 — '이 시각 이전' 서버 대화/방송을 이 기기서 다시 안 그리게 경계를 세운다.
+    //   (개별 삭제만 서버 숨김으로 모든 기기 반영. 전체 삭제는 기기별 뷰 정리라 다른 기기엔 영향 없음.)
+    try { localStorage.setItem(CHAT_CLEARED_KEY, new Date().toISOString()); } catch (e) {}
     chatMsgs = [];
     saveChatMsgs();
-    try { localStorage.setItem(OFFICE_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 표식을 '지금'으로: 옛 방송 다시 안 당겨옴
+    officeHW = CHAT_EPOCH; chatSyncHW = CHAT_EPOCH;   // 다음 동기화는 경계 이후만 그린다
     stopChatReconcile();
     renderChat();
     updateSendEnabled();
-    toast('대화를 모두 삭제했어요.');
+    toast('이 기기의 대화를 모두 지웠어요.');
   }
   if (sheetConfirm) sheetConfirm.addEventListener('click', function () {
     var act = sheetAction; closeSheet(); if (act) act();
@@ -2257,4 +2293,6 @@
     loadChatSync();                                                               // 다른 기기에서 온 대화도 함께 확인
   });
   if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
+  // M1: 버전 표시 — 대표님이 지금 보는 화면이 최신본인지 알 수 있게(특히 PC판 캐시 확인용)
+  try { var _av = $('appVer'); if (_av) _av.textContent = '스마트비서 ' + APP_VERSION; } catch (e) {}
 })();

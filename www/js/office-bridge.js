@@ -607,6 +607,22 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* v4.0: 멀티기기 삭제 — 서버에 "숨김(소프트삭제)" 표시. 조회 RPC들이 숨김 행을 제외한다.
+   *   물리 삭제가 아니라 hidden_memos 에 id 만 넣는 것(원본 유지·복구 가능). 연동 암호로 잠금.
+   *   반환: true(숨김 처리/이미 숨김) — 실패해도 로컬 tombstone 이 있어 이 기기엔 즉시 사라진다. */
+  function hideMemo(id, pass) {
+    if (!id) return Promise.resolve(false);
+    return fetch(CONFIG.url + '/rest/v1/rpc/hide_memo', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: id, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('삭제 반영 실패(HTTP ' + r.status + ')');
+      return true;
+    });
+  }
+
   /* ---------- PC↔폰 공유함(locker): 케이 없이 두 기기끼리 글·파일 보관 ----------
    * 케이(chat_responder)·어떤 워커도 이 종류(kind='locker')를 처리하지 않는다(순수 보관).
    * 파일은 "공개 버킷 locker"에 올려 공개 URL 로 상대 기기에서 다운로드한다(service_role 서명 불필요).
@@ -702,7 +718,7 @@
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
-    listOfficePushes: listOfficePushes, listChatHistory: listChatHistory,
+    listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
     saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
