@@ -638,3 +638,22 @@ body.doc-fs #docFsHint{display:block}
 .attach-view svg{width:17px;height:17px}
 .attach-view:active{transform:scale(.985)}
 .bubble.me .attach-view{background:rgba(255,255,255,.22);box-shadow:none}
+
+/* ===== 녹음 중 미니 배너(백그라운드 녹음 유지 표시 · 2026-09-21) ===== */
+.rec-indicator{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  display:flex;align-items:center;gap:9px;padding:11px 16px;border-radius:999px;
+  background:rgba(225,29,72,.96);color:#fff;border:1px solid rgba(255,255,255,.25);
+  font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:10000;-webkit-tap-highlight-color:transparent}
+.rec-indicator:active{transform:translateX(-50%) scale(.98)}
+.rec-indicator .rec-dot{width:10px;height:10px;border-radius:50%;background:#fff;flex:none;animation:recpulse 1.1s ease-in-out infinite}
+.rec-indicator .rec-ind-time{font-variant-numeric:tabular-nums;opacity:.95}
+.rec-indicator .rec-ind-go{font-size:12.5px;font-weight:700;opacity:.9;border-left:1px solid rgba(255,255,255,.35);padding-left:9px;margin-left:1px}
+@keyframes recpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+
+/* 첨부 [다운로드] 버튼(채팅·공유함 공용 · 2026-09-21) — [뷰어로 보기]와 나란히, 차분한 보조 스타일 */
+.attach-dl{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 11px;border-radius:12px;
+  background:var(--ic-bg);color:var(--text);border:1px solid var(--glass-b);cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:800}
+.attach-dl:active{transform:scale(.985)}
+.bubble.me .attach-dl{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}

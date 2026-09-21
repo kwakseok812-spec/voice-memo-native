@@ -34,6 +34,7 @@
   var orbLabel = $('orbLabel'), orbHint = $('orbHint');
   var homeView = $('homeView'), recView = $('recView'), recPrep = $('recPrep');
   var btnStartRec = $('btnStartRec'), matAttach = $('matAttach'), matInput = $('matInput'), matList = $('matList');
+  var matAttachPrep = $('matAttachPrep'), matListPrep = $('matListPrep');   // 녹음 전(준비 화면) 첨부 UI(2026-09-21)
   var recordedPanel = $('recordedPanel'), memoTitle = $('memoTitle'), btnSend = $('btnSend'), btnRetake = $('btnRetake');
   var recDoneBadge = $('recDoneBadge');
   var processing = $('processing'), processingText = $('processingText');
@@ -43,10 +44,11 @@
   var modal = $('modal'), modalTitle = $('modalTitle'), modalBody = $('modalBody'), modalClose = $('modalClose');
 
   var pendingBlob = null, pollTimer = null, pollingId = null, viewId = null;
-  var pendingMaterials = [];              // 녹음 준비 화면에서 붙인 회의자료(선택 · 2026-09-21)
+  var pendingMaterials = [];              // 회의자료(선택) — 녹음 전(준비)·후(완료) 양쪽에서 붙일 수 있음(2026-09-21)
   var MAT_MAX_MB = 40;                    // 자료 1개 상한(단일 업로드 안전선)
   var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
   var isRecording = false, recCancelled = false;
+  var recIndicator = $('recIndicator'), recIndTime = $('recIndTime');   // 녹음 중 미니 배너(백그라운드 녹음 표시 · 2026-09-21)
 
   /* ---------- 유틸 ---------- */
   function show(el) { if (el) el.style.display = ''; }
@@ -73,6 +75,7 @@
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
+    updateRecIndicator();
   }
   function openScreen(el) {
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
@@ -82,15 +85,28 @@
     if (el !== searchPanelRef()) clearSearch();
     show(el); scrollTop();
     if (homeFooter) homeFooter.style.display = 'none';   // 다른 화면에선 숨김
+    updateRecIndicator();
   }
+  /* 녹음 중 미니 배너: 녹음이 살아있는데 녹음 화면(recView)이 아닌 다른 화면에 있을 때만 보인다.
+   * 녹음은 화면과 무관하게 네이티브 포그라운드 서비스로 계속되므로, 이 배너로 "녹음 중"을 계속 알리고
+   * 탭하면 녹음 화면으로 돌아가 [정지]/[취소] 할 수 있다. */
+  function updateRecIndicator() {
+    if (!recIndicator) return;
+    if (isRecording && !isOpen(recView)) recIndicator.style.display = 'flex';
+    else recIndicator.style.display = 'none';
+  }
+  if (recIndicator) recIndicator.addEventListener('click', function () { openScreen(recView); });
 
   /* ---------- 녹음 ---------- */
   function startRecTimer() {
     recStart = Date.now();
     if (recTimerEl) recTimerEl.textContent = '00:00';
+    if (recIndTime) recIndTime.textContent = '00:00';
     if (recInterval) clearInterval(recInterval);
     recInterval = setInterval(function () {
-      if (recTimerEl) recTimerEl.textContent = fmtSec((Date.now() - recStart) / 1000);
+      var s = (Date.now() - recStart) / 1000;
+      if (recTimerEl) recTimerEl.textContent = fmtSec(s);
+      if (recIndTime) recIndTime.textContent = fmtSec(s);   // 미니 배너 시간도 함께 갱신
     }, 500);
   }
   function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
@@ -111,27 +127,35 @@
     onAudio: function (blob) { onRecorded(blob); }
   });
 
-  /* ---------- 회의자료 첨부(녹음 준비 화면) ---------- */
+  /* ---------- 회의자료 첨부(녹음 전 준비 화면 + 녹음 후 완료 화면 공용) ----------
+   * pendingMaterials(하나) 를 두 화면(matList·matListPrep)에 똑같이 그려서
+   * 녹음 전에 붙인 자료가 녹음 후에도 그대로 이어지고, 어느 쪽에서든 더 붙이거나 뺄 수 있다. */
   function renderMatList() {
-    if (!matList) return;
+    var html;
     if (!pendingMaterials.length) {
-      matList.innerHTML = '<p class="empty" style="margin:4px 0">첨부한 회의자료가 없어요. (선택)</p>';
-      return;
+      html = '<p class="empty" style="margin:4px 0">첨부한 회의자료가 없어요. (선택)</p>';
+    } else {
+      html = '<div class="vfiles">' + pendingMaterials.map(function (f, i) {
+        var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
+        return '<div class="filemeta"><svg><use href="#i-doc"/></svg>' + esc(f.name || '자료') +
+          (mb ? ' · ' + mb + 'MB' : '') +
+          ' <button type="button" class="matdel" data-i="' + i + '" aria-label="빼기" ' +
+          'style="margin-left:auto;background:none;border:0;color:inherit;font-size:16px;cursor:pointer">✕</button></div>';
+      }).join('') + '</div>';
     }
-    matList.innerHTML = '<div class="vfiles">' + pendingMaterials.map(function (f, i) {
-      var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
-      return '<div class="filemeta"><svg><use href="#i-doc"/></svg>' + esc(f.name || '자료') +
-        (mb ? ' · ' + mb + 'MB' : '') +
-        ' <button type="button" class="matdel" data-i="' + i + '" aria-label="빼기" ' +
-        'style="margin-left:auto;background:none;border:0;color:inherit;font-size:16px;cursor:pointer">✕</button></div>';
-    }).join('') + '</div>';
-    Array.prototype.forEach.call(matList.querySelectorAll('.matdel'), function (b) {
-      b.addEventListener('click', function () {
-        pendingMaterials.splice(+b.getAttribute('data-i'), 1); renderMatList();
+    [matList, matListPrep].forEach(function (box) {
+      if (!box) return;
+      box.innerHTML = html;
+      Array.prototype.forEach.call(box.querySelectorAll('.matdel'), function (b) {
+        b.addEventListener('click', function () {
+          pendingMaterials.splice(+b.getAttribute('data-i'), 1); renderMatList();
+        });
       });
     });
   }
-  if (matAttach) matAttach.addEventListener('click', function () { if (matInput) matInput.click(); });
+  function openMatPicker() { if (matInput) matInput.click(); }   // 두 화면의 [회의자료 붙이기] 공용 — 바로 파일 선택 열림
+  if (matAttach) matAttach.addEventListener('click', openMatPicker);
+  if (matAttachPrep) matAttachPrep.addEventListener('click', openMatPicker);
   if (matInput) matInput.addEventListener('change', function () {
     var arr = Array.prototype.slice.call(this.files || []);
     var tooBig = arr.filter(function (f) { return (f.size || 0) > MAT_MAX_MB * 1024 * 1024; });
@@ -146,9 +170,9 @@
   if (btnRecord) btnRecord.addEventListener('click', function () {
     if (btnRecord.disabled || isRecording) return;
     hideBanner();
-    pendingMaterials = []; renderMatList();
+    pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
-    setStatus('녹음 준비 — 자료를 붙이고 시작하세요', 'idle');
+    setStatus('녹음 준비 — 시작을 눌러 주세요', 'idle');
   });
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
@@ -175,6 +199,7 @@
     stopRecTimer(); isRecording = false;
     if (recCancelled) { recCancelled = false; pendingBlob = null; showHome(); return; }
     pendingBlob = blob;
+    renderMatList();     // 준비 화면에서 붙인 회의자료를 그대로 이어받고, 완료 화면에서 더 붙일 수 있게(2026-09-21)
     if (memoTitle) memoTitle.value = defaultTitle();
     var durMs = (recorder && recorder.lastDurationMs) || 0;
     if (recDoneBadge) recDoneBadge.textContent = durMs > 0
@@ -377,16 +402,53 @@
       if (e.kind === 'photo' || e.kind === 'video') showResult(id);
       else openModal(e);
     } else if (e.status === 'failed') {
-      setStatus('재시도 중…', 'rec');
-      OfficeBridge.flush(function (memo) {
-        if (memo.id === id) { HistoryModule.update(id, { status: 'processing', error: null }); renderHistory(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중…'); startPolling(id, e.token); }
-      }).then(function () {
-        var cur = HistoryModule.get(id);
-        if (cur && cur.status === 'failed') showBanner('재시도 실패 — 인터넷 연결을 확인해 주세요.');
-      });
+      openFailedModal(e);          // 실패 항목도 눌러서 열림 — 사유 안내 + [다시 보내기]/[삭제] (2026-09-21)
     } else {
       openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(id, e.token);
     }
+  }
+  /* ---------- 전송 실패한 메모: 사유 안내 + 다시 보내기 + 삭제 (2026-09-21) ----------
+   * 예전엔 실패 항목을 누르면 화면 변화 없이 조용히 재시도만 돌아 "눌러도 반응이 없다"고 느껴졌다.
+   * 이제 항목을 누르면 모달로 사유를 보여주고, [다시 보내기](즉시 피드백)·[삭제](영영 갇히지 않게)를 준다. */
+  function openFailedModal(e) {
+    modalTitle.textContent = (e.title || '메모') + '  ·  ' + (e.date || '');
+    var reason = e.error ? esc(e.error) : '인터넷 연결이 끊겼을 수 있어요';
+    var html = '<div class="card rcard"><div class="h"><svg><use href="#i-flag"/></svg>전송 실패</div>' +
+      '<div style="padding:2px 2px 0;line-height:1.6">' +
+      '이 항목을 PC로 보내지 못했어요.<br><b>사유:</b> ' + reason + '<br><br>' +
+      '📶 인터넷 연결(와이파이·데이터)과 PC가 켜져 있는지 확인하고 <b>다시 보내기</b>를 눌러 주세요.<br>' +
+      '녹음·파일은 이 기기에 안전하게 보관돼 있어요.' +
+      '</div></div>' +
+      '<div class="btnrow">' +
+      '<button id="mRetry" class="btn primary"><svg><use href="#i-refresh"/></svg>다시 보내기</button>' +
+      '<button id="mFailDel" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button>' +
+      '</div>';
+    modalBody.innerHTML = html;
+    $('mRetry').addEventListener('click', function () { closeModal(); retryFailedMemo(e.id); });
+    $('mFailDel').addEventListener('click', function () { HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('삭제했어요.'); });
+    modal.style.display = 'flex';
+  }
+  function retryFailedMemo(id) {
+    var e = HistoryModule.get(id); if (!e) return;
+    toast('다시 보내는 중…');
+    HistoryModule.update(id, { status: 'processing', error: null });   // 즉시 '정리중'으로 보이게(재시도 시작 표시)
+    renderHistory();
+    var handled = false;
+    OfficeBridge.flush(function (memo) {
+      if (memo.id === id) {           // 대기열에서 이 항목 재업로드 성공 → 결과 폴링
+        handled = true;
+        HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
+        startPolling(id, e.token);
+      }
+    }).then(function () {
+      if (!handled) {                 // 못 보냈으면(대기열에 없음/또 실패) 실패로 되돌리고 사유 안내
+        HistoryModule.update(id, { status: 'failed' }); renderHistory();
+        showBanner('⚠️ 다시 보내기에 실패했어요. 인터넷 연결과 PC 상태를 확인하고 잠시 후 다시 시도해 주세요.');
+      }
+    }).catch(function () {
+      if (!handled) { HistoryModule.update(id, { status: 'failed' }); renderHistory(); }
+      showBanner('⚠️ 다시 보내기에 실패했어요. 인터넷 연결을 확인해 주세요.');
+    });
   }
 
   /* ---------- 상세 모달 ---------- */
@@ -835,8 +897,35 @@
           '" data-view-name="' + esc(f.name || '문서') + '" data-view-mime="' + esc(f.mime || '') + '">' +
           '<svg><use href="#i-doc"/></svg>뷰어로 보기</button>';
       }
+      // 받은 파일(url 있음)이면 [다운로드] — 기기 다운로드 폴더로 저장(안드로이드·PC 공용, 2026-09-21)
+      if (!isUp && f.url) {
+        chip += '<button type="button" class="attach-dl" data-dl-url="' + esc(f.url) +
+          '" data-dl-name="' + esc(f.name || '파일') + '">⬇ 다운로드</button>';
+      }
       return '<div class="attachitem">' + chip + '</div>';
     }).join('') + '</div>';
+  }
+  /* 첨부 파일을 기기 다운로드 폴더로 저장(채팅·공유함 공용 · 2026-09-21).
+   * fetch → Blob → <a download> 방식: PC(PWA)는 곧장 다운로드 폴더에 저장되고,
+   * 안드로이드(Capacitor WebView)는 blob 다운로드를 WebView 가 받아 다운로드 폴더에 저장한다.
+   * CORS 등으로 fetch 가 막히면 새 탭으로 열어(브라우저에서 저장) 최소한 파일에 닿게 한다(폴백). */
+  function downloadAttachment(url, name) {
+    if (!url) return;
+    var fname = name || (url.split('/').pop().split('?')[0]) || 'download';
+    toast('다운로드 중…');
+    fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function (blob) {
+        var bu = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = bu; a.download = fname; a.rel = 'noopener';
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
+        toast('다운로드 폴더에 저장했어요.');
+      })
+      .catch(function () {
+        var w = window.open(url, '_blank');   // 폴백: 브라우저로 열어 저장
+        toast(w ? '브라우저에서 저장해 주세요.' : '다운로드에 실패했어요 — 다시 눌러 주세요.');
+      });
   }
   function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
   // 이스케이프된 문자열에서 http/https URL을 파랑+밑줄 링크로. data-link엔 원래 URL(&amp;→&) 보관.
@@ -1661,6 +1750,13 @@
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
     var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openLockerActionSheet(bub.getAttribute('data-uid')); return; }
+    var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
+    if (dv) {                                        // 공유함 문서도 [뷰어로 보기] → 문서 뷰어로 표시(2026-09-21)
+      openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' });
+      return;
+    }
+    var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name')); return; }   // [다운로드]
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     var url = b.getAttribute('data-att-url'); var w = window.open(url, '_blank');
@@ -1745,6 +1841,8 @@
       openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' });
       return;
     }
+    var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name')); return; }   // [다운로드]
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     var url = b.getAttribute('data-att-url');
@@ -1872,13 +1970,35 @@
       setTimeout(function () { toastEl.style.display = 'none'; }, 250);
     }, 1800);
   }
+  /* 녹음 화면에서 뒤로가기 → 갇히지 않게 선택지를 준다(2026-09-21):
+   *   · [녹음 정지하고 나가기] → 정지(→ 완료 화면에서 제목·보내기)
+   *   · [계속 녹음하며 나가기]  → 홈으로. 녹음은 백그라운드로 계속되고 빨간 배너로 표시
+   *   · (취소=시트 닫기) → 녹음 화면 유지 */
+  function openRecLeaveSheet() {
+    openSheet(
+      '녹음 중이에요',
+      '녹음을 멈추지 않고 다른 화면으로 갈 수 있어요. 화면을 옮겨도 녹음은 계속돼요.',
+      '녹음 정지하고 나가기',
+      function () {   // 정지 → onAudio → onRecorded → 완료 화면
+        if (!isRecording) return;
+        isRecording = false; stopRecTimer(); updateRecIndicator();
+        try { recorder.stop(); } catch (e) {}
+      },
+      null,
+      { label: '계속 녹음하며 나가기', action: function () {
+          showHome(); setStatus('녹음 중(백그라운드)', 'rec');
+          toast('녹음은 계속되고 있어요 — 아래 빨간 「녹음 중」을 누르면 녹음 화면으로 가요.');
+        } }
+    );
+  }
   function goBack() {
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
     if (isOpen(modal)) { closeModal(); return true; }
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
-    if (isRecording) { toast('녹음 중이에요. 정지 또는 취소를 눌러 주세요.'); return true; }
+    // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
+    if (isRecording && isOpen(recView)) { openRecLeaveSheet(); return true; }
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
@@ -1896,6 +2016,8 @@
   if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
     Capacitor.Plugins.App.addListener('backButton', function () {
       if (goBack()) return;
+      // 녹음이 백그라운드로 살아있는데 홈에서 뒤로 = 앱 종료 대신 녹음 화면으로(실수로 녹음 유실 방지)
+      if (isRecording) { openScreen(recView); toast('녹음 중이에요 — 정지 후 나가 주세요.'); return; }
       if (backExitArmed) { try { Capacitor.Plugins.App.exitApp(); } catch (e) {} }
       else {
         backExitArmed = true; toast('한 번 더 누르면 나갑니다');

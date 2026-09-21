@@ -131,15 +131,11 @@
     <input type="file" id="videoInput" accept="video/*" multiple style="display:none">
 
     <!-- ===================== 녹음 준비(시작 전) ===================== -->
+    <!-- 회의자료는 「녹음 전(여기)」에도, 「녹음이 끝난 뒤(완료 화면)」에도 붙일 수 있다(2026-09-21). -->
     <section id="recPrep" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 준비</span><span class="spacer"></span></div>
       <div class="recdone-badge">🎙️ 준비되면 아래 <b>녹음 시작</b>을 눌러 주세요</div>
-      <div class="label">회의자료 <span class="hint">(선택 · 붙이면 자료 내용까지 반영해 정리해요)</span></div>
-      <div id="matList"></div>
-      <div class="btnrow">
-        <button id="matAttach" class="btn ghost sm"><svg><use href="#i-plus"/></svg>회의자료 첨부</button>
-      </div>
-      <div class="orbwrap" style="margin-top:16px">
+      <div class="orbwrap" style="margin-top:22px">
         <button class="orbbtn" id="btnStartRec" aria-label="녹음 시작">
           <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
           <span class="core"><svg><use href="#i-mic"/></svg></span>
@@ -147,8 +143,14 @@
         <div class="orblabel">녹음 시작</div>
         <div class="orbhint">누르면 그때부터 녹음돼요</div>
       </div>
-      <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능 -->
-      <input type="file" id="matInput" accept=".ppt,.pptx,.doc,.docx,.pdf,.hwp,.hwpx,.rtf,.odt,.odp,.xls,.xlsx,.csv,.txt" multiple style="display:none">
+      <!-- 회의자료 첨부(선택): 지금 붙여도 되고, 녹음 끝난 뒤에도 붙일 수 있어요 -->
+      <div class="label" style="margin-top:20px">회의자료 첨부 <span class="hint">(선택 · 지금 붙여도, 녹음 끝난 뒤 붙여도 돼요)</span></div>
+      <button id="matAttachPrep" class="card action wide" type="button">
+        <span class="ic blue"><svg><use href="#i-plus"/></svg></span>
+        <span class="tx"><b>회의자료 붙이기</b><small>PPT·문서·PDF·한글 등, 여러 개 가능</small></span>
+        <svg class="chev"><use href="#i-chev-r"/></svg>
+      </button>
+      <div id="matListPrep"></div>
     </section>
 
     <!-- ===================== 녹음 중 ===================== -->
@@ -177,10 +179,20 @@
       <div class="recdone-badge" id="recDoneBadge">✅ 녹음됐어요</div>
       <div class="label">제목 <span class="hint">(PC에 저장될 파일 이름이 돼요)</span></div>
       <div class="input filled"><svg class="lead"><use href="#i-note"/></svg><input id="memoTitle" type="text" maxlength="40" placeholder="메모 제목"></div>
+      <!-- 회의자료 첨부(선택): 회의 끝나고 여기서 자료를 붙이면 녹음+자료 통합 회의록으로 정리 -->
+      <div class="label">회의자료 첨부 <span class="hint">(선택 · PPT·문서·PDF·한글 등, 여러 개 가능)</span></div>
+      <button id="matAttach" class="card action wide" type="button">
+        <span class="ic blue"><svg><use href="#i-plus"/></svg></span>
+        <span class="tx"><b>회의자료 붙이기</b><small>붙이면 자료 내용까지 반영해 정리해요</small></span>
+        <svg class="chev"><use href="#i-chev-r"/></svg>
+      </button>
+      <div id="matList"></div>
       <div class="btnrow">
         <button id="btnSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내 정리하기</button>
         <button id="btnRetake" class="btn ghost sm"><svg><use href="#i-mic"/></svg>다시 녹음</button>
       </div>
+      <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능(버튼 누르면 바로 열림) -->
+      <input type="file" id="matInput" accept=".ppt,.pptx,.doc,.docx,.pdf,.hwp,.hwpx,.rtf,.odt,.odp,.xls,.xlsx,.csv,.txt" multiple style="display:none">
     </section>
 
     <!-- ===================== 파일 보내기 ===================== -->
@@ -379,6 +391,14 @@
     </section>
   </main>
 </div>
+
+<!-- 녹음 중 미니 배너(녹음을 백그라운드로 유지한 채 다른 화면에 있을 때 표시 · 탭하면 녹음 화면으로) -->
+<button id="recIndicator" class="rec-indicator" type="button" style="display:none;" aria-label="녹음 화면으로 돌아가기">
+  <span class="rec-dot"></span>
+  <span class="rec-ind-tx">녹음 중</span>
+  <span id="recIndTime" class="rec-ind-time">00:00</span>
+  <span class="rec-ind-go">녹음 화면 →</span>
+</button>
 
 <!-- 토스트 -->
 <div id="toast" class="toast" style="display:none;"></div>
