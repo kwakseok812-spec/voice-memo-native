@@ -6,6 +6,15 @@
   <meta name="theme-color" content="#070B1D">
   <title>스마트비서</title>
 
+  <!-- 다른 앱에서 "공유/열기 → 스마트비서"로 넘어온 문서를 받는 조기 훅.
+       네이티브(MainActivity)가 app.js 로드 전에 주입해도 유실되지 않게 큐에 담아둔다.
+       app.js가 준비되면 실제 처리기로 교체하고 큐를 비운다. -->
+  <script>
+    window.__smartSharedDocQueue = window.__smartSharedDocQueue || [];
+    window.__smartSharedDoc = function (name, mime, b64) { window.__smartSharedDocQueue.push({ name: name, mime: mime, b64: b64 }); };
+    window.__smartSharedDocError = function (msg, name) { window.__smartSharedDocQueue.push({ error: msg, name: name }); };
+  </script>
+
   <!-- PWA -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">

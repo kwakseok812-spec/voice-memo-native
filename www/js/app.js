@@ -2068,6 +2068,37 @@
     if (window.SmartDocs && SmartDocs.viewChatAttachment) { try { SmartDocs.viewChatAttachment(att); } catch (e) { toast('문서를 여는 데 실패했어요.'); } }
   }
 
+  /* ---- 다른 앱에서 "공유/열기 → 스마트비서"로 넘어온 문서를 뷰어로 표시 ----
+     네이티브(MainActivity)가 content:// 파일을 읽어 base64로 넘겨준다.
+     여기서 File 객체로 복원해 SmartDocs.handleLocalFile에 태우면
+     PDF는 폰에서 바로, 오피스·한글·엑셀은 기존 변환 경로(OfficeBridge kind='doc')로 표시된다. */
+  function b64ToBytes(b64) {
+    var bin = atob(b64 || ''); var len = bin.length; var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function openSharedDoc(d) {
+    if (!d) return;
+    if (d.error) { toast(d.error || '공유된 문서를 여는 데 실패했어요.'); return; }
+    try {
+      var bytes = b64ToBytes(d.b64);
+      var f = new File([bytes], d.name || 'document', { type: d.mime || 'application/octet-stream' });
+      openScreen(docsView);
+      if (window.SmartDocs && SmartDocs.handleLocalFile) { SmartDocs.handleLocalFile(f); }
+      else { toast('문서 뷰어를 준비하지 못했어요.'); }
+    } catch (e) { toast('공유된 문서를 여는 데 실패했어요.'); }
+  }
+  // 조기 스텁(index.html head)을 실제 처리기로 교체하고, 그동안 큐에 쌓인 것을 처리한다.
+  window.__smartSharedDoc = function (name, mime, b64) { openSharedDoc({ name: name, mime: mime, b64: b64 }); };
+  window.__smartSharedDocError = function (msg, name) { openSharedDoc({ error: msg, name: name }); };
+  (function () {
+    try {
+      var q = window.__smartSharedDocQueue || [];
+      window.__smartSharedDocQueue = [];
+      for (var i = 0; i < q.length; i++) openSharedDoc(q[i]);
+    } catch (e) {}
+  })();
+
   /* ---- 푸시 알림(FCM): 등록·수신은 push.js. 여기선 대화 화면과 연결만 한다 ---- */
   window.addEventListener('smartOpenChat', function () { openChat(); });          // 알림 탭 → 대화 열기
   window.addEventListener('smartOpenHealth', function () { openHealth(); });       // 건강 리마인더 탭 → 건강 탭 열기
