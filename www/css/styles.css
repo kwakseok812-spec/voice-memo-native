@@ -332,6 +332,19 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 
 /* ===== v0.9 케이와 대화 ===== */
 #chatView{display:flex;flex-direction:column;min-height:calc(100vh - 150px)}
+/* v3.6: 채팅 헤더(뒤로 버튼)를 항상 화면 맨 위에 고정 — 대화를 아래로 스크롤해도 사라지지 않는다.
+   window(문서)가 스크롤되는 구조라 일반 헤더는 위로 밀려 사라졌음. 채팅 화면에만 적용(#chatView 스코프).
+   좌우 -22px 여백으로 .app 좌우 패딩까지 덮어 뒤 메시지가 가장자리로 비치지 않게 하고,
+   상단은 노치/상태바 안전영역(env(safe-area-inset-top)) 아래에 고정한다. */
+#chatView .subbar{
+  position:sticky;
+  top:env(safe-area-inset-top, 0px);
+  z-index:20;
+  margin:0 -22px 6px;
+  padding:0 22px;
+  background:var(--bg1);
+  border-bottom:1px solid var(--glass-b);
+}
 .chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px}
 .bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 /* 링크·전화·메일은 그대로 눌리게 */
