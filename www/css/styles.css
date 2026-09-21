@@ -330,6 +330,19 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .chip b{color:var(--text)}
 .chip.on{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
 
+/* v3.7: 드래그 앤 드롭 첨부 시각 피드백(PC판 마우스). 파일을 끌어오면 점선 테두리 + "여기에 놓기" 오버레이.
+   .dropping 은 채팅(#chatView)·공유함(#lockerView)에 JS가 붙였다 뗀다. 폰(터치)에선 발생하지 않는다. */
+#chatView.dropping, #lockerView.dropping{position:relative}
+#chatView.dropping::after, #lockerView.dropping::after{
+  content:"여기에 놓으면 첨부돼요";
+  position:absolute; inset:6px; z-index:60;
+  display:flex; align-items:center; justify-content:center;
+  border:2px dashed var(--p1, #3B82F6); border-radius:20px;
+  background:rgba(59,130,246,.14);
+  color:var(--text); font-size:18px; font-weight:800; text-align:center;
+  pointer-events:none; backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+}
+
 /* ===== v0.9 케이와 대화 ===== */
 #chatView{display:flex;flex-direction:column;min-height:calc(100vh - 150px)}
 /* v3.6: 채팅 헤더(뒤로 버튼)를 항상 화면 맨 위에 고정 — 대화를 아래로 스크롤해도 사라지지 않는다.

@@ -1738,6 +1738,35 @@
     if (fs.length) { lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending(); }
     this.value = '';
   });
+
+  /* ---- 드래그 앤 드롭 첨부(PC판=마우스). 파일을 화면에 끌어다 놓으면 기존 첨부 경로로 그대로 태운다.
+         폰(터치)은 파일 드래그 이벤트가 없어 이 리스너가 아예 안 걸리므로 기존 첨부 흐름에 무해하다.
+         'Files' 종류의 드래그일 때만 반응(대화 글자 선택·드래그엔 반응 안 함). ---- */
+  function dragHasFiles(e) {
+    try { var t = e.dataTransfer && e.dataTransfer.types; if (!t) return false; return (t.indexOf ? t.indexOf('Files') !== -1 : Array.prototype.indexOf.call(t, 'Files') !== -1); } catch (x) { return false; }
+  }
+  function enableDropZone(el, onFiles) {
+    if (!el) return;
+    var depth = 0;
+    el.addEventListener('dragenter', function (e) { if (!dragHasFiles(e)) return; e.preventDefault(); depth++; el.classList.add('dropping'); });
+    el.addEventListener('dragover', function (e) { if (!dragHasFiles(e)) return; e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} });
+    el.addEventListener('dragleave', function (e) { if (!dragHasFiles(e)) return; depth--; if (depth <= 0) { depth = 0; el.classList.remove('dropping'); } });
+    el.addEventListener('drop', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault(); depth = 0; el.classList.remove('dropping');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length) onFiles(files);
+    });
+  }
+  // 채팅: 드롭 → 기존 첨부 대기줄(chatPendingFiles)로 (전송 때 글과 함께 발송)
+  enableDropZone($('chatView'), function (files) { onChatFilesPicked(files); });
+  // 공유함: 드롭 → 기존 공유함 대기줄(lockerPendingFiles)로 (전송 때 sendLocker로 업로드)
+  enableDropZone($('lockerView'), function (files) {
+    var fs = Array.prototype.slice.call(files || []);
+    if (!fs.length) return;
+    lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending();
+    toast('파일을 붙였어요. 보내기를 누르세요.');
+  });
   if ($('lockerMenuBtn')) $('lockerMenuBtn').addEventListener('click', function () {
     var linked = !!getSyncPass();
     openSheet('공유함 메뉴',
