@@ -870,7 +870,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v4.0';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다
+  var APP_VERSION = 'v4.1';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.1: 채팅 전송 잠금 해제 + 폰채팅 Haiku 통일)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1503,8 +1503,25 @@
   function reconcileChat() {
     var pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
     if (!pending.length) { stopChatReconcile(); updateSendEnabled(); return; }
-    // 답이 늦어지면(약 35초) 한 번만 재렌더 → "케이가 PC에서 확인 중이에요" 안내가 뜨게 한다
     var nowT = Date.now(), slowChanged = false;
+    // ⏰ 하드 타임아웃 sweep(2026-09-22, poll 결과와 독립) — 예전엔 이 시간초과 판정이 poll 의 .then 안에만
+    //   있어서, 네트워크가 멈춰 poll 이 영영 안 끝나거나 서버 불통으로 계속 실패하면 답도 못 받고
+    //   입력창도 영영 안 풀렸다("한 번 보내면 다음 전송 안 됨"). 이제 벽시계로 직접 풀어준다:
+    //   보낸 지 텍스트 6분·첨부 20분이 지나면 poll 상태와 무관하게 answered 로 확정해 잠금을 해제한다.
+    var gaveUp = false;
+    pending.forEach(function (m) {
+      var limitMs = (m.files ? 20 : 6) * 60 * 1000;
+      if ((nowT - (m.ts || 0)) > limitMs) {
+        m.answered = true; m._polling = false; m._doneShown = true;
+        chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
+        gaveUp = true;
+      }
+    });
+    if (gaveUp) { saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled(); }
+    // 아직 시간이 안 지난 대기 메시지만 다시 추린다(방금 풀린 것 제외).
+    pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
+    if (!pending.length) { stopChatReconcile(); updateSendEnabled(); return; }
+    // 답이 늦어지면(약 35초) 한 번만 재렌더 → "케이가 PC에서 확인 중이에요" 안내가 뜨게 한다
     pending.forEach(function (m) { if (!m._slowShown && (nowT - (m.ts || 0)) > 35000) { m._slowShown = true; slowChanged = true; } });
     if (slowChanged && isOpen(chatView)) renderChat();
     pending.forEach(function (m) {
@@ -1512,8 +1529,9 @@
       OfficeBridge.poll(m.id, m.token).then(function (res) {
         m._polling = false;
         if (chatMsgs.indexOf(m) === -1) return;    // 사이에 이 질문이 삭제됐으면 답을 붙이지 않음
+        if (m.answered || m._doneShown) return;    // 하드 타임아웃 sweep 이 이미 풀었으면 중복 처리 안 함
         if (res && res.status === 'done') {
-          m.answered = true;
+          m.answered = true; m._doneShown = true;
           if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)

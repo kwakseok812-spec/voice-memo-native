@@ -676,13 +676,23 @@
   }
 
   // 결과 조회(RPC). 결과 객체 또는 null. (progress/progress_total/progress_msg 포함)
+  // ⏱️ 하드 타임아웃(2026-09-22): 폰이 네트워크 전환(WiFi↔LTE)·정체로 소켓이 멈추면 fetch 가 영영
+  //   끝나지 않을 수 있다. 그러면 reconcileChat 의 per-메시지 _polling 플래그가 true 로 굳어 더는
+  //   폴링도 안 되고, .then 안에 있던 6분 안전망도 돌지 않아 입력창이 영구 잠긴다("한 번 보내면
+  //   다음 전송 안 됨"). AbortController 로 15초 안에 강제로 reject 시켜 _polling 이 반드시 풀리게 한다.
   function poll(id, tok) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, 15000) : null;
+    function _clr(v) { if (to) clearTimeout(to); return v; }
+    function _clrThrow(e) { if (to) clearTimeout(to); throw e; }
     return fetch(CONFIG.url + '/rest/v1/rpc/get_voice_memo', {
       method: 'POST',
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_id: id, p_token: tok })
+      body: JSON.stringify({ p_id: id, p_token: tok }),
+      signal: ac ? ac.signal : undefined
     }).then(function (r) { if (!r.ok) throw new Error('결과 조회 실패(HTTP ' + r.status + ')'); return r.json(); })
-      .then(function (arr) { return (arr && arr[0]) || null; });
+      .then(function (arr) { return (arr && arr[0]) || null; })
+      .then(_clr, _clrThrow);
   }
 
   // 오프라인으로 밀렸던 오디오 재업로드. onEach(memo) 성공 콜백.
