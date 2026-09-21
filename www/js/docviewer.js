@@ -48,6 +48,8 @@
   // ============ 화면 전환 ============
   function showViewer() { if (rootEl) rootEl.classList.add('on'); }
   function showPick() {
+    opToken++;      // 진행 중이던 변환·다운로드 콜백을 무효화(취소) — 나가면 뒤에서 계속 돌지 않게
+    hideOverlay();  // 변환 스피너 오버레이가 남아 화면을 가리는(갇히는) 것을 막는다
     closeSlideshow();
     if (rootEl) rootEl.classList.remove('on');
   }
@@ -55,8 +57,12 @@
   // ============ 오버레이 ============
   function showLoading(msg, sub) {
     panel.innerHTML = '<div class="spinner"></div><div class="msg">' + esc(msg) + '</div>' +
-      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '<div class="bar-wrap"><div class="bar-fill" id="dvBarFill"></div></div>';
+      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '<div class="bar-wrap"><div class="bar-fill" id="dvBarFill"></div></div>' +
+      '<button class="btn ghost" id="dvLoadCancel" style="margin-top:18px;">취소하고 나가기</button>';
     overlay.classList.add('on');
+    // 변환이 오래 걸려도 기다리다 빠져나올 수 있게 — 취소하면 진행 중이던 변환을 멈추고 문서 고르기 화면으로
+    var cx = $('dvLoadCancel');
+    if (cx) cx.onclick = function () { showPick(); };
   }
   function setProgress(pct) { var b = $('dvBarFill'); if (b) b.style.width = Math.max(2, Math.min(100, pct)) + '%'; }
   function showError(msg, sub, retryFn) {
@@ -68,7 +74,7 @@
     $('dvErrClose').onclick = function () { hideOverlay(); if (!pdfDoc && !isExcelDoc) showPick(); };
     if (retryFn) $('dvErrRetry').onclick = function () { hideOverlay(); try { retryFn(); } catch (e) {} };
   }
-  function hideOverlay() { overlay.classList.remove('on'); }
+  function hideOverlay() { if (overlay) overlay.classList.remove('on'); }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
   // ============ 야간 보기(기기별 기억) ============

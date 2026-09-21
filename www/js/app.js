@@ -585,7 +585,10 @@
 
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
+  var searchPollTimer = null;   // 진행 중인 검색 폴링 — 검색 화면을 나가면 멈춘다
+  function stopSearchPoll() { if (searchPollTimer) { clearInterval(searchPollTimer); searchPollTimer = null; } }
   function clearSearch() {
+    stopSearchPoll();   // 검색 중 나가도 뒤에서 계속 조회하지 않게
     // 검색 전 빈 화면: 무엇을 하는 화면인지 예시로 안내(2026-09-20)
     if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하세요.<br>예: 홍길동, 셀트리온</div>';
     setSearchMsg('', '');
@@ -612,11 +615,12 @@
   if (searchInput) searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
 
   function pollSearch(id, tok, onDone) {
+    stopSearchPoll();   // 이전 검색 폴링이 남아 있으면 정리
     var started = Date.now();
-    var t = setInterval(function () {
+    searchPollTimer = setInterval(function () {
       OfficeBridge.poll(id, tok).then(function (res) {
-        if (res && res.status === 'done') { clearInterval(t); onDone(res); }
-        else if (Date.now() - started > 60000) { clearInterval(t); setSearchMsg('시간이 걸려요. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
+        if (res && res.status === 'done') { stopSearchPoll(); onDone(res); }
+        else if (Date.now() - started > 60000) { stopSearchPoll(); setSearchMsg('시간이 걸려요. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
       }).catch(function () {});
     }, 2000);
   }
@@ -1870,6 +1874,7 @@
   }
   function goBack() {
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
+    if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
     if (isOpen(modal)) { closeModal(); return true; }
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
