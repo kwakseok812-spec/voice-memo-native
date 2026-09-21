@@ -2008,7 +2008,12 @@
   });
   if (chatInput) {
     chatInput.addEventListener('input', autoGrowChat);
-    chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); } });
+    chatInput.addEventListener('keydown', function (e) {
+      // 한글 조합 중(IME) Enter 는 "글자 확정"용이다. 이때 전송하면 마지막 음절이 잘리거나
+      // 조기 전송돼 "글자가 하나씩 잘 안 들어가는" 현상이 난다 → 조합 중이면 무시(2026-09-22).
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMsg(); }
+    });
   }
 
   /* ---- 채팅 파일 첨부(대표님 → 케이, 상향) ---- */

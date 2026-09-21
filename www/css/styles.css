@@ -390,6 +390,12 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 /* 입력 한 줄: [+] 첨부 · 입력창 · 📷 카메라 · 전송 — 좁은 폰(375px)에서도 한 줄 */
 .chatbar{position:sticky;bottom:0;display:flex;align-items:flex-end;gap:7px;padding:8px 0 calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg1) 34%)}
 .chatinput{flex:1;min-width:0;min-height:50px;padding:6px 13px;align-items:center}
+/* ⌨️ 타이핑 렉 방지(2026-09-22): 입력창은 글자를 칠 때마다 다시 그려진다. 이 영역에
+   backdrop-filter(유리 blur, .input 상속)가 있으면 매 글자마다 뒤 배경을 다시 blur 계산해야 해
+   "글씨가 하나씩 늦게 들어가는" 버벅임이 난다(특히 대화가 길고 뒤에 blur 말풍선이 많을수록).
+   → 입력창만 불투명 배경으로 바꿔 blur 재계산 자체를 없앤다. 유리 질감은 나머지 화면에 그대로 둔다. */
+.chatinput{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;background:#101A38}
+html[data-style="light"] .chatinput{background:#fff}
 .chatinput textarea{resize:none;max-height:120px;height:36px;font-size:16px;font-weight:500;line-height:1.4}
 .chatsend{width:48px;height:48px;flex:none;border:0;border-radius:15px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:var(--glow-s)}
 .chatsend:disabled{opacity:.5;cursor:default}
