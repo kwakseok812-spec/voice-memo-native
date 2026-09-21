@@ -870,7 +870,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v4.2';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.2: 안읽음 배지 9+ 오표시 완전 해소 — 시각(ts) 기반 '이미 본' 경계)
+  var APP_VERSION = 'v4.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.3: 답 기다리는 중에도 다음 메시지 바로 전송 가능 — 전송 잠금 해제, 케이는 FIFO 순차 처리)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1113,7 +1113,11 @@
     requestAnimationFrame(function () { requestAnimationFrame(doScroll); });
     setTimeout(doScroll, 80);
   }
-  function updateSendEnabled() { if (chatSend) chatSend.disabled = anyAwaiting(); }
+  // 대표님 지시(2026-09-22, v4.3): 앞 답을 기다리는 중에도 다음 메시지를 '바로' 보낼 수 있어야 한다.
+  //   각 질문은 고유 id/token 을 갖고, reconcileChat 이 질문마다 따로 poll 해 답을 그 질문에만 매칭한다.
+  //   PC(chat_responder.py)도 pending 을 created_at 순(FIFO)으로 하나씩 처리하므로 여러 개가 동시에
+  //   대기해도 순서·매칭이 엉키지 않는다 → 전송 버튼을 '대기 중'이라고 잠그지 않는다(항상 활성).
+  function updateSendEnabled() { if (chatSend) chatSend.disabled = false; }
   function updateChatBadge() {
     var b = $('chatBadge'); if (!b) return;
     if (chatUnseen > 0) { b.textContent = chatUnseen > 9 ? '9+' : String(chatUnseen); b.style.display = 'inline-flex'; }
@@ -1239,7 +1243,9 @@
     var imgs = chatPendingImages.slice();
     var files = chatPendingFiles.slice();
     if (!text && !imgs.length && !files.length) return;
-    if (anyAwaiting()) { toast('앞 답을 받은 뒤에 보낼 수 있어요.'); return; }   // 순서 유지(입력·첨부는 계속 가능)
+    // (2026-09-22, v4.3) 앞 답을 기다리는 중에도 다음 메시지를 바로 보낼 수 있게 잠금 해제.
+    //   케이는 받은 순서(FIFO)대로 처리하고, 각 질문은 고유 id/token 으로 답이 따로 매칭된다.
+    //   대기 상태는 '입력 막기'가 아니라 화면의 점 세 개(typing) 표시로만 알린다.
     unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
     var textUsed = false;
