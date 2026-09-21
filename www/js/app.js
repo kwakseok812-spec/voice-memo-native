@@ -856,6 +856,10 @@
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
   var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 대표님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
   var chatThread = getChatThread(), chatMsgs = loadChatMsgs(), chatUnseen = 0, chatTimer = null;
+  // v4.5(2026-09-22): 한글(IME) 조합 중에 백그라운드 폴링(loadChatSync/reconcile)이 대화목록을
+  //   다시 그리면(chatLog.innerHTML 재설정) 조합이 끊겨 "글자가 하나씩 씹힌다". 조합 중엔 재렌더를
+  //   미뤘다가 조합이 끝나면(또는 포커스가 빠지면) 한 번에 그린다.
+  var chatComposing = false, chatRenderDeferred = false;
   // ── PC↔폰 채팅 동기화(1단계) ───────────────────────────────────────────────
   var SYNC_SINCE_KEY = 'smart_chat_sync_since';   // 대화 동기화를 어디까지 가져왔는지 표식
   var SYNC_PASS_KEY = 'smart_sync_pass';          // 이 기기에 저장한 연동 암호
@@ -870,7 +874,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v4.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.3: 답 기다리는 중에도 다음 메시지 바로 전송 가능 — 전송 잠금 해제, 케이는 FIFO 순차 처리)
+  var APP_VERSION = 'v4.5';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.5: 채팅 타이핑 렉 근본 수정 — 채팅화면 blur 전면 제거로 글자마다 재합성 없앰 + IME 조합 중 목록 재렌더 차단으로 글자 씹힘 방지)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1145,6 +1149,9 @@
     return linkify(out).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
   }
   function renderChat() {
+    // IME(한글) 조합 중이면 목록 DOM을 건드리지 않는다 → 조합이 끊겨 글자가 씹히는 것을 막는다.
+    // 미룬 렌더는 compositionend/blur 에서 flushChatRender()로 한 번에 반영(v4.5).
+    if (chatComposing) { chatRenderDeferred = true; return; }
     var q = chatSearchOn ? chatSearchQuery.trim().toLowerCase() : '';
     if (!chatMsgs.length && !q) {
       chatLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
@@ -2006,8 +2013,17 @@
   if (chatConvoToggle) chatConvoToggle.addEventListener('click', function () {
     if (convoOn) stopConvo(false); else startConvo();
   });
+  // 조합 중 미뤄둔 재렌더를 한 번에 반영(v4.5)
+  function flushChatRender() {
+    if (chatRenderDeferred) { chatRenderDeferred = false; if (isOpen(chatView)) renderChat(); }
+  }
   if (chatInput) {
     chatInput.addEventListener('input', autoGrowChat);
+    // 한글 조합 시작/끝을 추적 → 조합 중에는 renderChat 이 목록을 다시 그리지 않게 한다(글자 씹힘 방지)
+    chatInput.addEventListener('compositionstart', function () { chatComposing = true; });
+    chatInput.addEventListener('compositionend', function () { chatComposing = false; flushChatRender(); });
+    // 조합 도중 포커스가 빠지면 compositionend 가 안 오는 브라우저가 있어 안전하게 해제
+    chatInput.addEventListener('blur', function () { chatComposing = false; flushChatRender(); });
     chatInput.addEventListener('keydown', function (e) {
       // 한글 조합 중(IME) Enter 는 "글자 확정"용이다. 이때 전송하면 마지막 음절이 잘리거나
       // 조기 전송돼 "글자가 하나씩 잘 안 들어가는" 현상이 난다 → 조합 중이면 무시(2026-09-22).

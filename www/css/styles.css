@@ -362,7 +362,7 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
   background:var(--bg1);
   border-bottom:1px solid var(--glass-b);
 }
-.chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px}
+.chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px;contain:layout}
 .bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text;content-visibility:auto;contain-intrinsic-size:auto 52px}
 /* 링크·전화·메일은 그대로 눌리게 */
 .bubble a{-webkit-user-select:auto;user-select:auto}
@@ -396,6 +396,16 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
    → 입력창만 불투명 배경으로 바꿔 blur 재계산 자체를 없앤다. 유리 질감은 나머지 화면에 그대로 둔다. */
 .chatinput{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;background:#101A38}
 html[data-style="light"] .chatinput{background:#fff}
+/* ⌨️ 타이핑 렉 근본 수정(v4.5, 2026-09-22): v4.4는 입력창 자신의 blur만 없앴는데도 렉이 남았다.
+   진짜 원인 — 입력창 높이가 글자마다 바뀌면 flex 형제인 대화목록이 재계산되고, 그때 화면에 떠 있는
+   backdrop-filter 레이어(케이 말풍선 전부 + 옆 첨부·카메라 버튼)가 모두 다시 합성돼야 해서
+   대화가 길수록(=blur 말풍선이 많을수록) 타이핑이 느려지고 프레임이 밀려 글자가 씹혔다.
+   → 채팅화면에 남은 blur도 전부 불투명 배경으로 대체해 재합성 자체를 없앤다.
+   (색은 저사양용 html.no-blur 모드의 검증된 값과 동일 — 유리 질감은 홈 등 다른 화면엔 그대로 둔다) */
+/* 아래 .chatattach/.chatcam 원본 규칙이 이 블록보다 뒤에 있으므로 배경도 !important 로 덮는다 */
+.bubble.k{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;background:rgba(22,31,48,.86) !important}
+.chatattach,.chatcam{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;background:rgba(22,31,48,.86) !important}
+html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[data-style="light"] .chatcam{background:rgba(255,255,255,.92) !important}
 .chatinput textarea{resize:none;max-height:120px;height:36px;font-size:16px;font-weight:500;line-height:1.4}
 .chatsend{width:48px;height:48px;flex:none;border:0;border-radius:15px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:var(--glow-s)}
 .chatsend:disabled{opacity:.5;cursor:default}
