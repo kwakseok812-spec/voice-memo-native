@@ -870,7 +870,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v4.1';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.1: 채팅 전송 잠금 해제 + 폰채팅 Haiku 통일)
+  var APP_VERSION = 'v4.2';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.2: 안읽음 배지 9+ 오표시 완전 해소 — 시각(ts) 기반 '이미 본' 경계)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -987,6 +987,23 @@
   var CHAT_CLEARED_KEY = 'smart_chat_cleared_before';
   function getChatClearedBefore() { try { return localStorage.getItem(CHAT_CLEARED_KEY) || ''; } catch (e) { return ''; } }
   function isBeforeCleared(ts) { var c = getChatClearedBefore(); return !!c && !!ts && ts <= c; }
+  // v4.2: 안읽음 배지 전용 '이미 본' 경계(시각). localStorage 에 epoch millis 로 굳혀 앱을 껐다 켜도 유지.
+  //   ▷ 왜 필요한가(v4.1 cid/rid 영속화로도 +9 가 안 없어진 진짜 이유):
+  //     · 배지 홍수의 주 출처는 「케이 방송」(건강문진·매시간알림·브리핑) = loadOfficePushes 경로다.
+  //       이 경로 dedupe 는 hasBroadcast(bid) 인데, 앱 시작 시 chatMsgs 는 saveChatMsgs 가 남긴 최근
+  //       120개뿐이라, 120개 밖으로 밀려난 옛 방송은 dedupe 를 못 타 매 재시작마다 새로 세어졌다.
+  //     · v4.1 이 손댄 cid/rid 는 다른 경로(loadChatSync)용이고, 그마저도 같은 120개 윈도 한계가 있다.
+  //   ▷ 해법: id(bid/cid) 대신 '시각'으로 판정한다. 이 경계 이하 ts 는 '이미 본 것'으로 보고 배지에서
+  //     제외한다(대화 내용 표시는 그대로). 경계는 앞으로만 전진(단조 증가). 업데이트 첫 실행 때 '지금'을
+  //     한 번 심어 두면, 그전에 쌓인 모든 방송·대화는 '본 것'이 되어 배지가 깨끗해진다(1회성 정리).
+  var CHAT_SEEN_HW_KEY = 'smart_chat_seen_hw';
+  function getSeenHW() { try { var v = localStorage.getItem(CHAT_SEEN_HW_KEY); var n = v ? parseInt(v, 10) : 0; return (n && !isNaN(n)) ? n : 0; } catch (e) { return 0; } }
+  function setSeenHW(v) {
+    var n = (typeof v === 'number') ? v : Date.parse(v);
+    if (!n || isNaN(n)) return;
+    try { var cur = getSeenHW(); if (n > cur) localStorage.setItem(CHAT_SEEN_HW_KEY, String(n)); } catch (e) {}
+  }
+  function isSeenTs(ts) { var h = getSeenHW(); if (!h) return false; var n = Date.parse(ts); return !!n && !isNaN(n) && n <= h; }
   /* ---- 채팅 첨부 파일 유틸(업로드·다운로드 공용 렌더) ---- */
   function fmtBytes(b) { b = b || 0; if (b < 1024) return b + 'B'; if (b < 1024 * 1024) return Math.round(b / 1024) + 'KB'; return (Math.round(b / 1024 / 1024 * 10) / 10) + 'MB'; }
   function fileKindOf(mime, name) {
@@ -1189,6 +1206,7 @@
     if ($('chatSearchInput')) $('chatSearchInput').value = '';
     if ($('chatSearchInfo')) { $('chatSearchInfo').style.display = 'none'; $('chatSearchInfo').textContent = ''; }
     chatUnseen = 0; updateChatBadge();
+    setSeenHW(Date.now());                        // v4.2: '지금까지는 다 봤다'를 굳혀 둠 → 껐다 켜도 배지가 되살아나지 않음
     renderPending(); updateConvoToggle();        // 기본: 조용한 텍스트(음성 대화 모드 꺼짐)
     // v4.0: 채팅을 열 때마다 서버 전체에서 재구성한다 → 어느 기기서 열어도 같은 대화가 보인다.
     //   세션 high-water 를 EPOCH 로 리셋하면 다음 loadChatSync/loadOfficePushes 가 전체를 받아온다.
@@ -1588,7 +1606,7 @@
     OfficeBridge.listOfficePushes(since).then(function (rows) {
       officeLoading = false;
       if (!rows || !rows.length) return;
-      var added = 0, maxTs = since;
+      var added = 0, unseenAdded = 0, maxTs = since;   // added=화면에 새로 그린 수 / unseenAdded=배지로 셀 수(자동알림·이미 본 것 제외)
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
@@ -1599,19 +1617,23 @@
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });   // 첨부칩(PDF 등)
         if (!reply && !atts.length) return;                    // 본문·첨부 모두 없으면 표시할 것 없음
         var ts = row.ts ? Date.parse(row.ts) : Date.now();
+        var isNotice = !!(row.summary_json && row.summary_json.notice);   // 🔔 자동 알림(건강·매시간·봇 경보 등)
         var kmsg = { role: 'k', text: reply, ts: (isNaN(ts) ? Date.now() : ts), bid: row.id };
         if (atts.length) kmsg.files = atts;
         // 단순 알림성 방송이면 표식(앱이 「🔔 알림」 배지 표시) — notify_app --kind notice 가 넣어준다
-        if (row.summary_json && row.summary_json.notice) kmsg.notice = true;
+        if (isNotice) kmsg.notice = true;
         kmsg.rid = row.id;                                     // v4.0: 행 id(삭제 시 서버 숨김 대상)
         chatMsgs.push(kmsg);
         added++;
+        // v4.2 배지 카운트: (1) 자동 알림(notice)은 제외(대표님이 답장으로 오인 안 하게, 🔔 배지로 이미 구분됨),
+        //   (2) '이미 본' 경계(ts) 이하도 제외 → 재시작 때 120개 밖으로 밀려난 옛 방송이 다시 세어지던 +9 를 막는다.
+        if (!isNotice && !isSeenTs(row.ts)) unseenAdded++;
       });
       if (added) {
         sortChatByTime();
         saveChatMsgs();
-        if (isOpen(chatView)) renderChat();
-        else { chatUnseen += added; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
+        if (isOpen(chatView)) { renderChat(); setSeenHW(maxTs); }   // 보고 있으면 방금 것까지 '본 것'으로 굳힘(재시작 후 재계산 방지)
+        else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
       }
       officeHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋되어 전체 재동기화됨
     }).catch(function () { officeLoading = false; });
@@ -1644,7 +1666,7 @@
     OfficeBridge.listChatHistory(since, pass).then(function (rows) {
       syncLoading = false;
       if (!rows || !rows.length) return;
-      var added = 0, maxTs = since;
+      var added = 0, unseenAdded = 0, maxTs = since;
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
@@ -1664,12 +1686,14 @@
           chatMsgs.push(km);
         }
         added++;
+        // v4.2 배지: '이미 본' 경계(ts) 이하(재시작 시 120개 밖으로 밀려나 다시 내려온 옛 대화)는 세지 않는다.
+        if (!isSeenTs(row.ts)) unseenAdded++;
       });
       if (added) {
         sortChatByTime();
         saveChatMsgs();
-        if (isOpen(chatView)) renderChat();
-        else { chatUnseen += added; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
+        if (isOpen(chatView)) { renderChat(); setSeenHW(maxTs); }
+        else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
       }
       chatSyncHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋됨
     }).catch(function (e) {
@@ -2249,6 +2273,10 @@
   });
   // 앱을 껐다 켜도, 나가 있는 동안 도착한 케이 답을 이어받는다(배지·복원)
   if (anyAwaiting()) startChatReconcile();
+  // v4.2: '이미 본' 경계가 아직 없으면(=이 버전 설치 후 첫 실행) 지금 시각으로 한 번 심어 둔다(1회성 정리).
+  //   이렇게 하면 그전에 쌓인 과거 방송·대화는 '본 것'으로 간주돼, 아래 loadOfficePushes/loadChatSync 가
+  //   그것들을 다시 안읽음으로 세지 않는다(대표님 증상: 새 메시지 없는데 +9 → 해소). 이후 새로 오는 것만 배지.
+  if (!getSeenHW()) setSeenHW(Date.now());
   loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
   loadChatSync();       // 시작 시, 다른 기기에서 온 대화도 한 번 확인(암호 설정돼 있을 때만)
 
