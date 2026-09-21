@@ -120,7 +120,13 @@
     onStatus: function (s) {
       if (s === 'recording') setStatus('녹음 중', 'rec');
       else if (s === 'stopped') setStatus('녹음 완료', 'idle');
-      else if (s === 'error') setStatus('오류', 'err');
+      else if (s === 'error') {
+        setStatus('오류', 'err');
+        // 녹음 시작 실패(네이티브 reject 등) 정리: 타이머 계속 돌아 혼란주지 않게 상태를 되돌리고
+        //   녹음/준비 화면이면 홈으로 복귀(실패 안내 배너는 onError 가 이미 표시). — 2026-09-21
+        if (isRecording) { isRecording = false; stopRecTimer(); updateRecIndicator(); }
+        if (isOpen(recView) || isOpen(recPrep)) showHome();
+      }
     },
     onLevel: function (v) { if (levelBar) levelBar.style.width = Math.round(v * 100) + '%'; },
     onError: function (m) { showBanner('⚠️ ' + m); },
@@ -1176,7 +1182,20 @@
     if (anyAwaiting()) startChatReconcile();
     // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
-  function autoGrowChat() { if (!chatInput) return; chatInput.style.height = 'auto'; chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px'; }
+  // 입력창 높이 자동 조절. 키 입력마다 style.height='auto' 후 scrollHeight 를 읽으면
+  // 그때마다 문서 전체 레이아웃이 강제로 다시 계산돼(대화가 길수록 무거워짐) 타이핑이 버벅인다.
+  // → requestAnimationFrame 으로 한 프레임에 한 번만 재계산하게 합쳐 강제 리플로우를 줄인다(2026-09-21).
+  var _agChatRaf = 0;
+  function autoGrowChat() {
+    if (!chatInput) return;
+    if (_agChatRaf) return;                 // 이미 이번 프레임에 예약됨 → 중복 리플로우 방지
+    _agChatRaf = requestAnimationFrame(function () {
+      _agChatRaf = 0;
+      if (!chatInput) return;
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px';
+    });
+  }
   function sendChatMsg() {
     if (!chatInput) return;
     var text = (chatInput.value || '').trim();
@@ -1738,7 +1757,9 @@
     openScreen(lockerView);
     renderLocker(); renderLockerPending();
     loadLockerSync(); startLockerSync();
-    if (!getSyncPass()) { try { if (!localStorage.getItem(SYNC_PROMPTED_KEY)) showSyncGate(false); } catch (e) {} }
+    // 공유함은 연동 암호가 있어야 다른 기기(PC↔폰)의 파일을 받아온다. 암호가 없으면
+    // 조용히 '안 보이는' 상태가 되므로, 없을 땐 매번 암호 입력을 안내한다(v3.9).
+    if (!getSyncPass()) showSyncGate(true);
   }
   function sendLockerMsg() {
     if (!lockerInput) return;
@@ -1765,15 +1786,17 @@
     if (lockerLoading || !(window.OfficeBridge && OfficeBridge.listLocker)) return;
     var pass = getSyncPass(); if (!pass) return;
     lockerLoading = true;
-    var since = lockerSince();
-    OfficeBridge.listLocker(since, pass).then(function (rows) {
+    // v3.9: 매번 서버 공유함 '전체'(EPOCH부터, 최근 500)를 받아 id 로 중복 제거한다.
+    //   증분 마커(since)를 쓰면 옛 PC판 캐시·기기 시계차로 마커가 과하게 전진했을 때
+    //   그 뒤로 올라온 파일이 'ts > since'에서 걸러져 "올렸는데 안 보인다"가 났다.
+    //   개인 보관함이라 전체 재조회가 가벼워, 마커 꼬임에 영향받지 않게 항상 전체를 본다.
+    OfficeBridge.listLocker(LOCKER_EPOCH, pass).then(function (rows) {
       lockerLoading = false;
       if (!rows || !rows.length) return;
-      var added = 0, maxTs = since;
+      var added = 0;
       rows.forEach(function (row) {
         if (!row || !row.id) return;
-        if (row.ts && row.ts > maxTs) maxTs = row.ts;
-        if (hasLockerRow(row.id)) return;               // 내가 올린 것/이미 받은 것 → 건너뜀
+        if (hasLockerRow(row.id)) return;               // 내가 올린 것/이미 받은 것 → 건너뜀(중복 방지)
         var meta = row.meta || {};
         var files = (meta.files || []).map(function (f) {
           return { name: f.name || '파일', url: f.url || '', size: f.size || 0, mime: f.mime || '', kind: f.kind || '' };
@@ -1788,7 +1811,6 @@
         if (isOpen(lockerView)) renderLocker();
         else toast('공유함에 새 자료가 도착했어요.');
       }
-      try { localStorage.setItem(LOCKER_SINCE_KEY, maxTs); } catch (e) {}
     }).catch(function (e) {
       lockerLoading = false;
       if (e && e.badpass) { setSyncPass(''); if (isOpen(lockerView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }

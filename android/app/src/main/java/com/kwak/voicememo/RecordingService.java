@@ -34,7 +34,9 @@ public class RecordingService extends Service {
     private MediaRecorder recorder;
     private String outputPath;
     private long startedAtMs;
-    private boolean recording = false;
+    // volatile: 녹음 시작 확인(플러그인 doStart)이 별도 스레드에서 isRecording() 을 읽으므로
+    //   메인 스레드의 갱신이 즉시 보이도록 한다(시작 성공/실패를 놓치지 않게).
+    private volatile boolean recording = false;
 
     @Override
     public void onCreate() {

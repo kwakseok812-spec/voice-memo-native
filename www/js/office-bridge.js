@@ -123,7 +123,13 @@
         //    upsert 를 켜면 UPDATE 정책까지 필요해 RLS 로 막힌다.
       },
       body: blob
-    }).then(function (r) { if (!r.ok) throw new Error('오디오 업로드 실패(HTTP ' + r.status + ')'); return path; });
+    }).then(function (r) {
+      // 409 = 같은 경로({id}.{ext} = 같은 메모의 같은 오디오)가 이미 서버에 있음 = 이전 시도에 이미 업로드됨.
+      //   재전송(flush·[다시 보내기])이 여기서 죽지 않고 통과해야 한다("유실"이 아니라 "이미 완료된 업로드").
+      //   ⚠️ 오디오가 아예 안 올라갔다면 서버는 200(created)을 주지 409를 주지 않으므로, 409 통과가 실제 유실을 감추지 않는다.
+      if (r.ok || r.status === 409) return path;
+      throw new Error('오디오 업로드 실패(HTTP ' + r.status + ')');
+    });
   }
   function _insertRow(body) {
     return fetch(CONFIG.url + '/rest/v1/' + CONFIG.table, {
@@ -133,7 +139,13 @@
         'Content-Type': 'application/json', 'Prefer': 'return=minimal'
       },
       body: JSON.stringify(body)
-    }).then(function (r) { if (!r.ok) throw new Error('메모 등록 실패(HTTP ' + r.status + ')'); return true; });
+    }).then(function (r) {
+      // 409 = 같은 기본키(id) 행이 이미 있음(이전 시도에 등록됨). 재시도가 여기서 죽으면 조각(part) 공급
+      //   단계로 못 넘어가 긴 녹음 복구가 막힌다 → 중복 키는 "이미 등록됨=성공"으로 취급(멱등).
+      //   ⚠️ id 는 client 생성 UUID라 409는 오직 "같은 메모 재시도"에서만 발생 → 유실을 감추지 않는다.
+      if (r.ok || r.status === 409) return true;
+      throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
+    });
   }
   function createMemo(memo, audioPath) {
     var meta = { app: 'voice-memo-test', ext: memo.ext };
@@ -201,7 +213,14 @@
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
                  'Content-Type': (blob && blob.type) || 'application/octet-stream' },
       body: blob
-    }).then(function (r) { if (!r.ok) throw new Error('파일 업로드 실패(HTTP ' + r.status + ')'); return key; });
+    }).then(function (r) {
+      // 409 = 이 키(자료 mat_i / 조각 part_k 등)가 이미 서버에 있음(이전 시도에 업로드 성공) →
+      //   재전송이 자료·조각 409로 죽지 않게 "이미 올라감=성공"으로 취급.
+      //   (교무위 사고 근본원인: mat_0 재업로드 409로 재전송이 오디오에 닿기 전 죽음.)
+      //   ⚠️ 안 올라간 객체는 서버가 200을 주므로 409 통과가 실제 유실을 감추지 않는다.
+      if (r.ok || r.status === 409) return key;
+      throw new Error('파일 업로드 실패(HTTP ' + r.status + ')');
+    });
   }
   function _insertBatchRow(memo, filesMeta) {
     return _insertRow({

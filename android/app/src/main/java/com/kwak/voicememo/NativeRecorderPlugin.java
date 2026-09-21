@@ -47,15 +47,41 @@ public class NativeRecorderPlugin extends Plugin {
         }
     }
 
-    private void doStart(PluginCall call) {
+    private void doStart(final PluginCall call) {
         try {
             Intent i = new Intent(getContext(), RecordingService.class);
             i.setAction(RecordingService.ACTION_START);
             ContextCompat.startForegroundService(getContext(), i);
-            call.resolve();
         } catch (Exception e) {
             call.reject("녹음 시작 실패: " + e.getMessage());
+            return;
         }
+        // startForegroundService 는 비동기다. 바로 resolve 하면 서비스 안 startRecordingInternal 의
+        // 실패(마이크 점유·MediaRecorder 준비 실패 등)를 조용히 삼켜 "녹음 중"으로 보이지만 실제론
+        // 아무것도 안 담기는 사고가 난다(튜터링 다 하고 빈손). → 서비스가 실제로 녹음을 시작했는지
+        // 최대 ~2.5초 확인한 뒤 resolve/reject 한다. 확인은 별도 스레드에서(메인 스레드 ANR 방지).
+        final long deadlineMs = System.currentTimeMillis() + 2500;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                boolean started = false;
+                while (System.currentTimeMillis() < deadlineMs) {
+                    RecordingService svc = RecordingService.instance;
+                    if (svc != null && svc.isRecording()) { started = true; break; }
+                    try { Thread.sleep(120); } catch (InterruptedException ignored) {}
+                }
+                if (started) {
+                    call.resolve();
+                } else {
+                    // 서비스는 떴지만 녹음이 시작 못한 경우 → 좀비 포그라운드 서비스 정리 후 명확히 실패 통보.
+                    try {
+                        RecordingService svc = RecordingService.instance;
+                        if (svc != null && !svc.isRecording()) svc.stopAndFinalize();
+                    } catch (Exception ignored) {}
+                    call.reject("녹음을 시작하지 못했어요. 마이크가 다른 앱에서 쓰이고 있는지 확인하고 다시 시작해 주세요.");
+                }
+            }
+        }).start();
     }
 
     @PluginMethod

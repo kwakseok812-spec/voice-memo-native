@@ -363,7 +363,7 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
   border-bottom:1px solid var(--glass-b);
 }
 .chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px}
-.bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
+.bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text;content-visibility:auto;contain-intrinsic-size:auto 52px}
 /* 링크·전화·메일은 그대로 눌리게 */
 .bubble a{-webkit-user-select:auto;user-select:auto}
 /* 말풍선 링크: 파랑+밑줄, 탭하면 열림 */
