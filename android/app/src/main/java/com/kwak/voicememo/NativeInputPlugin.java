@@ -2,6 +2,7 @@ package com.kwak.voicememo;
 
 import android.app.Dialog;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -16,6 +17,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -28,39 +30,51 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 /**
  * 네이티브 채팅 입력 플러그인.
  *  - 목적: 안드로이드 WebView 의 textarea 한글(IME) 조합이 "한 글자씩 씹히고 마지막 글자가 늦게 보이는"
- *    고질 문제를 근본 회피한다. 웹 입력창을 탭하면 이 플러그인이 화면 하단에 "네이티브 EditText 입력 바"를
- *    올려 키보드를 붙인다 → 한글 조합이 OS(네이티브 텍스트 위젯) 수준에서 매끄럽게 이뤄진다.
- *  - JS(WebView)는 open() 으로 입력 바를 띄우고, 사용자가 "보내기"를 누르면 'send' 이벤트로 텍스트만
- *    돌려받아 기존 웹 전송 로직(#chatSend/#lockerSend 클릭 = sendChatMsg/sendLockerMsg)에 그대로 넘긴다.
- *    → 채팅 화면·전송·멀티기기 동기화 등 나머지는 전부 기존 웹 그대로 유지된다.
- *  - 입력 바는 "보내기" 후에도 닫히지 않고(연속 대화) 텍스트만 비운다. 화면 바깥(위쪽 대화)을 탭하거나
- *    뒤로가기를 누르면 닫히며, 아직 안 보낸 초안은 'close' 이벤트로 웹 입력창에 되돌려 저장한다.
- *
- * 구현은 android.app.Dialog(하단 도킹, 창 소프트키보드 ADJUST_RESIZE)로, 키보드/인셋 처리를 안드로이드
- * 윈도우 매니저에 위임한다 → WebView 위에 네이티브 뷰를 픽셀 단위로 얹어 좌표·인셋을 직접 맞추는 방식보다
- * 기기 편차에 훨씬 안전하다(엣지투엣지·제스처바 대응 포함).
+ *    고질 문제를 근본 회피한다. 웹 입력창을 탭하면 이 플러그인이 화면 하단에 "네이티브 입력 바"를 올려
+ *    키보드를 붙인다 → 한글 조합이 OS(네이티브 텍스트 위젯) 수준에서 매끄럽게 이뤄진다.
+ *  - JS(WebView)는 open() 으로 입력 바를 띄우고, "보내기/＋/카메라"를 누르면 이벤트로 알려
+ *    기존 웹 로직(#chatSend/#chatAttach/#chatCam 클릭)을 그대로 실행한다 → 전송·첨부·동기화는 웹 그대로.
+ *  - ⭐ 색은 하드코딩하지 않는다. JS 가 "현재 화면에 실제 적용된 색"(라이트/다크 어느 쪽이든)을 읽어
+ *    open({colors:{...}}) 로 넘겨주고, 이 바는 그 색을 그대로 쓴다 → 평소 웹 입력 바와 톤이 일치한다.
+ *  - 입력 바는 "보내기" 후에도 닫히지 않고(연속 대화) 텍스트만 비운다. 바깥(위쪽 대화)을 탭하거나
+ *    뒤로가기를 누르면 닫히며, 안 보낸 초안은 'close' 이벤트로 웹 입력창에 되돌려 저장한다.
  */
 @CapacitorPlugin(name = "NativeInput")
 public class NativeInputPlugin extends Plugin {
 
     private Dialog dialog;
     private EditText edit;
-    private TextView sendBtn;
 
     private int dp(float v) {
         return Math.round(TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, v, getContext().getResources().getDisplayMetrics()));
     }
 
+    /** JS 가 넘긴 색(#RRGGBB / #AARRGGBB)을 파싱. 없거나 잘못되면 fallback. */
+    private int col(JSObject c, String key, int fallback) {
+        try {
+            if (c == null) return fallback;
+            String v = c.getString(key, null);
+            if (v == null || v.length() == 0) return fallback;
+            return Color.parseColor(v.trim());
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
     @PluginMethod
     public void open(final PluginCall call) {
         final String text = call.getString("text", "");
         final String hint = call.getString("hint", "메시지 입력");
+        final JSObject colors = call.getObject("colors");
+        final boolean hasAttach = call.getBoolean("hasAttach", false);
+        final boolean hasCamera = call.getBoolean("hasCamera", false);
         getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    showBar(text == null ? "" : text, hint == null ? "메시지 입력" : hint);
+                    showBar(text == null ? "" : text, hint == null ? "메시지 입력" : hint,
+                            colors, hasAttach, hasCamera);
                     call.resolve();
                 } catch (Exception e) {
                     call.reject("입력창을 여는 데 실패했어요: " + e.getMessage());
@@ -80,9 +94,26 @@ public class NativeInputPlugin extends Plugin {
         });
     }
 
+    /** 아이콘 버튼(＋·카메라) 만들기 — 웹 .iconbtn(둥근모서리·연한 배경·컬러 아이콘) 과 같은 모양. */
+    private ImageView makeIconButton(int iconRes, int bg, int tint, View.OnClickListener onClick) {
+        ImageView b = new ImageView(getContext());
+        b.setImageResource(iconRes);
+        b.setColorFilter(tint, PorterDuff.Mode.SRC_IN);
+        b.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        b.setPadding(dp(12), dp(12), dp(12), dp(12));
+        GradientDrawable bgD = new GradientDrawable();
+        bgD.setColor(bg);
+        bgD.setCornerRadius(dp(15));
+        b.setBackground(bgD);
+        b.setClickable(true);
+        b.setOnClickListener(onClick);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        b.setLayoutParams(lp);
+        return b;
+    }
+
     /** 입력 바(하단 도킹 다이얼로그)를 만들거나, 이미 떠 있으면 텍스트만 갱신한다. */
-    private void showBar(String text, String hint) {
-        // 이미 떠 있으면 새로 만들지 않고 내용만 바꾼다(탭 중복 방지).
+    private void showBar(String text, String hint, JSObject colors, boolean hasAttach, boolean hasCamera) {
         if (dialog != null && dialog.isShowing() && edit != null) {
             edit.setText(text);
             edit.setSelection(edit.getText().length());
@@ -91,52 +122,58 @@ public class NativeInputPlugin extends Plugin {
             return;
         }
 
-        // ── 색상: 웹(앱) 다크 테마 토큰과 정확히 일치시켜 이질감을 없앤다 ──
-        //   --bg1 #0D1634 (하단 바) · .chatinput #101A38 (입력칸) · --text #F3F6FF (글자)
-        //   --dim #6F7D9E (안내문) · 전송버튼 그라디언트 --p1 #3B82F6 → --p2 #8B5CF6
-        int bgBar = Color.parseColor("#0D1634");    // 입력 바 배경(웹 --bg1)
-        int bgField = Color.parseColor("#101A38");  // 입력칸 배경(웹 .chatinput)
-        int fg = Color.parseColor("#F3F6FF");       // 글자(웹 --text)
-        int hintCol = Color.parseColor("#6F7D9E");  // 안내문(웹 --dim)
-        int fieldBorder = Color.parseColor("#1F2A44"); // 입력칸 테두리(웹 --glass-b 톤)
-        int hairline = Color.parseColor("#1E2748"); // 위 대화와 구분하는 얇은 경계선
-        int p1 = Color.parseColor("#3B82F6");       // 전송 그라디언트 시작(웹 --p1)
-        int p2 = Color.parseColor("#8B5CF6");       // 전송 그라디언트 끝(웹 --p2)
+        // ── 색: JS 가 넘긴 "화면에 실제 적용된 색"을 그대로 사용(라이트/다크 자동 대응) ──
+        //   fallback 은 라이트 톤(대표님 현재 화면 기준).
+        int barBg      = col(colors, "bar",         Color.parseColor("#EDF0FC")); // 하단 바 배경(웹 --bg1)
+        int fieldBg    = col(colors, "field",       Color.parseColor("#FFFFFF")); // 입력칸 배경(웹 .chatinput)
+        int fieldBorder= col(colors, "fieldBorder", Color.parseColor("#29296366")); // 입력칸 테두리(웹 --glass-b)
+        int fg         = col(colors, "text",        Color.parseColor("#0F172A")); // 글자(웹 --text)
+        int hintCol    = col(colors, "hint",        Color.parseColor("#8A95AC")); // 안내문(웹 --dim)
+        int iconBg     = col(colors, "iconBg",      Color.parseColor("#EBFFFFFF")); // ＋·카메라 배경(웹 .chatattach)
+        int iconTint   = col(colors, "iconColor",   Color.parseColor("#2563EB")); // ＋·카메라 아이콘색(웹 --p1)
+        int send1      = col(colors, "send1",       Color.parseColor("#2563EB")); // 전송 그라디언트 시작(웹 --p1)
+        int send2      = col(colors, "send2",       Color.parseColor("#7C3AED")); // 전송 그라디언트 끝(웹 --p2)
+        int hairline   = col(colors, "hairline",    Color.parseColor("#22636399")); // 위 대화와 구분하는 얇은 경계선
 
-        // ── 바깥 컨테이너(가로 한 줄: [입력칸][보내기]) — 웹 .chatbar 자리를 그대로 대체 ──
+        // ── 바깥 컨테이너(가로 한 줄) — 웹 .chatbar 자리를 그대로 대체 ──
         final LinearLayout bar = new LinearLayout(getContext());
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        // 위쪽에 얇은 경계선 하나만 둔 평면 바(웹 하단 바와 같은 폭·톤)
-        GradientDrawable barBg = new GradientDrawable();
-        barBg.setColor(bgBar);
-        barBg.setStroke(dp(1), hairline);
-        bar.setBackground(barBg);
-        bar.setPadding(dp(10), dp(9), dp(10), dp(9));
+        GradientDrawable barBgD = new GradientDrawable();
+        barBgD.setColor(barBg);
+        barBgD.setStroke(dp(1), hairline);
+        bar.setBackground(barBgD);
+        bar.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        // ── ＋ 첨부 버튼(왼쪽) ──
+        if (hasAttach) {
+            ImageView plus = makeIconButton(R.drawable.ic_ni_plus, iconBg, iconTint, new View.OnClickListener() {
+                @Override public void onClick(View v) { notifyListeners("attach", new JSObject()); }
+            });
+            ((LinearLayout.LayoutParams) plus.getLayoutParams()).rightMargin = dp(6);
+            bar.addView(plus);
+        }
 
         // ── 입력칸(EditText) ──
         edit = new EditText(getContext());
-        GradientDrawable fieldBg = new GradientDrawable();
-        fieldBg.setColor(bgField);
-        fieldBg.setCornerRadius(dp(18));         // 웹 .input radius 18px 와 일치
-        fieldBg.setStroke(dp(1), fieldBorder);
-        edit.setBackground(fieldBg);
+        GradientDrawable fieldBgD = new GradientDrawable();
+        fieldBgD.setColor(fieldBg);
+        fieldBgD.setCornerRadius(dp(18));            // 웹 .input radius 18px 와 일치
+        fieldBgD.setStroke(dp(1), fieldBorder);
+        edit.setBackground(fieldBgD);
         edit.setPadding(dp(16), dp(10), dp(16), dp(10));
         edit.setTextColor(fg);
         edit.setHintTextColor(hintCol);
         edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         edit.setHint(hint);
-        // 여러 줄 입력 + 한글 조합. 최대 5줄까지 늘어나고 그 뒤엔 내부 스크롤.
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         edit.setImeOptions(EditorInfo.IME_ACTION_SEND | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         edit.setMaxLines(5);
         edit.setText(text);
         edit.setSelection(edit.getText().length());
         LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        eLp.rightMargin = dp(8);
+        eLp.rightMargin = dp(6);
         edit.setLayoutParams(eLp);
-
-        // 일부 IME 는 멀티라인이어도 액션(Send)을 노출한다 → 그 경우 전송 처리.
         edit.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView v, int actionId, android.view.KeyEvent event) {
@@ -144,26 +181,34 @@ public class NativeInputPlugin extends Plugin {
                 return false;
             }
         });
+        bar.addView(edit);
 
-        // ── 보내기 버튼(웹 .chatsend 와 같은 그라디언트·둥근모서리) ──
-        sendBtn = new TextView(getContext());
-        sendBtn.setText("보내기");
-        sendBtn.setTextColor(Color.WHITE);
-        sendBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        sendBtn.setGravity(Gravity.CENTER);
-        sendBtn.setPadding(dp(16), dp(12), dp(16), dp(12));
-        // 웹 전송버튼: linear-gradient(135deg, --p1, --p2) → 왼쪽위→오른쪽아래 그라디언트
-        GradientDrawable btnBg = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR, new int[]{ p1, p2 });
-        btnBg.setCornerRadius(dp(15));           // 웹 .chatsend radius 15px 와 일치
-        sendBtn.setBackground(btnBg);
-        sendBtn.setClickable(true);
-        sendBtn.setOnClickListener(new View.OnClickListener() {
+        // ── 카메라 버튼(입력칸 오른쪽) — 웹 배치와 동일. 공유함(locker)엔 없음 ──
+        if (hasCamera) {
+            ImageView cam = makeIconButton(R.drawable.ic_ni_camera, iconBg, iconTint, new View.OnClickListener() {
+                @Override public void onClick(View v) { notifyListeners("camera", new JSObject()); }
+            });
+            ((LinearLayout.LayoutParams) cam.getLayoutParams()).rightMargin = dp(6);
+            bar.addView(cam);
+        }
+
+        // ── 보내기 버튼(종이비행기 아이콘 + 웹과 같은 파랑→보라 그라디언트) ──
+        ImageView send = new ImageView(getContext());
+        send.setImageResource(R.drawable.ic_ni_send);
+        send.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        send.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        send.setPadding(dp(12), dp(12), dp(12), dp(12));
+        GradientDrawable sendBgD = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR, new int[]{ send1, send2 }); // 웹 linear-gradient(135deg,--p1,--p2)
+        sendBgD.setCornerRadius(dp(15));             // 웹 .chatsend radius 15px 와 일치
+        send.setBackground(sendBgD);
+        send.setClickable(true);
+        send.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { doSend(); }
         });
-
-        bar.addView(edit);
-        bar.addView(sendBtn);
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        send.setLayoutParams(sLp);
+        bar.addView(send);
 
         // 엣지투엣지(안드로이드 15+) 대비: 키보드가 없을 때 하단 제스처/네비게이션 바 위로 띄운다.
         applyBottomInset(bar);
@@ -176,7 +221,6 @@ public class NativeInputPlugin extends Plugin {
         dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
             @Override
             public void onDismiss(android.content.DialogInterface d) {
-                // 안 보낸 초안을 웹 입력창으로 되돌려 저장.
                 JSObject o = new JSObject();
                 o.put("text", edit != null ? edit.getText().toString() : "");
                 notifyListeners("close", o);
@@ -193,7 +237,6 @@ public class NativeInputPlugin extends Plugin {
             lp.dimAmount = 0.15f;   // 딤을 옅게 → '모달'이 아니라 '입력창이 활성화된' 느낌(뒤 대화 잘 보임)
             w.setAttributes(lp);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            // ADJUST_RESIZE + 하단정렬 → 창이 키보드 위로 줄어들며 입력 바가 키보드 바로 위에 붙는다.
             w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                     | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
         }
@@ -243,6 +286,6 @@ public class NativeInputPlugin extends Plugin {
         JSObject o = new JSObject();
         o.put("text", t);
         notifyListeners("send", o);
-        edit.setText("");   // 보낸 뒤 비움(다이얼로그·키보드는 유지)
+        edit.setText("");
     }
 }
