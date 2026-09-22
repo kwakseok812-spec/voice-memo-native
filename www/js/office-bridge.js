@@ -110,6 +110,17 @@
       });
     }).catch(function () { return false; });
   }
+  // 안전 업로드(2026-09-22, v5.1): pending 원본의 'sent' 표시를 내려 flush 가 다시 보내게 한다.
+  //   (원본 blob 은 그대로 보존 — 자동복구/[다시 보내기] 시 재전송 대상으로 되돌리는 용도)
+  function markResendable(id) {
+    return _db().then(function (db) {
+      return new Promise(function (res) {
+        var tx = db.transaction(STORE, 'readwrite'); var st = tx.objectStore(STORE); var rq = st.get(id);
+        rq.onsuccess = function () { var r = rq.result; if (r) { r.sent = false; st.put(r); } res(!!r); };
+        rq.onerror = function () { res(false); };
+      });
+    }).catch(function () { return false; });
+  }
 
   /* ---------- 네트워크 ---------- */
   function uploadAudio(id, ext, blob) {
@@ -191,14 +202,20 @@
 
   // 회의자료(있으면) + 오디오 업로드 + 메모 등록. 실패하면 IndexedDB에 오디오·자료를 넣고 throw.
   function send(memo, blob) {
-    return uploadMaterials(memo.id, memo.materials || [])
+    // 안전 업로드(2026-09-22, v5.1): 전송 '전에' 원본을 먼저 영속(idbPut)하고, 업로드가 끝나도
+    //   지우지 않는다(sent:true 표시만). 실제 원본 삭제는 PC 정리(done) 확인 뒤에만(app.js dropPending).
+    //   ⚠️ 예전엔 r.ok/409(HTTP 성공)만 보고 idbDel 했다 — 서버에 실제로 안 남았는데도 원본을 지워
+    //      녹음이 유실될 수 있었다(2026-09-22 CCUBIO 사고). 그 결합을 끊는다.
+    var rec = { id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob,
+                materials: memo.materials || [], date: memo.date, time: memo.time, kind: memo.kind || 'audio', sent: false };
+    return idbPut(rec)                                            // (1) 전송 전 원본 영속 — 인메모리만 믿지 않음
+      .then(function () { return uploadMaterials(memo.id, memo.materials || []); })
       .then(function (matMeta) { memo.materialsMeta = matMeta; return uploadAudio(memo.id, memo.ext, blob); })
       .then(function (path) { return createMemo(memo, path); })
-      .then(function () { return idbDel(memo.id); })   // 성공 시 대기분 제거
+      .then(function () { rec.sent = true; return idbPut(rec); }) // (2) 업로드 완료 표시(원본은 done 확인까지 보존)
       .catch(function (e) {
-        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob,
-                        materials: memo.materials || [], date: memo.date, time: memo.time })
-          .then(function () { throw e; });
+        rec.sent = false;
+        return idbPut(rec).then(function () { throw e; });        // 실패: 원본 보존(재전송 가능)
       });
   }
 
@@ -332,7 +349,12 @@
   function sendAudioChunked(memo, blob, onProgress) {
     var ext = memo.ext || extFromBlob(blob);
     var total = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
-    return uploadMaterials(memo.id, memo.materials || [])   // 회의자료 먼저(있으면) — 2026-09-21
+    // 안전 업로드(2026-09-22, v5.1): 전송 '전에' 원본을 먼저 영속하고, 전 청크 업로드가 끝나도
+    //   지우지 않는다(sent:true 표시만). 실제 삭제는 PC 정리(done) 확인 뒤에만(app.js dropPending).
+    var rec = { id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob,
+                materials: memo.materials || [], date: memo.date, time: memo.time, kind: 'audio', sent: false };
+    return idbPut(rec)                                       // (1) 전송 전 원본 영속
+      .then(function () { return uploadMaterials(memo.id, memo.materials || []); })   // 회의자료 먼저(있으면) — 2026-09-21
       .then(function (matMeta) { memo.materialsMeta = matMeta; return _insertChunkedAudioRow(memo, total, ext); })
       .then(function () {
       var k = 0;
@@ -350,11 +372,10 @@
         });
       }
       return step();
-    }).then(function () { return idbDel(memo.id); })   // 성공 시 대기분 제거
+    }).then(function () { rec.sent = true; return idbPut(rec); })   // (2) 전 청크 업로드 완료 표시(원본 보존)
       .catch(function (e) {
-        return idbPut({ id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob,
-                        materials: memo.materials || [], date: memo.date, time: memo.time })
-          .then(function () { throw e; });
+        rec.sent = false;
+        return idbPut(rec).then(function () { throw e; });          // 실패: 원본 보존(재전송 가능)
       });
   }
 
@@ -702,15 +723,19 @@
       function next() {
         if (i >= list.length) return Promise.resolve();
         var rec = list[i++];
+        // 안전 업로드(2026-09-22, v5.1): 이미 서버로 전송을 마친(=PC 정리 대기 중) 원본은 재전송하지 않는다.
+        //   (중복 업로드 방지 — done 확인 후 삭제는 폴링이 담당. 원본은 그대로 보존.)
+        //   자동복구/[다시 보내기]가 markResendable 로 sent 를 내리면 그때 이 흐름을 다시 탄다.
+        if (rec.sent) { return next(); }
         var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
                      materials: rec.materials || [], date: rec.date, time: rec.time };   // 회의자료도 함께 재시도
         var p;
         if (rec.files) {
           p = sendBatch(memo, rec.files);              // 사진/영상 묶음 재업로드
         } else if (rec.blob && rec.blob.size > CHUNK_SIZE) {
-          p = sendAudioChunked(memo, rec.blob);        // 큰 음성(2시간 등): 조각으로 재업로드(성공 시 내부에서 idbDel)
+          p = sendAudioChunked(memo, rec.blob);        // 큰 음성(2시간 등): 조각으로 재업로드(성공해도 done 확인까지 원본 보존)
         } else {
-          p = send(memo, rec.blob);                    // 일반 음성 + 회의자료 재업로드(성공 시 내부에서 idbDel)
+          p = send(memo, rec.blob);                    // 일반 음성 + 회의자료 재업로드(성공해도 done 확인까지 원본 보존)
         }
         return p
           .then(function () { onEach && onEach(memo); })
@@ -720,7 +745,7 @@
       return next();
     });
   }
-  function pendingCount() { return idbAll().then(function (l) { return l.length; }); }
+  function pendingCount() { return idbAll().then(function (l) { return l.filter(function (r) { return !r.sent; }).length; }); }
 
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
@@ -732,6 +757,7 @@
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
     saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
+    markResendable: markResendable,   // v5.1: 보존 원본을 재전송 대상으로(자동복구/[다시 보내기])
     CHUNK_SIZE: CHUNK_SIZE
   };
   global.addEventListener('online', function () { flush(); });

@@ -344,12 +344,32 @@
   }
 
   /* ---------- 결과 폴링 ---------- */
+  // 안전 업로드(2026-09-22, v5.1): 서버에 이 메모 '행'이 없는(=전송이 서버까지 못 닿은) 채 이 시간을
+  //   넘기면 자동으로 '실패'로 되돌려 [다시 보내기]/[삭제] 가 뜨게 한다. 근거: 정상 정리는 행이 즉시
+  //   존재하고(느린 전사여도 행은 있음) poll 이 행을 돌려준다 → 오탐 없음. '행 자체가 없음'만 스턱으로 본다.
+  var STUCK_MS = 10 * 60 * 1000;
+  function autoFailStuck(id) {
+    OfficeBridge.markResendable(id).then(function () {   // 보존 원본이 있으면 재전송 대상으로 되돌림(없으면 무해)
+      var e = HistoryModule.get(id);
+      if (e && e.status !== 'done') {
+        HistoryModule.update(id, { status: 'failed',
+          error: 'PC가 이 녹음을 받지 못했어요(전송이 서버까지 도달하지 못함). 다시 보내거나 삭제해 주세요.' });
+        renderHistory();
+      }
+    });
+  }
   function startPolling(id, token) {
     stopPolling(); pollingId = id;
     var started = Date.now();
+    var lastRowAt = Date.now();      // 마지막으로 서버에서 이 메모 '행'을 본 시각(무행 지속 감지)
+    var bannerShown = false;
     pollTimer = setInterval(function () {
       OfficeBridge.poll(id, token).then(function (res) {
-        if (!res) return;
+        if (!res) {                  // 행 없음 = 서버 미수신. STUCK_MS 넘게 지속되면 자동복구.
+          if (Date.now() - lastRowAt > STUCK_MS) { stopPolling(); autoFailStuck(id); }
+          return;
+        }
+        lastRowAt = Date.now();
         if (res.status === 'done') {
           stopPolling();
           HistoryModule.update(id, {
@@ -357,18 +377,24 @@
             content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
             title: res.title, error: res.error || null
           });
+          OfficeBridge.dropPending(id);                    // 실제 정리 완료 확인 → 폰 원본 삭제(안전)
           renderHistory(); setStatus('정리 완료', 'idle');
           if (isOpen(processing)) showResult(id);            // 기다리는 중이면 결과로 이동
           else toast('✅ 정리 완료 — 지난 메모에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
+          return;
         } else if (res.status === 'processing') {
           setProcessing('🖨️ PC에서 정리 중… 잠시만요');
         } else if (res.error) {
           setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…');
         }
-        if (Date.now() - started > 5 * 60 * 1000) {
-          stopPolling(); showHome();
+        // 포그라운드 대기화면 안내(1회) — 폴링은 멈추지 않는다(done/자동복구를 계속 감지해야 하므로).
+        if (!bannerShown && isOpen(processing) && Date.now() - started > 5 * 60 * 1000) {
+          bannerShown = true; showHome();
           showBanner('아직 정리 중이에요. PC가 켜져 있는지 확인하고, 잠시 후 <b>지난 메모</b>에서 다시 확인해 주세요.');
         }
+        // 러너웨이 방지: 행이 있어도(정상·느린 정리) 이 시간을 넘기면 폴링을 조용히 멈춘다.
+        //   (남은 done 은 다음 앱 실행/열람 시 복원 폴러가 잡는다. 무행 실패는 위 STUCK_MS 로 이미 처리됨.)
+        if (Date.now() - started > 25 * 60 * 1000) stopPolling();
       }).catch(function () {});
     }, 5000);
   }
@@ -507,9 +533,41 @@
       openDraftModal(e);           // v3.8 임시저장 — 자료 붙이기 + [PC 보내기] + 삭제
     } else if (e.status === 'failed') {
       openFailedModal(e);          // 실패 항목도 눌러서 열림 — 사유 안내 + [다시 보내기]/[삭제] (2026-09-21)
+    } else if (e.status === 'processing') {
+      openProcessingModal(e);      // v5.1: 정리중 — 상태 안내 + [계속 기다리기]/[삭제](굳었을 때 직접 지울 수 있게)
     } else {
       openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(id, e.token);
     }
+  }
+  /* ---------- 정리중(processing) 항목: 상태 안내 + 계속 기다리기 + 삭제 (v5.1) ----------
+   * 예전엔 'processing' 항목을 누르면 정리중 화면+폴링만 떠서, 서버 미수신으로 굳은 항목을 지울 UI가
+   * 전혀 없었다(2026-09-22 CCUBIO 사고). 이제 눌러서 상태를 보고, 굳었으면 직접 [삭제] 할 수 있다.
+   *   ⚠️ 삭제는 '명시적 사용자 탭'으로만 — 정상 진행 중인 정리를 성급히 지우지 않는다. */
+  function openProcessingModal(e) {
+    modalTitle.textContent = (e.title || '메모') + '  ·  ' + (e.date || '');
+    var html = '<div class="card rcard"><div class="h"><svg><use href="#i-spark"/></svg>PC에서 정리 중</div>' +
+      '<div style="padding:2px 2px 0;line-height:1.6">' +
+      '이 메모는 지금 PC에서 정리 중이에요.<br>' +
+      '만약 <b>10분 넘게 계속 “정리 중”에서 멈춰</b> 있다면, 전송이 PC까지 닿지 못했을 수 있어요' +
+      '(그럴 땐 잠시 뒤 자동으로 <b>실패</b>로 바뀌어 다시 보낼 수 있어요).<br>' +
+      '지금 바로 정리하려면 아래 <b>삭제</b>로 이 항목을 지우고 다시 녹음해 보내 주세요.' +
+      '</div></div>' +
+      '<div class="btnrow">' +
+      '<button id="mProcWait" class="btn primary"><svg><use href="#i-refresh"/></svg>계속 기다리기</button>' +
+      '<button id="mProcDel" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button>' +
+      '</div>';
+    modalBody.innerHTML = html;
+    $('mProcWait').addEventListener('click', function () {
+      closeModal(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(e.id, e.token);
+    });
+    $('mProcDel').addEventListener('click', function () {
+      if (videoPollers[e.id]) { clearInterval(videoPollers[e.id]); delete videoPollers[e.id]; }
+      delete videoProg[e.id];
+      if (pollingId === e.id) stopPolling();
+      OfficeBridge.dropPending(e.id);              // 남은 원본(있으면) 함께 정리
+      HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('삭제했어요.');
+    });
+    modal.style.display = 'flex';
   }
   /* ---------- 전송 실패한 메모: 사유 안내 + 다시 보내기 + 삭제 (2026-09-21) ----------
    * 예전엔 실패 항목을 누르면 화면 변화 없이 조용히 재시도만 돌아 "눌러도 반응이 없다"고 느껴졌다.
@@ -538,12 +596,15 @@
     HistoryModule.update(id, { status: 'processing', error: null });   // 즉시 '정리중'으로 보이게(재시도 시작 표시)
     renderHistory();
     var handled = false;
-    OfficeBridge.flush(function (memo) {
-      if (memo.id === id) {           // 대기열에서 이 항목 재업로드 성공 → 결과 폴링
-        handled = true;
-        HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
-        startPolling(id, e.token);
-      }
+    // v5.1: 보존된 원본(sent:true 로 대기 중이던 것 포함)을 재전송 대상으로 되돌린 뒤 flush.
+    OfficeBridge.markResendable(id).then(function () {
+      return OfficeBridge.flush(function (memo) {
+        if (memo.id === id) {           // 대기열에서 이 항목 재업로드 성공 → 결과 폴링
+          handled = true;
+          HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
+          startPolling(id, e.token);
+        }
+      });
     }).then(function () {
       if (!handled) {                 // 못 보냈으면(대기열에 없음/또 실패) 실패로 되돌리고 사유 안내
         HistoryModule.update(id, { status: 'failed' }); renderHistory();
@@ -699,9 +760,16 @@
   function startVideoPolling(id, token) {
     if (videoPollers[id]) return;
     var started = Date.now();
+    var lastRowAt = Date.now();      // 무행(서버 미수신) 지속 감지 — v5.1
     videoPollers[id] = setInterval(function () {
       OfficeBridge.poll(id, token).then(function (res) {
-        if (!res) return;
+        if (!res) {                  // 행 없음 = 서버 미수신. STUCK_MS 넘게 지속되면 자동복구.
+          if (Date.now() - lastRowAt > STUCK_MS) {
+            clearInterval(videoPollers[id]); delete videoPollers[id]; delete videoProg[id]; autoFailStuck(id);
+          }
+          return;
+        }
+        lastRowAt = Date.now();
         if (res.status === 'done') {
           clearInterval(videoPollers[id]); delete videoPollers[id]; delete videoProg[id];
           HistoryModule.update(id, {
@@ -709,6 +777,7 @@
             content_md: res.content_md, pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url,
             title: res.title, error: res.error || null
           });
+          OfficeBridge.dropPending(id);                    // 실제 정리 완료 확인 → 폰 원본 삭제(안전)
           renderHistory();
           toast((res.kind === 'audio' ? '🎙️ 긴 녹음 정리 완료' : '🎬 영상 정리 완료') + ' — 지난 메모에서 볼 수 있어요.');
         } else {
@@ -874,7 +943,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.0';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.0: 네이티브 입력 바 색·아이콘을 '실제 화면 색'과 일치 — 다크 토큰을 박아 라이트 화면과 정반대였던 것을 수정. 이제 JS가 현재 테마(라이트/다크)의 실제 색을 읽어 네이티브에 넘김. ＋·카메라·종이비행기(전송) 아이콘을 네이티브 바에도 추가해 입력 중에도 사진첨부 가능. v4.9=이중구조 해소, v4.8=네이티브 전환.)
+  var APP_VERSION = 'v5.1';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.1: 안전 업로드 — 녹음 원본을 전송 전 폰에 먼저 보관하고, PC가 정리를 '완료(done)'한 걸 확인한 뒤에만 삭제. 전송이 서버까지 못 닿았는데 원본을 지워 유실되던 문제(CCUBIO 사고) 근본 차단. '정리중'이 10분+ 무진행이면 자동으로 '실패'로 되돌려 [다시 보내기]/[삭제] 노출, 정리중 항목도 눌러 삭제 가능. v5.0=네이티브 입력 바 색·아이콘 일치, v4.9=이중구조 해소, v4.8=네이티브 전환.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
