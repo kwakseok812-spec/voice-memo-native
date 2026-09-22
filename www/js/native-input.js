@@ -24,9 +24,21 @@
     locker: { input: 'lockerInput', send: 'lockerSend', hint: '여기에 글을 쓰거나 파일을 올리세요' }
   };
   var current = null;      // 현재 열려 있는 입력 대상('chat' | 'locker')
+  var hiddenBar = null;    // 네이티브 입력 중 숨겨둔 웹 하단 바(.chatbar) — 닫힐 때 복원
   var lastOpen = 0;        // click/touchend 중복 방지용
 
   function el(id) { return document.getElementById(id); }
+
+  // 네이티브 입력 바가 웹 하단 바(.chatbar) 자리를 그대로 대체하므로,
+  // 열려 있는 동안 웹 하단 바를 숨겨 "입력창이 두 개로 보이는" 이중구조를 없앤다.
+  //   visibility:hidden(=자리 유지) 로 숨겨 대화목록 스크롤이 튀지 않게 한다.
+  function hideWebBar(ta) {
+    var bar = ta && ta.closest ? ta.closest('.chatbar') : null;
+    if (bar) { bar.style.visibility = 'hidden'; hiddenBar = bar; }
+  }
+  function restoreWebBar() {
+    if (hiddenBar) { hiddenBar.style.visibility = ''; hiddenBar = null; }
+  }
 
   function openFor(target) {
     var m = MAP[target]; if (!m) return;
@@ -35,7 +47,11 @@
     if (now - lastOpen < 400) { current = target; return; }  // 탭 한 번에 이벤트가 두 번 와도 한 번만
     lastOpen = now;
     current = target;
-    try { NI.open({ target: target, text: ta.value || '', hint: m.hint }); } catch (e) {}
+    hideWebBar(ta);   // 웹 하단 바 숨김 → 화면엔 네이티브 입력 바 하나만
+    try {
+      var p = NI.open({ target: target, text: ta.value || '', hint: m.hint });
+      if (p && p.catch) p.catch(function () { restoreWebBar(); });  // 열기 실패 시 원복(웹 바가 사라진 채 멈추지 않게)
+    } catch (e) { restoreWebBar(); }
   }
 
   // 웹 textarea 를 "탭하면 네이티브 입력이 열리는 버튼"으로 바꾼다.
@@ -63,8 +79,9 @@
     // 전송 후 입력창 비우기는 기존 send 로직(sendChatMsg/sendLockerMsg)이 담당한다.
   });
 
-  // 네이티브 입력 바가 닫힘 → 아직 안 보낸 초안을 웹 입력창으로 되돌려 저장(다음에 열면 이어쓰기)
+  // 네이티브 입력 바가 닫힘 → 웹 하단 바 복원 + 안 보낸 초안을 웹 입력창으로 되돌려 저장(다음에 열면 이어쓰기)
   NI.addListener('close', function (ev) {
+    restoreWebBar();
     if (!current) return;
     var m = MAP[current]; var ta = el(m.input);
     if (ta) {

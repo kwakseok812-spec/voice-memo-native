@@ -91,25 +91,35 @@ public class NativeInputPlugin extends Plugin {
             return;
         }
 
-        // ── 색상(앱 다크 테마와 결) ──
-        int bgBar = Color.parseColor("#101534");   // 입력 바 배경(진한 남색)
-        int bgField = Color.parseColor("#1B2145");  // 입력칸 배경
-        int fg = Color.parseColor("#FFFFFF");       // 글자
-        int hintCol = Color.parseColor("#7E88AD");  // 안내문
-        int accent = Color.parseColor("#3B6EF6");   // 보내기 버튼
+        // ── 색상: 웹(앱) 다크 테마 토큰과 정확히 일치시켜 이질감을 없앤다 ──
+        //   --bg1 #0D1634 (하단 바) · .chatinput #101A38 (입력칸) · --text #F3F6FF (글자)
+        //   --dim #6F7D9E (안내문) · 전송버튼 그라디언트 --p1 #3B82F6 → --p2 #8B5CF6
+        int bgBar = Color.parseColor("#0D1634");    // 입력 바 배경(웹 --bg1)
+        int bgField = Color.parseColor("#101A38");  // 입력칸 배경(웹 .chatinput)
+        int fg = Color.parseColor("#F3F6FF");       // 글자(웹 --text)
+        int hintCol = Color.parseColor("#6F7D9E");  // 안내문(웹 --dim)
+        int fieldBorder = Color.parseColor("#1F2A44"); // 입력칸 테두리(웹 --glass-b 톤)
+        int hairline = Color.parseColor("#1E2748"); // 위 대화와 구분하는 얇은 경계선
+        int p1 = Color.parseColor("#3B82F6");       // 전송 그라디언트 시작(웹 --p1)
+        int p2 = Color.parseColor("#8B5CF6");       // 전송 그라디언트 끝(웹 --p2)
 
-        // ── 바깥 컨테이너(가로 한 줄: [입력칸][보내기]) ──
+        // ── 바깥 컨테이너(가로 한 줄: [입력칸][보내기]) — 웹 .chatbar 자리를 그대로 대체 ──
         final LinearLayout bar = new LinearLayout(getContext());
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(bgBar);
-        bar.setPadding(dp(10), dp(8), dp(10), dp(8));
+        // 위쪽에 얇은 경계선 하나만 둔 평면 바(웹 하단 바와 같은 폭·톤)
+        GradientDrawable barBg = new GradientDrawable();
+        barBg.setColor(bgBar);
+        barBg.setStroke(dp(1), hairline);
+        bar.setBackground(barBg);
+        bar.setPadding(dp(10), dp(9), dp(10), dp(9));
 
         // ── 입력칸(EditText) ──
         edit = new EditText(getContext());
         GradientDrawable fieldBg = new GradientDrawable();
         fieldBg.setColor(bgField);
-        fieldBg.setCornerRadius(dp(20));
+        fieldBg.setCornerRadius(dp(18));         // 웹 .input radius 18px 와 일치
+        fieldBg.setStroke(dp(1), fieldBorder);
         edit.setBackground(fieldBg);
         edit.setPadding(dp(16), dp(10), dp(16), dp(10));
         edit.setTextColor(fg);
@@ -135,16 +145,17 @@ public class NativeInputPlugin extends Plugin {
             }
         });
 
-        // ── 보내기 버튼 ──
+        // ── 보내기 버튼(웹 .chatsend 와 같은 그라디언트·둥근모서리) ──
         sendBtn = new TextView(getContext());
         sendBtn.setText("보내기");
         sendBtn.setTextColor(Color.WHITE);
         sendBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         sendBtn.setGravity(Gravity.CENTER);
-        sendBtn.setPadding(dp(16), dp(10), dp(16), dp(10));
-        GradientDrawable btnBg = new GradientDrawable();
-        btnBg.setColor(accent);
-        btnBg.setCornerRadius(dp(20));
+        sendBtn.setPadding(dp(16), dp(12), dp(16), dp(12));
+        // 웹 전송버튼: linear-gradient(135deg, --p1, --p2) → 왼쪽위→오른쪽아래 그라디언트
+        GradientDrawable btnBg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR, new int[]{ p1, p2 });
+        btnBg.setCornerRadius(dp(15));           // 웹 .chatsend radius 15px 와 일치
         sendBtn.setBackground(btnBg);
         sendBtn.setClickable(true);
         sendBtn.setOnClickListener(new View.OnClickListener() {
@@ -179,7 +190,7 @@ public class NativeInputPlugin extends Plugin {
             lp.gravity = Gravity.BOTTOM;
             lp.width = WindowManager.LayoutParams.MATCH_PARENT;
             lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
-            lp.dimAmount = 0.35f;   // 뒤 대화가 살짝 비치게(완전 가리지 않음)
+            lp.dimAmount = 0.15f;   // 딤을 옅게 → '모달'이 아니라 '입력창이 활성화된' 느낌(뒤 대화 잘 보임)
             w.setAttributes(lp);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             // ADJUST_RESIZE + 하단정렬 → 창이 키보드 위로 줄어들며 입력 바가 키보드 바로 위에 붙는다.
