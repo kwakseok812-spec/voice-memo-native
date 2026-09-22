@@ -26,6 +26,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // 커스텀 네이티브 녹음 플러그인 등록(포그라운드 서비스 기반 백그라운드 녹음)
         registerPlugin(NativeRecorderPlugin.class);
+        // 커스텀 네이티브 채팅 입력 플러그인 등록(한글 IME 씹힘 회피 — 하단 네이티브 입력 바)
+        registerPlugin(NativeInputPlugin.class);
         super.onCreate(savedInstanceState);
         // 앱이 꺼진 상태에서 "열기/공유 → 스마트비서"로 시작된 경우
         handleIncomingDoc(getIntent());

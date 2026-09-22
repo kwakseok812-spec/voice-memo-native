@@ -472,6 +472,9 @@
 <script src="js/health.js"></script>
 <script src="js/docviewer.js"></script>
 <script src="js/app.js"></script>
+<!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
+     네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
+<script src="js/native-input.js"></script>
 <!-- install.js (홈 화면 설치 배너)는 2026-09-19 대표님 지시로 제거됨 -->
 <script>
   if ('serviceWorker' in navigator) {

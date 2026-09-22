@@ -859,7 +859,7 @@
   // v4.5(2026-09-22): 한글(IME) 조합 중에 백그라운드 폴링(loadChatSync/reconcile)이 대화목록을
   //   다시 그리면(chatLog.innerHTML 재설정) 조합이 끊겨 "글자가 하나씩 씹힌다". 조합 중엔 재렌더를
   //   미뤘다가 조합이 끝나면(또는 포커스가 빠지면) 한 번에 그린다.
-  var chatComposing = false, chatRenderDeferred = false, chatAgPending = false;
+  var chatComposing = false, chatRenderDeferred = false;
   // ── PC↔폰 채팅 동기화(1단계) ───────────────────────────────────────────────
   var SYNC_SINCE_KEY = 'smart_chat_sync_since';   // 대화 동기화를 어디까지 가져왔는지 표식
   var SYNC_PASS_KEY = 'smart_sync_pass';          // 이 기기에 저장한 연동 암호
@@ -874,7 +874,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v4.6';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.6: 한글 글자 씹힘 진짜 원인 해결 — IME 조합 중 입력창 높이(autoGrow) 변경이 대화목록을 재레이아웃해 조합 음절을 떨어뜨리던 것을 차단. 조합 중엔 높이·목록을 전혀 안 건드리고 조합이 끝나면 한 번에 반영)
+  var APP_VERSION = 'v4.8';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v4.8: 채팅 입력을 '네이티브'로 전환 — 안드로이드 WebView textarea 한글 IME 씹힘/마지막 글자 지연을 근본 회피. 입력창을 탭하면 네이티브 입력 바가 하단에 뜨고, 보내기 시 텍스트만 넘겨 기존 웹 전송 로직을 그대로 사용. PC/브라우저는 종전 웹 입력창 유지(v4.7 웹 개선 포함).)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1233,25 +1233,23 @@
   // 입력창 높이 자동 조절. 키 입력마다 style.height='auto' 후 scrollHeight 를 읽으면
   // 그때마다 문서 전체 레이아웃이 강제로 다시 계산돼(대화가 길수록 무거워짐) 타이핑이 버벅인다.
   // → requestAnimationFrame 으로 한 프레임에 한 번만 재계산하게 합쳐 강제 리플로우를 줄인다(2026-09-21).
+  // 입력창 높이 자동 조절. v4.7(2026-09-22): v4.6의 '조합 중 높이 얼리기'를 걷어냈다.
+  //   실측 결과 입력창 높이가 바뀌어도 대화목록(.chatlog)은 재배치되지 않았다(문서 스크롤 구조라 문서만
+  //   길어질 뿐 목록·말풍선 위치는 그대로였다). 즉 v4.6의 억제는 목록 reflow를 막은 게 아니라 입력창
+  //   높이만 얼려서, 미확정(조합 중) 마지막 한글이 화면에 안 나오다가 확정(스페이스·점)해야 보이던
+  //   증상을 유발했다. → 이제 조합 중에도 입력창은 브라우저 기본대로 정상 확장시켜 마지막 글자가 항상
+  //   보이게 한다. 렉 방지는 rAF 배칭(프레임당 리플로우 1회)으로 유지한다.
   var _agChatRaf = 0;
   function autoGrowChat() {
     if (!chatInput) return;
-    // ⌨️ v4.6 근본 수정(2026-09-22): 입력창(textarea) 높이를 바꾸면 flex 형제인 대화목록(.chatlog)이
-    //   딸려서 #chatView 열(column) 전체가 재레이아웃된다. 이 재레이아웃이 '한글 조합(IME) 도중'에
-    //   일어나면 안드로이드 WebView가 조합 중인 음절을 떨어뜨려 "친 것보다 한 글자가 적게 들어가는"
-    //   현상이 났다 — v3.9~v4.5는 이 높이 변경(=재레이아웃)을 조합 중에 막지 않아 계속 실패했다.
-    //   → 조합 중에는 높이를 절대 건드리지 않고 보류했다가, 조합이 끝나면(compositionend/blur) 한 번에 반영한다.
-    if (chatComposing) { chatAgPending = true; return; }
-    if (_agChatRaf) return;                 // 이미 이번 프레임에 예약됨 → 중복 리플로우 방지
+    if (_agChatRaf) return;                 // 이미 이번 프레임에 예약됨 → 프레임당 1회로 리플로우를 합침
     _agChatRaf = requestAnimationFrame(function () {
       _agChatRaf = 0;
       if (!chatInput) return;
-      if (chatComposing) { chatAgPending = true; return; }   // rAF가 조합 시작 뒤에 돌더라도 높이 손대지 않음
       chatInput.style.height = 'auto';
       chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px';
     });
   }
-  function flushChatAutoGrow() { if (chatAgPending) { chatAgPending = false; autoGrowChat(); } }
   function sendChatMsg() {
     if (!chatInput) return;
     var text = (chatInput.value || '').trim();
@@ -2026,19 +2024,19 @@
     if (chatRenderDeferred) { chatRenderDeferred = false; if (isOpen(chatView)) renderChat(); }
   }
   if (chatInput) {
-    // v4.6: 입력 이벤트의 isComposing 을 '조합 상태의 최종 진실'로 삼는다 — 일부 안드로이드 IME는
-    //   compositionstart 가 늦거나 누락돼도 input.isComposing 은 조합 중임을 정확히 알려준다.
-    //   조합 중이면 높이(autoGrow)를 건드리지 않고 보류하고, 조합이 아닌 입력에서만 높이를 반영한다.
+    // v4.7: 조합 상태(chatComposing)는 '대화목록 재렌더를 잠깐 미루는' 용도로만 쓴다.
+    //   입력창(textarea)의 표시·높이확장은 조합 중에도 절대 막지 않는다 → 미확정 마지막 글자가 항상 보인다.
+    //   (입력 이벤트의 isComposing 을 조합 판정의 최종 기준으로 삼는다 — compositionstart 가 늦는 IME 대비)
     chatInput.addEventListener('input', function (e) {
-      if (e && e.isComposing) { chatComposing = true; chatAgPending = true; return; }
-      chatComposing = false;              // 조합이 아닌 입력 → 상태를 확실히 풀어 목록 렌더가 멈추지 않게 함(자가복구)
-      autoGrowChat(); flushChatRender();
+      chatComposing = !!(e && e.isComposing);   // 목록 재렌더 보류 판단용(true여도 아래 autoGrow는 그대로 실행)
+      autoGrowChat();                            // 조합 중에도 입력창 높이 확장 → 마지막 글자 잘림 없음
+      if (!chatComposing) flushChatRender();     // 조합이 끝난(또는 조합 아닌) 입력에서 미뤄둔 목록 렌더 반영
     });
-    // 한글 조합 시작/끝을 추적 → 조합 중에는 renderChat/autoGrow 가 입력창·목록을 건드리지 않게 한다(글자 씹힘 방지)
+    // 한글 조합 시작/끝 추적 → 조합 중에는 대화목록(chatLog) '재렌더만' 미룬다(입력창은 안 건드림)
     chatInput.addEventListener('compositionstart', function () { chatComposing = true; });
-    chatInput.addEventListener('compositionend', function () { chatComposing = false; flushChatRender(); flushChatAutoGrow(); });
+    chatInput.addEventListener('compositionend', function () { chatComposing = false; autoGrowChat(); flushChatRender(); });
     // 조합 도중 포커스가 빠지면 compositionend 가 안 오는 브라우저가 있어 안전하게 해제
-    chatInput.addEventListener('blur', function () { chatComposing = false; flushChatRender(); flushChatAutoGrow(); });
+    chatInput.addEventListener('blur', function () { chatComposing = false; flushChatRender(); });
     chatInput.addEventListener('keydown', function (e) {
       // 한글 조합 중(IME) Enter 는 "글자 확정"용이다. 이때 전송하면 마지막 음절이 잘리거나
       // 조기 전송돼 "글자가 하나씩 잘 안 들어가는" 현상이 난다 → 조합 중이면 무시(2026-09-22).
