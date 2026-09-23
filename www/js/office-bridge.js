@@ -628,6 +628,28 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* ---------- 회의 요약 탭(v5.2): 서버의 done 녹음/영상 요약본 목록 ----------
+   * 전용 RPC(list_recent_memos)가 done 인 audio/video 행만, 요약 열람에 필요한 칸
+   *   (id, kind, title, created_at, summary_json, content_md, transcript)만 최근순으로 돌려준다.
+   *   client_token·audio_path 등 보안 필드와 타 kind(채팅·사진·공유함 등 개인정보)는 서버에서 제외.
+   * 재설치로 로컬 히스토리가 비어도 이 탭은 서버를 직접 보여주므로 항상 최신. 읽기 전용.
+   * 🔒 연동 암호 게이트(채팅·공유함과 동일): pass 를 함께 넘긴다. 암호 불일치/미설정이면 서버가
+   *   BAD_PASSCODE → 여기서 err.badpass=true 로 표시해 앱이 암호 입력창을 띄우게 한다(민감정보 보호).
+   *   반환: [{id, kind, title, created_at, summary_json, content_md, transcript}]. */
+  function listRecentMemos(limit, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_recent_memos', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_limit: limit || 100, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) {
+        var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;   // 암호 불일치(또는 미설정)
+      }
+      if (!r.ok) throw new Error('회의 요약 목록 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+
   /* v4.0: 멀티기기 삭제 — 서버에 "숨김(소프트삭제)" 표시. 조회 RPC들이 숨김 행을 제외한다.
    *   물리 삭제가 아니라 hidden_memos 에 id 만 넣는 것(원본 유지·복구 가능). 연동 암호로 잠금.
    *   반환: true(숨김 처리/이미 숨김) — 실패해도 로컬 tombstone 이 있어 이 기기엔 즉시 사라진다. */
@@ -754,6 +776,8 @@
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
+    listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
+
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
     saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,

@@ -69,6 +69,8 @@
     });
     // 알림 탭 → 화면 열기. data.screen 으로 분기(건강 리마인더 → 건강 탭, 그 외 → 케이 대화)
     PN.addListener('pushNotificationActionPerformed', function (a) {
+      // v5.2(A): 알림을 탭해 진입하면 쌓인 알림/앱아이콘 배지를 정리(읽었으니 사라지게).
+      try { if (PN.removeAllDeliveredNotifications) PN.removeAllDeliveredNotifications(); } catch (e) {}
       var scr = '';
       try { scr = (a && a.notification && a.notification.data && a.notification.data.screen) || ''; } catch (e) {}
       try { global.dispatchEvent(new CustomEvent(scr === 'health' ? 'smartOpenHealth' : 'smartOpenChat')); } catch (e) {}

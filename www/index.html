@@ -127,6 +127,7 @@
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnLocker"><span class="ic cyan"><svg><use href="#i-copy"/></svg></span><span class="tx"><b>PC↔폰 공유함</b><small>케이 없이 두 기기끼리 글·파일 공유</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><span class="tx"><b>회의 요약</b><small>PC에서 정리한 회의·녹음 요약본 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
       <!-- 지난 메모 -->
       <div class="sec-title">지난 메모 <span id="historyCount"></span></div>
@@ -283,6 +284,14 @@
         <button id="lockerSend" class="chatsend" aria-label="올리기"><svg><use href="#i-send"/></svg></button>
       </div>
       <input type="file" id="lockerFileInput" multiple style="display:none">
+    </section>
+
+    <!-- ===================== 회의 요약(서버 요약본 열람 전용, v5.2) ===================== -->
+    <section id="meetingsView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">회의 요약</span><span class="spacer"></span></div>
+      <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
+      <div id="meetingsList"></div>
+      <div id="meetingsDetail" style="display:none;"></div>
     </section>
 
     <!-- ===================== 건강 ===================== -->

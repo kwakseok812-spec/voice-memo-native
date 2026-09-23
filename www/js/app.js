@@ -67,7 +67,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('healthView'), $('docsView'), processing, resultWrap];
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('healthView'), $('docsView'), processing, resultWrap];
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -499,6 +499,91 @@
     if (viewId) HistoryModule.remove(viewId);
     viewId = null; showHome(); renderHistory(); setStatus('대기 중', 'idle');
   });
+
+  /* ---------- 회의 요약 탭(v5.2) — 서버 done 요약본 열람 전용 ----------
+   * 서버(list_recent_memos)를 단일 소스로 직접 보여준다(HistoryModule 병합 안 함).
+   * 요약이 주(主), 원문(전사/상세)은 <details> 로 접어 옵션으로 펼친다. 삭제·재전송 없음. */
+  var meetingsRows = [], meetingsDetailOpen = false;
+  function openMeetings() {
+    openScreen($('meetingsView'));
+    showMeetingsList();
+    var host = $('meetingsList'); if (!host) return;
+    if (!(window.OfficeBridge && OfficeBridge.listRecentMemos)) {
+      host.innerHTML = '<p class="empty" style="padding:16px">이 기능을 아직 쓸 수 없어요(업데이트 필요).</p>'; return;
+    }
+    // 🔒 회의 요약은 민감정보 → 채팅·공유함과 동일한 PC 연동 암호 게이트(중복 UI 없이 기존 게이트 재사용).
+    var pass = getSyncPass();
+    if (!pass) {
+      host.innerHTML = '<p class="empty" style="padding:16px">회의 요약을 보려면 PC 연동 암호가 필요해요.</p>';
+      showSyncGate(true, '회의 요약을 보려면 PC 연동 암호를 입력해 주세요.');
+      return;
+    }
+    host.innerHTML = '<p class="empty" style="padding:16px">불러오는 중…</p>';
+    OfficeBridge.listRecentMemos(100, pass).then(function (rows) {
+      meetingsRows = Array.isArray(rows) ? rows : [];
+      renderMeetingsList();
+    }).catch(function (e) {
+      if (e && e.badpass) {                          // 암호 불일치/미설정 → 저장 암호 지우고 재입력 유도(기존 게이트)
+        setSyncPass('');
+        host.innerHTML = '<p class="empty" style="padding:16px">암호가 맞지 않아요. 다시 입력해 주세요.</p>';
+        if (isOpen($('meetingsView'))) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.');
+      } else {
+        host.innerHTML = '<p class="empty" style="padding:16px">목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>';
+      }
+    });
+  }
+  function showMeetingsList() {
+    var l = $('meetingsList'), d = $('meetingsDetail');
+    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
+    if (l) l.style.display = '';
+    meetingsDetailOpen = false;
+    scrollTop();
+  }
+  function renderMeetingsList() {
+    var host = $('meetingsList'); if (!host) return;
+    if (!meetingsRows.length) { host.innerHTML = '<p class="empty" style="padding:16px">아직 정리된 회의 요약이 없어요. 녹음이 정리되면 여기에 쌓여요.</p>'; return; }
+    var lastDate = '', html = '';
+    meetingsRows.forEach(function (r, idx) {
+      var ca = r.created_at || '';
+      var d = ca.slice(0, 10), tm = ca.slice(11, 16);
+      if (d && d !== lastDate) { html += '<div style="padding:12px 6px 4px;font-size:12px;opacity:.6;font-weight:700">' + esc(d) + '</div>'; lastDate = d; }
+      var kb = (r.kind === 'video') ? '영상' : '녹음';
+      html += '<button class="card action wide" data-mtg="' + idx + '">' +
+              '<span class="ic blue"><svg><use href="#i-note"/></svg></span>' +
+              '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc((tm ? tm + '  ·  ' : '') + kb) + '</small></span>' +
+              '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
+    });
+    host.innerHTML = html;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-mtg]'), function (b) {
+      b.addEventListener('click', function () { openMeetingDetail(parseInt(b.getAttribute('data-mtg'), 10)); });
+    });
+  }
+  function openMeetingDetail(idx) {
+    var r = meetingsRows[idx]; if (!r) return;
+    var d = $('meetingsDetail'), l = $('meetingsList'); if (!d) return;
+    var sj = r.summary_json || {};
+    var when = (r.created_at || '').slice(0, 16).replace('T', ' ');
+    var html = '<button class="back" id="mtgBackToList" style="margin:6px 0"><svg><use href="#i-chev-l"/></svg>목록으로</button>';
+    html += '<div class="rtitle"><h2>' + esc(r.title || '회의 요약') + '</h2><div class="rmeta">' +
+            (when ? '<span class="chip">' + esc(when) + '</span>' : '') +
+            '<span class="chip on">요약</span></div></div>';
+    if (sj.integrated && sj.minutes)   // 회의자료 함께 낸 경우: 통합 회의록
+      html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
+    html += renderCards(sj);           // 요약·할 일·결정·키워드 카드(기존 헬퍼 재사용)
+    // 원문(전사/상세)은 기본 접힘 — 요약이 주, 원문은 옵션(대표님 지시)
+    var raw = r.transcript || r.content_md || '';
+    if (raw) {
+      html += '<details class="card rcard" style="padding:10px 12px">' +
+              '<summary style="cursor:pointer;font-weight:600">원문 전체 보기 (펼치기)</summary>' +
+              '<div style="white-space:pre-wrap;margin-top:8px;line-height:1.6">' + esc(raw) + '</div></details>';
+    }
+    d.innerHTML = html;
+    if (l) l.style.display = 'none';
+    d.style.display = 'block';
+    meetingsDetailOpen = true;
+    var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', showMeetingsList);
+    scrollTop();
+  }
 
   /* ---------- 지난 메모 ---------- */
   function iconFor(kind) { return kind === 'photo' ? 'i-image' : kind === 'video' ? 'i-video' : kind === 'search' ? 'i-card' : 'i-mic'; }
@@ -943,7 +1028,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.1';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.1: 안전 업로드 — 녹음 원본을 전송 전 폰에 먼저 보관하고, PC가 정리를 '완료(done)'한 걸 확인한 뒤에만 삭제. 전송이 서버까지 못 닿았는데 원본을 지워 유실되던 문제(CCUBIO 사고) 근본 차단. '정리중'이 10분+ 무진행이면 자동으로 '실패'로 되돌려 [다시 보내기]/[삭제] 노출, 정리중 항목도 눌러 삭제 가능. v5.0=네이티브 입력 바 색·아이콘 일치, v4.9=이중구조 해소, v4.8=네이티브 전환.)
+  var APP_VERSION = 'v5.2';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.2: ①알림 배지 자동 클리어 — 채팅 열람·앱 복귀·알림 탭 시 OS 알림/앱아이콘 배지를 지운다(읽으면 사라지게). ②「회의 요약」 탭 신설 — PC에서 정리한 회의·녹음 요약본을 서버에서 직접 불러와 요약 중심으로 열람(원문은 접힘). v5.1=안전 업로드(done 확인 후에만 원본 삭제), v5.0=입력 바 색 일치.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1277,9 +1362,22 @@
     var info = $('chatSearchInfo'); if (info) { info.style.display = 'none'; info.textContent = ''; }
     renderChat();
   }
+  // v5.2(A): OS 알림 트레이/앱아이콘 배지 클리어(네이티브 전용). 인앱 #chatBadge 로직과 별개 —
+  //   채팅을 읽거나 앱으로 돌아오면 쌓인 푸시 알림·런처 배지 숫자가 사라지게 한다.
+  function clearDeliveredNotifications() {
+    try {
+      var Cap = window.Capacitor;
+      if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() &&
+          Cap.Plugins && Cap.Plugins.PushNotifications &&
+          Cap.Plugins.PushNotifications.removeAllDeliveredNotifications) {
+        Cap.Plugins.PushNotifications.removeAllDeliveredNotifications();
+      }
+    } catch (e) {}
+  }
   function openChat(opts) {
     opts = opts || {};
     openScreen(chatView);
+    clearDeliveredNotifications();                 // v5.2(A): 채팅 열람 시 OS 알림/배지 정리
     // 검색 상태는 대화에 들어올 때 항상 닫힌 상태로 시작(바·안내·검색어 초기화)
     chatSearchOn = false; chatSearchQuery = '';
     if ($('chatSearchBar')) $('chatSearchBar').style.display = 'none';
@@ -1823,6 +1921,7 @@
     try { localStorage.setItem(SYNC_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 지금부터 동기화(과거 안 쏟음)
     toast('PC 연동 암호를 저장했어요.');
     startChatSync();                                  // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
+    if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
   });
   if ($('syncGateLater')) $('syncGateLater').addEventListener('click', function () { hideSyncGate(); });
 
@@ -2007,6 +2106,7 @@
   }
 
   if ($('btnLocker')) $('btnLocker').addEventListener('click', openLocker);
+  if ($('btnMeetings')) $('btnMeetings').addEventListener('click', openMeetings);   // v5.2: 회의 요약 탭
   if ($('lockerSend')) $('lockerSend').addEventListener('click', sendLockerMsg);
   if (lockerInput) {
     lockerInput.addEventListener('input', autoGrowLocker);
@@ -2344,6 +2444,10 @@
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
+    if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
+      if (meetingsDetailOpen) { showMeetingsList(); return true; }
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
       pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
     }
@@ -2354,6 +2458,10 @@
   });
   var backExitArmed = false, backExitTimer = null;
   if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
+    // v5.2(A): 앱이 포그라운드로 돌아오면 쌓인 OS 알림/앱아이콘 배지를 정리한다(읽었으니 사라지게).
+    Capacitor.Plugins.App.addListener('appStateChange', function (st) {
+      if (st && st.isActive) clearDeliveredNotifications();
+    });
     Capacitor.Plugins.App.addListener('backButton', function () {
       if (goBack()) return;
       // 녹음이 백그라운드로 살아있는데 홈에서 뒤로 = 앱 종료 대신 녹음 화면으로(실수로 녹음 유실 방지)
