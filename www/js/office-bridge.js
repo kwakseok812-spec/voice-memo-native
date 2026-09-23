@@ -650,6 +650,22 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* 회의 요약 항목 이름 변경(v5.3): 서버 title 만 바꾼다(PC 원본 .md·collect.py 무관).
+   *   연동 암호 게이트(불일치/미설정이면 badpass). 반환: true(수정 1건) / false(대상 없음).
+   *   ⚠️ 삭제는 별도 함수가 아니라 기존 hideMemo(소프트삭제) 재사용 — list_recent_memos 가 숨김 제외. */
+  function renameMemo(id, title, pass) {
+    if (!id) return Promise.resolve(false);
+    return fetch(CONFIG.url + '/rest/v1/rpc/rename_memo', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: id, p_title: title || '', p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('이름 변경 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (n) { return (typeof n === 'number') ? n > 0 : !!n; });   // 수정 행 수>0 → true
+  }
+
   /* v4.0: 멀티기기 삭제 — 서버에 "숨김(소프트삭제)" 표시. 조회 RPC들이 숨김 행을 제외한다.
    *   물리 삭제가 아니라 hidden_memos 에 id 만 넣는 것(원본 유지·복구 가능). 연동 암호로 잠금.
    *   반환: true(숨김 처리/이미 숨김) — 실패해도 로컬 tombstone 이 있어 이 기기엔 즉시 사라진다. */
@@ -777,6 +793,7 @@
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
+    renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)

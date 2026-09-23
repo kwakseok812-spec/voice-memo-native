@@ -567,6 +567,11 @@
     html += '<div class="rtitle"><h2>' + esc(r.title || '회의 요약') + '</h2><div class="rmeta">' +
             (when ? '<span class="chip">' + esc(when) + '</span>' : '') +
             '<span class="chip on">요약</span></div></div>';
+    // v5.3: 이름 변경 · 삭제(소프트삭제) — 연동암호 게이트, 확인은 기존 시트/모달 재사용
+    html += '<div class="btnrow">' +
+            '<button id="mtgRename" class="btn ghost sm"><svg><use href="#i-note"/></svg>이름 변경</button>' +
+            '<button id="mtgDelete" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button>' +
+            '</div>';
     if (sj.integrated && sj.minutes)   // 회의자료 함께 낸 경우: 통합 회의록
       html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
     html += renderCards(sj);           // 요약·할 일·결정·키워드 카드(기존 헬퍼 재사용)
@@ -582,7 +587,64 @@
     d.style.display = 'block';
     meetingsDetailOpen = true;
     var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', showMeetingsList);
+    var rn = $('mtgRename'); if (rn) rn.addEventListener('click', function () { renameMeetingPrompt(idx); });
+    var dl = $('mtgDelete'); if (dl) dl.addEventListener('click', function () { confirmDeleteMeeting(idx); });
     scrollTop();
+  }
+  // v5.3: 이름 변경 — 기존 modal 재사용(텍스트 입력). 서버 title 만 변경(PC 원본 무관).
+  function renameMeetingPrompt(idx) {
+    var r = meetingsRows[idx]; if (!r) return;
+    var pass = getSyncPass();
+    if (!pass) { showSyncGate(true, '이름을 변경하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    modalTitle.textContent = '이름 변경';
+    var cur = r.title || '';
+    var html = '<div class="card rcard"><div class="h"><svg><use href="#i-note"/></svg>표시 이름 바꾸기</div>' +
+      '<div style="padding:2px 2px 8px;line-height:1.6">앱에 보이는 <b>표시 이름</b>만 바뀌어요(PC에 저장된 원본 파일은 그대로예요).</div>' +
+      '<input id="mtgRenameInput" type="text" maxlength="120" value="' + esc(cur) + '" ' +
+      'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="새 이름을 입력하세요"></div>' +
+      '<div class="btnrow">' +
+      '<button id="mtgRenameSave" class="btn primary"><svg><use href="#i-check"/></svg>저장</button>' +
+      '<button id="mtgRenameCancel" class="btn ghost sm"><svg><use href="#i-x"/></svg>취소</button>' +
+      '</div>';
+    modalBody.innerHTML = html;
+    var inp = $('mtgRenameInput');
+    $('mtgRenameCancel').addEventListener('click', closeModal);
+    $('mtgRenameSave').addEventListener('click', function () {
+      var nt = ((inp && inp.value) || '').trim();
+      if (!nt) { toast('이름을 입력해 주세요.'); return; }
+      if (nt.length > 120) nt = nt.slice(0, 120);
+      if (nt === (r.title || '')) { closeModal(); return; }   // 변화 없음
+      OfficeBridge.renameMemo(r.id, nt, getSyncPass()).then(function (ok) {
+        if (!ok) { toast('이름을 바꾸지 못했어요(대상을 찾지 못함).'); return; }
+        r.title = nt;                     // 로컬 캐시 갱신 → 목록·상세 즉시 반영
+        closeModal(); renderMeetingsList(); openMeetingDetail(idx);
+        toast('이름을 바꿨어요.');
+      }).catch(function (e) {
+        closeModal();
+        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+        else toast('이름 변경에 실패했어요. 잠시 후 다시 시도해 주세요.');
+      });
+    });
+    modal.style.display = 'flex';
+    setTimeout(function () { if (inp) try { inp.focus(); inp.select(); } catch (e) {} }, 60);
+  }
+  // v5.3: 삭제 — 소프트삭제(hide_memo 재사용, 복구 가능). 확인은 기존 시트(openSheet) 재사용.
+  function confirmDeleteMeeting(idx) {
+    var r = meetingsRows[idx]; if (!r) return;
+    var pass = getSyncPass();
+    if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    openSheet('이 회의 요약을 삭제할까요?',
+      '목록에서 사라져요. 소프트삭제라 서버 원본과 PC 파일은 남아 있어(복구 가능) 안심하셔도 돼요.',
+      '삭제', function () {
+        OfficeBridge.hideMemo(r.id, getSyncPass()).then(function () {
+          meetingsRows.splice(idx, 1);          // 로컬 캐시에서 제거
+          showMeetingsList(); renderMeetingsList();
+          toast('삭제했어요.');
+        }).catch(function (e) {
+          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+          else toast('삭제에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        });
+      });
   }
 
   /* ---------- 지난 메모 ---------- */
@@ -1028,7 +1090,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.2';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.2: ①알림 배지 자동 클리어 — 채팅 열람·앱 복귀·알림 탭 시 OS 알림/앱아이콘 배지를 지운다(읽으면 사라지게). ②「회의 요약」 탭 신설 — PC에서 정리한 회의·녹음 요약본을 서버에서 직접 불러와 요약 중심으로 열람(원문은 접힘). v5.1=안전 업로드(done 확인 후에만 원본 삭제), v5.0=입력 바 색 일치.)
+  var APP_VERSION = 'v5.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.3: 「회의 요약」 항목 이름 변경·삭제 추가 — 이름 변경은 서버 표시 이름(title)만 바꿈(PC 원본 .md는 그대로), 삭제는 소프트삭제(복구 가능). 둘 다 연동암호 게이트. v5.2=배지 자동 클리어+회의 요약 탭, v5.1=안전 업로드, v5.0=입력 바 색.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
