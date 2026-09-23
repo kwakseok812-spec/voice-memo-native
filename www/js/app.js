@@ -1090,7 +1090,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.3: 「회의 요약」 항목 이름 변경·삭제 추가 — 이름 변경은 서버 표시 이름(title)만 바꿈(PC 원본 .md는 그대로), 삭제는 소프트삭제(복구 가능). 둘 다 연동암호 게이트. v5.2=배지 자동 클리어+회의 요약 탭, v5.1=안전 업로드, v5.0=입력 바 색.)
+  var APP_VERSION = 'v5.4';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1387,11 +1387,13 @@
         inner += '<button type="button" class="voiceplay" data-lid="' + m.lid + '"><svg><use href="#i-sound"/></svg>' + (m.vurl ? '다시 듣기' : '듣기') + '</button>';
       }
       if (!inner) return '';
-      // 단순 알림성 방송(건강 리마인더·매시간 확인·봇 경보 등)은 「🔔 알림」 배지로 대화와 구분(2026-09-20)
-      if (m.role === 'k' && m.notice) inner = '<div class="noticerow"><span class="noticebadge">🔔 알림</span></div>' + inner;
+      // v5.4(2026-09-23, 대표님 지시): 「🔔 알림」 딱지·호박색 테두리 등 화면 표시를 제거한다.
+      //   메시지 자체는 그대로 오고 일반 말풍선처럼 보인다. ⚠️ 내부 notice 플래그(m.notice)는 그대로 두어
+      //   '안읽음 배지 카운트 제외' 로직(아래 !isNotice)은 유지한다 — 알림이 안읽음 숫자를 올리지 않게.
+      //   (예전: noticerow/noticebadge 딱지 + 말풍선 ' notice' 클래스 → v5.4에서 렌더만 제거.)
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + (m.notice ? ' notice' : '') + '" data-uid="' + msgUid(m) + '">' + inner +
+      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner +
         '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
