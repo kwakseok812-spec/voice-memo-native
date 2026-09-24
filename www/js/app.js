@@ -1090,7 +1090,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.5';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.6';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -2568,7 +2568,6 @@
   var ideaRows = [], ideaFilter = 'all', ideaPollTimer = null, ideaLoading = false;
   var ideaRecorder = null, ideaRecording = false, ideaRecCancel = false, ideaRecStart = 0, ideaRecTick = null, ideaRecAuto = null;
 
-  function ideaIsNight(d) { var h = (d || new Date()).getHours(); return h >= 22 || h < 4; }
   function loadIdeaLocal() { try { var a = JSON.parse(localStorage.getItem(IDEA_LOCAL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function saveIdeaLocal(a) { try { localStorage.setItem(IDEA_LOCAL_KEY, JSON.stringify((a || []).slice(-100))); } catch (e) {} }
   function upsertIdeaLocal(rec) {
@@ -2578,7 +2577,7 @@
   }
   function removeIdeaLocal(id) { saveIdeaLocal(loadIdeaLocal().filter(function (x) { return x.id !== id; })); }
   function ideaSentToast() {
-    toast(ideaIsNight() ? '받았습니다 🌙 아침 8시에 제안서를 모아 드릴게요' : '받았습니다 — 제안서가 준비되면 알려드릴게요');
+    toast('보냈습니다 — 몇 분 안에 제안서를 보내드릴게요');
   }
 
   /* ---- 화면 열기 / 서버 목록 ---- */
@@ -2649,7 +2648,6 @@
       return ['제안완료', 'done'];
     }
     if (r.status === 'done') return [sj.retry ? '제안 재시도 중' : '제안 실패', sj.retry ? 'wait' : 'err'];
-    if (ideaIsNight(new Date(r.created_at)) && ideaIsNight()) return ['받았습니다 🌙', 'wait'];
     return ['정리중', 'wait'];
   }
   function renderIdeaFilter(rows) {
@@ -2669,7 +2667,7 @@
   function renderIdeaCard(r, local) {
     var idea = ideaOf(r), sj = r.summary_json || {}, st, said;
     if (local) {
-      st = r.status === 'failed' ? ['전송 실패', 'err'] : (r.status === 'sending' ? ['보내는 중', 'wait'] : (ideaIsNight(new Date(r.ts)) ? ['받았습니다 🌙', 'wait'] : ['정리중', 'wait']));
+      st = r.status === 'failed' ? ['전송 실패', 'err'] : (r.status === 'sending' ? ['보내는 중', 'wait'] : ['정리중', 'wait']);
       said = r.input === 'text' ? (r.text || '') : '(말씀하신 녹음 — PC에서 받아쓰는 중이에요)';
     } else {
       st = ideaStatus(r);
