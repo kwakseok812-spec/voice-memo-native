@@ -666,6 +666,43 @@
     }).then(function (n) { return (typeof n === 'number') ? n > 0 : !!n; });   // 수정 행 수>0 → true
   }
 
+  /* ---------- 💡 아이디어 수첩(v5.5, 2026-09-24) ----------
+   * 음성 아이디어: 기존 안전 업로드 send(memo, blob) 를 그대로 쓰되 memo.kind='idea' 로 보낸다
+   *   (원본 idbPut 선영속 → 업로드 → 행 INSERT, 폰 원본 삭제는 PC 정리(done) 확인 뒤 — v5.1 규약 동일).
+   * 글 아이디어: 파일 없이 kind='idea' 행만(note=글). 서버 PC 워커(idea_worker.py)가 활용 제안서를 만든다.
+   * 조회·결정은 연동 암호 게이트 RPC(list_ideas / set_idea_decision). 삭제는 기존 hideMemo 재사용. */
+  function sendIdeaText(memo) {
+    return _insertRow({
+      id: memo.id, title: '아이디어', status: 'pending', kind: 'idea',
+      note: memo.note || '', client_token: memo.token,
+      meta: { app: 'voice-memo-test', from: 'phone', input: 'text' }
+    });
+  }
+  function listIdeas(limit, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_ideas', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_limit: limit || 100, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('아이디어 목록 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+  // decision: 'go' | 'hold' | 'none', choice: 진행할 활용 방향 번호(0부터, go 일 때만 의미). 반환 true=저장됨
+  function setIdeaDecision(id, decision, choice, pass) {
+    if (!id) return Promise.resolve(false);
+    return fetch(CONFIG.url + '/rest/v1/rpc/set_idea_decision', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: id, p_decision: decision || 'none', p_choice: (choice == null ? null : choice), p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('결정 저장 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (n) { return (typeof n === 'number') ? n > 0 : !!n; });
+  }
+
   /* v4.0: 멀티기기 삭제 — 서버에 "숨김(소프트삭제)" 표시. 조회 RPC들이 숨김 행을 제외한다.
    *   물리 삭제가 아니라 hidden_memos 에 id 만 넣는 것(원본 유지·복구 가능). 연동 암호로 잠금.
    *   반환: true(숨김 처리/이미 숨김) — 실패해도 로컬 tombstone 이 있어 이 기기엔 즉시 사라진다. */
@@ -794,6 +831,7 @@
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
+    sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)

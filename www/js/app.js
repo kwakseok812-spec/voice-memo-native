@@ -67,7 +67,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('healthView'), $('docsView'), processing, resultWrap];
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), processing, resultWrap];   // v5.5: ideasView(아이디어 수첩) 등록
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -1090,7 +1090,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.4';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.5';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1986,6 +1986,7 @@
     toast('PC 연동 암호를 저장했어요.');
     startChatSync();                                  // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
     if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
+    if (isOpen($('ideasView'))) refreshIdeas(false);  // v5.5: 아이디어 화면에서 암호를 넣었으면 바로 다시 불러온다
   });
   if ($('syncGateLater')) $('syncGateLater').addEventListener('click', function () { hideSyncGate(); });
 
@@ -2362,6 +2363,8 @@
   // extra: { label, action } — 있으면 보조 버튼 하나 더 표시(선택)
   function openSheet(title, msg, confirmLabel, action, copyText, extra) {
     if (!sheetEl) return;
+    // v5.5: 확인 버튼 모양을 매번 기본(빨간 휴지통)으로 되돌린다 — 아이디어 [진행해줘] 시트가 잠시 긍정형(✓)으로 바꿔 쓰기 때문.
+    if (sheetConfirm) { sheetConfirm.classList.add('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-trash'); }
     sheetTitle.textContent = title;
     sheetMsg.textContent = msg || '';
     sheetMsg.style.display = msg ? 'block' : 'none';
@@ -2508,6 +2511,10 @@
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
+    if (isOpen($('ideasView'))) {      // v5.5: 아이디어 수첩 — 녹음 중이면 '멈추고 보내기'(잠결 아이디어 유실 방지), 아니면 홈
+      if (ideaRecording) { stopIdeaRec(); toast('녹음을 멈추고 보냈어요.'); return true; }
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
       if (meetingsDetailOpen) { showMeetingsList(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -2539,6 +2546,378 @@
     });
   }
 
+  /* ===================== 💡 아이디어 수첩 → 활용 제안 (v5.5, 2026-09-24) =====================
+   * 대표님 지시: 자려고 눕거나 막 깼을 때·문득 떠오를 때 폰에 말하면, 그걸 바탕으로 활용(프로그램·자동화·
+   *   문서·교육·연구·보관) 제안을 받아 삶을 편하게.
+   * 흐름: 큰 버튼 한 번 = 즉시 녹음(준비화면 없음) → 다시 누르면 정지·즉시 전송.  글로 적어도 됨.
+   *   · 음성: OfficeBridge.send(memo{kind:'idea'}, blob) — v5.1 안전 업로드 그대로(원본 선영속,
+   *     폰 원본 삭제는 서버 status==='done' 확인 뒤 dropPending).
+   *   · 글  : OfficeBridge.sendIdeaText.
+   *   · PC 워커 idea_worker.py 가 전사(원문 먼저 저장) → 활용 제안서(summary_json.idea) → 알림.
+   *   · 목록: list_ideas(연동암호 게이트) — 서버가 단일 소스, 아직 서버에 없는 것만 로컬 목록으로 보탠다.
+   *   · 결정: [진행해줘](추천안 또는 고른 방향)/[보류] → set_idea_decision. 진행해줘는 소장 K 채팅으로도 전달.
+   * ⚠️ confirm() 금지 → openSheet. 새 화면은 SUBS·goBack 에 등록됨. 새 backdrop-filter 없음. */
+  var ideasView = $('ideasView'), ideaList = $('ideaList'), ideaFilterEl = $('ideaFilter');
+  var ideaRecBtn = $('ideaRecBtn'), ideaRecLabel = $('ideaRecLabel'), ideaRecHint = $('ideaRecHint');
+  var ideaInput = $('ideaInput'), ideaSendBtn = $('ideaSend');
+  var IDEA_LOCAL_KEY = 'smart_ideas_local';
+  var IDEA_STUCK_MS = 10 * 60 * 1000;          // 보냈는데 서버에 행이 10분째 없으면 '전송 실패'로(v5.1 STUCK_MS 와 동일 근거)
+  var IDEA_MAX_REC_MS = 5 * 60 * 1000;         // 한 번에 최대 5분(잠결에 켜둔 채 잠드는 것 방지)
+  var IDEA_TAGS = { app: '💻앱', auto: '⚙️자동화', doc: '📄문서', edu: '🎓교육', research: '🔬연구', keep: '📌보관' };
+  var IDEA_TAG_ORDER = ['app', 'auto', 'doc', 'edu', 'research', 'keep'];
+  var ideaRows = [], ideaFilter = 'all', ideaPollTimer = null, ideaLoading = false;
+  var ideaRecorder = null, ideaRecording = false, ideaRecCancel = false, ideaRecStart = 0, ideaRecTick = null, ideaRecAuto = null;
+
+  function ideaIsNight(d) { var h = (d || new Date()).getHours(); return h >= 22 || h < 4; }
+  function loadIdeaLocal() { try { var a = JSON.parse(localStorage.getItem(IDEA_LOCAL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveIdeaLocal(a) { try { localStorage.setItem(IDEA_LOCAL_KEY, JSON.stringify((a || []).slice(-100))); } catch (e) {} }
+  function upsertIdeaLocal(rec) {
+    var a = loadIdeaLocal(), i;
+    for (i = 0; i < a.length; i++) if (a[i].id === rec.id) { a[i] = Object.assign({}, a[i], rec); saveIdeaLocal(a); return; }
+    a.push(rec); saveIdeaLocal(a);
+  }
+  function removeIdeaLocal(id) { saveIdeaLocal(loadIdeaLocal().filter(function (x) { return x.id !== id; })); }
+  function ideaSentToast() {
+    toast(ideaIsNight() ? '받았습니다 🌙 아침 8시에 제안서를 모아 드릴게요' : '받았습니다 — 제안서가 준비되면 알려드릴게요');
+  }
+
+  /* ---- 화면 열기 / 서버 목록 ---- */
+  function openIdeas() {
+    openScreen(ideasView);
+    renderIdeas();
+    refreshIdeas(false);
+    startIdeaPoll();
+  }
+  function startIdeaPoll() {
+    if (ideaPollTimer) return;
+    ideaPollTimer = setInterval(function () {
+      if (!isOpen(ideasView)) { clearInterval(ideaPollTimer); ideaPollTimer = null; return; }
+      var busy = loadIdeaLocal().length || ideaRows.some(function (r) { return r.status !== 'done'; });
+      if (busy) refreshIdeas(true);
+    }, 15000);
+  }
+  // silent=true: 암호 없으면 조용히 넘어감(시작 시 원본 정리용). false: 암호 게이트를 띄움.
+  function refreshIdeas(silent) {
+    if (!(window.OfficeBridge && OfficeBridge.listIdeas)) return;
+    var pass = getSyncPass();
+    if (!pass) {
+      if (!silent && isOpen(ideasView)) showSyncGate(true, '아이디어 목록을 보려면 PC 연동 암호를 입력해 주세요.');
+      renderIdeas(); return;
+    }
+    if (ideaLoading) return; ideaLoading = true;
+    OfficeBridge.listIdeas(100, pass).then(function (rows) {
+      ideaLoading = false;
+      ideaRows = Array.isArray(rows) ? rows : [];
+      var onServer = {};
+      ideaRows.forEach(function (r) {
+        onServer[r.id] = true;
+        if (r.status === 'done') OfficeBridge.dropPending(r.id);   // ★ PC 정리 확인 뒤에만 폰 원본 삭제(v5.1 규약)
+      });
+      // 로컬 목록 정리: 서버에 올라간 것은 서버 목록이 보여주므로 로컬 표시를 뗀다(원본 삭제는 위 done 조건만).
+      var now = Date.now(), changed = false;
+      var a = loadIdeaLocal().filter(function (x) {
+        if (onServer[x.id]) { changed = true; return false; }
+        if (x.status === 'sent' && now - (x.ts || now) > IDEA_STUCK_MS) {   // 보냈다는데 서버에 없음 → 실패로
+          x.status = 'failed'; x.err = 'PC가 받지 못했어요(전송이 서버까지 도달하지 못함).'; changed = true;
+          if (x.input === 'voice') OfficeBridge.markResendable(x.id);
+        }
+        return true;
+      });
+      if (changed) saveIdeaLocal(a);
+      renderIdeas();
+    }).catch(function (e) {
+      ideaLoading = false;
+      if (e && e.badpass) {
+        setSyncPass('');
+        if (!silent && isOpen(ideasView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.');
+      } else if (!silent) toast('아이디어 목록을 불러오지 못했어요. 잠시 후 다시 시도해요.');
+      renderIdeas();
+    });
+  }
+
+  /* ---- 그리기 ---- */
+  function ideaOf(r) { return (r && r.summary_json && r.summary_json.idea) || null; }
+  function ideaWhen(ts) {
+    var d = new Date(ts); if (isNaN(d.getTime())) return '';
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function ideaStatus(r) {   // [라벨, 클래스]
+    var sj = r.summary_json || {}, idea = ideaOf(r);
+    if (idea) {
+      if (sj.decision === 'go') return ['진행 요청', 'go'];
+      if (sj.decision === 'hold') return ['보류', ''];
+      return ['제안완료', 'done'];
+    }
+    if (r.status === 'done') return [sj.retry ? '제안 재시도 중' : '제안 실패', sj.retry ? 'wait' : 'err'];
+    if (ideaIsNight(new Date(r.created_at)) && ideaIsNight()) return ['받았습니다 🌙', 'wait'];
+    return ['정리중', 'wait'];
+  }
+  function renderIdeaFilter(rows) {
+    if (!ideaFilterEl) return;
+    var cnt = {}; IDEA_TAG_ORDER.forEach(function (k) { cnt[k] = 0; });
+    rows.forEach(function (r) { var i = ideaOf(r); (i && i.tags || []).forEach(function (t) { if (cnt[t] != null) cnt[t]++; }); });
+    var html = '<button class="chip' + (ideaFilter === 'all' ? ' on' : '') + '" data-if="all">전체 ' + rows.length + '</button>';
+    IDEA_TAG_ORDER.forEach(function (k) {
+      if (!cnt[k] && ideaFilter !== k) return;
+      html += '<button class="chip' + (ideaFilter === k ? ' on' : '') + '" data-if="' + k + '">' + IDEA_TAGS[k] + ' ' + cnt[k] + '</button>';
+    });
+    ideaFilterEl.innerHTML = rows.length ? html : '';
+    Array.prototype.forEach.call(ideaFilterEl.querySelectorAll('[data-if]'), function (b) {
+      b.addEventListener('click', function () { ideaFilter = b.getAttribute('data-if'); renderIdeas(); });
+    });
+  }
+  function renderIdeaCard(r, local) {
+    var idea = ideaOf(r), sj = r.summary_json || {}, st, said;
+    if (local) {
+      st = r.status === 'failed' ? ['전송 실패', 'err'] : (r.status === 'sending' ? ['보내는 중', 'wait'] : (ideaIsNight(new Date(r.ts)) ? ['받았습니다 🌙', 'wait'] : ['정리중', 'wait']));
+      said = r.input === 'text' ? (r.text || '') : '(말씀하신 녹음 — PC에서 받아쓰는 중이에요)';
+    } else {
+      st = ideaStatus(r);
+      said = [r.transcript || '', r.note || ''].filter(function (x) { return x && x.trim(); }).join('\n');
+      if (!said) said = (r.status === 'done') ? '(인식된 말이 없어요)' : '(PC에서 받아쓰는 중이에요)';
+    }
+    var title = (idea && idea.title) || (said && said.charAt(0) !== '(' ? said.slice(0, 22) + (said.length > 22 ? '…' : '') : '아이디어');
+    var h = '<div class="card idea-item" data-iid="' + esc(r.id) + '">';
+    h += '<div class="idea-head"><b>' + esc(title) + '</b><span class="idea-st ' + st[1] + '">' + esc(st[0]) + '</span></div>';
+    h += '<div class="idea-when">' + esc(ideaWhen(local ? r.ts : r.created_at)) + (local && r.input === 'voice' ? ' · 🎤' : '') + '</div>';
+    if (idea && idea.tags && idea.tags.length) {
+      h += '<div class="idea-tags">' + idea.tags.map(function (t) { return '<span class="idea-tag">' + esc(IDEA_TAGS[t] || t) + '</span>'; }).join('') + '</div>';
+    }
+    // 말한 내용(전사) — 제안이 있으면 접어서, 없으면 펼쳐서
+    if (idea) h += '<details><summary>말씀하신 내용 보기</summary><div class="idea-said">' + esc(said) + '</div></details>';
+    else h += '<div class="idea-said">' + esc(said) + '</div>';
+    if (idea) {
+      var pick = idea.pick || 0, chosen = (sj.decision === 'go' && sj.choice != null) ? sj.choice : null;
+      h += '<div class="idea-body"><b>핵심</b> ' + esc(idea.summary || '') + '</div>';
+      (idea.uses || []).forEach(function (u, i) {
+        h += '<div class="idea-use' + (i === pick ? ' pick' : '') + '">' +
+             ((i === pick || chosen === i) ? '<div class="u-b">' + (i === pick ? '<span class="idea-st go">★ 소장 추천</span> ' : '') +
+               (chosen === i ? '<span class="idea-st done">진행 요청함</span>' : '') + '</div>' : '') +
+             '<div class="u-h">' + (i + 1) + ') ' + esc(u.tag || IDEA_TAGS[u.cat] || '') + ' ' + esc(u.what || '') + '</div>' +
+             '<div class="u-t">' + esc(u.how || '') + '</div>' +
+             (u.effect ? '<div class="u-e">→ ' + esc(u.effect) + '</div>' : '') +
+             (i !== pick ? '<button class="btn ghost sm" data-igo="' + i + '">이 방향으로 진행</button>' : '') +
+             '</div>';
+      });
+      h += '<div class="idea-meta">👍 <b>소장 추천 ' + (pick + 1) + '번</b> — ' + esc(idea.pick_reason || '') +
+           '<br>난이도 ' + esc(idea.difficulty || '') + ' · 예상 ' + esc(idea.effort || '') + '</div>';
+      if ((idea.links && idea.links.length) || idea.related_note) {
+        h += '<div class="idea-meta">🔗 ' + (idea.links && idea.links.length ? '「' + esc(idea.links.join(', ')) + '」과 연결됨' + (idea.related_note ? ' — ' : '') : '') + esc(idea.related_note || '') + '</div>';
+      }
+      if (idea.clarify) h += '<div class="idea-meta">❓ ' + esc(idea.clarify) + '</div>';
+      h += '<div class="idea-actions">' +
+           '<button class="btn primary" data-igo="' + pick + '">진행해줘</button>' +
+           '<button class="btn ghost" data-ihold="1">보류</button></div>';
+    } else if (!local && r.status === 'done' && r.error) {
+      h += '<div class="idea-meta">⚠️ ' + esc(r.error) + '</div>';
+    } else if (local && r.status === 'failed') {
+      h += '<div class="idea-meta">⚠️ ' + esc(r.err || '전송하지 못했어요. 폰에 안전하게 보관돼 있어요.') + '</div>' +
+           '<div class="idea-actions"><button class="btn primary" data-iresend="1">다시 보내기</button></div>';
+    } else if (!local && r.progress_msg) {
+      h += '<div class="idea-meta">⏳ ' + esc(r.progress_msg) + '</div>';
+    }
+    h += '<div class="idea-actions end"><button class="btn ghost idea-del" data-idel="1"><svg><use href="#i-trash"/></svg>삭제</button></div>';
+    h += '</div>';
+    return h;
+  }
+  function renderIdeas() {
+    if (!ideaList) return;
+    var onServer = {}; ideaRows.forEach(function (r) { onServer[r.id] = true; });
+    var locals = loadIdeaLocal().filter(function (x) { return !onServer[x.id]; }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    renderIdeaFilter(ideaRows);
+    var rows = ideaFilter === 'all' ? ideaRows : ideaRows.filter(function (r) { var i = ideaOf(r); return i && (i.tags || []).indexOf(ideaFilter) !== -1; });
+    var html = '';
+    if (ideaFilter === 'all') locals.forEach(function (x) { html += renderIdeaCard(x, true); });
+    rows.forEach(function (r) { html += renderIdeaCard(r, false); });
+    if (!html) {
+      html = !getSyncPass()
+        ? '<p class="empty-note">아이디어 목록을 보려면 PC 연동 암호가 필요해요.</p>'
+        : '<p class="empty-note">' + (ideaFilter === 'all' ? '떠오른 생각을 말하거나 적어 보세요.<br>소장이 어떻게 활용할지 제안해 드려요.' : '이 갈래의 아이디어가 아직 없어요.') + '</p>';
+    }
+    ideaList.innerHTML = html;
+    Array.prototype.forEach.call(ideaList.querySelectorAll('[data-iid]'), function (card) {
+      var id = card.getAttribute('data-iid');
+      Array.prototype.forEach.call(card.querySelectorAll('[data-igo]'), function (b) {
+        b.addEventListener('click', function () { decideIdea(id, 'go', parseInt(b.getAttribute('data-igo'), 10) || 0); });
+      });
+      var hb = card.querySelector('[data-ihold]'); if (hb) hb.addEventListener('click', function () { decideIdea(id, 'hold', null); });
+      var rb = card.querySelector('[data-iresend]'); if (rb) rb.addEventListener('click', function () { resendIdea(id); });
+      var db = card.querySelector('[data-idel]'); if (db) db.addEventListener('click', function () { deleteIdea(id); });
+    });
+  }
+
+  /* ---- 보내기: 음성 ---- */
+  function ensureIdeaRecorder() {
+    if (ideaRecorder) return ideaRecorder;
+    ideaRecorder = new RecordingModule({
+      onStatus: function (s) { if (s === 'error') resetIdeaRecUI(); },
+      onError: function (m) { toast('🎤 ' + m); resetIdeaRecUI(); },
+      onAudio: function (blob) { onIdeaAudio(blob); }
+    });
+    return ideaRecorder;
+  }
+  function setIdeaRecUI(on) {
+    if (ideaRecBtn) { ideaRecBtn.classList.toggle('stop', on); ideaRecBtn.classList.toggle('pulsing', on); }
+    var ic = $('ideaRecIcon'); if (ic) ic.innerHTML = '<use href="#' + (on ? 'i-stop' : 'i-mic') + '"/>';
+    if (ideaRecLabel) ideaRecLabel.textContent = on ? '듣고 있어요 00:00' : '눌러서 말하기';
+    if (ideaRecHint) ideaRecHint.textContent = on ? '다 말씀하셨으면 한 번 더 누르세요 — 바로 보내요' : '한 번 누르면 바로 녹음, 다시 누르면 보내요';
+  }
+  function resetIdeaRecUI() {
+    ideaRecording = false;
+    if (ideaRecTick) { clearInterval(ideaRecTick); ideaRecTick = null; }
+    if (ideaRecAuto) { clearTimeout(ideaRecAuto); ideaRecAuto = null; }
+    setIdeaRecUI(false);
+  }
+  function startIdeaRec() {
+    if (ideaRecording) return;
+    if (isRecording) { toast('회의 녹음이 진행 중이에요. 먼저 마쳐 주세요.'); return; }
+    if (chatRecording) { toast('케이와 음성 대화 중이에요. 먼저 마쳐 주세요.'); return; }
+    if (!RecordingModule.isSupported()) { toast('이 기기에서는 녹음을 쓸 수 없어요. 글로 적어 주세요.'); return; }
+    var r = ensureIdeaRecorder();
+    ideaRecCancel = false; ideaRecording = true; ideaRecStart = Date.now();
+    setIdeaRecUI(true);
+    ideaRecTick = setInterval(function () {
+      if (ideaRecLabel) ideaRecLabel.textContent = '듣고 있어요 ' + fmtSec((Date.now() - ideaRecStart) / 1000);
+    }, 500);
+    ideaRecAuto = setTimeout(function () { if (ideaRecording) { toast('5분이 지나 자동으로 보냈어요.'); stopIdeaRec(); } }, IDEA_MAX_REC_MS);
+    try { r.start(); } catch (e) { toast('녹음을 시작하지 못했어요.'); resetIdeaRecUI(); }
+  }
+  function stopIdeaRec() {
+    if (!ideaRecording) return;
+    resetIdeaRecUI();
+    if (ideaRecLabel) ideaRecLabel.textContent = '보내는 중…';
+    try { ideaRecorder.stop(); } catch (e) { toast('녹음 정지에 실패했어요.'); setIdeaRecUI(false); }
+  }
+  function onIdeaAudio(blob) {
+    setIdeaRecUI(false);
+    if (ideaRecCancel) { ideaRecCancel = false; return; }
+    var dur = (ideaRecorder && ideaRecorder.lastDurationMs) || 0;
+    if (!blob || (blob.size || 0) < 1200 || (dur && dur < 700)) { toast('너무 짧아요. 버튼을 누르고 말씀한 뒤 다시 눌러 주세요.'); return; }
+    var t = now();
+    var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '아이디어', kind: 'idea',
+                 ext: OfficeBridge.extFromBlob(blob), date: t.date, time: t.time, materials: [] };
+    upsertIdeaLocal({ id: memo.id, token: memo.token, ts: Date.now(), input: 'voice', status: 'sending' });
+    renderIdeas();
+    OfficeBridge.send(memo, blob).then(function () {
+      upsertIdeaLocal({ id: memo.id, status: 'sent', ts: Date.now() });
+      renderIdeas(); ideaSentToast(); startIdeaPoll();
+    }).catch(function (e) {
+      upsertIdeaLocal({ id: memo.id, status: 'failed', err: '전송 실패(인터넷 확인). 녹음은 폰에 안전하게 보관돼 있어요 — 연결되면 자동으로 다시 보내요.' });
+      renderIdeas(); toast('⚠️ 전송 실패 — 녹음은 폰에 보관됐어요. 인터넷이 되면 자동으로 다시 보내요.');
+    });
+  }
+  if (ideaRecBtn) ideaRecBtn.addEventListener('click', function () {
+    if (ideaRecording) stopIdeaRec(); else startIdeaRec();
+  });
+
+  /* ---- 보내기: 글 ---- */
+  function sendIdeaTextUI(text, reuseId, reuseTok) {
+    var id = reuseId || OfficeBridge.uuid(), tok = reuseTok || OfficeBridge.token();
+    upsertIdeaLocal({ id: id, token: tok, ts: Date.now(), input: 'text', text: text, status: 'sending' });
+    renderIdeas();
+    return OfficeBridge.sendIdeaText({ id: id, token: tok, note: text }).then(function () {
+      upsertIdeaLocal({ id: id, status: 'sent', ts: Date.now() });
+      renderIdeas(); ideaSentToast(); startIdeaPoll();
+    }).catch(function () {
+      upsertIdeaLocal({ id: id, status: 'failed', err: '전송 실패(인터넷 확인). 적으신 글은 폰에 남아 있어요.' });
+      renderIdeas(); toast('⚠️ 전송 실패 — 글은 남아 있어요. [다시 보내기]를 눌러 주세요.');
+    });
+  }
+  if (ideaSendBtn) ideaSendBtn.addEventListener('click', function () {
+    var text = ((ideaInput && ideaInput.value) || '').trim();
+    if (!text) { toast('아이디어를 적어 주세요.'); return; }
+    if (ideaInput) ideaInput.value = '';
+    sendIdeaTextUI(text.slice(0, 4000));
+  });
+  function resendIdea(id) {
+    var x = null; loadIdeaLocal().forEach(function (e) { if (e.id === id) x = e; });
+    if (!x) return;
+    if (x.input === 'text') { sendIdeaTextUI(x.text || '', x.id, x.token); return; }
+    upsertIdeaLocal({ id: id, status: 'sending', ts: Date.now() }); renderIdeas();
+    OfficeBridge.markResendable(id).then(function () {
+      return OfficeBridge.flush();                                // 보존 원본(IndexedDB)을 같은 id 로 재전송
+    }).then(function () {
+      // flush 는 건별 실패를 삼키므로 여기선 'sent'로 두고, 10분 안에 서버에 안 보이면 refreshIdeas 가 다시 '실패'로 돌린다.
+      upsertIdeaLocal({ id: id, status: 'sent', ts: Date.now() }); renderIdeas(); startIdeaPoll();
+      setTimeout(function () { refreshIdeas(true); }, 4000);
+    }).catch(function () {
+      upsertIdeaLocal({ id: id, status: 'failed' }); renderIdeas(); toast('아직 보내지 못했어요. 잠시 후 다시 눌러 주세요.');
+    });
+  }
+
+  /* ---- 결정: [진행해줘]/[보류] ---- */
+  function findIdeaRow(id) { for (var i = 0; i < ideaRows.length; i++) if (ideaRows[i].id === id) return ideaRows[i]; return null; }
+  function decideIdea(id, decision, choice) {
+    var r = findIdeaRow(id), idea = ideaOf(r); if (!r || !idea) return;
+    var pass = getSyncPass();
+    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주세요.'); return; }
+    var u = (idea.uses || [])[choice || 0] || {};
+    var doIt = function () {
+      OfficeBridge.setIdeaDecision(id, decision, decision === 'go' ? (choice || 0) : null, getSyncPass()).then(function (ok) {
+        if (!ok) { toast('저장하지 못했어요(아직 정리 전일 수 있어요).'); return; }
+        r.summary_json = Object.assign({}, r.summary_json || {}, { decision: decision, choice: decision === 'go' ? (choice || 0) : null });
+        renderIdeas();
+        if (decision === 'hold') { toast('보류로 표시했어요.'); return; }
+        forwardIdeaToK(r, idea, choice || 0);
+      }).catch(function (e) {
+        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+        else toast('저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
+      });
+    };
+    if (decision !== 'go') { doIt(); return; }
+    openSheet('이 방향으로 진행할까요?',
+      (choice + 1) + ') ' + (u.tag || '') + ' ' + (u.what || '') + '\n소장 K에게 채팅으로 전달돼요. 소장이 계획을 먼저 정리해 여쭤요.',
+      '진행해줘', doIt);
+    if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-check'); }   // 긍정 동작이라 휴지통·빨강 대신 ✓
+  }
+  // 진행해줘 → 소장 K 채팅으로 전달(대표님 이름으로 보내는 채팅 1건). 실패해도 결정 저장은 이미 끝남.
+  function forwardIdeaToK(r, idea, choice) {
+    var u = (idea.uses || [])[choice] || {};
+    var said = [r.transcript || '', r.note || ''].filter(function (x) { return x && x.trim(); }).join(' ').slice(0, 300);
+    var text = '💡 [아이디어 진행 요청] 「' + (idea.title || '아이디어') + '」\n' +
+               '진행할 방향: ' + (choice + 1) + ') ' + (u.tag || '') + ' ' + (u.what || '') + ' — ' + (u.how || '') + '\n' +
+               (choice !== (idea.pick || 0) ? '(소장 추천은 ' + ((idea.pick || 0) + 1) + '번이었지만 이 방향으로 골랐어요)\n' : '') +
+               '말한 내용: ' + said + '\n' +
+               '소장님, 바로 만들지 말고 먼저 진행 계획(범위·일정·제가 승인할 것)을 정리해서 알려 주세요.';
+    try {
+      var cid = OfficeBridge.uuid(), tok = OfficeBridge.token();
+      chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: cid, token: tok, answered: false });
+      saveChatMsgs(); renderChat();
+      OfficeBridge.sendChat(cid, tok, chatThread, text, { speak: false }).then(function () {
+        startChatReconcile();
+        toast('진행 요청을 소장 K에게 보냈어요. 채팅에서 답을 확인하세요.');
+      }).catch(function () {
+        var m = findMsg(cid); if (m) m.answered = true;
+        saveChatMsgs(); renderChat();
+        toast('결정은 저장됐지만 소장에게 전달하지 못했어요. 채팅으로 한 번 말씀해 주세요.');
+      });
+    } catch (e) { toast('결정은 저장됐어요. 소장 전달은 채팅으로 한 번 말씀해 주세요.'); }
+  }
+
+  /* ---- 삭제(소프트삭제 hide_memo 재사용 · 복구 가능) ---- */
+  function deleteIdea(id) {
+    var isLocal = !findIdeaRow(id);
+    openSheet('이 아이디어를 지울까요?',
+      isLocal ? '아직 PC로 보내지 못한 아이디어예요. 지우면 폰에 보관된 원본도 함께 지워져요.'
+              : '목록에서 사라져요. 소프트삭제라 서버 원본은 남아 있어(복구 가능) 안심하셔도 돼요.',
+      '삭제', function () {
+        if (isLocal) { removeIdeaLocal(id); OfficeBridge.dropPending(id); renderIdeas(); toast('지웠어요.'); return; }
+        var pass = getSyncPass();
+        if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주세요.'); return; }
+        OfficeBridge.hideMemo(id, pass).then(function () {
+          ideaRows = ideaRows.filter(function (x) { return x.id !== id; });
+          OfficeBridge.dropPending(id);                             // 폰에 남은 원본(있으면)도 정리
+          removeIdeaLocal(id); renderIdeas(); toast('지웠어요.');
+        }).catch(function (e) {
+          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+          else toast('삭제에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        });
+      });
+  }
+
+  if ($('btnIdeas')) $('btnIdeas').addEventListener('click', openIdeas);
+  window.addEventListener('smartOpenIdeas', function () { openIdeas(); });   // 제안 알림 탭 → 아이디어 화면
+
   /* ===================== 시작 ===================== */
   setStatus('대기 중', 'idle');
   renderHistory();
@@ -2560,6 +2939,8 @@
   if (!getSeenHW()) setSeenHW(Date.now());
   loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
   loadChatSync();       // 시작 시, 다른 기기에서 온 대화도 한 번 확인(암호 설정돼 있을 때만)
+  // v5.5: 보내 둔 아이디어가 있으면 조용히 한 번 확인 → PC 정리(done)된 것의 폰 원본 정리·로컬 표시 갱신
+  if (loadIdeaLocal().length && getSyncPass()) refreshIdeas(true);
 
   /* ---- 건강 탭: 화면 열기/연결(로직은 health.js) ---- */
   var healthView = $('healthView');

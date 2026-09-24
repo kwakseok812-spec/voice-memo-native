@@ -73,7 +73,7 @@
       try { if (PN.removeAllDeliveredNotifications) PN.removeAllDeliveredNotifications(); } catch (e) {}
       var scr = '';
       try { scr = (a && a.notification && a.notification.data && a.notification.data.screen) || ''; } catch (e) {}
-      try { global.dispatchEvent(new CustomEvent(scr === 'health' ? 'smartOpenHealth' : 'smartOpenChat')); } catch (e) {}
+      try { global.dispatchEvent(new CustomEvent(scr === 'health' ? 'smartOpenHealth' : scr === 'ideas' ? 'smartOpenIdeas' : 'smartOpenChat')); } catch (e) {}   // v5.5: 아이디어 제안 알림 → 아이디어 화면
     });
 
     // 권한 확인 → 없으면 요청 → 허용 시 등록

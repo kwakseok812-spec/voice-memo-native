@@ -22,7 +22,8 @@
   // 대상별 웹 요소 매핑: 입력창 · 전송 · 첨부(＋) · 카메라(공유함엔 없음) · 안내문
   var MAP = {
     chat:   { input: 'chatInput',   send: 'chatSend',   attach: 'chatAttach',   cam: 'chatCam', hint: '메시지 입력' },
-    locker: { input: 'lockerInput', send: 'lockerSend', attach: 'lockerAttach', cam: null,      hint: '여기에 글을 쓰거나 파일을 올리세요' }
+    locker: { input: 'lockerInput', send: 'lockerSend', attach: 'lockerAttach', cam: null,      hint: '여기에 글을 쓰거나 파일을 올리세요' },
+    idea:   { input: 'ideaInput',   send: 'ideaSend',   attach: null,           cam: null,      hint: '떠오른 생각을 적어 주세요' }   // v5.5 아이디어 수첩
   };
   var current = null;      // 현재 열려 있는 입력 대상('chat' | 'locker')
   var hiddenBar = null;    // 네이티브 입력 중 숨겨둔 웹 하단 바(.chatbar) — 닫힐 때 복원
@@ -148,7 +149,7 @@
     current = null;
   });
 
-  function init() { wire('chat'); wire('locker'); }
+  function init() { wire('chat'); wire('locker'); wire('idea'); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
   if (global.console) console.log('[native-input] 네이티브 채팅 입력 활성화(색 자동 일치)');

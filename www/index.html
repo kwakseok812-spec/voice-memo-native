@@ -123,6 +123,7 @@
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
+      <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
@@ -292,6 +293,25 @@
       <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
       <div id="meetingsList"></div>
       <div id="meetingsDetail" style="display:none;"></div>
+    </section>
+
+    <!-- ===================== 💡 아이디어 수첩(v5.5) ===================== -->
+    <section id="ideasView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">💡 아이디어</span><span class="spacer"></span></div>
+      <div class="orbwrap ideaorb">
+        <button class="orbbtn" id="ideaRecBtn" aria-label="아이디어 말하기">
+          <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
+          <span class="core"><svg id="ideaRecIcon"><use href="#i-mic"/></svg></span>
+        </button>
+        <div class="orblabel" id="ideaRecLabel">눌러서 말하기</div>
+        <div class="orbhint" id="ideaRecHint">한 번 누르면 바로 녹음, 다시 누르면 보내요</div>
+      </div>
+      <div class="chatbar ideabar">
+        <div class="input chatinput"><textarea id="ideaInput" rows="1" placeholder="글로 적어도 돼요"></textarea></div>
+        <button id="ideaSend" class="chatsend" aria-label="아이디어 보내기"><svg><use href="#i-send"/></svg></button>
+      </div>
+      <div id="ideaFilter" class="ideafilter"></div>
+      <div id="ideaList"></div>
     </section>
 
     <!-- ===================== 건강 ===================== -->

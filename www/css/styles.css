@@ -703,3 +703,42 @@ body.doc-fs #docFsHint{display:block}
   font-family:inherit;font-size:13.5px;font-weight:800}
 .attach-dl:active{transform:scale(.985)}
 .bubble.me .attach-dl{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}
+
+/* ===================== 💡 아이디어 수첩(v5.5, 2026-09-24) =====================
+   ⚠️ backdrop-filter 를 새로 쓰지 않는다(입력 렉 원인). 카드는 기존 .card 재사용, 추가 요소는 단색 배경만. */
+.ideaorb .orbbtn{width:196px;height:196px}
+.ideaorb .orbbtn .core{width:160px;height:160px}
+.ideaorb .orblabel{margin-top:24px}
+.ideabar{position:static;margin-top:18px;padding:0;background:none}
+.ideafilter{display:flex;flex-wrap:wrap;gap:7px;margin:18px 0 6px}
+.ideafilter .chip{cursor:pointer;height:34px;font-size:13.5px}
+.idea-item{margin-top:10px;padding:14px 15px}
+.idea-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.idea-head b{font-size:16.5px;flex:1 1 auto;min-width:0}
+.idea-when{font-size:12px;color:var(--dim);font-weight:600}
+.idea-st{font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(120,140,200,.16);color:var(--muted)}
+.idea-st.done{background:rgba(34,197,94,.18);color:#22c55e}
+.idea-st.wait{background:rgba(250,204,21,.18);color:#eab308}
+.idea-st.err{background:rgba(244,63,94,.16);color:#f43f5e}
+.idea-st.go{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
+.idea-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.idea-tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px;background:rgba(120,140,200,.14);color:var(--muted)}
+.idea-said{margin-top:8px;font-size:14.5px;line-height:1.6;color:var(--muted);white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word}
+.idea-body{margin-top:10px;font-size:15px;line-height:1.65;word-break:keep-all;overflow-wrap:break-word}
+.idea-use{margin-top:8px;padding:10px 11px;border-radius:14px;border:1px solid var(--glass-b);background:rgba(120,140,200,.07)}
+.idea-use.pick{border-color:var(--p1);background:rgba(99,102,241,.12)}
+.idea-use .u-h{font-weight:800;font-size:14.5px}
+.idea-use .u-t{font-size:14px;line-height:1.55;margin-top:3px}
+.idea-use .u-e{font-size:13px;color:var(--dim);margin-top:2px}
+.idea-use .btn.sm{height:40px;font-size:14.5px;border-radius:12px;margin-top:8px}
+.idea-meta{margin-top:8px;font-size:13.5px;line-height:1.55;color:var(--muted)}
+.idea-actions{display:flex;gap:8px;margin-top:12px}
+.idea-actions .btn{height:48px;font-size:16px;border-radius:14px}
+.idea-actions .btn.ghost{background:rgba(120,140,200,.12);backdrop-filter:none;-webkit-backdrop-filter:none}
+.idea-item details summary{cursor:pointer;font-weight:700;font-size:14px;margin-top:8px;color:var(--dim)}
+.idea-use .btn.ghost{background:rgba(120,140,200,.12);backdrop-filter:none;-webkit-backdrop-filter:none}
+.ideaorb{margin-top:46px}
+.idea-use .u-b{margin-bottom:4px}
+.idea-actions.end{justify-content:flex-end}
+.idea-actions .btn.idea-del{width:auto;height:36px;font-size:13.5px;padding:0 14px;border-radius:12px;color:var(--dim)}
+.idea-actions .btn.idea-del svg{width:16px;height:16px}
