@@ -451,8 +451,49 @@
       return '<div><i>' + (dec ? '<svg><use href="#i-check"/></svg>' : '') + '</i>' + esc(s) + '</div>';
     }).join('') + '</div>';
   }
+  // v5.7(준비안 · 2026-09-25 · 빌드·배포 전): 요약 v3(summary_json.brief)면 '한눈 요약' 화면.
+  //   맨 위 한 줄 결론을 크게 → 핵심(번호) → (교수 피드백) → 결정 → 할 일(담당·기한 칩) → 미결·다음 → 상세(접힘).
+  //   brief 가 없는 옛 요약본은 아래 기존 renderCards 그대로(하위호환). '자주 나온 단어' 카드는 brief 화면에선 숨김.
+  function hiNum(s) {   // 숫자·날짜·수량을 굵게(esc 뒤 적용 — esc 는 숫자 엔티티를 만들지 않음)
+    return esc(s).replace(/(\d{1,4}(?:[.\/~:\-]\d{1,4})*(?:\s?(?:명|억원|억|만원|원|%|점|학점|개월|월|일|주차|주|시|분|년|개|차|회|쪽|건|팀))?(?:\([월화수목금토일]\))?)/g,
+      '<b style="color:var(--text)">$1</b>');
+  }
+  function briefList(arr, numbered) {
+    return '<div class="check">' + arr.map(function (s, i) {
+      return '<div><i style="border:none;font-weight:800;color:var(--cyan)">' + (numbered ? (i + 1) : '·') + '</i><span>' + hiNum(s) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  function briefTodo(arr) {
+    return '<div class="check">' + arr.map(function (t) {
+      var chips = (t.owner ? '<span class="chip" style="height:26px;font-size:13px;margin:4px 6px 0 0">담당 <b>' + esc(t.owner) + '</b></span>' : '') +
+                  (t.due ? '<span class="chip" style="height:26px;font-size:13px;margin:4px 6px 0 0">기한 <b>' + esc(t.due) + '</b></span>' : '');
+      return '<div><i></i><span>' + hiNum(t.task) + (chips ? '<br>' + chips : '') + '</span></div>';
+    }).join('') + '</div>';
+  }
+  function briefCard(cls, icon, title, inner) {
+    return '<div class="card rcard' + (cls ? ' ' + cls : '') + '"><div class="h"><svg><use href="#' + icon + '"/></svg>' + esc(title) + '</div>' + inner + '</div>';
+  }
+  function renderBrief(sj) {
+    var b = sj.brief, tut = b.mode === 'tutoring', html = '';
+    // ① 한 줄 결론 + 핵심 — 이 카드만 봐도 파악이 끝나게
+    html += '<div class="card rcard" style="border-left:4px solid var(--cyan)">' +
+      '<div class="h"><svg><use href="#i-note"/></svg>' + (tut ? '이번 튜터링 한 줄' : '한 줄 결론') + '</div>' +
+      '<p style="font-size:19px;font-weight:800;line-height:1.45;margin:0 0 12px">' + hiNum(b.headline || '') + '</p>' +
+      ((b.key_points && b.key_points.length) ? '<div class="h" style="margin-top:4px">' + (tut ? '진행 상황' : '핵심') + '</div>' + briefList(b.key_points, true) : '') +
+      '</div>';
+    if (tut && b.feedback && b.feedback.length) html += briefCard('todo', 'i-flag', '교수 피드백', briefList(b.feedback, false));
+    if (b.decisions && b.decisions.length) html += briefCard('dec', 'i-flag', tut ? '팀 결정 사항' : '결정 사항',
+      '<div class="check dec">' + b.decisions.map(function (d) { return '<div><i><svg><use href="#i-check"/></svg></i><span>' + hiNum(d) + '</span></div>'; }).join('') + '</div>');
+    if (b.todos && b.todos.length) html += briefCard('todo', 'i-list', tut ? '다음까지 할 일' : '할 일', briefTodo(b.todos));
+    if (b.next && b.next.length) html += briefCard('', 'i-list', tut ? '미결·확인 필요' : '다음 일정·미결', briefList(b.next, false));
+    if (b.detail && b.detail.length)
+      html += '<details class="card rcard" style="padding:10px 12px"><summary style="cursor:pointer;font-weight:600">상세 정리 (펼치기)</summary>' +
+        '<div style="margin-top:10px">' + briefList(b.detail, false) + '</div></details>';
+    return html;
+  }
   function renderCards(sj) {
     sj = sj || {};
+    if (sj.brief && sj.brief.headline) return renderBrief(sj);
     var html = '';
     var sum = (sj.summary && sj.summary.length) ? sj.summary.join(' ') : '';
     html += '<div class="card rcard"><div class="h"><svg><use href="#i-note"/></svg>요약</div>' +
@@ -1090,7 +1131,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.6';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.7';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
