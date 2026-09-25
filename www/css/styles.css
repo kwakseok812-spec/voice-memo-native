@@ -912,3 +912,8 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 .kw-cat:first-child{margin-top:0}
 .kw-cat::after{content:"";flex:1;height:1px;background:var(--glass-b)}
 .kw-cat small{font-size:12px;font-weight:700;color:var(--dim)}
+/* O-0040 케이 꾸미기: 옷/머리 탭 · 준비 중 표시 */
+.kw-seg{margin:16px auto 0;max-width:420px}
+.kw-item .kw-soon{position:absolute;left:6px;right:6px;bottom:6px;padding:2px 6px;border-radius:8px;background:rgba(5,8,20,.62);color:#fff;font-size:10.5px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kw-item.new span.kw-nm{color:var(--dim);font-weight:700}
+#kwHairNote{margin-top:10px}

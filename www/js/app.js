@@ -1774,19 +1774,23 @@
     }
     renderPending();
     // (3) 남은 순수 텍스트(첨부가 하나도 없을 때) — 기존 경로(음성 답은 음성 대화 모드일 때만)
-    if (!textUsed && text) {
-      var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
-      chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus });
+    if (!textUsed && text) sendPlainChat(text, opus);
+  }
+  // 순수 텍스트 1건을 케이 채팅으로 보낸다(sendChatMsg 의 (3)과 같은 경로 — O-0040 「추가 요청」도 이걸 재사용)
+  function sendPlainChat(text, opus) {
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus });
+    saveChatMsgs(); renderChat(); updateSendEnabled();
+    return OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn, modelPref: opus ? 'opus' : null }).then(function () {
+      kickOrderPoll();                          // v5.8: 작업 카드가 곧 붙도록
+      startChatReconcile();
+      return true;
+    }).catch(function () {
+      var m = findMsg(id); if (m) m.answered = true;
+      chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); renderChat(); updateSendEnabled();
-      OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn, modelPref: opus ? 'opus' : null }).then(function () {
-        kickOrderPoll();                          // v5.8: 작업 카드가 곧 붙도록
-        startChatReconcile();
-      }).catch(function () {
-        var m = findMsg(id); if (m) m.answered = true;
-        chatMsgs.push({ role: 'k', text: '죄송해요, 전송이 안 됐어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
-        saveChatMsgs(); renderChat(); updateSendEnabled();
-      });
-    }
+      return false;
+    });
   }
 
   /* ---- 통합 전송: (선택)음성 + (선택)사진 + 텍스트 한 턴 → 케이가 보고/듣고 답 ---- */
@@ -2814,7 +2818,8 @@
   function renderKWardrobe() {
     if (!window.KChar) return;
     var cur = KChar.outfit(), list = KChar.outfits();
-    if ($('kwCurName')) $('kwCurName').textContent = cur.name;
+    if ($('kwCurName')) $('kwCurName').textContent = KChar.lookName ? KChar.lookName() : cur.name;
+    var curHair = KChar.hair ? KChar.hair() : null, hairOn = curHair && curHair.id !== KChar.defaultHair;
     if ($('kwCount')) $('kwCount').textContent = String(list.length);
     var g = $('kwGrid');
     if (g) {
@@ -2826,15 +2831,82 @@
         var c = o.category || '';
         if (multiCat && c !== lastCat) { lastCat = c; head = '<div class="kw-cat">' + esc(c || '기타') + ' <small>' + cats[c] + '벌</small></div>'; }
         return head + '<button type="button" class="kw-item' + (on ? ' on' : '') + '" data-outfit="' + esc(o.id) + '">' +
-          '<span class="kw-th"><img src="' + esc(KChar.thumbUrl(o)) + '" alt="" loading="lazy">' + (on ? '<span class="kw-on">입는 중</span>' : '') + '</span>' +
+          '<span class="kw-th"><img src="' + esc(KChar.thumbUrl(o)) + '" alt="" loading="lazy">' + (on ? '<span class="kw-on">입는 중</span>' : '') +
+          (hairOn && !KChar.hasLook(curHair.id, o.id) ? '<span class="kw-soon">이 머리는 준비 중</span>' : '') + '</span>' +
           '<span class="kw-nm">' + esc(o.name) + '</span></button>';
       }).join('') +
-        '<button type="button" class="kw-item new" id="kwNew"><span class="kw-th"><div><svg><use href="#i-plus"/></svg>새 옷 만들기</div></span><span class="kw-nm">&nbsp;</span></button>';
+        '<button type="button" class="kw-item new" data-kreq="outfit"><span class="kw-th"><div><svg><use href="#i-plus"/></svg>추가 요청</div></span><span class="kw-nm">새 옷 부탁하기</span></button>';
     }
+    renderKHairs();
     renderKVoices();
     var mo = $('kwMotion');
     if (mo) mo.checked = KChar.motionPref();
     if ($('kwMotionWhy')) $('kwMotionWhy').textContent = (KChar.motionPref() && KChar.motionBlockReason()) ? ('지금은 정지 사진: ' + KChar.motionBlockReason()) : '';
+  }
+  // O-0040: 머리 목록 — 지금 옷으로 한 모습 썸네일. 이 옷과의 조합 사진이 아직 없으면 「준비 중」(고르면 기본머리 사진으로 보임)
+  function renderKHairs() {
+    var g = $('kwHairGrid'); if (!g || !window.KChar || !KChar.hairs) return;
+    var hs = KChar.hairs(), cur = KChar.hair(), o = KChar.outfit();
+    if ($('kwHairCount')) $('kwHairCount').textContent = String(hs.length);
+    g.innerHTML = hs.map(function (h) {
+      var on = h.id === cur.id, ready = KChar.hasLook(h.id, o.id);
+      return '<button type="button" class="kw-item' + (on ? ' on' : '') + '" data-hair="' + esc(h.id) + '">' +
+        '<span class="kw-th"><img src="' + esc(KChar.hairThumbUrl(h)) + '" alt="" loading="lazy">' + (on ? '<span class="kw-on">하는 중</span>' : '') +
+        (!ready ? '<span class="kw-soon">이 옷은 준비 중</span>' : '') + '</span>' +
+        '<span class="kw-nm">' + esc(h.name) + '</span></button>';
+    }).join('') +
+      '<button type="button" class="kw-item new" data-kreq="hair"><span class="kw-th"><div><svg><use href="#i-plus"/></svg>추가 요청</div></span><span class="kw-nm">새 머리 부탁하기</span></button>';
+    var note = $('kwHairNote');
+    if (note) {
+      var st = KChar.catalogState ? KChar.catalogState() : { source: 'bundle' };
+      var msg = '';
+      if (cur.id !== KChar.defaultHair && !KChar.hasLook(cur.id, o.id)) msg = '「' + cur.name + '」 + 「' + o.name + '」 사진은 준비 중이라 지금은 기본 머리 사진으로 보여요.';
+      else if (cur.id !== KChar.defaultHair) msg = '기본 단발이 아닐 때는 표정 변화·움직임 없이 사진 한 장으로 보여요.';
+      else if (st.source === 'bundle' && hs.length <= 1) msg = '머리 목록을 불러오지 못했어요(인터넷 연결 확인). 지금은 기본 머리만 보여요.';
+      note.textContent = msg;
+      note.style.display = msg ? 'block' : 'none';
+    }
+  }
+  function setKwTab(which) {
+    var hairTab = which === 'hair';
+    if ($('kwTabOutfit')) $('kwTabOutfit').classList.toggle('on', !hairTab);
+    if ($('kwTabHair')) $('kwTabHair').classList.toggle('on', hairTab);
+    if ($('kwOutfitPane')) $('kwOutfitPane').style.display = hairTab ? 'none' : '';
+    if ($('kwHairPane')) $('kwHairPane').style.display = hairTab ? '' : 'none';
+  }
+  if ($('kwTabOutfit')) $('kwTabOutfit').addEventListener('click', function () { setKwTab('outfit'); });
+  if ($('kwTabHair')) $('kwTabHair').addEventListener('click', function () { setKwTab('hair'); });
+  // O-0040: [＋ 추가 요청] — 한 줄 입력 → 기존 케이 채팅 전송 경로(sendPlainChat)로 보낸다(새 서버 API 없음)
+  function kDecorRequestText(kind, text) { return '[케이 꾸미기 추가 요청] ' + (kind === 'hair' ? '머리' : '옷') + ': ' + text; }
+  function openKDecorRequest(kind) {
+    var isHair = kind === 'hair';
+    modalTitle.textContent = isHair ? '새 머리 부탁하기' : '새 옷 부탁하기';
+    modalBody.innerHTML = '<div class="card rcard"><div class="h"><svg><use href="#i-plus"/></svg>' + (isHair ? '어떤 머리 스타일을 원하세요?' : '어떤 옷을 원하세요?') + '</div>' +
+      '<div style="padding:2px 2px 8px;line-height:1.6">한 줄로 적어 주시면 케이에게 보내요. 만들어지면 옷장에 추가돼요(앱을 다시 열면 보여요).</div>' +
+      '<input id="kReqInput" type="text" maxlength="100" ' +
+      'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="' +
+      (isHair ? '예: 어깨 길이 굵은 웨이브' : '예: 가을 트렌치코트') + '"></div>' +
+      '<div class="btnrow">' +
+      '<button id="kReqSend" class="btn primary"><svg><use href="#i-check"/></svg>보내기</button>' +
+      '<button id="kReqCancel" class="btn ghost sm"><svg><use href="#i-x"/></svg>취소</button>' +
+      '</div>';
+    var inp = $('kReqInput');
+    $('kReqCancel').addEventListener('click', closeModal);
+    function go() {
+      var t = ((inp && inp.value) || '').replace(/\s+/g, ' ').trim();
+      if (!t) { toast(isHair ? '원하시는 머리를 적어 주세요.' : '원하시는 옷을 적어 주세요.'); return; }
+      if (t.length > 100) t = t.slice(0, 100);
+      closeModal();
+      unlockKaiAudio();
+      sendPlainChat(kDecorRequestText(kind, t), false).then(function (ok) {
+        if (ok) toast('요청을 케이에게 보냈어요. 만들면 알려드릴게요.');
+        else toast('요청을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      });
+    }
+    $('kReqSend').addEventListener('click', go);
+    if (inp) inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); go(); } });
+    modal.style.display = 'flex';
+    setTimeout(function () { if (inp) try { inp.focus(); } catch (e) {} }, 60);
   }
   function renderKVoices() {
     var box = $('kwVoices'); if (!box || !window.KChar) return;
@@ -2860,8 +2932,17 @@
   if ($('kWardrobeView')) $('kWardrobeView').addEventListener('click', function (ev) {
     var t = ev.target;
     if (!t.closest || !window.KChar) return;
-    var nw = t.closest('#kwNew');
-    if (nw) { toast('새 옷 만들기는 곧 추가됩니다.'); return; }
+    var rq = t.closest('[data-kreq]');
+    if (rq) { openKDecorRequest(rq.getAttribute('data-kreq')); return; }
+    var hr = t.closest('[data-hair]');
+    if (hr) {
+      var hid = hr.getAttribute('data-hair');
+      if (KChar.setHair(hid)) {
+        renderKWardrobe(); if (isOpen(chatView)) renderChat();
+        toast(KChar.hasLook(hid) ? '케이가 ' + KChar.hair().name + '(으)로 바꿨어요.' : KChar.hair().name + ' + 지금 옷 사진은 준비 중이라 기본 머리 사진으로 보여요.');
+      }
+      return;
+    }
     var it = t.closest('[data-outfit]');
     if (it) {
       var id = it.getAttribute('data-outfit');

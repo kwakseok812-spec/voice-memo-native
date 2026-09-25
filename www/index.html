@@ -333,11 +333,23 @@
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이 꾸미기</span><span class="spacer"></span></div>
       <div class="kw-hero">
         <span class="kface wide" data-kface="wardrobe" aria-hidden="true"></span>
-        <div class="kw-hero-cap"><small>지금 입은 옷</small><b id="kwCurName">버건디 정장</b></div>
+        <div class="kw-hero-cap"><small>지금 모습</small><b id="kwCurName">버건디 정장</b></div>
       </div>
-      <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입어요</small></div>
-      <div id="kwGrid" class="kw-grid"></div>
-      <div class="kw-note">갈아입으면 채팅·홈·프로필의 케이 사진도 함께 바뀌어요.</div>
+      <!-- O-0040: 옷 / 머리 탭 -->
+      <div class="hseg kw-seg">
+        <button type="button" class="hseg-btn on" id="kwTabOutfit">옷</button>
+        <button type="button" class="hseg-btn" id="kwTabHair">머리</button>
+      </div>
+      <div id="kwOutfitPane">
+        <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입어요</small></div>
+        <div id="kwGrid" class="kw-grid"></div>
+      </div>
+      <div id="kwHairPane" style="display:none;">
+        <div class="kw-sec"><b>머리 · <span id="kwHairCount">1</span>가지</b><small>누르면 바로 바꿔요</small></div>
+        <div id="kwHairGrid" class="kw-grid"></div>
+        <div id="kwHairNote" class="kw-note"></div>
+      </div>
+      <div class="kw-note">바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀌어요.</div>
       <div class="kw-sec"><b>목소리</b><small>무료 음성만 써요</small></div>
       <div id="kwVoices" class="kw-voices"></div>
       <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
