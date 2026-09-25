@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "default": "burgundy_suit",
  "expressions": [
   "neutral",
@@ -26,6 +26,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
+   "category": "기본",
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4"
@@ -34,34 +35,204 @@
    "id": "navy_suit",
    "name": "네이비 정장",
    "expr": {
-    "neutral": "expr_neutral.jpg"
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
    },
    "avatar": {
-    "neutral": "av_neutral.jpg"
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
    },
-   "thumb": "thumb.jpg"
+   "category": "기본",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
   },
   {
    "id": "knit",
-   "name": "베이지 니트",
+   "name": "베이지 니트 카디건",
    "expr": {
-    "neutral": "expr_neutral.jpg"
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
    },
    "avatar": {
-    "neutral": "av_neutral.jpg"
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
    },
-   "thumb": "thumb.jpg"
+   "category": "기본",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
   },
   {
    "id": "hanbok",
-   "name": "개량한복",
+   "name": "생활한복",
    "expr": {
-    "neutral": "expr_neutral.jpg"
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
    },
    "avatar": {
-    "neutral": "av_neutral.jpg"
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
    },
-   "thumb": "thumb.jpg"
+   "category": "기본",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "jeans_shirt",
+   "name": "흰 셔츠 캐주얼",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "캐주얼",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "sweatshirt",
+   "name": "파스텔 맨투맨",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "캐주얼",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "floral_dress",
+   "name": "플로럴 원피스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "캐주얼",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "black_dress",
+   "name": "블랙 슬림 원피스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "매력",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "offshoulder",
+   "name": "오프숄더 니트",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "매력",
+   "crop": {
+    "scale": 1.191,
+    "ox": 50.0,
+    "oy": 58.0
+   },
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "red_evening",
+   "name": "레드 이브닝드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "매력",
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
   }
  ]
 }

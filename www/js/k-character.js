@@ -18,9 +18,10 @@
 
   /* ---------------- 표정 규칙(여기만 고치면 됨) ---------------- */
   // 띄어쓰기는 무시하고 비교한다("진행중"=“진행 중”). 위에서부터 첫 번째로 걸린 표정을 쓴다.
+  // 부정 표현이 '완료' 계열보다 먼저 걸리게 둔다: "완료하지 못해 죄송합니다" → concern, "완료했습니다" → cheer
   var EXPR_RULES = [
+    { expr: 'concern',  words: ['못', '실패', '오류', '죄송', '문제', '지연', '보류'] },
     { expr: 'cheer',    words: ['완료', '끝났', '축하'] },
-    { expr: 'concern',  words: ['문제', '실패', '오류', '죄송'] },
     { expr: 'thinking', words: ['진행 중', '작업 중', '확인 중', '맡겼'] },
     { expr: 'smile',    words: ['좋은', '됐습니다', '반갑'] }
   ];
@@ -54,7 +55,7 @@
   function normOutfit(o) {
     // wardrobe.json 이 '원본 규격'(base.png·avatar.png·expr_*_1024.png·loop_*_small.mp4)이어도 읽히게 기본 파일명을 채운다
     if (!o || !o.id) return null;
-    var n = { id: String(o.id), name: o.name || o.label || o.id, desc: o.desc || '', expr: {}, avatar: {} };
+    var n = { id: String(o.id), name: o.name || o.name_ko || o.label || o.id, desc: o.desc || '', category: o.category || '', crop: o.crop || null, expr: {}, avatar: {} };
     var ex = o.expr || o.expressions || null;
     if (ex && !Array.isArray(ex)) n.expr = ex;
     else {
@@ -164,6 +165,11 @@
     var img = el.querySelector('.kf-img'), vid = el.querySelector('.kf-vid');
     var src = wideFace(el) ? exprUrl(e) : avatarUrl(e);
     el.classList.toggle('kf-crop', !wideFace(el) && !hasCrop(o, e));   // 잘린 얼굴사진이 없으면 전체사진을 CSS로 확대
+    // 옷마다 원형 구도가 다를 수 있다(예: 오프숄더는 아래로 넓게) → 영상 확대 비율·중심도 그 옷 값으로
+    var c = o.crop || {};
+    el.style.setProperty('--kscale', String(c.scale || 1.35));
+    el.style.setProperty('--kox', (c.ox != null ? c.ox : 50) + '%');
+    el.style.setProperty('--koy', (c.oy != null ? c.oy : 49) + '%');
     if (img.getAttribute('src') !== src) img.setAttribute('src', src);
     var poster = exprUrl(DEFAULT_EXPR);
     if (vid.getAttribute('poster') !== poster) vid.setAttribute('poster', poster);

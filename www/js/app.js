@@ -2813,9 +2813,14 @@
     if ($('kwCount')) $('kwCount').textContent = String(list.length);
     var g = $('kwGrid');
     if (g) {
+      var lastCat = null, cats = {};
+      list.forEach(function (o) { var c = o.category || ''; cats[c] = (cats[c] || 0) + 1; });
+      var multiCat = Object.keys(cats).length > 1;
       g.innerHTML = list.map(function (o) {
-        var on = o.id === cur.id;
-        return '<button type="button" class="kw-item' + (on ? ' on' : '') + '" data-outfit="' + esc(o.id) + '">' +
+        var on = o.id === cur.id, head = '';
+        var c = o.category || '';
+        if (multiCat && c !== lastCat) { lastCat = c; head = '<div class="kw-cat">' + esc(c || '기타') + ' <small>' + cats[c] + '벌</small></div>'; }
+        return head + '<button type="button" class="kw-item' + (on ? ' on' : '') + '" data-outfit="' + esc(o.id) + '">' +
           '<span class="kw-th"><img src="' + esc(KChar.thumbUrl(o)) + '" alt="" loading="lazy">' + (on ? '<span class="kw-on">입는 중</span>' : '') + '</span>' +
           '<span class="kw-nm">' + esc(o.name) + '</span></button>';
       }).join('') +

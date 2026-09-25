@@ -819,11 +819,11 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
    ========================================================================== */
 .kface{position:relative;display:block;overflow:hidden;border-radius:50%;background:#dfe3ea;flex:none;isolation:isolate}
 .kface .kf-img,.kface .kf-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;-webkit-user-select:none;user-select:none;pointer-events:none}
-.kface .kf-vid{opacity:0;transition:opacity .35s;transform:scale(1.35);transform-origin:50% 49%}   /* 전체 상반신 영상 → 얼굴 쪽으로 확대(av_* 자른 사진과 같은 구도) */
+.kface .kf-vid{opacity:0;transition:opacity .35s;transform:scale(var(--kscale,1.35));transform-origin:var(--kox,50%) var(--koy,49%)}   /* 전체 상반신 영상 → 얼굴 쪽으로 확대(av_* 자른 사진과 같은 구도) */
 .kface.vid-on .kf-vid{opacity:1}
 .kface .kf-img{transition:opacity .35s}
 .kface.vid-on .kf-img{opacity:0}
-.kface.kf-crop .kf-img{transform:scale(1.35);transform-origin:50% 49%}
+.kface.kf-crop .kf-img{transform:scale(var(--kscale,1.35));transform-origin:var(--kox,50%) var(--koy,49%)}
 .kface.wide{border-radius:0}
 .kface.wide .kf-vid,.kface.wide.kf-crop .kf-img{transform:none}
 /* talk 영상이 없는 옷: 정지 사진이 살짝 끄덕이는 효과로 '말하는 중' 표시 */
@@ -907,3 +907,8 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 .kw-motion{margin-bottom:24px}
 #kwMotion:checked ~ .switch{background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
 #kwMotion:checked ~ .switch::after{left:25px}
+/* v6.0: 옷장 카테고리 구분(기본/캐주얼/매력 — wardrobe.json 의 category 순서대로) */
+.kw-cat{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:8px 2px 0;font-size:13.5px;font-weight:800;color:var(--p1)}
+.kw-cat:first-child{margin-top:0}
+.kw-cat::after{content:"";flex:1;height:1px;background:var(--glass-b)}
+.kw-cat small{font-size:12px;font-weight:700;color:var(--dim)}
