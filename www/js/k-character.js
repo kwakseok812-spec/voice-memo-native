@@ -217,7 +217,8 @@
     (Array.isArray(cat.combos) ? cat.combos : []).forEach(function (c) {
       if (!c || !c.hair || !c.outfit || !c.img || String(c.hair) === DEFAULT_HAIR) return;
       var k = String(c.hair) + '|' + String(c.outfit);
-      var e = { img: abs(c.img), av: abs(c.av), thumb: abs(c.thumb), crop: c.crop || null };
+      var e = { img: abs(c.img), av: abs(c.av), thumb: abs(c.thumb), crop: c.crop || null,
+                idle: abs(c.idle) };               // (O-0042/O-0043) 조합 idle 영상 — 있는 조합만(지금은 h02 긴생머리 × 옷 10벌). 없으면 정지 사진
       [e.img, e.av, e.thumb].forEach(function (u) { if (u) nIndex[u] = k; });
       nCombos[k] = e;
     });
@@ -330,7 +331,7 @@
   }
   function markFail(el, kind) {
     el._kFail = el._kFail || {};
-    if (kind) el._kFail[kind + '|' + curId] = true;
+    if (kind) el._kFail[kind + '|' + curId + (activeCombo() ? '|' + curHair : '')] = true;
     el.classList.remove('vid-on');
     syncVideo(el);
   }
@@ -356,20 +357,23 @@
   }
   function syncVideo(el) {
     var vid = el.querySelector && el.querySelector('.kf-vid'); if (!vid) return;
-    var o = outfit(), still = !!activeCombo();
+    var o = outfit(), cb = activeCombo(), still = !!cb;
     var kind = talking ? 'talk' : 'idle';
     var file = still ? '' : o[kind];                                  // 기본머리 외 조합 = 영상 없음(정지 사진)
+    // (O-0042) 조합에 idle 영상이 있으면 평소엔 그것을 반복 재생. 말하는 중엔 기존대로 정지 사진 + 끄덕임 CSS
+    if (still && !talking && cb.idle) file = cb.idle;
     if (talking && !file && !still) { kind = 'idle'; file = o.idle; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
     el.classList.toggle('kf-talk', talking);
     el.classList.toggle('kf-talkstill', talking && (still || !o.talk));
-    var failed = el._kFail && el._kFail[kind + '|' + curId];
+    var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
+    var failed = el._kFail && el._kFail[fkey];
     var want = !!file && !failed && !el._kHold && motionOn() && !flashing && el._kVisible !== false && !document.hidden;
     if (!want) {
       el.classList.remove('vid-on');
       if (!vid.paused) try { vid.pause(); } catch (e) {}
       return;
     }
-    var src = url(o, file);
+    var src = still ? file : url(o, file);
     if (vid.getAttribute('src') !== src) {
       el.classList.remove('vid-on');
       vid.setAttribute('data-kind', kind);
