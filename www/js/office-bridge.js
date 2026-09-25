@@ -681,6 +681,30 @@
     if (!ids.length) return Promise.resolve([]);
     return _ordersRpc('list_office_orders_by_source', { p_ids: ids, p_pass: pass || '' }, '작업 카드');
   }
+  /* v5.9 작업 현황 「지우기」 = 숨김(서버 hidden_at 표시만, 행·PC 대장 원본은 그대로 → 되살리기 가능).
+   *   hideOfficeOrders(ids, pass)  → 숨긴 건수. 서버가 끝난 상태(완료·취소·실패·보류)만 받아준다.
+   *   restoreOfficeOrders(pass)    → 숨긴 것 전부 되살린 건수.
+   *   서버에 RPC 가 아직 없으면(SQL 미적용) err.notready=true. 암호 불일치면 err.badpass=true. */
+  function _ordersWriteRpc(body) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/hide_office_orders', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (r.status === 404) { var n = new Error('NOT_READY'); n.notready = true; throw n; }   // 함수 없음(SQL 미적용)
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('작업 현황 정리 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (n) { return (typeof n === 'number') ? n : (parseInt(n, 10) || 0); });
+  }
+  function hideOfficeOrders(ids, pass) {
+    ids = (ids || []).filter(function (x) { return !!x; }).slice(0, 200);
+    if (!ids.length) return Promise.resolve(0);
+    return _ordersWriteRpc({ p_ids: ids, p_pass: pass || '', p_hide: true });
+  }
+  function restoreOfficeOrders(pass) {
+    return _ordersWriteRpc({ p_ids: null, p_pass: pass || '', p_hide: false });
+  }
 
   /* 회의 요약 항목 이름 변경(v5.3): 서버 title 만 바꾼다(PC 원본 .md·collect.py 무관).
    *   연동 암호 게이트(불일치/미설정이면 badpass). 반환: true(수정 1건) / false(대상 없음).
@@ -865,6 +889,7 @@
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
+    hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)

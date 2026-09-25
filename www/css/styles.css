@@ -787,6 +787,14 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
 .ord-item .oi-s{margin-top:7px;font-size:15.5px;font-weight:700;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
 .ord-item .oi-r{margin-top:5px;font-size:13.5px;color:var(--muted);line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
 .ord-item.hl{border-color:var(--p1);box-shadow:0 0 0 2px rgba(59,130,246,.25)}
+/* v5.9 작업 현황 지우기(숨김)·되살리기 */
+.ord-item .oi-foot{display:flex;align-items:center;gap:8px;margin-top:5px}
+.ord-item .oi-foot .oi-r{margin-top:0}
+.oi-del{margin-left:auto;display:inline-flex;align-items:center;gap:4px;flex:none;font:inherit;font-size:12.5px;font-weight:800;color:var(--rec);background:rgba(244,63,94,.10);border:0;border-radius:999px;padding:5px 11px;cursor:pointer}
+.oi-del svg,.ord-clear svg{width:14px;height:14px}
+.ord-clear{display:inline-flex;align-items:center;gap:4px;margin-left:8px;font:inherit;font-size:12.5px;font-weight:800;color:var(--rec);background:rgba(244,63,94,.10);border:0;border-radius:999px;padding:4px 10px;cursor:pointer;vertical-align:middle}
+.ord-restore{text-align:center;margin:18px 0 8px}
+.ord-restore-btn{font:inherit;font-size:13px;font-weight:700;color:var(--dim);background:none;border:0;text-decoration:underline;cursor:pointer;padding:6px 10px}
 .ord-empty{color:var(--dim);font-size:14.5px;font-weight:600;padding:14px 4px;text-align:center}
 .ord-err{margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--warn-bg);color:var(--warn);font-size:14px;font-weight:700}
 /* v5.8 검수 표시(진행 활동·완료 근거·감독관 재촉·소장 검토) */

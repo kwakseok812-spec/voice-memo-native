@@ -1132,7 +1132,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.8';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.9: 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -2075,6 +2075,10 @@
   var orderCards = loadOrderCards(), ordTimer = null, ordBusy = false, ordFullOnce = false;
   var ordersView = $('ordersView'), ordersBody = $('ordersBody'), ordersTimer = null, ordersBusy = false;
   var ordersFromChat = false, ordersHl = '';
+  // v5.9: 「지우기」(숨김) 가능한 상태 = 끝난 일(완료·취소) + 멈춘 일(실패·보류=작업실 「확인 필요」 포함).
+  //   접수·진행 중인 일은 지우지 않는다(그건 채팅의 「#번호 취소」 몫). 서버도 같은 목록만 받아준다.
+  var ORD_HIDEABLE = { '완료': 1, '취소': 1, '실패': 1, '보류': 1 };
+  var ordersRows = [];
 
   function loadOrderCards() { try { var o = JSON.parse(localStorage.getItem(ORDER_CARDS_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
   function saveOrderCards() {
@@ -2239,7 +2243,9 @@
       (ordActivityLine(o) ? '<div class="oi-a">' + esc(ordActivityLine(o)) + '</div>' : '') +
       (o.result ? '<div class="oi-r">' + esc(o.result) + '</div>' : '') +
       (ORD_CLOSED[o.status] && o.evidence && o.evidence.text ? '<div class="oi-r oi-e">근거: ' + esc(o.evidence.text) + '</div>' : '') +
-      '<div class="oi-r" style="font-size:12px;color:var(--dim)">접수 ' + esc(fmtKst(o.received_at)) + (o.job_seq ? ' · 작업실 #' + esc(o.job_seq) : '') + '</div></div>';
+      '<div class="oi-foot"><span class="oi-r" style="font-size:12px;color:var(--dim)">접수 ' + esc(fmtKst(o.received_at)) + (o.job_seq ? ' · 작업실 #' + esc(o.job_seq) : '') + '</span>' +
+      (ORD_HIDEABLE[o.status] ? '<button type="button" class="oi-del" data-ord-del="' + esc(o.id) + '" aria-label="이 항목 지우기" title="목록에서 지우기"><svg><use href="#i-trash"/></svg>지우기</button>' : '') +
+      '</div></div>';
   }
   function renderOrders(rows) {
     if (!ordersBody) return;
@@ -2247,10 +2253,13 @@
     var open = rows.filter(function (o) { return !ORD_CLOSED[o.status]; });
     var done = rows.filter(function (o) { return ORD_CLOSED[o.status]; }).slice(0, 15);
     updateOrdersBadge(open.length);
+    ordersRows = rows;
     var h = '<div class="ord-sec">아직 안 끝난 일 <small>' + open.length + '건</small></div>';
     h += open.length ? open.map(ordItemHtml).join('') : '<div class="ord-empty">지금 진행 중이거나 기다리는 일이 없어요.</div>';
-    h += '<div class="ord-sec">최근 끝난 일 <small>' + done.length + '건</small></div>';
+    h += '<div class="ord-sec">최근 끝난 일 <small>' + done.length + '건' +
+      (done.length ? ' <button type="button" class="ord-clear" id="ordersClearDone"><svg><use href="#i-trash"/></svg>모두 지우기</button>' : '') + '</small></div>';
     h += done.length ? done.map(ordItemHtml).join('') : '<div class="ord-empty">아직 없어요.</div>';
+    h += '<div class="ord-restore"><button type="button" class="ord-restore-btn" id="ordersRestore">지운 항목 다시 보기</button></div>';   // v5.9: 숨김 되살리기
     ordersBody.innerHTML = h;
     if (ordersHl) {                                  // 카드에서 들어왔으면 그 항목으로 스크롤(한 번만)
       var el = ordersBody.querySelector('[data-oid="' + ordersHl.replace(/"/g, '') + '"]');
@@ -2258,6 +2267,59 @@
       ordersHl = '';
     }
   }
+  /* ---- v5.9 작업 현황 「지우기」 = 숨김(서버 hidden_at). 서버 원본 행·PC 지시 대장은 그대로 ----
+   * ⚠️ confirm() 금지(앱 함정) → 기존 확인 시트(openSheet) 재사용. 암호 없거나 틀리면 기존 게이트. */
+  function ordHideErr(e) {
+    if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); return; }
+    if (e && e.notready) { toast('서버 준비가 아직 안 됐어요(소장에게 알려 주세요).'); return; }
+    toast('지우지 못했어요. 잠시 후 다시 시도해 주세요.');
+  }
+  function ordFind(id) { for (var i = 0; i < ordersRows.length; i++) if (ordersRows[i].id === id) return ordersRows[i]; return null; }
+  function ordDoHide(ids, doneMsg) {
+    var pass = getSyncPass();
+    if (!pass) { showSyncGate(true, '지우려면 PC 연동 암호를 입력해 주세요.'); return; }
+    OfficeBridge.hideOfficeOrders(ids, pass).then(function (n) {
+      renderOrders(ordersRows.filter(function (o) { return ids.indexOf(o.id) === -1; }));   // 바로 화면에서 빼고
+      refreshOrders(true);                                                                 // 서버 기준으로 다시 확인
+      toast(n > 0 ? doneMsg.replace('{n}', n) : '지울 항목이 없었어요(이미 다시 진행 중일 수 있어요).');
+    }).catch(ordHideErr);
+  }
+  function confirmHideOrder(id) {
+    var o = ordFind(id); if (!o || !ORD_HIDEABLE[o.status]) return;
+    var open = !ORD_CLOSED[o.status];                // 보류·실패 = 아직 소장이 챙기는 일
+    var s = (o.summary || '').replace(/\s+/g, ' ').trim(); if (s.length > 50) s = s.slice(0, 50) + '…';
+    openSheet(o.id + ' 항목을 지울까요?',
+      '「' + (s || '요지 없음') + '」 — ' +
+      (open ? '목록에서만 사라져요. 아직 「' + o.status + '」 상태라 PC 지시 대장엔 남아 소장이 계속 챙겨요. '
+            : '목록에서만 사라지고 기록 원본은 남아요. ') +
+      '맨 아래 [지운 항목 다시 보기]로 되살릴 수 있어요.',
+      '지우기', function () { ordDoHide([id], '지웠어요.'); });
+  }
+  function confirmClearDoneOrders() {
+    var ids = ordersRows.filter(function (o) { return ORD_CLOSED[o.status]; }).map(function (o) { return o.id; });
+    if (!ids.length) { toast('지울 끝난 일이 없어요.'); return; }
+    openSheet('끝난 일 ' + ids.length + '건을 모두 지울까요?',
+      '「완료」「취소」된 일만 목록에서 사라져요(「보류」「실패」·진행 중인 일은 그대로). 기록 원본은 지워지지 않고, 맨 아래 [지운 항목 다시 보기]로 되살릴 수 있어요.',
+      '모두 지우기', function () { ordDoHide(ids, '끝난 일 {n}건을 지웠어요.'); });
+  }
+  function confirmRestoreOrders() {
+    var pass = getSyncPass();
+    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주세요.'); return; }
+    openSheet('지운 항목을 다시 보이게 할까요?', '작업 현황에서 지웠던 항목이 전부 목록으로 돌아와요.', '다시 보기', function () {
+      OfficeBridge.restoreOfficeOrders(getSyncPass()).then(function (n) {
+        refreshOrders(false);
+        toast(n > 0 ? n + '건을 다시 보이게 했어요.' : '지운 항목이 없어요.');
+      }).catch(ordHideErr);
+    });
+    if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-refresh'); }   // 되살리기는 빨간 휴지통 대신
+  }
+  if (ordersBody) ordersBody.addEventListener('click', function (ev) {
+    var t = ev.target.closest ? ev.target : null; if (!t) return;
+    var d = t.closest('[data-ord-del]'); if (d) { ev.preventDefault(); confirmHideOrder(d.getAttribute('data-ord-del')); return; }
+    if (t.closest('#ordersClearDone')) { ev.preventDefault(); confirmClearDoneOrders(); return; }
+    if (t.closest('#ordersRestore')) { ev.preventDefault(); confirmRestoreOrders(); return; }
+  });
+
   function updateOrdersBadge(n) {
     var b = $('ordersOpenBadge'); if (!b) return;
     if (n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.style.display = ''; } else b.style.display = 'none';
