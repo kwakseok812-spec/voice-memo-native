@@ -20,7 +20,8 @@
   // 띄어쓰기는 무시하고 비교한다("진행중"=“진행 중”). 위에서부터 첫 번째로 걸린 표정을 쓴다.
   // 부정 표현이 '완료' 계열보다 먼저 걸리게 둔다: "완료하지 못해 죄송합니다" → concern, "완료했습니다" → cheer
   var EXPR_RULES = [
-    { expr: 'concern',  words: ['못', '실패', '오류', '죄송', '문제', '지연', '보류'] },
+    // '못'은 넓게 걸려("잘못 보내셨네요"·"못지않게") 동사형으로만 좁혔다
+    { expr: 'concern',  words: ['못 했', '못했', '못해', '못하', '못 하', '실패', '오류', '죄송', '문제', '지연', '보류'] },
     { expr: 'cheer',    words: ['완료', '끝났', '축하'] },
     { expr: 'thinking', words: ['진행 중', '작업 중', '확인 중', '맡겼'] },
     { expr: 'smile',    words: ['좋은', '됐습니다', '반갑'] }
@@ -184,7 +185,7 @@
     el.classList.toggle('kf-talk', talking);
     el.classList.toggle('kf-talkstill', talking && !o.talk);
     var failed = el._kFail && el._kFail[kind + '|' + curId];
-    var want = !!file && !failed && motionOn() && !flashing && el._kVisible !== false && !document.hidden;
+    var want = !!file && !failed && !el._kHold && motionOn() && !flashing && el._kVisible !== false && !document.hidden;
     if (!want) {
       el.classList.remove('vid-on');
       if (!vid.paused) try { vid.pause(); } catch (e) {}
@@ -293,12 +294,26 @@
   function onVoices(fn) { voiceListeners.push(fn); }
   function notifyVoices() { voiceListeners.forEach(function (fn) { try { fn(); } catch (e) {} }); }
 
+  // 프로필 카드처럼 '열 때' 보이는 얼굴: 정지 사진(기본 표정)을 먼저 보이고, 영상은 0초부터 잠시 뒤 시작
+  //   (반복영상 중간 프레임 = 눈 깜빡임 순간이 카드 첫 화면에 걸리지 않게)
+  function restartFace(el, delayMs) {
+    if (!el) return;
+    build(el);
+    var vid = el.querySelector('.kf-vid');
+    el.classList.remove('vid-on');
+    el._kHold = true;
+    try { vid.pause(); vid.currentTime = 0; } catch (e) {}
+    paint(el);
+    setTimeout(function () { el._kHold = false; try { vid.currentTime = 0; } catch (e) {} syncVideo(el); }, delayMs == null ? 450 : delayMs);
+  }
+
   window.KChar = {
     ready: ready,
     exprFor: exprFor, rules: EXPR_RULES,
     outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange,
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     mount: function () { faces().forEach(paint); },
+    restartFace: restartFace,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },
     setTalking: setTalking, isTalking: function () { return talking; },
     motionOn: motionOn, motionPref: motionPref, setMotionPref: setMotionPref, motionBlockReason: motionBlockReason,

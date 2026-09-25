@@ -2790,7 +2790,12 @@
 
   /* ---- v6.0 케이 프로필 카드 + 옷장 「케이 꾸미기」 ---- */
   var kProfile = $('kProfile'), kwFrom = null;
-  function openKProfile() { if (!kProfile) return; kProfile.style.display = 'flex'; if (window.KChar) KChar.mount(); }
+  function openKProfile() {
+    if (!kProfile) return;
+    var pf = kProfile.querySelector('[data-kface=profile]');
+    if (window.KChar) KChar.restartFace(pf, 450);   // 정지 사진 먼저 → 영상은 0초부터(눈 감은 프레임 방지)
+    kProfile.style.display = 'flex';
+  }
   function closeKProfile() { if (kProfile) kProfile.style.display = 'none'; }
   if ($('kHeadBtn')) $('kHeadBtn').addEventListener('click', openKProfile);
   if ($('kProfClose')) $('kProfClose').addEventListener('click', closeKProfile);
