@@ -67,7 +67,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), processing, resultWrap];   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), processing, resultWrap];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -1132,7 +1132,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v6.0';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1189,6 +1189,9 @@
     if (!kaiAudio) {
       try {
         kaiAudio = new Audio(); kaiAudio.preload = 'auto';
+        // v6.0: 케이 목소리가 나오는 동안 얼굴을 talk 영상으로(무음 언락 재생은 제외)
+        kaiAudio.addEventListener('playing', function () { if (window.KChar && kaiAudio.src && kaiAudio.src.indexOf('data:') !== 0) KChar.setTalking(true); });
+        ['ended', 'pause', 'error', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (window.KChar) KChar.setTalking(false); }); });
         kaiAudio.addEventListener('ended', function () {
           if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
           if (convoOn) scheduleNextListen(350);   // 케이 목소리 끝 → 다음 말 듣기(연속 대화)
@@ -1470,6 +1473,7 @@
     function target() {
       var el = chatLog && chatLog.querySelector('[data-uid="' + uid + '"]');
       if (!el) return null;
+      var row = el.closest ? el.closest('.krow') : null; if (row) el = row;   // v6.0: 케이 말풍선은 아바타 줄(krow) 기준
       var prev = el.previousElementSibling;
       return (prev && prev.classList && prev.classList.contains('chatnewdiv')) ? prev : el;
     }
@@ -1548,6 +1552,28 @@
     }
     return linkify(out).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
   }
+  /* ---- v6.0 소장 「케이」 캐릭터: 말풍선 아바타·표정 ----
+   * 표정 규칙은 js/k-character.js 의 EXPR_RULES 한 곳에만 있다(KChar.exprFor). */
+  var kLastUidSeen = null;                        // 마지막 케이 답 uid(새 답장이 왔는지 = 표정 잠깐 보여주기)
+  function kAvatar(expr) { return (window.KChar ? KChar.avatarUrl(expr) : ''); }
+  function kRowHtml(start, bubbleHtml, extra) {
+    return '<div class="krow ' + (start ? 'kstart' : 'kcont') + (extra || '') + '"><div class="kavcol">' +
+      (start ? '<img class="kav" data-kexpr="neutral" src="' + kAvatar('neutral') + '" alt="케이" draggable="false">' : '') +
+      '</div><div class="kcol">' + (start ? '<div class="kname">케이</div>' : '') + bubbleHtml + '</div></div>';
+  }
+  function applyKExpr(lastKMsg) {
+    if (!window.KChar) return;
+    var expr = lastKMsg ? KChar.exprFor(lastKMsg.text || '') : 'neutral';
+    var rows = chatLog.querySelectorAll('.krow.kstart:not(.ktyping) img.kav');
+    if (rows.length && lastKMsg) {
+      var im = rows[rows.length - 1];
+      im.setAttribute('data-kexpr', expr); im.setAttribute('src', KChar.avatarUrl(expr));
+    }
+    var uid = lastKMsg ? msgUid(lastKMsg) : '';
+    var fresh = kLastUidSeen !== null && uid && uid !== kLastUidSeen;   // 처음 그릴 땐 깜짝 표정 없이
+    kLastUidSeen = uid;
+    KChar.setExpr(expr, fresh);
+  }
   function renderChat() {
     // IME(한글) 조합 중이면 목록 DOM을 건드리지 않는다 → 조합이 끊겨 글자가 씹히는 것을 막는다.
     // 미룬 렌더는 compositionend/blur 에서 flushChatRender()로 한 번에 반영(v4.5).
@@ -1573,7 +1599,9 @@
       }
       if (firstUnreadUid) chatNewDivUid = firstUnreadUid;
     }
-    var shown = 0;
+    var shown = 0, prevKind = '';                          // v6.0: 직전에 그린 말풍선 종류(케이 연속이면 아바타 생략)
+    var lastKMsg = null;
+    for (var li = chatMsgs.length - 1; li >= 0; li--) { if (chatMsgs[li].role === 'k' && (chatMsgs[li].text || chatMsgs[li].vurl)) { lastKMsg = chatMsgs[li]; break; } }
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
       if (q && !msgMatches(m, q)) return '';                // 검색 중이면 일치하는 말풍선만
@@ -1603,27 +1631,36 @@
       }
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
-      return divider + '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + uid + '">' + inner +
-        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>' +
-        (m.role === 'me' && !q ? orderCardHtml(m) : '');   // v5.8: 작업 카드(대장에 접수된 메시지만)
+      var bubbleHtml = '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + uid + '">' + inner +
+        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
+      if (m.role === 'me') {
+        prevKind = 'me';
+        return divider + bubbleHtml + (!q ? orderCardHtml(m) : '');   // v5.8: 작업 카드(대장에 접수된 메시지만)
+      }
+      // v6.0: 케이 말풍선 = 왼쪽 원형 아바타 + 이름(연속 메시지는 첫 칸만)
+      var kStart = !(prevKind === 'k' && !divider);
+      prevKind = 'k';
+      return divider + kRowHtml(kStart, bubbleHtml, '');
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
       var info = $('chatSearchInfo');
       if (info) { info.style.display = 'block'; info.textContent = shown ? ('“' + chatSearchQuery.trim() + '” 검색 결과 ' + shown + '개') : '“' + chatSearchQuery.trim() + '”에 일치하는 대화가 없어요.'; }
       chatLog.innerHTML = html || '';
+      applyKExpr(null);
       chatLog.scrollTop = 0;
       try { window.scrollTo(0, 0); } catch (e) {}
       chatRenderedUids = null;                            // v5.9: 검색을 닫고 돌아올 땐 기준 없이(=맨 아래) 다시 그림
       return;
     }
     if (anyAwaiting()) {
-      html += '<div class="bubble k typing"><span></span><span></span><span></span></div>';
+      html += kRowHtml(prevKind !== 'k', '<div class="bubble k typing"><span></span><span></span><span></span></div>', ' ktyping');
       // 답이 늦으면(약 35초 이상) "멈춘 것처럼" 보이지 않게 안내를 함께 띄운다
       var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
       if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
     }
     chatLog.innerHTML = html;
     chatRenderedUids = nowUids;
+    applyKExpr(lastKMsg);                                // v6.0: 마지막 케이 답 표정 → 마지막 아바타·헤더·홈
     // v5.9: 어디로 스크롤할지 — 우선순위 ① 내가 방금 보냄 → 맨 아래(예전 그대로)
     //   ② 열기·복귀 직후(앵커 모드) 안읽음 있음 → 첫 안읽음의 시작  ③ 보는 중 새 메시지 + 맨 아래 근처 → 새 메시지 시작(부드럽게)
     //   ④ 맨 아래 근처 → 맨 아래(예전 그대로)  ⑤ 위로 올려 읽는 중 → 보던 위치 유지
@@ -1913,6 +1950,21 @@
   function resetListenBtn(btn, lbl) { if (!btn) return; btn._loading = false; btn.classList.remove('loading'); btn.removeAttribute('disabled'); btn.innerHTML = lbl; }
   function onListenBtn(lid, btn) {
     var m = findKByLid(lid); if (!m) return;
+    // v6.0: 「목소리」에서 이 기기 음성을 골랐으면 PC 요청 없이 바로 기기에서 읽는다(무료·즉시).
+    var dv = window.KChar && KChar.voice.active();
+    if (dv && m.text) {
+      if (btn.classList.contains('playing')) { KChar.voice.stop(); btn.classList.remove('playing'); return; }
+      try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
+      if (playingBubbleEl && playingBubbleEl !== btn) playingBubbleEl.classList.remove('playing');
+      playingBubbleEl = btn; btn.classList.add('playing');
+      var ok = KChar.voice.speak(m.text, dv, {
+        onend: function () { btn.classList.remove('playing'); if (playingBubbleEl === btn) playingBubbleEl = null; },
+        onerror: function () { btn.classList.remove('playing'); if (playingBubbleEl === btn) playingBubbleEl = null; }
+      });
+      if (ok) return;
+      btn.classList.remove('playing');                 // 기기 음성 실패 → 아래 케이 기본 목소리로
+    }
+    if (window.KChar && KChar.voice.speaking()) KChar.voice.stop();
     unlockKaiAudio();
     if (m.vurl) { playKaiVoice(m.vurl, btn); return; }
     if (btn._loading) return;
@@ -2735,6 +2787,92 @@
 
   // 홈 소장 K 오브 → 케이 채팅(옛 가로 카드 대체, 진입 경로 일원화)
   if ($('btnVoiceChat')) $('btnVoiceChat').addEventListener('click', function () { openChat(); });
+
+  /* ---- v6.0 케이 프로필 카드 + 옷장 「케이 꾸미기」 ---- */
+  var kProfile = $('kProfile'), kwFrom = null;
+  function openKProfile() { if (!kProfile) return; kProfile.style.display = 'flex'; if (window.KChar) KChar.mount(); }
+  function closeKProfile() { if (kProfile) kProfile.style.display = 'none'; }
+  if ($('kHeadBtn')) $('kHeadBtn').addEventListener('click', openKProfile);
+  if ($('kProfClose')) $('kProfClose').addEventListener('click', closeKProfile);
+  if (kProfile) kProfile.addEventListener('click', function (ev) { if (ev.target === kProfile) closeKProfile(); });
+  if ($('kProfWardrobe')) $('kProfWardrobe').addEventListener('click', function () { closeKProfile(); openKWardrobe(); });
+  function openKWardrobe() {
+    kwFrom = isOpen(chatView) ? 'chat' : 'home';
+    openScreen($('kWardrobeView'));
+    renderKWardrobe();
+    if (window.KChar) KChar.mount();
+  }
+  function closeKWardrobe() {
+    if (window.KChar) KChar.voice.stop();
+    if (kwFrom === 'chat') openChat(); else { showHome(); setStatus('대기 중', 'idle'); }
+  }
+  function renderKWardrobe() {
+    if (!window.KChar) return;
+    var cur = KChar.outfit(), list = KChar.outfits();
+    if ($('kwCurName')) $('kwCurName').textContent = cur.name;
+    if ($('kwCount')) $('kwCount').textContent = String(list.length);
+    var g = $('kwGrid');
+    if (g) {
+      g.innerHTML = list.map(function (o) {
+        var on = o.id === cur.id;
+        return '<button type="button" class="kw-item' + (on ? ' on' : '') + '" data-outfit="' + esc(o.id) + '">' +
+          '<span class="kw-th"><img src="' + esc(KChar.thumbUrl(o)) + '" alt="" loading="lazy">' + (on ? '<span class="kw-on">입는 중</span>' : '') + '</span>' +
+          '<span class="kw-nm">' + esc(o.name) + '</span></button>';
+      }).join('') +
+        '<button type="button" class="kw-item new" id="kwNew"><span class="kw-th"><div><svg><use href="#i-plus"/></svg>새 옷 만들기</div></span><span class="kw-nm">&nbsp;</span></button>';
+    }
+    renderKVoices();
+    var mo = $('kwMotion');
+    if (mo) mo.checked = KChar.motionPref();
+    if ($('kwMotionWhy')) $('kwMotionWhy').textContent = (KChar.motionPref() && KChar.motionBlockReason()) ? ('지금은 정지 사진: ' + KChar.motionBlockReason()) : '';
+  }
+  function renderKVoices() {
+    var box = $('kwVoices'); if (!box || !window.KChar) return;
+    var V = KChar.voice, pref = V.pref(), vs = V.list();
+    var act = V.active();                             // 고른 기기 음성이 지금 없으면 기본으로 표시
+    var rows = ['<button type="button" class="kw-voice' + (!act ? ' on' : '') + '" data-voice="">' +
+      '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>한국어 여성 · 선희(무료 뉴럴 음성) · PC에서 만들어 보내요</small></span></button>'];
+    vs.forEach(function (v) {
+      var on = act && act.name === v.name;
+      rows.push('<div class="kw-voice' + (on ? ' on' : '') + '" role="button" tabindex="0" data-voice="' + esc(v.name) + '">' +
+        '<span class="rd"></span><span class="tx"><b>' + esc(v.name) + '</b><small>이 기기 음성' + (V.isFemaleGuess(v) ? ' · 여성' : '') + ' · 바로 읽어요</small></span>' +
+        '<button type="button" class="try" data-try="' + esc(v.name) + '">미리 듣기</button></div>');
+    });
+    if (!V.supported()) rows.push('<div class="kw-vnote">이 기기(앱)는 내장 음성을 지원하지 않아 케이 기본 목소리만 쓸 수 있어요.</div>');
+    else if (!vs.length) rows.push('<div class="kw-vnote">이 기기에 한국어 내장 음성이 없어 케이 기본 목소리만 쓸 수 있어요.</div>');
+    else if (pref && !act) rows.push('<div class="kw-vnote">골라 두신 기기 음성(' + esc(pref) + ')을 찾지 못해 기본 목소리로 읽어요.</div>');
+    box.innerHTML = rows.join('');
+  }
+  if (window.KChar) {
+    KChar.voice.onVoices(function () { if (isOpen($('kWardrobeView'))) renderKVoices(); });
+    KChar.onChange(function () { if (isOpen($('kWardrobeView'))) renderKWardrobe(); });
+  }
+  if ($('kWardrobeView')) $('kWardrobeView').addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t.closest || !window.KChar) return;
+    var nw = t.closest('#kwNew');
+    if (nw) { toast('새 옷 만들기는 곧 추가됩니다.'); return; }
+    var it = t.closest('[data-outfit]');
+    if (it) {
+      var id = it.getAttribute('data-outfit');
+      if (KChar.setOutfit(id)) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast('케이가 ' + KChar.outfit().name + '(으)로 갈아입었어요.'); }
+      return;
+    }
+    var tr = t.closest('[data-try]');
+    if (tr) {
+      var v = null, nm = tr.getAttribute('data-try');
+      KChar.voice.list().forEach(function (x) { if (x.name === nm) v = x; });
+      if (v) KChar.voice.speak('대표님, 안녕하세요. 케이입니다. 이 목소리로 읽어 드릴게요.', v);
+      return;
+    }
+    var vo = t.closest('[data-voice]');
+    if (vo) { KChar.voice.setPref(vo.getAttribute('data-voice')); renderKVoices(); toast(vo.getAttribute('data-voice') ? '이 기기 음성으로 읽어 드릴게요.' : '케이 기본 목소리로 읽어 드릴게요.'); }
+  });
+  if ($('kwMotion')) $('kwMotion').addEventListener('change', function () {
+    if (!window.KChar) return;
+    KChar.setMotionPref(this.checked);
+    renderKWardrobe();
+  });
   if (chatSend) chatSend.addEventListener('click', sendChatMsg);
   // 음성 대화 도구 연결
   if (chatMic) chatMic.addEventListener('click', toggleChatMic);
@@ -2829,6 +2967,8 @@
   });
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
+    var kav = ev.target.closest ? ev.target.closest('img.kav') : null;   // v6.0: 말풍선 옆 케이 사진 → 프로필 카드
+    if (kav) { openKProfile(); return; }
     // 링크 탭 → 외부로 열기(선택 복사와 별개)
     var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
@@ -3007,6 +3147,7 @@
     );
   }
   function goBack() {
+    if (kProfile && isOpen(kProfile)) { closeKProfile(); return true; }   // v6.0: 케이 프로필 카드
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
     if (isOpen(modal)) { closeModal(); return true; }
@@ -3027,6 +3168,7 @@
       if (ordersFromChat) { ordersFromChat = false; openChat(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('kWardrobeView'))) { closeKWardrobe(); return true; }   // v6.0: 케이 꾸미기 → 온 곳으로
     if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
       if (meetingsDetailOpen) { showMeetingsList(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;

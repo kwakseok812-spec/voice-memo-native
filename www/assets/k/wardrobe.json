@@ -1,0 +1,67 @@
+{
+ "version": 1,
+ "default": "burgundy_suit",
+ "expressions": [
+  "neutral",
+  "smile",
+  "cheer",
+  "concern",
+  "thinking"
+ ],
+ "outfits": [
+  {
+   "id": "burgundy_suit",
+   "name": "버건디 정장",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "thumb": "thumb.jpg",
+   "idle": "idle.mp4",
+   "talk": "talk.mp4"
+  },
+  {
+   "id": "navy_suit",
+   "name": "네이비 정장",
+   "expr": {
+    "neutral": "expr_neutral.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg"
+   },
+   "thumb": "thumb.jpg"
+  },
+  {
+   "id": "knit",
+   "name": "베이지 니트",
+   "expr": {
+    "neutral": "expr_neutral.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg"
+   },
+   "thumb": "thumb.jpg"
+  },
+  {
+   "id": "hanbok",
+   "name": "개량한복",
+   "expr": {
+    "neutral": "expr_neutral.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg"
+   },
+   "thumb": "thumb.jpg"
+  }
+ ]
+}

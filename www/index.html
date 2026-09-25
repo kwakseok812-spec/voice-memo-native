@@ -111,7 +111,7 @@
         <div class="orbwrap">
           <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
             <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
-            <span class="core"><svg><use href="#i-chat"/></svg></span>
+            <span class="core kcore"><span class="kface" data-kface="home" aria-hidden="true"></span></span>
             <span id="chatBadge" class="chatbadge orbbadge" style="display:none;">0</span>
           </button>
           <div class="orblabel">소장 K</div>
@@ -244,7 +244,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><button type="button" class="khead" id="kHeadBtn" aria-label="케이 프로필 보기"><span class="kface sm" data-kface="head" aria-hidden="true"></span><span class="khead-tx"><b>케이</b><small>소장</small></span></button><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
       <!-- 대화 검색바(🔍 누르면 나타남) -->
       <div id="chatSearchBar" class="chatsearchbar" style="display:none;">
         <div class="input filled chatsearchinput"><svg class="lead"><use href="#i-search"/></svg><input id="chatSearchInput" type="text" placeholder="대화에서 찾기 (이름·단어)"></div>
@@ -326,6 +326,22 @@
       </div>
       <div id="ideaFilter" class="ideafilter"></div>
       <div id="ideaList"></div>
+    </section>
+
+    <!-- ===================== 케이 꾸미기(v6.0 옷장) ===================== -->
+    <section id="kWardrobeView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이 꾸미기</span><span class="spacer"></span></div>
+      <div class="kw-hero">
+        <span class="kface wide" data-kface="wardrobe" aria-hidden="true"></span>
+        <div class="kw-hero-cap"><small>지금 입은 옷</small><b id="kwCurName">버건디 정장</b></div>
+      </div>
+      <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입어요</small></div>
+      <div id="kwGrid" class="kw-grid"></div>
+      <div class="kw-note">갈아입으면 채팅·홈·프로필의 케이 사진도 함께 바뀌어요.</div>
+      <div class="kw-sec"><b>목소리</b><small>무료 음성만 써요</small></div>
+      <div id="kwVoices" class="kw-voices"></div>
+      <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
+      <label class="card toggle kw-motion"><span><b>케이 얼굴 움직이기</b><small>끄면 정지 사진만 보여요(배터리 절약)</small></span><input type="checkbox" id="kwMotion" hidden><span class="switch"></span></label>
     </section>
 
     <!-- ===================== 건강 ===================== -->
@@ -464,6 +480,21 @@
 <!-- 토스트 -->
 <div id="toast" class="toast" style="display:none;"></div>
 
+<!-- v6.0 케이 프로필 카드(헤더·말풍선 사진을 누르면) -->
+<div id="kProfile" class="kprof" style="display:none;" role="dialog" aria-modal="true" aria-label="케이 프로필">
+  <div class="kprof-box">
+    <div class="kprof-photo"><span class="kface wide" data-kface="profile" aria-hidden="true"></span></div>
+    <div class="kprof-body">
+      <div class="kprof-name">케이 <small>· 소장</small></div>
+      <div class="kprof-intro">대표님의 일을 챙기고, 정리해서 보고드리는 AI 사무소 소장입니다.</div>
+      <div class="kprof-btns">
+        <button type="button" class="kprof-btn" id="kProfClose">닫기</button>
+        <button type="button" class="kprof-btn primary" id="kProfWardrobe">케이 꾸미기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 삭제 확인 시트(개별 메시지 삭제 / 대화 전체 삭제 공용) -->
 <div id="chatSheet" class="sheet" style="display:none;">
   <div class="sheet-box">
@@ -514,6 +545,7 @@
 <script src="js/push.js"></script>
 <script src="js/health.js"></script>
 <script src="js/docviewer.js"></script>
+<script src="js/k-character.js"></script>
 <script src="js/app.js"></script>
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
      네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
