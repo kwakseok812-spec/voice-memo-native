@@ -381,12 +381,15 @@
 
   // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
   //   opts.speak=true 면 케이 답을 목소리(mp3)로도 만들게 요청(meta.speak).
+  //   v5.8: opts.modelPref='opus' 면 meta.model_pref='opus' → PC 케이가 이 1건을 오퍼스 5.5로 처리.
   function sendChat(id, token, thread, text, opts) {
     opts = opts || {};
+    var meta = { app: 'voice-memo-test', thread: thread, speak: !!opts.speak };
+    if (opts.modelPref) meta.model_pref = opts.modelPref;
     return _insertRow({
       id: id, title: '채팅', status: 'pending', kind: 'chat',
       note: text, client_token: token,
-      meta: { app: 'voice-memo-test', thread: thread, speak: !!opts.speak }
+      meta: meta
     });
   }
 
@@ -417,6 +420,7 @@
     var files = opts.files || [];
     var audioBlob = opts.audioBlob || null;
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', speak: !!opts.speak };
+    if (opts.modelPref) meta.model_pref = opts.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
     var imgMeta = [];
     function uploadImages(i) {
       if (i >= files.length) return Promise.resolve();
@@ -460,6 +464,7 @@
    */
   function _insertChatFileRow(memo, filesMeta, extra) {
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', files: filesMeta };
+    if (memo.modelPref) meta.model_pref = memo.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
     if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) meta[k] = extra[k];
     return _insertRow({
       id: memo.id, title: memo.title || '파일', status: 'pending', kind: 'chat',
@@ -650,6 +655,33 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* ---------- 작업 현황(v5.8): PC 지시 대장의 서버 사본(office_orders) ----------
+   * 원본은 PC 파일(office-orders\orders.json)이고, orders_log.py 가 쓸 때마다 서버 표로 사본을 올린다.
+   * 조회는 연동 암호 게이트 RPC 2개(채팅·회의 요약과 동일 패턴 — 불일치면 err.badpass):
+   *   listOfficeOrders(limit, pass)         → 「작업 현황」 화면(미완료 먼저, 그다음 최근 끝난 것)
+   *   listOfficeOrdersBySource(ids, pass)   → 채팅 말풍선 아래 「작업 카드」(내 메시지 행 id → 대장 항목)
+   * 반환 행: {id(O-0012), seq, channel, summary, source_id, status, result, model, job_seq, job_status,
+   *           received_at, updated_at, closed_at} */
+  function _ordersRpc(name, body, what) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error(what + ' 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+  function listOfficeOrders(limit, pass) {
+    return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
+  }
+  function listOfficeOrdersBySource(ids, pass) {
+    ids = (ids || []).filter(function (x) { return !!x; }).slice(0, 100);
+    if (!ids.length) return Promise.resolve([]);
+    return _ordersRpc('list_office_orders_by_source', { p_ids: ids, p_pass: pass || '' }, '작업 카드');
+  }
+
   /* 회의 요약 항목 이름 변경(v5.3): 서버 title 만 바꾼다(PC 원본 .md·collect.py 무관).
    *   연동 암호 게이트(불일치/미설정이면 badpass). 반환: true(수정 1건) / false(대상 없음).
    *   ⚠️ 삭제는 별도 함수가 아니라 기존 hideMemo(소프트삭제) 재사용 — list_recent_memos 가 숨김 제외. */
@@ -832,6 +864,7 @@
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
+    listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)

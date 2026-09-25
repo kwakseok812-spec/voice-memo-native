@@ -55,6 +55,7 @@
   <symbol id="i-onepage" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="6" y="14" width="12" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></symbol>
+  <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 4.5V3h6v1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 11l1.7 1.7L13 10M8.5 16.5h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 12h9M17 12v4M20 12v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -123,6 +124,7 @@
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
+      <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
@@ -242,7 +244,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer end"><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">소장 K(케이)</span><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
       <!-- 대화 검색바(🔍 누르면 나타남) -->
       <div id="chatSearchBar" class="chatsearchbar" style="display:none;">
         <div class="input filled chatsearchinput"><svg class="lead"><use href="#i-search"/></svg><input id="chatSearchInput" type="text" placeholder="대화에서 찾기 (이름·단어)"></div>
@@ -260,6 +262,11 @@
         <button type="button" id="chatMic" class="vpill micbtn" aria-label="눌러서 말하기" title="한 번 누르면 말 끝날 때 자동 전송"><svg><use href="#i-mic"/></svg><span id="chatMicLabel">눌러서 말하기</span></button>
       </div>
       <div id="chatConvoStatus" class="convostatus" style="display:none;"></div>
+      <!-- v5.8: 「오퍼스 5.5」 1회 지정 — 켜고 보낸 그 1건만 오퍼스로, 보내면 자동으로 꺼짐 -->
+      <div class="opusrow">
+        <button type="button" id="chatOpusToggle" class="opuschip" aria-pressed="false" title="중요한 작업일 때만 켜세요. 보내면 자동으로 꺼져요."><svg><use href="#i-spark"/></svg><span id="chatOpusLabel">오퍼스 5.5</span></button>
+        <span id="chatOpusHint" class="opushint">중요 작업일 때만 켜고 보내세요</span>
+      </div>
       <!-- 입력 한 줄: [+] 첨부 · 입력창 · 📷 카메라 · 전송 -->
       <div class="chatbar">
         <button id="chatAttach" class="iconbtn chatattach" aria-label="파일 첨부" title="파일 보내기"><svg><use href="#i-plus"/></svg></button>
@@ -293,6 +300,13 @@
       <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
       <div id="meetingsList"></div>
       <div id="meetingsDetail" style="display:none;"></div>
+    </section>
+
+    <!-- ===================== 작업 현황(v5.8) — PC 지시 대장의 서버 사본 ===================== -->
+    <section id="ordersView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">작업 현황</span><span class="spacer end"><button class="iconbtn" id="ordersRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
+      <div class="chatsearchinfo" style="display:block">📒 앱·텔레그램·PC로 시키신 일이 지금 어디까지 왔는지 보여드려요. 자동으로 새로 고쳐져요.</div>
+      <div id="ordersBody"></div>
     </section>
 
     <!-- ===================== 💡 아이디어 수첩(v5.5) ===================== -->

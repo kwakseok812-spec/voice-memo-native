@@ -7,6 +7,8 @@
  *     화면 하단에 올라온다 → 한글 조합이 OS 수준에서 매끄럽게 이뤄진다.
  *   - "보내기/＋/카메라" 는 네이티브 바에서 이벤트로 알려주고, 이 파일이 기존 웹 버튼
  *     (#chatSend/#chatAttach/#chatCam 등)을 그대로 클릭한다 → 전송·첨부·동기화는 웹 그대로.
+ *   - v5.8: 채팅 입력 바 위에 「오퍼스 5.5」 칩(1회 지정). 웹 칩(window.SmartOpus)과 상태를 맞춘다:
+ *     열 때 웹 상태를 넘기고, 네이티브에서 켜고/끄면 'opus' 이벤트로 웹에 반영, 보내면 양쪽 모두 자동으로 꺼짐.
  *   - ⭐ 색은 하드코딩하지 않는다. "지금 화면에 실제 적용된 색"(라이트/다크 어느 쪽이든, 테마 토글
  *     후에도)을 DOM 에서 읽어 네이티브에 넘겨 톤을 항상 일치시킨다.
  *
@@ -21,7 +23,7 @@
 
   // 대상별 웹 요소 매핑: 입력창 · 전송 · 첨부(＋) · 카메라(공유함엔 없음) · 안내문
   var MAP = {
-    chat:   { input: 'chatInput',   send: 'chatSend',   attach: 'chatAttach',   cam: 'chatCam', hint: '메시지 입력' },
+    chat:   { input: 'chatInput',   send: 'chatSend',   attach: 'chatAttach',   cam: 'chatCam', hint: '메시지 입력', opus: true },
     locker: { input: 'lockerInput', send: 'lockerSend', attach: 'lockerAttach', cam: null,      hint: '여기에 글을 쓰거나 파일을 올리세요' },
     idea:   { input: 'ideaInput',   send: 'ideaSend',   attach: null,           cam: null,      hint: '떠오른 생각을 적어 주세요' }   // v5.5 아이디어 수첩
   };
@@ -68,7 +70,9 @@
       iconBg:      toHex(iconBg),
       iconColor:   toHex(v('--p1')),
       send1:       toHex(v('--p1')),
-      send2:       toHex(v('--p2'))
+      send2:       toHex(v('--p2')),
+      opus1:       toHex(v('--opus1')),   // v5.8 「오퍼스 5.5」 칩 켜짐 색
+      opus2:       toHex(v('--opus2'))
     };
   }
 
@@ -94,7 +98,9 @@
       var p = NI.open({
         target: target, text: ta.value || '', hint: m.hint,
         colors: readColors(target),
-        hasAttach: !!m.attach, hasCamera: !!m.cam
+        hasAttach: !!m.attach, hasCamera: !!m.cam,
+        hasOpus: !!m.opus,                                                     // v5.8
+        opusOn: !!(m.opus && global.SmartOpus && global.SmartOpus.get())
       });
       if (p && p.catch) p.catch(function () { restoreWebBar(); });  // 열기 실패 시 원복
     } catch (e) { restoreWebBar(); }
@@ -120,7 +126,15 @@
     var m = MAP[current]; var ta = el(m.input); var btn = el(m.send);
     if (!ta || !btn) return;
     ta.value = (ev && ev.text) || '';
+    // v5.8: 네이티브 칩 상태를 이번 전송에 반영(웹 sendChatMsg 가 takeOpus 로 쓰고 끈다)
+    if (MAP[current].opus && global.SmartOpus) { try { global.SmartOpus.set(!!(ev && ev.opus)); } catch (e) {} }
     try { btn.click(); } catch (e) {}
+  });
+
+  // v5.8: 네이티브 「오퍼스 5.5」 칩을 켜고/끄면 웹 칩도 같은 상태로(바를 닫았을 때 웹 화면이 맞게 보이도록)
+  NI.addListener('opus', function (ev) {
+    if (!current || !MAP[current].opus || !global.SmartOpus) return;
+    try { global.SmartOpus.set(!!(ev && ev.on)); } catch (e) {}
   });
 
   // 네이티브 "＋"(첨부) → 웹 첨부 버튼 클릭(파일 선택 열림). 입력 바는 열린 채 유지.

@@ -67,7 +67,7 @@
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), processing, resultWrap];   // v5.5: ideasView(아이디어 수첩) 등록
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), processing, resultWrap];   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -76,6 +76,7 @@
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
     updateRecIndicator();
+    setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 300);   // v5.8: 홈 「작업 현황」 미완료 숫자
   }
   function openScreen(el) {
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
@@ -1131,7 +1132,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.7';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.8';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1143,6 +1144,26 @@
   var convoOn = false, convoMiss = 0, ampTimer = null, ampBusy = false, nextListenArmed = false;
   var lsnSpoke = false, lsnSpeechMs = 0, lsnStartTs = 0, lsnLastSound = 0, lsnPendingSend = false, lsnReason = '';
   var HF = { THRESH: 0.05, POLL: 160, SILENCE_MS: 1600, NOSPEECH_MS: 7000, MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3 };
+
+  /* ---- v5.8 「오퍼스 5.5」 1회 지정 ----
+   * 대표님 지시(2026-09-25): "중요 작업을 지시할 경우에만 오퍼스를 체크해서 진행하겠다."
+   *  · 기본 꺼짐(평소처럼 PC 케이가 알아서 모델 선택). 켜고 보낸 「그 1건」에만 meta.model_pref='opus'.
+   *  · 보내는 순간 자동으로 꺼진다(takeOpus) → 실수로 계속 오퍼스로 도는 일이 없다.
+   *  · 켜져 있는 동안은 칩 색·안내문으로 눈에 띄게 표시. 네이티브 입력 바(안드로이드)에도 같은 칩이 있고
+   *    서로 상태를 맞춘다(native-input.js 가 window.SmartOpus 로 읽고/쓴다). */
+  var opusNext = false;
+  var chatOpusToggle = $('chatOpusToggle'), chatOpusLabel = $('chatOpusLabel'), chatOpusHint = $('chatOpusHint');
+  function setOpusNext(on) {
+    opusNext = !!on;
+    if (chatOpusToggle) chatOpusToggle.setAttribute('aria-pressed', opusNext ? 'true' : 'false');
+    if (chatOpusLabel) chatOpusLabel.textContent = opusNext ? '오퍼스 5.5 켜짐' : '오퍼스 5.5';
+    if (chatOpusHint) {
+      chatOpusHint.textContent = opusNext ? '다음에 보내는 1건을 오퍼스 5.5로 처리해요' : '중요 작업일 때만 켜고 보내세요';
+      chatOpusHint.className = 'opushint' + (opusNext ? ' on' : '');
+    }
+  }
+  function takeOpus() { var on = opusNext; if (on) setOpusNext(false); return on; }   // 보낸 그 1건에만 쓰고 끔
+  window.SmartOpus = { get: function () { return opusNext; }, set: function (on) { setOpusNext(on); } };
 
   /* ---- 케이 목소리 재생(안드로이드 자동재생 언락 + 수동 재생 폴백) ----
    * 안드로이드 WebView 는 사용자 제스처 없이 소리 재생을 막는다. 그래서
@@ -1224,7 +1245,7 @@
       //   chatUnseen 이 부풀고 안 읽은 게 0인데도 배지가 계속 「9+」로 남았다. rid 는 삭제 tombstone(rowIdOf)용.
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote }
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus }
           : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
@@ -1421,6 +1442,7 @@
       if (q && !msgMatches(m, q)) return '';                // 검색 중이면 일치하는 말풍선만
       var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText(m.text))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
+      if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">오퍼스 5.5</span><br>' + inner;   // v5.8
       if (m.role === 'me' && m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
       inner += attachChips(m.files, m.role === 'me');
       if (m.role === 'k' && (m.text || m.vurl)) {           // 모든 케이 답에 [듣기](없으면 온디맨드 생성)
@@ -1435,7 +1457,8 @@
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
       return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner +
-        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
+        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>' +
+        (m.role === 'me' && !q ? orderCardHtml(m) : '');   // v5.8: 작업 카드(대장에 접수된 메시지만)
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
       var info = $('chatSearchInfo');
@@ -1497,6 +1520,7 @@
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
     loadOfficePushes();                          // 케이 방송 전체(삭제분 제외) 재구성
     startChatSync();                              // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 게이트 안내)
+    ordFullOnce = true; startOrderPoll();         // v5.8: 작업 카드 — 열 때 최근 메시지들 카드 한 번 전체 확인
     // C4: 공유함과 동일 — 연동 암호가 없으면 조용히 넘기지 말고 매번 안내(암호 없으면 기기 간 대화가 안 보임).
     if (!getSyncPass()) showSyncGate(true);
     if (anyAwaiting()) startChatReconcile();
@@ -1533,11 +1557,12 @@
     //   대기 상태는 '입력 막기'가 아니라 화면의 점 세 개(typing) 표시로만 알린다.
     unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
+    var opus = takeOpus();                        // v5.8: 켜져 있었으면 이번 1건(첨부 포함 한 번의 전송)에만 적용하고 끔
     var textUsed = false;
     // (1) 사진이 붙어 있으면 통합 전송(케이가 사진을 보고 답) — 글은 사진과 함께 감
     if (imgs.length) {
       chatPendingImages = [];
-      sendChatTurnUI({ text: text, files: imgs, audioBlob: null });
+      sendChatTurnUI({ text: text, files: imgs, audioBlob: null, opus: opus });
       textUsed = true;
     }
     // (2) 파일이 붙어 있으면 파일 전송 — 글이 아직 안 쓰였으면 첫 파일 묶음에 함께 붙임
@@ -1545,17 +1570,18 @@
       chatPendingFiles = [];
       var big = files.filter(function (f) { return (f.size || 0) > CHAT_CHUNK_LIMIT; });
       var small = files.filter(function (f) { return (f.size || 0) <= CHAT_CHUNK_LIMIT; });
-      if (small.length) { pushChatFileMsg(small, false, textUsed ? '' : text); textUsed = true; }
-      big.forEach(function (f) { pushChatFileMsg([f], true, textUsed ? '' : text); textUsed = true; });
+      if (small.length) { pushChatFileMsg(small, false, textUsed ? '' : text, opus); textUsed = true; }
+      big.forEach(function (f) { pushChatFileMsg([f], true, textUsed ? '' : text, opus); textUsed = true; });
       if (big.length) toast('큰 파일은 나눠 올려요 — 시간이 걸릴 수 있어요.');
     }
     renderPending();
     // (3) 남은 순수 텍스트(첨부가 하나도 없을 때) — 기존 경로(음성 답은 음성 대화 모드일 때만)
     if (!textUsed && text) {
       var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
-      chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false });
+      chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus });
       saveChatMsgs(); renderChat(); updateSendEnabled();
-      OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn }).then(function () {
+      OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn, modelPref: opus ? 'opus' : null }).then(function () {
+        kickOrderPoll();                          // v5.8: 작업 카드가 곧 붙도록
         startChatReconcile();
       }).catch(function () {
         var m = findMsg(id); if (m) m.answered = true;
@@ -1573,16 +1599,16 @@
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var dispFiles = imgs.map(function (f) { return { name: f.name || '사진', size: f.size || 0, mime: f.type || '', kind: 'image' }; });
     var meMsg = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false,
-                  files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob };
+                  files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob, opus: !!o.opus };
     chatMsgs.push(meMsg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var note = text;                              // 사진만 있고 말/글이 없으면 기본 질문
     if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주세요.';
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
-    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn }).then(function () {
+    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null }).then(function () {
       meMsg.uploading = false; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
-      startChatReconcile();
+      startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       meMsg.answered = true; meMsg.uploading = false;
       chatMsgs.push({ role: 'k', text: '전송이 안 됐어요(' + (e && e.message || e) + '). 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
@@ -1667,7 +1693,7 @@
       convoMiss = 0;
       var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
       if (convoOn) setConvoStatus('케이가 답하는 중…');
-      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob });   // 음성(+있으면 사진) 전송
+      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus() });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회
     } else {
       // 말이 없었음/취소
       if (convoOn) {
@@ -1823,7 +1849,7 @@
     //   보낸 지 텍스트 6분·첨부 20분이 지나면 poll 상태와 무관하게 answered 로 확정해 잠금을 해제한다.
     var gaveUp = false;
     pending.forEach(function (m) {
-      var limitMs = (m.files ? 20 : 6) * 60 * 1000;
+      var limitMs = ((m.files || m.opus) ? 20 : 6) * 60 * 1000;   // v5.8: 오퍼스 지정도 첨부처럼 여유(창구 상한 10분)
       if ((nowT - (m.ts || 0)) > limitMs) {
         m.answered = true; m._polling = false; m._doneShown = true;
         chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
@@ -1854,6 +1880,7 @@
           if (vurl) kmsg.vurl = vurl;
           chatMsgs.push(kmsg);
           saveChatMsgs();
+          setTimeout(pollOrderCards, 1500);          // v5.8: 답이 오면 작업 카드도 곧바로 갱신(PC가 대장에 결과를 막 적은 직후)
           if (isOpen(chatView)) {
             renderChat();
             if (vurl) {                          // 음성 대화 모드 답 → 즉시 자동재생(끝나면 다음 듣기)
@@ -1868,7 +1895,7 @@
           }
           else { chatUnseen++; updateChatBadge(); toast(vurl ? '케이가 음성으로 답했어요.' : (atts.length ? '케이가 파일을 보냈어요.' : '케이 답장이 도착했어요.')); }
           updateSendEnabled();
-        } else if (Date.now() - (m.ts || 0) > (m.files ? 20 : 6) * 60 * 1000) {   // 파일 첨부는 여유롭게
+        } else if (Date.now() - (m.ts || 0) > ((m.files || m.opus) ? 20 : 6) * 60 * 1000) {   // 파일 첨부·오퍼스 지정은 여유롭게
           m.answered = true;
           chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
           saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
@@ -2028,8 +2055,213 @@
     startChatSync();                                  // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
     if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ideasView'))) refreshIdeas(false);  // v5.5: 아이디어 화면에서 암호를 넣었으면 바로 다시 불러온다
+    if (isOpen($('ordersView'))) refreshOrders(false); // v5.8: 작업 현황에서 암호를 넣었으면 바로 다시 불러온다
+    if (isOpen(chatView)) { ordFullOnce = true; pollOrderCards(); }   // v5.8: 작업 카드도 곧바로
   });
   if ($('syncGateLater')) $('syncGateLater').addEventListener('click', function () { hideSyncGate(); });
+
+  /* ===================== v5.8 작업 카드 · 작업 현황 =====================
+   * 대표님: "매번 작업을 지시해도 하는 건지 안 하는 건지 알 수가 없어."
+   * 원본은 PC 지시 대장(office-orders\orders.json). orders_log.py 가 쓸 때마다 서버 표 office_orders 로
+   * 사본을 올리고(미러), 앱은 연동 암호 게이트 RPC 로 읽기만 한다(쓰기·삭제 없음).
+   *  · 작업 카드: 내가 보낸 채팅 메시지(행 id = 대장 source_id) 아래에 [O-번호 · 상태 · 처리 모델 · 결과 한 줄].
+   *    대장에 접수된 메시지(일반 차선)에만 붙는다 — 짧은 인사(빠른 차선)는 대장에 안 올라가므로 카드 없음.
+   *    채팅이 열려 있는 동안 8초마다: 아직 안 끝난 카드 + 최근 15분 안에 보낸(카드 아직 없는) 메시지만 조회.
+   *  · 작업 현황: 미완료 전부(창구 표시) + 최근 끝난 것. 열려 있는 동안 15초마다 갱신.
+   * ⚠️ 채팅 화면 새 요소엔 backdrop-filter 금지(v4.5 타이핑 렉) · confirm 금지 · 암호 없거나 틀리면 기존 게이트. */
+  var ORDER_CARDS_KEY = 'smart_order_cards';
+  var ORD_CLOSED = { '완료': 1, '취소': 1 };
+  var ORD_ST_CLASS = { '접수': 's-recv', '진행': 's-prog', '완료': 's-done', '보류': 's-hold', '실패': 's-fail', '취소': 's-canc' };
+  var orderCards = loadOrderCards(), ordTimer = null, ordBusy = false, ordFullOnce = false;
+  var ordersView = $('ordersView'), ordersBody = $('ordersBody'), ordersTimer = null, ordersBusy = false;
+  var ordersFromChat = false, ordersHl = '';
+
+  function loadOrderCards() { try { var o = JSON.parse(localStorage.getItem(ORDER_CARDS_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+  function saveOrderCards() {
+    try {
+      var keys = Object.keys(orderCards);
+      if (keys.length > 200) {                     // 오래된 것부터 정리(최근 200개만 보관)
+        keys.sort(function (a, b) { return (orderCards[a]._t || 0) - (orderCards[b]._t || 0); });
+        keys.slice(0, keys.length - 200).forEach(function (k) { delete orderCards[k]; });
+      }
+      localStorage.setItem(ORDER_CARDS_KEY, JSON.stringify(orderCards));
+    } catch (e) {}
+  }
+  // 모델 id → 대표님이 읽기 쉬운 이름. (claude-opus-5-5 → 오퍼스 5.5, claude-sonnet-5 → 소넷 5)
+  function modelLabel(id) {
+    if (!id) return '';
+    var s = String(id).toLowerCase(), r;
+    if (/^router-|^recover/.test(s)) return '';
+    if (s === 'haiku-fast') return '하이쿠(빠른 답)';
+    var names = { opus: '오퍼스', sonnet: '소넷', haiku: '하이쿠', fable: '페이블' };
+    for (var k in names) {
+      if (s.indexOf(k) === -1) continue;
+      r = s.match(new RegExp(k + '-(\\d+)(?:-(\\d{1,2})(?!\\d))?'));
+      return names[k] + (r ? (' ' + r[1] + (r[2] ? '.' + r[2] : '')) : '');
+    }
+    return String(id);
+  }
+  function fmtKst(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function ordStatusHtml(st) { return '<span class="ordst ' + (ORD_ST_CLASS[st] || '') + '">' + esc(st || '?') + '</span>'; }
+  function ordModelHtml(model, wantOpus) {
+    var lb = modelLabel(model);
+    if (!lb && wantOpus) lb = '오퍼스 5.5 요청';
+    if (!lb) return '';
+    return '<span class="ordmodel' + (/오퍼스/.test(lb) ? ' opus' : '') + '">' + esc(lb) + '</span>';
+  }
+  /* v5.8 검수 표시: 진행 활동 · 완료 근거 · 감독관 재촉 · 소장 검토 → 카드만 보고
+   *   「하고 있다(진행 중 N분째·최근 활동)」 / 「진짜 끝냈다(✅근거)」 / 「말로만 끝냈다(⚠️근거 없음·활동 없음)」가 구분되게. */
+  function minsSince(iso) { var t = Date.parse(iso || ''); return isNaN(t) ? null : Math.max(0, Math.round((Date.now() - t) / 60000)); }
+  function ordActivityLine(o) {
+    var a = o.activity; if (!a) return '';
+    if (!ORD_CLOSED[o.status] && a.live) {
+      var mn = minsSince(a.started);
+      return '진행 중' + (mn != null ? ' (' + (mn < 1 ? '방금 시작' : mn + '분째') + ')' : '') + (a.last ? ' · 최근: ' + a.last : '');
+    }
+    if (!(a.tools > 0)) return '활동 없음(답변만)';
+    return '활동: ' + (a.summary || (a.tools + '건'));
+  }
+  function ordEvidenceHtml(o) {
+    var e = o.evidence; if (!e || !e.mark) return '';
+    var cls = e.grade === 'ok' ? 'ev-ok' : e.grade === 'partial' ? 'ev-part' : e.grade === 'none' ? 'ev-none' : 'ev-unk';
+    return '<span class="ordev ' + cls + '">' + esc(e.mark + ' ' + (e.label || '')) + '</span>';
+  }
+  function ordExtraHtml(o) {
+    var h = '';
+    if (o.nudge && o.nudge.count) h += '<span class="ordtag">감독관 재촉 ' + esc(o.nudge.count) + '회</span>';
+    if (o.nudge && o.nudge.escalated) h += '<span class="ordtag warn">재촉해도 안 끝남</span>';
+    if (o.reviewed_by) h += '<span class="ordtag ok">소장 검토 완료</span>';
+    return h;
+  }
+  function orderCardHtml(m) {
+    if (!orderCards) return '';                      // (시작 직후 모듈 초기화 전 렌더 대비)
+    var key = m.id || m.cid; if (!key) return '';
+    var o = orderCards[key]; if (!o || !o.id) return '';
+    var line = o.result || o.summary || '';
+    var act = ordActivityLine(o);
+    var ev = ORD_CLOSED[o.status] && o.evidence && o.evidence.text ? o.evidence.text : '';
+    return '<div class="ordcard" data-ord="' + esc(o.id) + '">' +
+      '<div class="oc-h"><span class="oc-id">' + esc(o.id) + '</span>' + ordStatusHtml(o.status) + ordModelHtml(o.model, m.opus || o.model_pref === 'opus') +
+      (ORD_CLOSED[o.status] ? ordEvidenceHtml(o) : '') + ordExtraHtml(o) + '</div>' +
+      (act ? '<div class="oc-a">' + esc(act) + '</div>' : '') +
+      (line ? '<div class="oc-r">' + esc(line) + '</div>' : '') +
+      (ev ? '<div class="oc-e">근거: ' + esc(ev) + '</div>' : '') + '</div>';
+  }
+  // 이번에 조회할 원본 id: (전체 1회) 최근 내 메시지 40개 / (평소) 안 끝난 카드 + 최근 15분 내 보낸 카드 없는 메시지
+  function orderPollIds(full) {
+    if (!orderCards) orderCards = loadOrderCards();
+    var now = Date.now(), ids = [], mine = chatMsgs.filter(function (m) { return m.role === 'me' && (m.id || m.cid); });
+    mine.slice(-40).forEach(function (m) {
+      var key = m.id || m.cid, c = orderCards[key];
+      if (full) { ids.push(key); return; }
+      if (c && c.id) { if (!ORD_CLOSED[c.status]) ids.push(key); return; }
+      if (now - (m.ts || 0) < 15 * 60 * 1000) ids.push(key);
+    });
+    return ids;
+  }
+  function startOrderPoll() {
+    if (!ordTimer) ordTimer = setInterval(function () {
+      if (!isOpen(chatView)) { clearInterval(ordTimer); ordTimer = null; return; }
+      pollOrderCards();
+    }, 8000);
+    pollOrderCards();
+  }
+  // 방금 보낸 메시지: PC 응답기가 집어 대장에 올리기까지 몇 초 → 2.5초·6초 뒤 한 번씩 더 확인 + 주기 폴링 시작
+  function kickOrderPoll() { startOrderPoll(); setTimeout(pollOrderCards, 2500); setTimeout(pollOrderCards, 6000); }
+  function pollOrderCards() {
+    if (ordBusy || !(window.OfficeBridge && OfficeBridge.listOfficeOrdersBySource)) return;
+    var pass = getSyncPass(); if (!pass) return;       // 암호 없으면 조용히(채팅 게이트가 이미 안내)
+    var full = ordFullOnce; ordFullOnce = false;
+    var ids = orderPollIds(full); if (!ids.length) return;
+    ordBusy = true;
+    OfficeBridge.listOfficeOrdersBySource(ids, pass).then(function (rows) {
+      ordBusy = false;
+      var changed = false;
+      rows.forEach(function (r) {
+        if (!r || !r.source_id) return;
+        var old = orderCards[r.source_id];
+        var nv = { id: r.id, status: r.status, result: r.result || '', summary: r.summary || '', model: r.model || '', u: r.updated_at || '', _t: Date.now(),
+                   activity: r.activity || null, evidence: r.evidence || null, nudge: r.nudge || null, reviewed_by: r.reviewed_by || '', model_pref: r.model_pref || '' };   // v5.8 검수 칸
+        var sig = function (x) { return x ? JSON.stringify([x.id, x.status, x.result, x.model, x.activity, x.evidence, x.nudge, x.reviewed_by]) : ''; };
+        if (sig(old) !== sig(nv)) changed = true;
+        orderCards[r.source_id] = nv;
+      });
+      var liveAny = rows.some(function (r) { return r && r.activity && r.activity.live && !ORD_CLOSED[r.status]; });
+      if (changed) { saveOrderCards(); if (isOpen(chatView)) renderChat(); }
+      else if (liveAny && Date.now() - (pollOrderCards._lastLive || 0) > 60000) { pollOrderCards._lastLive = Date.now(); if (isOpen(chatView)) renderChat(); }
+    }).catch(function (e) {
+      ordBusy = false;
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); }
+    });
+  }
+
+  /* ---- 작업 현황 화면 ---- */
+  function openOrders(fromChat, hlId) {
+    ordersFromChat = !!fromChat; ordersHl = hlId || '';
+    openScreen(ordersView);
+    if (ordersBody && !ordersBody.innerHTML) ordersBody.innerHTML = '<div class="ord-empty">불러오는 중…</div>';
+    refreshOrders(false);
+    if (!ordersTimer) ordersTimer = setInterval(function () {
+      if (!isOpen(ordersView)) { clearInterval(ordersTimer); ordersTimer = null; return; }
+      refreshOrders(true);
+    }, 15000);
+  }
+  function refreshOrders(silent) {
+    if (!(window.OfficeBridge && OfficeBridge.listOfficeOrders)) return;
+    var pass = getSyncPass();
+    if (!pass) {
+      if (!silent && isOpen(ordersView)) showSyncGate(true, '작업 현황을 보려면 PC 연동 암호를 입력해 주세요.');
+      if (ordersBody) ordersBody.innerHTML = '<div class="ord-empty">PC 연동 암호를 넣으면 작업 현황이 보여요.</div>';
+      return;
+    }
+    if (ordersBusy) return; ordersBusy = true;
+    OfficeBridge.listOfficeOrders(80, pass).then(function (rows) {
+      ordersBusy = false;
+      renderOrders(rows);
+    }).catch(function (e) {
+      ordersBusy = false;
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(ordersView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); return; }
+      if (ordersBody && !silent) ordersBody.innerHTML = '<div class="ord-err">작업 현황을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침을 눌러 주세요.</div>';
+    });
+  }
+  function ordItemHtml(o) {
+    var when = o.closed_at ? ('끝남 ' + fmtKst(o.closed_at)) : ('갱신 ' + fmtKst(o.updated_at || o.received_at));
+    return '<div class="card ord-item' + (ordersHl && ordersHl === o.id ? ' hl' : '') + '" data-oid="' + esc(o.id) + '">' +
+      '<div class="oi-h"><span class="oi-id">' + esc(o.id) + '</span>' + ordStatusHtml(o.status) +
+      '<span class="ordch">' + esc(o.channel || '?') + '</span>' + ordModelHtml(o.model, o.model_pref === 'opus') +
+      '<span class="oi-when">' + esc(when) + '</span></div>' +
+      '<div class="oi-s">' + esc(o.summary || '(요지 없음)') + '</div>' +
+      ((ORD_CLOSED[o.status] ? ordEvidenceHtml(o) : '') + ordExtraHtml(o) ? '<div class="oi-tags">' + (ORD_CLOSED[o.status] ? ordEvidenceHtml(o) : '') + ordExtraHtml(o) + '</div>' : '') +
+      (ordActivityLine(o) ? '<div class="oi-a">' + esc(ordActivityLine(o)) + '</div>' : '') +
+      (o.result ? '<div class="oi-r">' + esc(o.result) + '</div>' : '') +
+      (ORD_CLOSED[o.status] && o.evidence && o.evidence.text ? '<div class="oi-r oi-e">근거: ' + esc(o.evidence.text) + '</div>' : '') +
+      '<div class="oi-r" style="font-size:12px;color:var(--dim)">접수 ' + esc(fmtKst(o.received_at)) + (o.job_seq ? ' · 작업실 #' + esc(o.job_seq) : '') + '</div></div>';
+  }
+  function renderOrders(rows) {
+    if (!ordersBody) return;
+    rows = Array.isArray(rows) ? rows : [];
+    var open = rows.filter(function (o) { return !ORD_CLOSED[o.status]; });
+    var done = rows.filter(function (o) { return ORD_CLOSED[o.status]; }).slice(0, 15);
+    updateOrdersBadge(open.length);
+    var h = '<div class="ord-sec">아직 안 끝난 일 <small>' + open.length + '건</small></div>';
+    h += open.length ? open.map(ordItemHtml).join('') : '<div class="ord-empty">지금 진행 중이거나 기다리는 일이 없어요.</div>';
+    h += '<div class="ord-sec">최근 끝난 일 <small>' + done.length + '건</small></div>';
+    h += done.length ? done.map(ordItemHtml).join('') : '<div class="ord-empty">아직 없어요.</div>';
+    ordersBody.innerHTML = h;
+    if (ordersHl) {                                  // 카드에서 들어왔으면 그 항목으로 스크롤(한 번만)
+      var el = ordersBody.querySelector('[data-oid="' + ordersHl.replace(/"/g, '') + '"]');
+      if (el) try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
+      ordersHl = '';
+    }
+  }
+  function updateOrdersBadge(n) {
+    var b = $('ordersOpenBadge'); if (!b) return;
+    if (n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.style.display = ''; } else b.style.display = 'none';
+  }
 
   /* ===================== PC↔폰 공유함(locker) =====================
    * 카카오톡 「나와의 채팅」처럼, 케이(chat_responder)는 개입하지 않고 대표님 기기끼리만
@@ -2290,6 +2522,15 @@
     if (this.files && this.files.length) onChatCamPicked(this.files);
     this.value = '';
   });
+  // v5.8: 「오퍼스 5.5」 1회 지정 칩
+  if (chatOpusToggle) chatOpusToggle.addEventListener('click', function () {
+    setOpusNext(!opusNext);
+    if (opusNext) toast('다음에 보내는 1건을 오퍼스 5.5로 처리해요(보내면 자동으로 꺼져요).');
+  });
+  // v5.8: 작업 현황 열기(채팅 헤더 · 홈 카드)
+  if ($('chatOrdersBtn')) $('chatOrdersBtn').addEventListener('click', function () { openOrders(true); });
+  if ($('btnOrders')) $('btnOrders').addEventListener('click', function () { openOrders(false); });
+  if ($('ordersRefresh')) $('ordersRefresh').addEventListener('click', function () { refreshOrders(false); toast('새로 불러왔어요.'); });
   // 음성 대화 모드(핸즈프리) 켜기/끄기
   if (chatConvoToggle) chatConvoToggle.addEventListener('click', function () {
     if (convoOn) stopConvo(false); else startConvo();
@@ -2322,7 +2563,7 @@
 
   /* ---- 채팅 파일 첨부(대표님 → 케이, 상향) ---- */
   var CHAT_CHUNK_LIMIT = 45 * 1024 * 1024;   // 이보다 큰 파일은 청크 업로드(단일 50MB 한도 우회)
-  function pushChatFileMsg(files, chunked, userText) {
+  function pushChatFileMsg(files, chunked, userText, opus) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     userText = (userText || '').trim();
     var upFiles = Array.prototype.map.call(files, function (f) {
@@ -2330,14 +2571,15 @@
     });
     var names = upFiles.map(function (f) { return f.name; });
     var note = (userText ? (userText + '\n\n') : '') + '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨어요. 확인해 주세요.';
-    var msg = { role: 'me', text: userText, ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true };
+    var msg = { role: 'me', text: userText, ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true, opus: !!opus };
     chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var memo = { id: id, token: tok, thread: chatThread, title: names[0] || '파일', note: note };
+    if (opus) memo.modelPref = 'opus';           // v5.8: 오퍼스 5.5 1회 지정
     var work = chunked ? OfficeBridge.sendChatChunked(memo, files[0]) : OfficeBridge.sendChatBatch(memo, files);
     work.then(function () {
       msg.uploading = false; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
-      startChatReconcile();
+      startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       msg.answered = true; msg.uploading = false;
       chatMsgs.push({ role: 'k', text: '파일 전송이 안 됐어요(' + (e && e.message || e) + '). 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
@@ -2367,6 +2609,8 @@
     // 링크 탭 → 외부로 열기(선택 복사와 별개)
     var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
+    var oc = ev.target.closest ? ev.target.closest('.ordcard[data-ord]') : null;   // v5.8: 작업 카드 → 작업 현황(그 항목 강조)
+    if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
     // ⋯ 메뉴 → 복사·삭제 시트
     var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openMsgActionSheet(bub.getAttribute('data-uid')); return; }
@@ -2554,6 +2798,10 @@
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
     if (isOpen($('ideasView'))) {      // v5.5: 아이디어 수첩 — 녹음 중이면 '멈추고 보내기'(잠결 아이디어 유실 방지), 아니면 홈
       if (ideaRecording) { stopIdeaRec(); toast('녹음을 멈추고 보냈어요.'); return true; }
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
+    if (isOpen($('ordersView'))) {     // v5.8: 작업 현황 — 채팅에서 왔으면 채팅으로, 아니면 홈으로
+      if (ordersFromChat) { ordersFromChat = false; openChat(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
@@ -3046,4 +3294,5 @@
   if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
   // M1: 버전 표시 — 대표님이 지금 보는 화면이 최신본인지 알 수 있게(특히 PC판 캐시 확인용)
   try { var _av = $('appVer'); if (_av) _av.textContent = '스마트비서 ' + APP_VERSION; } catch (e) {}
+  setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 1500);   // v5.8: 시작 시 홈 「작업 현황」 숫자
 })();

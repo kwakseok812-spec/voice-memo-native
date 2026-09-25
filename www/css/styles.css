@@ -19,6 +19,7 @@
   --ring-c:rgba(139,92,246,.55); --focus:rgba(59,130,246,.25);
   --glow:0 14px 44px rgba(99,102,241,.50); --glow-s:0 6px 18px rgba(99,102,241,.40);
   --blur:18px; --blur-s:14px; --blur-orb:60px;
+  --opus1:#F59E0B; --opus2:#EA580C;   /* v5.8 「오퍼스 5.5」 강조색(네이티브 입력 바도 이 값을 읽어 씀) */
 }
 /* ---------- B안: 오로라 라이트 ---------- */
 html[data-style="light"] {
@@ -35,6 +36,7 @@ html[data-style="light"] {
   --in-bg:rgba(255,255,255,.8); --sw-off:rgba(30,41,99,.18);
   --ring-c:rgba(124,58,237,.35); --focus:rgba(37,99,235,.18);
   --glow:0 14px 36px rgba(79,70,229,.30); --glow-s:0 6px 16px rgba(79,70,229,.25);
+  --opus1:#D97706; --opus2:#C2410C;
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -742,3 +744,61 @@ body.doc-fs #docFsHint{display:block}
 .idea-actions.end{justify-content:flex-end}
 .idea-actions .btn.idea-del{width:auto;height:36px;font-size:13.5px;padding:0 14px;border-radius:12px;color:var(--dim)}
 .idea-actions .btn.idea-del svg{width:16px;height:16px}
+
+/* ===== v5.8 「오퍼스 5.5」 1회 지정 + 작업 카드 + 작업 현황 =====
+   ⚠️ 채팅 화면은 타이핑 렉 방지로 backdrop-filter 금지(v4.5) — 아래 요소도 전부 불투명/반투명 배경만 쓴다. */
+.opusrow{display:flex;align-items:center;gap:9px;margin:0 0 4px;min-height:36px}
+.opuschip{flex:none;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:999px;border:1.5px solid var(--glass-b2);background:rgba(120,140,200,.10);color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.opuschip svg{width:16px;height:16px;flex:none}
+.opuschip:active{transform:scale(.97)}
+.opuschip[aria-pressed="true"]{color:#fff;background:linear-gradient(135deg,var(--opus1),var(--opus2));border-color:transparent;box-shadow:0 5px 16px rgba(234,88,12,.40)}
+.opushint{min-width:0;font-size:12.5px;font-weight:600;color:var(--dim);line-height:1.35;word-break:keep-all;overflow-wrap:break-word}
+.opushint.on{color:var(--opus2);font-weight:800}
+/* 내 말풍선 안 「오퍼스 5.5」 표시 */
+.opustag{display:inline-flex;align-items:center;gap:4px;margin:0 0 5px;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,.22);font-size:11.5px;font-weight:800;letter-spacing:.1px}
+.opustag::before{content:"";width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--opus1),var(--opus2));box-shadow:0 0 0 1.5px rgba(255,255,255,.75)}
+/* 작업 카드(내 메시지 아래) */
+.ordcard{align-self:flex-end;max-width:84%;margin:-5px 2px 2px 0;padding:8px 12px;border-radius:14px;border:1px solid var(--glass-b);background:rgba(22,31,48,.72);color:var(--text);font-size:13px;line-height:1.45;cursor:pointer;-webkit-user-select:none;user-select:none}
+html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
+.ordcard .oc-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ordcard .oc-id{font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
+.ordcard .oc-r{margin-top:3px;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ordst{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;background:rgba(120,140,200,.16);color:var(--muted)}
+.ordst.s-recv{background:rgba(120,140,200,.18);color:var(--muted)}
+.ordst.s-prog{background:rgba(59,130,246,.18);color:var(--p1)}
+.ordst.s-prog::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--p1);animation:ordpulse 1.2s ease-in-out infinite}
+.ordst.s-done{background:var(--ok-bg);color:var(--ok)}
+.ordst.s-hold{background:var(--warn-bg);color:var(--warn)}
+.ordst.s-fail{background:rgba(244,63,94,.16);color:var(--rec)}
+.ordst.s-canc{background:rgba(120,140,200,.10);color:var(--dim)}
+@keyframes ordpulse{0%,100%{opacity:1}50%{opacity:.25}}
+.ordmodel{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(120,140,200,.12);color:var(--muted)}
+.ordmodel.opus{color:#fff;background:linear-gradient(135deg,var(--opus1),var(--opus2))}
+.ordch{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(120,140,200,.14);color:var(--muted)}
+/* 작업 현황 화면 */
+.ordbadge{flex:none;min-width:24px;height:24px;padding:0 8px;border-radius:999px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center;margin-left:auto}
+.ordbadge + .chev{margin-left:6px}
+.ord-sec{display:flex;align-items:baseline;justify-content:space-between;font-size:16px;font-weight:800;margin:18px 2px 8px}
+.ord-sec small{font-size:13px;color:var(--dim);font-weight:600}
+.ord-item{margin-top:9px;padding:13px 14px;border-radius:18px}
+.ord-item .oi-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ord-item .oi-id{font-weight:800;font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+.ord-item .oi-when{margin-left:auto;font-size:12px;color:var(--dim);font-weight:600}
+.ord-item .oi-s{margin-top:7px;font-size:15.5px;font-weight:700;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.ord-item .oi-r{margin-top:5px;font-size:13.5px;color:var(--muted);line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.ord-item.hl{border-color:var(--p1);box-shadow:0 0 0 2px rgba(59,130,246,.25)}
+.ord-empty{color:var(--dim);font-size:14.5px;font-weight:600;padding:14px 4px;text-align:center}
+.ord-err{margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--warn-bg);color:var(--warn);font-size:14px;font-weight:700}
+/* v5.8 검수 표시(진행 활동·완료 근거·감독관 재촉·소장 검토) */
+.ordcard .oc-a,.ord-item .oi-a{margin-top:3px;font-size:12.5px;font-weight:700;color:var(--p1);word-break:keep-all;overflow-wrap:anywhere}
+.ordcard .oc-e{margin-top:2px;font-size:12px;color:var(--dim);word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ord-item .oi-e{font-size:12.5px;color:var(--dim)}
+.ord-item .oi-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.ordev{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px}
+.ordev.ev-ok{background:var(--ok-bg);color:var(--ok)}
+.ordev.ev-part{background:rgba(59,130,246,.16);color:var(--p1)}
+.ordev.ev-none{background:rgba(244,63,94,.16);color:var(--rec)}
+.ordev.ev-unk{background:rgba(120,140,200,.14);color:var(--muted)}
+.ordtag{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(120,140,200,.14);color:var(--muted)}
+.ordtag.ok{background:var(--ok-bg);color:var(--ok)}
+.ordtag.warn{background:var(--warn-bg);color:var(--warn)}

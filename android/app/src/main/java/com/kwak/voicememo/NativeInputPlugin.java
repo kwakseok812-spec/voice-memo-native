@@ -38,12 +38,19 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *    open({colors:{...}}) 로 넘겨주고, 이 바는 그 색을 그대로 쓴다 → 평소 웹 입력 바와 톤이 일치한다.
  *  - 입력 바는 "보내기" 후에도 닫히지 않고(연속 대화) 텍스트만 비운다. 바깥(위쪽 대화)을 탭하거나
  *    뒤로가기를 누르면 닫히며, 안 보낸 초안은 'close' 이벤트로 웹 입력창에 되돌려 저장한다.
+ *  - v5.8(2026-09-25): 채팅(hasOpus)이면 입력 줄 위에 「오퍼스 5.5」 칩을 한 줄 둔다(1회 지정).
+ *    탭하면 켜짐/꺼짐 → 'opus' 이벤트({on})로 웹 칩과 동기화. 보내면 'send' 이벤트에 opus 값을 실어 보내고
+ *    칩은 자동으로 꺼진다(대표님: 중요 작업일 때만 체크 — 실수로 계속 오퍼스로 도는 일 방지).
  */
 @CapacitorPlugin(name = "NativeInput")
 public class NativeInputPlugin extends Plugin {
 
     private Dialog dialog;
     private EditText edit;
+    // v5.8 「오퍼스 5.5」 1회 지정 칩
+    private TextView opusChip;
+    private boolean opusOn = false;
+    private int opusC1, opusC2, opusOffBg, opusOffFg, opusOffBorder;
 
     private int dp(float v) {
         return Math.round(TypedValue.applyDimension(
@@ -69,12 +76,14 @@ public class NativeInputPlugin extends Plugin {
         final JSObject colors = call.getObject("colors");
         final boolean hasAttach = call.getBoolean("hasAttach", false);
         final boolean hasCamera = call.getBoolean("hasCamera", false);
+        final boolean hasOpus = call.getBoolean("hasOpus", false);     // v5.8
+        final boolean opusInit = call.getBoolean("opusOn", false);
         getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 try {
                     showBar(text == null ? "" : text, hint == null ? "메시지 입력" : hint,
-                            colors, hasAttach, hasCamera);
+                            colors, hasAttach, hasCamera, hasOpus, opusInit);
                     call.resolve();
                 } catch (Exception e) {
                     call.reject("입력창을 여는 데 실패했어요: " + e.getMessage());
@@ -112,12 +121,33 @@ public class NativeInputPlugin extends Plugin {
         return b;
     }
 
+    /** v5.8: 오퍼스 칩 모양(켜짐=주황 그라디언트+흰 글씨, 꺼짐=연한 배경+흐린 글씨). */
+    private void styleOpusChip() {
+        if (opusChip == null) return;
+        GradientDrawable d;
+        if (opusOn) {
+            d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{ opusC1, opusC2 });
+            opusChip.setTextColor(Color.WHITE);
+            opusChip.setText("✦ 오퍼스 5.5 켜짐 · 이번 1건");
+        } else {
+            d = new GradientDrawable();
+            d.setColor(opusOffBg);
+            d.setStroke(dp(1.5f), opusOffBorder);
+            opusChip.setTextColor(opusOffFg);
+            opusChip.setText("✦ 오퍼스 5.5");
+        }
+        d.setCornerRadius(dp(999));
+        opusChip.setBackground(d);
+    }
+
     /** 입력 바(하단 도킹 다이얼로그)를 만들거나, 이미 떠 있으면 텍스트만 갱신한다. */
-    private void showBar(String text, String hint, JSObject colors, boolean hasAttach, boolean hasCamera) {
+    private void showBar(String text, String hint, JSObject colors, boolean hasAttach, boolean hasCamera,
+                         boolean hasOpus, boolean opusInit) {
         if (dialog != null && dialog.isShowing() && edit != null) {
             edit.setText(text);
             edit.setSelection(edit.getText().length());
             edit.setHint(hint);
+            if (opusChip != null) { opusOn = opusInit; styleOpusChip(); }   // v5.8: 웹 칩 상태로 맞춤
             focusAndShowKeyboard();
             return;
         }
@@ -134,6 +164,11 @@ public class NativeInputPlugin extends Plugin {
         int send1      = col(colors, "send1",       Color.parseColor("#2563EB")); // 전송 그라디언트 시작(웹 --p1)
         int send2      = col(colors, "send2",       Color.parseColor("#7C3AED")); // 전송 그라디언트 끝(웹 --p2)
         int hairline   = col(colors, "hairline",    Color.parseColor("#22636399")); // 위 대화와 구분하는 얇은 경계선
+        opusC1         = col(colors, "opus1",       Color.parseColor("#D97706")); // v5.8 오퍼스 칩 켜짐 그라디언트 시작(웹 --opus1)
+        opusC2         = col(colors, "opus2",       Color.parseColor("#C2410C")); // v5.8 끝(웹 --opus2)
+        opusOffBg      = iconBg;
+        opusOffFg      = hintCol;
+        opusOffBorder  = fieldBorder;
 
         // ── 바깥 컨테이너(가로 한 줄) — 웹 .chatbar 자리를 그대로 대체 ──
         final LinearLayout bar = new LinearLayout(getContext());
@@ -142,8 +177,40 @@ public class NativeInputPlugin extends Plugin {
         GradientDrawable barBgD = new GradientDrawable();
         barBgD.setColor(barBg);
         barBgD.setStroke(dp(1), hairline);
-        bar.setBackground(barBgD);
         bar.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        // ── v5.8: 바깥 세로 컨테이너(배경·경계선은 여기로) = [오퍼스 칩 줄(채팅만)] + [입력 줄] ──
+        final LinearLayout root = new LinearLayout(getContext());
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackground(barBgD);
+        opusChip = null;
+        opusOn = hasOpus && opusInit;
+        if (hasOpus) {
+            opusChip = new TextView(getContext());
+            opusChip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            opusChip.setTypeface(opusChip.getTypeface(), android.graphics.Typeface.BOLD);
+            opusChip.setPadding(dp(13), dp(6), dp(13), dp(6));
+            opusChip.setGravity(Gravity.CENTER);
+            opusChip.setClickable(true);
+            opusChip.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    opusOn = !opusOn;
+                    styleOpusChip();
+                    JSObject o = new JSObject();
+                    o.put("on", opusOn);
+                    notifyListeners("opus", o);
+                }
+            });
+            styleOpusChip();
+            LinearLayout chipRow = new LinearLayout(getContext());
+            chipRow.setOrientation(LinearLayout.HORIZONTAL);
+            chipRow.setGravity(Gravity.CENTER_VERTICAL);
+            chipRow.setPadding(dp(10), dp(8), dp(10), 0);
+            chipRow.addView(opusChip, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            root.addView(chipRow, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
 
         // ── ＋ 첨부 버튼(왼쪽) ──
         if (hasAttach) {
@@ -210,13 +277,17 @@ public class NativeInputPlugin extends Plugin {
         send.setLayoutParams(sLp);
         bar.addView(send);
 
+        root.addView(bar, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
         // 엣지투엣지(안드로이드 15+) 대비: 키보드가 없을 때 하단 제스처/네비게이션 바 위로 띄운다.
-        applyBottomInset(bar);
+        //   v5.8: 인셋은 바깥 컨테이너(root)에 준다(입력 줄 자체 여백 8dp 는 그대로 → 예전과 같은 높이).
+        applyBottomInset(root, 0);
 
         // ── 다이얼로그(하단 도킹) ──
         dialog = new Dialog(getActivity());
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
-        dialog.setContentView(bar);
+        dialog.setContentView(root);
         dialog.setCanceledOnTouchOutside(true);   // 위쪽 대화를 탭하면 닫힘(자연스러운 채팅 UX)
         dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
             @Override
@@ -246,7 +317,7 @@ public class NativeInputPlugin extends Plugin {
     }
 
     /** 하단(네비게이션/제스처 바) 인셋만큼 아래 여백을 준다. 키보드가 뜨면 ADJUST_RESIZE 가 알아서 처리. */
-    private void applyBottomInset(final LinearLayout bar) {
+    private void applyBottomInset(final LinearLayout bar, final int basePx) {
         try {
             bar.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
                 @Override
@@ -257,7 +328,7 @@ public class NativeInputPlugin extends Plugin {
                     } else {
                         bottom = insets.getSystemWindowInsetBottom();
                     }
-                    v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), dp(8) + bottom);
+                    v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), basePx + bottom);
                     return insets;
                 }
             });
@@ -285,7 +356,9 @@ public class NativeInputPlugin extends Plugin {
         if (t.trim().length() == 0) return;
         JSObject o = new JSObject();
         o.put("text", t);
+        o.put("opus", opusChip != null && opusOn);   // v5.8: 이번 1건 오퍼스 지정 여부
         notifyListeners("send", o);
         edit.setText("");
+        if (opusChip != null && opusOn) { opusOn = false; styleOpusChip(); }   // 보내면 자동으로 꺼짐(1회성)
     }
 }
