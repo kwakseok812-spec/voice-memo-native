@@ -1132,7 +1132,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v5.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.9: 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v5.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1387,13 +1387,135 @@
   function chatScrollBottom() {
     // chatLog는 자체 높이 제약이 없어 실제로는 window(문서)가 스크롤된다 →
     // chatLog.scrollTop과 window 스크롤을 함께 맨 아래로 내린다(포커스는 건드리지 않음).
+    var token = ++chatScrollSeq;                 // v5.9: 뒤늦게 도는 다른 스크롤 예약(새 메시지 위치 등)과 겹치지 않게
     function doScroll() {
+      if (token !== chatScrollSeq) return;
       if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
       try { window.scrollTo(0, document.documentElement.scrollHeight); } catch (e) {}
     }
     // 레이아웃이 아직 반영되지 않았을 수 있어 한 프레임 뒤 실행 + 짧은 지연으로 한 번 더(이미지·첨부 등 늦게 커지는 콘텐츠 대비)
     requestAnimationFrame(function () { requestAnimationFrame(doScroll); });
     setTimeout(doScroll, 80);
+  }
+  /* ===================== v5.9 채팅 열림 위치 — 「새 메시지의 시작」에서 열기 (2026-09-25) =====================
+   * 대표님 말씀: 새 메시지가 오면 그 메시지가 시작하는 위치에서 열려야 하는데 무조건 맨 아래에서 열려,
+   *   다시 위로 올려 확인해야 하는 불편.
+   * ▷ 안읽음 기준은 새로 만들지 않고 기존 '이미 본 경계'(smart_chat_seen_hw, getSeenHW)를 그대로 쓴다.
+   *   채팅을 열 때(또는 앱으로 돌아올 때) 그 경계를 먼저 붙잡아 두고(chatAnchorHW), 그보다 늦게 온
+   *   케이 말풍선·다른 기기에서 온 대화 중 첫 번째를 화면 위쪽(고정 헤더 바로 아래)에 맞춘다.
+   *   알림(notice) 메시지는 안읽음 카운트에서 빠져 있으므로 여기서도 제외(기존 판정 유지).
+   * ▷ 안 읽은 게 없으면 예전처럼 맨 아래.
+   * ▷ 열고 나서 몇 초 동안(CHAT_ANCHOR_MS)은 서버 재구성·작업카드 갱신 등으로 다시 그려져도 같은 위치를
+   *   다시 맞춘다. 대표님이 손으로 스크롤하면(터치·휠·키) 그 즉시 자동 맞춤을 멈춘다.
+   * ▷ 보고 있는 중에 새 메시지가 오면: 맨 아래 근처였으면 새 메시지의 '시작'으로 부드럽게 이동,
+   *   위로 올려 읽는 중이면 보던 말풍선 위치를 그대로 지킨다. 내가 보낸 직후엔 예전처럼 맨 아래.
+   * ▷ 말풍선은 content-visibility:auto 라 화면 밖 높이가 추정값(52px)이다 → 한 번에 안 맞을 수 있어
+   *   rAF·짧은 지연으로 몇 차례 재보정한다. */
+  var CHAT_ANCHOR_MS = 5000;
+  var chatScrollSeq = 0;           // 스크롤 예약 번호 — 새 예약이 오면 옛 예약(재보정)은 알아서 멈춘다
+  var chatAnchorHW = 0;            // 열 때 붙잡은 '이미 본 경계'(epoch ms). 0이면 앵커 모드 아님
+  var chatAnchorUntil = 0;         // 앵커 모드 유지 기한
+  var chatAnchorArmedAt = 0;
+  var chatAnchorKind = '';         // 'open'(열기·알림 탭) | 'resume'(앱 복귀)
+  var chatNewDivUid = '';          // 「여기부터 새 메시지」 구분선을 붙일 말풍선 uid(이번 열람 동안 유지)
+  var chatRenderedUids = null;     // 직전 렌더에 있던 말풍선 uid 맵(null=기준 없음 → 새 메시지 판정 안 함)
+  var chatUserTouchAt = 0;         // 대표님이 마지막으로 직접 스크롤을 시작한 시각
+  function markChatUserScroll() { chatUserTouchAt = Date.now(); }
+  try {
+    window.addEventListener('touchstart', markChatUserScroll, { passive: true });
+    window.addEventListener('wheel', markChatUserScroll, { passive: true });
+    window.addEventListener('mousedown', markChatUserScroll, { passive: true });   // PC: 스크롤바 끌기
+    window.addEventListener('keydown', function (e) {
+      var k = e && e.key;
+      if (k === 'PageUp' || k === 'PageDown' || k === 'ArrowUp' || k === 'ArrowDown' || k === 'Home' || k === 'End') markChatUserScroll();
+    });
+  } catch (e) {}
+  function armChatAnchor(kind, hw) {
+    // 알림 탭(open)과 앱 복귀(resume)는 거의 동시에 온다(순서 일정치 않음) → 이미 잡힌 앵커가 살아 있으면 더 이른 경계를 쓰고, 열기 쪽을 우선
+    if (chatAnchorActive()) {
+      if (chatAnchorHW && (!hw || chatAnchorHW < hw)) hw = chatAnchorHW;
+      if (chatAnchorKind === 'open') kind = 'open';
+    }
+    chatAnchorKind = kind; chatAnchorHW = hw || 0;
+    chatAnchorArmedAt = Date.now(); chatAnchorUntil = chatAnchorHW ? chatAnchorArmedAt + CHAT_ANCHOR_MS : 0;
+    // 새 열람이면 옛 구분선·렌더 기준을 지운다(복귀는 보던 화면을 이어 가므로 그대로 두고, 새 안읽음이 있을 때만 구분선을 옮김)
+    if (kind === 'open') { chatNewDivUid = ''; chatRenderedUids = null; }
+  }
+  function chatAnchorActive() {
+    if (!chatAnchorHW || Date.now() > chatAnchorUntil) return false;
+    if (chatUserTouchAt > chatAnchorArmedAt) { chatAnchorUntil = 0; return false; }   // 손으로 움직였으면 끝
+    return true;
+  }
+  function isIncomingMsg(m) { return m.role === 'k' || (m.role === 'me' && !!m.remote); }
+  function isUnreadSince(m, hw) { return !!hw && isIncomingMsg(m) && !m.notice && (m.ts || 0) > hw; }
+  // 고정 헤더(.subbar, sticky) 아래로 말풍선 시작이 오도록 하는 위쪽 여백
+  function chatHeadOffset() {
+    var h = 0;
+    try {
+      var sb = chatView && chatView.querySelector('.subbar');
+      if (sb) h = (parseFloat(getComputedStyle(sb).top) || 0) + sb.offsetHeight;
+    } catch (e) {}
+    return h + 8;
+  }
+  function chatNearBottom() {
+    try {
+      var de = document.documentElement;
+      var y = window.pageYOffset || de.scrollTop || 0;
+      return (Math.max(de.scrollHeight, document.body.scrollHeight) - (y + window.innerHeight)) < 160;
+    } catch (e) { return true; }
+  }
+  // uid 말풍선(바로 위에 구분선이 있으면 구분선)의 시작을 헤더 아래에 맞춘다
+  function chatScrollToUid(uid, smooth) {
+    var token = ++chatScrollSeq, started = Date.now();
+    function target() {
+      var el = chatLog && chatLog.querySelector('[data-uid="' + uid + '"]');
+      if (!el) return null;
+      var prev = el.previousElementSibling;
+      return (prev && prev.classList && prev.classList.contains('chatnewdiv')) ? prev : el;
+    }
+    function go(sm) {
+      if (token !== chatScrollSeq || chatUserTouchAt > started) return;
+      var el = target(); if (!el) return;
+      var dy = el.getBoundingClientRect().top - chatHeadOffset();
+      if (Math.abs(dy) < 2) return;
+      var y = Math.max(0, (window.pageYOffset || 0) + dy);
+      try { if (sm) window.scrollTo({ top: y, behavior: 'smooth' }); else window.scrollTo(0, y); }
+      catch (e) { try { window.scrollTo(0, y); } catch (e2) {} }
+    }
+    requestAnimationFrame(function () { requestAnimationFrame(function () { go(!!smooth); }); });
+    if (smooth) setTimeout(function () { go(false); }, 700);   // 부드러운 이동이 끝난 뒤 한 번만 보정
+    else { setTimeout(function () { go(false); }, 80); setTimeout(function () { go(false); }, 250); setTimeout(function () { go(false); }, 600); }
+  }
+  // 위로 올려 읽는 중: 다시 그리기 전 보던 말풍선의 화면 위치를 기억했다가 그대로 되돌린다
+  function chatCaptureView() {
+    try {
+      var off = chatHeadOffset(), bs = chatLog.querySelectorAll('.bubble[data-uid]');
+      for (var i = 0; i < bs.length; i++) {
+        var r = bs[i].getBoundingClientRect();
+        if (r.bottom > off) return { uid: bs[i].getAttribute('data-uid'), top: r.top };
+      }
+    } catch (e) {}
+    return null;
+  }
+  function chatRestoreView(v) {
+    var token = ++chatScrollSeq, started = Date.now();
+    function fix(first) {
+      if (token !== chatScrollSeq || (!first && chatUserTouchAt > started)) return;
+      var el = chatLog && chatLog.querySelector('[data-uid="' + v.uid + '"]'); if (!el) return;
+      var dy = el.getBoundingClientRect().top - v.top;
+      if (Math.abs(dy) >= 1) try { window.scrollBy(0, dy); } catch (e) {}
+    }
+    fix(true);
+    requestAnimationFrame(function () { fix(false); });
+    setTimeout(function () { fix(false); }, 80);
+    setTimeout(function () { fix(false); }, 250);
+  }
+  // 보고 있는 동안(화면이 켜져 있을 때만) 그려진 것까지 '본 것'으로 굳힌다 → 다음에 열 때 오판 방지
+  function markChatSeenRendered() {
+    if (document.hidden) return;
+    var mx = 0;
+    for (var i = 0; i < chatMsgs.length; i++) if ((chatMsgs[i].ts || 0) > mx) mx = chatMsgs[i].ts;
+    if (mx) setSeenHW(mx);
   }
   // 대표님 지시(2026-09-22, v4.3): 앞 답을 기다리는 중에도 다음 메시지를 '바로' 보낼 수 있어야 한다.
   //   각 질문은 고유 id/token 을 갖고, reconcileChat 이 질문마다 따로 poll 해 답을 그 질문에만 매칭한다.
@@ -1434,7 +1556,22 @@
     if (!chatMsgs.length && !q) {
       chatLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
         '<b>안녕하세요, 대표님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
+      chatRenderedUids = {};
       return;
+    }
+    // v5.9: 다시 그리기 '전' 상태(맨 아래 근처였나 · 보던 말풍선)를 먼저 잰다
+    var viewOpen = !q && isOpen(chatView);
+    var anchorOn = viewOpen && chatAnchorActive();
+    var wasNearBottom = viewOpen ? chatNearBottom() : true;
+    var keepView = (viewOpen && !wasNearBottom) ? chatCaptureView() : null;
+    var prevUids = chatRenderedUids, nowUids = {};
+    var firstUnreadUid = '', newIncomingUid = '', newMine = false;
+    if (anchorOn) {                                     // 붙잡아 둔 경계 이후 첫 안읽음(내용 있는 말풍선만)
+      for (var ai = 0; ai < chatMsgs.length; ai++) {
+        var am = chatMsgs[ai];
+        if (am.role !== 'typing' && isUnreadSince(am, chatAnchorHW) && (am.text || am.vin || am.vurl || (am.files && am.files.length))) { firstUnreadUid = msgUid(am); break; }
+      }
+      if (firstUnreadUid) chatNewDivUid = firstUnreadUid;
     }
     var shown = 0;
     var html = chatMsgs.map(function (m) {
@@ -1454,9 +1591,19 @@
       //   메시지 자체는 그대로 오고 일반 말풍선처럼 보인다. ⚠️ 내부 notice 플래그(m.notice)는 그대로 두어
       //   '안읽음 배지 카운트 제외' 로직(아래 !isNotice)은 유지한다 — 알림이 안읽음 숫자를 올리지 않게.
       //   (예전: noticerow/noticebadge 딱지 + 말풍선 ' notice' 클래스 → v5.4에서 렌더만 제거.)
+      // v5.9: 새 메시지 판정(검색 중엔 안 함) + 「여기부터 새 메시지」 구분선
+      var uid = msgUid(m), divider = '';
+      if (!q) {
+        nowUids[uid] = 1;
+        if (prevUids && !prevUids[uid]) {
+          if (isIncomingMsg(m)) { if (!newIncomingUid) newIncomingUid = uid; }
+          else newMine = true;                              // 이 기기에서 방금 보낸 내 메시지
+        }
+        if (uid === chatNewDivUid && shown > 0) divider = '<div class="chatnewdiv"><span>여기부터 새 메시지</span></div>';
+      }
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
-      return '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + msgUid(m) + '">' + inner +
+      return divider + '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + uid + '">' + inner +
         '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>' +
         (m.role === 'me' && !q ? orderCardHtml(m) : '');   // v5.8: 작업 카드(대장에 접수된 메시지만)
     }).join('');
@@ -1466,6 +1613,7 @@
       chatLog.innerHTML = html || '';
       chatLog.scrollTop = 0;
       try { window.scrollTo(0, 0); } catch (e) {}
+      chatRenderedUids = null;                            // v5.9: 검색을 닫고 돌아올 땐 기준 없이(=맨 아래) 다시 그림
       return;
     }
     if (anyAwaiting()) {
@@ -1475,7 +1623,19 @@
       if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
     }
     chatLog.innerHTML = html;
-    chatScrollBottom();
+    chatRenderedUids = nowUids;
+    // v5.9: 어디로 스크롤할지 — 우선순위 ① 내가 방금 보냄 → 맨 아래(예전 그대로)
+    //   ② 열기·복귀 직후(앵커 모드) 안읽음 있음 → 첫 안읽음의 시작  ③ 보는 중 새 메시지 + 맨 아래 근처 → 새 메시지 시작(부드럽게)
+    //   ④ 맨 아래 근처 → 맨 아래(예전 그대로)  ⑤ 위로 올려 읽는 중 → 보던 위치 유지
+    //   ⑥ 열기(open)인데 안읽음 없음 → 맨 아래(예전 그대로) / 복귀(resume)인데 없음 → ③~⑤ 규칙
+    if (!viewOpen) { chatScrollBottom(); return; }
+    if (newMine) { chatAnchorUntil = 0; chatScrollBottom(); }
+    else if (anchorOn && firstUnreadUid) chatScrollToUid(firstUnreadUid, false);
+    else if (anchorOn && chatAnchorKind === 'open') chatScrollBottom();
+    else if (newIncomingUid && wasNearBottom) chatScrollToUid(newIncomingUid, true);
+    else if (wasNearBottom || !prevUids) chatScrollBottom();
+    else if (keepView) chatRestoreView(keepView);
+    markChatSeenRendered();
   }
   function openChatSearch() {
     chatSearchOn = true;
@@ -1512,6 +1672,7 @@
     if ($('chatSearchInput')) $('chatSearchInput').value = '';
     if ($('chatSearchInfo')) { $('chatSearchInfo').style.display = 'none'; $('chatSearchInfo').textContent = ''; }
     chatUnseen = 0; updateChatBadge();
+    armChatAnchor('open', getSeenHW());           // v5.9: '어디까지 봤나'를 굳히기 전에 붙잡아 둔다 → 첫 안읽음의 시작에서 열기
     setSeenHW(Date.now());                        // v4.2: '지금까지는 다 봤다'를 굳혀 둠 → 껐다 켜도 배지가 되살아나지 않음
     renderPending(); updateConvoToggle();        // 기본: 조용한 텍스트(음성 대화 모드 꺼짐)
     // v4.0: 채팅을 열 때마다 서버 전체에서 재구성한다 → 어느 기기서 열어도 같은 대화가 보인다.
@@ -1950,7 +2111,7 @@
       if (added) {
         sortChatByTime();
         saveChatMsgs();
-        if (isOpen(chatView)) { renderChat(); setSeenHW(maxTs); }   // 보고 있으면 방금 것까지 '본 것'으로 굳힘(재시작 후 재계산 방지)
+        if (isOpen(chatView)) { renderChat(); if (!document.hidden) setSeenHW(maxTs); }   // 보고 있으면 방금 것까지 '본 것'으로 굳힘(재시작 후 재계산 방지) · v5.9: 앱이 뒤로 가 있을 땐 굳히지 않음(복귀 때 새 메시지 위치로)
         else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
       }
       officeHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋되어 전체 재동기화됨
@@ -2010,7 +2171,7 @@
       if (added) {
         sortChatByTime();
         saveChatMsgs();
-        if (isOpen(chatView)) { renderChat(); setSeenHW(maxTs); }
+        if (isOpen(chatView)) { renderChat(); if (!document.hidden) setSeenHW(maxTs); }   // v5.9: 앱이 뒤로 가 있을 땐 '본 것'으로 굳히지 않음(복귀 때 새 메시지 위치로)
         else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
       }
       chatSyncHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋됨
@@ -3347,6 +3508,13 @@
 
   /* ---- 푸시 알림(FCM): 등록·수신은 push.js. 여기선 대화 화면과 연결만 한다 ---- */
   window.addEventListener('smartOpenChat', function () { openChat(); });          // 알림 탭 → 대화 열기
+  // v5.9: 채팅을 켜 둔 채 앱을 나갔다 돌아오면(폰 복귀·PC 창 전환) 그사이 온 첫 메시지의 시작으로.
+  //   알림 탭은 smartOpenChat → openChat 이 다시 처리하므로, 여기선 경계만 붙잡고 다시 그린다.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !isOpen(chatView) || chatSearchOn) return;
+    armChatAnchor('resume', getSeenHW());
+    renderChat();
+  });
   window.addEventListener('smartOpenHealth', function () { openHealth(); });       // 건강 리마인더 탭 → 건강 탭 열기
   window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
     startChatReconcile(); reconcileChat();

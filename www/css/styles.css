@@ -384,6 +384,9 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
 .bubble.typing span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
 /* 답이 늦을 때 뜨는 안내(약 35초 후) — "멈춘 것처럼" 보이지 않게(2026-09-20) */
+/* v5.9: 「여기부터 새 메시지」 얇은 구분선 — 채팅을 열 때 첫 안읽음 바로 위(이번 열람 동안만) */
+.chatnewdiv{display:flex;align-items:center;gap:10px;margin:4px 2px 0;color:var(--p1);font-size:12.5px;font-weight:700;letter-spacing:-.2px;-webkit-user-select:none;user-select:none}
+.chatnewdiv::before,.chatnewdiv::after{content:"";flex:1;height:1px;background:currentColor;opacity:.35}
 .waitnote{align-self:flex-start;max-width:84%;margin:-2px 0 2px;padding:9px 13px;border-radius:14px;background:var(--warn-bg);border:1px solid var(--glass-b);color:var(--muted);font-size:13.5px;line-height:1.5;word-break:keep-all;overflow-wrap:break-word}
 /* 🔔 알림 배지: 답이 필요 없는 단순 알림성 방송(건강 리마인더·매시간 확인·봇 경보)을 대화와 구분(2026-09-20) */
 .noticerow{margin:0 0 7px}
