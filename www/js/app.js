@@ -1132,7 +1132,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v6.2';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v6.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1332,9 +1332,20 @@
    * fetch → Blob → <a download> 방식: PC(PWA)는 곧장 다운로드 폴더에 저장되고,
    * 안드로이드(Capacitor WebView)는 blob 다운로드를 WebView 가 받아 다운로드 폴더에 저장한다.
    * CORS 등으로 fetch 가 막히면 새 탭으로 열어(브라우저에서 저장) 최소한 파일에 닿게 한다(폴백). */
+  // v6.3: 저장 파일명 — 원래 이름을 그대로 쓰되 윈도·안드로이드가 못 쓰는 글자(\ / : * ? " < > | 제어문자)만 '_'로,
+  //   끝의 점·공백 제거, 너무 길면 확장자를 살리고 앞부분을 줄인다(한글·공백·괄호·대괄호·이모지는 그대로).
+  function safeDownloadName(name) {
+    var n = String(name || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/[. ]+$/, '').trim();
+    if (!n) n = 'download';
+    if (n.length > 150) {
+      var dot = n.lastIndexOf('.'), ext = (dot > 0 && n.length - dot <= 10) ? n.slice(dot) : '';
+      n = n.slice(0, 150 - ext.length) + ext;
+    }
+    return n;
+  }
   function downloadAttachment(url, name) {
     if (!url) return;
-    var fname = name || (url.split('/').pop().split('?')[0]) || 'download';
+    var fname = safeDownloadName(name || (url.split('/').pop().split('?')[0]) || 'download');
     toast('다운로드 중…');
     fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(function (blob) {
@@ -1346,7 +1357,10 @@
         toast('다운로드 폴더에 저장했어요.');
       })
       .catch(function () {
-        var w = window.open(url, '_blank');   // 폴백: 브라우저로 열어 저장
+        // 폴백: 브라우저로 열어 저장. 공유함(공개 버킷) 주소면 ?download=원래이름 → 서버가 원래 이름으로 내려준다(v6.3)
+        var fu = url;
+        if (url.indexOf('/storage/v1/object/public/') !== -1 && !/[?&]download=/.test(url)) fu = url + (url.indexOf('?') === -1 ? '?' : '&') + 'download=' + encodeURIComponent(fname);
+        var w = window.open(fu, '_blank');
         toast(w ? '브라우저에서 저장해 주세요.' : '다운로드에 실패했어요 — 다시 눌러 주세요.');
       });
   }
@@ -2565,7 +2579,14 @@
   function isLockerDeleted(id) { return !!id && lockerDeleted.indexOf(id) !== -1; }
   function isLockerBeforeCleared(ts) { var c = ''; try { c = localStorage.getItem(LOCKER_CLEARED_KEY) || ''; } catch (e) {} return !!c && !!ts && ts <= c; }
 
-  function loadLockerMsgs() { try { var a = JSON.parse(localStorage.getItem(LOCKER_MSGS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function loadLockerMsgs() {
+    try {
+      var a = JSON.parse(localStorage.getItem(LOCKER_MSGS_KEY) || '[]'); if (!Array.isArray(a)) return [];
+      // v6.3: 올리던 중 앱·창이 닫혀 끝나지 못한 항목 → '올리는 중…'에 영원히 머물지 않게 실패로 표시
+      a.forEach(function (m) { if (m && m.uploading) { m.uploading = false; m.error = true; m.errorMsg = '앱이 닫혀 전송이 중간에 끊겼어요. 파일을 다시 보내 주세요.'; delete m.progress; } });
+      return a;
+    } catch (e) { return []; }
+  }
   function saveLockerMsgs() {
     try {
       lockerMsgs.forEach(function (m) { if (!m.uid) m.uid = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); });
@@ -2595,8 +2616,8 @@
     }
     lockerLog.innerHTML = lockerMsgs.map(function (m) {
       var inner = m.text ? chatText(m.text) : '';
-      if (m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
-      if (m.error) inner += (inner ? '<br>' : '') + '<span style="color:var(--rec)">올리지 못했어요</span>';
+      if (m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span class="lk-prog" style="opacity:.75">' + esc(lockerProgText(m)) + '</span>';
+      if (m.error) inner += (inner ? '<br>' : '') + (m.errorMsg ? '<span class="lk-err" style="display:block;margin-top:4px;padding:7px 9px;border-radius:9px;background:rgba(0,0,0,.32);color:#fff;line-height:1.45"><b>올리지 못했어요</b><br>' + esc(m.errorMsg) + '</span>' : '<span style="color:var(--rec)">올리지 못했어요</span>');
       inner += attachChips(m.files, false);                 // 항상 다운로드 가능(공개 url)
       if (!inner) inner = '<span style="opacity:.6">(빈 메모)</span>';
       return '<div class="bubble me" data-uid="' + lockerUid(m) + '">' + inner +
@@ -2625,25 +2646,57 @@
     // 조용히 '안 보이는' 상태가 되므로, 없을 땐 매번 암호 입력을 안내한다(v3.9).
     if (!getSyncPass()) showSyncGate(true);
   }
+  // v6.3: 진행률 글자 — '올리는 중… 37% (20.6/55.8MB)'
+  function lockerProgText(m) {
+    var p = m.progress;
+    if (!p || !p.total) return '올리는 중…';
+    var pct = Math.min(100, Math.floor(p.sent * 100 / p.total));
+    var mb = function (n) { return (n / 1048576).toFixed(1); };
+    return '올리는 중… ' + pct + '% (' + mb(p.sent) + '/' + mb(p.total) + 'MB' + (p.count > 1 ? ', ' + (p.index + 1) + '/' + p.count + '번째 파일' : '') + ')';
+  }
+  // 진행률은 해당 말풍선 글자만 바꾼다(목록 전체 재그리기는 무거움). 없으면 0.3초 간격으로 전체 재그리기.
+  function updateLockerProgress(item) {
+    if (!isOpen(lockerView) || !lockerLog) return;
+    var el = null;
+    try { el = lockerLog.querySelector('.bubble[data-uid="' + item.uid + '"] .lk-prog'); } catch (x) {}
+    if (el) { el.textContent = lockerProgText(item); return; }
+    var now = Date.now();
+    if (!item._lastRender || now - item._lastRender > 300) { item._lastRender = now; renderLocker(); }
+  }
+  var lockerRestored = {};   // v6.3: 실패 후 파일을 대기줄로 되돌린 말풍선 uid(이 화면 세션에서만 — 저장 안 함)
   function sendLockerMsg() {
     if (!lockerInput) return;
     var text = (lockerInput.value || '').trim();
     var files = lockerPendingFiles.slice();
     if (!text && !files.length) return;
+    // v6.3: 앞서 실패해 파일을 대기줄로 되돌려 둔 말풍선은 이번 재전송이 대신하므로 지운다(중복 방지)
+    lockerMsgs = lockerMsgs.filter(function (m) { return !(m.error && m.uid && lockerRestored[m.uid]); });
+    lockerRestored = {};
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var disp = files.map(function (f) { return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) }; });
     var item = { id: id, text: text, ts: Date.now(), files: disp.length ? disp : null, up: !!files.length, uploading: !!files.length };
+    lockerUid(item);
     lockerMsgs.push(item); saveLockerMsgs();
     lockerInput.value = ''; autoGrowLocker(); lockerPendingFiles = []; renderLockerPending(); renderLocker();
     var memo = { id: id, token: tok, text: text };
-    OfficeBridge.sendLocker(memo, files).then(function (savedFiles) {
-      item.uploading = false;
+    OfficeBridge.sendLocker(memo, files, function (sent, total, index, count) {
+      item.progress = { sent: sent, total: total, index: index, count: count };   // 화면용(저장 안 함)
+      updateLockerProgress(item);
+    }).then(function (savedFiles) {
+      item.uploading = false; delete item.progress; delete item._lastRender;
       if (savedFiles && savedFiles.length) item.files = savedFiles;   // 공개 url 채워 내 기기서도 다운로드칩 표시
       saveLockerMsgs(); if (isOpen(lockerView)) renderLocker();
     }).catch(function (e) {
-      item.uploading = false; item.error = true; saveLockerMsgs();
+      var why = (e && (e.friendly || e.message)) || String(e || '알 수 없는 오류'), restored = false;
+      item.uploading = false; item.error = true; item.errorMsg = why; delete item.progress; delete item._lastRender;
+      // 파일은 보낼 대기줄로 되돌려 두고(파일 객체는 이 화면에만 있음), 글은 입력칸이 비어 있으면 되돌린다 → [보내기]만 다시 누르면 재전송
+      if (files.length && e && e.reason !== 'too_big' && e.reason !== 'unreadable') {
+        lockerPendingFiles = files.concat(lockerPendingFiles); lockerRestored[item.uid] = true; restored = true; renderLockerPending();
+        if (text && lockerInput && !lockerInput.value) { lockerInput.value = text; autoGrowLocker(); }
+      }
+      saveLockerMsgs();
       if (isOpen(lockerView)) renderLocker();
-      toast('올리지 못했어요 (' + (e && e.message || e) + '). 다시 시도해 주세요.');
+      toast('올리지 못했어요 — ' + why + (restored ? ' (파일은 보낼 칸에 다시 넣어 두었어요)' : ''));
     });
   }
   function loadLockerSync() {
@@ -2752,7 +2805,19 @@
       if (!dragHasFiles(e)) return;
       e.preventDefault(); depth = 0; el.classList.remove('dropping');
       var files = e.dataTransfer && e.dataTransfer.files;
-      if (files && files.length) onFiles(files);
+      if (!files || !files.length) return;
+      // v6.3: 폴더를 끌어 놓으면 브라우저가 '크기 0짜리 파일'처럼 넘겨 전송이 실패한다 → 폴더는 빼고 알려 준다
+      var arr = Array.prototype.slice.call(files), items = e.dataTransfer.items, dirs = 0;
+      if (items && items.length === arr.length) {
+        arr = arr.filter(function (f, i) {
+          var it = items[i], en = null;
+          try { en = it && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null; } catch (x) {}
+          if (en && en.isDirectory) { dirs++; return false; }
+          return true;
+        });
+      }
+      if (arr.length) onFiles(arr);
+      if (dirs) toast('폴더는 올릴 수 없어요(' + dirs + '개 뺐어요). 폴더 안 파일을 골라 끌거나, 압축(zip)해서 올려 주세요.');   // 폴더 안내가 뒤에 떠야 가려지지 않음
     });
   }
   // 채팅: 드롭 → 기존 첨부 대기줄(chatPendingFiles)로 (전송 때 글과 함께 발송)

@@ -219,9 +219,14 @@
       });
   }
 
+  // 저장 키용 확장자. ⚠️ 저장 키(Storage 경로)에는 원래 파일명을 절대 넣지 않는다 — 키는 `{uuid}/{번호}.{ext}`.
+  //   원래 이름(한글·공백·대괄호·괄호·이모지·아주 긴 이름)은 meta.files[].name 에만 두고 화면·다운로드에 쓴다.
+  //   v6.3(2026-09-27): 확장자 자체가 한글/특수문자이거나(예: '보고서'처럼 점 없는 한글 이름 → 이름 전체가 ext 로
+  //   잡힘, '파일.최종') 영문·숫자가 아니면 Supabase 가 'InvalidKey'(400)로 거절했다 → 영문 소문자·숫자·_- 1~5자만 통과,
+  //   아니면 기본값으로. 기존에 통과하던 보통 확장자(영문·숫자 ≤5자)는 결과가 그대로라 워커 규약은 바뀌지 않는다.
   function extForFile(file, kind) {
     var e = ((file.name || '').split('.').pop() || '').toLowerCase();
-    if (!e || e.length > 5) e = (kind === 'video' ? 'mp4' : 'jpg');
+    if (!/^[a-z0-9_-]{1,5}$/.test(e)) e = (kind === 'video' ? 'mp4' : (kind === 'locker' ? 'bin' : 'jpg'));
     return e;
   }
   function uploadObject(key, blob) {
@@ -781,33 +786,133 @@
    *   - 경로가 무작위 UUID 라 링크를 모르면 접근 불가(개인 보관함 수준). 만료 없음(보관함 성격에 맞음).
    *   - 조회는 list_locker(since, pass) — list_chat_history 와 같은 암호 잠금 패턴. */
   var LOCKER_BUCKET = 'locker';
+  /* v6.3(2026-09-27) 공유함 용량·파일명·실패안내 개선 (대표님 "용량제한 없애" · "파일명도 거절하지 않게").
+   *   ▶ 원인(확정): 55.8MB hwp → Supabase 가 400 {"statusCode":"413","code":"EntityTooLarge"} 로 거절.
+   *     locker 버킷 한도는 비어 있어(null) 프로젝트 「전역 업로드 한도」(50MB)가 그대로 적용됐다.
+   *     파일명은 원인 아님 — 저장 키는 원래부터 `{uuid}/{번호}.{ext}`(원래 이름은 meta 에만).
+   *   ▶ 해결: 서버 전역 한도를 올리고(요금제 Pro, 대시보드 설정) 버킷별 한도를 명시(SQL 별도 파일).
+   *     앱은 조각 없이 한 번에 올리되(받는 쪽·뷰어·다운로드·옛 파일 전부 그대로 = 폰 APK 재설치 없이 호환),
+   *       · XHR 로 올려 진행률(%)을 보여 주고,
+   *       · 실패하면 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 돌려준다(err.reason, err.friendly).
+   *   ⚠️ LOCKER_MAX_BYTES 는 서버 전역 한도와 같게 맞춘다(서버가 더 낮으면 서버 413 → 'too_big_server' 안내). */
+  var LOCKER_MAX_BYTES = 5 * 1024 * 1024 * 1024;     // 5GB = 서버 전역 한도 계획값(Supabase 일반 업로드 최대치)
+  var LOCKER_STALL_MS = 120000;                      // 2분 동안 한 바이트도 안 올라가면 끊긴 것으로 보고 중단
   function lockerPublicUrl(key) { return CONFIG.url + '/storage/v1/object/public/' + LOCKER_BUCKET + '/' + key; }
-  function uploadLockerObject(key, blob) {
-    return fetch(CONFIG.url + '/storage/v1/object/' + LOCKER_BUCKET + '/' + key, {
-      method: 'POST',
-      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
-                 'Content-Type': (blob && blob.type) || 'application/octet-stream' },
-      body: blob
-    }).then(function (r) { if (!r.ok) throw new Error('파일 올리기 실패(HTTP ' + r.status + ')'); return key; });
+  function fmtSize(n) {
+    n = n || 0;
+    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + 'GB';
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + 'MB';
+    if (n >= 1024) return Math.round(n / 1024) + 'KB';
+    return n + 'B';
+  }
+  // 실패 이유 → 대표님이 읽을 쉬운 문장.
+  //   reason: too_big | too_big_server | network | stalled | unreadable | bad_key | auth | server | row | unknown
+  function lockerErr(reason, info) {
+    info = info || {};
+    var nm = info.name ? '「' + info.name + '」 ' : '';
+    var table = {
+      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). 한 파일은 ' + fmtSize(LOCKER_MAX_BYTES) + '까지 올릴 수 있어요.',
+      too_big_server: nm + '파일이 서버가 받는 최대 크기를 넘었어요(' + fmtSize(info.size) + '). 소장에게 공유함 용량 한도를 올려 달라고 말씀해 주세요.',
+      network: '인터넷 연결이 끊겨 ' + nm + '전송하지 못했어요. 연결을 확인하고 다시 보내 주세요.',
+      stalled: '전송이 2분 넘게 멈춰 ' + nm + '중단했어요(인터넷이 느리거나 끊김). 다시 보내 주세요.',
+      unreadable: nm + '파일을 읽지 못했어요. 폴더이거나, 옮겨졌거나 지워진 파일일 수 있어요. 파일을 다시 골라 주세요.',
+      bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
+      auth: '서버가 권한 문제로 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
+      server: '서버가 잠시 응답하지 않아요(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
+      row: '파일은 올라갔지만 공유함 목록에 등록하지 못했어요(HTTP ' + (info.status || '?') + '). 다시 보내 주세요.',
+      unknown: nm + '올리지 못했어요' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
+    };
+    var msg = table[reason] || '올리지 못했어요. 다시 보내 주세요.';
+    var e = new Error(msg);
+    e.reason = reason; e.friendly = msg; e.status = info.status || 0; e.serverCode = info.code || '';
+    return e;
+  }
+  // 서버 응답(JSON) → 이유 분류. Supabase Storage 는 용량 초과도 HTTP 400 + body.statusCode "413" 로 준다(2026-09-27 실측).
+  function classifyStorageFail(status, bodyText) {
+    var j = null; try { j = JSON.parse(bodyText || ''); } catch (x) {}
+    var code = (j && (j.code || j.error)) || '', sc = String((j && j.statusCode) || '');
+    if (status === 413 || sc === '413' || code === 'EntityTooLarge' || /too large|maximum allowed size/i.test(bodyText || '')) return { reason: 'too_big_server', code: code };
+    if (code === 'InvalidKey' || /invalid key/i.test(bodyText || '')) return { reason: 'bad_key', code: code };
+    if (status === 401 || status === 403 || sc === '403' || sc === '401') return { reason: 'auth', code: code };
+    if (status >= 500) return { reason: 'server', code: code };
+    return { reason: 'unknown', code: code };
+  }
+  // 파일 앞부분 1바이트를 실제로 읽어 본다(폴더·사라진 파일이면 실패). true=읽힘.
+  function probeReadable(blob) {
+    return new Promise(function (resolve) {
+      try {
+        var fr = new FileReader();
+        fr.onload = function () { resolve(true); };
+        fr.onerror = function () { resolve(false); };
+        fr.readAsArrayBuffer(blob.slice(0, 1));
+      } catch (x) { resolve(false); }
+    });
+  }
+  // 한 파일 업로드(XHR — fetch 는 업로드 진행률을 못 준다). onProgress(loadedBytes).
+  function uploadLockerObject(key, blob, onProgress, name) {
+    var size = (blob && blob.size) || 0;
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest(), lastTick = Date.now(), done = false, stallTimer = null, stalled = false;
+      function finish(err) {
+        if (done) return; done = true;
+        if (stallTimer) clearInterval(stallTimer);
+        if (err) reject(err); else resolve(key);
+      }
+      xhr.open('POST', CONFIG.url + '/storage/v1/object/' + LOCKER_BUCKET + '/' + key, true);
+      xhr.setRequestHeader('apikey', CONFIG.key);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + CONFIG.key);
+      xhr.setRequestHeader('Content-Type', (blob && blob.type) || 'application/octet-stream');
+      if (xhr.upload) xhr.upload.onprogress = function (ev) { lastTick = Date.now(); if (onProgress) onProgress(ev.loaded || 0); };
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) { if (onProgress) onProgress(size); return finish(null); }
+        var c = classifyStorageFail(xhr.status, xhr.responseText);
+        finish(lockerErr(c.reason, { name: name, size: size, status: xhr.status, code: c.code }));
+      };
+      // status 0 = 요청 자체가 못 나감: 인터넷 끊김 또는 로컬 파일을 못 읽음(폴더·지워진 파일). 파일을 직접 읽어 구분한다.
+      xhr.onerror = function () {
+        probeReadable(blob).then(function (ok) {
+          finish(lockerErr(ok ? 'network' : 'unreadable', { name: name, size: size }));
+        });
+      };
+      xhr.onabort = function () { finish(lockerErr(stalled ? 'stalled' : 'network', { name: name, size: size })); };
+      stallTimer = setInterval(function () {
+        if (Date.now() - lastTick > LOCKER_STALL_MS) { stalled = true; try { xhr.abort(); } catch (x) {} }
+      }, 5000);
+      try { xhr.send(blob); } catch (x) { finish(lockerErr('unreadable', { name: name, size: size })); }
+    });
   }
   // memo:{id,token,text}, files:[File]. 파일을 공개 버킷에 올리고 kind='locker' 행을 만든다.
+  // onProgress(sentBytes, totalBytes, fileIndex, fileCount) — 선택.
   // 반환: files 메타(공개 url 포함) — 앱이 내 기기 화면에도 다운로드칩을 표시하게.
-  function sendLocker(memo, files) {
+  // 실패: Error{reason, friendly, status} (lockerErr 참고).
+  // 표시명(meta.files[].name)은 원래 이름 그대로(한글·공백·괄호·이모지·긴 이름 OK), 저장 키는 `{uuid}/{번호}.{ext}`(영문·숫자).
+  function sendLocker(memo, files, onProgress) {
     files = files || [];
     var filesMeta = [], idx = 0;
+    var totalBytes = files.reduce(function (a, f) { return a + ((f && f.size) || 0); }, 0), doneBytes = 0;
+    for (var i = 0; i < files.length; i++) {             // 보내기 전에 한도 확인(다 올린 뒤 거절당하지 않게)
+      if ((files[i].size || 0) > LOCKER_MAX_BYTES) return Promise.reject(lockerErr('too_big', { name: files[i].name, size: files[i].size }));
+    }
     function step() {
       if (idx >= files.length) {
         return _insertRow({
           id: memo.id, title: '공유함', status: 'pending', kind: 'locker',
           note: memo.text || null, client_token: memo.token,
           meta: { app: 'voice-memo-test', from: 'device', files: filesMeta }
-        }).then(function () { return filesMeta; });
+        }).then(function () { return filesMeta; }, function (e) {
+          var m = /HTTP (\d+)/.exec((e && e.message) || '');
+          throw (m ? lockerErr('row', { status: +m[1] }) : lockerErr('network', {}));
+        });
       }
       var f = files[idx];
-      var ext = extForFile(f, 'file');
+      var ext = extForFile(f, 'locker');
       var key = memo.id + '/' + idx + '.' + ext;
-      return uploadLockerObject(key, f).then(function () {
-        filesMeta.push({ key: key, ext: ext, name: f.name || ('file' + idx + '.' + ext),
+      var nm = f.name || ('file' + idx + '.' + ext);
+      return uploadLockerObject(key, f, function (loaded) {
+        if (onProgress) onProgress(Math.min(totalBytes, doneBytes + loaded), totalBytes, idx, files.length);
+      }, nm).then(function () {
+        doneBytes += (f.size || 0);
+        filesMeta.push({ key: key, ext: ext, name: nm,
                          size: f.size || 0, mime: f.type || '', url: lockerPublicUrl(key) });
         idx++;
         return step();
@@ -892,6 +997,7 @@
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
+    LOCKER_MAX_BYTES: LOCKER_MAX_BYTES,   // v6.3: 공유함 한 파일 최대(서버 전역 한도와 같게)
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
     saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
     markResendable: markResendable,   // v5.1: 보존 원본을 재전송 대상으로(자동복구/[다시 보내기])
