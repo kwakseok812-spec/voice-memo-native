@@ -1764,6 +1764,76 @@
     kLastUidSeen = uid;
     KChar.setExpr(expr, fresh);
   }
+  /* ---- O-0111 긴 메시지 접기(카톡 「전체 보기」) — 2026-09-30 대표님 지시 ----
+   * 말풍선 본문(.bfold)이 20줄 높이를 넘으면 15줄까지만 보이게 접고, 아래 끝을 흐리게 + [전체 보기 ▼].
+   *   누르면 그 자리에서 펼치고 [접기 ▲]로 다시 접는다. 잘라내는 게 아니다 — 전문은 DOM·저장본에 그대로.
+   * ▷ 판정은 글자 수가 아니라 실제 그려진 높이(scrollHeight) — 줄바꿈 많은 짧은 글·폭 차이(폰/펼친 폴드/PC)를 그대로 반영.
+   * ▷ 15줄 ≈ 폰(390px 폭) 화면 높이의 절반. 20줄 미만은 접지 않는다(몇 줄 숨기려고 버튼을 다는 건 오히려 번거로움).
+   * ▷ 줄 수 기준이라 키보드가 올라와 화면 높이가 바뀌어도 접힘이 흔들리지 않는다(폭이 바뀔 때만 다시 잰다).
+   * ▷ 펼친 말풍선은 chatFoldOpen(uid)에 기억 → 새 메시지·[이전 대화 더 보기]·다시 그리기 뒤에도 펼친 채 유지(앱을 끄면 초기화). */
+  var CHAT_FOLD_SHOW_LINES = 15, CHAT_FOLD_MIN_LINES = 20;
+  var chatFoldOpen = {};
+  // 20줄이 '될 수도 있는' 글만 후보로 감싼다(한 줄 12자로 넉넉히 어림 = 좁은 폰에서도 놓치지 않게).
+  //   짧은 글은 .bfold 조차 안 붙어 예전과 똑같이 그려지고, 높이 재기 비용도 없다. 진짜 판정은 applyChatFolds 의 실측.
+  function chatFoldMaybe(s) {
+    var ls = String(s).split('\n'), n = 0;
+    for (var i = 0; i < ls.length; i++) { n += Math.max(1, Math.ceil(ls[i].length / 12)); if (n >= CHAT_FOLD_MIN_LINES - 1) return true; }
+    return false;
+  }
+  var chatFoldCache = {};   // uid → 「폭|글자수」에서 잰 판정(true=접을 대상). 같은 폭이면 다시 그려도 재지 않는다(렉 방지)
+  function applyChatFolds() {
+    if (!chatLog || !chatLog.offsetHeight) return;      // 채팅 화면이 안 보일 땐 높이를 못 잰다 → 접지 않고 전부 보임(열 때 다시 그림)
+    var els = chatLog.querySelectorAll('.bfold'), hit = [], need = [], bubs = [];
+    if (!els.length) return;
+    var w = chatLog.clientWidth;
+    for (var c = 0; c < els.length; c++) {
+      var ck = w + '|' + els[c].textContent.length, cv = chatFoldCache[els[c].getAttribute('data-fuid')];
+      if (cv && cv.k === ck) { if (cv.f) hit.push(els[c]); } else need.push(els[c]);
+    }
+    if (need.length) {
+      // ⚠️ 말풍선은 렉 방지로 content-visibility:auto(화면 밖은 안 그림)라, 방금 그린 말풍선은 폭이 내용 없이(≈52px)
+      //   잡혀 높이가 수십 배로 부풀어 보인다(실측). → 처음 재는 말풍선만 잠깐 'visible'로 풀었다가 바로 되돌린다.
+      for (var k = 0; k < need.length; k++) { bubs.push(need[k].closest('.bubble')); if (bubs[k]) bubs[k].style.contentVisibility = 'visible'; }
+      var minH = (parseFloat(getComputedStyle(need[0]).lineHeight) || 24.8) * CHAT_FOLD_MIN_LINES;
+      for (var i = 0; i < need.length; i++) {             // 읽기만 모아서(리플로우 1번)
+        var big = need[i].scrollHeight > minH;
+        chatFoldCache[need[i].getAttribute('data-fuid')] = { k: w + '|' + need[i].textContent.length, f: big };
+        if (big) hit.push(need[i]);
+      }
+      for (var r = 0; r < bubs.length; r++) if (bubs[r]) bubs[r].style.contentVisibility = '';
+    }
+    if (!hit.length) return;
+    var showH = Math.round((parseFloat(getComputedStyle(hit[0]).lineHeight) || 24.8) * CHAT_FOLD_SHOW_LINES);
+    for (var j = 0; j < hit.length; j++) {                // 그다음 한꺼번에 쓰기
+      var f = hit[j], open = !!chatFoldOpen[f.getAttribute('data-fuid')];
+      f.style.setProperty('--fold-h', showH + 'px');
+      f.classList.add('bfoldable');
+      if (!open) f.classList.add('folded');
+      f.insertAdjacentHTML('afterend', '<button type="button" class="bfoldbtn" aria-expanded="' + open + '">' + (open ? '접기 ▲' : '전체 보기 ▼') + '</button>');
+    }
+  }
+  function toggleChatFold(btn) {
+    var bub = btn.closest('.bubble'), f = bub && bub.querySelector('.bfold');
+    if (!f) return;
+    var uid = f.getAttribute('data-fuid'), fold = !f.classList.contains('folded');
+    var before = btn.getBoundingClientRect().top;
+    ++chatScrollSeq;                                     // 뒤늦게 도는 자동 스크롤 예약이 있으면 취소(화면이 튀지 않게)
+    f.classList.toggle('folded', fold);
+    if (fold) delete chatFoldOpen[uid]; else chatFoldOpen[uid] = 1;
+    btn.textContent = fold ? '전체 보기 ▼' : '접기 ▲';
+    btn.setAttribute('aria-expanded', String(!fold));
+    // 펼칠 땐 위쪽이 그대로라 화면이 안 움직인다. 접을 땐 글이 위로 줄어드니 → 누른 버튼이 손가락 아래 그 자리에 있게 되돌린다.
+    if (fold) { var dy = btn.getBoundingClientRect().top - before; if (Math.abs(dy) >= 1) try { window.scrollBy(0, dy); } catch (e) {} }
+  }
+  // 폭이 바뀌면(폴드 펼침·화면 회전·PC 창 크기) 줄 수가 달라지니 다시 그려 다시 잰다. 높이만 바뀌는 건(키보드) 무시.
+  (function () {
+    var lastW = window.innerWidth, t = 0;
+    window.addEventListener('resize', function () {
+      if (window.innerWidth === lastW) return;
+      lastW = window.innerWidth; clearTimeout(t);
+      t = setTimeout(function () { if (chatLog && isOpen(chatView) && !chatSearchOn) renderChat(); }, 250);
+    }, { passive: true });
+  })();
   function renderChat() {
     // IME(한글) 조합 중이면 목록 DOM을 건드리지 않는다 → 조합이 끊겨 글자가 씹히는 것을 막는다.
     // 미룬 렌더는 compositionend/blur 에서 flushChatRender()로 한 번에 반영(v4.5).
@@ -1798,6 +1868,9 @@
       var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText(m.text))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
       if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">오퍼스 5.5</span><br>' + inner;   // v5.8
+      // O-0111: 긴 글은 접어 보이게 — 본문 글만 .bfold 로 감싼다(첨부·[듣기]는 접지 않고 항상 보임).
+      //   전문은 DOM 에 그대로 있고 높이만 가린다. 실제 접기 판정은 그린 뒤 applyChatFolds()가 높이로 한다.
+      if (m.text && !q && chatFoldMaybe(m.text)) inner = '<div class="bfold" data-fuid="' + msgUid(m) + '">' + inner + '</div>';
       if (m.role === 'me' && m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span style="opacity:.75">올리는 중…</span>';
       inner += attachChips(m.files, m.role === 'me');
       if (m.role === 'k' && (m.text || m.vurl)) {           // 모든 케이 답에 [듣기](없으면 온디맨드 생성)
@@ -1858,6 +1931,7 @@
       if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
     }
     chatLog.innerHTML = chatMoreHtml() + html;         // v7.0: 맨 위 [이전 대화 더 보기] / 「여기가 대화의 처음이에요」
+    applyChatFolds();                                    // O-0111: 긴 말풍선 접기(아래 스크롤 계산 '전'에 높이를 확정)
     chatRenderedUids = nowUids;
     applyKExpr(lastKMsg);                                // v6.0: 마지막 케이 답 표정 → 마지막 아바타·헤더·홈
     // v5.9: 어디로 스크롤할지 — 우선순위 ① 내가 방금 보냄 → 맨 아래(예전 그대로)
@@ -3449,6 +3523,8 @@
   if (chatLog) chatLog.addEventListener('click', function (ev) {
     var more = ev.target.closest ? ev.target.closest('.chatmorebtn') : null;   // v7.0: [이전 대화 더 보기]
     if (more) { loadOlderChat(); return; }
+    var fb = ev.target.closest ? ev.target.closest('.bfoldbtn') : null;   // O-0111: [전체 보기 ▼]/[접기 ▲]
+    if (fb) { toggleChatFold(fb); return; }
     var kav = ev.target.closest ? ev.target.closest('img.kav') : null;   // v6.0: 말풍선 옆 케이 사진 → 프로필 카드
     if (kav) { openKProfile(); return; }
     // 링크 탭 → 외부로 열기(선택 복사와 별개)

@@ -936,6 +936,11 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
 .krow.kcont{margin-top:-4px}
 /* 「듣기」 버튼은 항상 말풍선 아래 줄로(본문 끝에 붙지 않게) */
 .bubble.k .voiceplay{display:flex;width:max-content;max-width:100%}
+/* O-0111 긴 메시지 접기 — 높이만 가리고(전문은 그대로) 아래 끝을 흐리게. 흐림은 mask 라 케이(반투명)·대표님(그라데이션) 말풍선 모두 배경색과 무관 */
+.bfold.folded{max-height:var(--fold-h,372px);overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 72px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 72px),transparent)}
+.bfoldbtn{display:flex;align-items:center;justify-content:center;width:100%;margin:6px 0 0;padding:8px 10px;border:0;border-top:1px solid var(--glass-b);background:transparent;color:var(--p1);font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.bubble.me .bfoldbtn{color:#fff;border-top-color:rgba(255,255,255,.3)}
+.bfoldbtn:active{opacity:.7}
 
 /* 프로필 카드 */
 .kprof{position:fixed;inset:0;z-index:1150;background:rgba(3,6,18,.62);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
