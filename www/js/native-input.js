@@ -137,18 +137,83 @@
     try { global.SmartOpus.set(!!(ev && ev.on)); } catch (e) {}
   });
 
-  // 네이티브 "＋"(첨부) → 웹 첨부 버튼 클릭(파일 선택 열림). 입력 바는 열린 채 유지.
+  /* v7.1(2026-09-30) 「글을 먼저 쓰면 첨부가 안 된다」 수정.
+   *  원인: 네이티브 입력 바(Dialog)의 ＋를 누르면 예전엔 웹 첨부 버튼을 JS 로 대신 눌렀다
+   *        → 웹 <input type=file>.click(). 그런데 손가락은 Dialog 를 눌렀으므로 WebView 에는
+   *        '사용자 동작(user activation)'이 없어 Chromium 이 파일 선택 창을 조용히 막았다.
+   *        (글을 안 쓰고 웹 화면의 ＋를 직접 누르면 사용자 동작이 있어 정상 → "글 먼저"일 때만 고장)
+   *  해결: 네이티브가 파일 선택 창을 직접 열고(NativeInput.pickFiles), 고른 파일을 File 로 만들어
+   *        app.js 의 첨부 입구(window.SmartAttach)로 넘긴다 → 대기줄·전송은 웹 그대로.
+   *        옛 APK(플러그인에 pickFiles 없음)면 예전 방식(웹 버튼 클릭)으로 동작한다. */
+  var NATIVE_PICK_MAX = 300 * 1024 * 1024;   // 이보다 큰 파일은 메모리 부담 → 입력 바를 닫고 웹 ＋로 안내
+
+  function hasNativePick() {
+    try {
+      var hs = Cap.PluginHeaders || [];
+      for (var i = 0; i < hs.length; i++) {
+        if (hs[i] && hs[i].name === 'NativeInput') {
+          var ms = hs[i].methods || [];
+          for (var j = 0; j < ms.length; j++) if (ms[j] && ms[j].name === 'pickFiles') return true;
+          return false;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+  function say(msg, ms) { try { if (global.SmartAttach && global.SmartAttach.toast) global.SmartAttach.toast(msg, ms); } catch (e) {} }
+
+  // 네이티브가 캐시에 복사해 둔 사본(path) → 웹 File 객체
+  function toFile(f) {
+    var url = (typeof Cap.convertFileSrc === 'function') ? Cap.convertFileSrc(f.path) : f.path;
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.blob();
+    }).then(function (b) {
+      return new File([b], f.name || '파일', { type: f.mime || b.type || '', lastModified: Date.now() });
+    }).catch(function () { return null; });
+  }
+
+  // hookName: SmartAttach 의 입구 이름, accept: 'image/*' 등, fallbackBtn: 옛 방식용 웹 버튼
+  function pickNative(hookName, accept, fallbackBtn) {
+    var hook = global.SmartAttach && global.SmartAttach[hookName];
+    if (typeof hook !== 'function' || !hasNativePick()) {       // 옛 APK·입구 없음 → 예전 방식
+      if (fallbackBtn) { try { fallbackBtn.click(); } catch (e) {} }
+      return;
+    }
+    NI.pickFiles({ accept: accept || '*/*', multiple: true }).then(function (res) {
+      var list = (res && res.files) || [];
+      var requested = (res && res.requested) || 0;
+      if (!list.length) { if (requested > 0) say('고른 파일을 읽지 못했어요. 다시 시도해 주세요.'); return; }
+      var big = list.filter(function (f) { return (f.size || 0) > NATIVE_PICK_MAX; });
+      var ok = list.filter(function (f) { return (f.size || 0) <= NATIVE_PICK_MAX; });
+      return Promise.all(ok.map(toFile)).then(function (files) {
+        files = files.filter(Boolean);
+        if (files.length) hook(files);
+        var failed = ok.length - files.length + (requested > list.length ? requested - list.length : 0);
+        if (big.length) {
+          say('300MB가 넘는 파일(' + big.length + '개)은 입력창을 닫고 아래 ＋ 버튼으로 붙여 주세요.', 4000);
+        } else if (failed > 0) {
+          say('파일 ' + failed + '개를 읽지 못했어요. 다시 골라 주세요.', 3000);
+        }
+      });
+    }).catch(function () {
+      say('파일 선택 창을 열지 못했어요. 입력창을 닫고 아래 ＋ 버튼을 눌러 주세요.', 3500);
+    });
+  }
+
+  // 네이티브 "＋"(첨부) → 네이티브 파일 선택 → 첨부 대기줄. 입력 바는 열린 채 유지(글 그대로).
   NI.addListener('attach', function () {
     if (!current) return;
-    var b = el(MAP[current].attach);
-    if (b) { try { b.click(); } catch (e) {} }
+    var m = MAP[current];
+    pickNative(current, '*/*', el(m.attach));   // current = 'chat' | 'locker' (SmartAttach 입구 이름과 같음)
   });
 
-  // 네이티브 "카메라" → 웹 카메라 버튼 클릭(공유함엔 카메라 없음 → 무시)
+  // 네이티브 "카메라" → 사진 고르기(웹 chatCamInput 과 같은 image/*) → 사진 대기줄. 공유함엔 카메라 없음.
   NI.addListener('camera', function () {
     if (!current) return;
-    var b = el(MAP[current].cam);
-    if (b) { try { b.click(); } catch (e) {} }
+    var m = MAP[current];
+    if (!m.cam) return;
+    pickNative('chatCam', 'image/*', el(m.cam));
   });
 
   // 네이티브 입력 바 닫힘 → 웹 하단 바 복원 + 안 보낸 초안을 웹 입력창으로 되돌려 저장(이어쓰기)
