@@ -65,6 +65,48 @@
   function fmtSec(s) { s = Math.max(0, Math.floor(s)); return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60); }
   function defaultTitle() { var d = new Date(); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
+  /* v6.5 (O-0085): 서버 시각(created_at 등, UTC) → 한국 시간 {date:'YYYY-MM-DD', time:'HH:MM'}.
+   *   예전엔 문자열을 잘라 UTC(02:45)를 그대로 보여 한국 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보였다.
+   *   한국은 서머타임이 없어 +9시간 고정 → 기기 시간대(해외 출장 등)와 무관하게 늘 한국 시각·날짜.
+   *   'T'·공백 구분, 소수초 자릿수, 'Z'·'+00'·'+00:00'·'+0000' 모두 직접 해석(엔진별 Date.parse 차이 회피).
+   *   시간대 표기가 없으면 서버 관례대로 UTC 로 본다. 해석 실패 시 null. */
+  function kstParts(iso) {
+    if (!iso) return null;
+    var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i);
+    var t;
+    if (m) {
+      t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+      var z = m[7];
+      if (z && z.toUpperCase() !== 'Z') {
+        var sg = z.charAt(0) === '-' ? -1 : 1, zz = z.slice(1).replace(':', '');
+        t -= sg * (+zz.slice(0, 2) * 60 + +(zz.slice(2, 4) || 0)) * 60000;
+      }
+    } else {
+      t = Date.parse(iso); if (isNaN(t)) return null;
+    }
+    var k = new Date(t + 9 * 3600000);   // UTC+9 로 옮긴 뒤 getUTC* 로 읽음
+    return { date: k.getUTCFullYear() + '-' + pad2(k.getUTCMonth() + 1) + '-' + pad2(k.getUTCDate()),
+             time: pad2(k.getUTCHours()) + ':' + pad2(k.getUTCMinutes()) };
+  }
+  /* v6.5 (O-0085): 녹음/영상 길이(초) — PC 워커가 summary_json 에 적은 값. duration_sec 우선, 없으면
+   *   영상 워커의 duration_min(분). 모르면 0(→ 화면엔 길이 없이 '녹음'만). */
+  function memoDurSec(r) {
+    var sj = (r && r.summary_json) || {};
+    var s = Number(sj.duration_sec);
+    if (isFinite(s) && s > 0) return s;
+    var mn = Number(sj.duration_min);
+    if (isFinite(mn) && mn > 0) return mn * 60;
+    return 0;
+  }
+  /* 길이 → '1시간 40분' / '35분' / '45초'. 분 단위는 버림(6049초=1시간 40분). */
+  function fmtDurKo(sec) {
+    sec = Math.floor(Number(sec) || 0);
+    if (sec <= 0) return '';
+    if (sec < 60) return sec + '초';
+    var mins = Math.floor(sec / 60), h = Math.floor(mins / 60), mm = mins % 60;
+    if (!h) return mm + '분';
+    return h + '시간' + (mm ? ' ' + mm + '분' : '');
+  }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
   var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), processing, resultWrap];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
@@ -611,13 +653,16 @@
     if (!meetingsRows.length) { host.innerHTML = '<p class="empty" style="padding:16px">아직 정리된 회의 요약이 없어요. 녹음이 정리되면 여기에 쌓여요.</p>'; return; }
     var lastDate = '', html = '';
     meetingsRows.forEach(function (r, idx) {
-      var ca = r.created_at || '';
-      var d = ca.slice(0, 10), tm = ca.slice(11, 16);
+      // v6.5 (O-0085): 날짜 묶음은 한국 날짜 기준. 카드의 시각(올린 시각=대표님께 의미 없는 숫자)은 빼고
+      //   녹음 길이를 보여 준다 — '녹음 · 1시간 40분'. 길이를 모르면 '녹음'만.
+      var kp = kstParts(r.created_at);
+      var d = kp ? kp.date : '';
       if (d && d !== lastDate) { html += '<div style="padding:12px 6px 4px;font-size:12px;opacity:.6;font-weight:700">' + esc(d) + '</div>'; lastDate = d; }
       var kb = (r.kind === 'video') ? '영상' : '녹음';
+      var dur = fmtDurKo(memoDurSec(r));
       html += '<button class="card action wide" data-mtg="' + idx + '">' +
               '<span class="ic blue"><svg><use href="#i-note"/></svg></span>' +
-              '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc((tm ? tm + '  ·  ' : '') + kb) + '</small></span>' +
+              '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc(kb + (dur ? '  ·  ' + dur : '')) + '</small></span>' +
               '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
     });
     host.innerHTML = html;
@@ -629,10 +674,13 @@
     var r = meetingsRows[idx]; if (!r) return;
     var d = $('meetingsDetail'), l = $('meetingsList'); if (!d) return;
     var sj = r.summary_json || {};
-    var when = (r.created_at || '').slice(0, 16).replace('T', ' ');
+    var kp = kstParts(r.created_at);                      // v6.5: 한국 시간(참고용) — 예전엔 UTC 가 그대로 보였음
+    var when = kp ? (kp.date + ' ' + kp.time) : '';
+    var dur = fmtDurKo(memoDurSec(r));
     var html = '<button class="back" id="mtgBackToList" style="margin:6px 0"><svg><use href="#i-chev-l"/></svg>목록으로</button>';
     html += '<div class="rtitle"><h2>' + esc(r.title || '회의 요약') + '</h2><div class="rmeta">' +
             (when ? '<span class="chip">' + esc(when) + '</span>' : '') +
+            (dur ? '<span class="chip">' + esc(((r.kind === 'video') ? '영상 ' : '녹음 ') + dur) + '</span>' : '') +
             '<span class="chip on">요약</span></div></div>';
     // v5.3: 이름 변경 · 삭제(소프트삭제) — 연동암호 게이트, 확인은 기존 시트/모달 재사용
     html += '<div class="btnrow">' +
@@ -1159,7 +1207,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v6.4';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v6.5';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
