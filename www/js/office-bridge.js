@@ -916,6 +916,28 @@
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
+  /* ---------- v7.0(O-0102) 채팅 「개수 상한 없애기」: 대화+방송 한 쪽씩 되읽기 ----------
+   * 전용 RPC(list_chat_page)가 대화 줄(src='chat')과 케이 방송(src='push')을 한 시간표로 합쳐
+   *   최신부터 limit 건씩 돌려준다(숨김 행 제외). 커서(beforeTs + beforeId)보다 옛것만 → 끝까지 넘길 수 있다.
+   *   ⚠️ beforeTs 는 서버가 준 ts 문자열을 그대로 넘긴다(Date 로 바꾸면 마이크로초가 잘려 경계 행이 샌다).
+   * 🔒 연동 암호 게이트(list_chat_history 와 동일): 불일치면 err.badpass.
+   *   RPC 가 아직 서버에 없으면(404) err.missing=true → 앱이 예전 방식(최신 300/1000)으로 자동 폴백.
+   *   반환: [{src, id, note, content_md, summary_json, ts}] (최신→옛 순) */
+  function listChatPage(beforeTs, beforeId, limit, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/list_chat_page', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_before_ts: beforeTs || null, p_before_id: beforeId || null, p_limit: limit || 150, p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 404) { var m = new Error('PAGE_RPC_MISSING'); m.missing = true; throw m; }   // 서버 SQL 미적용
+      if (r.status === 400 || r.status === 401 || r.status === 403) {
+        var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;   // 암호 불일치(또는 미설정)
+      }
+      if (!r.ok) throw new Error('이전 대화 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
+  }
+
   /* ---------- 회의 요약 탭(v5.2): 서버의 done 녹음/영상 요약본 목록 ----------
    * 전용 RPC(list_recent_memos)가 done 인 audio/video 행만, 요약 열람에 필요한 칸
    *   (id, kind, title, created_at, summary_json, content_md, transcript)만 최근순으로 돌려준다.
@@ -1269,6 +1291,7 @@
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     fmtSize: fmtSize,                   // v6.9: 문서 뷰어 진행 안내(○MB / ○MB)
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
+    listChatPage: listChatPage,         // v7.0: 대화+방송 한 쪽씩(개수 상한 없음, 이전 대화 더 보기)
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩

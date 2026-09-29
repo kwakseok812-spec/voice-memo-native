@@ -1232,7 +1232,17 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v6.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  // ── v7.0(O-0102) 채팅 개수 상한 없애기 ─────────────────────────────────────
+  //  예전: 열 때 서버에서 방송 최신 300 + 대화 최신 1000만 받아 그 밖(옛 대화)은 앱에서 볼 길이 없었다(9/29 O-0101 사고의 뿌리).
+  //  이제: 열 때 대화+방송을 합친 최신 CHAT_PAGE_SIZE 건만 받고(list_chat_page), 맨 위 [이전 대화 더 보기]로
+  //  그보다 옛것을 한 쪽씩 끝(첫 대화)까지 이어 받는다. 실시간 새 메시지는 예전 증분 조회(since)를 그대로 쓴다.
+  //  서버에 list_chat_page 가 아직 없거나(404) 암호가 없으면 예전 방식 그대로(자동 폴백).
+  var CHAT_PAGE_SIZE = 150;        // 한 쪽 크기(서버 최대 500). 쪽 수 제한은 없다
+  var chatOlder = null;            // 다음 [이전 대화 더 보기] 커서 {ts: 서버 ts 문자열 그대로, id}. null=아직 쪽 조회 안 함
+  var chatHasMore = false;         // 커서보다 옛것이 더 있나(마지막 쪽이 꽉 찼나)
+  var chatOlderBusy = false;       // 옛 쪽 불러오는 중
+  var chatPageMissing = false;     // 서버에 list_chat_page 없음(404) → 이번 실행 동안 예전 방식
+  var APP_VERSION = 'v7.0';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1824,7 +1834,16 @@
     }).join('');
     if (q) {                                                // 검색 모드: 결과 안내 + (없으면) 빈 안내
       var info = $('chatSearchInfo');
-      if (info) { info.style.display = 'block'; info.textContent = shown ? ('“' + chatSearchQuery.trim() + '” 검색 결과 ' + shown + '개') : '“' + chatSearchQuery.trim() + '”에 일치하는 대화가 없어요.'; }
+      if (info) {
+        info.style.display = 'block';
+        var qt = esc(chatSearchQuery.trim());
+        var ih = shown ? ('“' + qt + '” 검색 결과 ' + shown + '개') : '“' + qt + '”에 일치하는 대화가 없어요.';
+        // v7.0: 옛 대화가 아직 서버에 남아 있으면(불러온 것 안에서만 찾았음) → 전부 받아 와서 찾기
+        if (chatHasMore) ih += '<br><span class="chatsearchnote">지금 불러온 대화 안에서 찾았어요.</span> ' +
+          '<button type="button" id="chatSearchMore" class="chatsearchmore"' + (chatOlderBusy ? ' disabled' : '') + '>' +
+          (chatOlderBusy ? '불러오는 중…' : '옛 대화까지 모두 찾기') + '</button>';
+        info.innerHTML = ih;
+      }
       chatLog.innerHTML = html || '';
       applyKExpr(null);
       chatLog.scrollTop = 0;
@@ -1838,7 +1857,7 @@
       var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
       if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
     }
-    chatLog.innerHTML = html;
+    chatLog.innerHTML = chatMoreHtml() + html;         // v7.0: 맨 위 [이전 대화 더 보기] / 「여기가 대화의 처음이에요」
     chatRenderedUids = nowUids;
     applyKExpr(lastKMsg);                                // v6.0: 마지막 케이 답 표정 → 마지막 아바타·헤더·홈
     // v5.9: 어디로 스크롤할지 — 우선순위 ① 내가 방금 보냄 → 맨 아래(예전 그대로)
@@ -1896,8 +1915,12 @@
     //   세션 high-water 를 EPOCH 로 리셋하면 다음 loadChatSync/loadOfficePushes 가 전체를 받아온다.
     chatSyncHW = CHAT_EPOCH; officeHW = CHAT_EPOCH;
     renderChat(); reconcileChat();               // 들어올 때 그동안 도착한 답을 즉시 반영
-    loadOfficePushes();                          // 케이 방송 전체(삭제분 제외) 재구성
-    startChatSync();                              // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 게이트 안내)
+    // v7.0: 먼저 최신 한 쪽(대화+방송 합쳐 CHAT_PAGE_SIZE 건)을 받고, 그 최신 시각부터 증분 조회를 잇는다.
+    //   쪽 조회를 못 하면(암호 없음·서버 SQL 미적용·통신 실패) 예전처럼 EPOCH 부터(최신 300/1000) 재구성.
+    loadChatFirstPage(function () {
+      loadOfficePushes();                        // 케이 방송(쪽 조회 성공 시엔 그 이후 새것만)
+      startChatSync();                            // PC↔폰 대화 동기화(암호 있으면 폴링, 없으면 게이트 안내)
+    });
     ordFullOnce = true; startOrderPoll();         // v5.8: 작업 카드 — 열 때 최근 메시지들 카드 한 번 전체 확인
     // C4: 공유함과 동일 — 연동 암호가 없으면 조용히 넘기지 말고 매번 안내(암호 없으면 기기 간 대화가 안 보임).
     if (!getSyncPass()) showSyncGate(true);
@@ -2355,6 +2378,137 @@
     }).catch(function () { officeLoading = false; });
   }
 
+  /* ===================== v7.0(O-0102) 대화 쪽 조회 — 개수 상한 없이 첫 대화까지 =====================
+   * 대표님 지시: 「스마트비서 앱 채팅 제한 없애」.
+   * · 열 때: list_chat_page(최신 한 쪽, 대화+방송 합쳐 CHAT_PAGE_SIZE 건) → 합치고, 그 최신 시각을 증분 조회의
+   *   출발점(chatSyncHW·officeHW)으로 삼는다. 그 뒤 새 메시지는 예전 증분 조회(since)가 그대로 받는다.
+   * · 맨 위 [이전 대화 더 보기]: 커서(chatOlder = 지금까지 받은 가장 옛 행)보다 옛것을 한 쪽 더 → 끝까지.
+   * · 검색은 불러온 말풍선 안에서 찾으므로, 옛것이 남아 있으면 [옛 대화까지 모두 찾기]로 전부 받아 온다.
+   * · 옛 쪽은 배지(안읽음)로 세지 않고, 화면 위치도 보던 말풍선에 그대로 둔다(아래로 튀지 않게).
+   * · 쪽 조회가 안 되면(암호 없음·서버 SQL 미적용 404·통신 실패) 예전 방식 그대로 → 지금보다 나빠지지 않음. */
+  function chatTsMs(ts) { var n = ts ? Date.parse(ts) : NaN; return isNaN(n) ? 0 : n; }
+  // 쪽 조회 행을 chatMsgs 에 합친다(이미 있는 것·개별 삭제·「전체 삭제」 경계 이전은 제외). 새로 넣은 말풍선 목록을 돌려준다.
+  function mergeChatPageRows(rows) {
+    var have = {}, added = [];
+    chatMsgs.forEach(function (m) { if (m.id) have[m.id] = 1; if (m.cid) have[m.cid] = 1; if (m.bid) have[m.bid] = 1; });
+    (rows || []).forEach(function (row) {
+      if (!row || !row.id || have[row.id]) return;
+      if (isDeletedBid(row.id) || isBeforeCleared(row.ts)) return;
+      have[row.id] = 1;
+      var sj = row.summary_json || null;
+      var ts = chatTsMs(row.ts) || Date.now();
+      var atts = OfficeBridge.attachmentsFrom({ summary_json: sj });
+      if (row.src === 'push') {                          // 케이 방송 — loadOfficePushes 와 같은 모양
+        var reply = row.content_md || (sj && sj.reply) || '';
+        if (!reply && !atts.length) return;
+        var km = { role: 'k', text: reply, ts: ts, bid: row.id };
+        if (atts.length) km.files = atts;
+        if (sj && sj.notice) km.notice = true;
+        km.rid = row.id;
+        chatMsgs.push(km); added.push(km);
+        return;
+      }
+      // 대화 줄 — loadChatSync 와 같은 모양(질문 말풍선 + 케이 답)
+      var q = (row.note || '').trim();
+      var a = (row.content_md || (sj && sj.reply) || '').trim();
+      var me = { role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true, rid: row.id };
+      chatMsgs.push(me); added.push(me);
+      if (a || atts.length) {
+        var k2 = { role: 'k', text: a, ts: ts, cid: row.id, rid: row.id };
+        if (atts.length) k2.files = atts;
+        var vu = sj && sj.voice_url; if (vu) k2.vurl = vu;
+        chatMsgs.push(k2); added.push(k2);
+      }
+    });
+    return added;
+  }
+  function chatPageCanRun() { return !!(getSyncPass() && !chatPageMissing && window.OfficeBridge && OfficeBridge.listChatPage); }
+  function chatPageFail(e) {
+    if (e && e.missing) {                            // 서버 SQL 미적용(또는 되돌림) → 이번 실행은 예전 방식
+      chatPageMissing = true; chatHasMore = false; chatOlder = null;
+      if (isOpen(chatView)) renderChat();            // 맨 위 [더 보기]/「처음이에요」 줄을 바로 걷어 낸다
+      return;
+    }
+    if (e && e.badpass) {
+      setSyncPass('');
+      if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.');
+    }
+  }
+  // 열 때 최신 한 쪽. done() 은 성공·실패와 무관하게 꼭 한 번 부른다(그다음 증분 조회를 잇게).
+  function loadChatFirstPage(done) {
+    var fin = function () { if (done) { var d = done; done = null; d(); } };
+    if (!chatPageCanRun()) { fin(); return; }
+    // 이미 옛 쪽까지 받아 둔 상태에서 다시 열었을 때, 그사이 새 메시지가 한 쪽을 넘게 쌓였으면 사이가 빈다 → 커서를 새로 잡는다
+    var prevNewest = 0;
+    chatMsgs.forEach(function (m) { if ((m.rid || m.bid || m.cid) && (m.ts || 0) > prevNewest) prevNewest = m.ts; });
+    OfficeBridge.listChatPage(null, null, CHAT_PAGE_SIZE, getSyncPass()).then(function (rows) {
+      var oldest = rows.length ? rows[rows.length - 1] : null;
+      var full = rows.length >= CHAT_PAGE_SIZE;
+      var gap = !!(chatOlder && oldest && full && chatTsMs(oldest.ts) > prevNewest);
+      if (!chatOlder || gap || !oldest) {
+        chatOlder = oldest ? { ts: oldest.ts, id: oldest.id } : { ts: '', id: '' };   // 빈 커서 = 쪽 조회는 됐고 더 없음
+        chatHasMore = !!oldest && full && !isBeforeCleared(oldest.ts);
+      }
+      var added = mergeChatPageRows(rows);
+      if (rows.length && rows[0].ts) { chatSyncHW = rows[0].ts; officeHW = rows[0].ts; }   // 이 뒤로는 새것만 증분 조회
+      if (added.length) { sortChatByTime(); saveChatMsgs(); }
+      if (isOpen(chatView)) renderChat();
+      fin();
+    }).catch(function (e) { chatPageFail(e); fin(); });
+  }
+  // [이전 대화 더 보기] — 한 쪽 더. cb(ok, 추가 수)
+  function loadOlderChat(cb) {
+    if (chatOlderBusy || !chatHasMore || !chatOlder || !chatOlder.ts || !chatPageCanRun()) { if (cb) cb(false, 0); return; }
+    chatOlderBusy = true;
+    var btn = chatLog && chatLog.querySelector('.chatmorebtn');
+    if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
+    OfficeBridge.listChatPage(chatOlder.ts, chatOlder.id, CHAT_PAGE_SIZE, getSyncPass()).then(function (rows) {
+      chatOlderBusy = false;
+      var oldest = rows.length ? rows[rows.length - 1] : null;
+      if (oldest) chatOlder = { ts: oldest.ts, id: oldest.id };
+      chatHasMore = !!oldest && rows.length >= CHAT_PAGE_SIZE && !isBeforeCleared(oldest.ts);
+      var added = mergeChatPageRows(rows);
+      if (added.length) {
+        sortChatByTime();
+        // 옛 말풍선은 '새로 도착한 메시지'가 아니다 → 렌더 기준에 미리 넣어 새 메시지 스크롤·구분선이 안 붙게
+        if (chatRenderedUids) added.forEach(function (m) { chatRenderedUids[msgUid(m)] = 1; });
+      }
+      if (isOpen(chatView)) {
+        var keep = chatSearchOn ? null : chatCaptureView();   // 보던 말풍선(= 지금 맨 위 말풍선) 위치 그대로
+        renderChat();
+        if (keep) chatRestoreView(keep);
+      }
+      if (cb) cb(true, added.length);
+    }).catch(function (e) {
+      chatOlderBusy = false;
+      chatPageFail(e);
+      if (!(e && (e.missing || e.badpass))) toast('이전 대화를 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.');
+      if (isOpen(chatView)) renderChat();
+      if (cb) cb(false, 0);
+    });
+  }
+  // 검색용: 남은 옛 대화를 끝까지(안전 상한 200쪽 = 3만 건) 받아 온 뒤 검색 결과를 다시 그린다
+  function loadAllOlderChat() {
+    if (chatOlderBusy) return;
+    var pages = 0, info = $('chatSearchInfo');
+    function step() {
+      if (!chatHasMore || pages >= 200) { if (isOpen(chatView)) renderChat(); return; }
+      pages++;
+      if (info) { info.style.display = 'block'; info.textContent = '옛 대화를 불러오는 중… (' + pages + '쪽)'; }
+      loadOlderChat(function (ok) { if (ok) step(); else if (isOpen(chatView)) renderChat(); });
+    }
+    step();
+  }
+  // 대화 목록 맨 위 줄: [이전 대화 더 보기] / 「여기가 대화의 처음이에요」 (쪽 조회를 안 했으면 아무것도 없음 = 예전 화면)
+  function chatMoreHtml() {
+    if (!chatOlder) return '';
+    if (chatHasMore) {
+      return '<div class="chatmore"><button type="button" class="chatmorebtn"' + (chatOlderBusy ? ' disabled' : '') + '>' +
+        (chatOlderBusy ? '불러오는 중…' : '이전 대화 더 보기') + '</button></div>';
+    }
+    return '<div class="chatmore end">여기가 대화의 처음이에요</div>';
+  }
+
   /* ===================== PC↔폰 채팅 동기화(1단계) =====================
    * 목적: "지금부터" 폰에서 보낸 글/케이 답이 PC에, PC에서 보낸 것이 폰에 뜨게 한다.
    * 방식: 전용 조회 RPC(list_chat_history)를 채팅 화면 열려 있을 때 몇 초마다 부른다.
@@ -2450,7 +2604,8 @@
     setSyncPass(p); hideSyncGate();
     try { localStorage.setItem(SYNC_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 지금부터 동기화(과거 안 쏟음)
     toast('PC 연동 암호를 저장했어요.');
-    startChatSync();                                  // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
+    if (isOpen(chatView) && !chatOlder) loadChatFirstPage(startChatSync);   // v7.0: 채팅에서 암호를 넣었으면 최신 한 쪽부터(→ 이전 대화 더 보기)
+    else startChatSync();                             // 곧바로 한 번 확인(암호 틀리면 게이트가 다시 뜸)
     if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ideasView'))) refreshIdeas(false);  // v5.5: 아이디어 화면에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ordersView'))) refreshOrders(false); // v5.8: 작업 현황에서 암호를 넣었으면 바로 다시 불러온다
@@ -3292,6 +3447,8 @@
   });
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
+    var more = ev.target.closest ? ev.target.closest('.chatmorebtn') : null;   // v7.0: [이전 대화 더 보기]
+    if (more) { loadOlderChat(); return; }
     var kav = ev.target.closest ? ev.target.closest('img.kav') : null;   // v6.0: 말풍선 옆 케이 사진 → 프로필 카드
     if (kav) { openKProfile(); return; }
     // 링크 탭 → 외부로 열기(선택 복사와 별개)
@@ -3401,6 +3558,7 @@
     chatMsgs = [];
     saveChatMsgs();
     officeHW = CHAT_EPOCH; chatSyncHW = CHAT_EPOCH;   // 다음 동기화는 경계 이후만 그린다
+    chatOlder = null; chatHasMore = false;            // v7.0: 경계 이전 옛 쪽은 더 볼 게 없음(다음 열람 때 새로 잡음)
     stopChatReconcile();
     renderChat();
     updateSendEnabled();
@@ -3427,6 +3585,11 @@
     if (chatSearchOn) closeChatSearch(); else openChatSearch();
   });
   if ($('chatSearchClose')) $('chatSearchClose').addEventListener('click', closeChatSearch);
+  // v7.0: 검색 안내 줄의 [옛 대화까지 모두 찾기]
+  if ($('chatSearchInfo')) $('chatSearchInfo').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('#chatSearchMore') : null;
+    if (b && !b.disabled) { b.disabled = true; b.textContent = '불러오는 중…'; loadAllOlderChat(); }
+  });
   if ($('chatSearchInput')) {
     $('chatSearchInput').addEventListener('input', function () { chatSearchQuery = this.value || ''; renderChat(); });
     $('chatSearchInput').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChatSearch(); });

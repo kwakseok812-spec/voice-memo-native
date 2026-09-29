@@ -750,6 +750,16 @@ body.doc-fs #docFsHint{display:block}
 .chatsearchbar{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
 .chatsearchbar .chatsearchinput{flex:1;min-height:48px}
 .chatsearchinfo{font-size:13.5px;font-weight:700;color:var(--muted);margin:0 2px 8px;line-height:1.5}
+/* v7.0(O-0102): 대화 맨 위 [이전 대화 더 보기] · 「여기가 대화의 처음이에요」 · 검색의 [옛 대화까지 모두 찾기]
+   (채팅 화면 새 요소 → backdrop-filter 금지(v4.5 타이핑 렉). 폰 390px 에서도 한 줄·손가락 48px 높이) */
+.chatmore{display:flex;justify-content:center;margin:2px 0 4px}
+.chatmorebtn{min-height:44px;max-width:100%;padding:10px 18px;border-radius:999px;background:var(--glass2);border:1px solid var(--glass-b2);color:var(--text);font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;white-space:nowrap}
+.chatmorebtn:active{transform:scale(.985)}
+.chatmorebtn:disabled{opacity:.6;cursor:default}
+.chatmore.end{color:var(--dim);font-size:12.5px;font-weight:700;padding:6px 0}
+.chatsearchnote{font-weight:600;color:var(--dim)}
+.chatsearchmore{margin-top:6px;min-height:40px;padding:8px 14px;border-radius:999px;background:var(--glass2);border:1px solid var(--glass-b2);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.chatsearchmore:disabled{opacity:.6;cursor:default}
 .bubble mark{background:var(--warn);color:#1a1a1a;border-radius:4px;padding:0 2px;font-weight:800}
 .bubble.me mark{background:#FDE68A;color:#1a1a1a}
 
