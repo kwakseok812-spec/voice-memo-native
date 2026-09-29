@@ -699,6 +699,27 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .doc-recent-item svg{width:22px;height:22px;flex:none;color:var(--p1)}
 .doc-recent-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-recent-item:active{transform:scale(.99)}
+/* v6.9(O-0098) 최근 연 문서 — 이 기기에 저장한 변환본 목록(다크·라이트 공용 변수) */
+#docRecentWrap .sec-title{margin-top:22px}
+.dv-recent{display:flex;flex-direction:column;gap:8px}
+.dv-ritem{display:flex;align-items:center;gap:2px;padding:2px 4px 2px 0;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh)}
+.dv-ritem.fav{border-color:var(--glass-b2)}
+.dv-rmain{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:11px 4px 11px 12px;background:none;border:0;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.dv-rmain:active{transform:scale(.99)}
+.dv-rbadge{flex:none;width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:12.5px;font-weight:900;letter-spacing:.4px;color:#fff}
+.dv-rbadge.t-hwp{background:#0E7490}.dv-rbadge.t-pdf{background:#DC2626}.dv-rbadge.t-doc{background:#2563EB}
+.dv-rbadge.t-xls{background:#047857}.dv-rbadge.t-ppt{background:#C2410C}.dv-rbadge.t-etc{background:#64748B}
+.dv-rtx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.dv-rname{font-size:16px;font-weight:700;line-height:1.35;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.dv-rsub{font-size:13px;color:var(--muted);font-weight:600;line-height:1.4}
+.dv-rlast{font-size:13px;color:var(--p1);font-weight:700;line-height:1.4}
+.dv-ract{flex:none;width:42px;height:46px;border:0;background:none;border-radius:12px;color:var(--dim);font-size:22px;line-height:1;display:grid;place-items:center;cursor:pointer;font-family:inherit}
+.dv-ract svg{width:20px;height:20px}
+.dv-ract:active{background:var(--ic-bg)}
+.dv-rfav.on{color:var(--warn)}
+.dv-recent-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;font-size:12.5px;color:var(--dim);line-height:1.5;word-break:keep-all}
+.dv-linkbtn{flex:none;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--glass-b);background:var(--glass);color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.dv-linkbtn:active{transform:scale(.97)}
 /* ===== 전체화면(몰입형) — 오직 문서만 화면 가득, 앱 메뉴 전부 숨김 ===== */
 body.doc-fs .topbar{display:none}
 body.doc-fs #docsView .subbar{display:none}

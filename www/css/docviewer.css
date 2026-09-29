@@ -92,6 +92,14 @@
 #docOverlay .btn.ghost{background:#eef2ff; color:#1d4ed8;}
 #docOverlay .bar-wrap{height:9px; background:#eaeef4; border-radius:999px; overflow:hidden; margin-top:18px;}
 #docOverlay .bar-fill{height:100%; width:0%; background:#2563eb; transition:width .2s;}
+/* v6.9(O-0097) 진행 단계·진행률 숫자·안내 한 줄 */
+#docOverlay .dv-steps{display:flex; justify-content:center; gap:6px; margin:0 0 12px; flex-wrap:wrap;}
+#docOverlay .dv-steps span{font-size:12.5px; font-weight:700; color:#8a94a3; background:#f1f4f8; border-radius:999px; padding:4px 10px; white-space:nowrap;}
+#docOverlay .dv-steps span.on{color:#fff; background:#2563eb;}
+#docOverlay .dv-steps span.done{color:#1d4ed8; background:#e0e9ff;}
+#docOverlay .dv-pct{font-size:13px; color:#5b6470; margin-top:8px; font-variant-numeric:tabular-nums;}
+#docOverlay .dv-hint{font-size:13.5px; color:#92400e; background:#fef3c7; border-radius:10px; padding:9px 12px; margin-top:12px; line-height:1.5; text-align:left; word-break:keep-all;}
+#docOverlay .sub{word-break:keep-all; overflow-wrap:anywhere;}
 
 /* 전체화면 / 슬라이드쇼 오버레이 (브라우저 Fullscreen API 대상) */
 #slideshow{position:fixed; inset:0; z-index:140; background:#000; display:none; overflow:hidden; touch-action:none;}

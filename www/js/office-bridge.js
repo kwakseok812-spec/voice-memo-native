@@ -168,6 +168,13 @@
       bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
       auth: '서버가 권한 문제로 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
       server: '서버가 잠시 응답하지 않아요(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
+      // v6.9 문서 뷰어 업로드(sendDoc)용
+      stalled: nm + '올리는 중에 전송이 멈췄어요(인터넷이 느리거나 끊김, 또는 앱이 잠시 화면 뒤로 감). 여러 번 다시 올려 봤지만 되지 않았어요.',
+      parts_missing: nm + '일부 조각이 서버에 올라갔는지 확인되지 않아 PC에 넘기지 않았어요. 다시 시도해 주세요.',
+      cancelled: '올리기를 취소했어요.',
+      row_net: '문서는 올라갔지만 인터넷이 끊겨 PC에 변환 요청을 넣지 못했어요.',
+      row_server: '문서는 올라갔지만 서버가 잠시 응답하지 않아 PC에 변환 요청을 넣지 못했어요(HTTP ' + (info.status || '?') + ').',
+      row_fail: '문서는 올라갔지만 서버가 변환 요청을 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
       unknown: nm + '올리지 못했어요' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
     };
     var msg = table[reason] || table.unknown;
@@ -660,44 +667,182 @@
    * ▶ 워커→앱 규약(하향): 결과 PDF 를 voice-docs `{id}/view.pdf` 로 올리고 7일 서명URL(inline) 을
    *   summary_json.doc={pdf_url,name,pages?} 에 기록. 실패 시 summary_json.doc={error:"..."}.
    *   앱은 poll() → docResultFrom() 로 읽어 PDF.js 로 표시. (PDF 원본이면 변환 없이 그대로 전달.) */
+  // v6.9 검토 반영: 문서 요청 행 등록에도 시간 제한(30초)과 재시도(3번)를 둔다 — 조각 전송과 같은 이유
+  //   (fetch 는 시간 제한이 없어 망이 멈추면 영영 안 끝남). 같은 id 재등록은 409=이미 등록=성공이라 안전하다.
+  //   ⚠️ 다른 종류(채팅 등)의 _insertRow 는 그대로 둔다(시간 초과 뒤 실제로는 등록된 경우 새 id 로 다시 보내 중복될 수 있어서).
+  var DOC_ROW_TIMEOUT_MS = 30000, DOC_ROW_TRIES = 3;
+  function _insertRowTimed(body) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, DOC_ROW_TIMEOUT_MS) : null;
+    return fetch(CONFIG.url + '/rest/v1/' + CONFIG.table, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
+                 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(body),
+      signal: ac ? ac.signal : undefined
+    }).then(function (r) {
+      if (to) clearTimeout(to);
+      if (r.ok || r.status === 409) return true;
+      var e = voiceErr(r.status >= 500 ? 'row_server' : 'row_fail', { status: r.status }); e.retry = r.status >= 500; throw e;
+    }, function () {
+      if (to) clearTimeout(to);
+      var e = voiceErr('row_net', {}); e.retry = true; throw e;
+    });
+  }
   function _insertDocRow(memo, meta) {
     var m = { app: 'voice-memo-test', from: 'phone' };
     for (var k in meta) if (meta.hasOwnProperty(k)) m[k] = meta[k];
-    return _insertRow({
-      id: memo.id, title: memo.title || '문서', status: 'pending', kind: 'doc',
-      note: memo.note || null, client_token: memo.token, meta: m
-    });
-  }
-  // (A) 폰에서 고른 문서 1개 업로드 + kind='doc' 행. 큰 파일은 청크·페이싱. onProgress('upload',done,total).
-  function sendDoc(memo, file, onProgress) {
-    if (((file && file.size) || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));   // v6.6
-    var ext = extForFile(file, 'file');
-    var fileMeta = { ext: ext, name: file.name || ('doc.' + ext), size: file.size || 0, mime: file.type || '' };
-    if ((file.size || 0) <= CHUNK_SIZE) {
-      var key = memo.id + '/src.' + ext;
-      return uploadObject(key, file).then(function () {
-        fileMeta.key = key;
-        return _insertDocRow(memo, { file: fileMeta });
+    var body = { id: memo.id, title: memo.title || '문서', status: 'pending', kind: 'doc',
+                 note: memo.note || null, client_token: memo.token, meta: m };
+    function attempt(n) {
+      return _insertRowTimed(body).catch(function (e) {
+        if (!e.retry || n >= DOC_ROW_TRIES) throw e;
+        return new Promise(function (res) { setTimeout(res, n * 2000); })
+          .then(function () { return _waitOnline(60000); })
+          .then(function () { return attempt(n + 1); });
       });
     }
-    // 큰 파일: 청크로 나눠 올리고 워커가 소비하는 속도에 맞춰 페이싱(영상/채팅 청크와 동일 규약)
-    var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-    return _insertDocRow(memo, { file: fileMeta, chunked: true, ext: ext, total: total }).then(function () {
-      var k = 0;
-      function step() {
-        if (k >= total) return Promise.resolve();
-        var pacing = (k >= MAX_INFLIGHT)
-          ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
-          : Promise.resolve();
-        return pacing.then(function () {
-          var blob = file.slice(k * CHUNK_SIZE, Math.min(file.size, (k + 1) * CHUNK_SIZE));
-          return uploadPartWithRetry(memo.id, k, ext, blob, 3);
-        }).then(function () {
-          k++; onProgress && onProgress('upload', k, total);
-          return step();
+    return attempt(1);
+  }
+  /* ---------- v6.9(2026-09-29, O-0097) 문서 뷰어 업로드 — 조각이 빠지지 않게 ----------
+   * ▶ 사고(9/29 19:08): 56MB 한글을 두 조각(40MB+15.7MB)으로 올리는데 둘째 조각이 폰에서 끝내 안 올라갔다.
+   *   옛 방식은 ① 행(kind='doc')을 '먼저' 만들고 조각을 뒤에 올렸고 ② 조각 전송이 fetch(시간 제한 없음)라
+   *   앱이 화면 뒤로 가거나 망이 바뀌어 소켓이 멈추면 약속(promise)이 영영 끝나지 않았다(재시도도 안 돎).
+   *   PC 워커는 이미 생긴 행의 둘째 조각을 최대 10분 기다리느라 뒤 요청까지 막혔다.
+   * ▶ 고침:
+   *   1) 조각을 '전부' 올리고 서버가 조각마다 받았다고 답한(2xx 또는 "이미 있음") 것을 확인한 '뒤에만' 행을 만든다.
+   *      → PC 워커는 행을 보는 순간 조각이 다 있으므로 조각을 기다리며 막히는 일이 없다.
+   *      (앱의 공개 키는 voice-audio 에 '올리기'만 허용되고 목록 보기는 막혀 있어, 서버 목록 대조 대신
+   *       조각별 서버 응답을 장부(opts.done)에 적고 마지막에 빠진 번호가 없는지 확인한다.)
+   *   2) 조각마다 XHR(진행률 %) + 멈춤 감시(45초 동안 한 바이트도 안 가면 끊고 다시) + 최대 5번 재시도
+   *      (2·4·8·15초 쉬고, 인터넷이 끊겨 있으면 다시 연결될 때까지 최대 1분 기다렸다가).
+   *   3) 조각은 먼저 메모리로 읽고 올린다(녹음 조각과 같은 방식 — 폰 파일 읽기 실패가 '인터넷 끊김'으로 둔갑하지 않게).
+   *   4) 이어 올리기: 이미 올라간 조각 번호(opts.done)는 건너뛴다 → [다시 시도] 때 처음부터 다시 올리지 않는다.
+   *   ⚠️ 워커 규약은 그대로(작은 파일 `{id}/src.{ext}`, 큰 파일 `{id}/part_{k}.{ext}` + meta.chunked/total) — PC 수정 불필요.
+   *   ⚠️ 페이싱(PC가 받아 간 만큼만 앞서 올리기)은 문서 뷰어에서 뺐다: 행이 없으면 PC가 받아 가지 않으므로.
+   *      서버에는 한때 파일 크기만큼 조각이 쌓인다(5GB 한도·Pro 요금제 안). */
+  var DOC_STALL_MS = 45000;                          // 45초 동안 한 바이트도 안 올라가면 끊긴 것으로 보고 다시 올림
+  var DOC_PART_TRIES = 5;                            // 조각 하나당 최대 시도 횟수
+  var DOC_RETRY_WAIT = [2000, 4000, 8000, 15000];    // 재시도 사이 쉬는 시간
+  var DOC_NO_RETRY = { too_big: 1, too_big_server: 1, bad_key: 1, auth: 1, unreadable: 1, cancelled: 1 };
+
+  // 한 조각 POST(XHR). 성공·중복=key. ctl.cancelled 면 즉시 중단. onBytes(보낸 바이트).
+  function _docXhrPost(key, body, onBytes, ctl, info) {
+    var size = (body && (body.byteLength || body.size)) || 0;
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest(), lastTick = Date.now(), done = false, stalled = false, timer = null;
+      function onVis() { if (!document.hidden) lastTick = Date.now(); }   // 화면 복귀 직후 오판 방지(유예)
+      function finish(err) {
+        if (done) return; done = true;
+        if (timer) clearInterval(timer);
+        try { document.removeEventListener('visibilitychange', onVis); } catch (x) {}
+        if (ctl && ctl.xhr === xhr) ctl.xhr = null;
+        if (err) reject(err); else resolve(key);
+      }
+      if (ctl) ctl.xhr = xhr;
+      try { document.addEventListener('visibilitychange', onVis); } catch (x) {}
+      xhr.open('POST', CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + key, true);
+      xhr.setRequestHeader('apikey', CONFIG.key);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + CONFIG.key);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      if (xhr.upload) xhr.upload.onprogress = function (ev) { lastTick = Date.now(); if (onBytes) onBytes(ev.loaded || 0); };
+      xhr.onload = function () {
+        if ((xhr.status >= 200 && xhr.status < 300) || isDuplicateStorage(xhr.status, xhr.responseText)) {
+          if (onBytes) onBytes(size); return finish(null);
+        }
+        var c = classifyStorageFail(xhr.status, xhr.responseText);
+        finish(voiceErr(c.reason, { name: info.name, size: info.size, status: xhr.status, code: c.code }));
+      };
+      xhr.onerror = function () { finish(voiceErr('network', info)); };
+      xhr.onabort = function () { finish(voiceErr((ctl && ctl.cancelled) ? 'cancelled' : (stalled ? 'stalled' : 'network'), info)); };
+      timer = setInterval(function () {
+        if (ctl && ctl.cancelled) { try { xhr.abort(); } catch (x) {} return; }
+        if (Date.now() - lastTick > DOC_STALL_MS) { stalled = true; try { xhr.abort(); } catch (x) {} }
+      }, 2000);
+      try { xhr.send(body); } catch (x) { finish(voiceErr('unreadable', info)); }
+    });
+  }
+  function _waitOnline(maxMs) {
+    if (typeof navigator === 'undefined' || navigator.onLine !== false) return Promise.resolve();
+    return new Promise(function (res) {
+      var t = setTimeout(done, maxMs);
+      function done() { clearTimeout(t); global.removeEventListener('online', done); res(); }
+      global.addEventListener('online', done);
+    });
+  }
+  // 조각 하나: 메모리로 읽기 → 올리기(재시도). onRetry(시도번호, 오류) 선택.
+  function _uploadDocPart(key, blob, info, onBytes, ctl, onRetry) {
+    return readAllBytes(blob, info).then(function (buf) {
+      function attempt(n) {
+        if (ctl && ctl.cancelled) return Promise.reject(voiceErr('cancelled', info));
+        return _docXhrPost(key, buf, onBytes, ctl, info).catch(function (e) {
+          if ((e && DOC_NO_RETRY[e.reason]) || n >= DOC_PART_TRIES) throw e;
+          if (onRetry) { try { onRetry(n, e); } catch (x) {} }
+          if (onBytes) onBytes(0);
+          var wait = DOC_RETRY_WAIT[Math.min(n - 1, DOC_RETRY_WAIT.length - 1)];
+          return new Promise(function (res) { setTimeout(res, wait); })
+            .then(function () { return _waitOnline(60000); })
+            .then(function () { return attempt(n + 1); });
         });
       }
-      return step();
+      return attempt(1);
+    });
+  }
+  // (A) 폰에서 고른 문서 1개 업로드 + kind='doc' 행.
+  //   onProgress('upload', 끝난조각수, 전체조각수) — 옛 호출 호환.
+  //   opts(선택, v6.9):
+  //     done      : { k: true } 이미 서버가 받았다고 답한 조각 번호(이어 올리기 장부) — 건너뜀
+  //     onPartOk  : function(k, total) 조각 k 확인됨(장부 저장용)
+  //     onBytes   : function(보낸바이트, 전체바이트) 진행률
+  //     onRetry   : function(k, 시도번호, 오류) 다시 올리는 중 안내
+  //     onRowSent : function() 행 등록까지 끝남
+  //     ctl       : { cancelled:false } 밖에서 cancelled=true 로 바꾸면 올리던 것을 멈춤
+  //   반환: { total, chunked }
+  function sendDoc(memo, file, onProgress, opts) {
+    opts = opts || {};
+    if (((file && file.size) || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));   // v6.6
+    var ext = extForFile(file, 'file');
+    var size = file.size || 0;
+    var fileMeta = { ext: ext, name: file.name || ('doc.' + ext), size: size, mime: file.type || '' };
+    var chunked = size > CHUNK_SIZE;
+    var total = chunked ? Math.max(1, Math.ceil(size / CHUNK_SIZE)) : 1;
+    var done = opts.done || {};
+    var ctl = opts.ctl || { cancelled: false };
+    function keyOf(k) { return chunked ? (memo.id + '/part_' + k + '.' + ext) : (memo.id + '/src.' + ext); }
+    function bytesDone() {
+      var s = 0;
+      for (var i = 0; i < total; i++) if (done[i]) s += Math.min(size, (i + 1) * CHUNK_SIZE) - i * CHUNK_SIZE;
+      return s;
+    }
+    var k = 0;
+    function step() {
+      if (ctl.cancelled) return Promise.reject(voiceErr('cancelled', {}));
+      if (k >= total) return Promise.resolve();
+      if (done[k]) { k++; return step(); }                                    // 이미 올라간 조각은 건너뜀
+      var start = k * CHUNK_SIZE, end = Math.min(size, (k + 1) * CHUNK_SIZE);
+      var base = bytesDone();
+      var info = { name: fileMeta.name + (chunked ? ' (조각 ' + (k + 1) + '/' + total + ')' : ''), size: end - start };
+      var kk = k;
+      return _uploadDocPart(keyOf(kk), file.slice(start, end), info, function (sent) {
+        if (opts.onBytes) opts.onBytes(Math.min(size, base + sent), size);
+      }, ctl, function (n, e) { if (opts.onRetry) opts.onRetry(kk, n, e); }).then(function () {
+        done[kk] = true;
+        if (opts.onPartOk) { try { opts.onPartOk(kk, total); } catch (x) {} }
+        if (onProgress) onProgress('upload', kk + 1, total);
+        k++;
+        return step();
+      });
+    }
+    return step().then(function () {
+      // 마지막 확인: 모든 조각을 서버가 받았다고 답했는지(장부에 빠진 번호 없음) — 하나라도 없으면 행을 만들지 않는다.
+      for (var i = 0; i < total; i++) if (!done[i]) throw voiceErr('parts_missing', { name: fileMeta.name });
+      if (ctl.cancelled) throw voiceErr('cancelled', {});
+      if (!chunked) fileMeta.key = keyOf(0);
+      var meta = chunked ? { file: fileMeta, chunked: true, ext: ext, total: total } : { file: fileMeta };
+      return _insertDocRow(memo, meta);                                      // 409(이미 등록)=성공
+    }).then(function () {
+      if (opts.onRowSent) { try { opts.onRowSent(); } catch (x) {} }
+      return { total: total, chunked: chunked };
     });
   }
   // (B) 이미 우편함(voice-docs)에 있는 문서(케이가 보낸 첨부)를 업로드 없이 변환 요청.
@@ -1122,6 +1267,7 @@
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
+    fmtSize: fmtSize,                   // v6.9: 문서 뷰어 진행 안내(○MB / ○MB)
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)

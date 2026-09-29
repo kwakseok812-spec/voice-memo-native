@@ -380,7 +380,16 @@
           </div>
           <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르시면<br>PC와 똑같은 모습으로 보여드려요. (보기 전용 · 편집 없음)</div>
         </div>
-        <div class="doc-note">🔒 올리신 문서는 화면에 보여드리기 위해 잠깐 변환에만 쓰고, 변환이 끝나면 원본은 지워집니다. 계약서·주민번호 등 민감 문서는 올리지 않으시길 권해요.</div>
+        <!-- v6.9(O-0098): 최근 연 문서 — 이 기기에 저장해 둔 변환본. 누르면 변환 없이 바로 열림(docviewer.js renderRecent) -->
+        <div id="docRecentWrap" style="display:none;">
+          <div class="sec-title">최근 연 문서 <span id="docRecentInfo"></span></div>
+          <div class="dv-recent" id="docRecentList"></div>
+          <div class="dv-recent-foot">
+            <span id="docRecentCap"></span>
+            <button class="dv-linkbtn" id="docRecentClear" type="button">전체 비우기</button>
+          </div>
+        </div>
+        <div class="doc-note">🔒 올리신 문서는 화면에 보여드리기 위해 잠깐 변환에만 쓰고, 변환이 끝나면 PC·서버의 원본은 지워집니다. 다시 빨리 열 수 있게 변환본은 <b>이 기기에만</b> 「최근 연 문서」로 보관돼요. 계약서·주민번호 등 민감 문서는 올리지 않으시길 권해요.</div>
       </div>
     </section>
 

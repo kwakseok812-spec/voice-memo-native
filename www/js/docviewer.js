@@ -39,7 +39,157 @@
   var EXCEL_EXTS = ['xls', 'xlsx', 'csv', 'ods'];
   var VIEWABLE = ['hwp', 'hwpx', 'doc', 'docx', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pdf'];
 
+  // v6.9: 지금 열린 문서의 저장 키(최근 목록)·원래 파일 정보·이어볼 쪽
+  var curKey = null, curSrcUrl = null, curFileInfo = null, resumePage = 0, excelKey = null, excelPdfBlob = null;
+  var confirmFn = null;   // 앱의 확인 시트(openSheet) — confirm() 금지
+  var idbWarned = false;  // 목록 저장 불가 안내는 한 번만
+
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
+  function blobToBuf(blob) {
+    if (blob && typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+    return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { rej(fr.error); }; fr.readAsArrayBuffer(blob); });
+  }
+  function fmtSize(n) { return (global.OfficeBridge && OfficeBridge.fmtSize) ? OfficeBridge.fmtSize(n) : (Math.round((n || 0) / 1048576) + 'MB'); }
+
+  /* ============ v6.9(O-0098) 최근 연 문서 — 폰(또는 PC 브라우저) 안 저장본 ============
+   * 옛 독립 뷰어(doc-viewer-ho30)는 IndexedDB 'docviewer_docs' 에 본 문서를 보관해(30개·200MB, 즐겨찾기·이어보기)
+   * 다시 열 때 변환 없이 바로 보였다. 스마트비서로 옮길 때 이 부분이 빠졌던 것을 되살린다.
+   *   · DB 'smartdocs_recent' — 'meta'(목록용 가벼운 정보) + 'blob'(PDF·엑셀 원본) 두 칸으로 나눠
+   *     목록을 그릴 때 큰 파일을 건드리지 않는다.
+   *   · 같은 문서 판정 = 파일 내용 지문(SHA-256, 64MB 이하는 전체·그 이상은 앞·가운데·끝 4MB 표본+이름·수정일).
+   *     「공유/열기」·채팅·공유함처럼 수정일이 매번 새로 붙는 경로에서도 같은 파일이면 같은 키가 된다.
+   *     채팅·공유함 [뷰어로 보기]는 파일 주소(서명 토큰을 뗀 경로)로도 먼저 찾아 내려받기조차 건너뛴다.
+   *   · 한도: 최대 40개, 용량 = min(1GB, 이 앱에 허용된 저장 공간의 절반). 넘치면 즐겨찾기가 아닌 것부터
+   *     오래 안 연 순서로 자동 정리. 방금 연 문서는 지우지 않는다.
+   *   · 기기마다 따로 저장(서버에 올리지 않음). */
+  var DocStore = (function () {
+    var DB = 'smartdocs_recent', VER = 1, META = 'meta', BLOB = 'blob';
+    var MAX_COUNT = 40, CAP = 1024 * 1024 * 1024, FLOOR = 100 * 1024 * 1024;
+    var FULL_HASH_MAX = 64 * 1024 * 1024, SAMPLE = 4 * 1024 * 1024;   // 전체 지문은 64MB까지(「공유/열기」 60MB 한도 포함) — 폰 메모리 보호
+    var limit = CAP, dbP = null;
+    function open() {
+      if (dbP) return dbP;
+      dbP = new Promise(function (res, rej) {
+        if (!global.indexedDB) { rej(new Error('no indexedDB')); return; }
+        var rq; try { rq = indexedDB.open(DB, VER); } catch (e) { rej(e); return; }
+        rq.onupgradeneeded = function () {
+          var db = rq.result;
+          if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'key' });
+          if (!db.objectStoreNames.contains(BLOB)) db.createObjectStore(BLOB, { keyPath: 'key' });
+        };
+        rq.onsuccess = function () { res(rq.result); };
+        rq.onerror = function () { dbP = null; rej(rq.error); };
+      });
+      return dbP;
+    }
+    function rq2p(r) { return new Promise(function (res, rej) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
+    function txDone(tx) { return new Promise(function (res, rej) { tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('abort')); }; }); }
+    function sortList(a) {
+      return (a || []).sort(function (x, y) {
+        if (!!y.fav !== !!x.fav) return (y.fav ? 1 : 0) - (x.fav ? 1 : 0);
+        return (y.openedAt || 0) - (x.openedAt || 0);
+      });
+    }
+    function list() { return open().then(function (db) { return rq2p(db.transaction(META, 'readonly').objectStore(META).getAll()); }).then(sortList).catch(function () { return []; }); }
+    function get(key) { if (!key) return Promise.resolve(null); return open().then(function (db) { return rq2p(db.transaction(META, 'readonly').objectStore(META).get(key)); }).then(function (r) { return r || null; }).catch(function () { return null; }); }
+    function getBlobs(key) { return open().then(function (db) { return rq2p(db.transaction(BLOB, 'readonly').objectStore(BLOB).get(key)); }).then(function (r) { return r || null; }).catch(function () { return null; }); }
+    function findBySrc(src) { if (!src) return Promise.resolve(null); return list().then(function (a) { for (var i = 0; i < a.length; i++) if (a[i].srcUrl === src) return a[i]; return null; }); }
+    function touch(key, patch) {
+      if (!key) return Promise.resolve();
+      return open().then(function (db) {
+        var tx = db.transaction(META, 'readwrite'), st = tx.objectStore(META), g = st.get(key);
+        g.onsuccess = function () { var m = g.result; if (!m) return; for (var k in patch) if (patch.hasOwnProperty(k)) m[k] = patch[k]; st.put(m); };
+        return txDone(tx);
+      }).catch(function () {});
+    }
+    function del(key) {
+      return open().then(function (db) {
+        var tx = db.transaction([META, BLOB], 'readwrite'); tx.objectStore(META).delete(key); tx.objectStore(BLOB).delete(key); return txDone(tx);
+      }).catch(function () {});
+    }
+    function clearAll() {
+      return open().then(function (db) {
+        var tx = db.transaction([META, BLOB], 'readwrite'); tx.objectStore(META).clear(); tx.objectStore(BLOB).clear(); return txDone(tx);
+      }).catch(function () {});
+    }
+    function computeLimit() {
+      try {
+        if (global.navigator && navigator.storage && navigator.storage.estimate) {
+          return navigator.storage.estimate().then(function (e) {
+            var q = e && e.quota;
+            limit = (q && q > 0) ? Math.max(FLOOR, Math.min(CAP, Math.floor(q * 0.5))) : CAP;
+            return limit;
+          }, function () { return limit; });
+        }
+      } catch (e) {}
+      return Promise.resolve(limit);
+    }
+    // 넘치면 오래 안 연 것부터 정리(즐겨찾기·protect 제외). 반환: 지운 개수.
+    function cleanup(protect, target) {
+      return computeLimit().then(list).then(function (a) {
+        var cap = target || limit, total = 0, count = a.length, n = 0;
+        a.forEach(function (m) { total += (m.bytes || 0); });
+        var rm = a.filter(function (m) { return !m.fav && m.key !== protect; })
+                  .sort(function (x, y) { return (x.openedAt || 0) - (y.openedAt || 0); });
+        var dels = [];
+        while ((count > MAX_COUNT || total > cap) && rm.length) {
+          var m = rm.shift(); dels.push(del(m.key)); total -= (m.bytes || 0); count--; n++;
+        }
+        return Promise.all(dels).then(function () { return n; });
+      }).catch(function () { return 0; });
+    }
+    function writeOnce(meta, blobs) {
+      return open().then(function (db) {
+        var tx = db.transaction([META, BLOB], 'readwrite'), ms = tx.objectStore(META), bs = tx.objectStore(BLOB);
+        var gm = ms.get(meta.key), gb = bs.get(meta.key), now = Date.now();
+        gb.onsuccess = function () {
+          var om = gm.result || {}, ob = gb.result || {};
+          var nb = { key: meta.key, pdf: blobs.pdf || ob.pdf || null, orig: blobs.orig || ob.orig || null };
+          var m = {}, k;
+          for (k in om) if (om.hasOwnProperty(k)) m[k] = om[k];
+          for (k in meta) if (meta.hasOwnProperty(k) && meta[k] != null) m[k] = meta[k];
+          m.bytes = (nb.pdf ? nb.pdf.size : 0) + (nb.orig ? nb.orig.size : 0);
+          m.savedAt = om.savedAt || now; m.openedAt = now;
+          m.fav = !!om.fav; m.lastPage = om.lastPage || 0;
+          bs.put(nb); ms.put(m);
+        };
+        return txDone(tx);
+      });
+    }
+    // 저장(같은 키면 합침: 즐겨찾기·이어볼 쪽 유지). 반환: {saved, removed, skipped}
+    function save(meta, blobs) {
+      var bytes = (blobs.pdf ? blobs.pdf.size : 0) + (blobs.orig ? blobs.orig.size : 0);
+      return open().then(computeLimit, function () { return null; }).then(function (lim) {
+        if (lim === null) return { saved: false, removed: 0, skipped: 'unavailable' };   // IndexedDB 막힘(비공개 창·저장 차단 등)
+        if (bytes > limit) return { saved: false, removed: 0, skipped: 'too_big' };   // 한 개가 한도보다 크면 보관하지 않음
+        return writeOnce(meta, blobs).catch(function () {
+          // 저장 공간 부족(QuotaExceeded 등) → 한도의 절반까지 비우고 한 번만 다시
+          return cleanup(meta.key, Math.floor(limit / 2)).then(function () { return writeOnce(meta, blobs); });
+        }).then(function () {
+          return cleanup(meta.key).then(function (n) { return { saved: true, removed: n }; });
+        }, function () { return { saved: false, removed: 0, skipped: 'quota' }; });
+      });
+    }
+    function hex(buf) { var a = new Uint8Array(buf), s = ''; for (var i = 0; i < a.length; i++) s += ('0' + a[i].toString(16)).slice(-2); return s; }
+    function keyOf(file) {
+      var size = (file && file.size) || 0, name = (file && file.name) || '', lm = (file && file.lastModified) || 0;
+      var fallback = 'n:' + size + ':' + name + ':' + lm;
+      var subtle = global.crypto && global.crypto.subtle;
+      if (!subtle || !file) return Promise.resolve(fallback);
+      var full = size <= FULL_HASH_MAX, src;
+      if (full) src = file;
+      else { var mid = Math.floor(size / 2); src = new Blob([file.slice(0, SAMPLE), file.slice(mid - SAMPLE / 2, mid + SAMPLE / 2), file.slice(size - SAMPLE)]); }
+      return blobToBuf(src).then(function (buf) { return subtle.digest('SHA-256', buf); }).then(function (h) {
+        return full ? ('h:' + size + ':' + hex(h)) : ('s:' + size + ':' + hex(h) + ':' + name + ':' + lm);
+      }).catch(function () { return fallback; });
+    }
+    function usage() { return list().then(function (a) { var t = 0; a.forEach(function (m) { t += (m.bytes || 0); }); return { count: a.length, bytes: t, limit: limit }; }); }
+    function persist() { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {} }
+    return { list: list, get: get, getBlobs: getBlobs, findBySrc: findBySrc, touch: touch, del: del, clearAll: clearAll,
+             save: save, cleanup: cleanup, keyOf: keyOf, usage: usage, computeLimit: computeLimit, persist: persist,
+             limit: function () { return limit; }, MAX_COUNT: MAX_COUNT };
+  })();
+  function srcBase(url) { return String(url || '').split('#')[0].split('?')[0]; }
   function isExcelExt(ext) { return EXCEL_EXTS.indexOf(ext) >= 0; }
   function isPptName(name) { var e = extOf(name); return e === 'ppt' || e === 'pptx'; }
   function isPptMime(t) { t = String(t || '').toLowerCase(); return t.indexOf('presentationml') >= 0 || t.indexOf('powerpoint') >= 0; }
@@ -49,20 +199,49 @@
   function showViewer() { if (rootEl) rootEl.classList.add('on'); }
   function showPick() {
     opToken++;      // 진행 중이던 변환·다운로드 콜백을 무효화(취소) — 나가면 뒤에서 계속 돌지 않게
+    cancelUpload(); // v6.9: 올리던 조각 전송도 멈춘다(이미 올라간 조각은 장부에 남아 다음에 이어 올림)
+    releaseWake();
     hideOverlay();  // 변환 스피너 오버레이가 남아 화면을 가리는(갇히는) 것을 막는다
     closeSlideshow();
+    if (lastPageT && curKey && pdfDoc && viewMode === 'pdf') {   // 나가기 직전 본 쪽을 바로 저장
+      clearTimeout(lastPageT); lastPageT = null; DocStore.touch(curKey, { lastPage: getCurrentPage() }).then(renderRecent);
+    }
+    curKey = null;
     if (rootEl) rootEl.classList.remove('on');
+    renderRecent();
   }
 
   // ============ 오버레이 ============
+  // v6.9: 진행 패널 — ① 올리기 ② PC 변환 ③ 열기 단계 표시 + 큰 글씨 상태 + 진행률 숫자 + 안내 한 줄.
+  //   setLoading({step, msg, sub, pct, pctText, hint}) 로 패널을 다시 그리지 않고 글자만 바꾼다(취소 버튼 유지).
   function showLoading(msg, sub) {
-    panel.innerHTML = '<div class="spinner"></div><div class="msg">' + esc(msg) + '</div>' +
-      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '<div class="bar-wrap"><div class="bar-fill" id="dvBarFill"></div></div>' +
+    panel.innerHTML = '<div class="spinner"></div>' +
+      '<div class="dv-steps" id="dvSteps" style="display:none"><span data-s="1">① 올리기</span><span data-s="2">② PC 변환</span><span data-s="3">③ 열기</span></div>' +
+      '<div class="msg" id="dvMsg">' + esc(msg) + '</div>' +
+      '<div class="sub" id="dvSub"' + (sub ? '' : ' style="display:none"') + '>' + esc(sub || '') + '</div>' +
+      '<div class="bar-wrap"><div class="bar-fill" id="dvBarFill"></div></div>' +
+      '<div class="dv-pct" id="dvPct"></div>' +
+      '<div class="dv-hint" id="dvHint" style="display:none"></div>' +
       '<button class="btn ghost" id="dvLoadCancel" style="margin-top:18px;">취소하고 나가기</button>';
     overlay.classList.add('on');
     // 변환이 오래 걸려도 기다리다 빠져나올 수 있게 — 취소하면 진행 중이던 변환을 멈추고 문서 고르기 화면으로
     var cx = $('dvLoadCancel');
     if (cx) cx.onclick = function () { showPick(); };
+  }
+  function setLoading(o) {
+    if (!o || !$('dvMsg')) return;                       // 오류 화면으로 바뀐 뒤면 무시
+    var st = $('dvSteps');
+    if (st && o.step) {
+      st.style.display = 'flex';
+      Array.prototype.forEach.call(st.children, function (el) {
+        var s = +el.getAttribute('data-s');
+        el.className = (s < o.step) ? 'done' : (s === o.step ? 'on' : '');
+      });
+    }
+    if (o.msg != null) $('dvMsg').textContent = o.msg;
+    function txt(id, v) { var el = $(id); if (!el || v === undefined) return; el.textContent = v || ''; el.style.display = v ? '' : 'none'; }
+    txt('dvSub', o.sub); txt('dvPct', o.pctText); txt('dvHint', o.hint);
+    if (o.pct != null) setProgress(o.pct);
   }
   function setProgress(pct) { var b = $('dvBarFill'); if (b) b.style.width = Math.max(2, Math.min(100, pct)) + '%'; }
   function showError(msg, sub, retryFn) {
@@ -112,17 +291,98 @@
   }
 
   // ============ 파일 처리 ============
-  function handleFile(file) {
+  // v6.9: 먼저 「최근 연 문서」 저장본이 있는지 본다(있으면 변환 요청 없이 바로). opts.srcUrl = 채팅·공유함 파일 주소.
+  function handleFile(file, opts) {
     if (!file) return;
-    var ext = extOf(file.name);
+    opts = opts || {};
+    var ext = extOf(file.name), op = opToken;
     isExcelDoc = false; xlToggleBtn.style.display = 'none';
-    if (isExcelExt(ext)) { openExcelFile(file); return; }
-    convertAndShowPdf(file);
+    curKey = null; curSrcUrl = opts.srcUrl || null; resumePage = 0;
+    curFileInfo = { name: file.name || '문서', ext: ext, size: file.size || 0 };
+    clearDocView();                                     // 앞 문서가 새 파일 이름 아래 남아 보이지 않게
+    showViewer(); fnameLabel.textContent = file.name;
+    showLoading('문서를 확인하는 중…', '전에 열어 본 문서면 변환 없이 바로 보여 드려요.'); setProgress(4);
+    function proceed() {
+      if (op !== opToken) return;
+      if (isExcelExt(ext)) { openExcelFile(file); return; }
+      convertAndShowPdf(file);
+    }
+    DocStore.keyOf(file).then(function (key) {
+      if (op !== opToken) return null;
+      curKey = key;
+      return DocStore.get(key).then(function (meta) {
+        if (op !== opToken) return;
+        if (meta) {
+          var patch = {};
+          if (curSrcUrl && meta.srcUrl !== curSrcUrl) patch.srcUrl = curSrcUrl;
+          if (file.name && meta.name !== file.name) { patch.name = file.name; meta.name = file.name; }   // 내용이 같은 파일 → 방금 고른 이름으로
+          if (Object.keys(patch).length) DocStore.touch(key, patch);
+          openStored(meta, op, file);
+          return;
+        }
+        proceed();
+      });
+    }).catch(function () { proceed(); });
+  }
+  // v6.9: 새 문서를 열기 전에 앞 문서 화면을 비운다(예전엔 새 문서 변환이 실패하면 앞 문서가 새 이름 아래 그대로 보였다).
+  function clearDocView() {
+    renderToken++;
+    if (io) { try { io.disconnect(); } catch (e) {} }
+    if (pdfDoc) { try { pdfDoc.destroy(); } catch (e) {} pdfDoc = null; }
+    if (pagesEl) { pagesEl.innerHTML = ''; pagesEl.style.transform = 'none'; }
+    if (tableviewEl) tableviewEl.innerHTML = '';
+    excelWorkbook = null; isExcelDoc = false;
+    if (xlToggleBtn) xlToggleBtn.style.display = 'none';
+    if (sheetBar) sheetBar.style.display = 'none';
+    setViewMode('pdf'); updatePageBadge();
+  }
+  // 저장본 열기(변환·업로드 없음). 저장본이 사라졌으면 file 이 있을 때만 원래 길로.
+  function openStored(meta, op, file) {
+    if (pdfDoc || excelWorkbook) clearDocView();
+    showViewer(); fnameLabel.textContent = meta.name;
+    showLoading('저장해 둔 문서를 여는 중…', '전에 변환해 둔 문서라 바로 열려요.'); setProgress(40);
+    DocStore.getBlobs(meta.key).then(function (b) {
+      if (op !== opToken) return;
+      if (!b || !(b.pdf || b.orig)) {
+        DocStore.del(meta.key); renderRecent();
+        if (file) { curKey = meta.key; if (isExcelExt(extOf(file.name))) openExcelFile(file); else convertAndShowPdf(file); }
+        else showError('폰에 저장해 둔 문서가 없어졌어요.', '원래 파일을 다시 골라 주세요.');
+        return;
+      }
+      curKey = meta.key; curSrcUrl = meta.srcUrl || curSrcUrl; resumePage = meta.lastPage || 0;
+      curFileInfo = { name: meta.name, ext: meta.ext || extOf(meta.name), size: meta.size || 0 };
+      DocStore.touch(meta.key, { openedAt: Date.now() });
+      if (meta.kind === 'excel' && b.orig) {
+        var f = new File([b.orig], meta.name, { type: b.orig.type || 'application/octet-stream' });
+        openExcelFile(f, { pdfBlob: b.pdf || null, stored: true });
+        return;
+      }
+      if (!b.pdf) { showError('저장본을 열지 못했어요.', '원래 파일을 다시 골라 주세요.'); return; }
+      setProgress(70);
+      blobToBuf(b.pdf).then(function (buf) {
+        if (op !== opToken) return;
+        loadPdf({ data: new Uint8Array(buf) }, meta.name, meta.isPpt);
+      }, function () { if (op === opToken) showError('저장본을 읽지 못했어요.', '원래 파일을 다시 골라 주세요.'); });
+    });
+  }
+  // 지금 문서를 최근 목록에 저장(변환 결과 PDF 또는 엑셀 원본). 조용히 실패해도 보기에는 영향 없음.
+  function saveCurrent(kind, blobs, isPpt) {
+    if (!curKey || !curFileInfo) return;
+    var key = curKey;
+    DocStore.save({ key: key, name: curFileInfo.name, ext: curFileInfo.ext, kind: kind, isPpt: !!isPpt,
+                    size: curFileInfo.size, srcUrl: curSrcUrl || null }, blobs).then(function (r) {
+      if (r && r.removed > 0) toast('저장 공간을 위해 오래 안 연 문서 ' + r.removed + '개를 목록에서 정리했어요.');
+      if (r && r.skipped === 'quota') toast('폰 저장 공간이 모자라 이 문서는 최근 목록에 넣지 못했어요.');
+      if (r && r.skipped === 'unavailable' && !idbWarned) { idbWarned = true; toast('이 기기에서는 목록 저장을 쓸 수 없어요. 문서 보기는 그대로 돼요.'); }
+      if (key === curKey && pdfDoc) DocStore.touch(key, { pages: pdfDoc.numPages });
+    });
   }
 
   // ============ 엑셀 「표로 보기」(SheetJS, 서버 안 감) ============
-  function openExcelFile(file) {
+  function openExcelFile(file, xo) {
+    xo = xo || {};
     if (typeof XLSX === 'undefined') { convertAndShowPdf(file); return; }
+    excelKey = curKey; excelPdfBlob = xo.pdfBlob || null;
     isExcelDoc = true; excelFile = file; excelName = file.name; excelPdfBuf = null; excelWorkbook = null; excelView = 'table'; pdfDoc = null;
     showViewer(); fnameLabel.textContent = file.name;
     setViewMode('table'); updateXlToggle();
@@ -135,6 +395,7 @@
         var wb = XLSX.read(data, { type: 'array', cellStyles: true, cellDates: true, cellNF: true });
         if (!wb || !wb.SheetNames || wb.SheetNames.length === 0) throw new Error('시트가 없습니다.');
         excelWorkbook = wb; buildSheetSelector(); renderSheet(0); hideOverlay(); updateXlToggle();
+        if (!xo.stored) saveCurrent('excel', { orig: file });            // v6.9: 최근 목록(원본 그대로 → 다시 표로)
       } catch (err) { isExcelDoc = false; xlToggleBtn.style.display = 'none'; convertAndShowPdf(file); }
     };
     reader.onerror = function () { isExcelDoc = false; xlToggleBtn.style.display = 'none'; convertAndShowPdf(file); };
@@ -206,15 +467,23 @@
     if (!isExcelDoc) return;
     if (excelView === 'table') {
       if (excelPdfBuf) { excelView = 'pdf'; loadPdf({ data: new Uint8Array(excelPdfBuf.slice(0)) }, excelName, false); updateXlToggle(); }
+      else if (excelPdfBlob) {                                           // v6.9: 저장해 둔 PDF 가 있으면 변환 없이
+        var eb = excelPdfBlob;
+        blobToBuf(eb).then(function (buf) { if (excelPdfBlob !== eb) return; excelPdfBuf = buf; excelView = 'pdf'; loadPdf({ data: new Uint8Array(excelPdfBuf.slice(0)) }, excelName, false); updateXlToggle(); },
+                           function () { excelPdfBlob = null; openExcelAsPdf(); });
+      }
       else openExcelAsPdf();
     } else { excelView = 'table'; setViewMode('table'); if (excelWorkbook) renderSheet(parseInt(sheetSel.value, 10) || 0); updateXlToggle(); }
   }
   function openExcelAsPdf() {
     if (!excelFile) return;
     showLoading('PDF로 변환 중…', 'PC 문서를 폰용으로 변환하고 있어요.'); setProgress(6);
+    var k = excelKey;
     convertViaOffice(excelFile, excelName, function (buf) {
-      excelPdfBuf = buf; excelView = 'pdf'; loadPdf({ data: new Uint8Array(excelPdfBuf.slice(0)) }, excelName, false); updateXlToggle();
-    }, function (msg) { showError('PDF로 변환하지 못했습니다.', msg, openExcelAsPdf); });
+      excelPdfBuf = buf; excelView = 'pdf';
+      if (k) { try { excelPdfBlob = new Blob([buf], { type: 'application/pdf' }); curKey = k; saveCurrent('excel', { pdf: excelPdfBlob }); } catch (e) {} }
+      loadPdf({ data: new Uint8Array(excelPdfBuf.slice(0)) }, excelName, false); updateXlToggle();
+    }, function (msg, resumable) { showError(resumable ? '아직 PDF로 열지 못했어요.' : 'PDF로 변환하지 못했습니다.', msg, openExcelAsPdf); }, k);
   }
 
   // ============ 변환(스마트비서 우편함 — OfficeBridge) ============
@@ -233,39 +502,216 @@
     }
     showLoading('문서를 여는 중…', 'PC 문서를 폰용으로 변환하고 있어요. 처음 한 번은 1~2분 걸릴 수 있어요.'); setProgress(10);
     convertViaOffice(file, file.name, function (buf) { openPdfArrayBuffer(buf, file.name, wasPpt); },
-      function (msg) { showError('이 문서를 열지 못했습니다.', msg, function () { convertAndShowPdf(file); }); });
-  }
-  function convertViaOffice(file, name, onDone, onErr) {
-    if (!global.OfficeBridge) { onErr('연결 모듈을 찾지 못했어요.'); return; }
-    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), op = ++opToken;
-    var memo = { id: id, token: tok, title: (name || '문서').slice(0, 40) };
-    OfficeBridge.sendDoc(memo, file, function (phase, done, total) { if (op === opToken && total > 1) setProgress(6 + (done / total) * 49); })
-      .then(function () { if (op === opToken) pollConvert(id, tok, name, op, onDone, onErr); })
-      .catch(function (e) { if (op === opToken) onErr((e && e.message) || String(e)); });
-  }
-  function pollConvert(id, tok, name, op, onDone, onErr) {
-    var start = Date.now(), MAX = 4 * 60 * 1000; setProgress(70);
-    (function loop() {
-      if (op !== opToken) return;
-      OfficeBridge.poll(id, tok).then(function (res) {
-        if (op !== opToken) return;
-        if (res && res.status === 'done') {
-          var d = OfficeBridge.docResultFrom(res);
-          if (d && d.pdf_url) {
-            setProgress(88);
-            fetch(d.pdf_url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.arrayBuffer(); })
-              .then(function (buf) { if (op === opToken) onDone(buf); })
-              .catch(function (e) { if (op === opToken) onErr((e && e.message) || String(e)); });
-          } else { onErr((d && d.error) || res.error || '이 문서는 변환하지 못했어요. 암호가 걸렸거나 형식이 특수할 수 있어요.'); }
-          return;
-        }
-        if (Date.now() - start > MAX) { onErr('변환이 오래 걸려요. PC가 켜져 있는지 확인하고 다시 시도해 주세요.'); return; }
-        setTimeout(loop, 2500);
-      }).catch(function () { setTimeout(loop, 3500); });
-    })();
+      function (msg, resumable) { showError(resumable ? '아직 문서를 열지 못했어요.' : '이 문서를 열지 못했습니다.', msg, function () { convertAndShowPdf(file); }); },
+      curKey);
   }
 
-  function openPdfArrayBuffer(buf, name, isPpt) { loadPdf({ data: new Uint8Array(buf) }, name, isPpt); }
+  /* ============ v6.9(O-0097) 변환 요청 — 끊겨도 이어서, 기다림은 PC가 변환을 시작한 뒤부터 ============
+   * 요청 장부(localStorage 'docviewer_jobs_v1'): 파일 키 → {id, tok, parts(서버가 받았다고 답한 조각), rowSent, ...}
+   *   [다시 시도]·같은 파일 다시 열기 때 먼저 장부의 지난 요청을 서버에 물어본다.
+   *     · 이미 변환 끝(pdf_url) → 다시 올리지 않고 그 결과를 바로 연다.
+   *     · PC가 아직 처리 중·차례 대기 → 다시 올리지 않고 이어서 기다린다.
+   *     · 행이 없음(올리다 끊김) → 이미 올라간 조각은 건너뛰고 나머지만 올린다(같은 요청 번호).
+   *     · 지난번이 실패로 끝남 → 새 요청으로 처음부터.
+   * 기다림 단계(서버 행의 status·progress 는 PC 워커 doc_worker.py 가 쓴다 — 읽기만 확인):
+   *     pending                     → PC 차례 기다림(앞 문서 처리 중일 수 있음) — 최대 15분
+   *     processing & 조각 받는 중    → progress_msg 「받는 중 k/n」 — 진행이 있으면 대기 시계를 다시 셈
+   *     processing & 다 받음(또는 단일) → 여기서부터 변환 시계: 작은 문서 5분, 큰 문서(20MB↑) 10분
+   *     done                        → summary_json.doc.pdf_url(쪽수 pages) 또는 error
+   *   ⚠️ 워커는 변환 중 쪽수 진행을 쓰지 않는다(쪽수는 끝나야 앎). 변환 중 progress_msg 를 따로 쓰면 그 글을 그대로 보여 준다. */
+  var JOB_STORE = 'docviewer_jobs_v1', JOB_KEEP_MS = 6 * 24 * 3600 * 1000;   // 결과 주소(서명 7일)보다 짧게
+  var BIG_DOC = 20 * 1024 * 1024;
+  var QUEUE_MAX = 15 * 60 * 1000, CONV_MAX_SMALL = 5 * 60 * 1000, CONV_MAX_BIG = 10 * 60 * 1000;
+  function jobsLoad() { try { return JSON.parse(localStorage.getItem(JOB_STORE) || '{}') || {}; } catch (e) { return {}; } }
+  function jobsSave(m) {
+    try {
+      var now = Date.now(), keys = Object.keys(m).filter(function (k) { return m[k] && now - (m[k].ts || 0) < JOB_KEEP_MS; });
+      keys.sort(function (a, b) { return (m[b].ts || 0) - (m[a].ts || 0); });
+      var out = {}; keys.slice(0, 20).forEach(function (k) { out[k] = m[k]; });
+      localStorage.setItem(JOB_STORE, JSON.stringify(out));
+    } catch (e) {}
+  }
+  function jobGet(k) { var j = jobsLoad()[k]; return (j && Date.now() - (j.ts || 0) < JOB_KEEP_MS) ? j : null; }
+  function jobPut(k, j) { var m = jobsLoad(); m[k] = j; jobsSave(m); }
+  function jobDel(k) { var m = jobsLoad(); delete m[k]; jobsSave(m); }
+  function fmtDur(ms) { var s = Math.max(0, Math.round(ms / 1000)), m = Math.floor(s / 60); s = s % 60; return m ? (m + '분 ' + (s < 10 ? '0' : '') + s + '초') : (s + '초'); }
+
+  // 화면 켜 두기(지원하는 기기만 — 안드로이드 크롬/웹뷰·PC 크롬). 올리고 기다리는 동안 화면이 꺼져 끊기는 것을 줄인다.
+  var wakeLock = null, wakeWanted = false, curCtl = null;
+  function acquireWake() {
+    wakeWanted = true;
+    try {
+      if (navigator.wakeLock && !wakeLock && !document.hidden) {
+        navigator.wakeLock.request('screen').then(function (l) {
+          if (!wakeWanted) { try { l.release(); } catch (e) {} return; }
+          wakeLock = l; try { l.addEventListener('release', function () { wakeLock = null; }); } catch (e) {}
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  function releaseWake() { wakeWanted = false; try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+  function cancelUpload() { if (curCtl) { curCtl.cancelled = true; try { if (curCtl.xhr) curCtl.xhr.abort(); } catch (e) {} curCtl = null; } }
+  try { document.addEventListener('visibilitychange', function () { if (!document.hidden && wakeWanted) acquireWake(); }); } catch (e) {}
+
+  // PDF 결과 내려받기(진행률). onPct(0~1)
+  function downloadPdf(url, onPct) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true); xhr.responseType = 'arraybuffer';
+      xhr.onprogress = function (e) { if (e.lengthComputable && onPct) onPct(e.loaded / e.total); };
+      xhr.onload = function () { if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response); else reject(new Error('내려받기 실패(' + xhr.status + ')')); };
+      xhr.onerror = function () { reject(new Error('인터넷 연결이 끊겨 변환된 문서를 받지 못했어요.')); };
+      xhr.send();
+    });
+  }
+
+  // onErr(글, 이어하기가능) — 이어하기 가능이면 [다시 시도] 때 처음부터 다시 올리지 않는다.
+  function convertViaOffice(file, name, onDone, onErr, key) {
+    if (!global.OfficeBridge) { onErr('연결 모듈을 찾지 못했어요.', false); return; }
+    var op = ++opToken;
+    var jk = key || ('f:' + (file.name || '') + '|' + (file.size || 0) + '|' + (file.lastModified || 0));
+    var size = file.size || 0, big = size >= BIG_DOC;
+    acquireWake();
+    function alive() { return op === opToken; }
+    // keep=true: 장부 유지([다시 시도] 때 이어서). suffix 를 주면 기본 안내 대신 그 글을 붙인다.
+    function fail(msg, keep, suffix) {
+      if (!alive()) return;
+      releaseWake(); curCtl = null;
+      if (!keep) jobDel(jk);
+      onErr(msg + (suffix != null ? suffix : (keep ? ' [다시 시도]를 누르면 처음부터 다시 올리지 않고 이어서 해요.' : '')), !!keep);
+    }
+    var CONV_MAX = big ? CONV_MAX_BIG : CONV_MAX_SMALL;
+    var STUCK_SUFFIX = ' [다시 시도]를 누르면 PC에 새로 요청해요(문서를 처음부터 다시 올려요).';
+    // v6.9 검토 반영: PC 워커가 변환 중에 죽으면 서버 행이 processing 에 굳는다(워커는 pending 만 집음).
+    //   그 요청을 계속 기다리면 영영 안 끝나므로, 한 번 시간 초과(convTimedOut)했거나 변환 시작 뒤 한도의 2배가
+    //   지났으면 [다시 시도] 때 옛 요청을 버리고 새 요청으로 처음부터 올린다(PC 쪽 수정이 없어도 빠져나옴).
+    function isStuck(job, now) {
+      return !!job.convTimedOut || (!!job.convStartAt && now - job.convStartAt > 2 * CONV_MAX);
+    }
+    function startFresh() {
+      var job = { id: OfficeBridge.uuid(), tok: OfficeBridge.token(), name: name || file.name || '문서', size: size,
+                  parts: {}, total: 0, chunked: size > OfficeBridge.CHUNK_SIZE, rowSent: false, ts: Date.now() };
+      jobPut(jk, job);
+      upload(job);
+    }
+    function upload(job) {
+      var ctl = curCtl = { cancelled: false };
+      var baseHint = big ? '큰 문서예요. 다 올라갈 때까지 이 화면을 켜 둔 채 기다려 주세요.' : '';
+      var resumed = Object.keys(job.parts || {}).length > 0;
+      var label = resumed ? '남은 부분을 이어서 올리는 중… ' : '문서를 올리는 중… ';
+      setLoading({ step: 1, msg: label, sub: job.name + ' · ' + fmtSize(size), pct: 3, pctText: '', hint: baseHint });
+      var memo = { id: job.id, token: job.tok, title: (job.name || '문서').slice(0, 40) };
+      OfficeBridge.sendDoc(memo, file, null, {
+        done: job.parts, ctl: ctl,
+        onBytes: function (sent, total) {
+          if (!alive()) return;
+          var p = total ? sent / total : 1;
+          setLoading({ msg: label + Math.floor(p * 100) + '%', pct: 3 + p * 55, pctText: fmtSize(sent) + ' / ' + fmtSize(total) });
+        },
+        onPartOk: function (k, total) { job.parts[k] = true; job.total = total; jobPut(jk, job); if (alive()) setLoading({ hint: baseHint }); },
+        onRetry: function (k, n) { if (alive()) setLoading({ hint: '전송이 끊겨 다시 올리는 중이에요(' + (n + 1) + '번째 시도)…' }); },
+        onRowSent: function () { job.rowSent = true; jobPut(jk, job); }
+      }).then(function (r) {
+        if (!alive()) return;
+        curCtl = null; job.chunked = r.chunked; job.total = r.total; job.rowSent = true; jobPut(jk, job);
+        waitConvert(job);
+      }, function (e) {
+        if (!alive() || (e && e.reason === 'cancelled')) return;
+        curCtl = null;
+        var permanent = e && (e.reason === 'too_big' || e.reason === 'too_big_server' || e.reason === 'unreadable' || e.reason === 'bad_key');
+        fail((e && (e.friendly || e.message)) || String(e), !permanent);
+      });
+    }
+    function waitConvert(job) {
+      var tWait = Date.now(), lastProg = -1, netFail = 0;
+      setLoading({ step: 2, msg: 'PC에 전달했어요', sub: 'PC가 받아 변환을 시작하면 알려 드려요.', pct: 60, pctText: '', hint: '' });
+      (function loop() {
+        if (!alive()) return;
+        OfficeBridge.poll(job.id, job.tok).then(function (res) {
+          if (!alive()) return;
+          netFail = 0;
+          if (res && res.status === 'done') {
+            var d = OfficeBridge.docResultFrom(res);
+            if (d && d.pdf_url) { openResult(job, d, false); return; }
+            fail((d && d.error) || '이 문서는 변환하지 못했어요. 암호가 걸렸거나 형식이 특수할 수 있어요.', false);
+            return;
+          }
+          var st = res && res.status, prog = (res && res.progress) | 0, ptot = (res && res.progress_total) | 0;
+          var pmsg = (res && res.progress_msg) || '';
+          var converting = st === 'processing' && (!job.chunked || (ptot > 0 && prog >= ptot));
+          var now = Date.now();
+          if (converting) {
+            if (!job.convStartAt) { job.convStartAt = now; jobPut(jk, job); }   // 변환 시작 시각(다시 열어도 이어서 셈)
+            var el = now - job.convStartAt;
+            var extra = (pmsg && !/^받는 중/.test(pmsg)) ? pmsg : '';          // PC가 변환 진행 글을 쓰면 그대로
+            setLoading({ step: 2, msg: 'PC에서 변환 중… ' + fmtDur(el), sub: extra || (job.name + ' · ' + fmtSize(size)),
+                         pct: 62 + 30 * Math.min(1, el / (big ? 240000 : 90000)), pctText: '',
+                         hint: el > 60000 ? (big ? '큰 문서라 변환에 몇 분 걸려요. 최대 10분까지 기다려요.' : '조금 오래 걸리고 있어요. 최대 5분까지 기다려요.') : '' });
+            if (el > CONV_MAX) {
+              job.convTimedOut = true; jobPut(jk, job);
+              fail('PC가 ' + (big ? '10' : '5') + '분 넘게 변환 중이에요. PC가 멈췄을 수 있어요.', true, STUCK_SUFFIX); return;
+            }
+          } else if (st === 'processing') {
+            if (prog !== lastProg) { lastProg = prog; tWait = now; }
+            setLoading({ step: 2, msg: 'PC가 문서를 받는 중… ' + prog + '/' + ptot, sub: '다 받으면 바로 변환을 시작해요.', pct: 60 + 2 * (ptot ? prog / ptot : 0), pctText: '', hint: '' });
+            if (now - tWait > QUEUE_MAX) { job.convTimedOut = true; jobPut(jk, job); fail('PC가 문서를 받다가 멈췄어요.', true, STUCK_SUFFIX); return; }
+          } else {
+            var w = now - tWait;
+            setLoading({ step: 2, msg: 'PC 차례를 기다리는 중… ' + fmtDur(w),
+                         sub: w > 20000 ? 'PC가 앞 문서를 처리하고 있거나 잠시 꺼져 있을 수 있어요. 요청은 PC에 남아 있어요.' : 'PC가 곧 받아 갈 거예요.',
+                         pct: 60, pctText: '', hint: '' });
+            if (w > QUEUE_MAX) { fail('PC가 15분 동안 이 문서를 받아 가지 않았어요. PC가 켜져 있는지 확인해 주세요.', true); return; }
+          }
+          setTimeout(loop, 2500);
+        }, function () {
+          if (!alive()) return;
+          if (!netFail) netFail = Date.now();
+          var nf = Date.now() - netFail;
+          if (nf > 20000) setLoading({ hint: '인터넷 연결을 확인하는 중이에요… (' + fmtDur(nf) + ')' });
+          if (nf > QUEUE_MAX) { fail('인터넷 연결이 오래 끊겨 있어요.', true); return; }
+          setTimeout(loop, 3500);
+        });
+      })();
+    }
+    function openResult(job, d, reused) {
+      setLoading({ step: 3, msg: reused ? '이미 변환된 문서를 받는 중…' : ('변환 완료' + (d.pages ? '(' + d.pages + '쪽)' : '') + ' · 폰으로 받는 중…'),
+                   sub: reused ? '지난번에 PC가 변환해 둔 결과라 다시 올리지 않아요.' : '', pct: 92, pctText: '', hint: '' });
+      job.doneAt = Date.now(); jobPut(jk, job);
+      downloadPdf(d.pdf_url, function (p) { if (alive()) setLoading({ pct: 92 + 8 * p, pctText: Math.floor(p * 100) + '%' }); })
+        .then(function (buf) { if (!alive()) return; releaseWake(); onDone(buf); }, function (e) {
+          if (!alive()) return;
+          if (reused) { jobDel(jk); startFresh(); return; }   // 지난 결과 주소가 만료 → 새로
+          fail((e && e.message) || '변환된 문서를 받지 못했어요.', true);
+        });
+    }
+    // 시작: 장부에 지난 요청이 있으면 먼저 서버에 물어본다.
+    var prev = jobGet(jk);
+    if (!prev) { startFresh(); return; }
+    setLoading({ step: 2, msg: '지난번 요청을 확인하는 중…', sub: '이미 PC에 보낸 문서인지 확인하고 있어요.', pct: 8, pctText: '', hint: '' });
+    OfficeBridge.poll(prev.id, prev.tok).then(function (res) {
+      if (!alive()) return;
+      prev.parts = prev.parts || {};
+      if (!res) {                                             // 행이 없음 = 올리다 끊긴 요청
+        if (prev.rowSent) { jobDel(jk); startFresh(); return; }
+        upload(prev); return;                                 // 올라간 조각은 건너뛰고 이어서
+      }
+      if (res.status === 'done') {
+        var d = OfficeBridge.docResultFrom(res);
+        if (d && d.pdf_url) { openResult(prev, d, true); return; }   // 이미 변환됨 → 다시 올리지 않음
+        jobDel(jk); startFresh(); return;                    // 지난번은 실패로 끝남 → 처음부터
+      }
+      if (res.status === 'processing' && isStuck(prev, Date.now())) { jobDel(jk); startFresh(); return; }   // 굳은 요청 → 새로
+      waitConvert(prev);                                      // PC가 아직 처리 중 → 이어서 기다림
+    }, function () {
+      fail('인터넷 연결을 확인할 수 없어요. 연결을 확인해 주세요.', true);
+    });
+  }
+
+  // v6.9: 변환 결과·PDF 는 PDF.js 에 넘기기 '전에' 최근 목록용 사본(Blob)을 만든다(PDF.js 가 버퍼를 가져가 비울 수 있음).
+  function openPdfArrayBuffer(buf, name, isPpt) {
+    try { saveCurrent('pdf', { pdf: new Blob([buf], { type: 'application/pdf' }) }, isPpt); } catch (e) {}
+    loadPdf({ data: new Uint8Array(buf) }, name, isPpt);
+  }
 
   // ============ 렌더링(지연 렌더) ============
   var p1w = 612, p1h = 792, renderToken = 0, io = null;
@@ -276,7 +722,14 @@
       pdfDoc = doc; userZoom = 1; renderedZoom = 1; userRotation = 0; return computeBaseScale();
     }).then(function () {
       curIsPpt = (isPpt === undefined) ? isPptName(name) : !!isPpt; pageModeCur = 1;
+      var want = Math.min(resumePage || 0, pdfDoc.numPages); resumePage = 0;
+      if (want > 1 && pdfPaged) pageModeCur = want;
       renderPdfLayout(); hideOverlay(); scroller.scrollTop = 0; scroller.scrollLeft = 0;
+      if (want > 1) {                                      // v6.9: 지난번 본 쪽부터(옛 독립 뷰어의 이어보기)
+        if (!pdfPaged) requestAnimationFrame(function () { goToPage(want, true); updatePageBadge(); });
+        toast('📖 ' + want + '쪽부터 이어서 보여 드려요');
+      }
+      if (curKey) DocStore.touch(curKey, { pages: pdfDoc.numPages });
       updatePageBadge(); updateFeatureButtons();
     }).catch(function (err) { showError('문서를 표시하지 못했습니다.', (err && err.message) ? err.message : ''); });
   }
@@ -355,6 +808,15 @@
     if (!pdfDoc) { pageBadge.textContent = '– / –'; return; }
     pageBadge.textContent = getCurrentPage() + ' / ' + pdfDoc.numPages;
     prevBtn.disabled = (getCurrentPage() <= 1); nextBtn.disabled = (getCurrentPage() >= pdfDoc.numPages);
+    scheduleLastPage();
+  }
+  // v6.9: 지금 보는 쪽을 최근 목록에 기억(1.2초 모아서 한 번 저장)
+  var lastPageT = null;
+  function scheduleLastPage() {
+    if (!curKey || !pdfDoc || viewMode !== 'pdf') return;
+    var k = curKey, p = getCurrentPage();
+    if (lastPageT) clearTimeout(lastPageT);
+    lastPageT = setTimeout(function () { lastPageT = null; if (k === curKey) DocStore.touch(k, { lastPage: p }); }, 1200);
   }
   function goToPage(n, instant) {
     if (!pdfDoc) return; n = Math.max(1, Math.min(pdfDoc.numPages, n));
@@ -506,20 +968,111 @@
     if (!isViewable(file.name, file.type)) { showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없어요.', extOf(file.name) || file.name); return; }
     handleFile(file);
   }
+  // 채팅·공유함 [뷰어로 보기]. v6.9: 같은 주소로 전에 연 문서면 내려받기조차 없이 저장본을 연다.
   function viewChatAttachment(att) {
     if (!att || !att.url) { toast('열 수 있는 파일이 아니에요.'); return; }
-    opToken++; var op = opToken; var name = att.name || '문서';
+    opToken++; var op = opToken; var name = att.name || '문서', src = srcBase(att.url);
     showViewer(); setViewMode('pdf'); fnameLabel.textContent = name;
     showLoading('문서를 여는 중…', '문서를 불러오고 있어요.'); setProgress(15);
-    fetch(att.url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.blob(); })
-      .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f); })
-      .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했어요.', (e && e.message) || String(e)); });
+    DocStore.findBySrc(src).then(function (meta) {
+      if (op !== opToken) return;
+      if (meta) { curSrcUrl = src; openStored(meta, op, null); return; }
+      fetch(att.url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.blob(); })
+        .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f, { srcUrl: src }); })
+        .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했어요.', (e && e.message) || String(e)); });
+    });
+  }
+
+  // ============ v6.9 「최근 연 문서」 목록(문서 뷰어 첫 화면) ============
+  var TYPE_BADGE = { hwp: ['HWP', 't-hwp'], hwpx: ['HWP', 't-hwp'], pdf: ['PDF', 't-pdf'], doc: ['DOC', 't-doc'], docx: ['DOC', 't-doc'],
+                     rtf: ['DOC', 't-doc'], odt: ['DOC', 't-doc'], xls: ['XLS', 't-xls'], xlsx: ['XLS', 't-xls'], csv: ['CSV', 't-xls'],
+                     ods: ['XLS', 't-xls'], ppt: ['PPT', 't-ppt'], pptx: ['PPT', 't-ppt'], odp: ['PPT', 't-ppt'] };
+  function fmtWhen(ts) {
+    if (!ts) return '';
+    var d = new Date(ts), now = new Date(), hm = d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2);
+    var day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (ts >= day0) return '오늘 ' + hm;
+    if (ts >= day0 - 86400000) return '어제 ' + hm;
+    return (d.getFullYear() !== now.getFullYear() ? d.getFullYear() + '. ' : '') + (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+  }
+  var recentSeq = 0;
+  function renderRecent() {
+    var wrap = $('docRecentWrap'), list = $('docRecentList');
+    if (!wrap || !list) return;
+    var seq = ++recentSeq;
+    DocStore.computeLimit().then(DocStore.list).then(function (items) {
+      if (seq !== recentSeq) return;
+      if (!items.length) { wrap.style.display = 'none'; list.innerHTML = ''; return; }
+      var total = 0; items.forEach(function (m) { total += (m.bytes || 0); });
+      wrap.style.display = '';
+      var info = $('docRecentInfo'); if (info) info.textContent = items.length + '개';
+      var cap = $('docRecentCap');
+      if (cap) cap.textContent = '이 기기에 ' + fmtSize(total) + ' 보관 · 최대 ' + fmtSize(DocStore.limit()) + '·' + DocStore.MAX_COUNT + '개, 넘치면 오래 안 연 것부터 자동 정리';
+      list.innerHTML = items.map(function (m) {
+        var b = TYPE_BADGE[m.ext || extOf(m.name)] || [String(m.ext || '문서').toUpperCase().slice(0, 4), 't-etc'];
+        var bits = [fmtWhen(m.openedAt)];
+        if (m.kind === 'excel') bits.push('표로 보기'); else if (m.pages) bits.push(m.pages + '쪽');
+        if (m.size) bits.push(fmtSize(m.size));
+        var last = (m.kind !== 'excel' && m.lastPage > 1) ? '<span class="dv-rlast">📖 ' + m.lastPage + '쪽까지 보셨어요</span>' : '';
+        return '<div class="dv-ritem' + (m.fav ? ' fav' : '') + '" data-key="' + esc(m.key) + '">' +
+          '<button class="dv-rmain" data-act="open" type="button">' +
+            '<span class="dv-rbadge ' + b[1] + '">' + esc(b[0]) + '</span>' +
+            '<span class="dv-rtx"><span class="dv-rname">' + esc(m.name) + '</span>' +
+            '<span class="dv-rsub">' + esc(bits.join(' · ')) + '</span>' + last + '</span>' +
+          '</button>' +
+          '<button class="dv-ract dv-rfav' + (m.fav ? ' on' : '') + '" data-act="fav" type="button" aria-label="' + (m.fav ? '즐겨찾기 풀기' : '즐겨찾기(자동 정리 안 함)') + '">' + (m.fav ? '★' : '☆') + '</button>' +
+          '<button class="dv-ract" data-act="del" type="button" aria-label="목록에서 지우기"><svg><use href="#i-trash"/></svg></button>' +
+        '</div>';
+      }).join('');
+    });
+  }
+  function askThen(title, msg, label, fn) {
+    if (confirmFn) { try { confirmFn(title, msg, label, fn); return; } catch (e) {} }
+    fn();   // 확인 시트가 없으면(시험용 단독 화면) 바로 실행 — confirm() 은 쓰지 않는다
+  }
+  function onRecentClick(ev) {
+    var btn = ev.target.closest ? ev.target.closest('[data-act]') : null;
+    var row = btn && btn.closest('.dv-ritem');
+    if (!btn || !row) return;
+    var key = row.getAttribute('data-key'), act = btn.getAttribute('data-act');
+    if (act === 'open') {
+      opToken++; var op = opToken;
+      DocStore.get(key).then(function (meta) {
+        if (op !== opToken) return;
+        if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서예요.'); return; }
+        isExcelDoc = false; xlToggleBtn.style.display = 'none'; curSrcUrl = null;
+        openStored(meta, op, null);
+      });
+    } else if (act === 'fav') {
+      DocStore.get(key).then(function (meta) {
+        if (!meta) return;
+        DocStore.touch(key, { fav: !meta.fav }).then(function () {
+          renderRecent(); toast(meta.fav ? '즐겨찾기를 풀었어요.' : '즐겨찾기 했어요. 자동 정리에서 빠져요.');
+        });
+      });
+    } else if (act === 'del') {
+      DocStore.get(key).then(function (meta) {
+        if (!meta) { renderRecent(); return; }
+        askThen('이 문서를 목록에서 지울까요?', '「' + meta.name + '」 — 이 기기에 저장해 둔 사본(' + fmtSize(meta.bytes) + ')만 지워요. 원래 파일은 그대로예요.', '지우기', function () {
+          DocStore.del(key).then(function () { renderRecent(); toast('목록에서 지웠어요.'); });
+        });
+      });
+    }
+  }
+  function onRecentClear() {
+    DocStore.usage().then(function (u) {
+      if (!u.count) { renderRecent(); return; }
+      askThen('최근 연 문서를 모두 비울까요?', u.count + '개(' + fmtSize(u.bytes) + ')를 이 기기에서 지워요. 즐겨찾기도 함께 지워지고, 원래 파일은 그대로예요.', '모두 비우기', function () {
+        DocStore.clearAll().then(function () { renderRecent(); toast('최근 연 문서를 비웠어요.'); });
+      });
+    });
   }
 
   // ============ 초기화 ============
   function init(opts) {
     opts = opts || {};
     if (opts.toast) toast = opts.toast;
+    if (opts.confirm) confirmFn = opts.confirm;          // v6.9: 앱 확인 시트(openSheet)
     rootEl = $('docRoot'); viewerEl = $('viewer'); overlay = $('docOverlay'); panel = $('docPanel'); fileInput = $('docFileInput');
     pagesEl = $('pages'); tableviewEl = $('tableview'); sheetBar = $('sheetBar'); sheetSel = $('sheetSel'); xlToggleBtn = $('dvXlToggle');
     pageNavGrp = $('pageNavGrp'); scroller = $('scroller'); pageBadge = $('dvBadge'); fnameLabel = $('dvFname');
@@ -532,6 +1085,11 @@
     (function () { var on = false; try { on = localStorage.getItem(DARK_STORE) === '1'; } catch (e) {} applyDark(on); })();
 
     if ($('docPickBtn')) $('docPickBtn').addEventListener('click', function () { if (fileInput) fileInput.click(); });
+    // v6.9: 최근 연 문서 목록
+    if ($('docRecentList')) $('docRecentList').addEventListener('click', onRecentClick);
+    if ($('docRecentClear')) $('docRecentClear').addEventListener('click', onRecentClear);
+    DocStore.persist();
+    renderRecent();
     if (fileInput) fileInput.addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) handleLocalFile(f); });
 
     $('dvBack').onclick = showPick;
@@ -627,6 +1185,8 @@
     isViewerOpen: function () { return !!(rootEl && rootEl.classList.contains('on')); },
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
-    leave: function () { closeSlideshow(); showPick(); }
+    leave: function () { closeSlideshow(); showPick(); },
+    renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
+    _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관
   };
 })(window);
