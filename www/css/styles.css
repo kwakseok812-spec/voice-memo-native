@@ -363,24 +363,56 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
    ▶ 불투명 배경(var(--bg1) — 다크·라이트 모두 불투명)이라 뒤 글자가 비치지 않는다. blur(backdrop-filter) 금지(입력 렉 원인).
    ▶ 문서 뷰어 본문(#docRoot)은 원래부터 화면 전체 고정 오버레이 + 자체 상단 툴바(← 목록)라 이 규칙과 무관.
    ▶ 전체화면 보기(body.doc-fs)에선 아래 id 규칙이 이겨 헤더가 그대로 숨는다. */
+/* v6.8(O-0089, 2026-09-29): 대표님 "스마트폰에서는 뒤에 배경을 가리고 있어. 보기가 안 좋아" —
+   v6.6 의 불투명 판(var(--bg1) 단색 + 아래 선)과 상태바 덮개(::before)를 없앴다. 고정(sticky) 동작·대상 14개 화면은 그대로.
+   ▶ 머리줄 자체는 투명(판 없음). 떠 있는 것은 [뒤로]·오른쪽 버튼(새로고침·메뉴 등) 알약뿐 — 거의 불투명한 흰색(다크는 짙은 남색)
+     + 가벼운 그림자. blur(backdrop-filter)는 쓰지 않는다(입력 렉 원인) — 불투명에 가까운 색만으로 뒤 글자가 비치지 않게 한다.
+   ▶ 제목(작업 현황 등)·채팅 케이 이름표(.khead): 스크롤 전엔 지금처럼 글자만, 스크롤하면(html.subbar-float — app.js 가 붙임)
+     같은 알약 배경이 생겨 아래로 지나가는 글자와 겹치지 않는다.
+   ▶ 머리줄의 빈 곳(버튼 사이)은 손가락이 그대로 아래 콘텐츠에 닿는다(pointer-events 통과).
+   ▶ 상태바: top = --sat(= env(safe-area-inset-top)) 이라 상태바 바로 아래에 붙는다. 옛 덮개는 스크롤 전 화면에서
+     위 앱 제목(스마트비서)을 반쯤 가리던 '큰 빈 판'의 정체라 삭제했다. PC·안전영역 0 기기는 top 0 그대로. */
+:root{--sat:env(safe-area-inset-top, 0px); --float-bg:rgba(24,33,58,.96); --float-sh:0 4px 14px rgba(0,0,0,.38); --float-ds:0 3px 6px rgba(0,0,0,.34)}
+html[data-style="light"]{--float-bg:rgba(255,255,255,.97); --float-sh:0 4px 14px rgba(30,41,99,.13); --float-ds:0 3px 6px rgba(30,41,99,.12)}
 .app section > .subbar{
   position:sticky;
-  top:env(safe-area-inset-top, 0px);
+  top:var(--sat);
   z-index:20;
-  margin:0 -22px 6px;
-  padding:0 22px;
-  background:var(--bg1);
-  border-bottom:1px solid var(--glass-b);
-}
-/* v6.6: 상태바가 웹 화면 위로 겹치는 폰(edge-to-edge)에선 고정 헤더 위 틈(안전영역)으로 스크롤된 글자가 비칠 수 있어
-   같은 색으로 덮는다. 안전영역이 0인 기기·PC에선 높이 0이라 아무 영향 없음. */
-.app section > .subbar::before{
-  content:"";
-  position:absolute; left:0; right:0; bottom:100%;
-  height:env(safe-area-inset-top, 0px);
-  background:var(--bg1);
+  background:transparent;
   pointer-events:none;
 }
+.app section > .subbar > *,
+.app section > .subbar .spacer > *{pointer-events:auto}
+.app section > .subbar > .spacer{pointer-events:none}
+.app section > .subbar .back,
+.app section > .subbar .iconbtn{
+  background:var(--float-bg);
+  box-shadow:var(--float-sh);
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+/* 오른쪽 버튼 묶음(채팅: 작업현황·검색·메뉴 3개): 버튼끼리 떨어지거나 겹치지 않게 한 줄 알약 하나로 붙인다.
+   (예전엔 76px 칸에 44px 버튼 3개가 눌려 들어가 겹쳐 있었음) 그림자는 묶음 전체에 한 번(drop-shadow — 뒤 배경 blur 아님). */
+.app section > .subbar .spacer.end{width:auto; min-width:76px; gap:0;
+  -webkit-filter:drop-shadow(var(--float-ds)); filter:drop-shadow(var(--float-ds))}
+.app section > .subbar .spacer.end > .iconbtn{flex:none; box-shadow:none}
+.app section > .subbar .spacer.end > .iconbtn:not(:only-child){width:40px}
+.app section > .subbar .spacer.end > .iconbtn:not(:last-child){border-right:0; border-top-right-radius:0; border-bottom-right-radius:0}
+.app section > .subbar .spacer.end > .iconbtn:not(:first-child){border-left:0; border-top-left-radius:0; border-bottom-left-radius:0}
+.app section > .subbar .title{
+  display:inline-flex; align-items:center; height:40px; padding:0 14px; border-radius:14px;
+  min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.app section > .subbar .title,
+.app section > .subbar .khead{transition:background-color .18s ease, box-shadow .18s ease}
+html.subbar-float .app section > .subbar .title,
+html.subbar-float .app section > .subbar .khead{background:var(--float-bg); box-shadow:var(--float-sh)}
+.app section > .subbar .khead{padding:0 12px 0 5px}   /* 알약이 생겨도 글자가 움직이지 않게 여백은 늘 같게 */
+/* 상태바(시계·배터리) 뒤로 스크롤된 글자가 지나갈 때만, 상태바 높이 안에서 배경색 → 투명으로 옅어지는 그라데이션.
+   경계선 있는 판이 아니고, 스크롤 전(앱 제목이 보일 때)엔 안 보이며(opacity 0), 안전영역 0 인 PC 는 높이 0 이라 없음.
+   필요 없으면 이 규칙 두 줄만 지우면 된다. */
+.app::before{content:""; position:fixed; left:0; right:0; top:0; height:calc(var(--sat) * 1.4); z-index:19; pointer-events:none;
+  background:linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg) 68%, transparent 100%); opacity:0; transition:opacity .18s ease}
+html.subbar-float .app::before{opacity:1}
 .chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px;contain:layout}
 .bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text;content-visibility:auto;contain-intrinsic-size:auto 52px}
 /* 링크·전화·메일은 그대로 눌리게 */
