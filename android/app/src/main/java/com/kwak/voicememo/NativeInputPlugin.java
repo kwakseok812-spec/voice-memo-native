@@ -1,6 +1,13 @@
 package com.kwak.voicememo;
 
+import android.app.Activity;
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ContentResolver;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.OpenableColumns;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.ColorDrawable;
@@ -21,11 +28,22 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResult;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 네이티브 채팅 입력 플러그인.
@@ -101,6 +119,144 @@ public class NativeInputPlugin extends Plugin {
                 call.resolve();
             }
         });
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────────────
+     * v7.1 (2026-09-30) 입력 바의 ＋/카메라 → 네이티브 파일 선택.
+     *  문제: 글을 쓰는 동안(=이 입력 바가 열린 동안) ＋를 누르면 JS 가 웹 <input type=file>.click() 을
+     *        대신 눌러 주는데, 사용자의 손가락은 WebView 가 아니라 이 Dialog 를 눌렀기 때문에 WebView 에는
+     *        "사용자 동작(user activation)"이 없다 → Chromium 이 파일 선택 창을 조용히 막는다
+     *        ("File chooser dialog can only be shown with a user activation").
+     *  해결: 입력 바에서 누른 ＋/카메라는 파일 선택 창을 네이티브가 직접 연다. 고른 파일은 앱 캐시 폴더로
+     *        복사하고 경로를 JS 에 돌려준다 → JS 가 Capacitor.convertFileSrc 로 읽어 File 로 만들어
+     *        기존 첨부 대기줄(onChatFilesPicked 등)에 그대로 붙인다(전송 경로는 웹 그대로).
+     *  옵션: accept(모든 파일 또는 image/*), multiple(기본 true).
+     *  결과: { files: [{ path, name, mime, size }], requested } — 취소하면 files 는 빈 배열.
+     * ─────────────────────────────────────────────────────────────────────────── */
+    @PluginMethod
+    public void pickFiles(final PluginCall call) {
+        String accept = call.getString("accept", "*/*");
+        if (accept == null || accept.trim().length() == 0) accept = "*/*";
+        boolean multiple = call.getBoolean("multiple", true);
+        try {
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType(accept.trim());
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple);
+            startActivityForResult(call, i, "onFilesPicked");
+        } catch (Exception e) {
+            call.reject("파일 선택 창을 열지 못했어요: " + e.getMessage());
+        }
+    }
+
+    @ActivityCallback
+    private void onFilesPicked(final PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        final List<Uri> uris = new ArrayList<>();
+        if (result != null && result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+            Intent data = result.getData();
+            ClipData clip = data.getClipData();
+            if (clip != null) {
+                for (int k = 0; k < clip.getItemCount(); k++) {
+                    Uri u = clip.getItemAt(k).getUri();
+                    if (u != null) uris.add(u);
+                }
+            } else if (data.getData() != null) {
+                uris.add(data.getData());
+            }
+        }
+        if (uris.isEmpty()) {                       // 취소 → 빈 목록(오류 아님)
+            JSObject o = new JSObject();
+            o.put("files", new JSArray());
+            o.put("requested", 0);
+            call.resolve(o);
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File dir = new File(getContext().getCacheDir(), "ni_pick");
+                    // 지난번에 고른 임시 사본(앱 캐시 폴더 안)은 이미 JS 가 읽어 갔으므로 지운다
+                    if (dir.exists()) {
+                        File[] old = dir.listFiles();
+                        if (old != null) for (File f : old) { try { f.delete(); } catch (Exception ignored) {} }
+                    } else {
+                        dir.mkdirs();
+                    }
+                    ContentResolver cr = getContext().getContentResolver();
+                    JSArray arr = new JSArray();
+                    long stamp = System.currentTimeMillis();
+                    int n = 0;
+                    for (Uri u : uris) {
+                        String name = queryName(cr, u);
+                        String mime = cr.getType(u);
+                        if (mime == null) mime = "";
+                        // 임시 사본 이름은 영문·숫자만(한글·공백 경로 문제 회피). 원래 이름은 name 으로 따로 넘긴다.
+                        String ext = "";
+                        int dot = name.lastIndexOf('.');
+                        if (dot >= 0 && dot < name.length() - 1) {
+                            String e2 = name.substring(dot + 1).replaceAll("[^A-Za-z0-9]", "");
+                            if (e2.length() > 0 && e2.length() <= 8) ext = "." + e2;
+                        }
+                        File out = new File(dir, "p" + stamp + "_" + (n++) + ext);
+                        long size = 0;
+                        InputStream in = null;
+                        OutputStream os = null;
+                        boolean ok = false;
+                        try {
+                            in = cr.openInputStream(u);
+                            if (in != null) {
+                                os = new FileOutputStream(out);
+                                byte[] buf = new byte[65536];
+                                int r;
+                                while ((r = in.read(buf)) != -1) { os.write(buf, 0, r); size += r; }
+                                ok = true;
+                            }
+                        } catch (Exception copyErr) {
+                            ok = false;
+                        } finally {
+                            try { if (in != null) in.close(); } catch (Exception ignored) {}
+                            try { if (os != null) os.close(); } catch (Exception ignored) {}
+                        }
+                        if (!ok) { try { out.delete(); } catch (Exception ignored) {} continue; }   // 이 파일만 건너뜀
+                        JSObject f = new JSObject();
+                        f.put("path", out.getAbsolutePath());
+                        f.put("name", name);
+                        f.put("mime", mime);
+                        f.put("size", size);
+                        arr.put(f);
+                    }
+                    JSObject o = new JSObject();
+                    o.put("files", arr);
+                    o.put("requested", uris.size());
+                    call.resolve(o);
+                } catch (Exception e) {
+                    call.reject("고른 파일을 읽지 못했어요: " + e.getMessage());
+                }
+            }
+        }).start();
+    }
+
+    /** content:// 에서 사람이 읽는 파일명(없으면 경로 끝 조각). */
+    private String queryName(ContentResolver cr, Uri uri) {
+        String name = null;
+        try {
+            if ("content".equals(uri.getScheme())) {
+                Cursor c = cr.query(uri, new String[]{ OpenableColumns.DISPLAY_NAME }, null, null, null);
+                if (c != null) {
+                    try {
+                        int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                        if (idx >= 0 && c.moveToFirst()) name = c.getString(idx);
+                    } finally { c.close(); }
+                }
+            }
+        } catch (Exception ignored) {}
+        if (name == null || name.length() == 0) {
+            String p = uri.getLastPathSegment();
+            name = (p != null && p.length() > 0) ? p : "file";
+        }
+        return name;
     }
 
     /** 아이콘 버튼(＋·카메라) 만들기 — 웹 .iconbtn(둥근모서리·연한 배경·컬러 아이콘) 과 같은 모양. */
@@ -353,7 +509,9 @@ public class NativeInputPlugin extends Plugin {
     private void doSend() {
         if (edit == null) return;
         String t = edit.getText().toString();
-        if (t.trim().length() == 0) return;
+        // v7.1: 글이 비어 있어도 JS 로 알린다 — 첨부만 붙여 두고 보내는 경우(첨부만 전송)를 위해.
+        //   보낼 것이 정말 없으면 웹 sendChatMsg 가 아무것도 하지 않는다(기존과 같음).
+        if (t.trim().length() == 0) t = "";
         JSObject o = new JSObject();
         o.put("text", t);
         o.put("opus", opusChip != null && opusOn);   // v5.8: 이번 1건 오퍼스 지정 여부

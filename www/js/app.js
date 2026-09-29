@@ -3179,9 +3179,12 @@
     lockerInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLockerMsg(); } });
   }
   if ($('lockerAttach')) $('lockerAttach').addEventListener('click', function () { var fi = $('lockerFileInput'); if (fi) fi.click(); });
-  if ($('lockerFileInput')) $('lockerFileInput').addEventListener('change', function () {
-    var fs = keepSendable(this.files);            // v6.6: 5GB 초과는 고를 때 바로 빼고 안내(보낼 때 거절되기 전에)
+  function onLockerFilesPicked(fileList) {
+    var fs = keepSendable(fileList);              // v6.6: 5GB 초과는 고를 때 바로 빼고 안내(보낼 때 거절되기 전에)
     if (fs.length) { lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending(); }
+  }
+  if ($('lockerFileInput')) $('lockerFileInput').addEventListener('change', function () {
+    onLockerFilesPicked(this.files);
     this.value = '';
   });
 
@@ -3519,6 +3522,15 @@
     if (this.files && this.files.length) onChatFilesPicked(this.files);
     this.value = '';
   });
+  // v7.1(2026-09-30): 폰 네이티브 입력 바(글 쓰는 중)의 ＋/카메라는 웹 파일칸을 대신 누를 수 없다
+  //   (WebView 에 '사용자 동작'이 없어 파일 선택 창이 막힘). native-input.js 가 네이티브로 파일을 골라
+  //   File 로 만든 뒤 이 입구로 넘긴다 → 웹에서 고른 것과 똑같이 첨부 대기줄에 붙는다.
+  window.SmartAttach = {
+    chat: onChatFilesPicked,
+    chatCam: onChatCamPicked,
+    locker: onLockerFilesPicked,
+    toast: function (m, ms) { toast(m, ms); }
+  };
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
     var more = ev.target.closest ? ev.target.closest('.chatmorebtn') : null;   // v7.0: [이전 대화 더 보기]
