@@ -45,7 +45,25 @@
 
   var pendingBlob = null, pollTimer = null, pollingId = null, viewId = null;
   var pendingMaterials = [];              // 회의자료(선택) — 녹음 전(준비)·후(완료) 양쪽에서 붙일 수 있음(2026-09-21)
-  var MAT_MAX_MB = 40;                    // 자료 1개 상한(단일 업로드 안전선)
+  // v6.6(O-0086): 파일 크기 상한은 office-bridge.js 의 MAX_UPLOAD_BYTES(5GB) 하나로 통일.
+  //   (옛 값: 회의자료 40MB · 사진 45MB · 채팅 사진 45MB(말없이 뺌) · 영상/채팅파일/문서는 상한 없음)
+  var MAX_UPLOAD_BYTES = (window.OfficeBridge && OfficeBridge.MAX_UPLOAD_BYTES) || 5 * 1024 * 1024 * 1024;
+  // 고른 파일 중 5GB 넘는 것은 빼고 쉬운 말로 알린다. 반환: 남은 파일 배열.
+  function keepSendable(arr) {
+    arr = Array.prototype.slice.call(arr || []);
+    var big = arr.filter(function (f) { return (f && f.size || 0) > MAX_UPLOAD_BYTES; });
+    if (big.length) {
+      var who = big.length === 1 ? ('「' + (big[0].name || '파일') + '」') : (big.length + '개 파일');
+      toast('⚠️ ' + who + '은 너무 커서 뺐어요. 5GB까지 보낼 수 있어요.');
+    }
+    var keep = arr.filter(function (f) { return (f && f.size || 0) <= MAX_UPLOAD_BYTES; });
+    keep.removed = big.length;                    // 뺀 게 있으면 뒤따르는 '붙였어요' 안내가 경고를 덮지 않게
+    return keep;
+  }
+  // 미리보기 썸네일: 파일을 메모리로 통째 읽지 않고(readAsDataURL 금지 — 큰 사진이면 폰이 멈춤) 주소만 만든다.
+  function thumbSrc(im, f) {
+    try { var u = URL.createObjectURL(f); im.onload = im.onerror = function () { try { URL.revokeObjectURL(u); } catch (x) {} }; im.src = u; } catch (e) {}
+  }
   var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
   var isRecording = false, recCancelled = false;
   var recIndicator = $('recIndicator'), recIndTime = $('recIndTime');   // 녹음 중 미니 배너(백그라운드 녹음 표시 · 2026-09-21)
@@ -206,10 +224,7 @@
   if (matAttach) matAttach.addEventListener('click', openMatPicker);
   if (matAttachPrep) matAttachPrep.addEventListener('click', openMatPicker);
   if (matInput) matInput.addEventListener('change', function () {
-    var arr = Array.prototype.slice.call(this.files || []);
-    var tooBig = arr.filter(function (f) { return (f.size || 0) > MAT_MAX_MB * 1024 * 1024; });
-    arr = arr.filter(function (f) { return (f.size || 0) <= MAT_MAX_MB * 1024 * 1024; });
-    if (tooBig.length) toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAT_MAX_MB + 'MB 초과) 제외했어요.');
+    var arr = keepSendable(this.files);          // v6.6: 회의자료 40MB → 5GB(File 그대로 스트리밍 업로드)
     pendingMaterials = pendingMaterials.concat(arr);
     renderMatList();
     this.value = '';
@@ -901,17 +916,11 @@
 
   /* ===================== 사진·영상: 미리보기 + 설명 → 묶음 전송 ===================== */
   var filePanel = $('filePanel'), pendingFiles = [], pendingKind = null;
-  var MAX_MB = 45;
-
   function reviewFiles(fileList, kind) {
     var arr = Array.prototype.slice.call(fileList || []);
     if (!arr.length) return;
-    // 사진만 용량 제한(각 45MB). 영상은 큰 것도 허용(큰 영상은 조각으로 나눠 전송).
-    if (kind === 'photo') {
-      var tooBig = arr.filter(function (f) { return (f.size || 0) > MAX_MB * 1024 * 1024; });
-      arr = arr.filter(function (f) { return (f.size || 0) <= MAX_MB * 1024 * 1024; });
-      if (tooBig.length) toast('⚠️ ' + tooBig.length + '개가 너무 커서(각 ' + MAX_MB + 'MB 초과) 제외했어요.');
-    }
+    // v6.6: 사진·영상 모두 한 파일 5GB까지(옛 값: 사진 45MB, 영상 상한 없음). 큰 영상은 40MB 조각으로 나눠 전송.
+    arr = keepSendable(arr);
     if (!arr.length) return;
     pendingFiles = arr; pendingKind = kind;
     var t = now();
@@ -929,7 +938,7 @@
         var t2 = document.createElement('div'); t2.className = 'thumb';
         t2.innerHTML = '<span class="n">' + (i + 1) + '</span>';
         var im = document.createElement('img');
-        var r = new FileReader(); r.onload = function () { im.src = r.result; }; r.readAsDataURL(f);
+        thumbSrc(im, f);                          // v6.6: readAsDataURL(통째 읽기) → 주소만
         t2.appendChild(im); box.appendChild(t2);
       });
       if (arr.length > 8) box.insertAdjacentHTML('beforeend', '<div class="morethumb">+' + (arr.length - 8) + '</div>');
@@ -1207,7 +1216,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v6.5';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v6.6';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -2097,7 +2106,7 @@
     chatPendingImages.forEach(function (f, i) {
       var d = document.createElement('div'); d.className = 'pend';
       var im = document.createElement('img');
-      try { var rd = new FileReader(); rd.onload = function () { im.src = rd.result; }; rd.readAsDataURL(f); } catch (e) {}
+      thumbSrc(im, f);                            // v6.6: readAsDataURL(통째 읽기) → 주소만
       var b = document.createElement('button'); b.className = 'rm'; b.type = 'button';
       b.innerHTML = '<svg><use href="#i-x"/></svg>';
       b.addEventListener('click', function () { chatPendingImages.splice(i, 1); renderPending(); });
@@ -2113,7 +2122,7 @@
       if (isImg) {
         d.className = 'pend';
         var im = document.createElement('img');
-        try { var rd = new FileReader(); rd.onload = function () { im.src = rd.result; }; rd.readAsDataURL(f); } catch (e) {}
+        thumbSrc(im, f);                          // v6.6
         d.appendChild(im); d.appendChild(b);
       } else {
         d.className = 'pend pendfile';
@@ -2129,13 +2138,14 @@
   function onChatCamPicked(fileList) {
     var arr = Array.prototype.slice.call(fileList || []);
     if (!arr.length) return;
-    arr = arr.filter(function (f) { return (f.size || 0) <= 45 * 1024 * 1024; });   // 각 45MB 이하
+    arr = keepSendable(arr);                      // v6.6: 각 45MB(말없이 뺌) → 5GB(넘으면 안내)
+    var removed = arr.removed;
     var room = Math.max(0, 6 - chatPendingImages.length);
     if (arr.length > room) { arr = arr.slice(0, room); toast('사진은 한 번에 최대 6장까지예요.'); }
     if (!arr.length) return;
     chatPendingImages = chatPendingImages.concat(arr);
     renderPending();
-    toast('사진을 붙였어요. 말하거나 질문을 적어 보내세요.');
+    if (!removed) toast('사진을 붙였어요. 말하거나 질문을 적어 보내세요.');
   }
   function findMsg(id) { for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].id === id) return chatMsgs[i]; return null; }
   function startChatReconcile() {
@@ -2859,7 +2869,7 @@
   }
   if ($('lockerAttach')) $('lockerAttach').addEventListener('click', function () { var fi = $('lockerFileInput'); if (fi) fi.click(); });
   if ($('lockerFileInput')) $('lockerFileInput').addEventListener('change', function () {
-    var fs = Array.prototype.slice.call(this.files || []);
+    var fs = keepSendable(this.files);            // v6.6: 5GB 초과는 고를 때 바로 빼고 안내(보낼 때 거절되기 전에)
     if (fs.length) { lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending(); }
     this.value = '';
   });
@@ -2899,10 +2909,11 @@
   enableDropZone($('chatView'), function (files) { onChatFilesPicked(files); });
   // 공유함: 드롭 → 기존 공유함 대기줄(lockerPendingFiles)로 (전송 때 sendLocker로 업로드)
   enableDropZone($('lockerView'), function (files) {
-    var fs = Array.prototype.slice.call(files || []);
+    var fs = keepSendable(files);                 // v6.6
+    var removed = fs.removed;
     if (!fs.length) return;
     lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending();
-    toast('파일을 붙였어요. 보내기를 누르세요.');
+    if (!removed) toast('파일을 붙였어요. 보내기를 누르세요.');
   });
   if ($('lockerMenuBtn')) $('lockerMenuBtn').addEventListener('click', function () {
     var linked = !!getSyncPass();
@@ -3180,14 +3191,15 @@
   }
   // 파일을 고르면 '바로 보내지 않고' 대기줄(pending)에 붙인다 → 대표님이 계속 글을 쓸 수 있고, 전송 때 함께 나감.
   function onChatFilesPicked(fileList) {
-    var arr = Array.prototype.slice.call(fileList || []);
+    var arr = keepSendable(fileList);             // v6.6: 한 파일 5GB까지(45MB 넘으면 40MB 조각 전송)
+    var removed = arr.removed;
     if (!arr.length) return;
     var room = Math.max(0, 10 - chatPendingFiles.length);
     if (arr.length > room) { arr = arr.slice(0, room); toast('파일은 한 번에 최대 10개까지예요.'); }
     if (!arr.length) return;
     chatPendingFiles = chatPendingFiles.concat(arr);
     renderPending();
-    toast('파일을 붙였어요. 글을 더 쓰거나 전송을 누르세요.');
+    if (!removed) toast('파일을 붙였어요. 글을 더 쓰거나 전송을 누르세요.');
   }
   if ($('chatAttach')) $('chatAttach').addEventListener('click', function () {
     $('chatFileInput').click();                              // 첨부는 언제든 가능(붙여두고 계속 입력)
@@ -3859,7 +3871,12 @@
   }
   function openSharedDoc(d) {
     if (!d) return;
-    if (d.error) { toast(d.error || '공유된 문서를 여는 데 실패했어요.'); return; }
+    if (d.error) {
+      // v6.6: 「공유/열기」는 폰 안에서 파일을 통째로 옮기는 방식이라 60MB까지만(네이티브 제한 유지).
+      //   더 큰 파일은 앱 안에서 직접 고르면 5GB까지 된다 — 그 길을 알려 준다.
+      var tip = /60MB/.test(d.error) ? ' 큰 파일은 스마트비서의 「문서 보기」·「공유함」·채팅 첨부에서 직접 고르면 5GB까지 보낼 수 있어요.' : '';
+      toast((d.error || '공유된 문서를 여는 데 실패했어요.') + tip); return;
+    }
     try {
       var bytes = b64ToBytes(d.b64);
       var f = new File([bytes], d.name || 'document', { type: d.mime || 'application/octet-stream' });

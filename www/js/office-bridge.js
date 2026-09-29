@@ -21,6 +21,24 @@
     bucket: 'voice-audio'
   };
 
+  /* v6.6(2026-09-29, O-0086) 파일 크기 상한 5GB 통일 — 대표님 "용량 제한이 너무 작아" · "5기가로 다 올려".
+   *   서버: 전역 업로드 한도 500GB, 버킷 voice-audio·voice-docs·locker 5GB(소장 설정 완료).
+   *   앱의 모든 '사용자 파일 보내기'(녹음 회의자료·사진·영상·채팅 첨부·문서 뷰어·공유함)는 이 상수 하나로 막는다.
+   *   ▶ 폰 메모리: 큰 파일은 전부 Blob 그대로 스트리밍(fetch/XHR body) 또는 40MB 조각(slice)으로 보낸다
+   *     — 파일 전체를 메모리로 읽는 경로는 40MB 이하(녹음 단일·녹음 조각)에서만 쓴다. */
+  var MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;   // 5GB (= 버킷 한도)
+  var MAX_UPLOAD_LABEL = '5GB';
+  function tooBigErr(file, maker) {
+    return (maker || voiceErr)('too_big', { name: (file && file.name) || '', size: (file && file.size) || 0 });
+  }
+  // files 중 5GB 초과가 있으면 그 파일로 만든 오류, 없으면 null.
+  function firstTooBig(files, maker) {
+    for (var i = 0; i < (files || []).length; i++) {
+      if (((files[i] && files[i].size) || 0) > MAX_UPLOAD_BYTES) return tooBigErr(files[i], maker);
+    }
+    return null;
+  }
+
   function uuid() {
     if (global.crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -143,7 +161,8 @@
     info = info || {};
     var nm = info.name ? '「' + info.name + '」 ' : '';
     var table = {
-      too_big_server: nm + '파일이 서버가 한 번에 받는 크기를 넘었어요(' + fmtSize(info.size) + ').',
+      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
+      too_big_server: nm + '파일이 서버가 한 번에 받는 크기를 넘었어요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
       network: '인터넷 연결이 끊겨 보내지 못했어요. 와이파이·데이터를 확인하고 다시 보내 주세요.',
       unreadable: nm + '폰에 저장된 파일을 읽지 못했어요.',
       bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
@@ -241,7 +260,7 @@
   //   그 자료만 빼고(out.skipped 에 기록) 녹음은 계속 보낸다 — 녹음이 자료 때문에 못 가는 일이 없게.
   //   인터넷·서버 문제(다시 보내면 될 수 있는 것)는 지금처럼 전체 실패로 돌려 원본을 보존한다.
   //   재전송 때 이미 올라간 mat_i 는 중복=성공으로 통과한다(_storagePost).
-  var MAT_SKIP_REASONS = { too_big_server: 1, unreadable: 1, bad_key: 1 };
+  var MAT_SKIP_REASONS = { too_big: 1, too_big_server: 1, unreadable: 1, bad_key: 1 };
   function uploadMaterials(id, materials, onProgress) {
     materials = materials || [];
     var out = [], skipped = [], i = 0;
@@ -252,7 +271,11 @@
       var ext = extForMaterial(f);
       var key = id + '/mat_' + i + '.' + ext;
       var nm = f.name || ('mat' + i + '.' + ext);
-      return _storagePost(key, f, f.type || 'application/octet-stream', { name: nm, size: f.size || 0 }).then(function () {
+      // v6.6: 5GB 초과 자료는 올리지 않고 건너뜀(녹음은 계속). 5GB 이하는 File(Blob) 그대로 스트리밍 — 메모리로 읽지 않음.
+      var up = ((f.size || 0) > MAX_UPLOAD_BYTES)
+        ? Promise.reject(voiceErr('too_big', { name: nm, size: f.size || 0 }))
+        : _storagePost(key, f, f.type || 'application/octet-stream', { name: nm, size: f.size || 0 });
+      return up.then(function () {
         out.push({ key: key, ext: ext, name: nm, size: f.size || 0, mime: f.type || '' });
       }, function (e) {
         if (!(e && MAT_SKIP_REASONS[e.reason])) throw e;
@@ -332,6 +355,8 @@
   }
   // memo.kind photo/video, files: [File] (1장 이상). onProgress(done,total) 선택.
   function sendBatch(memo, files, onProgress) {
+    var big = firstTooBig(files);                     // v6.6: 5GB 초과는 올리기 전에 거절(보관·재시도 안 함)
+    if (big) return Promise.reject(big);
     var filesMeta = [], idx = 0;
     function step() {
       if (idx >= files.length) {
@@ -406,6 +431,7 @@
   }
   // 큰 영상 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
   function sendVideoChunked(memo, file, onProgress) {
+    if (((file && file.size) || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));   // v6.6
     var ext = extForFile(file, 'video');
     var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
     return _insertChunkedVideoRow(memo, total, ext).then(function () {
@@ -525,6 +551,8 @@
     opts = opts || {};
     var files = opts.files || [];
     var audioBlob = opts.audioBlob || null;
+    var big = firstTooBig(files);                     // v6.6: 채팅 사진 5GB 초과 거절
+    if (big) return Promise.reject(big);
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', speak: !!opts.speak };
     if (opts.modelPref) meta.model_pref = opts.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
     var imgMeta = [];
@@ -579,6 +607,8 @@
   }
   // 여러 파일(각 ≤ 단일 업로드 한도)을 한 채팅 행으로. onProgress(done,total).
   function sendChatBatch(memo, files, onProgress) {
+    var big = firstTooBig(files);                     // v6.6
+    if (big) return Promise.reject(big);
     var filesMeta = [], idx = 0;
     function step() {
       if (idx >= files.length) { return _insertChatFileRow(memo, filesMeta); }
@@ -596,6 +626,7 @@
   }
   // 큰 파일 1개: 청크로 나눠 페이싱 업로드(영상 청크와 동일 규약). onProgress('upload',done,total).
   function sendChatChunked(memo, file, onProgress) {
+    if (((file && file.size) || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));   // v6.6
     var ext = extForFile(file, 'file');
     var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
     var fileMeta = { name: file.name || ('file.' + ext), size: file.size || 0, mime: file.type || '', ext: ext };
@@ -639,6 +670,7 @@
   }
   // (A) 폰에서 고른 문서 1개 업로드 + kind='doc' 행. 큰 파일은 청크·페이싱. onProgress('upload',done,total).
   function sendDoc(memo, file, onProgress) {
+    if (((file && file.size) || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));   // v6.6
     var ext = extForFile(file, 'file');
     var fileMeta = { ext: ext, name: file.name || ('doc.' + ext), size: file.size || 0, mime: file.type || '' };
     if ((file.size || 0) <= CHUNK_SIZE) {
@@ -896,7 +928,7 @@
    *       · XHR 로 올려 진행률(%)을 보여 주고,
    *       · 실패하면 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 돌려준다(err.reason, err.friendly).
    *   ⚠️ LOCKER_MAX_BYTES 는 서버 전역 한도와 같게 맞춘다(서버가 더 낮으면 서버 413 → 'too_big_server' 안내). */
-  var LOCKER_MAX_BYTES = 5 * 1024 * 1024 * 1024;     // 5GB = 서버 전역 한도 계획값(Supabase 일반 업로드 최대치)
+  var LOCKER_MAX_BYTES = MAX_UPLOAD_BYTES;           // v6.6: 공용 상한(5GB = locker 버킷 한도)과 하나로
   var LOCKER_STALL_MS = 120000;                      // 2분 동안 한 바이트도 안 올라가면 끊긴 것으로 보고 중단
   function lockerPublicUrl(key) { return CONFIG.url + '/storage/v1/object/public/' + LOCKER_BUCKET + '/' + key; }
   function fmtSize(n) {
@@ -912,8 +944,8 @@
     info = info || {};
     var nm = info.name ? '「' + info.name + '」 ' : '';
     var table = {
-      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). 한 파일은 ' + fmtSize(LOCKER_MAX_BYTES) + '까지 올릴 수 있어요.',
-      too_big_server: nm + '파일이 서버가 받는 최대 크기를 넘었어요(' + fmtSize(info.size) + '). 소장에게 공유함 용량 한도를 올려 달라고 말씀해 주세요.',
+      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
+      too_big_server: nm + '파일이 서버가 받는 최대 크기를 넘었어요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요. 5GB 이하인데도 이렇게 나오면 소장에게 알려 주세요.',
       network: '인터넷 연결이 끊겨 ' + nm + '전송하지 못했어요. 연결을 확인하고 다시 보내 주세요.',
       stalled: '전송이 2분 넘게 멈춰 ' + nm + '중단했어요(인터넷이 느리거나 끊김). 다시 보내 주세요.',
       unreadable: nm + '파일을 읽지 못했어요. 폴더이거나, 옮겨졌거나 지워진 파일일 수 있어요. 파일을 다시 골라 주세요.',
@@ -1099,6 +1131,7 @@
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     LOCKER_MAX_BYTES: LOCKER_MAX_BYTES,   // v6.3: 공유함 한 파일 최대(서버 전역 한도와 같게)
+    MAX_UPLOAD_BYTES: MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL: MAX_UPLOAD_LABEL,   // v6.6: 모든 파일 보내기 공용 상한(5GB)
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
     saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
     markResendable: markResendable,   // v5.1: 보존 원본을 재전송 대상으로(자동복구/[다시 보내기])

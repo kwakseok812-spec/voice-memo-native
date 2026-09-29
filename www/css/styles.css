@@ -355,7 +355,15 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
    window(문서)가 스크롤되는 구조라 일반 헤더는 위로 밀려 사라졌음. 채팅 화면에만 적용(#chatView 스코프).
    좌우 -22px 여백으로 .app 좌우 패딩까지 덮어 뒤 메시지가 가장자리로 비치지 않게 하고,
    상단은 노치/상태바 안전영역(env(safe-area-inset-top)) 아래에 고정한다. */
-#chatView .subbar{
+/* v6.6(O-0087): 대표님 "나머지 메뉴 탭에서도 동일하게" — 채팅과 똑같은 고정 헤더를 모든 서브 화면에.
+   대상 = .app 안 각 화면(section)의 머리줄 .subbar 전부(홈은 .subbar 가 없어 해당 없음):
+   녹음 준비·녹음 완료·사진/영상 보내기·명함 검색·채팅·공유함·회의 요약(목록·상세)·작업 현황·아이디어·
+   케이 꾸미기·건강·문서 뷰어(고르기 화면)·보내는 중·정리 결과.
+   ▶ 모두 window(문서)가 스크롤되는 구조라(화면 안 별도 스크롤 상자 없음) 채팅처럼 sticky 가 그대로 먹는다.
+   ▶ 불투명 배경(var(--bg1) — 다크·라이트 모두 불투명)이라 뒤 글자가 비치지 않는다. blur(backdrop-filter) 금지(입력 렉 원인).
+   ▶ 문서 뷰어 본문(#docRoot)은 원래부터 화면 전체 고정 오버레이 + 자체 상단 툴바(← 목록)라 이 규칙과 무관.
+   ▶ 전체화면 보기(body.doc-fs)에선 아래 id 규칙이 이겨 헤더가 그대로 숨는다. */
+.app section > .subbar{
   position:sticky;
   top:env(safe-area-inset-top, 0px);
   z-index:20;
@@ -363,6 +371,15 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
   padding:0 22px;
   background:var(--bg1);
   border-bottom:1px solid var(--glass-b);
+}
+/* v6.6: 상태바가 웹 화면 위로 겹치는 폰(edge-to-edge)에선 고정 헤더 위 틈(안전영역)으로 스크롤된 글자가 비칠 수 있어
+   같은 색으로 덮는다. 안전영역이 0인 기기·PC에선 높이 0이라 아무 영향 없음. */
+.app section > .subbar::before{
+  content:"";
+  position:absolute; left:0; right:0; bottom:100%;
+  height:env(safe-area-inset-top, 0px);
+  background:var(--bg1);
+  pointer-events:none;
 }
 .chatlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0 10px;contain:layout}
 .bubble{max-width:84%;padding:12px 30px 12px 15px;border-radius:18px;font-size:16px;line-height:1.55;word-break:break-word;position:relative;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text;content-visibility:auto;contain-intrinsic-size:auto 52px}
