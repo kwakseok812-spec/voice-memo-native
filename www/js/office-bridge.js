@@ -123,23 +123,85 @@
   }
 
   /* ---------- 네트워크 ---------- */
+  /* v6.4(2026-09-29) 녹음·회의자료 업로드 공통 — 「임시저장 → 자료 붙여 PC 보내기」 오류(O-0085) 수정.
+   *  ▶ 원인(서버 로그 실측): Supabase Storage 는 "이미 있음(중복)"을 HTTP 409 가 아니라
+   *    **HTTP 400 + 본문 {"statusCode":"409","code":"KeyAlreadyExists","error":"Duplicate",...}** 로 준다
+   *    (9/29 12:25·12:49 재전송 응답 106바이트 = 이 본문 길이와 정확히 일치). 그래서 v5.1~v6.3 의
+   *    `r.status === 409` 통과 규칙은 한 번도 작동하지 않았고, 재전송은 이미 올라간 mat_0 에서 400 으로 죽었다.
+   *  ▶ 고침: 본문까지 읽어 중복이면 "이미 올라감=성공". 그 밖의 실패는 이유(용량/인터넷/파일 읽기/서버)를
+   *    쉬운 말(err.friendly)로 돌려준다. ⚠️ 안 올라간 객체는 서버가 200 을 주므로 중복 통과가 유실을 감추지 않는다. */
+  function isDuplicateStorage(status, bodyText) {
+    if (status === 409) return true;
+    var j = null; try { j = JSON.parse(bodyText || ''); } catch (x) {}
+    var sc = String((j && j.statusCode) || ''), code = String((j && j.code) || ''), er = String((j && j.error) || '');
+    return sc === '409' || code === 'KeyAlreadyExists' || code === 'ResourceAlreadyExists' ||
+           er === 'Duplicate' || /already exists/i.test(bodyText || '');
+  }
+  // 녹음·자료 업로드 실패 → 대표님이 읽을 쉬운 문장(err.friendly) + 분류(err.reason).
+  //   reason: too_big_server | network | unreadable | bad_key | auth | server | unknown
+  function voiceErr(reason, info) {
+    info = info || {};
+    var nm = info.name ? '「' + info.name + '」 ' : '';
+    var table = {
+      too_big_server: nm + '파일이 서버가 한 번에 받는 크기를 넘었어요(' + fmtSize(info.size) + ').',
+      network: '인터넷 연결이 끊겨 보내지 못했어요. 와이파이·데이터를 확인하고 다시 보내 주세요.',
+      unreadable: nm + '폰에 저장된 파일을 읽지 못했어요.',
+      bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
+      auth: '서버가 권한 문제로 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
+      server: '서버가 잠시 응답하지 않아요(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
+      unknown: nm + '올리지 못했어요' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
+    };
+    var msg = table[reason] || table.unknown;
+    var e = new Error(msg);
+    e.reason = reason; e.friendly = msg; e.status = info.status || 0; e.serverCode = info.code || '';
+    return e;
+  }
+  // Storage 에 한 객체 POST. body 는 Blob 또는 ArrayBuffer. 성공·중복=key, 실패=voiceErr.
+  //   ※ x-upsert 안 씀: 경로가 UUID라 고유 → 순수 INSERT(anon 업로드 정책과 일치). upsert 는 UPDATE 정책이 필요해 RLS 로 막힌다.
+  function _storagePost(key, body, contentType, info) {
+    info = info || {};
+    return fetch(CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + key, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
+                 'Content-Type': contentType || 'application/octet-stream' },
+      body: body
+    }).then(function (r) {
+      if (r.ok) return key;
+      return r.text().catch(function () { return ''; }).then(function (txt) {
+        if (isDuplicateStorage(r.status, txt)) return key;          // 이전 시도에 이미 올라감 = 성공
+        var c = classifyStorageFail(r.status, txt);
+        throw voiceErr(c.reason, { name: info.name, size: info.size, status: r.status, code: c.code });
+      });
+    }, function () {
+      // 요청이 서버에 닿지 못함(status 0): 인터넷 끊김 또는 폰 파일을 못 읽음 — 파일을 직접 읽어 구분.
+      if (!(body && typeof body.slice === 'function' && typeof Blob !== 'undefined' && body instanceof Blob)) {
+        throw voiceErr('network', info);
+      }
+      return probeReadable(body).then(function (ok) { throw voiceErr(ok ? 'network' : 'unreadable', info); });
+    });
+  }
+  // Blob 전체를 메모리로 읽는다(ArrayBuffer). 폰에 저장된(IndexedDB) 녹음을 올리기 '전에' 먼저 읽어 두면
+  //   ① 업로드 도중 저장 파일 읽기 실패가 '인터넷 끊김'처럼 보이는 일을 막고(원인이 바로 드러남),
+  //   ② 파일 기반 Blob 을 그대로 스트리밍하다 끊기는 WebView 문제를 비껴간다(조각 40MB 이하라 메모리 부담 작음).
+  function readAllBytes(blob, info) {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (blob && typeof blob.arrayBuffer === 'function') {
+          blob.arrayBuffer().then(resolve, function () { reject(voiceErr('unreadable', info)); });
+          return;
+        }
+        var fr = new FileReader();
+        fr.onload = function () { resolve(fr.result); };
+        fr.onerror = function () { reject(voiceErr('unreadable', info)); };
+        fr.readAsArrayBuffer(blob);
+      } catch (x) { reject(voiceErr('unreadable', info)); }
+    });
+  }
   function uploadAudio(id, ext, blob) {
     var path = id + '.' + ext;
-    return fetch(CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + path, {
-      method: 'POST',
-      headers: {
-        'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
-        'Content-Type': (blob && blob.type) || 'audio/webm'
-        // ※ x-upsert 안 씀: 경로가 UUID라 고유 → 순수 INSERT(anon 업로드 정책과 일치).
-        //    upsert 를 켜면 UPDATE 정책까지 필요해 RLS 로 막힌다.
-      },
-      body: blob
-    }).then(function (r) {
-      // 409 = 같은 경로({id}.{ext} = 같은 메모의 같은 오디오)가 이미 서버에 있음 = 이전 시도에 이미 업로드됨.
-      //   재전송(flush·[다시 보내기])이 여기서 죽지 않고 통과해야 한다("유실"이 아니라 "이미 완료된 업로드").
-      //   ⚠️ 오디오가 아예 안 올라갔다면 서버는 200(created)을 주지 409를 주지 않으므로, 409 통과가 실제 유실을 감추지 않는다.
-      if (r.ok || r.status === 409) return path;
-      throw new Error('오디오 업로드 실패(HTTP ' + r.status + ')');
+    // 같은 경로가 이미 있으면(이전 시도에 올라감) 중복=성공으로 통과 — _storagePost 참고.
+    return readAllBytes(blob, { name: '녹음' }).then(function (buf) {
+      return _storagePost(path, buf, (blob && blob.type) || 'audio/webm', { name: '녹음', size: blob && blob.size });
     });
   }
   function _insertRow(body) {
@@ -161,6 +223,7 @@
   function createMemo(memo, audioPath) {
     var meta = { app: 'voice-memo-test', ext: memo.ext };
     if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
+    if (memo.materialsSkipped && memo.materialsSkipped.length) meta.materials_skipped = memo.materialsSkipped;   // v6.4: 못 붙인 자료(이름·이유)
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending',
       kind: memo.kind || 'audio', note: memo.note || null,
@@ -174,22 +237,47 @@
    * `{id}/mat_{i}.{ext}` 로 올리고, meta.materials=[{key,ext,name,size,mime}] 로 행에 싣는다.
    * PC(collect.py) 가 이 목록을 내려받아 텍스트를 추출하고, 전사문과 함께 통합 회의록으로 정리한다.
    * 반환: 업로드된 자료 메타 배열(없으면 []). */
+  //   v6.4: 자료 하나가 「너무 큼 / 폰에서 못 읽음 / 이름 거절」처럼 다시 보내도 똑같이 실패할 이유로 막히면,
+  //   그 자료만 빼고(out.skipped 에 기록) 녹음은 계속 보낸다 — 녹음이 자료 때문에 못 가는 일이 없게.
+  //   인터넷·서버 문제(다시 보내면 될 수 있는 것)는 지금처럼 전체 실패로 돌려 원본을 보존한다.
+  //   재전송 때 이미 올라간 mat_i 는 중복=성공으로 통과한다(_storagePost).
+  var MAT_SKIP_REASONS = { too_big_server: 1, unreadable: 1, bad_key: 1 };
   function uploadMaterials(id, materials, onProgress) {
     materials = materials || [];
-    var out = [], i = 0;
+    var out = [], skipped = [], i = 0;
+    out.skipped = skipped;
     function step() {
       if (i >= materials.length) return Promise.resolve(out);
       var f = materials[i];
-      var ext = extForFile(f, 'file');
+      var ext = extForMaterial(f);
       var key = id + '/mat_' + i + '.' + ext;
-      return uploadObject(key, f).then(function () {
-        out.push({ key: key, ext: ext, name: f.name || ('mat' + i + '.' + ext),
-                   size: f.size || 0, mime: f.type || '' });
+      var nm = f.name || ('mat' + i + '.' + ext);
+      return _storagePost(key, f, f.type || 'application/octet-stream', { name: nm, size: f.size || 0 }).then(function () {
+        out.push({ key: key, ext: ext, name: nm, size: f.size || 0, mime: f.type || '' });
+      }, function (e) {
+        if (!(e && MAT_SKIP_REASONS[e.reason])) throw e;
+        skipped.push({ name: nm, size: f.size || 0, reason: e.reason, msg: e.friendly || String(e.message || e) });
+      }).then(function () {
         i++; onProgress && onProgress(i, materials.length);
         return step();
       });
     }
     return step();
+  }
+  // 회의자료 저장 키 확장자: 이름의 확장자가 영문·숫자면 그대로, 아니면 파일 종류(mime)로 추정, 그래도 모르면 'bin'.
+  //   (예전 기본값 'jpg' 는 문서를 사진으로 오인시킬 수 있었다. PC collect.py 는 모르는 확장자도 PDF 변환 경로로 처리.)
+  var MAT_MIME_EXT = {
+    'application/pdf': 'pdf', 'application/x-hwp': 'hwp', 'application/haansofthwp': 'hwp', 'application/vnd.hancom.hwp': 'hwp',
+    'application/hwp+zip': 'hwpx', 'application/vnd.hancom.hwpx': 'hwpx', 'application/haansofthwpx': 'hwpx',
+    'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-powerpoint': 'ppt', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'text/plain': 'txt', 'text/csv': 'csv', 'text/markdown': 'md', 'image/jpeg': 'jpg', 'image/png': 'png'
+  };
+  function extForMaterial(f) {
+    var e = (((f && f.name) || '').split('.').pop() || '').toLowerCase();
+    if (/^[a-z0-9_-]{1,5}$/.test(e) && ((f && f.name) || '').indexOf('.') > 0) return e;
+    return MAT_MIME_EXT[((f && f.type) || '').toLowerCase()] || 'bin';
   }
   // 파일 없이 등록하는 메모(명함 검색 / 사진 온디맨드). kind='search'.
   function createSearch(memo) {
@@ -210,7 +298,7 @@
                 materials: memo.materials || [], date: memo.date, time: memo.time, kind: memo.kind || 'audio', sent: false };
     return idbPut(rec)                                            // (1) 전송 전 원본 영속 — 인메모리만 믿지 않음
       .then(function () { return uploadMaterials(memo.id, memo.materials || []); })
-      .then(function (matMeta) { memo.materialsMeta = matMeta; return uploadAudio(memo.id, memo.ext, blob); })
+      .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return uploadAudio(memo.id, memo.ext, blob); })
       .then(function (path) { return createMemo(memo, path); })
       .then(function () { rec.sent = true; return idbPut(rec); }) // (2) 업로드 완료 표시(원본은 done 확인까지 보존)
       .catch(function (e) {
@@ -230,19 +318,11 @@
     return e;
   }
   function uploadObject(key, blob) {
-    return fetch(CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + key, {
-      method: 'POST',
-      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
-                 'Content-Type': (blob && blob.type) || 'application/octet-stream' },
-      body: blob
-    }).then(function (r) {
-      // 409 = 이 키(자료 mat_i / 조각 part_k 등)가 이미 서버에 있음(이전 시도에 업로드 성공) →
-      //   재전송이 자료·조각 409로 죽지 않게 "이미 올라감=성공"으로 취급.
-      //   (교무위 사고 근본원인: mat_0 재업로드 409로 재전송이 오디오에 닿기 전 죽음.)
-      //   ⚠️ 안 올라간 객체는 서버가 200을 주므로 409 통과가 실제 유실을 감추지 않는다.
-      if (r.ok || r.status === 409) return key;
-      throw new Error('파일 업로드 실패(HTTP ' + r.status + ')');
-    });
+    // 이 키(자료 mat_i / 조각 part_k / 사진 등)가 이미 서버에 있으면(이전 시도에 업로드 성공) "이미 올라감=성공".
+    //   (교무위 9/21·기획혁신처 9/29 사고 근본원인: 서버는 중복을 409 가 아니라 400+본문 statusCode "409" 로 준다
+    //    → v6.3 까지는 재전송이 mat_0 에서 죽었다. v6.4: 본문까지 보고 판정 — _storagePost 참고.)
+    //   실패 메시지는 예전처럼 '(HTTP 400)' 등 상태코드가 들어가고, err.friendly 에 쉬운 설명이 붙는다.
+    return _storagePost(key, blob, (blob && blob.type) || 'application/octet-stream', { size: blob && blob.size });
   }
   function _insertBatchRow(memo, filesMeta) {
     return _insertRow({
@@ -295,6 +375,21 @@
       });
     });
   }
+  // v6.4: 녹음 조각 전용 — 폰에 저장된(IndexedDB) 녹음 조각을 '먼저 메모리로 읽고' 올린다(readAllBytes 참고).
+  //   읽기 실패(unreadable)는 다시 해도 같으므로 즉시 실패, 인터넷·서버 실패만 3초 간격으로 재시도.
+  //   이미 올라간 조각은 중복=성공(_storagePost).
+  function uploadAudioPartWithRetry(id, k, total, ext, part, tries) {
+    var info = { name: '녹음 조각 ' + (k + 1) + '/' + total, size: part.size };
+    return readAllBytes(part, info).then(function (buf) {
+      function attempt(n) {
+        return _storagePost(id + '/part_' + k + '.' + ext, buf, 'application/octet-stream', info).catch(function (e) {
+          if (n <= 1 || (e && e.reason === 'too_big_server') || (e && e.reason === 'bad_key')) throw e;
+          return new Promise(function (res) { setTimeout(res, 3000); }).then(function () { return attempt(n - 1); });
+        });
+      }
+      return attempt(tries || 3);
+    });
+  }
   // progress(=PC가 소비한 조각 수) >= need 될 때까지 대기(최대 30분).
   function waitConsumed(id, tok, need) {
     var start = Date.now();
@@ -343,6 +438,7 @@
   function _insertChunkedAudioRow(memo, total, ext) {
     var meta = { app: 'voice-memo-test', chunked: true, ext: ext, total: total };
     if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
+    if (memo.materialsSkipped && memo.materialsSkipped.length) meta.materials_skipped = memo.materialsSkipped;   // v6.4
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending', kind: 'audio', note: memo.note || null,
       client_token: memo.token,
@@ -360,9 +456,14 @@
                 materials: memo.materials || [], date: memo.date, time: memo.time, kind: 'audio', sent: false };
     return idbPut(rec)                                       // (1) 전송 전 원본 영속
       .then(function () { return uploadMaterials(memo.id, memo.materials || []); })   // 회의자료 먼저(있으면) — 2026-09-21
-      .then(function (matMeta) { memo.materialsMeta = matMeta; return _insertChunkedAudioRow(memo, total, ext); })
-      .then(function () {
+      .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return _insertChunkedAudioRow(memo, total, ext); })
+      // v6.4 재전송 이어받기: 행이 이미 있으면(409=등록됨) PC가 이미 받아 간 조각 수(progress)부터 올린다.
+      //   (이미 붙여 지운 조각을 또 올리면 서버에 쓰레기 조각이 남는다.) 이미 끝난(done) 메모면 조각을 건너뛴다.
+      .then(function () { return poll(memo.id, memo.token).catch(function () { return null; }); })
+      .then(function (row) {
       var k = 0;
+      if (row && row.status === 'done') k = total;
+      else if (row && row.progress > 0) k = Math.min(total, row.progress | 0);
       function step() {
         if (k >= total) return Promise.resolve();
         var pacing = (k >= MAX_INFLIGHT)
@@ -370,7 +471,7 @@
           : Promise.resolve();
         return pacing.then(function () {
           var part = blob.slice(k * CHUNK_SIZE, Math.min(blob.size, (k + 1) * CHUNK_SIZE));
-          return uploadPartWithRetry(memo.id, k, ext, part, 3);
+          return uploadAudioPartWithRetry(memo.id, k, total, ext, part, 3);
         }).then(function () {
           k++; onProgress && onProgress('upload', k, total);
           return step();
@@ -952,8 +1053,8 @@
       .then(_clr, _clrThrow);
   }
 
-  // 오프라인으로 밀렸던 오디오 재업로드. onEach(memo) 성공 콜백.
-  function flush(onEach) {
+  // 오프라인으로 밀렸던 오디오 재업로드. onEach(memo) 성공 콜백. onFail(memo, err) 실패 콜백(v6.4, 선택 — 이유 안내용).
+  function flush(onEach, onFail) {
     return idbAll().then(function (list) {
       var i = 0;
       function next() {
@@ -975,7 +1076,7 @@
         }
         return p
           .then(function () { onEach && onEach(memo); })
-          .catch(function () { /* 다음 기회 */ })
+          .catch(function (e) { try { onFail && onFail(memo, e); } catch (x) {} /* 다음 기회 */ })
           .then(next);
       }
       return next();

@@ -242,9 +242,9 @@
       setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
-      HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
+      HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       renderHistory(); showHome();
-      showBanner('⚠️ 전송 실패(오프라인일 수 있어요). 녹음은 안전하게 보관됐어요 — 인터넷 되면 <b>지난 메모</b>에서 다시 눌러 보세요.');
+      showBanner('⚠️ 전송 실패 — ' + esc(friendlyErr(e)) + '<br>녹음은 안전하게 보관됐어요 — <b>지난 메모</b>에서 다시 눌러 보세요.');
       setStatus('전송 실패', 'err');
     });
   });
@@ -281,6 +281,8 @@
         '이 녹음은 폰에 임시 저장돼 있어요(<b>아직 PC로 안 보냈어요</b>).<br>' +
         '회의자료(선택)를 붙이고 <b>PC로 보내기</b>를 누르면 녹음+자료를 함께 정리해 드려요.<br>' +
         '<b>붙인 자료:</b> <span id="mDraftMatN">' + matN + '</span>개' +
+        (e.error ? '<br><span style="color:var(--rec,#c0392b)"><b>지난번 보내기 실패:</b> ' + esc(e.error) + '</span>' +
+                   '<br>다시 <b>PC로 보내기</b>를 누르면 이어서 보내요(이미 올라간 부분은 건너뜀).' : '') +
         '</div></div>' +
         '<div class="btnrow">' +
         '<button id="mDraftAttach" class="btn ghost"><svg><use href="#i-plus"/></svg>회의자료 붙이기</button>' +
@@ -311,6 +313,30 @@
       });
     });
   });
+  /* v6.4(2026-09-29) 실패 이유를 쉬운 말로 — 예전엔 이유 없이 "전송 실패 — 다시 보내세요"만 떠서
+   *   무엇이 문제인지(인터넷? 파일? 서버?) 알 수 없었다(O-0085 「기획혁신처회의」). */
+  function friendlyErr(e) {
+    if (!e) return '알 수 없는 이유로 보내지 못했어요.';
+    return String(e.friendly || e.message || e);
+  }
+  // 임시저장 발송 실패: 임시저장은 그대로 두고(유실 방지) 이유를 항목에 남기고 배너로 알린다.
+  function draftSendFailed(id, err) {
+    var why = friendlyErr(err);
+    var tail = (err && err.reason === 'unreadable')
+      ? ' 폰 저장 공간·앱 상태 문제일 수 있으니 이 항목은 지우지 마시고 소장에게 알려 주세요.'
+      : ' 지난 메모 → 이 항목 → <b>PC로 보내기</b>를 다시 누르면 이어서 보내요(이미 올라간 부분은 건너뜀).';
+    HistoryModule.update(id, { status: 'draft', error: why }); renderHistory(); showHome();
+    showBanner('⚠️ 전송 실패 — ' + esc(why) + '<br>임시 저장한 녹음은 폰에 그대로 있어요.' + tail);
+    setStatus('전송 실패', 'err');
+  }
+  // 보내기는 됐지만 붙인 자료 중 못 붙인 것(너무 큼·읽기 실패 등)이 있으면 알려 준다(녹음은 정상 전송).
+  function noticeSkippedMaterials(memo) {
+    var sk = (memo && memo.materialsSkipped) || [];
+    if (!sk.length) return;
+    showBanner('📎 녹음은 PC로 보냈어요. 다만 자료 ' + sk.length + '개는 함께 붙이지 못했어요:<br>' +
+      sk.map(function (x) { return '· ' + esc(x.msg || x.name); }).join('<br>') +
+      '<br>(큰 한글·PPT 파일은 PDF로 저장해 크기를 줄이면 붙일 수 있어요. 이 녹음은 자료 없이 정리돼요.)');
+  }
   // 임시저장 → 실제 발송(대표님이 [PC 보내기]를 눌렀을 때만 실행). 기존 send/sendAudioChunked 재사용.
   //  실패 시: draft 는 그대로 두고(유실 방지), send 가 pending 에 남긴 잔재는 dropPending 으로 제거해 자동발송을 막는다.
   function resumeSendDraft(id) {
@@ -323,22 +349,21 @@
         HistoryModule.update(id, { status: 'pending', kind: 'audio' });
         videoProg[id] = '올릴 준비 중…'; renderHistory();
         OfficeBridge.sendAudioChunked(memo, blob, function (phase, done, total) { videoProg[id] = '올리는 중 ' + done + '/' + total + ' 조각'; renderHistory(); })
-          .then(function () { OfficeBridge.delDraft(id); HistoryModule.update(id, { status: 'processing' }); videoProg[id] = 'PC에서 정리 준비 중…'; renderHistory(); startVideoPolling(id, memo.token); })
-          .catch(function () { OfficeBridge.dropPending(id); delete videoProg[id]; HistoryModule.update(id, { status: 'draft' }); renderHistory(); showHome(); showBanner('⚠️ 전송 실패 — 임시 저장은 그대로 있어요. 지난 메모에서 다시 보내세요.'); });
+          .then(function () { OfficeBridge.delDraft(id); HistoryModule.update(id, { status: 'processing', error: null }); videoProg[id] = 'PC에서 정리 준비 중…'; renderHistory(); startVideoPolling(id, memo.token); noticeSkippedMaterials(memo); })
+          .catch(function (err) { OfficeBridge.dropPending(id); delete videoProg[id]; draftSendFailed(id, err); });
         toast('긴 녹음은 조각으로 나눠 보내요. 지난 메모에서 진행 상태를 볼 수 있어요.'); showHome();
       } else {
         HistoryModule.update(id, { status: 'pending', kind: 'audio' }); renderHistory();
         openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
         OfficeBridge.send(memo, blob).then(function () {
           OfficeBridge.delDraft(id);
-          HistoryModule.update(id, { status: 'processing' }); renderHistory();
+          HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
           setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
           startPolling(id, memo.token);
-        }).catch(function () {
+          noticeSkippedMaterials(memo);
+        }).catch(function (err) {
           OfficeBridge.dropPending(id);                 // send 가 pending 에 넣은 잔재 제거 → 자동발송 방지
-          HistoryModule.update(id, { status: 'draft', error: null }); renderHistory(); showHome();
-          showBanner('⚠️ 전송 실패(오프라인일 수 있어요). 임시 저장은 그대로 있어요 — 지난 메모에서 다시 보내세요.');
-          setStatus('전송 실패', 'err');
+          draftSendFailed(id, err);
         });
       }
     });
@@ -784,7 +809,7 @@
     toast('다시 보내는 중…');
     HistoryModule.update(id, { status: 'processing', error: null });   // 즉시 '정리중'으로 보이게(재시도 시작 표시)
     renderHistory();
-    var handled = false;
+    var handled = false, failErr = null;
     // v5.1: 보존된 원본(sent:true 로 대기 중이던 것 포함)을 재전송 대상으로 되돌린 뒤 flush.
     OfficeBridge.markResendable(id).then(function () {
       return OfficeBridge.flush(function (memo) {
@@ -792,12 +817,13 @@
           handled = true;
           HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
           startPolling(id, e.token);
+          noticeSkippedMaterials(memo);
         }
-      });
+      }, function (memo, err) { if (memo.id === id) failErr = err; });   // v6.4: 실패 이유 받기
     }).then(function () {
       if (!handled) {                 // 못 보냈으면(대기열에 없음/또 실패) 실패로 되돌리고 사유 안내
-        HistoryModule.update(id, { status: 'failed' }); renderHistory();
-        showBanner('⚠️ 다시 보내기에 실패했어요. 인터넷 연결과 PC 상태를 확인하고 잠시 후 다시 시도해 주세요.');
+        HistoryModule.update(id, { status: 'failed', error: failErr ? friendlyErr(failErr) : (e.error || null) }); renderHistory();
+        showBanner('⚠️ 다시 보내기에 실패했어요. ' + (failErr ? esc(friendlyErr(failErr)) : '인터넷 연결과 PC 상태를 확인하고 잠시 후 다시 시도해 주세요.'));
       }
     }).catch(function () {
       if (!handled) { HistoryModule.update(id, { status: 'failed' }); renderHistory(); }
@@ -938,10 +964,11 @@
       videoProg[memo.id] = 'PC에서 정리 준비 중…';
       renderHistory();
       startVideoPolling(memo.id, memo.token);
+      noticeSkippedMaterials(memo);
     }).catch(function (e) {
-      HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
+      HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       delete videoProg[memo.id]; renderHistory();
-      toast('긴 음성 업로드 실패 — 지난 메모에서 다시 시도해 주세요.');
+      toast('긴 음성 업로드 실패 — ' + friendlyErr(e) + ' 지난 메모에서 다시 보내 주세요.');
     });
     toast('긴 녹음은 조각으로 나눠 보내요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
     showHome();
@@ -1132,7 +1159,7 @@
   var CHAT_EPOCH = '1970-01-01T00:00:00.000Z';
   var chatSyncHW = CHAT_EPOCH;    // 대화 동기화 세션 high-water(메모리 전용, 열 때 EPOCH 로 리셋)
   var officeHW = CHAT_EPOCH;      // 케이 방송 세션 high-water(메모리 전용)
-  var APP_VERSION = 'v6.3';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v6.4';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
