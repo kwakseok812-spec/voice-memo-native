@@ -115,4 +115,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ 알림 표시(녹음 중 알림) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- v6.7: [다운로드]로 받은 APK(스마트비서 새 버전)를 바로 설치 화면으로 넘기기 위한 권한.
+         실제 설치 허용은 사용자가 설정의 「이 출처 허용」에서 한 번 켜야 한다(앱이 임의로 켤 수 없음). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>
