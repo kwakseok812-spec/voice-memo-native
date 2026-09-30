@@ -4,8 +4,10 @@
  * - 오늘 기록: 공복혈당·체중·수면(스텝퍼+숫자) / 식단(프리셋 칩+직접입력) /
  *              간식 / 당뇨약(아침·저녁)·영양제(원탭 토글). 한 항목 바꿀 때마다 자동 저장.
  * - 기록 보기: 날짜별 리스트 + 공복혈당·체중 추세 그래프(순수 SVG, 외부 라이브러리 X).
- * - 저장: Supabase public.health_logs 에 날짜(log_date) 기준 upsert(merge-duplicates).
- *         쓰는 키는 공개(publishable) 키뿐(OfficeBridge.CONFIG). RLS: anon INSERT/UPDATE/SELECT.
+ * - 저장: Supabase public.health_logs 에 날짜(log_date) 기준 upsert.
+ *         v7.5(O-0130 건강기록 잠그기): 표 직접 접근(anon 정책)을 없애고 연동 암호 게이트 RPC 로만 읽고 쓴다
+ *         — health_list(p_from,p_to,p_pass) / health_upsert(p_row,p_pass). 암호가 없거나 틀리면 연동 암호 창을 띄운다.
+ *         공개(publishable) 키만으로는 더 이상 건강기록을 읽거나 고칠 수 없다.
  * - 앱 텔레그램 건강 문진(건강일지.md)과는 완전히 별개 경로. 서로 건드리지 않는다.
  *
  * app.js 연결: window 이벤트/버튼으로 화면을 열면 HealthTab.open() 이 렌더한다.
@@ -109,27 +111,40 @@
     return hm.h + '시간 ' + hm.m + '분';
   }
 
-  /* ---------- 네트워크(Supabase, publishable 키) ---------- */
-  function upsertToday() {
-    var c = cfg(); if (!c) return Promise.resolve(false);
-    var body = { log_date: today.log_date, updated_at: new Date().toISOString() };
-    FIELDS.forEach(function (k) { body[k] = isSet(today[k]) ? today[k] : null; });
-    return fetch(c.url + '/rest/v1/health_logs', {
+  /* ---------- 네트워크(Supabase, 연동 암호 게이트 RPC — v7.5 O-0130) ---------- */
+  function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
+  var gateShownAt = 0;
+  function needPass(msg) {                       // 암호 없음/틀림 → 앱의 연동 암호 창(너무 자주 띄우지 않게 20초 간격)
+    if (Date.now() - gateShownAt < 20000) return;
+    gateShownAt = Date.now();
+    try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {}
+  }
+  function rpc(name, body) {
+    var c = cfg(); if (!c) return Promise.reject(new Error('NO_CONFIG'));
+    var pass = syncPass();
+    if (!pass) { needPass('건강 기록을 저장·조회하려면 PC 연동 암호를 입력해 주세요.'); var e0 = new Error('NO_PASS'); e0.badpass = true; return Promise.reject(e0); }
+    body.p_pass = pass;
+    return fetch(c.url + '/rest/v1/rpc/' + name, {
       method: 'POST',
-      headers: {
-        'apikey': c.key, 'Authorization': 'Bearer ' + c.key,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
-      },
+      headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
-    }).then(function (r) { return r.ok; });
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) {
+        needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했어요. 다시 입력해 주세요.');
+        var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function upsertToday() {
+    var body = { log_date: today.log_date };
+    FIELDS.forEach(function (k) { body[k] = isSet(today[k]) ? today[k] : null; });
+    return rpc('health_upsert', { p_row: body }).then(function (ok) { return ok === true; }).catch(function () { return false; });
   }
   function fetchRange(fromStr, toStr) {
-    var c = cfg(); if (!c) return Promise.resolve([]);
-    var q = '?select=*&log_date=gte.' + fromStr + '&log_date=lte.' + toStr + '&order=log_date.desc';
-    return fetch(c.url + '/rest/v1/health_logs' + q, {
-      headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key }
-    }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
+    return rpc('health_list', { p_from: fromStr, p_to: toStr })
+      .then(function (rows) { return Array.isArray(rows) ? rows : []; }).catch(function () { return []; });
   }
   function fetchOne(dateStr) {
     return fetchRange(dateStr, dateStr).then(function (rows) { return (rows && rows[0]) || null; });
@@ -471,13 +486,14 @@
     renderToday();
     // 서버 최신값으로 보정(다른 기기/문진 반영). 편집 중 충돌 최소화 위해 열자마자 1회.
     fetchOne(ds).then(function (row) {
-      if (!row) return;
-      var changed = false;
+      var changed = false, localAhead = false;
       FIELDS.forEach(function (k) {
-        var sv = isSet(row[k]) ? row[k] : null;
+        var sv = row && isSet(row[k]) ? row[k] : null;
         if (sv !== null && !isSet(today[k])) { today[k] = sv; changed = true; }   // 비어있던 칸만 서버값으로 채움(내가 방금 넣은 값 보호)
+        if (sv === null && isSet(today[k])) localAhead = true;                   // 저장 못 하고 폰에만 남은 값(암호 없을 때 등)
       });
       if (changed) { cachePut(); renderToday(); }
+      if (localAhead && syncPass()) scheduleSave();                              // v7.5: 밀린 값 서버로 올림
     }).catch(function () {});
   }
 
