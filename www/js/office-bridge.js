@@ -886,8 +886,18 @@
    * (id, content_md, summary_json, ts) 시간순으로 돌려준다 — voice_memos 전체를 열지 않으므로
    * 다른 채팅·음성·건강 데이터는 새지 않는다. 토큰 불필요(대표님 1인 앱, broadcast 전용).
    *   since : ISO 문자열(그 시각 '이후'에 처리된 방송만). 반환: [{id, content_md, summary_json, ts}] */
+  // v7.7(O-0134): 되읽기 조회 하드 타임아웃 — 폰이 뒤로 가 있는 사이(화면 꺼짐·WiFi↔LTE 전환) 소켓이 멈추면
+  //   fetch 가 영영 끝나지 않아 앱의 officeLoading/syncLoading 이 true 로 굳고, 그 뒤로는 방송·대화를
+  //   다시 받지 않았다(「앱을 껐다 켜야만 보인다」의 한 원인). poll() 과 같은 방식으로 15초에 강제 종료.
+  function fetchT(url, opt, ms) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, ms || 15000) : null;
+    if (ac) opt.signal = ac.signal;
+    return fetch(url, opt).then(function (r) { if (to) clearTimeout(to); return r; },
+                                function (e) { if (to) clearTimeout(to); throw e; });
+  }
   function listOfficePushes(since) {
-    return fetch(CONFIG.url + '/rest/v1/rpc/list_office_pushes', {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/list_office_pushes', {
       method: 'POST',
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_since: since || null })
@@ -903,7 +913,7 @@
    *   반환: [{id, note, content_md, summary_json, ts}]
    * 암호가 틀리면 서버가 예외(BAD_PASSCODE)→여기서 err.badpass=true 로 표시해 앱이 재입력하게 한다. */
   function listChatHistory(since, pass) {
-    return fetch(CONFIG.url + '/rest/v1/rpc/list_chat_history', {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/list_chat_history', {
       method: 'POST',
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_since: since || null, p_pass: pass || '' })
