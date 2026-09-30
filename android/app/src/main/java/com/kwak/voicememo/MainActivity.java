@@ -30,6 +30,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeInputPlugin.class);
         // v6.7: 네이티브 파일 다운로드(채팅·공유함 [다운로드] → 폰 「다운로드」 폴더, APK 는 설치 화면으로)
         registerPlugin(FileDownloadPlugin.class);
+        // v7.6(O-0133): 홈 일정 [길찾기] → 네이버 지도 앱 열기(없으면 JS 가 웹 지도로)
+        registerPlugin(ExternalAppPlugin.class);
         super.onCreate(savedInstanceState);
         // 앱이 꺼진 상태에서 "열기/공유 → 스마트비서"로 시작된 경우
         handleIncomingDoc(getIntent());

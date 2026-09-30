@@ -4477,6 +4477,7 @@
     getSyncPass: getSyncPass,
     needPass: function (msg) { showSyncGate(true, msg || ''); },   // v7.5(O-0130) 건강 탭 RPC 가 암호 없음/틀림일 때
     refreshOrders: function () { try { refreshOrders(true); } catch (e) {} },
+    toast: function (msg, ms) { toast(msg, ms); },   // (O-0133) 일정 [길찾기] 안내
     openOrders: function (hlId) { openOrders(false, hlId || ''); },
     sheet: function (title, msg, label, icon, action) {
       openSheet(title, msg, label, action);

@@ -12,6 +12,15 @@
  *   · ③   = 이미 있는 「작업 현황」 조회(list_office_orders) 결과를 그대로 받아 쓴다(추가 서버 호출 없음).
  *          app.js refreshOrders() 가 결과를 TodayCard.setOrders(rows) 로 넘겨 준다.
  *
+ * (O-0133) 일정 옆 [길찾기] — 네이버 지도 「검색」으로 연다(키·비용 없음, 좌표 없음).
+ *   · 네이버 대중교통 길찾기 스킴(nmap://route/public)은 도착지 좌표(dlat·dlng)가 「필수」라 장소 이름만으로는 못 쓴다.
+ *     좌표를 AI 가 추측해 넣지 않는다 → nmap://search?query=장소 로 열고, 대표님이 네이버 지도에서 [도착] 한 번 더
+ *     (출발지는 네이버 앱 기본값 = 현재 위치).
+ *   · 폰(APK): 네이티브 ExternalApp.openUri(패키지 com.nhn.android.nmap) → 앱이 없으면 웹 지도(map.naver.com).
+ *     PC판·옛 APK: 바로 웹 지도 검색.
+ *   · 「3호관 301호」「대회의실」「본관 5층」처럼 건물 안 방 이름만 있으면 버튼을 숨긴다(검색해도 엉뚱한 곳).
+ *     기관·주소 + 방 이름이면 방 부분만 떼고 검색(예: 「○○대학교 본관 2층 대회의실」 → 「○○대학교」).
+ *     온라인 회의(Zoom·화상·온라인·주소 링크)도 숨긴다.
  * ⚠️ confirm() 금지(앱 함정) — 상세는 기존 확인 시트(SmartHome.sheet) 재사용.
  * ⚠️ 연동 암호가 없으면 카드 전체를 숨긴다(메일 제목 등이 암호 없이 보이면 안 됨).
  * ==========================================================================*/
@@ -33,6 +42,50 @@
   function hm2min(s) { var m = /^(\d{1,2}):(\d{2})/.exec(s || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
   function hmOf(iso) { try { var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()); } catch (e) { return ''; } }
 
+  /* ---------- (O-0133) 길찾기: 장소 문자열 → 네이버 지도 검색어 ('' 이면 버튼 없음) ---------- */
+  var NMAP_PKG = 'com.nhn.android.nmap', NMAP_APPNAME = 'com.kwak.voicememo';
+  var ONLINE_RE = /(zoom|줌|온라인|화상|비대면|webex|teams|팀즈|google\s*meet|구글\s*미트|https?:|www\.)/i;
+  var ROOM_TOKEN = [
+    /^(지하|B)?\d+(층|F)$/i,                  // 2층, B1층, 3F
+    /^B\d+$/i,                                // B1
+    /^[A-Za-z]?\d+(-\d+)*(호|호실)?$/,        // 301, 301호, A102, 3-301
+    /^제?\d+(호관|관|동|강의동|공학관)$/,       // 3호관, 2관, 302동 (캠퍼스 안 건물 번호)
+    /(실|룸|room)[A-Za-z0-9]*$/i,             // 회의실·대회의실·강의실·실험실·세미나실·교수실·처장실·회의실A
+    /^(본관|신관|별관|구관|학생회관|도서관|로비|라운지|강당|대강당|소강당)$/   // 어느 기관 건물인지 알 수 없는 일반 명칭
+  ];
+  function routeQuery(place) {
+    var p = String(place || '').trim();
+    if (!p || ONLINE_RE.test(p)) return '';
+    p = p.replace(/\([^)]*\)|\[[^\]]*\]|（[^）]*）/g, ' ');            // 괄호 안 보충(층·호실 등)은 뺀다
+    var toks = p.split(/[\s,·\/|]+/).filter(Boolean);
+    var keep = toks.filter(function (t, i) {
+      // 주소의 번지는 지우지 않는다: 「세종대로 110」「겸재로29길 27」「역삼동 123-4」
+      if (/^\d+(-\d+)?$/.test(t) && i > 0 && /((로|길)|[^\d](동|리|가))$/.test(toks[i - 1])) return true;
+      return !ROOM_TOKEN.some(function (re) { return re.test(t); });
+    });
+    var q = keep.join(' ').trim();
+    if (q.replace(/[\d\s\-]/g, '').length < 2) return '';                 // 남은 게 숫자뿐이거나 한 글자면 숨김
+    return q.slice(0, 60);
+  }
+  function openWebMap(q, why) {
+    var url = 'https://map.naver.com/p/search/' + encodeURIComponent(q);
+    var w = null;
+    try { w = global.open(url, '_blank'); } catch (e) {}
+    var S = H();
+    if (!w) { if (S.toast) S.toast('지도를 열지 못했어요 — 다시 눌러 주세요.', 3000); return; }
+    if (why === 'noapp' && S.toast) S.toast('네이버 지도 앱이 없어 웹 지도로 열었어요.', 3500);
+  }
+  function openNaverMap(q) {
+    if (!q) return;
+    var C = global.Capacitor;
+    var native = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+    var EA = native && C.Plugins && C.Plugins.ExternalApp;
+    if (!EA || !EA.openUri) { openWebMap(q); return; }                // PC판·옛 APK → 웹 지도
+    EA.openUri({ uri: 'nmap://search?query=' + encodeURIComponent(q) + '&appname=' + NMAP_APPNAME, pkg: NMAP_PKG })
+      .then(function (r) { if (!r || !r.opened) openWebMap(q, 'noapp'); })
+      .catch(function () { openWebMap(q, 'noapp'); });
+  }
+
   /* ---------- 일정: 지금/다음 판정 ---------- */
   function markEvents(evs) {
     var now = nowMin(), nextDone = false;
@@ -50,10 +103,16 @@
   function evRow(o, i) {
     var e = o.e, time = e.all_day ? '종일' : esc(e.start || '') + (e.end ? '<small>~' + esc(e.end) + '</small>' : '');
     var tag = o.state === 'now' ? '<span class="td-tag now">지금</span>' : (o.state === 'next' ? '<span class="td-tag next">다음</span>' : '');
-    return '<button type="button" class="td-row ev ' + o.state + '" data-td="ev" data-i="' + i + '">' +
+    var rq = routeQuery(e.place);
+    // (O-0133) 줄 전체(상세 시트)와 [길찾기]를 서로 다른 버튼으로(버튼 안에 버튼 금지) — 상태 배경은 바깥 줄(div)이 가진다
+    return '<div class="td-row ev ' + o.state + (rq ? ' has-route' : '') + '">' +
+      '<button type="button" class="td-evbtn" data-td="ev" data-i="' + i + '">' +
       '<span class="td-time">' + time + '</span>' +
       '<span class="td-main"><b>' + esc(e.title || '(제목 없음)') + '</b>' + (e.place ? '<small>' + esc(e.place) + '</small>' : '') + '</span>' +
-      tag + '</button>';
+      tag + '</button>' +
+      (rq ? '<button type="button" class="td-route" data-td="route" data-i="' + i + '" aria-label="' + esc(rq) + ' 길찾기 — 네이버 지도">' +
+            '<svg><use href="#i-route"/></svg><span>길찾기</span></button>' : '') +
+      '</div>';
   }
   function mailRow(m, i) {
     return '<button type="button" class="td-row mail" data-td="mail" data-i="' + i + '">' +
@@ -183,6 +242,11 @@
     }
     if (kind === 'task') { if (S.openOrders) S.openOrders(t.getAttribute('data-oid')); return; }
     var i = +t.getAttribute('data-i');
+    if (kind === 'route') {
+      var re = ((card._evs || [])[i] || {}).e; if (!re) return;
+      openNaverMap(routeQuery(re.place));
+      return;
+    }
     if (kind === 'ev') {
       var e = ((card._evs || [])[i] || {}).e; if (!e) return;
       var when = e.all_day ? '종일' : (e.start || '') + (e.end ? ' ~ ' + e.end : '');
@@ -200,6 +264,7 @@
   global.TodayCard = {
     refresh: refresh,
     render: render,
+    routeQuery: routeQuery,                // (O-0133) 시험용: 장소 → 네이버 검색어('' = 버튼 없음)
     setOrders: function (rows) { st.orders = Array.isArray(rows) ? rows : []; render(); },
     _setDigest: function (dg, ready) { st.digest = dg; st.digestReady = ready !== false; st.busy = false; render(); }   // 캡처·시험용
   };
