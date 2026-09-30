@@ -132,6 +132,10 @@
         </div>
       </div>
 
+      <!-- (O-0129) 오늘 한눈에: 오늘 일정 · 답할 메일 · 챙길 일 + [말로 일정 잡기]. 내용은 js/today-card.js 가 채운다.
+           연동 암호가 없거나 아직 불러오기 전이면 숨김. 일정·메일은 PC가 만든 서버 요약(home_digest)을 읽기만 한다. -->
+      <div class="card today" id="todayCard" style="display:none;" aria-live="polite"></div>
+
       <!-- 액션 카드 -->
       <div class="actions">
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
@@ -608,6 +612,7 @@
 <script src="js/docviewer.js"></script>
 <script src="js/k-character.js"></script>
 <script src="js/app.js"></script>
+<script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
      네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
 <script src="js/native-input.js"></script>

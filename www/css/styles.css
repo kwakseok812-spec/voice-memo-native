@@ -1076,3 +1076,57 @@ html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(
 @media (prefers-reduced-motion:reduce){.kst-ic i{animation:none !important;height:12px}}
 /* 키보드가 올라와 화면이 낮아지면(입력줄에 글을 쓸 때) 무대를 줄여 대화 글·입력줄 자리를 남긴다 */
 @media (max-height:600px){.kstage-photo{height:clamp(96px,22vh,180px);height:clamp(96px,22dvh,180px)}.kstage-photo .kface .kf-img,.kstage-photo .kface .kf-vid{object-position:50% 44%}.kstage-status{min-height:40px;padding:4px 12px}}
+
+/* ===== (O-0129) 홈 「오늘 한눈에」 카드 =====
+   녹음/케이 오브 바로 아래. 기존 .card(유리) 재사용 — backdrop-filter 새로 쓰지 않음(입력 렉 원인).
+   줄마다 버튼(누르면 상세 시트·작업 현황). 강조: 지금=초록, 다음=파랑 왼쪽 막대 + 옅은 바탕. 지난 일정은 흐리게. */
+.card.today{margin-top:22px;padding:16px 14px 12px;border-radius:22px}
+.today .td-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px 4px}
+.today .td-ttl{display:flex;align-items:baseline;gap:8px;min-width:0}
+.today .td-ttl b{font-size:18px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
+.today .td-ttl span{font-size:13.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.today .td-meta{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--dim);white-space:nowrap}
+.today .td-stale{color:var(--warn)}
+.today .td-refresh{width:32px;height:32px;border-radius:10px;border:0;background:transparent;color:var(--dim);display:grid;place-items:center;cursor:pointer}
+.today .td-refresh svg{width:17px;height:17px}
+.today .td-sec{margin-top:6px;padding-top:8px;border-top:1px solid var(--glass-b)}
+.today .td-head + .td-sec{border-top:0;padding-top:4px}
+.today .td-sh{display:flex;align-items:center;gap:7px;padding:0 4px 4px;font-size:13.5px;font-weight:800;color:var(--muted)}
+.today .td-sh svg{width:16px;height:16px;color:var(--p1);flex:none}
+.today .td-sh em{font-style:normal;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--ic-bg);color:var(--text);font-size:12px;display:inline-grid;place-items:center}
+.today .td-row{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:5px 8px;margin:1px 0;border:0;border-radius:14px;background:transparent;color:var(--text);font-family:inherit;text-align:left;cursor:pointer;position:relative}
+.today .td-row:active{background:var(--ic-bg)}
+.today .td-time{flex:none;width:52px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.25;letter-spacing:-.2px}
+.today .td-time small{display:block;font-size:11.5px;font-weight:600;color:var(--dim)}
+.today .td-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.today .td-main b{font-size:15px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today .td-main small{font-size:12.5px;font-weight:500;color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today .td-row.past{opacity:.5}
+.today .td-row.next,.today .td-row.now{background:rgba(59,130,246,.10)}
+.today .td-row.now{background:var(--ok-bg)}
+.today .td-row.next::before,.today .td-row.now::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--p1)}
+.today .td-row.now::before{background:var(--ok)}
+.today .td-tag{flex:none;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(120,140,200,.16);color:var(--muted);white-space:nowrap}
+.today .td-tag.next{background:rgba(59,130,246,.18);color:var(--p1)}
+.today .td-tag.now{background:var(--ok-bg);color:var(--ok)}
+.today .td-tag.warn{background:var(--warn-bg);color:var(--warn)}
+.today .td-tag.bad{background:rgba(244,63,94,.16);color:var(--rec)}
+.today .td-row.task .td-tag{min-width:58px;text-align:center}
+.today .td-dot{flex:none;width:8px;height:8px;margin:0 4px 0 6px;border-radius:50%;background:var(--p2)}
+.today .td-chev{flex:none;width:16px;height:16px;color:var(--dim)}
+.today .td-none{padding:6px 8px 8px;font-size:13.5px;color:var(--dim);font-weight:500}
+.today .td-none.warn{color:var(--warn)}
+.today .td-more{display:block;width:100%;min-height:40px;padding:6px 8px;border:0;background:transparent;color:var(--p1);font:700 13px/1.4 inherit;font-family:inherit;text-align:left;cursor:pointer}
+.today .td-empty{display:flex;align-items:center;gap:12px;padding:14px 6px 10px}
+.today .td-empty-ic{flex:none;width:40px;height:40px;border-radius:14px;background:var(--ok-bg);color:var(--ok);display:grid;place-items:center}
+.today .td-empty-ic svg{width:20px;height:20px}
+.today .td-empty b{display:block;font-size:15.5px;font-weight:800}
+.today .td-empty small{display:block;font-size:13px;color:var(--muted);margin-top:2px;line-height:1.45}
+.today .td-voice{display:flex;align-items:center;gap:11px;width:100%;margin-top:8px;padding:8px 12px;border-radius:16px;border:1px solid var(--glass-b2);background:var(--in-bg);color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.today .td-voice:active{transform:scale(.99)}
+.today .td-voice-ic{flex:none;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;display:grid;place-items:center;box-shadow:var(--glow-s)}
+.today .td-voice-ic svg{width:18px;height:18px}
+.today .td-voice b{display:block;font-size:14.5px;font-weight:800}
+.today .td-voice small{display:block;font-size:12px;color:var(--muted);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today .td-voice > span:last-child{min-width:0}
+@media (max-width:360px){ .today .td-time{width:46px;font-size:14px} .today .td-ttl span{display:none} }

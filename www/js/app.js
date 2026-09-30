@@ -155,6 +155,7 @@
     try { renderKBubble(); } catch (e) {}                 // (O-0117) 홈에 돌아오면 케이 말풍선 꼬리 위치·문구 다시 맞춤
     syncConvoMode();                                      // (O-0124) 채팅을 떠나면 「스마트비서」 머리줄을 다시 보이게
     setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 300);   // v5.8: 홈 「작업 현황」 미완료 숫자
+    try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {}   // (O-0129) 홈 「오늘 한눈에」 카드
   }
   function openScreen(el) {
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
@@ -2998,6 +2999,7 @@
     OfficeBridge.listOfficeOrders(80, pass).then(function (rows) {
       ordersBusy = false;
       renderOrders(rows);
+      try { if (window.TodayCard) TodayCard.setOrders(rows); } catch (e) {}   // (O-0129) 같은 결과로 「챙길 일」(추가 호출 없음)
     }).catch(function (e) {
       ordersBusy = false;
       if (e && e.badpass) { setSyncPass(''); if (isOpen(ordersView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); return; }
@@ -4466,4 +4468,25 @@
   // M1: 버전 표시 — 대표님이 지금 보는 화면이 최신본인지 알 수 있게(특히 PC판 캐시 확인용)
   try { var _av = $('appVer'); if (_av) _av.textContent = '스마트비서 ' + APP_VERSION; } catch (e) {}
   setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 1500);   // v5.8: 시작 시 홈 「작업 현황」 숫자
+
+  /* (O-0129) 홈 「오늘 한눈에」 카드(today-card.js)가 쓰는 창구 — 화면 이동·시트·초안만 넘긴다(데이터 쓰기 없음). */
+  window.SmartHome = {
+    getSyncPass: getSyncPass,
+    refreshOrders: function () { try { refreshOrders(true); } catch (e) {} },
+    openOrders: function (hlId) { openOrders(false, hlId || ''); },
+    sheet: function (title, msg, label, icon, action) {
+      openSheet(title, msg, label, action);
+      if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄(시각·장소·보낸 사람) 왼쪽 정렬로
+      if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#' + (icon || 'i-chat')); }
+    },
+    draft: function (text) {                       // 채팅을 열고 입력창에 초안만 넣는다(보내지 않음 — 대표님이 다듬어 보내심)
+      openChat();
+      var ci = $('chatInput'); if (ci) { ci.value = text || ''; try { ci.dispatchEvent(new Event('input')); } catch (e) {} }
+    },
+    startVoiceSchedule: function () {              // 채팅 열고 음성 대화 시작 → 말씀하시면 PC 케이가 확인 문구 뒤 등록
+      openChat();
+      setTimeout(function () { try { startConvo(); } catch (e) {} }, 350);
+    }
+  };
+  setTimeout(function () { try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {} }, 1600);
 })();

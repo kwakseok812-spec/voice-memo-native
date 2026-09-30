@@ -978,6 +978,21 @@
       return r.json();
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
+  /* (O-0129) 홈 「오늘 한눈에」: PC 가 만든 오늘 요약(home_digest) 한 줄 — 연동 암호 게이트 RPC get_home_digest.
+   *   반환 {date:'YYYY-MM-DD', generated_at, cal_ok, mail_ok, events:[{start,end,all_day,title,place}], mails:[{from,subject,why,received_at}]}
+   *   서버에 RPC 가 아직 없으면(SQL 미적용) err.notready=true → 카드는 일정·메일 칸을 숨기고 「챙길 일」만 보인다. */
+  function getHomeDigest(pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/get_home_digest', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_pass: pass || '' })
+    }).then(function (r) {
+      if (r.status === 404) { var n = new Error('NOT_READY'); n.notready = true; throw n; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('오늘 요약 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
+  }
   function listOfficeOrders(limit, pass) {
     return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
   }
@@ -1295,6 +1310,7 @@
     listRecentMemos: listRecentMemos,   // v5.2: 회의 요약 탭 — 서버 done 요약본 목록
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
+    getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
 
