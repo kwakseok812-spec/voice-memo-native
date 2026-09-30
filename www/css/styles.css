@@ -1025,3 +1025,50 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 .kw-item .kw-soon{position:absolute;left:6px;right:6px;bottom:6px;padding:2px 6px;border-radius:8px;background:rgba(5,8,20,.62);color:#fff;font-size:10.5px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kw-item.new span.kw-nm{color:var(--dim);font-weight:700}
 #kwHairNote{margin-top:10px}
+
+/* ============================================================================
+   (O-0124) 음성 대화 무대 — 「음성 대화」를 켜면 케이가 채팅 화면 위쪽에 크게 나온다.
+   ▶ 켜짐 표시는 두 가지(app.js setConvoStage/syncConvoMode 가 붙였다 뗀다):
+     #chatView.convo-on  = 음성 대화 중(무대 보임 · 화면을 한 장으로 고정 · 대화 글은 무대 아래 상자 안에서 스크롤)
+     html.convo-mode     = 음성 대화 중이면서 채팅 화면이 열려 있을 때만(맨 위 「스마트비서」 줄을 접어 자리 확보)
+   ▶ 꺼지면 두 표시가 모두 사라져 지금 화면과 완전히 같다(.kstage 는 display:none — 영상도 IntersectionObserver 로 멈춤).
+   ▶ 판(배경 막)을 새로 깔지 않는다: 무대는 케이 사진 자체가 배경이고, 대화 글은 무대 뒤로 지나가지 않는다(상자 스크롤).
+   ========================================================================== */
+.kstage{display:none}
+html.convo-mode .topbar{display:none}
+html.convo-mode .app{padding-bottom:0}
+#chatView.convo-on{height:calc(100vh - var(--sat));height:calc(100dvh - var(--sat));min-height:0}   /* overflow:hidden 금지 — 머리줄 sticky 가 이 상자 기준으로 밀려 내려온다 */
+#chatView.convo-on .chatlog{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-top:8px;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14px);mask-image:linear-gradient(180deg,transparent 0,#000 14px)}   /* 무대 바로 아래에서 글이 칼같이 잘리지 않고 살짝 흐려지며 사라지게 */
+#chatView.convo-on #chatConvoStatus{display:none !important}   /* 상태 문구는 무대 아래 줄로 옮김 */
+#chatView.convo-on .kstage{display:flex;flex-direction:column;flex:none;margin:0 0 6px;border-radius:24px;overflow:hidden;
+  border:1.5px solid var(--glass-b);background:var(--glass2);box-shadow:0 10px 26px rgba(0,0,0,.26);transition:border-color .25s ease}
+html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(30,41,99,.13)}
+.kstage-photo{position:relative;height:clamp(180px,40vh,440px);height:clamp(180px,40dvh,440px);background:#dfe3ea}
+.kstage-photo .kface{width:100%;height:100%;background:#dfe3ea}
+.kstage-photo .kface .kf-img,.kstage-photo .kface .kf-vid{object-position:50% 10%}   /* 넓은 무대(펼친 폴드)에서 위아래가 잘릴 때 머리 윗부분을 남긴다 */
+/* 정지 사진으로 말할 때(기본머리 외 조합·영상 실패) 끄덕임: 무대에선 가장자리 빈틈이 안 보이게 살짝 더 확대한 채로 움직인다 */
+.kstage-photo .kface.kf-talkstill:not(.vid-on) .kf-img{transform-origin:50% 30%;animation:kStageNod 1.1s ease-in-out infinite}
+@keyframes kStageNod{0%,100%{transform:translateY(0) scale(1.03)}50%{transform:translateY(-1.2%) scale(1.04)}}
+.kstage-status{display:flex;align-items:center;justify-content:center;gap:11px;min-height:50px;padding:7px 14px}
+.kst-tx{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25;min-width:0}
+.kst-tx b{font-size:16.5px;font-weight:800;color:var(--text);white-space:nowrap}
+.kst-tx small{font-size:12.5px;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.kst-tx small:empty{display:none}
+.kst-ic{display:flex;align-items:center;justify-content:center;gap:3px;width:26px;height:24px;flex:none}
+.kst-ic i{display:block;width:4px;height:6px;border-radius:2px;background:var(--dim)}
+/* 듣는 중 = 청록 음파 · 답하는 중 = 보라 점 3개 · 말하는 중 = 분홍 음파(빠르게) */
+.kstage[data-state="listen"]{border-color:var(--cyan) !important}
+.kstage[data-state="listen"] .kst-ic i{background:var(--cyan);animation:kstWave 1.05s ease-in-out infinite}
+.kstage[data-state="think"] .kst-ic i{width:6px;height:6px;border-radius:50%;background:var(--p1);animation:kstDot 1.2s ease-in-out infinite}
+.kstage[data-state="think"] .kst-ic i:last-child{display:none}
+.kstage[data-state="talk"]{border-color:#EC4899 !important}
+.kstage[data-state="talk"] .kst-ic i{background:linear-gradient(180deg,#F43F5E,#A855F7);animation:kstWave .62s ease-in-out infinite}
+.kst-ic i:nth-child(2){animation-delay:.15s !important}
+.kst-ic i:nth-child(3){animation-delay:.3s !important}
+.kst-ic i:nth-child(4){animation-delay:.45s !important}
+@keyframes kstWave{0%,100%{height:6px}50%{height:20px}}
+@keyframes kstDot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.kst-ic i{animation:none !important;height:12px}}
+/* 키보드가 올라와 화면이 낮아지면(입력줄에 글을 쓸 때) 무대를 줄여 대화 글·입력줄 자리를 남긴다 */
+@media (max-height:600px){.kstage-photo{height:clamp(96px,22vh,180px);height:clamp(96px,22dvh,180px)}.kstage-photo .kface .kf-img,.kstage-photo .kface .kf-vid{object-position:50% 44%}.kstage-status{min-height:40px;padding:4px 12px}}

@@ -267,6 +267,12 @@
         <button class="iconbtn" id="chatSearchClose" aria-label="검색 닫기" title="검색 닫기"><svg><use href="#i-x"/></svg></button>
       </div>
       <div id="chatSearchInfo" class="chatsearchinfo" style="display:none;"></div>
+      <!-- (O-0124) 음성 대화 무대: 「음성 대화」를 켜면(#chatView.convo-on) 케이가 화면 위쪽에 크게 나온다.
+           말할 때 talk 영상 · 듣는 중/대기 idle(KChar.setTalking 흐름 그대로). 꺼지면 CSS 로 완전히 숨음(지금 화면 그대로). -->
+      <div id="chatKStage" class="kstage" data-state="idle" aria-live="polite">
+        <div class="kstage-photo"><span class="kface wide" data-kface="convo" aria-hidden="true"></span></div>
+        <div class="kstage-status"><span class="kst-ic" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="kst-tx"><b id="chatKStageText">음성 대화</b><small id="chatKStageHint"></small></span></div>
+      </div>
       <div id="chatLog" class="chatlog"></div>
       <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->
       <div id="chatPendingStrip" class="pendstrip" style="display:none;"></div>

@@ -153,6 +153,7 @@
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
     updateRecIndicator();
     try { renderKBubble(); } catch (e) {}                 // (O-0117) 홈에 돌아오면 케이 말풍선 꼬리 위치·문구 다시 맞춤
+    syncConvoMode();                                      // (O-0124) 채팅을 떠나면 「스마트비서」 머리줄을 다시 보이게
     setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 300);   // v5.8: 홈 「작업 현황」 미완료 숫자
   }
   function openScreen(el) {
@@ -164,6 +165,7 @@
     show(el); scrollTop();
     if (homeFooter) homeFooter.style.display = 'none';   // 다른 화면에선 숨김
     updateRecIndicator();
+    syncConvoMode();                                      // (O-0124) 음성 대화 중 채팅으로 돌아오면 무대 화면으로
   }
   /* 녹음 중 미니 배너: 녹음이 살아있는데 녹음 화면(recView)이 아닌 다른 화면에 있을 때만 보인다.
    * 녹음은 화면과 무관하게 네이티브 포그라운드 서비스로 계속되므로, 이 배너로 "녹음 중"을 계속 알리고
@@ -1211,6 +1213,7 @@
   var chatMic = $('chatMic'), chatMicLabel = $('chatMicLabel'), chatCam = $('chatCam'), chatCamInput = $('chatCamInput');
   var chatPendingStrip = $('chatPendingStrip');
   var chatConvoToggle = $('chatConvoToggle'), chatConvoLabel = $('chatConvoLabel'), chatConvoStatus = $('chatConvoStatus');
+  var chatKStage = $('chatKStage'), chatKStageText = $('chatKStageText'), chatKStageHint = $('chatKStageHint');   // (O-0124) 음성 대화 무대
   var CHAT_THREAD_KEY = 'smart_chat_thread', CHAT_MSGS_KEY = 'smart_chat_msgs';
   var OFFICE_SINCE_KEY = 'smart_office_since';   // 케이 방송(office_broadcast)을 어디까지 가져왔는지 표식
   var DELETED_BIDS_KEY = 'smart_deleted_bids';   // 대표님이 지운 케이 방송(bid) 무덤 — 다시 안 그리게
@@ -1642,8 +1645,23 @@
   }
   function isIncomingMsg(m) { return m.role === 'k' || (m.role === 'me' && !!m.remote); }
   function isUnreadSince(m, hw) { return !!hw && isIncomingMsg(m) && !m.notice && (m.ts || 0) > hw; }
+  // (O-0124) 음성 대화 무대가 켜진 동안은 화면이 한 장으로 고정되고 대화 글만 chatLog 상자 안에서 스크롤된다
+  //   (평소엔 지금처럼 window 가 스크롤). 아래 스크롤 도우미들은 이 한 가지만 갈라서 처리한다.
+  function chatBoxMode() { return !!(chatView && chatLog && chatView.classList.contains('convo-on')); }
+  function chatScrollByY(dy, smooth) {
+    if (chatBoxMode()) {
+      var t = Math.max(0, chatLog.scrollTop + dy);
+      try { if (smooth && chatLog.scrollTo) chatLog.scrollTo({ top: t, behavior: 'smooth' }); else chatLog.scrollTop = t; }
+      catch (e) { chatLog.scrollTop = t; }
+      return;
+    }
+    var y = Math.max(0, (window.pageYOffset || 0) + dy);
+    try { if (smooth) window.scrollTo({ top: y, behavior: 'smooth' }); else window.scrollTo(0, y); }
+    catch (e) { try { window.scrollTo(0, y); } catch (e2) {} }
+  }
   // 고정 헤더(.subbar, sticky) 아래로 말풍선 시작이 오도록 하는 위쪽 여백
   function chatHeadOffset() {
+    if (chatBoxMode()) { try { return chatLog.getBoundingClientRect().top + 8; } catch (e) {} }   // (O-0124) 무대 아래 대화 상자 맨 위
     var h = 0;
     try {
       var sb = chatView && chatView.querySelector('.subbar');
@@ -1652,6 +1670,7 @@
     return h + 8;
   }
   function chatNearBottom() {
+    if (chatBoxMode()) return (chatLog.scrollHeight - (chatLog.scrollTop + chatLog.clientHeight)) < 160;   // (O-0124)
     try {
       var de = document.documentElement;
       var y = window.pageYOffset || de.scrollTop || 0;
@@ -1673,9 +1692,7 @@
       var el = target(); if (!el) return;
       var dy = el.getBoundingClientRect().top - chatHeadOffset();
       if (Math.abs(dy) < 2) return;
-      var y = Math.max(0, (window.pageYOffset || 0) + dy);
-      try { if (sm) window.scrollTo({ top: y, behavior: 'smooth' }); else window.scrollTo(0, y); }
-      catch (e) { try { window.scrollTo(0, y); } catch (e2) {} }
+      chatScrollByY(dy, sm);                      // (O-0124) 평소=window · 음성 대화 무대=대화 상자
     }
     requestAnimationFrame(function () { requestAnimationFrame(function () { go(!!smooth); }); });
     if (smooth) setTimeout(function () { go(false); }, 700);   // 부드러운 이동이 끝난 뒤 한 번만 보정
@@ -1698,7 +1715,7 @@
       if (token !== chatScrollSeq || (!first && chatUserTouchAt > started)) return;
       var el = chatLog && chatLog.querySelector('[data-uid="' + v.uid + '"]'); if (!el) return;
       var dy = el.getBoundingClientRect().top - v.top;
-      if (Math.abs(dy) >= 1) try { window.scrollBy(0, dy); } catch (e) {}
+      if (Math.abs(dy) >= 1) chatScrollByY(dy, false);   // (O-0124) 평소=window · 음성 대화 무대=대화 상자
     }
     fix(true);
     requestAnimationFrame(function () { fix(false); });
@@ -2207,9 +2224,48 @@
     if (chatMicLabel) chatMicLabel.textContent = rec ? '듣는 중…' : '눌러서 말하기';
   }
   function setConvoStatus(t) {
+    setConvoStageStatus(t);                       // (O-0124) 무대 아래 상태 줄도 함께
     if (!chatConvoStatus) return;
     if (t) { chatConvoStatus.style.display = 'block'; chatConvoStatus.textContent = t; }
     else { chatConvoStatus.style.display = 'none'; chatConvoStatus.textContent = ''; }
+  }
+  /* ---- (O-0124) 음성 대화 무대 ----
+   * 음성 대화를 켜면 채팅 화면 위쪽에 케이가 크게(data-kface="convo") 나온다. 얼굴 움직임은 기존 흐름 그대로:
+   *   케이 목소리 재생 → kaiAudio 'playing' → KChar.setTalking(true) → talk 영상 / 끝나면 idle.
+   *   (기본머리 외 조합=정지 사진+끄덕임, 영상 실패·절전=정지 사진 — KChar 가 알아서 대신한다)
+   * 상태 문구는 기존 setConvoStatus 문구를 그대로 받아 「큰 글씨 + 작은 안내」로 바꿔 보여 준다.
+   * 무대가 안 보이면(음성 대화 끔·다른 화면·앱이 뒤로) 영상은 KChar 의 IntersectionObserver·visibilitychange 로 멈춘다. */
+  function setConvoStageStatus(t) {
+    if (!chatKStage) return;
+    t = String(t || '');
+    var st = 'idle', big = '음성 대화', small = '';
+    if (t.indexOf('말하는') !== -1) { st = 'talk'; big = '케이가 말하는 중…'; small = '말이 끝나면 다시 들을게요'; }
+    else if (t.indexOf('답하는') !== -1) { st = 'think'; big = '케이가 답하는 중…'; small = '잠시만 기다려 주세요'; }
+    else if (t.indexOf('기다려요') !== -1) { st = 'listen'; big = '듣는 중…'; small = '말씀을 기다리고 있어요'; }
+    else if (t) { st = 'listen'; big = '듣는 중…'; small = '말씀이 끝나면 자동으로 보내요'; }
+    chatKStage.setAttribute('data-state', st);
+    if (chatKStageText) chatKStageText.textContent = big;
+    if (chatKStageHint) chatKStageHint.textContent = small;
+  }
+  // 채팅 화면이 열려 있고 음성 대화 중일 때만 맨 위 「스마트비서」 머리줄을 접는다(다른 화면엔 영향 없음)
+  function syncConvoMode() {
+    var on = false;
+    try { on = !!(convoOn && chatView && isOpen(chatView)); } catch (e) { on = false; }
+    document.documentElement.classList.toggle('convo-mode', on);
+  }
+  function setConvoStage(on) {
+    on = !!on;
+    if (!chatView || chatView.classList.contains('convo-on') === on) { syncConvoMode(); return; }
+    var wasBottom = chatNearBottom();              // 레이아웃이 바뀌기 전 위치(끌 때: 맨 아래였으면 맨 아래로 복귀)
+    chatView.classList.toggle('convo-on', on);
+    syncConvoMode();
+    if (window.KChar) {
+      var head = chatView.querySelector('[data-kface="head"]');
+      if (KChar.hold) KChar.hold(head, on);       // 큰 무대가 도는 동안 헤더의 작은 얼굴 영상은 멈춤(영상 1개만 재생)
+      KChar.mount();                               // 무대 얼굴을 지금 옷·머리로 곧바로 그림
+    }
+    if (on) { scrollTop(); chatScrollBottom(); }   // 켤 때: 최근 대화가 무대 아래 상자 맨 아래에 보이게
+    else if (wasBottom) chatScrollBottom();
   }
   function stopAmpPoll() { if (ampTimer) { clearInterval(ampTimer); ampTimer = null; } }
   function kaiPlaying() { return !!(kaiAudio && !kaiAudio.paused && !kaiAudio.ended && kaiAudio.currentTime > 0); }
@@ -2303,6 +2359,7 @@
     }
     if (chatMic) chatMic.disabled = convoOn;      // 연속 대화 중엔 단발 마이크 비활성(루프가 제어)
     if (!convoOn) setConvoStatus(null);
+    setConvoStage(convoOn);                       // (O-0124) 음성 대화 무대 켜기/끄기
   }
   // 단발(한 번 누르면 말 끝날 때 자동 전송). 듣는 중 다시 누르면 지금 보내기(자동종료 안 될 때 대비).
   function toggleChatMic() {

@@ -5,7 +5,7 @@
  *   옷을 늘리려면 에셋 폴더(assets/k/<옷id>/)와 wardrobe.json 만 바꾸면 되고 코드는 그대로다.
  *   (에셋 생성 도구: Claude Code\apps\k-character\tools\build_app_assets.py)
  *
- * 화면 곳곳의 케이 얼굴은 <span class="kface" data-kface="head|home|profile|wardrobe"> 자리표시.
+ * 화면 곳곳의 케이 얼굴은 <span class="kface" data-kface="head|home|profile|wardrobe|convo"> 자리표시.
  *   KChar.mount() 가 안에 [정지 사진 <img>] + [반복 영상 <video muted loop playsinline>] 을 채운다.
  *   - 평소: idle 반복영상(실패·저전력·움직임 끔 → 정지 사진)
  *   - 케이 목소리 재생 중: talk 영상(없으면 사진이 살짝 움직이는 CSS)
@@ -377,7 +377,8 @@
     el.classList.remove('vid-on');
     syncVideo(el);
   }
-  function wideFace(el) { return el.getAttribute('data-kface') === 'profile' || el.getAttribute('data-kface') === 'wardrobe'; }
+  // (O-0124) 넓은 사진 자리: 프로필·꾸미기·음성 대화 무대(convo). class="kface wide" 도 넓은 자리로 본다.
+  function wideFace(el) { var k = el.getAttribute('data-kface'); return k === 'profile' || k === 'wardrobe' || k === 'convo' || el.classList.contains('wide'); }
   function paint(el) {
     build(el);
     var o = outfit(), e = flashing || lastExpr;
@@ -406,7 +407,9 @@
     if (still && !talking && cb.idle) file = cb.idle;
     if (talking && !file && !still) { kind = 'idle'; file = o.idle; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
     el.classList.toggle('kf-talk', talking);
-    el.classList.toggle('kf-talkstill', talking && (still || !o.talk));
+    // (O-0124) talk 영상을 못 읽었을 때도(네트워크·코덱) 정지 사진 + 끄덕임으로 '말하는 중'을 보여 준다
+    var talkFailed = !!(el._kFail && el._kFail['talk|' + curId]);
+    el.classList.toggle('kf-talkstill', talking && (still || !o.talk || talkFailed));
     var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
     var failed = el._kFail && el._kFail[fkey];
     var want = !!file && !failed && !el._kHold && motionOn() && !flashing && el._kVisible !== false && !document.hidden;
@@ -531,6 +534,16 @@
     setTimeout(function () { el._kHold = false; try { vid.currentTime = 0; } catch (e) {} syncVideo(el); }, delayMs == null ? 450 : delayMs);
   }
 
+  // (O-0124) 한 자리의 반복 영상만 잠시 멈춰 두기(정지 사진 유지). 음성 대화 무대가 켜진 동안 채팅 헤더의
+  //   작은 얼굴 영상을 멈춰 영상 두 개가 동시에 돌지 않게(배터리) 쓴다. on=false 면 원래대로.
+  function hold(el, on) {
+    if (!el) return;
+    build(el);
+    el._kHold = !!on;
+    if (on) el.classList.remove('vid-on');
+    syncVideo(el);
+  }
+
   window.KChar = {
     ready: ready,
     exprFor: exprFor, rules: EXPR_RULES, moodFor: moodFor,
@@ -544,7 +557,7 @@
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
     mount: function () { faces().forEach(paint); },
-    restartFace: restartFace,
+    restartFace: restartFace, hold: hold,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },
     setTalking: setTalking, isTalking: function () { return talking; },
     motionOn: motionOn, motionPref: motionPref, setMotionPref: setMotionPref, motionBlockReason: motionBlockReason,
