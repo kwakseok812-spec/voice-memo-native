@@ -605,8 +605,29 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
   .orbrow .orblabel{font-size:16px}
 }
 
-/* 홈: 소장 K 오브 위 안읽음 배지 */
-.orbbadge{position:absolute;top:2px;right:6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--rec);color:#fff;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px var(--rec);z-index:2}
+/* 홈: (O-0117) 소장 K 오브 위 숫자 배지는 없앴다 → 아래 「케이 말풍선」으로 대신한다. */
+.orbbadge{display:none !important}
+
+/* 홈: (O-0117) 케이 말풍선 — 안 읽은 메시지가 있을 때 오브 위에 「대표님, ○○」.
+   접힘/펼침은 grid 0fr↔1fr(높이를 부드럽게), 꼬리는 --kbub-tail(케이 얼굴 가운데, JS 실측) 위치에서 아래로.
+   배경을 불투명하게 둔 이유: 꼬리 삼각형이 말풍선 테두리 선을 덮어야 한 몸처럼 보인다. */
+:root, html[data-style="dark"]{--kbub-bg:#18214A; --kbub-b:rgba(139,160,255,.34); --kbub-sh:0 10px 26px rgba(0,0,0,.34)}
+html[data-style="light"]{--kbub-bg:#FFFFFF; --kbub-b:rgba(99,102,241,.26); --kbub-sh:0 8px 22px rgba(30,41,99,.12)}
+.kbub-wrap{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:0fr;opacity:0;margin-top:0;transition:grid-template-rows .38s cubic-bezier(.2,.8,.2,1),opacity .28s ease,margin-top .38s cubic-bezier(.2,.8,.2,1);--kbub-tail:calc(50% + 73px)}
+.kbub-wrap.on{grid-template-rows:1fr;opacity:1;margin-top:16px}
+.kbub-in{min-height:0;min-width:0;overflow:hidden}
+.kbub-wrap.settled .kbub-in{overflow:visible}
+.kbub{position:relative;display:block;width:calc(100% - 12px);margin:4px 6px 14px;padding:12px 16px 12px 30px;border:1px solid var(--kbub-b);border-radius:20px;background:var(--kbub-bg);box-shadow:var(--kbub-sh);color:var(--text);font-family:inherit;text-align:left;cursor:pointer;transform-origin:var(--kbub-tail) 100%}
+.kbub:active{transform:scale(.985)}
+.kbub::before{content:"";position:absolute;left:14px;top:21px;width:8px;height:8px;border-radius:50%;background:var(--rec);box-shadow:0 0 8px var(--rec)}
+.kbub::after{content:"";position:absolute;bottom:-8px;left:calc(var(--kbub-tail) - 6px - 8px);width:15px;height:15px;background:var(--kbub-bg);border-right:1px solid var(--kbub-b);border-bottom:1px solid var(--kbub-b);border-bottom-right-radius:3px;transform:rotate(45deg);clip-path:polygon(100% 0,100% 100%,0 100%)}
+.kbub-title{display:block;font-size:16.5px;font-weight:800;letter-spacing:-.3px;line-height:1.4;word-break:keep-all;overflow-wrap:break-word}
+.kbub-prev{display:block;margin-top:3px;font-size:13.5px;font-weight:500;color:var(--muted);line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kbub-wrap.pop .kbub{animation:kbubPop .46s cubic-bezier(.2,.8,.2,1) both}
+@keyframes kbubPop{0%{opacity:0;transform:translateY(10px) scale(.94)}100%{opacity:1;transform:none}}
+/* 케이 움직임 끔·절전·데이터 절약이면 애니메이션 없이 바로 */
+.kbub-wrap.calm,.kbub-wrap.calm .kbub{transition:none;animation:none}
+@media (max-width:360px){ .kbub-wrap{--kbub-tail:calc(50% + 60px)} .kbub-title{font-size:15.5px} }
 
 /* 채팅: 음성 버튼 2개(작게 나란히) — 연속 대화 토글 + 한 번 말하기 */
 .voicerow{display:flex;gap:8px;align-items:stretch;margin:2px 0 6px}

@@ -152,6 +152,7 @@
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
     updateRecIndicator();
+    try { renderKBubble(); } catch (e) {}                 // (O-0117) 홈에 돌아오면 케이 말풍선 꼬리 위치·문구 다시 맞춤
     setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 300);   // v5.8: 홈 「작업 현황」 미완료 숫자
   }
   function openScreen(el) {
@@ -1716,11 +1717,98 @@
   //   PC(chat_responder.py)도 pending 을 created_at 순(FIFO)으로 하나씩 처리하므로 여러 개가 동시에
   //   대기해도 순서·매칭이 엉키지 않는다 → 전송 버튼을 '대기 중'이라고 잠그지 않는다(항상 활성).
   function updateSendEnabled() { if (chatSend) chatSend.disabled = false; }
+  // (O-0117, 2026-09-30 대표님 지시) 홈 케이 사진 위 숫자 배지 → 케이 말풍선.
+  //   안읽음 카운트(chatUnseen)·알림(notice) 제외 규칙·OS 알림/앱아이콘 배지는 그대로 두고, 「보여 주는 방식」만 바꿨다.
   function updateChatBadge() {
-    var b = $('chatBadge'); if (!b) return;
-    if (chatUnseen > 0) { b.textContent = chatUnseen > 9 ? '9+' : String(chatUnseen); b.style.display = 'inline-flex'; }
-    else b.style.display = 'none';
+    var b = $('chatBadge');                       // 옛 숫자 배지(구버전 화면 호환) — 있으면 늘 숨김
+    if (b) b.style.display = 'none';
+    renderKBubble();
   }
+  /* ---- 홈 케이 말풍선 ----
+   * 문구: 1건 = 소식 종류별(KChar.moodFor: 문제/완료/확인요청/그 밖), 여러 건 = 「새 메시지 N건」.
+   *   같은 메시지에는 늘 같은 문구(메시지 시각으로 고름) → 다시 그려도 말이 바뀌지 않고, 메시지마다는 조금씩 다르다.
+   * 미리보기: 가장 최근 안읽은 케이 메시지의 첫 줄(한 줄, 넘치면 …).
+   * 얼굴: 그 메시지의 표정(EXPR_RULES)을 새 소식이 왔을 때 한 번 잠깐 보여 준다(KChar.setExpr flash).
+   * 움직임: 처음 나타날 때 한 번만 부드럽게. 움직임 끔·절전·모션 감소 설정이면 애니메이션 없이 바로. */
+  var K_BUBBLE_LINES = {
+    news:    ['대표님, 보고드릴 게 하나 있어요', '대표님, 새 소식 하나 가져왔어요', '대표님, 전해 드릴 말씀이 있어요'],
+    done:    ['대표님, 맡기신 일 끝났어요!', '대표님, 말씀하신 일 마쳤어요!'],
+    ask:     ['대표님, 확인해 주실 게 있어요', '대표님, 여쭤볼 게 하나 있어요'],
+    problem: ['대표님, 말씀드릴 문제가 있어요', '대표님, 잠깐 보셔야 할 일이 생겼어요'],
+    many:    ['대표님! 새 메시지 {n}건이 와 있어요', '대표님, 읽지 않으신 메시지가 {n}건 있어요']
+  };
+  var kBubbleKey = '', kBubbleSettleT = 0;       // 지금 말풍선이 가리키는 메시지(새 소식이 왔는지 판단) · 펼침 끝 타이머
+  function kBubblePick(list, seed) {
+    var h = 0, s = String(seed || '');
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return list[Math.abs(h) % list.length];
+  }
+  function kBubblePreview(m) {
+    if (!m) return '';
+    var lines = String(m.text || '').split('\n'), first = '';
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].replace(/\*\*/g, '').replace(/^\s*(#{1,6}\s+|[-*•·]\s+|>\s*)/, '').replace(/\s+/g, ' ').trim();
+      if (t && !/^[-=_|:\s]+$/.test(t)) { first = t; break; }
+    }
+    if (!first && m.files && m.files.length) first = '📎 파일 ' + m.files.length + '개를 보냈어요';
+    else if (!first && m.vurl) first = '🔊 음성으로 답했어요';
+    return first.length > 80 ? first.slice(0, 80) + '…' : first;
+  }
+  // 가장 최근 안읽은 메시지(알림 제외): 케이 답을 먼저, 없으면 다른 기기에서 온 대화
+  function kBubbleLatest() {
+    var seen = getSeenHW(), k = null, any = null;
+    for (var i = chatMsgs.length - 1; i >= 0; i--) {
+      var m = chatMsgs[i];
+      if (!m || m.notice || (m.ts || 0) <= seen) continue;
+      if (!any) any = m;
+      if (m.role === 'k') { k = m; break; }
+    }
+    return k || any;
+  }
+  function renderKBubble() {
+    var wrap = $('kBubbleWrap'), btn = $('kBubble'); if (!wrap || !btn) return;
+    var n = chatUnseen > 0 ? chatUnseen : 0;
+    var vbtn = $('btnVoiceChat');
+    if (!n) {
+      clearTimeout(kBubbleSettleT);
+      wrap.classList.remove('on', 'pop', 'settled'); btn.setAttribute('tabindex', '-1'); kBubbleKey = '';
+      if (vbtn) vbtn.setAttribute('aria-label', '소장 K(케이)와 대화');
+      return;
+    }
+    var m = kBubbleLatest();
+    var mood = (m && m.role === 'k' && window.KChar && KChar.moodFor) ? KChar.moodFor(m.text || '') : { kind: 'news', expr: 'neutral' };
+    var seed = m ? String(m.ts || '') + '|' + String(m.text || '').slice(0, 20) : 'n';
+    var title = n > 1
+      ? kBubblePick(K_BUBBLE_LINES.many, seed).replace('{n}', n > 99 ? '99+' : String(n))
+      : kBubblePick(K_BUBBLE_LINES[mood.kind] || K_BUBBLE_LINES.news, seed);
+    var prev = kBubblePreview(m);
+    $('kBubbleTitle').textContent = title;
+    var pv = $('kBubblePrev'); pv.textContent = prev; pv.style.display = prev ? '' : 'none';
+    btn.setAttribute('tabindex', '0');
+    btn.setAttribute('aria-label', title + (prev ? ' — ' + prev : '') + ' (눌러서 대화 열기)');
+    if (vbtn) vbtn.setAttribute('aria-label', '소장 K(케이)와 대화 — 안 읽은 메시지 ' + n + '건');
+    // 꼬리가 케이 얼굴 가운데를 가리키게(오브 위치 실측, 못 재면 CSS 기본값)
+    try {
+      var face = vbtn && vbtn.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+      if (face && face.width && wr.width) wrap.style.setProperty('--kbub-tail', Math.round(face.left + face.width / 2 - wr.left) + 'px');
+    } catch (e) {}
+    var key = seed + '|' + n;
+    var firstShow = !wrap.classList.contains('on');
+    var calm = !(window.KChar && KChar.motionOn && KChar.motionOn());
+    wrap.classList.toggle('calm', calm);
+    wrap.classList.add('on');
+    if (firstShow && !calm) {                      // 나타날 때 한 번만(다시 그릴 때마다 흔들지 않음)
+      wrap.classList.remove('pop', 'settled'); void wrap.offsetWidth; wrap.classList.add('pop');
+      clearTimeout(kBubbleSettleT);                // 펼침이 끝난 뒤에야 그림자·꼬리를 밖으로 보이게(펼치는 동안은 잘라 둠)
+      kBubbleSettleT = setTimeout(function () { if (wrap.classList.contains('on')) wrap.classList.add('settled'); }, 480);
+    } else if (calm) wrap.classList.add('settled');
+    if (key !== kBubbleKey) {
+      var fresh = !!kBubbleKey || firstShow;       // 새 소식 → 그 표정을 잠깐
+      kBubbleKey = key;
+      if (window.KChar && KChar.setExpr && m && m.role === 'k') KChar.setExpr(mood.expr || 'neutral', fresh);
+    }
+  }
+  window.addEventListener('resize', function () { if (chatUnseen > 0) renderKBubble(); });
   /* ---- 대화 검색(순수 로컬 · 필터 방식) ----
    * 원본은 localStorage(chatMsgs). 검색어가 있으면 '일치하는 말풍선만' 남기고 일치 부분을 강조한다.
    * 닫으면(X) 전체 대화로 정확히 복귀. 대소문자 무시·부분일치. 서버 재조회 없음. */
@@ -3256,6 +3344,7 @@
 
   // 홈 소장 K 오브 → 케이 채팅(옛 가로 카드 대체, 진입 경로 일원화)
   if ($('btnVoiceChat')) $('btnVoiceChat').addEventListener('click', function () { openChat(); });
+  if ($('kBubble')) $('kBubble').addEventListener('click', function () { openChat(); });   // (O-0117) 케이 말풍선 → 대화(첫 안읽음 위치)
 
   /* ---- v6.0 케이 프로필 카드 + 옷장 「케이 꾸미기」 ---- */
   var kProfile = $('kProfile'), kwFrom = null;
