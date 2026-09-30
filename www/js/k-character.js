@@ -46,6 +46,30 @@
     return DEFAULT_EXPR;
   }
 
+  /* ---------------- (O-0117) 홈 말풍선 「무슨 소식인가」 판정 ----------------
+   * 표정은 위 EXPR_RULES 가 먼저 정한다 → 말 종류도 그 결과를 그대로 따른다(얼굴과 말이 어긋나지 않게).
+   *   concern → problem(문제) · cheer → done(완료)
+   * 그 밖에만 아래 두 규칙을 본다(띄어쓰기 무시, 위에서부터).
+   *   done 추가어: 표정 규칙엔 없지만 「일 끝남」으로 볼 말(배포 완료 등) → 표정도 cheer 로 맞춘다.
+   *   ask: 대표님 확인·승인·결정이 필요한 말 → 표정은 EXPR_RULES 결과 그대로. */
+  var MOOD_EXTRA = [
+    { kind: 'done', expr: 'cheer', words: ['배포했', '배포됐', '배포 마쳤', '마쳤습니다', '다 됐', '올려 두었', '보내 드렸', '보내드렸'] },
+    { kind: 'ask',  expr: '',      words: ['확인해 주', '확인 부탁', '확인해주', '승인', '여쭙', '여쭤', '결정해 주', '골라 주', '정해 주', '답해 주', '말씀해 주', '어떻게 할까', '할까요', '괜찮을까요', '괜찮으실까요'] }
+  ];
+  function moodFor(text) {
+    var expr = exprFor(text);
+    if (expr === 'concern') return { kind: 'problem', expr: expr };
+    if (expr === 'cheer') return { kind: 'done', expr: expr };
+    var t = String(text || '').replace(/\s+/g, '');
+    for (var i = 0; i < MOOD_EXTRA.length; i++) {
+      var r = MOOD_EXTRA[i];
+      for (var j = 0; j < r.words.length; j++) {
+        if (t.indexOf(r.words[j].replace(/\s+/g, '')) !== -1) return { kind: r.kind, expr: r.expr || expr };
+      }
+    }
+    return { kind: 'news', expr: expr };
+  }
+
   /* ---------------- 옷장 데이터 ---------------- */
   var BASE = 'assets/k/';
   var OUTFIT_KEY = 'smart_k_outfit';
@@ -491,7 +515,7 @@
 
   window.KChar = {
     ready: ready,
-    exprFor: exprFor, rules: EXPR_RULES,
+    exprFor: exprFor, rules: EXPR_RULES, moodFor: moodFor,
     outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange,
     // (O-0040) 머리 스타일 · 서버 카탈로그
     catalogReady: catalogReady, reloadCatalog: loadCatalog, catalogState: function () { return { source: catState.source, url: catState.url, error: catState.error, at: catState.at }; },
