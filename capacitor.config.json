@@ -1,5 +1,6 @@
 {
   "appId": "com.kwak.voicememo",
   "appName": "스마트비서",
-  "webDir": "www"
+  "webDir": "www",
+  "backgroundColor": "#070B1D"
 }

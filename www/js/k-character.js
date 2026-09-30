@@ -120,6 +120,8 @@
     n.thumb = o.thumb || (o.expr && !Array.isArray(o.expr) ? n.expr.neutral : 'thumb.png');
     n.idle = o.idle === undefined ? (o.expr && !Array.isArray(o.expr) ? '' : 'loop_idle_small.mp4') : (o.idle || '');
     n.talk = o.talk === undefined ? (o.expr && !Array.isArray(o.expr) ? '' : 'loop_talk_small.mp4') : (o.talk || '');
+    // (O-0116/O-0118) 전신 사진 = 옷 10벌 모두 · 인사 영상 = 버건디 정장만. 없으면 '' → 꾸미기 화면은 상반신만
+    n.fullbody = o.fullbody || ''; n.bow = o.bow || ''; n.bowPoster = o.bow_poster || o.bowPoster || '';
     return n;
   }
   function setData(d) {
@@ -174,6 +176,19 @@
     var cb = comboFor(curHair, o.id);
     if (cb) return cb.thumb || cb.img;
     return url(o, o.thumb || o.expr.neutral);
+  }
+
+  // (O-0116) 전신 사진: 기본머리면 옷의 fullbody, 다른 머리면 그 조합의 fullbody(없으면 '' → 상반신만)
+  //   조합 사진이 없어 기본머리 사진으로 보이는 경우엔 전신도 기본머리 전신으로(상반신과 같은 모습)
+  function fullbodyUrl(o) {
+    var cb = isCur(o) ? activeCombo() : null;
+    if (cb) return cb.fullbody || '';
+    o = o || outfit(); return url(o, o.fullbody);
+  }
+  // 인사 영상은 기본머리 + 그 옷에 bow 가 있을 때만(다른 머리 조합 영상은 아직 없음)
+  function bowUrl(o) {
+    if (isCur(o) && activeCombo()) return '';
+    o = o || outfit(); return url(o, o.bow);
   }
 
   /* ---- 머리 ---- */
@@ -244,7 +259,8 @@
       if (!c || !c.hair || !c.outfit || !c.img || String(c.hair) === DEFAULT_HAIR) return;
       var k = String(c.hair) + '|' + String(c.outfit);
       var e = { img: abs(c.img), av: abs(c.av), thumb: abs(c.thumb), crop: c.crop || null,
-                idle: abs(c.idle) };               // (O-0042/O-0043) 조합 idle 영상 — 있는 조합만(지금은 h02 긴생머리 × 옷 10벌). 없으면 정지 사진
+                idle: abs(c.idle),
+                fullbody: abs(c.fullbody) };        // (O-0116) 조합 전신 사진 — 있는 조합만(아직 없음)               // (O-0042/O-0043) 조합 idle 영상 — 있는 조합만(지금은 h02 긴생머리 × 옷 10벌). 없으면 정지 사진
       [e.img, e.av, e.thumb].forEach(function (u) { if (u) nIndex[u] = k; });
       nCombos[k] = e;
     });
@@ -526,6 +542,7 @@
     // 지금 「보이는」 모습 이름(조합 사진이 없어 기본머리로 보일 땐 옷 이름만 — 안내는 머리 탭 아래 문구가 맡는다)
     lookName: function () { return outfit().name + (activeCombo() ? ' · ' + hair().name : ''); },
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
+    fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
     mount: function () { faces().forEach(paint); },
     restartFace: restartFace,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },

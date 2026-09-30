@@ -1,0 +1,63 @@
+/* k-intro.css — 앱 시작 인사 덮개 + 케이 꾸미기 전신 패널 (O-0116 시험판) */
+
+/* ---------- 시작 인사 덮개 ---------- */
+/* 바탕은 앱 다크색(#070B1D)에서 시작 → 케이 무대가 0.25초에 스르르 나타남(흰 화면 번쩍임 없음) */
+.kintro{position:fixed;inset:0;z-index:2147483000;display:none;background:#070B1D;opacity:1;transition:opacity .38s ease;
+  overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;-webkit-user-select:none;user-select:none}
+.kintro.show{display:block}
+.kintro.out{opacity:0}
+html.kintro-on,html.kintro-on body{overflow:hidden}
+/* 무대 바탕 = 영상 위·아래 가장자리 색(위 #cabdb6 → 아래 #f1eaea)이라 남는 공간과 영상 경계가 안 보인다 */
+.kintro-stage{position:absolute;inset:0;background:linear-gradient(180deg,#cabdb6 0%,#dccfcb 55%,#f1eaea 100%);opacity:0;transition:opacity .25s ease}
+.kintro.in .kintro-stage{opacity:1}
+.kintro-stage img,.kintro-stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;pointer-events:none}
+.kintro-stage .kintro-bg{display:none}
+.kintro-stage video{opacity:0}
+.kintro.playing .kintro-stage video{opacity:1}
+/* 세로로 긴 폰(9:16보다 좁음) = 꽉 채움(양옆 빈 배경만 조금 잘림). 아래 넓은 화면(폴드 펼침·PC) = 전신이 다 보이게 맞춤 */
+/* 넓은 화면: 양옆 빈자리 = 같은 장면을 크게 흐리게 깐 배경(경계선이 안 보이게) */
+@media (min-aspect-ratio: 9/16){
+  .kintro-stage .kintro-poster,.kintro-stage video{object-fit:contain;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%);
+            mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%)}
+  .kintro-stage .kintro-bg{display:block;object-fit:cover;filter:blur(28px) saturate(.9);transform:scale(1.15)}
+}
+.kintro-hint{position:absolute;left:0;right:0;top:calc(14px + env(safe-area-inset-top,0px));text-align:center;
+  font:600 13px/1.4 Pretendard,'Malgun Gothic',sans-serif;color:rgba(70,45,52,.62);letter-spacing:.2px;opacity:0;transition:opacity .5s ease}
+.kintro.hint-on .kintro-hint{opacity:1}
+/* 인사 멘트 자막(목소리 없음) — 허리 숙이는 순간(영상 1.0초) 아래에서 살짝 떠오르며 나타남. 폰 390px에서 크고 선명하게 */
+.kintro-cap{position:absolute;left:18px;right:18px;bottom:calc(58px + env(safe-area-inset-bottom,0px));margin:0 auto;width:fit-content;max-width:calc(100% - 36px);
+  box-sizing:border-box;padding:12px 22px 13px;border-radius:18px;background:rgba(22,10,16,.60);color:#fff;text-align:center;
+  font:800 23px/1.4 Pretendard,'Malgun Gothic',sans-serif;letter-spacing:-.4px;word-break:keep-all;text-wrap:balance;
+  text-shadow:0 1px 3px rgba(0,0,0,.35);box-shadow:0 8px 24px rgba(0,0,0,.18);
+  opacity:0;transform:translateY(12px);transition:opacity .5s ease-out,transform .5s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.kintro.cap-on .kintro-cap{opacity:1;transform:none}
+@media (max-width:350px){ .kintro-cap{font-size:20px;padding:10px 16px} }
+@media (min-aspect-ratio: 9/16){ .kintro-cap{font-size:26px;bottom:calc(46px + env(safe-area-inset-bottom,0px))} }
+@media (prefers-reduced-motion: reduce){ .kintro,.kintro-stage{transition:none} }
+
+/* ---------- 케이 꾸미기: 상반신 + 전신 나란히 ---------- */
+/* 전신이 있는 옷(.has-fb): 왼쪽 상반신(4:5) · 오른쪽 전신(9:16) — 높이를 맞춘다. 없는 옷은 예전 그대로 정사각 상반신 한 장. */
+.kw-hero-main{position:relative;width:100%;height:100%;overflow:hidden}
+.kw-hero-main .kface{width:100%;height:100%}
+.kw-fb{display:none}
+.kw-hero.has-fb{aspect-ratio:1.3625/1;max-width:min(560px,calc(62vh * 1.3625));max-height:none;display:grid;grid-template-columns:.8fr .5625fr;gap:2px;background:var(--glass-b)}
+.kw-hero.has-fb .kw-hero-main{background:#dfe3ea}
+.kw-hero.has-fb .kw-fb{display:block;position:relative;border:0;padding:0;margin:0;overflow:hidden;cursor:pointer;
+  background:linear-gradient(180deg,#cabdb6,#f1eaea);-webkit-tap-highlight-color:transparent}
+.kw-fb img,.kw-fb video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.kw-fb video{opacity:0;transition:opacity .15s linear}
+.kw-fb.bowing video{opacity:1}
+.kw-fb-tag{position:absolute;left:8px;top:8px;padding:3px 8px;border-radius:999px;background:rgba(5,8,20,.55);color:#fff;
+  font-size:11.5px;font-weight:700;line-height:1.3}
+.kw-fb-tag small{font-weight:600;opacity:.8;margin-left:3px}
+.kw-hero.has-fb .kw-hero-cap{padding:28px 12px 12px}
+.kw-hero.has-fb .kw-hero-cap b{font-size:17px}
+
+/* ---------- 케이 꾸미기: 시작 인사 설정 ---------- */
+.kw-intro{display:flex;flex-direction:column;gap:10px;padding:12px}
+.kw-intro .hseg{margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.kw-intro .hseg .hseg-btn{min-width:0;padding-left:4px;padding-right:4px;white-space:nowrap;font-size:13.5px}
+.kw-intro-row{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.kw-intro-row .btn{width:100%;white-space:nowrap}
+.kw-intro-row small{color:var(--muted);font-size:12.5px;line-height:1.5}

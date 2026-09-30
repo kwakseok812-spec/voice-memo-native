@@ -13,10 +13,17 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- O-0116 제안: 웹 화면이 그려지기 전 창 바탕도 앱 다크색(흰 화면 번쩍임 방지) -->
+        <item name="android:windowBackground">@color/kLaunchBg</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <!-- O-0116 제안: 흰 기본 스플래시(Capacitor 로고) → 앱 다크색 바탕 + 앱 아이콘.
+             시작 인사 덮개도 같은 다크색에서 시작하므로 [다크 → 케이 등장 → 앱 홈]으로 끊김 없이 이어진다. -->
+        <item name="windowSplashScreenBackground">@color/kLaunchBg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:background">@color/kLaunchBg</item>
     </style>
 </resources>
