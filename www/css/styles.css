@@ -1038,8 +1038,12 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 html.convo-mode .topbar{display:none}
 html.convo-mode .app{padding-bottom:0}
 #chatView.convo-on{height:calc(100vh - var(--sat));height:calc(100dvh - var(--sat));min-height:0}   /* overflow:hidden 금지 — 머리줄 sticky 가 이 상자 기준으로 밀려 내려온다 */
-#chatView.convo-on .chatlog{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-top:8px;
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14px);mask-image:linear-gradient(180deg,transparent 0,#000 14px)}   /* 무대 바로 아래에서 글이 칼같이 잘리지 않고 살짝 흐려지며 사라지게 */
+/* v7.4 소장 검토: 무대 바로 아래에서 말풍선이 반쯤 잘린 줄로 보이던 경계 → 대화 상자 위쪽 44px 을 투명→불투명 그라데이션으로
+   흐려 무대 밑으로 자연스럽게 사라지게. 맨 위까지 올렸을 때 첫 말풍선이 흐려지지 않게 위 여백(22px)을 둔다.
+   mask 는 상자(스크롤 창) 기준이라 글이 움직여도 흐림 자리는 그대로다. 배경 판을 새로 깔지 않는다(9/29 교훈). */
+#chatView.convo-on .chatlog{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-top:22px;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,rgba(0,0,0,.18) 12px,rgba(0,0,0,.62) 26px,#000 44px);
+  mask-image:linear-gradient(180deg,transparent 0,rgba(0,0,0,.18) 12px,rgba(0,0,0,.62) 26px,#000 44px)}
 #chatView.convo-on #chatConvoStatus{display:none !important}   /* 상태 문구는 무대 아래 줄로 옮김 */
 #chatView.convo-on .kstage{display:flex;flex-direction:column;flex:none;margin:0 0 6px;border-radius:24px;overflow:hidden;
   border:1.5px solid var(--glass-b);background:var(--glass2);box-shadow:0 10px 26px rgba(0,0,0,.26);transition:border-color .25s ease}
