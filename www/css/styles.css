@@ -297,6 +297,8 @@ html[data-style="light"] .modal-box{background:var(--bg0)}
 html[data-style="light"] .sheet-box{background:var(--bg0)}
 .sheet-head{font-size:18px;font-weight:800;color:var(--text);text-align:center;padding:2px 0 2px}
 .sheet-msg{font-size:14.5px;line-height:1.6;color:var(--muted);text-align:center;padding:0 6px 6px;max-height:120px;overflow:hidden}
+/* v7.3(O-0120): 「PC 케이에게 직접」 3줄 안내 — 줄바꿈 유지·왼쪽 정렬·높이 제한 해제 */
+.sheet-msg.pck{white-space:pre-line;word-break:keep-all;text-align:left;max-height:none;padding:0 10px 8px}
 /* [⋯] 시트: 부분 복사 힌트(2026-09-20) */
 .sheet-hint{font-size:13px;line-height:1.5;color:var(--dim);text-align:center;padding:0 6px 6px}
 .sheet-btn{width:100%;height:54px;border-radius:16px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-size:16.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}

@@ -137,8 +137,8 @@
         <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
         <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
       </div>
-      <!-- (O-0118) PC 케이에게 직접: Claude 앱의 Code 화면(claude.ai/code)을 바깥으로 연다.
-           폰 = 외부 앱으로(Claude 앱이 설치돼 있으면 앱으로 열림), PC판 = 새 탭 -->
+      <!-- (O-0118 → O-0120 v7.3) PC 케이에게 직접: 누르면 안내 시트(3줄) → [Claude 앱 열기]로 claude.ai/code 를 바깥으로 연다.
+           세션 제목·주소 상수는 app.js의 PC_K_SESSION_TITLE / PC_K_OPEN_URL / PC_K_SESSION_URL 한 곳에 모음 -->
       <button class="card action wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>PC 케이에게 직접</b><small>24시간 PC의 케이와 바로 대화</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
