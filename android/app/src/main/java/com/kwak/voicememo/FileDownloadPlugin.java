@@ -36,7 +36,12 @@ public class FileDownloadPlugin extends Plugin {
 
     static final String APK_MIME = "application/vnd.android.package-archive";
     private static final long POLL_MS = 700;
-    private static final long STALL_MS = 10L * 60 * 1000;   // 10분 동안 1바이트도 안 늘면 실패로 본다
+    // v7.9: 멈춤 판정을 10분 → "진행이 전혀 없는 시간" 기준 두 단계로 줄였다(느리지만 받아지고 있으면 실패로 보지 않는다).
+    //   - 첫 바이트도 못 받은 채(대기·일시정지) 45초 → WAITING_<사유> (인터넷 기다림·와이파이 대기 등)
+    //   - 받다가 2분 동안 1바이트도 안 늘면 → STALLED
+    //   둘 다 우리가 넣은 요청을 지우고(dm.remove) 실패로 알린다 → 다시 누르면 새로 받을 수 있다.
+    private static final long FIRST_BYTE_MS = 45L * 1000;
+    private static final long STALL_MS = 2L * 60 * 1000;
 
     private DownloadManager dm() {
         return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -149,10 +154,20 @@ public class FileDownloadPlugin extends Plugin {
                     }
                     // 진행 중 / 대기(인터넷 기다림 등)
                     if (got != lastBytes) { lastBytes = got; lastChange = System.currentTimeMillis(); }
-                    else if (System.currentTimeMillis() - lastChange > STALL_MS) {
-                        try { dm.remove(id); } catch (Exception ignore) { }   // 우리가 시작한 '받다 만' 조각만 정리
-                        call.reject("다운로드가 오래 멈춰 있어 중단했어요.", "STALLED");
-                        return;
+                    else {
+                        long idle = System.currentTimeMillis() - lastChange;
+                        if (got <= 0 && idle > FIRST_BYTE_MS) {
+                            // 시작도 못 함: 일시정지면 사유(1 다시 시도 대기·2 인터넷 기다림·3 와이파이 대기·4 알 수 없음), 그냥 대기열이면 0
+                            int why = (status == DownloadManager.STATUS_PAUSED) ? reason : 0;
+                            try { dm.remove(id); } catch (Exception ignore) { }
+                            call.reject("다운로드가 시작되지 않아 중단했어요(대기 사유 " + why + ").", "WAITING_" + why);
+                            return;
+                        }
+                        if (idle > STALL_MS) {
+                            try { dm.remove(id); } catch (Exception ignore) { }   // 우리가 시작한 '받다 만' 조각만 정리
+                            call.reject("다운로드가 오래 멈춰 있어 중단했어요.", "STALLED");
+                            return;
+                        }
                     }
                     if (total > 0) {
                         int pct = (int) Math.min(99, (got * 100) / total);

@@ -242,7 +242,9 @@
       // 409 = 같은 기본키(id) 행이 이미 있음(이전 시도에 등록됨). 재시도가 여기서 죽으면 조각(part) 공급
       //   단계로 못 넘어가 긴 녹음 복구가 막힌다 → 중복 키는 "이미 등록됨=성공"으로 취급(멱등).
       //   ⚠️ id 는 client 생성 UUID라 409는 오직 "같은 메모 재시도"에서만 발생 → 유실을 감추지 않는다.
-      if (r.ok || r.status === 409) return true;
+      //   v7.9: 409 는 'exists'(참 값)로 돌려 "새로 만든 것"과 구분한다 — 긴 녹음 재전송이 제목·자료를 고쳐 넣을 때 쓴다.
+      if (r.ok) return true;
+      if (r.status === 409) return 'exists';
       throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
     });
   }
@@ -268,7 +270,10 @@
   //   인터넷·서버 문제(다시 보내면 될 수 있는 것)는 지금처럼 전체 실패로 돌려 원본을 보존한다.
   //   재전송 때 이미 올라간 mat_i 는 중복=성공으로 통과한다(_storagePost).
   var MAT_SKIP_REASONS = { too_big: 1, too_big_server: 1, unreadable: 1, bad_key: 1 };
-  function uploadMaterials(id, materials, onProgress) {
+  //   v7.9: slots(선택) = 자료마다 고정된 저장 번호. 임시저장에서 자료를 빼면 뒤 자료의 '순서'가 당겨지는데,
+  //   번호까지 당겨지면 이미 올라간 다른 파일(mat_0)을 제 것으로 알고 건너뛴다 → 번호는 붙일 때 받은 것을 끝까지 쓴다.
+  //   slots 가 없으면 예전처럼 순서가 번호. PC(collect.py)는 meta.materials 의 key 만 보므로 번호가 건너뛰어도 된다.
+  function uploadMaterials(id, materials, onProgress, slots) {
     materials = materials || [];
     var out = [], skipped = [], i = 0;
     out.skipped = skipped;
@@ -276,7 +281,7 @@
       if (i >= materials.length) return Promise.resolve(out);
       var f = materials[i];
       var ext = extForMaterial(f);
-      var key = id + '/mat_' + i + '.' + ext;
+      var key = id + '/mat_' + ((slots && slots[i] != null) ? slots[i] : i) + '.' + ext;
       var nm = f.name || ('mat' + i + '.' + ext);
       // v6.6: 5GB 초과 자료는 올리지 않고 건너뜀(녹음은 계속). 5GB 이하는 File(Blob) 그대로 스트리밍 — 메모리로 읽지 않음.
       var up = ((f.size || 0) > MAX_UPLOAD_BYTES)
@@ -325,9 +330,9 @@
     //   ⚠️ 예전엔 r.ok/409(HTTP 성공)만 보고 idbDel 했다 — 서버에 실제로 안 남았는데도 원본을 지워
     //      녹음이 유실될 수 있었다(2026-09-22 CCUBIO 사고). 그 결합을 끊는다.
     var rec = { id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob,
-                materials: memo.materials || [], date: memo.date, time: memo.time, kind: memo.kind || 'audio', sent: false };
+                materials: memo.materials || [], matSlots: memo.matSlots, date: memo.date, time: memo.time, kind: memo.kind || 'audio', sent: false };
     return idbPut(rec)                                            // (1) 전송 전 원본 영속 — 인메모리만 믿지 않음
-      .then(function () { return uploadMaterials(memo.id, memo.materials || []); })
+      .then(function () { return uploadMaterials(memo.id, memo.materials || [], null, memo.matSlots); })
       .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return uploadAudio(memo.id, memo.ext, blob); })
       .then(function (path) { return createMemo(memo, path); })
       .then(function () { rec.sent = true; return idbPut(rec); }) // (2) 업로드 완료 표시(원본은 done 확인까지 보존)
@@ -478,6 +483,27 @@
       meta: meta
     });
   }
+  /* v7.9 긴 녹음 재전송 시 제목·회의자료 반영.
+   *   조각 전송은 행을 '먼저' 만들기 때문에, 다시 보낼 때는 행이 이미 있어(409) 고친 제목·새로 붙인(뺀) 자료가
+   *   서버에 들어가지 않았다. 공개 키로는 행을 고칠 수 없으므로 서버 함수 update_pending_memo 로 고친다
+   *   (이 메모를 만든 기기의 token 대조, PC가 조각을 다 받기 전에만 고쳐진다 — PC는 조각을 다 받은 뒤 행을 다시 읽는다).
+   *   반환: 'updated' | 'too_late'(이미 PC가 정리를 시작/완료 → 반영 안 됨) | null(호출 실패 — 인터넷·옛 서버 등).
+   *   ⚠️ 어떤 경우에도 reject 하지 않는다 — 이 호출 때문에 녹음 전송이 멈추면 안 된다. 15초 시간 제한(poll 과 같은 이유). */
+  function updatePendingMemo(id, tok, title, materialsMeta) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, 15000) : null;
+    function done(v) { if (to) clearTimeout(to); return v; }
+    try {
+      return fetch(CONFIG.url + '/rest/v1/rpc/update_pending_memo', {
+        method: 'POST',
+        headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_id: id, p_token: tok, p_title: title || '', p_materials: materialsMeta || [] }),
+        signal: ac ? ac.signal : undefined
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (v) { return done((v === 'updated' || v === 'too_late') ? v : null); },
+              function () { return done(null); });
+    } catch (e) { return Promise.resolve(done(null)); }
+  }
   // 큰 오디오 blob 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
   // 실패하면 blob 을 IndexedDB 에 넣고 throw → flush() 가 나중에 다시 시도.
   function sendAudioChunked(memo, blob, onProgress) {
@@ -486,10 +512,17 @@
     // 안전 업로드(2026-09-22, v5.1): 전송 '전에' 원본을 먼저 영속하고, 전 청크 업로드가 끝나도
     //   지우지 않는다(sent:true 표시만). 실제 삭제는 PC 정리(done) 확인 뒤에만(app.js dropPending).
     var rec = { id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob,
-                materials: memo.materials || [], date: memo.date, time: memo.time, kind: 'audio', sent: false };
+                materials: memo.materials || [], matSlots: memo.matSlots, date: memo.date, time: memo.time, kind: 'audio', sent: false };
     return idbPut(rec)                                       // (1) 전송 전 원본 영속
-      .then(function () { return uploadMaterials(memo.id, memo.materials || []); })   // 회의자료 먼저(있으면) — 2026-09-21
+      .then(function () { return uploadMaterials(memo.id, memo.materials || [], null, memo.matSlots); })   // 회의자료 먼저(있으면) — 2026-09-21
       .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return _insertChunkedAudioRow(memo, total, ext); })
+      // v7.9: 행이 이미 있으면(재전송) 지금 제목·실제로 올라간 자료 목록으로 고친다. 결과는 memo.resendEdit 에 남겨
+      //   앱이 'too_late' 를 안내한다(app.js noticeSkippedMaterials). 실패(null)해도 전송은 그대로 이어 간다.
+      .then(function (made) {
+        if (made !== 'exists') return;
+        return updatePendingMemo(memo.id, memo.token, memo.title, (memo.materialsMeta || []).slice())
+          .then(function (res) { memo.resendEdit = res; });
+      })
       // v6.4 재전송 이어받기: 행이 이미 있으면(409=등록됨) PC가 이미 받아 간 조각 수(progress)부터 올린다.
       //   (이미 붙여 지운 조각을 또 올리면 서버에 쓰레기 조각이 남는다.) 이미 끝난(done) 메모면 조각을 건너뛴다.
       .then(function () { return poll(memo.id, memo.token).catch(function () { return null; }); })
@@ -1289,7 +1322,7 @@
         //   자동복구/[다시 보내기]가 markResendable 로 sent 를 내리면 그때 이 흐름을 다시 탄다.
         if (rec.sent) { return next(); }
         var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
-                     materials: rec.materials || [], date: rec.date, time: rec.time };   // 회의자료도 함께 재시도
+                     materials: rec.materials || [], matSlots: rec.matSlots, date: rec.date, time: rec.time };   // 회의자료도 함께 재시도
         var p;
         if (rec.files) {
           p = sendBatch(memo, rec.files);              // 사진/영상 묶음 재업로드
