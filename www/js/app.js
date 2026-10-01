@@ -229,7 +229,7 @@
           (mb ? ' · ' + mb + 'MB' : '') +
           ' <button type="button" class="matdel" data-i="' + i + '" aria-label="빼기" ' +
           'style="margin-left:auto;background:none;border:0;color:inherit;font-size:16px;cursor:pointer">✕</button></div>';
-      }).join('') + '</div>';
+      }).join('') + '</div><div class="draft-hint">' + MAT_LIMIT_HINT + '</div>';
     }
     [matList, matListPrep].forEach(function (box) {
       if (!box) return;
@@ -241,13 +241,28 @@
       });
     });
   }
+  /* v7.8: 같은 자료를 두 번 고르면 두 번 붙던 것 — 이름·크기·수정시각이 모두 같으면 같은 파일로 보고 한 번만 붙인다.
+   *   (녹음 화면·임시저장 재개 창 공용) 반환: 새로 붙일 파일 배열, .dup = 빼 버린 중복 수. */
+  function matKey(f) { return ((f && f.name) || '') + '|' + ((f && f.size) || 0) + '|' + ((f && f.lastModified) || 0); }
+  function newMaterials(have, picked) {
+    var seen = {}, out = [], dup = 0;
+    (have || []).forEach(function (f) { seen[matKey(f)] = 1; });
+    (picked || []).forEach(function (f) { var k = matKey(f); if (seen[k]) { dup++; return; } seen[k] = 1; out.push(f); });
+    out.dup = dup;
+    return out;
+  }
+  // v7.8: PC가 요약에 읽어 넣는 자료 글자 수 상한(voice-memo-collector collect.py MAT_TEXT_PER·MAT_TEXT_TOTAL)을 앱에서도 알린다.
+  //   ⚠️ PC 쪽 값을 바꾸면 이 문구도 함께 고칠 것.
+  var MAT_LIMIT_HINT = '자료가 길거나 많으면 자료 하나당 앞에서 약 2만 자, 모두 합쳐 약 6만 자까지만 요약에 반영돼요.';
   function openMatPicker() { if (matInput) matInput.click(); }   // 두 화면의 [회의자료 붙이기] 공용 — 바로 파일 선택 열림
   if (matAttach) matAttach.addEventListener('click', openMatPicker);
   if (matAttachPrep) matAttachPrep.addEventListener('click', openMatPicker);
   if (matInput) matInput.addEventListener('change', function () {
     var arr = keepSendable(this.files);          // v6.6: 회의자료 40MB → 5GB(File 그대로 스트리밍 업로드)
-    pendingMaterials = pendingMaterials.concat(arr);
+    var add = newMaterials(pendingMaterials, arr);
+    pendingMaterials = pendingMaterials.concat(add);
     renderMatList();
+    if (add.dup && !arr.removed) toast('이미 붙인 자료 ' + add.dup + '개는 다시 붙이지 않았어요.');
     this.value = '';
   });
 
@@ -349,16 +364,53 @@
       toast('임시 저장했어요. 지난 메모에서 자료를 붙여 보낼 수 있어요.');
     }).catch(function () { showBanner('임시 저장에 실패했어요. 녹음은 아직 화면에 있어요.'); });
   });
-  // 지난 메모의 임시저장 항목 → 자료 붙이기 + 보내기 + 삭제
+  /* 임시저장 제목 고치기: 녹음 직후 화면(memoTitle)에서만 되던 제목 수정을 임시저장을 다시 연 창에서도.
+   *   - 제목의 기준은 지난 메모 목록(HistoryModule, 즉시 저장) — 창을 어떻게 닫든 고친 제목이 남는다.
+   *   - IndexedDB draft 에도 같은 제목을 써 둔다. 자료 붙이기와 같은 레코드를 읽고-고쳐-쓰므로
+   *     editDraft 한 줄로 차례대로 처리한다(동시에 쓰면 한쪽이 붙인 자료나 제목을 덮어쓴다).
+   *   - draft 레코드에는 녹음(수십 MB)이 통째로 들어 있어 쓸 때마다 전체를 읽고 다시 쓴다. 그래서 글자를
+   *     치는 동안에는 목록(가벼움)만 고치고, draft 쓰기는 입력을 마쳤을 때(change·blur)·자료 붙이기·
+   *     [PC로 보내기]·창이 닫힐 때(closeModal 공통 지점 — ✕·바깥 터치·뒤로가기)에 한 번만 한다.
+   *   - 비우면 기본 이름(녹음한 날짜·시각 기준 '메모 M월 D일 H시')으로 돌아간다. */
+  var draftQ = Promise.resolve();
+  function editDraft(id, fn) {
+    draftQ = draftQ.then(function () {
+      return OfficeBridge.getDraft(id).then(function (rec) {
+        if (!rec) return null;
+        fn(rec);
+        return OfficeBridge.saveDraft(rec).then(function (ok) { return ok ? rec : false; });
+      });
+    }).catch(function () { return false; });
+    return draftQ;
+  }
+  function draftDefaultTitle(e) {
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec((e && e.date) || ''), h = /^(\d{1,2}):/.exec((e && e.time) || '');
+    return (m && h) ? '메모 ' + (+m[2]) + '월 ' + (+m[3]) + '일 ' + (+h[1]) + '시' : defaultTitle();
+  }
+  var modalOnClose = null;          // 지금 열린 창이 닫힐 때 한 번 할 일(closeModal 이 부르고 비운다)
+  function setDraftTitle(e, raw) {  // 가벼운 저장: 지난 메모 목록만. 바뀌었으면 true
+    var title = (raw || '').trim() || draftDefaultTitle(e);
+    if (title === e.title) return false;
+    e.title = title;
+    HistoryModule.update(e.id, { title: title });
+    return true;
+  }
+  // 지난 메모의 임시저장 항목 → 제목 고치기 + 자료 붙이기 + 보내기 + 삭제
   function openDraftModal(e) {
     OfficeBridge.getDraft(e.id).then(function (rec) {
       var matN = (rec && rec.materials && rec.materials.length) || 0;
+      if (!e.title) e.title = (rec && rec.title) || '';     // 제목 없는 옛 임시저장 — draft 쪽 제목이 있으면 그것부터
       modalTitle.textContent = (e.title || '메모') + '  ·  ' + (e.date || '');
-      var html = '<div class="card rcard"><div class="h"><svg><use href="#i-mic"/></svg>임시 저장된 녹음</div>' +
+      var html = '<div class="label" style="margin-top:0">제목 <span class="hint">(PC에 저장될 파일 이름이 돼요)</span></div>' +
+        '<div class="input filled" style="margin-bottom:14px"><svg class="lead"><use href="#i-note"/></svg>' +
+        '<input id="mDraftTitle" type="text" maxlength="40" value="' + esc(e.title || '') + '" ' +
+        'placeholder="' + esc(draftDefaultTitle(e)) + '" enterkeyhint="done"></div>' +
+        '<div class="card rcard"><div class="h"><svg><use href="#i-mic"/></svg>임시 저장된 녹음</div>' +
         '<div style="padding:2px 2px 0;line-height:1.6">' +
         '이 녹음은 폰에 임시 저장돼 있어요(<b>아직 PC로 안 보냈어요</b>).<br>' +
         '회의자료(선택)를 붙이고 <b>PC로 보내기</b>를 누르면 녹음+자료를 함께 정리해 드려요.<br>' +
         '<b>붙인 자료:</b> <span id="mDraftMatN">' + matN + '</span>개' +
+        '<span id="mDraftMatHint" style="' + (matN ? '' : 'display:none') + '"><br><small>' + MAT_LIMIT_HINT + '</small></span>' +
         (e.error ? '<br><span style="color:var(--rec,#c0392b)"><b>지난번 보내기 실패:</b> ' + esc(e.error) + '</span>' +
                    '<br>다시 <b>PC로 보내기</b>를 누르면 이어서 보내요(이미 올라간 부분은 건너뜀).' : '') +
         '</div></div>' +
@@ -368,10 +420,41 @@
         '</div>' +
         '<div class="btnrow"><button id="mDraftDel" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button></div>';
       modalBody.innerHTML = html;
-      $('mDraftAttach').addEventListener('click', function () { draftAttachId = e.id; if ($('draftMatInput')) $('draftMatInput').click(); });
-      $('mDraftSend').addEventListener('click', function () { closeModal(); resumeSendDraft(e.id); });
+      // 제목: 치는 동안엔 목록·창 머리글만(가벼움), 녹음이 든 draft 쓰기는 flushTitle 에서 한 번. 비우면 기본 이름.
+      var ti = $('mDraftTitle'), listT = null, dirty = false;
+      function typeTitle() {
+        if (setDraftTitle(e, ti.value)) dirty = true;
+        modalTitle.textContent = e.title + '  ·  ' + (e.date || '');
+        if (listT) clearTimeout(listT);
+        listT = setTimeout(function () { listT = null; renderHistory(); }, 300);   // 뒤 목록은 잠깐 모아서 다시 그림
+      }
+      function flushTitle() {           // 입력을 마친 시점에 draft 에 한 번만 쓴다(고친 게 없으면 쓰지 않음)
+        if (setDraftTitle(e, ti.value)) dirty = true;
+        if (!dirty) return;
+        dirty = false;
+        var title = e.title;
+        editDraft(e.id, function (rec) { rec.title = title; });
+      }
+      ti.addEventListener('input', typeTitle);
+      ti.addEventListener('change', function () { typeTitle(); flushTitle(); });
+      ti.addEventListener('blur', flushTitle);
+      modalOnClose = function () {      // ✕·바깥 터치·뒤로가기 — 입력칸에 포커스가 있는 채 닫혀도 남게
+        flushTitle();
+        if (listT) { clearTimeout(listT); listT = null; }
+        renderHistory();
+      };
+      ti.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); ti.blur(); } });
+      ti.addEventListener('focus', function () {      // 키보드가 올라온 뒤에도 입력칸이 보이게
+        setTimeout(function () { try { ti.scrollIntoView({ block: 'center' }); } catch (x) {} }, 300);
+      });
+      $('mDraftAttach').addEventListener('click', function () { flushTitle(); draftAttachId = e.id; if ($('draftMatInput')) $('draftMatInput').click(); });
+      $('mDraftSend').addEventListener('click', function () {
+        closeModal(); resumeSendDraft(e.id);          // closeModal 이 제목을 draft 에 쓰고(draftQ), 보내기는 그 뒤에 읽는다
+      });
       $('mDraftDel').addEventListener('click', function () {
-        OfficeBridge.delDraft(e.id); HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('임시 저장을 삭제했어요.');
+        modalOnClose = null; dirty = false;           // 지우는 항목에 제목을 다시 쓰지 않는다
+        draftQ = draftQ.then(function () { return OfficeBridge.delDraft(e.id); }).catch(function () {});   // 쓰는 중인 제목·자료가 끝난 뒤 지운다(지운 뒤 되살아나지 않게)
+        HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('임시 저장을 삭제했어요.');
       });
       modal.style.display = 'flex';
     });
@@ -381,14 +464,18 @@
   if ($('draftMatInput')) $('draftMatInput').addEventListener('change', function () {
     var fs = Array.prototype.slice.call(this.files || []); this.value = '';
     var id = draftAttachId; if (!id || !fs.length) return;
-    OfficeBridge.getDraft(id).then(function (rec) {
-      if (!rec) { toast('임시 저장을 찾지 못했어요.'); return; }
-      rec.materials = (rec.materials || []).concat(fs);
-      OfficeBridge.saveDraft(rec).then(function (ok) {
-        if (!ok) { toast('자료 붙이기에 실패했어요.'); return; }
-        var span = $('mDraftMatN'); if (span) span.textContent = String(rec.materials.length);
-        toast('자료 ' + fs.length + '개를 붙였어요. [PC로 보내기]를 누르면 함께 정리돼요.');
-      });
+    var added = 0, dup = 0;
+    editDraft(id, function (rec) {
+      var add = newMaterials(rec.materials, fs);            // v7.8: 이미 붙인 자료는 다시 붙이지 않는다
+      added = add.length; dup = add.dup;
+      rec.materials = (rec.materials || []).concat(add);
+    }).then(function (rec) {
+      if (rec === null) { toast('임시 저장을 찾지 못했어요.'); return; }
+      if (!rec) { toast('자료 붙이기에 실패했어요.'); return; }
+      var span = $('mDraftMatN'); if (span) span.textContent = String(rec.materials.length);
+      var lh = $('mDraftMatHint'); if (lh) lh.style.display = rec.materials.length ? '' : 'none';
+      if (!added) { toast('이미 붙인 자료예요. 다시 붙이지 않았어요.'); return; }
+      toast('자료 ' + added + '개를 붙였어요.' + (dup ? ' (이미 붙인 ' + dup + '개는 뺐어요.)' : '') + ' [PC로 보내기]를 누르면 함께 정리돼요.');
     });
   });
   /* v6.4(2026-09-29) 실패 이유를 쉬운 말로 — 예전엔 이유 없이 "전송 실패 — 다시 보내세요"만 떠서
@@ -418,9 +505,11 @@
   // 임시저장 → 실제 발송(대표님이 [PC 보내기]를 눌렀을 때만 실행). 기존 send/sendAudioChunked 재사용.
   //  실패 시: draft 는 그대로 두고(유실 방지), send 가 pending 에 남긴 잔재는 dropPending 으로 제거해 자동발송을 막는다.
   function resumeSendDraft(id) {
-    OfficeBridge.getDraft(id).then(function (rec) {
+    draftQ.then(function () { return OfficeBridge.getDraft(id); }).then(function (rec) {   // 쓰는 중인 제목·자료가 끝난 뒤 읽는다
       if (!rec || !rec.blob) { showBanner('임시 저장한 녹음을 찾지 못했어요.'); renderHistory(); return; }
-      var memo = { id: rec.id, token: rec.token, title: rec.title, ext: rec.ext, date: rec.date, time: rec.time,
+      var he = HistoryModule.get(id);                       // 고친 제목의 기준은 지난 메모 목록
+      var title = (he && he.title) || rec.title || draftDefaultTitle(he || rec);
+      var memo = { id: rec.id, token: rec.token, title: title, ext: rec.ext, date: rec.date, time: rec.time,
                    materials: rec.materials || [] };
       var blob = rec.blob;
       if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
@@ -885,7 +974,12 @@
       '</div>';
     modalBody.innerHTML = html;
     $('mRetry').addEventListener('click', function () { closeModal(); retryFailedMemo(e.id); });
-    $('mFailDel').addEventListener('click', function () { HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('삭제했어요.'); });
+    $('mFailDel').addEventListener('click', function () {
+      // v7.8: 보관 원본(IndexedDB pending)도 함께 지운다 — 남겨 두면 목록에서 지운 뒤에도 다음 앱 실행·인터넷 복귀 때
+      //   flush() 가 그 녹음·파일을 PC로 자동 전송했다(지운 항목이 보내짐). [정리중] 삭제(mProcDel)와 같은 처리.
+      OfficeBridge.dropPending(e.id);
+      HistoryModule.remove(e.id); closeModal(); renderHistory(); toast('삭제했어요.');
+    });
     modal.style.display = 'flex';
   }
   function retryFailedMemo(id) {
@@ -931,7 +1025,11 @@
     $('mDelete').addEventListener('click', function () { HistoryModule.remove(e.id); closeModal(); renderHistory(); });
     modal.style.display = 'flex';
   }
-  function closeModal() { modal.style.display = 'none'; }
+  function closeModal() {
+    var h = modalOnClose; modalOnClose = null;
+    modal.style.display = 'none';
+    if (h) { try { h(); } catch (x) {} }
+  }
   if (modalClose) modalClose.addEventListener('click', closeModal);
   if (modal) modal.addEventListener('click', function (ev) { if (ev.target === modal) closeModal(); });
 
@@ -1249,7 +1347,7 @@
   var chatHasMore = false;         // 커서보다 옛것이 더 있나(마지막 쪽이 꽉 찼나)
   var chatOlderBusy = false;       // 옛 쪽 불러오는 중
   var chatPageMissing = false;     // 서버에 list_chat_page 없음(404) → 이번 실행 동안 예전 방식
-  var APP_VERSION = 'v7.7';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v7.7: 안읽음 실시간 갱신(O-0134) — 앱을 껐다 켜야만 새 메시지·홈 케이 말풍선이 보이던 문제. 화면이 보이는 동안 30초마다 케이 방송·다른 기기 대화를 조용히 받고, 앱 복귀·홈 복귀 즉시 한 번 받음, 화면 꺼짐·백그라운드면 멈춤. 방송·대화 조회 15초 타임아웃 + 굳은 '조회 중' 45초 뒤 풀기. 안읽음 계산·알림 제외·OS 알림/아이콘 배지는 그대로. v7.6: 홈 「오늘 한눈에」 일정 [길찾기](O-0133) — 장소가 기관·주소인 일정 옆 버튼 → 네이버 지도 앱 검색(nmap://search, 좌표·키 없음, [도착] 한 번 더 = 현재 위치 출발 대중교통), 앱 없으면 웹 지도, 방 이름만·온라인 회의는 버튼 숨김, PC판은 웹 지도. v7.5: 홈 「오늘 한눈에」(O-0129) — 녹음·케이 버튼 아래 카드 한 장: 오늘 일정(지금·다음 강조, 지난 일정은 접음)·답할 메일(제목·보낸 사람)·챙길 일(작업 현황 미완료, 확인 필요 먼저)+[말로 일정 잡기](채팅 열고 음성 대화). 일정·메일은 PC가 07~21시 매시 읽기 전용으로 만든 서버 요약(get_home_digest, 연동 암호), 할 일은 작업 현황 결과 재사용. 누르면 상세 시트→채팅 초안만(보내지 않음). + 건강기록 잠그기(O-0130) — 건강 탭 조회·저장과 푸시 토큰 등록을 연동 암호 게이트 RPC(health_list·health_upsert·push_token_register)로 옮김: 공개 키만으로는 건강기록·토큰을 읽거나 고칠 수 없게. 암호가 없으면 연동 암호 창, 폰에만 남은 값은 암호가 들어오면 올림. v7.4: 음성 대화 케이 무대(O-0124) — 「음성 대화」를 켜면 채팅 화면 위쪽 40%에 케이가 크게(말할 땐 talk 영상·들을 땐 idle, 기본머리 외·영상 실패는 정지 사진+끄덕임), 상태 줄 「듣는 중/답하는 중/말하는 중」, 대화 글은 무대 아래 상자에서 스크롤(위 가장자리 흐림), 음성 대화 중엔 맨 위 「스마트비서」 줄 접기, 키보드가 올라오면 무대 축소, 무대가 안 보이면 영상 정지·헤더 작은 얼굴 영상은 멈춤. 끄면 예전 화면 그대로. v7.3: 홈 「PC 케이에게 직접」 고침(O-0120) — 바로 claude.ai/code를 열어 새 클라우드 작업 시트가 뜨던 것을, 먼저 3줄 안내 시트(✕로 닫기 → Code 목록에서 PC 세션 고르기) + [Claude 앱 열기]로. 세션 제목·주소는 PC_K_* 상수 한 곳. v7.2: 통합 배포(O-0118) — 홈 케이 말풍선(O-0117, 숫자 배지 대신 「대표님, ○○」)·「문제」 표정 판정 좁히기 + 케이 전신 시작 인사(O-0116, 자막 멘트 13개·목소리 없음·설정 하루 첫 실행만(기본)/켤 때마다/끄기·[지금 보기]) + 꾸미기 전신 10벌(누르면 인사는 버건디만) + 네이티브 시작화면 다크(#070B1D) 통일 + 홈 「PC 케이에게 직접」(claude.ai/code 바깥으로 열기). v7.1: 글을 먼저 쓰면 첨부가 안 되던 문제 수정(O-0108) — 폰 입력 바의 ＋/카메라가 네이티브 파일 선택(NativeInput.pickFiles)으로 직접 골라 첨부 대기줄(window.SmartAttach)에 붙임·첨부만 보내기 가능·옛 APK는 예전 방식 + 채팅 긴 메시지 접기(O-0111) — 20줄 넘는 본문은 15줄까지만+아래 흐림+[전체 보기 ▼]/[접기 ▲], 펼친 상태는 다시 그려도 유지. v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v7.8';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v7.8: 홈 「길찾기」 카드 — 누르면 네이버 지도 앱이 바로 열림(nmap://map, 앱 없거나 PC판이면 웹 지도). 임시저장을 다시 열어 제목 고치기 — 치는 동안엔 목록만, 녹음이 든 임시저장 쓰기는 입력을 마쳤을 때·보내기·창 닫힐 때 한 번, 비우면 기본 이름. 회의자료 중복 붙이기 방지·요약 상한 안내. 실패 항목을 삭제한 뒤에도 자동 전송되던 문제(삭제 시 dropPending). 「작업 현황」 화살표 위치. v7.7: 안읽음 실시간 갱신(O-0134) — 앱을 껐다 켜야만 새 메시지·홈 케이 말풍선이 보이던 문제. 화면이 보이는 동안 30초마다 케이 방송·다른 기기 대화를 조용히 받고, 앱 복귀·홈 복귀 즉시 한 번 받음, 화면 꺼짐·백그라운드면 멈춤. 방송·대화 조회 15초 타임아웃 + 굳은 '조회 중' 45초 뒤 풀기. 안읽음 계산·알림 제외·OS 알림/아이콘 배지는 그대로. v7.6: 홈 「오늘 한눈에」 일정 [길찾기](O-0133) — 장소가 기관·주소인 일정 옆 버튼 → 네이버 지도 앱 검색(nmap://search, 좌표·키 없음, [도착] 한 번 더 = 현재 위치 출발 대중교통), 앱 없으면 웹 지도, 방 이름만·온라인 회의는 버튼 숨김, PC판은 웹 지도. v7.5: 홈 「오늘 한눈에」(O-0129) — 녹음·케이 버튼 아래 카드 한 장: 오늘 일정(지금·다음 강조, 지난 일정은 접음)·답할 메일(제목·보낸 사람)·챙길 일(작업 현황 미완료, 확인 필요 먼저)+[말로 일정 잡기](채팅 열고 음성 대화). 일정·메일은 PC가 07~21시 매시 읽기 전용으로 만든 서버 요약(get_home_digest, 연동 암호), 할 일은 작업 현황 결과 재사용. 누르면 상세 시트→채팅 초안만(보내지 않음). + 건강기록 잠그기(O-0130) — 건강 탭 조회·저장과 푸시 토큰 등록을 연동 암호 게이트 RPC(health_list·health_upsert·push_token_register)로 옮김: 공개 키만으로는 건강기록·토큰을 읽거나 고칠 수 없게. 암호가 없으면 연동 암호 창, 폰에만 남은 값은 암호가 들어오면 올림. v7.4: 음성 대화 케이 무대(O-0124) — 「음성 대화」를 켜면 채팅 화면 위쪽 40%에 케이가 크게(말할 땐 talk 영상·들을 땐 idle, 기본머리 외·영상 실패는 정지 사진+끄덕임), 상태 줄 「듣는 중/답하는 중/말하는 중」, 대화 글은 무대 아래 상자에서 스크롤(위 가장자리 흐림), 음성 대화 중엔 맨 위 「스마트비서」 줄 접기, 키보드가 올라오면 무대 축소, 무대가 안 보이면 영상 정지·헤더 작은 얼굴 영상은 멈춤. 끄면 예전 화면 그대로. v7.3: 홈 「PC 케이에게 직접」 고침(O-0120) — 바로 claude.ai/code를 열어 새 클라우드 작업 시트가 뜨던 것을, 먼저 3줄 안내 시트(✕로 닫기 → Code 목록에서 PC 세션 고르기) + [Claude 앱 열기]로. 세션 제목·주소는 PC_K_* 상수 한 곳. v7.2: 통합 배포(O-0118) — 홈 케이 말풍선(O-0117, 숫자 배지 대신 「대표님, ○○」)·「문제」 표정 판정 좁히기 + 케이 전신 시작 인사(O-0116, 자막 멘트 13개·목소리 없음·설정 하루 첫 실행만(기본)/켤 때마다/끄기·[지금 보기]) + 꾸미기 전신 10벌(누르면 인사는 버건디만) + 네이티브 시작화면 다크(#070B1D) 통일 + 홈 「PC 케이에게 직접」(claude.ai/code 바깥으로 열기). v7.1: 글을 먼저 쓰면 첨부가 안 되던 문제 수정(O-0108) — 폰 입력 바의 ＋/카메라가 네이티브 파일 선택(NativeInput.pickFiles)으로 직접 골라 첨부 대기줄(window.SmartAttach)에 붙임·첨부만 보내기 가능·옛 APK는 예전 방식 + 채팅 긴 메시지 접기(O-0111) — 20줄 넘는 본문은 15줄까지만+아래 흐림+[전체 보기 ▼]/[접기 ▲], 펼친 상태는 다시 그려도 유지. v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3349,6 +3447,11 @@
       'Claude 앱 열기', openPcKClaude);
     if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄 안내(왼쪽 정렬·줄바꿈 유지·높이 제한 해제)
     if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-chat'); }   // 여는 동작이라 빨간 휴지통 대신
+  });
+  // v7.8 홈 「길찾기」 — 화면을 바꾸지 않고 바로 네이버 지도를 연다(돌아오면 홈 그대로). 여는 방법은 today-card.js 한 곳.
+  if ($('btnRoute')) $('btnRoute').addEventListener('click', function () {
+    if (window.TodayCard && TodayCard.openMap) TodayCard.openMap();
+    else toast('지도를 열지 못했어요 — 다시 눌러 주세요.');
   });
   if ($('btnLocker')) $('btnLocker').addEventListener('click', openLocker);
   if ($('btnMeetings')) $('btnMeetings').addEventListener('click', openMeetings);   // v5.2: 회의 요약 탭

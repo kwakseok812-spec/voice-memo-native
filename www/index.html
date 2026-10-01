@@ -144,6 +144,8 @@
       </div>
       <!-- (O-0118 → O-0120 v7.3) PC 케이에게 직접: 누르면 안내 시트(3줄) → [Claude 앱 열기]로 claude.ai/code 를 바깥으로 연다.
            세션 제목·주소 상수는 app.js의 PC_K_SESSION_TITLE / PC_K_OPEN_URL / PC_K_SESSION_URL 한 곳에 모음 -->
+      <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱을 연다(nmap://map). 앱이 없거나 PC판이면 웹 지도. 동작은 today-card.js openMapHome -->
+      <button class="card action wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tx"><b>길찾기</b><small>누르면 네이버 지도가 바로 열려요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>PC 케이에게 직접</b><small>24시간 PC의 케이와 바로 대화</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>

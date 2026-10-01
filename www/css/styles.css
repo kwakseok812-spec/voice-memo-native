@@ -884,6 +884,8 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
 /* 작업 현황 화면 */
 .ordbadge{flex:none;min-width:24px;height:24px;padding:0 8px;border-radius:999px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center;margin-left:auto}
 .ordbadge + .chev{margin-left:6px}
+/* v7.8: 미완료 0건(배지 숨김)일 때도 위 규칙이 걸려 「작업 현황」 화살표만 글 바로 옆에 붙던 것(넓은 화면에서 보임) — 글 칸이 남는 폭을 차지해 화살표를 오른쪽 끝으로 */
+#btnOrders .tx{flex:1}
 .ord-sec{display:flex;align-items:baseline;justify-content:space-between;font-size:16px;font-weight:800;margin:18px 2px 8px}
 .ord-sec small{font-size:13px;color:var(--dim);font-weight:600}
 .ord-item{margin-top:9px;padding:13px 14px;border-radius:18px}
