@@ -10,6 +10,7 @@
  *   · PPT → ▶ 슬라이드쇼(전체화면·자동재생·간격·반복·좌우탭)
  *   · 회전(⟳) · 야간(🌙) · 스크롤⇄한장넘김(📖) · 폭맞춤/확대·축소(－＋·핀치·더블탭) · 좌우 스와이프
  *   · 책 넘김(StPageFlip, 종이 접힘) — 전체화면 한 장 보기에서 토글(라이브러리 없으면 자동 폴백)
+ *   · v8.0(O-0153) 여러 문서 탭(최대 5개, 탭마다 보던 쪽·확대·회전·시트 기억, [＋ 파일 더 열기])
  * 라이브러리는 www/vendor 에 번들(pdf.js / xlsx / page-flip).
  * ==========================================================================*/
 (function (global) {
@@ -43,6 +44,16 @@
   var curKey = null, curSrcUrl = null, curFileInfo = null, resumePage = 0, excelKey = null, excelPdfBlob = null;
   var confirmFn = null;   // 앱의 확인 시트(openSheet) — confirm() 금지
   var idbWarned = false;  // 목록 저장 불가 안내는 한 번만
+
+  // v8.0(O-0153) 여러 문서 탭
+  //   · 탭마다 「변환 끝난 PDF(Blob) 또는 엑셀 원본」과 보던 자리(쪽·확대·회전·시트)만 들고 있다.
+  //   · 화면에 그리는(=PDF 엔진·캔버스를 쥔) 문서는 언제나 하나뿐 — 탭을 바꾸면 앞 문서 엔진은 풀고 새로 연다.
+  //     (폰 웹뷰 메모리 보호. 다시 열 때 변환·내려받기는 없다 — 들고 있는 PDF 를 바로 그린다)
+  var MAX_TABS = 5;
+  var tabs = [], activeIdx = -1, liveTabId = null, tabSeq = 0;
+  var openIntent = null;           // 'new' = 새 문서를 탭으로 여는 중 · 'restore' = 탭 다시 그리는 중 · null
+  var pendingRestore = null, pendingPdfBlob = null, loadSeq = 0, STALE = { stale: true };
+  var tabsEl, tabListEl, tabAddBtn, sheetEl;
 
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function blobToBuf(blob) {
@@ -197,17 +208,22 @@
 
   // ============ 화면 전환 ============
   function showViewer() { if (rootEl) rootEl.classList.add('on'); }
-  function showPick() {
+  // 뷰어를 닫고 문서 고르기 화면으로. v8.0: 탭이 2개 이상이면 탭(문서 목록)은 남겨 두고 엔진만 푼다
+  //   → 고르기 화면 「열어 둔 문서 · 이어서 보기」로 돌아온다. 1개면 예전과 똑같이 닫힌다.
+  function leaveViewer() {
     opToken++;      // 진행 중이던 변환·다운로드 콜백을 무효화(취소) — 나가면 뒤에서 계속 돌지 않게
     cancelUpload(); // v6.9: 올리던 조각 전송도 멈춘다(이미 올라간 조각은 장부에 남아 다음에 이어 올림)
     releaseWake();
     hideOverlay();  // 변환 스피너 오버레이가 남아 화면을 가리는(갇히는) 것을 막는다
     closeSlideshow();
-    if (lastPageT && curKey && pdfDoc && viewMode === 'pdf') {   // 나가기 직전 본 쪽을 바로 저장
-      clearTimeout(lastPageT); lastPageT = null; DocStore.touch(curKey, { lastPage: getCurrentPage() }).then(renderRecent);
-    }
-    curKey = null;
+    closeSheet();
+    if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
+    snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
+    curKey = null; openIntent = null; pendingRestore = null;
+    if (tabs.length >= 2) { clearDocView(); liveTabId = null; }
+    else { tabs = []; activeIdx = -1; liveTabId = null; }
     if (rootEl) rootEl.classList.remove('on');
+    renderTabs(); renderOpenCard();
     renderRecent();
   }
 
@@ -226,7 +242,10 @@
     overlay.classList.add('on');
     // 변환이 오래 걸려도 기다리다 빠져나올 수 있게 — 취소하면 진행 중이던 변환을 멈추고 문서 고르기 화면으로
     var cx = $('dvLoadCancel');
-    if (cx) cx.onclick = function () { showPick(); };
+    if (cx) {                                    // v8.0: 탭이 있으면 「취소」= 보던 문서로 돌아감
+      if (openIntent === 'new' && tabs.length) cx.textContent = '취소';
+      cx.onclick = function () { if (openIntent === 'new' && tabs.length) abortOpen(); else leaveViewer(); };
+    }
   }
   function setLoading(o) {
     if (!o || !$('dvMsg')) return;                       // 오류 화면으로 바뀐 뒤면 무시
@@ -250,7 +269,12 @@
       (retryFn ? '<button class="btn" id="dvErrRetry" style="margin-top:20px;">🔄 다시 시도</button>' : '') +
       '<button class="' + (retryFn ? 'btn ghost' : 'btn') + '" id="dvErrClose" style="margin-top:' + (retryFn ? '10px' : '20px') + ';">확인</button>';
     overlay.classList.add('on');
-    $('dvErrClose').onclick = function () { hideOverlay(); if (!pdfDoc && !isExcelDoc) showPick(); };
+    $('dvErrClose').onclick = function () {
+      hideOverlay();
+      if (openIntent === 'restore') { failRestore(); return; }     // v8.0: 탭을 다시 그리지 못함 → 그 탭만 닫기
+      if (openIntent === 'new') { abortOpen(); return; }           // v8.0: 새 문서 실패 → 보던 탭으로(없으면 예전처럼 닫기)
+      if (!pdfDoc && !isExcelDoc) leaveViewer(); else refreshFname();
+    };
     if (retryFn) $('dvErrRetry').onclick = function () { hideOverlay(); try { retryFn(); } catch (e) {} };
   }
   function hideOverlay() { if (overlay) overlay.classList.remove('on'); }
@@ -309,6 +333,11 @@
     }
     DocStore.keyOf(file).then(function (key) {
       if (op !== opToken) return null;
+      if (openIntent === 'new') {                                   // v8.0: 이미 탭에 열린 문서면 그 탭으로
+        var di = tabByKey(key);
+        if (di >= 0) { openIntent = null; hideOverlay(); showTab(di); return null; }
+        if (tabs.length >= MAX_TABS) { capToast(); abortOpen(); return null; }
+      }
       curKey = key;
       return DocStore.get(key).then(function (meta) {
         if (op !== opToken) return;
@@ -359,6 +388,7 @@
       }
       if (!b.pdf) { showError('저장본을 열지 못했어요.', '원래 파일을 다시 골라 주세요.'); return; }
       setProgress(70);
+      pendingPdfBlob = b.pdf;                                       // v8.0: 탭이 들고 있을 PDF(저장본 = 기기 저장소 사본)
       blobToBuf(b.pdf).then(function (buf) {
         if (op !== opToken) return;
         loadPdf({ data: new Uint8Array(buf) }, meta.name, meta.isPpt);
@@ -382,6 +412,7 @@
   function openExcelFile(file, xo) {
     xo = xo || {};
     if (typeof XLSX === 'undefined') { convertAndShowPdf(file); return; }
+    var intent = openIntent, rs = pendingRestore; pendingRestore = null;   // v8.0
     excelKey = curKey; excelPdfBlob = xo.pdfBlob || null;
     isExcelDoc = true; excelFile = file; excelName = file.name; excelPdfBuf = null; excelWorkbook = null; excelView = 'table'; pdfDoc = null;
     showViewer(); fnameLabel.textContent = file.name;
@@ -394,8 +425,13 @@
         var data = new Uint8Array(reader.result);
         var wb = XLSX.read(data, { type: 'array', cellStyles: true, cellDates: true, cellNF: true });
         if (!wb || !wb.SheetNames || wb.SheetNames.length === 0) throw new Error('시트가 없습니다.');
-        excelWorkbook = wb; buildSheetSelector(); renderSheet(0); hideOverlay(); updateXlToggle();
+        excelWorkbook = wb; buildSheetSelector(); renderSheet(rs ? (rs.sheet || 0) : 0);
+        if (rs) { if (rs.font) { tableFontPx = rs.font; applyTableFont(); } scroller.scrollTop = rs.ttop || 0; scroller.scrollLeft = rs.tleft || 0; }
+        hideOverlay(); updateXlToggle();
         if (!xo.stored) saveCurrent('excel', { orig: file });            // v6.9: 최근 목록(원본 그대로 → 다시 표로)
+        if (intent === 'new') commitNewTab('excel');                     // v8.0: 새 탭으로 등록
+        else if (intent === 'restore') markRestored();
+        if (rs && rs.excelView === 'pdf' && excelPdfBlob) { pendingRestore = rs; toggleExcelView(); }
       } catch (err) { isExcelDoc = false; xlToggleBtn.style.display = 'none'; convertAndShowPdf(file); }
     };
     reader.onerror = function () { isExcelDoc = false; xlToggleBtn.style.display = 'none'; convertAndShowPdf(file); };
@@ -709,29 +745,36 @@
 
   // v6.9: 변환 결과·PDF 는 PDF.js 에 넘기기 '전에' 최근 목록용 사본(Blob)을 만든다(PDF.js 가 버퍼를 가져가 비울 수 있음).
   function openPdfArrayBuffer(buf, name, isPpt) {
-    try { saveCurrent('pdf', { pdf: new Blob([buf], { type: 'application/pdf' }) }, isPpt); } catch (e) {}
+    try { var pb = new Blob([buf], { type: 'application/pdf' }); pendingPdfBlob = pb; saveCurrent('pdf', { pdf: pb }, isPpt); } catch (e) {}
     loadPdf({ data: new Uint8Array(buf) }, name, isPpt);
   }
 
   // ============ 렌더링(지연 렌더) ============
   var p1w = 612, p1h = 792, renderToken = 0, io = null;
   function loadPdf(src, name, isPpt) {
+    var seq = ++loadSeq, intent = openIntent, rs = pendingRestore; pendingRestore = null;   // v8.0: 탭 등록·자리 되살리기
     setViewMode('pdf'); fnameLabel.textContent = name || '문서';
     global.pdfjsLib.getDocument(src).promise.then(function (doc) {
+      if (seq !== loadSeq) { try { doc.destroy(); } catch (e) {} throw STALE; }   // 그 사이 다른 탭을 눌렀음
       if (pdfDoc) { try { pdfDoc.destroy(); } catch (e) {} }
-      pdfDoc = doc; userZoom = 1; renderedZoom = 1; userRotation = 0; return computeBaseScale();
+      pdfDoc = doc; userZoom = (rs && rs.zoom) || 1; renderedZoom = userZoom; userRotation = (rs && rs.rot) || 0; return computeBaseScale();
     }).then(function () {
+      if (seq !== loadSeq) throw STALE;
       curIsPpt = (isPpt === undefined) ? isPptName(name) : !!isPpt; pageModeCur = 1;
-      var want = Math.min(resumePage || 0, pdfDoc.numPages); resumePage = 0;
+      if (intent === 'new' && !isExcelDoc) commitNewTab('pdf');      // v8.0: 새 문서 → 탭으로 등록
+      else if (intent === 'restore') markRestored();
+      var want = rs ? Math.min(rs.page || 1, pdfDoc.numPages) : Math.min(resumePage || 0, pdfDoc.numPages); resumePage = 0;
       if (want > 1 && pdfPaged) pageModeCur = want;
       renderPdfLayout(); hideOverlay(); scroller.scrollTop = 0; scroller.scrollLeft = 0;
-      if (want > 1) {                                      // v6.9: 지난번 본 쪽부터(옛 독립 뷰어의 이어보기)
+      if (rs && !pdfPaged && rs.pos) {                     // v8.0: 탭으로 돌아오면 보던 자리 그대로
+        requestAnimationFrame(function () { if (seq !== loadSeq) return; listSetPos(pagesEl, scroller, rs.pos); if (rs.left) scroller.scrollLeft = rs.left; updatePageBadge(); });
+      } else if (want > 1) {                               // v6.9: 지난번 본 쪽부터(옛 독립 뷰어의 이어보기)
         if (!pdfPaged) requestAnimationFrame(function () { goToPage(want, true); updatePageBadge(); });
-        toast('📖 ' + want + '쪽부터 이어서 보여 드려요');
+        if (!rs) toast('📖 ' + want + '쪽부터 이어서 보여 드려요');
       }
       if (curKey) DocStore.touch(curKey, { pages: pdfDoc.numPages });
       updatePageBadge(); updateFeatureButtons();
-    }).catch(function (err) { showError('문서를 표시하지 못했습니다.', (err && err.message) ? err.message : ''); });
+    }).catch(function (err) { if (err === STALE) return; showError('문서를 표시하지 못했습니다.', (err && err.message) ? err.message : ''); });
   }
   function computeBaseScale() {
     return pdfDoc.getPage(1).then(function (page) { var vp1 = page.getViewport({ scale: 1, rotation: userRotation }); p1w = vp1.width; p1h = vp1.height; baseScale = (scroller.clientWidth - 12) / vp1.width; });
@@ -962,21 +1005,227 @@
     else { setBookFlipPref(true); enterBookFlip(); showFlipHint('책 넘김 · 확대하려면 📖를 다시 끄세요'); }
   }
 
+  /* ============ v8.0(O-0153) 여러 문서 탭 ============
+   * 대표님 지시: "문서를 보고 있는 화면에서 파일을 더 열고, 탭으로 1번·2번·3번 파일을 왔다갔다."
+   *   · [＋ 파일 더 열기] → 시트(폰에서 파일 고르기 · 최근 연 문서) → 새 문서가 탭으로 붙는다. 보던 문서는 탭으로 남는다.
+   *   · 탭을 누르면 그 문서가 「보던 쪽·확대·회전·시트」 그대로 다시 열린다(변환·내려받기 없음).
+   *   · 같은 문서를 또 열면 새 탭을 만들지 않고 그 탭으로 간다. 최대 MAX_TABS 개.
+   * 메모리: 화면에 그리는 PDF 엔진은 언제나 1개. 보이지 않는 탭은 엔진·캔버스를 쥐지 않고 PDF 사본(Blob)만 든다.
+   * ==========================================================================*/
+  function tabByKey(key) { if (!key) return -1; for (var i = 0; i < tabs.length; i++) if (tabs[i].key === key) return i; return -1; }
+  function activeTab() { return (activeIdx >= 0 && tabs[activeIdx]) || null; }
+  function viewerOpen() { return !!(rootEl && rootEl.classList.contains('on')); }
+  function copyState(st) { var o = {}; if (st) for (var k in st) if (st.hasOwnProperty(k)) o[k] = st[k]; return o; }
+  function capToast() { toast('문서는 ' + MAX_TABS + '개까지 함께 열 수 있어요. 위 탭의 ✕로 하나를 닫고 다시 열어 주세요.'); }
+  function refreshFname() {
+    var t = activeTab(); if (fnameLabel && t && liveTabId === t.id) fnameLabel.textContent = t.name;
+  }
+
+  // 연속 스크롤 목록에서 「쪽 단위 위치」(3.25 = 3쪽의 1/4 지점) — 탭으로 돌아올 때 보던 자리를 그대로 되살린다.
+  function slotTop(listEl, k) { var f = listEl.firstElementChild; return k.offsetTop - (f ? f.offsetTop : 0) + 10; }
+  function listPos(listEl, sc) {
+    var kids = listEl.children, top = sc.scrollTop;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i], t0 = slotTop(listEl, k) - 6, h = k.offsetHeight + 12;
+      if (top < t0 + h || i === kids.length - 1) return i + 1 + Math.max(0, Math.min(0.999, (top - t0) / h));
+    }
+    return 1;
+  }
+  function listSetPos(listEl, sc, p) {
+    var kids = listEl.children; if (!kids.length) return;
+    var i = Math.max(0, Math.min(kids.length - 1, Math.floor(p) - 1)), k = kids[i];
+    var frac = Math.max(0, Math.min(0.999, p - (i + 1)));
+    sc.scrollTop = Math.max(0, slotTop(listEl, k) - 6 + frac * (k.offsetHeight + 12));
+  }
+
+  // 지금 화면의 문서 자리를 탭에 적어 둔다(탭 전환·새 문서 열기·나가기 직전).
+  function snapshotActive(touchRecent) {
+    var t = activeTab(); if (!t || liveTabId !== t.id) return;
+    var st = t.state || (t.state = {});
+    if (isExcelDoc) {
+      st.excelView = excelView; st.sheet = parseInt(sheetSel.value, 10) || 0; st.font = tableFontPx;
+      if (excelView === 'table') { st.ttop = scroller.scrollTop; st.tleft = scroller.scrollLeft; }
+      if (!excelPdfBlob && excelPdfBuf) { try { excelPdfBlob = new Blob([excelPdfBuf], { type: 'application/pdf' }); } catch (e) {} }
+      if (excelPdfBlob) t.pdfBlob = excelPdfBlob;
+    }
+    if (pdfDoc && viewMode === 'pdf') {
+      st.pos = pdfPaged ? pageModeCur : listPos(pagesEl, scroller); st.page = getCurrentPage();
+      st.zoom = userZoom; st.rot = userRotation; st.left = scroller.scrollLeft;
+      if (t.key) { var pr = DocStore.touch(t.key, { lastPage: st.page }); if (touchRecent && pr && pr.then) pr.then(renderRecent); }
+    }
+  }
+  function beginOpen() { closeSheet(); snapshotActive(); liveTabId = null; openIntent = 'new'; pendingRestore = null; pendingPdfBlob = null; }
+  function markRestored() { var t = activeTab(); if (t) liveTabId = t.id; openIntent = null; renderTabs(); }
+  function commitNewTab(kind) {
+    var info = curFileInfo || {};
+    var t = { id: ++tabSeq, key: curKey || null, srcUrl: curSrcUrl || null, name: info.name || fnameLabel.textContent || '문서',
+              ext: info.ext || extOf(info.name), size: info.size || 0, kind: kind, state: {} };
+    if (kind === 'excel') { t.file = excelFile; t.pdfBlob = excelPdfBlob || null; }
+    else { t.blob = pendingPdfBlob; t.isPpt = curIsPpt; }
+    pendingPdfBlob = null; openIntent = null;
+    tabs.push(t); activeIdx = tabs.length - 1; liveTabId = t.id;
+    renderTabs();
+    if (tabs.length === 2) toast('📑 두 번째 문서를 열었어요. 위 탭을 눌러 왔다갔다 보세요.');
+  }
+  // 새 문서 열기를 그만둠(취소·실패·한도) → 보던 탭으로. 탭이 없으면 예전처럼 뷰어를 닫는다.
+  function abortOpen() {
+    opToken++; cancelUpload(); releaseWake(); hideOverlay(); openIntent = null; pendingRestore = null; pendingPdfBlob = null;
+    if (tabs.length) { activateTab(Math.max(0, Math.min(activeIdx, tabs.length - 1)), { noSnap: true }); return; }
+    leaveViewer();
+  }
+  function failRestore() {
+    openIntent = null; var i = activeIdx;
+    if (tabs[i]) tabs.splice(i, 1);
+    toast('이 탭의 문서를 다시 열지 못해 탭을 닫았어요. 「최근 연 문서」에서 다시 열어 주세요.');
+    if (tabs.length) activateTab(Math.min(i, tabs.length - 1), { noSnap: true }); else { activeIdx = -1; leaveViewer(); }
+  }
+  // 탭 하나를 화면에 다시 그린다(들고 있는 PDF·엑셀 원본으로 — 변환·내려받기 없음).
+  function activateTab(i, o) {
+    o = o || {}; if (i < 0 || i >= tabs.length) return;
+    if (!o.noSnap) snapshotActive();
+    opToken++; var op = opToken; cancelUpload(); releaseWake(); hideOverlay(); closeSlideshow();
+    var t = tabs[i]; activeIdx = i; liveTabId = null;
+    clearDocView();
+    curKey = t.key || null; curSrcUrl = t.srcUrl || null; resumePage = 0;
+    curFileInfo = { name: t.name, ext: t.ext, size: t.size };
+    showViewer(); fnameLabel.textContent = t.name; renderTabs(); renderOpenCard();
+    openIntent = 'restore'; pendingRestore = copyState(t.state);
+    if (t.kind === 'excel' && t.file) { openExcelFile(t.file, { pdfBlob: t.pdfBlob || null, stored: true }); return; }
+    if (!t.blob) { failRestore(); return; }
+    blobToBuf(t.blob).then(function (buf) {
+      if (op !== opToken) return;
+      loadPdf({ data: new Uint8Array(buf) }, t.name, t.isPpt);
+    }, function () { if (op === opToken) failRestore(); });
+  }
+  function showTab(i) {
+    if (i === activeIdx && liveTabId === tabs[i].id && viewerOpen()) return;
+    showViewer(); activateTab(i);
+  }
+  function closeTab(i) {
+    var t = tabs[i]; if (!t) return;
+    var wasActive = (i === activeIdx);
+    if (wasActive) snapshotActive(true);
+    tabs.splice(i, 1);
+    if (!tabs.length) { activeIdx = -1; liveTabId = null; leaveViewer(); return; }
+    if (wasActive) activateTab(Math.min(i, tabs.length - 1), { noSnap: true });
+    else { if (i < activeIdx) activeIdx--; renderTabs(); }
+  }
+  // 뒤로(← · 폰 뒤로가기): 시트 닫기 → 여는 중이면 취소(보던 탭으로) → 뷰어 닫기
+  function backAction() {
+    if (!viewerOpen()) { leaveViewer(); return; }
+    if (sheetEl && sheetEl.classList.contains('on')) { closeSheet(); return; }
+    if (openIntent === 'new' && tabs.length) { abortOpen(); return; }
+    leaveViewer();
+  }
+
+  // ---------- 탭 띠 ----------
+  function renderTabs() {
+    if (!tabsEl) return;
+    tabsEl.style.display = (viewerOpen() && tabs.length >= 1) ? 'flex' : 'none';
+    if (tabAddBtn) { tabAddBtn.textContent = tabs.length <= 1 ? '＋ 파일 더 열기' : '＋'; tabAddBtn.classList.toggle('wide', tabs.length <= 1); }
+    if (!tabListEl) return;
+    tabListEl.innerHTML = tabs.map(function (t, i) {
+      var b = TYPE_BADGE[t.ext || extOf(t.name)] || ['', 't-etc'];
+      return '<div class="dv-tab' + (i === activeIdx ? ' on' : '') + '" data-i="' + i + '">' +
+        '<button class="dv-tabmain" type="button" data-act="go" title="' + esc(t.name) + '">' +
+          '<span class="dv-tbadge ' + b[1] + '">' + (i + 1) + '</span>' +
+          '<span class="dv-tname">' + esc(t.name) + '</span></button>' +
+        '<button class="dv-tabx" type="button" data-act="x" aria-label="' + esc(t.name) + ' 탭 닫기">✕</button>' +
+      '</div>';
+    }).join('');
+    var onEl = tabListEl.querySelector('.dv-tab.on');
+    if (onEl) { try { var L = onEl.offsetLeft, R = L + onEl.offsetWidth; if (L < tabListEl.scrollLeft || onEl.offsetWidth >= tabListEl.clientWidth) tabListEl.scrollLeft = Math.max(0, L - 8); else if (R > tabListEl.scrollLeft + tabListEl.clientWidth) tabListEl.scrollLeft = R - tabListEl.clientWidth + 8; } catch (e) {} }
+  }
+  function onTabClick(ev) {
+    var btn = ev.target.closest ? ev.target.closest('[data-act]') : null, row = btn && btn.closest('.dv-tab');
+    if (!btn || !row) return;
+    var i = +row.getAttribute('data-i'); if (!tabs[i]) return;
+    if (btn.getAttribute('data-act') === 'x') closeTab(i); else showTab(i);
+  }
+  // 문서 고르기 화면의 「열어 둔 문서」(탭 2개 이상 두고 나갔을 때)
+  function renderOpenCard() {
+    var w = $('docOpenWrap'); if (!w) return;
+    if (tabs.length < 2 || viewerOpen()) { w.style.display = 'none'; return; }
+    w.style.display = '';
+    var info = $('docOpenInfo'); if (info) info.textContent = tabs.length + '개';
+    var nm = $('docOpenNames');
+    if (nm) nm.innerHTML = tabs.map(function (t, i) { return '<div class="dv-openrow"><b>' + (i + 1) + '</b> ' + esc(t.name) + '</div>'; }).join('');
+  }
+
+  // ---------- [＋ 파일 더 열기] 시트 ----------
+  function openSheet() {
+    if (!sheetEl) { if (fileInput) fileInput.click(); return; }
+    if (tabs.length >= MAX_TABS) { capToast(); return; }
+    sheetEl.classList.add('on');
+    var note = $('dvsNote'); if (note) note.textContent = '지금 보던 문서는 위 탭에 그대로 남아요 · 최대 ' + MAX_TABS + '개';
+    var list = $('dvsList'); if (!list) return;
+    list.innerHTML = '<div class="dvs-empty">불러오는 중…</div>';
+    DocStore.list().then(function (items) {
+      if (!sheetEl.classList.contains('on')) return;
+      if (!items.length) { list.innerHTML = '<div class="dvs-empty">아직 최근 연 문서가 없어요.</div>'; return; }
+      list.innerHTML = items.slice(0, 20).map(function (m) {
+        var b = TYPE_BADGE[m.ext || extOf(m.name)] || [String(m.ext || '문서').toUpperCase().slice(0, 4), 't-etc'];
+        var open = tabByKey(m.key) >= 0;
+        var bits = [fmtWhen(m.openedAt)]; if (m.kind === 'excel') bits.push('표'); else if (m.pages) bits.push(m.pages + '쪽');
+        return '<button class="dvs-row' + (open ? ' open' : '') + '" type="button" data-key="' + esc(m.key) + '">' +
+          '<span class="dv-tbadge big ' + b[1] + '">' + esc(b[0]) + '</span>' +
+          '<span class="dvs-tx"><span class="dvs-nm">' + esc(m.name) + '</span><span class="dvs-mt">' + esc(bits.join(' · ')) + '</span></span>' +
+          (open ? '<span class="dvs-open">열려 있음</span>' : '') + '</button>';
+      }).join('');
+    });
+  }
+  function closeSheet() { if (sheetEl) sheetEl.classList.remove('on'); }
+  function openRecentKey(key) {
+    closeSheet();
+    var di = tabByKey(key);
+    if (di >= 0) { showTab(di); return; }
+    if (tabs.length >= MAX_TABS) { capToast(); return; }
+    beginOpen(); opToken++; var op = opToken;
+    DocStore.get(key).then(function (meta) {
+      if (op !== opToken) return;
+      if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서예요.'); abortOpen(); return; }
+      isExcelDoc = false; xlToggleBtn.style.display = 'none'; curSrcUrl = null;
+      openStored(meta, op, null);
+    });
+  }
+  function initTabs() {
+    if (tabListEl) tabListEl.addEventListener('click', onTabClick);
+    if (tabAddBtn) tabAddBtn.onclick = openSheet;
+    if (sheetEl) {
+      sheetEl.addEventListener('click', function (e) { if (e.target === sheetEl) closeSheet(); });
+      var pk = $('dvsPick'); if (pk) pk.onclick = function () { closeSheet(); if (fileInput) fileInput.click(); };
+      var cl = $('dvsClose'); if (cl) cl.onclick = closeSheet;
+      var ls = $('dvsList'); if (ls) ls.addEventListener('click', function (e) { var r = e.target.closest ? e.target.closest('.dvs-row') : null; if (r) openRecentKey(r.getAttribute('data-key')); });
+    }
+    var rs = $('docOpenResume'); if (rs) rs.onclick = function () { if (!tabs.length) { renderOpenCard(); return; } showViewer(); activateTab(Math.max(0, Math.min(activeIdx, tabs.length - 1)), { noSnap: true }); };
+    var ca = $('docOpenCloseAll'); if (ca) ca.onclick = function () { tabs = []; activeIdx = -1; liveTabId = null; renderOpenCard(); renderTabs(); toast('열어 둔 문서를 모두 닫았어요. (최근 연 문서에는 남아 있어요)'); };
+  }
+
   // ============ 진입점 ============
   function handleLocalFile(file) {
-    if (!file) return; opToken++;
-    if (!isViewable(file.name, file.type)) { showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없어요.', extOf(file.name) || file.name); return; }
+    if (!file) return;
+    if (!isViewable(file.name, file.type)) {
+      if (liveTabId) { toast('이 형식은 뷰어에서 열 수 없어요. (' + (extOf(file.name) || file.name) + ')'); return; }   // v8.0: 보던 문서는 그대로
+      opToken++; showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없어요.', extOf(file.name) || file.name); return;
+    }
+    beginOpen(); opToken++;
     handleFile(file);
   }
   // 채팅·공유함 [뷰어로 보기]. v6.9: 같은 주소로 전에 연 문서면 내려받기조차 없이 저장본을 연다.
   function viewChatAttachment(att) {
     if (!att || !att.url) { toast('열 수 있는 파일이 아니에요.'); return; }
+    beginOpen();                                                    // v8.0: 보던 문서는 탭으로 남긴다
     opToken++; var op = opToken; var name = att.name || '문서', src = srcBase(att.url);
     showViewer(); setViewMode('pdf'); fnameLabel.textContent = name;
     showLoading('문서를 여는 중…', '문서를 불러오고 있어요.'); setProgress(15);
     DocStore.findBySrc(src).then(function (meta) {
       if (op !== opToken) return;
-      if (meta) { curSrcUrl = src; openStored(meta, op, null); return; }
+      if (meta) {
+        var di = tabByKey(meta.key);
+        if (di >= 0) { openIntent = null; hideOverlay(); showTab(di); return; }
+        if (tabs.length >= MAX_TABS) { capToast(); abortOpen(); return; }
+        curSrcUrl = src; openStored(meta, op, null); return;
+      }
       fetch(att.url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.blob(); })
         .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f, { srcUrl: src }); })
         .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했어요.', (e && e.message) || String(e)); });
@@ -1036,13 +1285,7 @@
     if (!btn || !row) return;
     var key = row.getAttribute('data-key'), act = btn.getAttribute('data-act');
     if (act === 'open') {
-      opToken++; var op = opToken;
-      DocStore.get(key).then(function (meta) {
-        if (op !== opToken) return;
-        if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서예요.'); return; }
-        isExcelDoc = false; xlToggleBtn.style.display = 'none'; curSrcUrl = null;
-        openStored(meta, op, null);
-      });
+      openRecentKey(key);
     } else if (act === 'fav') {
       DocStore.get(key).then(function (meta) {
         if (!meta) return;
@@ -1081,6 +1324,10 @@
     ssExitBtn = $('ssExit'); ssPrevBtn = $('ssPrev'); ssNextBtn = $('ssNext'); ssPlayBtn = $('ssPlay'); ssLoopBtn = $('ssLoop'); ssRotateBtn = $('ssRotate'); ssIntervalSel = $('ssInterval');
     ssCtlShow = $('ssCtlShow'); ssCtlPage = $('ssCtlPage'); ssPrevPBtn = $('ssPrevP'); ssNextPBtn = $('ssNextP'); ssZoomInBtn = $('ssZoomIn'); ssZoomOutBtn = $('ssZoomOut'); ssFitBtn = $('ssFit'); ssFlipBtn = $('ssFlip'); flipStageEl = $('flipStage'); flipHintEl = $('flipHint');
 
+    // v8.0(O-0153) 탭 띠·파일 더 열기 시트
+    tabsEl = $('dvTabs'); tabListEl = $('dvTabList'); tabAddBtn = $('dvTabAdd'); sheetEl = $('dvSheet');
+    initTabs();
+
     // 야간 초기화
     (function () { var on = false; try { on = localStorage.getItem(DARK_STORE) === '1'; } catch (e) {} applyDark(on); })();
 
@@ -1092,7 +1339,7 @@
     renderRecent();
     if (fileInput) fileInput.addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) handleLocalFile(f); });
 
-    $('dvBack').onclick = showPick;
+    $('dvBack').onclick = backAction;
     $('dvZoomIn').onclick = function () { if (viewMode === 'table') stepTableFont(1.15); else stepZoom(1.25); };
     $('dvZoomOut').onclick = function () { if (viewMode === 'table') stepTableFont(1 / 1.15); else stepZoom(0.8); };
     $('zoomFit').onclick = function () { if (viewMode === 'table') { tableFontPx = TABLE_FONT_DEFAULT; applyTableFont(); return; } userZoom = 1; applyZoom(); };
@@ -1178,14 +1425,15 @@
   global.SmartDocs = {
     init: init,
     pick: function () { if (fileInput) fileInput.click(); },
-    showPick: showPick,
+    showPick: backAction,                  // v8.0: 뒤로 = 시트 닫기 → 여는 중 취소 → 뷰어 닫기(뷰어가 닫혀 있으면 예전과 동일)
     handleLocalFile: handleLocalFile,
     viewChatAttachment: viewChatAttachment,
     isViewable: isViewable, extOf: extOf,
     isViewerOpen: function () { return !!(rootEl && rootEl.classList.contains('on')); },
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
-    leave: function () { closeSlideshow(); showPick(); },
+    leave: function () { closeSlideshow(); leaveViewer(); },
+    openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
     _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관
   };

@@ -427,6 +427,15 @@
           </div>
           <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르시면<br>PC와 똑같은 모습으로 보여드려요. (보기 전용 · 편집 없음)</div>
         </div>
+        <!-- v8.0(O-0153): 열어 둔 문서(탭 2개 이상 두고 뷰어를 나왔을 때) — docviewer.js renderOpenCard -->
+        <div id="docOpenWrap" style="display:none;">
+          <div class="sec-title">열어 둔 문서 <span id="docOpenInfo"></span></div>
+          <div class="dv-openbox" id="docOpenNames"></div>
+          <div class="dv-open-acts">
+            <button class="btn primary" id="docOpenResume" type="button">이어서 보기</button>
+            <button class="dv-linkbtn" id="docOpenCloseAll" type="button">모두 닫기</button>
+          </div>
+        </div>
         <!-- v6.9(O-0098): 최근 연 문서 — 이 기기에 저장해 둔 변환본. 누르면 변환 없이 바로 열림(docviewer.js renderRecent) -->
         <div id="docRecentWrap" style="display:none;">
           <div class="sec-title">최근 연 문서 <span id="docRecentInfo"></span></div>
@@ -457,6 +466,11 @@
           <button class="btn icon" id="dvRotate" title="회전" style="font-size:22px;">⟳</button>
           <button class="btn icon" id="dvDark" title="야간 보기" style="font-size:22px;">🌙</button>
         </div>
+        <!-- v8.0(O-0153) 탭 띠: 1번·2번·3번 파일 — 누르면 그 문서(보던 쪽 그대로), ✕ 닫기, ＋ 파일 더 열기 -->
+        <div id="dvTabs">
+          <div class="dv-tablist" id="dvTabList"></div>
+          <button class="dv-tabbtn add" id="dvTabAdd" type="button" title="파일 더 열기">＋</button>
+        </div>
         <div id="sheetBar"><span class="lbl">시트</span><select id="sheetSel"></select></div>
         <div id="scroller">
           <div id="pages"></div>
@@ -474,6 +488,17 @@
             <button class="btn icon" id="zoomFit" title="폭 맞춤" style="font-size:15px;">폭맞춤</button>
             <button class="btn icon" id="dvZoomIn" title="확대">＋</button>
           </div>
+        </div>
+      </div>
+      <!-- v8.0(O-0153) 파일 더 열기 시트 -->
+      <div id="dvSheet">
+        <div class="dvs-panel">
+          <div class="dvs-title">파일 더 열기</div>
+          <div class="dvs-note" id="dvsNote"></div>
+          <button class="dvs-big" id="dvsPick" type="button">📁 폰에서 파일 고르기</button>
+          <div class="dvs-sub">최근 연 문서에서 열기</div>
+          <div id="dvsList"></div>
+          <button class="dvs-close" id="dvsClose" type="button">닫기</button>
         </div>
       </div>
     </div>

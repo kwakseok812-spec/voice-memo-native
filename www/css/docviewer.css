@@ -148,3 +148,60 @@
 #docEngineToast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 #docEngineToast.pc{background:rgba(22,101,52,.94);}
 #docEngineToast.srv{background:rgba(120,53,15,.94);}
+
+/* ============================================================================
+ * v8.0(O-0153) 여러 문서 탭
+ * ==========================================================================*/
+#docRoot{--focus-bg:#e0e9ff;}
+#docRoot.dark{--focus-bg:#1f2b48;}
+/* 탭 띠 — 1번·2번·3번 파일. 많으면 가로로 밀어 보기, 긴 이름은 줄임표 */
+#docRoot #dvTabs{display:none; align-items:center; gap:5px; background:var(--bar); border-bottom:1px solid var(--line); padding:6px 8px;}
+#docRoot .dv-tablist{flex:1; min-width:0; position:relative; display:flex; gap:6px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+#docRoot .dv-tablist::-webkit-scrollbar{display:none;}
+#docRoot .dv-tab{flex:0 1 auto; min-width:58px; display:flex; align-items:center; max-width:210px; min-height:44px; border-radius:12px; background:var(--icon-bg); border:2px solid transparent;}
+#docRoot .dv-tab.on{background:var(--focus-bg); border-color:var(--brand); min-width:104px;}
+/* 좁은 화면에서 탭 1·2·3이 한눈에 보이게: 고른 탭만 ✕, 나머지는 번호+이름(줄임표). 줄어들 땐 나머지 탭이 먼저 */
+#docRoot .dv-tab:not(.on){flex-shrink:3;}
+#docRoot .dv-tab:not(.on) .dv-tabx{display:none;}
+#docRoot .dv-tab:not(.on) .dv-tabmain{padding-right:9px;}
+#docRoot .dv-tabmain{flex:1 1 auto; display:flex; align-items:center; gap:6px; min-width:0; min-height:44px; padding:0 2px 0 7px; background:none; border:0; color:var(--ink); font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;}
+#docRoot .dv-tname{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:128px;}
+#docRoot .dv-tab.on .dv-tname{font-weight:800;}
+#docRoot .dv-tbadge{flex:none; min-width:22px; height:22px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:900; color:#fff; padding:0 4px; font-variant-numeric:tabular-nums;}
+#docRoot .dv-tbadge.big{min-width:44px; height:40px; border-radius:11px; font-size:11.5px; letter-spacing:.3px;}
+#docRoot .dv-tbadge.t-hwp{background:#0E7490}#docRoot .dv-tbadge.t-pdf{background:#DC2626}#docRoot .dv-tbadge.t-doc{background:#2563EB}
+#docRoot .dv-tbadge.t-xls{background:#047857}#docRoot .dv-tbadge.t-ppt{background:#C2410C}#docRoot .dv-tbadge.t-etc{background:#64748B}
+#docRoot .dv-tabx{flex:none; width:40px; min-height:44px; background:none; border:0; color:var(--sub); font-size:15px; font-weight:800; cursor:pointer; font-family:inherit;}
+#docRoot .dv-tabx:active, #docRoot .dv-tabmain:active{opacity:.6;}
+#docRoot .dv-tabbtn{flex:none; min-height:44px; min-width:44px; padding:0 9px; border-radius:12px; border:0; background:var(--icon-bg); color:var(--icon-ink); font-size:14px; font-weight:800; white-space:nowrap; cursor:pointer; font-family:inherit;}
+#docRoot .dv-tabbtn.add{font-size:20px; padding:0 12px;}
+#docRoot .dv-tabbtn.add.wide{background:var(--brand); color:#fff; font-size:14.5px; box-shadow:0 2px 8px rgba(37,99,235,.35);}
+#docRoot .dv-tabbtn:active{opacity:.75;}
+
+/* 파일 더 열기 시트 */
+#docRoot #dvSheet{display:none; position:absolute; inset:0; z-index:20; background:rgba(20,24,31,.55); align-items:flex-end; justify-content:center;}
+#docRoot #dvSheet.on{display:flex;}
+#docRoot .dvs-panel{background:var(--card); color:var(--ink); width:100%; max-width:560px; max-height:86%; border-radius:20px 20px 0 0;
+  padding:18px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; box-shadow:0 -6px 24px rgba(0,0,0,.25);}
+#docRoot .dvs-title{font-size:19px; font-weight:800;}
+#docRoot .dvs-note{font-size:13px; color:var(--sub); font-weight:600; margin-top:-6px; word-break:keep-all;}
+#docRoot .dvs-big{flex:none; min-height:56px; border-radius:14px; border:0; background:var(--brand); color:#fff; font-size:17px; font-weight:800; cursor:pointer; font-family:inherit;}
+#docRoot .dvs-big:active{opacity:.85;}
+#docRoot .dvs-sub{font-size:13px; font-weight:800; color:var(--sub); margin-top:4px;}
+#docRoot #dvsList{flex:1 1 auto; min-height:60px; overflow:auto; display:flex; flex-direction:column; gap:6px;}
+#docRoot .dvs-row{flex:none; display:flex; align-items:center; gap:10px; min-height:54px; padding:6px 10px; border-radius:12px; border:1px solid var(--line); background:var(--bg); color:var(--ink); text-align:left; font-family:inherit; cursor:pointer;}
+#docRoot .dvs-row.open{border-color:var(--brand);}
+#docRoot .dvs-tx{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+#docRoot .dvs-nm{font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#docRoot .dvs-mt{font-size:12.5px; color:var(--sub); font-weight:600;}
+#docRoot .dvs-open{flex:none; font-size:12px; font-weight:800; color:var(--brand);}
+#docRoot .dvs-empty{font-size:14px; color:var(--sub); padding:10px 2px;}
+#docRoot .dvs-close{flex:none; min-height:48px; border:0; border-radius:14px; background:var(--icon-bg); color:var(--icon-ink); font-size:16px; font-weight:800; cursor:pointer; font-family:inherit;}
+
+/* 문서 고르기 화면 「열어 둔 문서」(앱 본체 테마 변수) */
+#docOpenWrap .sec-title{margin-top:22px}
+.dv-openbox{padding:10px 14px; border-radius:18px; background:var(--glass); border:1px solid var(--glass-b); box-shadow:var(--card-sh)}
+.dv-openrow{font-size:15px; font-weight:700; color:var(--text); line-height:1.5; padding:3px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dv-openrow b{display:inline-block; min-width:22px; text-align:center; border-radius:7px; background:var(--p1); color:#fff; font-size:12.5px; margin-right:6px}
+.dv-open-acts{display:flex; gap:10px; align-items:center; margin-top:10px}
+.dv-open-acts .btn.primary{flex:1; width:auto; height:54px; font-size:17px}
