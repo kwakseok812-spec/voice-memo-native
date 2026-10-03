@@ -8,6 +8,8 @@
  *   [말로 일정 잡기]와 예약한 알림 화면의 [케이에게 알림 부탁하기]를 [말로 맡기기 (일정·알림)] 하나로(같은 음성 대화).
  *   홈 「작업 현황」 카드가 빠졌으므로 「챙길 일」 아래 「작업 현황 보기」 링크는 건수와 무관하게 늘 보인다.
  *   예약한 알림은 연동 암호 RPC(reminder_list)를 읽기만 한다 — 요약과 같은 1분 간격, 실패하면 이 기기에 남은 개수로.
+ * (O-0176 추가) 접기·펼치기: 머리줄(제목·▾ 버튼)을 누르면 접혀 한 줄 요약(「☁️ 19° · 일정 3 · 메일 2 · 챙길 일 3 · 알림 2」)만.
+ *   상태는 이 기기에 기억(localStorage 'smart_today_fold', 실패해도 펼친 채로). 접혀 있어도 불러오기·숫자 갱신은 그대로.
  *
  * 데이터 경로(앱은 읽기만 한다):
  *   · ①② = 서버 사본 home_digest — PC(home_digest.py 예정)가 주기적으로 구글 캘린더·Gmail 을 「읽기 전용」으로
@@ -42,6 +44,9 @@
   var st = { digest: null, digestReady: null, orders: null, busy: false, lastFetch: 0, wxLive: null, wxBusy: false, wxAt: 0, rems: null };
 
   function H() { return global.SmartHome || {}; }
+  var FOLD_KEY = 'smart_today_fold';
+  function isFolded() { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch (e) { return false; } }
+  function setFolded(v) { try { if (v) localStorage.setItem(FOLD_KEY, '1'); else localStorage.removeItem(FOLD_KEY); } catch (e) {} }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function todayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -162,6 +167,22 @@
       '<span class="td-main"><b>' + esc(o.summary || '(요지 없음)') + '</b><small>' + esc(o.id) + (o.channel ? ' · ' + esc(o.channel) : '') + '</small></span>' +
       '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
   }
+  /* ---------- (O-0176) 접힌 카드 한 줄 요약 ---------- */
+  function foldLine(dg, showDigest, evs, mails, tasks) {
+    var parts = [];
+    var w = showDigest ? wxData(dg) : null, n = wxNow(w);
+    if (n) parts.push(wxCond(n.code, n.night)[0] + ' ' + esc(n.temp) + '°');
+    if (showDigest && dg) {
+      parts.push('일정 ' + evs.length);                             // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
+      parts.push('메일 ' + mails.length);
+    }
+    if (st.orders) parts.push('챙길 일 ' + tasks.length);
+    var rn = st.rems ? st.rems.length : remCountCached();
+    parts.push('알림 ' + rn);
+    return '<button type="button" class="td-foldline" data-td="fold" aria-label="오늘 한눈에 펼치기">' +
+      '<span>' + parts.join('<i> · </i>') + '</span><small>펼치기</small></button>';
+  }
+
   /* ---------- (O-0176) 예약한 알림 한 줄 ---------- */
   var REM_ACTIVE = { active: 1, sending: 1 };
   function remDay(iso) {                                           // 「오늘」「내일」「10/5」(한국 날짜)
@@ -436,8 +457,19 @@
       hdrNote = (age > STALE_MIN ? '<span class="td-stale">' : '<span>') + esc(hmOf(dg.generated_at)) + ' 기준</span>';
     } else if (showDigest && st.digest === null && st.busy) hdrNote = '<span>불러오는 중…</span>';
 
-    var h = '<div class="td-head"><div class="td-ttl"><b>오늘 한눈에</b><span>' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span></div>' +
-      '<div class="td-meta">' + hdrNote + '<button type="button" class="td-refresh" data-td="refresh" aria-label="새로 고침"><svg><use href="#i-refresh"/></svg></button></div></div>';
+    var folded = isFolded();
+    var h = '<div class="td-head"><button type="button" class="td-ttl" data-td="fold" aria-expanded="' + (folded ? 'false' : 'true') + '"><b>오늘 한눈에</b><span>' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span></button>' +
+      '<div class="td-meta">' + hdrNote + '<button type="button" class="td-refresh" data-td="refresh" aria-label="새로 고침"><svg><use href="#i-refresh"/></svg></button>' +
+      '<button type="button" class="td-foldbtn' + (folded ? ' on' : '') + '" data-td="fold" aria-label="' + (folded ? '펼치기' : '접기') + '"><svg><use href="#i-chev-r"/></svg></button></div></div>';
+    if (folded) {                                                  // (O-0176) 접힘 — 한 줄 요약만(숫자는 매번 새로 셈)
+      if (showDigest) wxLiveFetch(false);
+      card.innerHTML = h + foldLine(dg, showDigest, evs, mails, tasks);
+      card.style.display = '';
+      card.classList.add('folded');
+      card._evs = evs; card._mails = mails;
+      return;
+    }
+    card.classList.remove('folded');
 
     if (showDigest && (dg || (st.wxLive && wxOn()))) h += wxRow(dg);   // v8.4 출퇴근 날씨 → v8.5(O-0169) 지금 날씨(없으면 '')
     if (showDigest) wxLiveFetch(false);                            // (O-0169) 10분에 한 번 앱이 직접 「지금」 날씨를 받는다
@@ -517,6 +549,7 @@
     if (!t) return;
     ev.preventDefault();
     var card = $('todayCard'), kind = t.getAttribute('data-td'), S = H();
+    if (kind === 'fold') { setFolded(!isFolded()); render(); return; }   // (O-0176) 접기·펼치기
     if (kind === 'refresh') { st.lastFetch = 0; refresh(false); wxLiveFetch(true); if (S.refreshOrders) S.refreshOrders(); return; }
     if (kind === 'voice') { if (S.startVoiceSchedule) S.startVoiceSchedule(); return; }
     if (kind === 'rems') { if (S.openReminders) S.openReminders(); return; }   // (O-0176) 예약한 알림 목록·취소

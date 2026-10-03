@@ -1332,6 +1332,29 @@ html[data-fs] .tool b{font-size:calc(15px * var(--fsx))}
 html[data-fs] .tool small{font-size:calc(11.5px * var(--fsx))}
 @media (max-width:360px){ .tools{gap:8px} .tool{padding:12px 4px 10px} .tool b{font-size:14px} .tool.wide{padding:10px 12px;gap:10px} .tool.wide .ic{width:38px;height:38px} }
 #homeProgress .sec-title{margin-top:24px}
+/* (O-0176 추가) 「다른 앱으로 열기」 소제목 · 오늘 한눈에·진행 중인 메모 접기 */
+.tools-sub{grid-column:1 / -1;margin:6px 2px -2px;font-size:13px;font-weight:700;color:var(--dim)}
+html[data-fs] .tools-sub{font-size:calc(13px * var(--fsx))}
+.prog-head{width:100%;border:0;background:transparent;padding:0;font-family:inherit;cursor:pointer;align-items:center;text-align:left}
+.prog-head span{margin-left:auto}
+.prog-chev{width:18px;height:18px;color:var(--dim);flex:none;margin-left:6px;transform:rotate(90deg);transition:transform .15s}
+.prog-head.folded .prog-chev{transform:rotate(0deg)}
+.today .td-ttl{border:0;background:transparent;padding:0;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.today .td-foldbtn{width:32px;height:32px;border-radius:10px;border:0;background:transparent;color:var(--dim);display:grid;place-items:center;cursor:pointer}
+.today .td-foldbtn svg{width:18px;height:18px;transform:rotate(-90deg);transition:transform .15s}
+.today .td-foldbtn.on svg{transform:rotate(90deg)}
+.card.today.folded{padding-bottom:10px}
+.today .td-foldline{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin-top:2px;padding:6px 10px;border:1px solid var(--glass-b);border-radius:14px;background:var(--in-bg);color:var(--text);font:700 14.5px/1.4 inherit;font-family:inherit;text-align:left;cursor:pointer}
+.today .td-foldline span{flex:1;min-width:0;word-break:keep-all}
+.today .td-foldline i{font-style:normal;color:var(--dim);font-weight:500}
+.today .td-foldline small{flex:none;font-size:12.5px;font-weight:700;color:var(--p1)}
+html[data-fs] .today .td-foldline{font-size:calc(14.5px * var(--fsx))}
+/* (O-0176 추가) 채팅 ＋ 고르기 창 */
+.atm-sheet .sheet-btn{height:auto;min-height:58px;padding:8px 14px;justify-content:flex-start;text-align:left;gap:12px}
+.atm-sheet .sheet-btn .atm-ic{flex:none;width:24px;height:24px;color:var(--p1)}
+.atm-sheet .sheet-btn span b{display:block;font-size:16px;font-weight:800}
+.atm-sheet .sheet-btn span small{display:block;font-size:12.5px;font-weight:500;color:var(--muted);margin-top:1px;word-break:keep-all}
+.atm-sheet .sheet-btn.atm-close{justify-content:center;min-height:50px}
 .prog-more{display:block;width:100%;margin-top:2px;padding:8px 4px;border:0;background:transparent;color:var(--p1);font:700 13.5px/1.4 inherit;font-family:inherit;text-align:center;cursor:pointer}
 /* 회의록 화면: 진행 중 칸 · 정리된 회의록 · 이 폰에서 보낸 기록(접힘) */
 #meetingsView .mtg-sec{margin:16px 2px 8px;font-size:15.5px}

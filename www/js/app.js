@@ -983,6 +983,12 @@
    *   · 회의록 화면 맨 아래 접힘 「이 폰에서 보낸 기록」: 끝난 것(사진·영상·명함 결과 포함) — 예전 지난 메모의 완료 항목.
    * 누르면 예전과 같은 onHistoryClick(재전송·임시저장 자료 붙이기·삭제·결과 보기 그대로). */
   var HOME_PROG_MAX = 3;
+  var PROG_FOLD_KEY = 'smart_prog_fold';
+  function progFolded() { try { return localStorage.getItem(PROG_FOLD_KEY) === '1'; } catch (e) { return false; } }
+  if ($('homeProgHead')) $('homeProgHead').addEventListener('click', function () {
+    try { if (progFolded()) localStorage.removeItem(PROG_FOLD_KEY); else localStorage.setItem(PROG_FOLD_KEY, '1'); } catch (e) {}
+    renderHistory();
+  });
   function iconFor(kind) { return kind === 'photo' ? 'i-image' : kind === 'video' ? 'i-video' : kind === 'search' ? 'i-card' : 'i-mic'; }
   function historyItemHtml(e) {
     var badge, cls;
@@ -1010,6 +1016,9 @@
     // ① 홈 「진행 중인 메모」 — 있을 때만
     var wrap = $('homeProgress');
     if (wrap) wrap.style.display = prog.length ? '' : 'none';
+    var pf = progFolded(), ph = $('homeProgHead');                 // (O-0176) 접힘이면 목록만 숨김(건수는 제목 옆에 그대로)
+    if (ph) { ph.classList.toggle('folded', pf); ph.setAttribute('aria-expanded', pf ? 'false' : 'true'); }
+    if (historyList) historyList.style.display = pf ? 'none' : '';
     if (historyCount) historyCount.textContent = prog.length ? prog.length + '건 · 끝나면 「회의록」에' : '';
     if (historyList) {
       var rest = prog.length - HOME_PROG_MAX;
@@ -1195,13 +1204,18 @@
     }
     openScreen(filePanel);
   }
-  if ($('fileCancel')) $('fileCancel').addEventListener('click', function () { pendingFiles = []; pendingKind = null; showHome(); });
+  if ($('fileCancel')) $('fileCancel').addEventListener('click', function () {
+    pendingFiles = []; pendingKind = null;
+    if (filePanelFromChat) { filePanelFromChat = false; openChat(); return; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
+    showHome();
+  });
   if ($('fileSend')) $('fileSend').addEventListener('click', function () {
     if (!pendingFiles.length) { showHome(); return; }
     var files = pendingFiles, kind = pendingKind;
     var title = ($('fileTitle').value || '').trim();
     var note = ($('fileNote').value || '').trim();
     var isCard = kind === 'photo' && $('isCard') && $('isCard').checked;
+    filePanelFromChat = false;                               // (O-0176) 보낸 뒤엔 홈(「진행 중인 메모」에서 상태 확인)
     pendingFiles = []; pendingKind = null;
     sendFiles(files, kind, title, note, isCard);
   });
@@ -1333,8 +1347,49 @@
   }
   if ($('btnPhoto')) $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
   if ($('btnVideo')) $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
-  $('photoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'photo'); this.value = ''; });
-  $('videoInput').addEventListener('change', function () { if (this.files && this.files.length) reviewFiles(this.files, 'video'); this.value = ''; });
+  $('photoInput').addEventListener('change', function () {
+    if (this.files && this.files.length) {
+      reviewFiles(this.files, 'photo');
+      if (photoAsCard) {                                        // (O-0176) 채팅 ＋ 「명함 등록」 — 명함 스위치를 켠 채로(끄면 일반 사진 PC 정리)
+        if ($('isCard')) $('isCard').checked = true;
+        if ($('filePanelTitle')) $('filePanelTitle').textContent = '명함 등록 · 사진 PC 정리';
+      }
+    } else filePanelFromChat = false;
+    photoAsCard = false; this.value = '';
+  });
+  $('videoInput').addEventListener('change', function () {
+    if (this.files && this.files.length) { reviewFiles(this.files, 'video'); if ($('filePanelTitle')) $('filePanelTitle').textContent = '영상 정리 (PC로)'; }
+    else filePanelFromChat = false;
+    this.value = '';
+  });
+  /* (O-0176) 홈 「사진 보내기」「영상 보내기」 칸을 뺀 대신 채팅 입력줄 [＋]를 누르면 고르기 창:
+   *   ① 파일·사진을 케이에게(예전 ＋ 그대로) ② 명함 등록·사진 PC 정리(예전 홈 사진 보내기 — collect 사진 정리·명함 등록)
+   *   ③ 영상 정리(예전 홈 영상 보내기 — 45MB 넘으면 조각 전송·PC 영상 정리). ②③은 채팅 첨부(케이에게)와 다른 길이라 그대로 살린다.
+   *   글 쓰는 중(폰 네이티브 입력 바)의 ＋ 는 예전처럼 곧장 파일 고르기(native-input.js) — 이 창은 웹 입력줄 ＋ 에서만.
+   *   뒤로가기로 닫힘(goBack 의 .shin-sheet 처리). 보내기 뒤에는 홈 「진행 중인 메모」에서 상태가 보인다. */
+  var photoAsCard = false, filePanelFromChat = false;
+  function openAttachMenu() {
+    photoAsCard = false; filePanelFromChat = false;          // 지난번에 고르기를 취소했으면 남은 표시를 지움
+    var old = document.querySelector('.atm-sheet'); if (old) { try { old.remove(); } catch (e) {} }
+    var sh = document.createElement('div');
+    sh.className = 'sheet shin-sheet atm-sheet';
+    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="보내기 고르기"><div class="sheet-head">무엇을 보낼까요?</div>' +
+      '<button type="button" class="sheet-btn" data-atm="file"><svg class="atm-ic"><use href="#i-image"/></svg><span><b>파일·사진을 케이에게</b><small>채팅에 붙여 케이에게 보여 주기</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>PC가 명함 대장에 넣거나 사진을 정리(명함 스위치로 고름)</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
+      '<button type="button" class="sheet-btn atm-close" data-atm="close">닫기</button></div>';
+    sh.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-atm]') : null;
+      if (!b && ev.target !== sh) return;
+      try { sh.remove(); } catch (e) {}
+      var k = b && b.getAttribute('data-atm');
+      if (k === 'file') $('chatFileInput').click();
+      else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
+      else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
+    });
+    document.body.appendChild(sh);
+    sh.style.display = 'flex';
+  }
 
   /* ===================== 명함 검색 ===================== */
   var searchPanel = $('searchPanel'), searchInput = $('searchInput'), searchResults = $('searchResults'), searchMsg = $('searchMsg');
@@ -4150,7 +4205,7 @@
     if (!removed) toast('파일을 붙였어요. 글을 더 쓰거나 전송을 누르세요.');
   }
   if ($('chatAttach')) $('chatAttach').addEventListener('click', function () {
-    $('chatFileInput').click();                              // 첨부는 언제든 가능(붙여두고 계속 입력)
+    openAttachMenu();                                        // (O-0176) 고르기 창: 케이에게 / 명함·사진 PC 정리 / 영상 정리
   });
   if ($('chatFileInput')) $('chatFileInput').addEventListener('change', function () {
     if (this.files && this.files.length) onChatFilesPicked(this.files);
@@ -4454,6 +4509,7 @@
       if (meetingsDetailOpen) { showMeetingsList(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen(filePanel) && filePanelFromChat) { filePanelFromChat = false; pendingFiles = []; pendingKind = null; openChat(); return true; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
     if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
       pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
     }

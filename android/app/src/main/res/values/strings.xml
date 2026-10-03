@@ -10,7 +10,7 @@
     <string name="sc_voice_long">케이와 음성 대화</string>
     <string name="sc_record_short">녹음</string>
     <string name="sc_record_long">바로 녹음 시작</string>
-    <string name="sc_photo_short">사진 보내기</string>
+    <string name="sc_photo_short">케이에게 사진</string>
     <string name="sc_photo_long">케이에게 사진 보내기</string>
     <string name="sc_today_short">오늘 한눈에</string>
     <string name="sc_today_long">오늘 일정·메일·할 일</string>

@@ -148,21 +148,22 @@
            연동 암호가 없거나 아직 불러오기 전이면 숨김. 일정·메일은 PC가 만든 서버 요약(home_digest)을 읽기만 한다. -->
       <div class="card today" id="todayCard" style="display:none;" aria-live="polite"></div>
 
-      <!-- (O-0176) 「도구」 격자 — 예전 넓은 카드 12개+작은 카드 2개를 한 화면 안에 들어오게 3칸×3줄 + 맨 아래 PC 두 칸(넓게).
+      <!-- (O-0176) 「도구」 격자 — 예전 넓은 카드 12개+작은 카드 2개를 앱 안 기능 3칸×2줄 + 「다른 앱으로 열기」 넓은 줄 셋으로.
+           (대표님 추가 의견) 사진 보내기·영상 보내기 칸은 뺐다 — 일반 사진은 채팅 첨부(케이에게)로, 채팅에 없던 두 길(명함 등록·사진 PC 정리 /
+           영상 정리·긴 녹화 조각 전송)은 채팅 입력줄 [＋] 고르기 창으로 옮김(app.js openAttachMenu). 숨은 photoInput·videoInput 은 그대로 씀.
            홈에서 뺀 것: 작업 현황(→ 오늘 한눈에 「챙길 일」 + 채팅 📋), 예약한 알림(→ 오늘 한눈에 한 줄), 저장한 답(→ 채팅 ☆),
            회의 요약·지난 메모(→ 「회의록」 하나, 홈엔 진행 중인 것만). 버튼 id 는 예전 그대로라 app.js 동작은 같다. -->
       <div class="sec-title tools-title">도구</div>
       <div class="tools" id="homeTools">
-        <button class="tool" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><b>사진 보내기</b><small>PC로 정리·명함</small></button>
-        <button class="tool" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><b>영상 보내기</b><small>PC로 정리</small></button>
         <button class="tool" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><b>회의록</b><small>녹음 정리·진행</small></button>
         <button class="tool" id="btnDocs"><span class="ic cyan"><svg><use href="#i-doc"/></svg></span><b>문서 뷰어</b><small>한글·오피스·PDF</small></button>
         <button class="tool" id="btnHealth"><span class="ic blue"><svg><use href="#i-heart"/></svg></span><b>건강</b><small>혈당·식단 기록</small></button>
         <button class="tool" id="btnLocker"><span class="ic cyan"><svg><use href="#i-copy"/></svg></span><b>공유함</b><small>PC↔폰 파일</small></button>
         <button class="tool" id="btnIdeas"><span class="ic blue"><svg><use href="#i-spark"/></svg></span><b>아이디어</b><small>말하면 제안</small></button>
         <button class="tool" id="btnSearchToggle"><span class="ic cyan"><svg><use href="#i-card"/></svg></span><b>명함 검색</b><small>이름·기관</small></button>
+        <div class="tools-sub">다른 앱으로 열기</div>
         <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱(nmap://map). 동작은 today-card.js openMapHome -->
-        <button class="tool" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><b>길찾기</b><small>네이버 지도</small></button>
+        <button class="tool wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tw"><b>길찾기</b><small>네이버 지도 바로 열기</small></span></button>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
              ② PC 원격 제어 = 크롬 원격 데스크톱으로 PC 화면을 직접 보고 조작 — 문서 뷰어 편집 시트 [PC 원격 제어 열기]와 같은 동작(SmartDocs.openRemote) -->
@@ -173,7 +174,8 @@
       <!-- (O-0176 D) 진행 중인 메모 — 이 폰에서 보낸 녹음·사진·영상 중 아직 안 끝난 것(정리 중·임시저장·실패)만. 없으면 칸째 숨김.
            끝난 것은 「회의록」에서(같은 목록을 회의록 맨 위 「진행 중」 칸에도 그린다). 그리기는 app.js renderHistory -->
       <div id="homeProgress" style="display:none;">
-        <div class="sec-title">진행 중인 메모 <span id="historyCount"></span></div>
+        <!-- (O-0176) 제목을 누르면 접기·펼치기(이 기기에 기억 'smart_prog_fold') — 접혀도 건수는 보인다 -->
+        <button type="button" class="sec-title prog-head" id="homeProgHead" aria-expanded="true">진행 중인 메모 <span id="historyCount"></span><svg class="prog-chev"><use href="#i-chev-r"/></svg></button>
         <div id="historyList" class="list"></div>
       </div>
     </section>
