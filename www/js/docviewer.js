@@ -1376,9 +1376,14 @@
    *   · 보내기는 연동 암호 확인 RPC(submit_memo)로만. 암호가 없거나 틀리면 앱의 연동 암호 창이 뜬다(smartBadPass).
    * ==========================================================================*/
   var EDITABLE = { hwp: '한글', hwpx: '한글', doc: '워드', docx: '워드', xls: '엑셀', xlsx: '엑셀', ppt: 'PowerPoint', pptx: 'PowerPoint' };
+  // ★ [편집하기]를 보여 줄 형식 — 이 한 줄이 켜고 끄는 곳(2026-10-03 대표님 「일단 한글부터」).
+  //   워드·엑셀·PPT 를 켜려면 'doc','docx','xls','xlsx','ppt','pptx' 를 더한다(PC 변환기 O-0172 패치 적용됨).
+  //   PC 쪽도 edit_config.json 의 enabled_exts 를 같이 넓혀야 한다(안 넓히면 PC가 정중히 거절).
+  var EDIT_ON_EXTS = ['hwp', 'hwpx'];
   var CRD_PKG = 'com.google.chromeremotedesktop', CRD_WEB = 'https://remotedesktop.google.com/access';
   var EDIT_STORE = 'smartedit_sessions_v1', EDIT_KEEP_MS = 24 * 3600 * 1000;
   var editEl = null, editBtn = null, editOpts = null, editCtx = null, editPollT = null, editSeq = 0, editPickInput = null;
+  function editOn(ext) { return !!EDITABLE[ext] && EDIT_ON_EXTS.indexOf(ext) >= 0; }
   function isNativeApp() { var C = global.Capacitor; return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()); }
   function isServerFileUrl(u) {
     u = String(u || ''); if (!global.OfficeBridge) return false;
@@ -1408,7 +1413,7 @@
   function updateEditBtn() {
     if (!editBtn) return;
     var t = activeTab();
-    var ok = !!(editOpts && viewerOpen() && t && liveTabId === t.id && EDITABLE[t.ext || extOf(t.name)]);
+    var ok = !!(editOpts && viewerOpen() && t && liveTabId === t.id && editOn(t.ext || extOf(t.name)));
     editBtn.style.display = ok ? 'inline-flex' : 'none';
     if (ok) { var s = editSessGet(t); editBtn.classList.toggle('live', !!(s && s.phase && s.phase !== 'returned')); }
   }
@@ -1664,7 +1669,7 @@
       var f = this.files && this.files[0]; this.value = '';
       var c = editCtx; if (!f || !c) return;
       var ext = extOf(f.name);
-      if (!EDITABLE[ext]) { toast('한글·워드·엑셀·PPT 파일만 PC에서 편집으로 열 수 있어요.'); return; }
+      if (!editOn(ext)) { toast(EDIT_ON_EXTS.length <= 2 ? '지금은 한글 파일(hwp·hwpx)만 PC에서 편집으로 열 수 있어요.' : '이 형식은 PC에서 편집으로 열 수 없어요.'); return; }
       c.tab.orig = f; c.tab.pcPath = null; c.tab.srcFull = null; c.tab.ext = ext; c.ext = ext; c.name = f.name;
       editShowStart();
     });

@@ -460,7 +460,7 @@
             <span class="chip">HWP</span><span class="chip">HWPX</span><span class="chip">워드</span>
             <span class="chip">엑셀</span><span class="chip">PPT</span><span class="chip">PDF</span>
           </div>
-          <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르시면<br>PC와 똑같은 모습으로 보여드려요. 한글·워드·엑셀·PPT는 <b>[✏️ 편집하기]</b>로 PC 프로그램에서 고칠 수 있어요.</div>
+          <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르시면<br>PC와 똑같은 모습으로 보여드려요. 한글 문서는 <b>[✏️ 편집하기]</b>로 PC의 한글 프로그램에서 고칠 수 있어요.</div>
         </div>
         <!-- v8.0(O-0153): 열어 둔 문서(탭 2개 이상 두고 뷰어를 나왔을 때) — docviewer.js renderOpenCard -->
         <div id="docOpenWrap" style="display:none;">
@@ -512,7 +512,7 @@
           <div id="tableview"></div>
         </div>
         <!-- v8.1(O-0154) 케이에게 묻기·맡기기 — 보던 문서를 케이 채팅으로(쪽 번호와 함께) -->
-        <div class="dv-askdock"><!-- O-0171 PC에서 편집하기(한글·워드·엑셀·PPT일 때만 보임) -->
+        <div class="dv-askdock"><!-- O-0171 PC에서 편집하기(docviewer.js EDIT_ON_EXTS 형식일 때만 보임 — 지금은 한글만) -->
           <button id="dvEditBtn" class="dv-editfab" type="button" style="display:none;" aria-label="PC에서 편집하기">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>편집하기</button>
           <button id="dvAskBtn" class="dv-askfab" type="button" style="display:none;" aria-label="이 문서로 케이에게 묻기">
