@@ -642,6 +642,10 @@
     if (big) return Promise.reject(big);
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', speak: !!opts.speak };
     if (opts.modelPref) meta.model_pref = opts.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
+    // O-0177 ② 폰 받아쓰기: 글자(note)를 음성 턴으로 — meta.voice + meta.stt='device'(오디오 없음). PC는 전사를 건너뛰고 note 를 받아쓰기로 쓴다.
+    if (opts.sttDevice && !audioBlob) { meta.voice = true; meta.stt = 'device'; }
+    // O-0177 ① 조각 목소리 요청(PC 스위치가 꺼져 있으면 무시되고 예전처럼 voice_url 한 덩어리)
+    if (opts.vstream) meta.vstream = 1;
     var imgMeta = [];
     function uploadImages(i) {
       if (i >= files.length) return Promise.resolve();
