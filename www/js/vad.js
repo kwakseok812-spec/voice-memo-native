@@ -41,7 +41,50 @@
     if (el >= c.MAX_TURN_MS) return s.spoke ? 'max' : 'nospeech';
     return null;
   }
-  var KVad = { create: create, step: step };
+  /* ---------- O-0189(v8.9) 폰 받아쓰기 「말 끝」 판정 — 이어 듣기 ----------
+   * v8.8 문제: 「부분 결과(글자)가 0.9초 안 바뀌면 끝」 + 「인식기가 스스로 끝내면 곧바로 전송」 → 생각하며 잠깐 쉬면 잘려 나갔다.
+   * 이제: 인식기가 스스로 끝낸 토막(segment)은 이어 붙이기만 하고, 「실제로 조용한 시간」이 기준(endMs)을 넘을 때만 끝.
+   *   조용함 = 새 글자도 없고(lastAct) 큰 소리도 없음(lastLoud). 큰 소리만으로 미루는 것은 endMs 한 번까지만
+   *   (시끄러운 곳에서 영영 안 끝나는 일 방지 — 그래도 안 끝나면 [다 말했어요]).
+   *   소리 크기(rms dB)는 기기마다 눈금이 달라 그 자리의 바닥값(가장 조용했던 값, 천천히 올라감)보다 LOUD_DB 이상 클 때만 「큰 소리」.
+   * 반환: sttCheck → null(계속) | 'quiet'(말 끝) | 'nospeech'(말 없음) | 'max'(최대 길이) */
+  function sttNew(now) {
+    return { t0: now, acc: '', cur: '', first: 0, lastAct: now, lastLoud: 0, segs: 0, floor: null };
+  }
+  function sttText(s) { return (s.acc + (s.acc && s.cur ? ' ' : '') + s.cur).trim(); }
+  function sttPartial(s, text, now) {
+    text = String(text || '').trim();
+    if (!text || text === s.cur) return false;
+    s.cur = text; s.lastAct = now; if (!s.first) s.first = now;
+    return true;
+  }
+  function sttSegment(s, text, now) {              // 인식기가 스스로 끝낸 토막: 확정 글자(없으면 마지막 부분 결과)를 이어 붙임
+    text = String(text || '').trim() || s.cur;
+    if (text) {
+      if (!s.cur) s.lastAct = now;                 // 부분 결과를 안 주는 인식기: 토막이 온 때를 「방금 말함」으로(글자만 다듬어진 것은 말이 아님)
+      s.acc = (s.acc + ' ' + text).trim(); if (!s.first) s.first = now;
+    }
+    s.cur = ''; s.segs++;
+  }
+  function sttRms(s, db, now, loudDb) {
+    if (typeof db !== 'number' || isNaN(db)) return false;
+    if (s.floor === null || db < s.floor) s.floor = db; else s.floor += 0.02;   // 바닥값은 아주 천천히 따라 올라감
+    if (db >= s.floor + (loudDb || 5)) { s.lastLoud = now; return true; }
+    return false;
+  }
+  function sttQuietFor(s, now, endMs) {
+    var eff = Math.max(s.lastAct, Math.min(s.lastLoud, s.lastAct + endMs));
+    return now - eff;
+  }
+  function sttCheck(s, now, cfg) {
+    var has = !!sttText(s);
+    if (has && sttQuietFor(s, now, cfg.endMs) >= cfg.endMs) return 'quiet';
+    if (!has && now - s.t0 >= cfg.noSpeechMs) return 'nospeech';
+    if (now - s.t0 >= cfg.maxMs) return has ? 'max' : 'nospeech';
+    return null;
+  }
+  var KVad = { create: create, step: step, sttNew: sttNew, sttText: sttText, sttPartial: sttPartial, sttSegment: sttSegment,
+               sttRms: sttRms, sttQuietFor: sttQuietFor, sttCheck: sttCheck };
   g.KVad = KVad;
   if (typeof module !== 'undefined' && module.exports) module.exports = KVad;
 })(typeof window !== 'undefined' ? window : globalThis);

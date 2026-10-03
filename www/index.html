@@ -304,6 +304,11 @@
         <div class="kstage-status"><span class="kst-ic" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="kst-tx"><b id="chatKStageText">음성 대화</b><small id="chatKStageHint"></small></span></div>
         <!-- O-0177 ② 폰 받아쓰기 글자 실시간 표시(듣는 동안 · 보낸 뒤 케이가 말을 시작하면 지움) -->
         <div id="chatKStageLive" class="kstage-live" aria-live="polite"></div>
+        <!-- O-0189(v8.9) 듣는 중에만 보임: [다 말했어요] = 기다리지 않고 지금 보내기 · 「기다림」 칩 = 말 끝 기다림 짧게/보통/길게(누를 때마다 바뀜, 이 기기에 저장) -->
+        <div class="kstage-act">
+          <button id="chatKStageSend" type="button" class="kstage-send">다 말했어요 · 지금 보내기</button>
+          <button id="chatKStageWait" type="button" class="kstage-wait" aria-label="말 끝 기다림 바꾸기">기다림 보통 · 2초</button>
+        </div>
       </div>
       <div id="chatLog" class="chatlog"></div>
       <!-- 첨부한 사진 미리보기(케이에게 보여줄 사진) -->

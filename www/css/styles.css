@@ -1090,6 +1090,16 @@ html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(
 .kstage-live:empty{display:none}
 .kstage-live.sent{color:var(--muted)}
 .kstage-live.sent::before{content:'보냄 · ';font-weight:800}
+/* O-0189(v8.9) 듣는 중에만: [다 말했어요](크게) + 「기다림」 칩. 말하는 중·답하는 중엔 숨김(그땐 얼굴 탭으로 끊기). */
+.kstage-act{display:none;align-items:stretch;gap:8px;padding:0 12px 12px}
+.kstage[data-state="listen"] .kstage-act{display:flex}
+.kstage-send{flex:1 1 auto;min-height:48px;border:0;border-radius:16px;font:inherit;font-size:16px;font-weight:800;color:#fff;
+  background:linear-gradient(90deg,#3B82F6,#8B5CF6);-webkit-tap-highlight-color:transparent}
+.kstage-send:active{filter:brightness(.9)}
+.kstage-wait{flex:none;min-height:48px;padding:0 12px;border-radius:16px;border:1.5px solid var(--glass-b);background:transparent;
+  font:inherit;font-size:12.5px;font-weight:700;color:var(--muted);white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.kstage-wait:active{filter:brightness(.85)}
+@media (max-height:600px){.kstage-send,.kstage-wait{min-height:40px}.kstage-act{padding-bottom:8px}}
 /* 키보드가 올라와 화면이 낮아지면(입력줄에 글을 쓸 때) 무대를 줄여 대화 글·입력줄 자리를 남긴다 */
 @media (max-height:600px){.kstage-photo{height:clamp(96px,22vh,180px);height:clamp(96px,22dvh,180px)}.kstage-photo .kface .kf-img,.kstage-photo .kface .kf-vid{object-position:50% 44%}.kstage-status{min-height:40px;padding:4px 12px}}
 

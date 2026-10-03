@@ -1532,7 +1532,7 @@
   var STAR_IDS_KEY = 'smart_star_ids';
   var starIds = (function () { try { return JSON.parse(localStorage.getItem(STAR_IDS_KEY) || '{}') || {}; } catch (e) { return {}; } })();
   var chatJumpUid = '', chatJumpUntil = 0;
-  var APP_VERSION = 'v8.8';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v8.8(O-0175·O-0176·O-0177·O-0178): 홈 정리 — 오늘 한눈에 아래를 「도구」 4칸×2줄(회의록·문서 뷰어·건강·계산기 / 공유함·아이디어·명함 검색·길찾기) + 「PC 연결」 두 줄(「Claude Code 연결」=PC 케이 대화방, 「PC 원격 제어」=크롬 원격 데스크톱, 문서 뷰어 편집 시트도 [PC 원격 제어 열기])로. 홈에서 작업 현황·예약한 알림·저장한 답 카드를 빼고 오늘 한눈에(「작업 현황 보기」 늘 보임·「예약한 알림」 한 줄·[말로 맡기기 (일정·알림)]·머리줄 눌러 접기 한 줄 요약)와 채팅 📋·☆ 로. 「지난 메모」+「회의 요약」 → 「회의록」(맨 위 「진행 중」 칸, 홈엔 진행 중인 것만·접기). 홈 사진·영상 보내기 칸 → 채팅 ＋ 고르기 창(케이에게 / 명함 등록·사진 PC 정리 / 영상 정리). 앱 서랍 「케이 음성」 아이콘 제거(바로가기 「음성 대화」는 그대로), 바로가기 「사진 보내기」→「케이에게 사진」. 계산기(O-0178) — 기본+공학용(삼각·역삼각·log·ln·거듭제곱·루트·n!·EXP·DEG/RAD·메모리·Ans), 직접 만든 계산 엔진(eval 없음), 계산 기록, [케이에게 묻기], 넓은 화면은 공학 자판 함께, 키보드 입력. 음성 대화 속도(O-0177) — 폰에서 바로 받아쓰기(KSpeech)·실시간 글자, 말 끝 판정 약 0.9초+소음 적응(vad.js), 조각 목소리 차례 재생(PC 스위치가 켜졌을 때), 케이 얼굴을 눌러 말 끊기. v8.7 까지: v8.7(O-0173·O-0174): 홈 「PC 화면」 카드 — 누르면 크롬 원격 데스크톱 앱이 바로 열림(없으면 플레이 스토어 안내, PC판은 원격 데스크톱 웹 새 탭, 문서 뷰어 [원격 화면 열기]와 같은 동작). 문서 뷰어 [✏️ 편집하기]를 워드·엑셀·PPT(doc·docx·xls·xlsx·ppt·pptx)에도 켬 — PC 편집 워커가 COM 으로 정확한 경로의 문서 창만 찾아 앞으로(다른 폴더 같은 이름 문서와 헷갈리지 않음, 엑셀·PPT 는 같은 이름이 열려 있으면 「(2)」 사본으로 엶). v8.6(O-0171·O-0172): 문서 뷰어 [✏️ 편집하기] — 한글(hwp·hwpx) 문서를 24시간 PC의 진짜 한글 프로그램으로 열어(창 최대화·맨 앞) 크롬 원격 데스크톱(삼성 DeX)으로 고치고 [저장] → [다 됐어요]로 고친 문서를 PDF·원본 파일로 돌려받음(채팅에도 첨부·푸시 없음). 원본은 PC 경로·사무소 서버 주소·폰 파일 순으로(최근 연 문서는 원본 다시 고르기). 연동 암호 확인 RPC로만 요청. [원격 화면 열기]=크롬 원격 데스크톱 앱(없으면 스토어), PC판은 원격 데스크톱 웹. 넓은 화면(900px↑)은 가운데 대화상자. 워드·엑셀·PPT 편집은 EDIT_ON_EXTS 한 줄로 켤 수 있음(PC 변환기가 켜 둔 Office 창을 닫던 문제는 O-0172로 고침). v8.5(O-0169): 홈 「오늘 한눈에」 날씨 줄 맨 앞에 「지금 21° 흐림」(앱이 Open-Meteo 를 직접 읽음 — 서울 시청 좌표만·키 없음, 홈이 보이는 동안 10분마다·열 때 3분보다 묵었으면 다시, 실패하면 PC 요약의 이번 시각 예보 「16시 21°」), 누르면 「오늘 날씨」 창 — 지금(크게)·남은 하루 우산·오늘 1시간 단위 가로 줄(지금 시각이 맨 왼쪽, 지난 시간은 흐리게, 저녁엔 내일 0~9시까지)·출퇴근 칸, 뒤로가기로 닫힘. v8.4(O-0162): 채팅 답을 기다리는 동안 점 세 개 옆에 「캘린더 확인 중…」처럼 케이가 지금 하는 일(PC 진행 표시) / 채팅 머리줄 케이 얼굴 옆 PC 상태 점(초록 정상·주황 바쁨·빨강 PC 응답 없음, 펼친 화면은 글자까지, 응답 없으면 맨 아래 안내) / 홈 「오늘 한눈에」 출퇴근 날씨·우산 한 줄(서울, 누르면 자세히) / 다른 앱에서 녹음 파일(통화 녹음 등)을 [공유]하면 [회의록으로 정리]·[케이에게 보내기] 고르기 — 회의록은 앱 녹음과 같은 화면·같은 정리 / 글자 크기 4단계(맨 위 「가가」·케이 꾸미기, 말풍선·입력창·홈 카드·문서 뷰어 글·엑셀 표). v8.3(O-0161): 말로 알림 예약 — 케이가 되읽어 확인 뒤 등록, 정한 시각에 앱 알림(PC 발송기·토큰 0), 홈 「예약한 알림」 목록·취소 / 앱 서랍 「케이 음성」 — 측면 버튼 두 번 누르기 → 바로 음성 대화 / 케이 답 [⋯] → ⭐ 저장, 홈·채팅 ☆ 「저장한 답」(검색·그 대화로·해제, 서버 저장) / 사무소 방송에 미리 붙인 케이 목소리 [▶ 듣기](아침 브리핑). v8.2: 어디서든 [공유] → 케이(O-0157) — 카톡 글·링크·사진 여러 장·파일을 공유하면 채팅에 첨부·본문이 채워져 열리고 빠른 칩 「요약해 줘」「답장 써 줘」「일정 잡아 줘」, 공유 문서 1개는 [문서 뷰어로 열기]/[케이에게 보내기] 고르기(「열기」는 예전처럼 곧장 뷰어). 케이 답장 알림에서 바로 [답장](앱을 안 열어도 됨, 잠금 해제 후에만, 자동 알림엔 버튼 없음). 아이콘 길게 눌러 음성 대화·녹음(바로 시작)·사진 보내기·오늘 한눈에. 바탕화면 케이 위젯 3종(한 줄·얼굴·카드, 스스로 깨어나지 않음, 「위젯에 내용 숨기기」). + 보안(O-0158): 채팅·사진·영상·명함검색·아이디어는 연동 암호 확인 RPC(submit_memo)로만 보냄 — 서버가 「확인됨」 표시를 남기고 PC는 그 표시를 확인. v8.1: 문서 뷰어 [케이에게 묻기·맡기기](O-0154) — 보던 문서를 쪽 번호·시트와 함께 케이 채팅으로(묻기 칩 3·맡기기 칩 2·직접 적기, 탭 2개 이상이면 열린 문서 함께 보내기), 엑셀은 원본·그 밖은 변환 PDF, PC 변환본이 서버에 있으면 다시 올리지 않음, 묻고 나와도 「이어서 보기」로 남음. v8.0: 문서 뷰어 여러 문서 탭(O-0153) — 보던 화면에서 [＋ 파일 더 열기]로 문서를 더 열면 탭(1·2·3…)으로 붙고, 탭을 누르면 보던 쪽·확대·회전·시트 그대로 왔다갔다. 최대 5개·같은 문서는 그 탭으로·여는 데 실패하면 보던 탭으로·탭 2개 이상 두고 나가면 고르기 화면 「열어 둔 문서 · 이어서 보기」. v7.9: 삭제 전 확인 — 임시저장·실패 항목을 지우기 전에 한 번 물어봄. 임시저장 창에 붙인 자료 이름 목록과 하나씩 빼기(✕). 재전송 시 자료 뒤바뀜 방지(자료마다 고정 저장 번호). 긴 녹음(조각 전송)을 다시 보낼 때 고친 제목·자료 반영(서버 update_pending_memo, PC가 조각을 다 받기 전까지 · 늦었으면 안내). 채팅·공유함 파일 이름 칩 — 폰에서 APK·압축·한글·오피스 파일은 크롬 대신 앱이 직접 저장(사진·영상·PDF는 그대로 열기). 다운로드 실패 사유 표시. 다운로드 멈춤 감지 10분 → 시작 대기 45초/진행 멈춤 2분. v7.8: 홈 「길찾기」 카드 — 누르면 네이버 지도 앱이 바로 열림(nmap://map, 앱 없거나 PC판이면 웹 지도). 임시저장을 다시 열어 제목 고치기 — 치는 동안엔 목록만, 녹음이 든 임시저장 쓰기는 입력을 마쳤을 때·보내기·창 닫힐 때 한 번, 비우면 기본 이름. 회의자료 중복 붙이기 방지·요약 상한 안내. 실패 항목을 삭제한 뒤에도 자동 전송되던 문제(삭제 시 dropPending). 「작업 현황」 화살표 위치. v7.7: 안읽음 실시간 갱신(O-0134) — 앱을 껐다 켜야만 새 메시지·홈 케이 말풍선이 보이던 문제. 화면이 보이는 동안 30초마다 케이 방송·다른 기기 대화를 조용히 받고, 앱 복귀·홈 복귀 즉시 한 번 받음, 화면 꺼짐·백그라운드면 멈춤. 방송·대화 조회 15초 타임아웃 + 굳은 '조회 중' 45초 뒤 풀기. 안읽음 계산·알림 제외·OS 알림/아이콘 배지는 그대로. v7.6: 홈 「오늘 한눈에」 일정 [길찾기](O-0133) — 장소가 기관·주소인 일정 옆 버튼 → 네이버 지도 앱 검색(nmap://search, 좌표·키 없음, [도착] 한 번 더 = 현재 위치 출발 대중교통), 앱 없으면 웹 지도, 방 이름만·온라인 회의는 버튼 숨김, PC판은 웹 지도. v7.5: 홈 「오늘 한눈에」(O-0129) — 녹음·케이 버튼 아래 카드 한 장: 오늘 일정(지금·다음 강조, 지난 일정은 접음)·답할 메일(제목·보낸 사람)·챙길 일(작업 현황 미완료, 확인 필요 먼저)+[말로 일정 잡기](채팅 열고 음성 대화). 일정·메일은 PC가 07~21시 매시 읽기 전용으로 만든 서버 요약(get_home_digest, 연동 암호), 할 일은 작업 현황 결과 재사용. 누르면 상세 시트→채팅 초안만(보내지 않음). + 건강기록 잠그기(O-0130) — 건강 탭 조회·저장과 푸시 토큰 등록을 연동 암호 게이트 RPC(health_list·health_upsert·push_token_register)로 옮김: 공개 키만으로는 건강기록·토큰을 읽거나 고칠 수 없게. 암호가 없으면 연동 암호 창, 폰에만 남은 값은 암호가 들어오면 올림. v7.4: 음성 대화 케이 무대(O-0124) — 「음성 대화」를 켜면 채팅 화면 위쪽 40%에 케이가 크게(말할 땐 talk 영상·들을 땐 idle, 기본머리 외·영상 실패는 정지 사진+끄덕임), 상태 줄 「듣는 중/답하는 중/말하는 중」, 대화 글은 무대 아래 상자에서 스크롤(위 가장자리 흐림), 음성 대화 중엔 맨 위 「스마트비서」 줄 접기, 키보드가 올라오면 무대 축소, 무대가 안 보이면 영상 정지·헤더 작은 얼굴 영상은 멈춤. 끄면 예전 화면 그대로. v7.3: 홈 「PC 케이에게 직접」 고침(O-0120) — 바로 claude.ai/code를 열어 새 클라우드 작업 시트가 뜨던 것을, 먼저 3줄 안내 시트(✕로 닫기 → Code 목록에서 PC 세션 고르기) + [Claude 앱 열기]로. 세션 제목·주소는 PC_K_* 상수 한 곳. v7.2: 통합 배포(O-0118) — 홈 케이 말풍선(O-0117, 숫자 배지 대신 「대표님, ○○」)·「문제」 표정 판정 좁히기 + 케이 전신 시작 인사(O-0116, 자막 멘트 13개·목소리 없음·설정 하루 첫 실행만(기본)/켤 때마다/끄기·[지금 보기]) + 꾸미기 전신 10벌(누르면 인사는 버건디만) + 네이티브 시작화면 다크(#070B1D) 통일 + 홈 「PC 케이에게 직접」(claude.ai/code 바깥으로 열기). v7.1: 글을 먼저 쓰면 첨부가 안 되던 문제 수정(O-0108) — 폰 입력 바의 ＋/카메라가 네이티브 파일 선택(NativeInput.pickFiles)으로 직접 골라 첨부 대기줄(window.SmartAttach)에 붙임·첨부만 보내기 가능·옛 APK는 예전 방식 + 채팅 긴 메시지 접기(O-0111) — 20줄 넘는 본문은 15줄까지만+아래 흐림+[전체 보기 ▼]/[접기 ▲], 펼친 상태는 다시 그려도 유지. v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  var APP_VERSION = 'v8.9';       // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v8.9(O-0189 긴급): 음성 대화가 말하는 중에 끊고 보내던 문제 — 폰 받아쓰기를 「이어 듣기」로(인식기가 스스로 끝내도 보내지 않고 다시 들으며 글을 이어 붙임), 보내는 때는 새 글자·큰 소리 없이 「말 끝 기다림」이 지났을 때·[다 말했어요]를 눌렀을 때·60초를 채웠을 때뿐. 말 끝 기다림 0.9초 → 기본 2초(무대 「기다림」 칩으로 짧게 1.2초/보통 2초/길게 3초, 이 기기에 저장), 녹음 경로도 같은 값(소음 적응 유지). 무대에 [다 말했어요 · 지금 보내기] 버튼. 끝난 이유·말한 길이를 PC 로그로(글 내용 아님). v8.8(O-0175·O-0176·O-0177·O-0178): 홈 정리 — 오늘 한눈에 아래를 「도구」 4칸×2줄(회의록·문서 뷰어·건강·계산기 / 공유함·아이디어·명함 검색·길찾기) + 「PC 연결」 두 줄(「Claude Code 연결」=PC 케이 대화방, 「PC 원격 제어」=크롬 원격 데스크톱, 문서 뷰어 편집 시트도 [PC 원격 제어 열기])로. 홈에서 작업 현황·예약한 알림·저장한 답 카드를 빼고 오늘 한눈에(「작업 현황 보기」 늘 보임·「예약한 알림」 한 줄·[말로 맡기기 (일정·알림)]·머리줄 눌러 접기 한 줄 요약)와 채팅 📋·☆ 로. 「지난 메모」+「회의 요약」 → 「회의록」(맨 위 「진행 중」 칸, 홈엔 진행 중인 것만·접기). 홈 사진·영상 보내기 칸 → 채팅 ＋ 고르기 창(케이에게 / 명함 등록·사진 PC 정리 / 영상 정리). 앱 서랍 「케이 음성」 아이콘 제거(바로가기 「음성 대화」는 그대로), 바로가기 「사진 보내기」→「케이에게 사진」. 계산기(O-0178) — 기본+공학용(삼각·역삼각·log·ln·거듭제곱·루트·n!·EXP·DEG/RAD·메모리·Ans), 직접 만든 계산 엔진(eval 없음), 계산 기록, [케이에게 묻기], 넓은 화면은 공학 자판 함께, 키보드 입력. 음성 대화 속도(O-0177) — 폰에서 바로 받아쓰기(KSpeech)·실시간 글자, 말 끝 판정 약 0.9초+소음 적응(vad.js), 조각 목소리 차례 재생(PC 스위치가 켜졌을 때), 케이 얼굴을 눌러 말 끊기. v8.7 까지: v8.7(O-0173·O-0174): 홈 「PC 화면」 카드 — 누르면 크롬 원격 데스크톱 앱이 바로 열림(없으면 플레이 스토어 안내, PC판은 원격 데스크톱 웹 새 탭, 문서 뷰어 [원격 화면 열기]와 같은 동작). 문서 뷰어 [✏️ 편집하기]를 워드·엑셀·PPT(doc·docx·xls·xlsx·ppt·pptx)에도 켬 — PC 편집 워커가 COM 으로 정확한 경로의 문서 창만 찾아 앞으로(다른 폴더 같은 이름 문서와 헷갈리지 않음, 엑셀·PPT 는 같은 이름이 열려 있으면 「(2)」 사본으로 엶). v8.6(O-0171·O-0172): 문서 뷰어 [✏️ 편집하기] — 한글(hwp·hwpx) 문서를 24시간 PC의 진짜 한글 프로그램으로 열어(창 최대화·맨 앞) 크롬 원격 데스크톱(삼성 DeX)으로 고치고 [저장] → [다 됐어요]로 고친 문서를 PDF·원본 파일로 돌려받음(채팅에도 첨부·푸시 없음). 원본은 PC 경로·사무소 서버 주소·폰 파일 순으로(최근 연 문서는 원본 다시 고르기). 연동 암호 확인 RPC로만 요청. [원격 화면 열기]=크롬 원격 데스크톱 앱(없으면 스토어), PC판은 원격 데스크톱 웹. 넓은 화면(900px↑)은 가운데 대화상자. 워드·엑셀·PPT 편집은 EDIT_ON_EXTS 한 줄로 켤 수 있음(PC 변환기가 켜 둔 Office 창을 닫던 문제는 O-0172로 고침). v8.5(O-0169): 홈 「오늘 한눈에」 날씨 줄 맨 앞에 「지금 21° 흐림」(앱이 Open-Meteo 를 직접 읽음 — 서울 시청 좌표만·키 없음, 홈이 보이는 동안 10분마다·열 때 3분보다 묵었으면 다시, 실패하면 PC 요약의 이번 시각 예보 「16시 21°」), 누르면 「오늘 날씨」 창 — 지금(크게)·남은 하루 우산·오늘 1시간 단위 가로 줄(지금 시각이 맨 왼쪽, 지난 시간은 흐리게, 저녁엔 내일 0~9시까지)·출퇴근 칸, 뒤로가기로 닫힘. v8.4(O-0162): 채팅 답을 기다리는 동안 점 세 개 옆에 「캘린더 확인 중…」처럼 케이가 지금 하는 일(PC 진행 표시) / 채팅 머리줄 케이 얼굴 옆 PC 상태 점(초록 정상·주황 바쁨·빨강 PC 응답 없음, 펼친 화면은 글자까지, 응답 없으면 맨 아래 안내) / 홈 「오늘 한눈에」 출퇴근 날씨·우산 한 줄(서울, 누르면 자세히) / 다른 앱에서 녹음 파일(통화 녹음 등)을 [공유]하면 [회의록으로 정리]·[케이에게 보내기] 고르기 — 회의록은 앱 녹음과 같은 화면·같은 정리 / 글자 크기 4단계(맨 위 「가가」·케이 꾸미기, 말풍선·입력창·홈 카드·문서 뷰어 글·엑셀 표). v8.3(O-0161): 말로 알림 예약 — 케이가 되읽어 확인 뒤 등록, 정한 시각에 앱 알림(PC 발송기·토큰 0), 홈 「예약한 알림」 목록·취소 / 앱 서랍 「케이 음성」 — 측면 버튼 두 번 누르기 → 바로 음성 대화 / 케이 답 [⋯] → ⭐ 저장, 홈·채팅 ☆ 「저장한 답」(검색·그 대화로·해제, 서버 저장) / 사무소 방송에 미리 붙인 케이 목소리 [▶ 듣기](아침 브리핑). v8.2: 어디서든 [공유] → 케이(O-0157) — 카톡 글·링크·사진 여러 장·파일을 공유하면 채팅에 첨부·본문이 채워져 열리고 빠른 칩 「요약해 줘」「답장 써 줘」「일정 잡아 줘」, 공유 문서 1개는 [문서 뷰어로 열기]/[케이에게 보내기] 고르기(「열기」는 예전처럼 곧장 뷰어). 케이 답장 알림에서 바로 [답장](앱을 안 열어도 됨, 잠금 해제 후에만, 자동 알림엔 버튼 없음). 아이콘 길게 눌러 음성 대화·녹음(바로 시작)·사진 보내기·오늘 한눈에. 바탕화면 케이 위젯 3종(한 줄·얼굴·카드, 스스로 깨어나지 않음, 「위젯에 내용 숨기기」). + 보안(O-0158): 채팅·사진·영상·명함검색·아이디어는 연동 암호 확인 RPC(submit_memo)로만 보냄 — 서버가 「확인됨」 표시를 남기고 PC는 그 표시를 확인. v8.1: 문서 뷰어 [케이에게 묻기·맡기기](O-0154) — 보던 문서를 쪽 번호·시트와 함께 케이 채팅으로(묻기 칩 3·맡기기 칩 2·직접 적기, 탭 2개 이상이면 열린 문서 함께 보내기), 엑셀은 원본·그 밖은 변환 PDF, PC 변환본이 서버에 있으면 다시 올리지 않음, 묻고 나와도 「이어서 보기」로 남음. v8.0: 문서 뷰어 여러 문서 탭(O-0153) — 보던 화면에서 [＋ 파일 더 열기]로 문서를 더 열면 탭(1·2·3…)으로 붙고, 탭을 누르면 보던 쪽·확대·회전·시트 그대로 왔다갔다. 최대 5개·같은 문서는 그 탭으로·여는 데 실패하면 보던 탭으로·탭 2개 이상 두고 나가면 고르기 화면 「열어 둔 문서 · 이어서 보기」. v7.9: 삭제 전 확인 — 임시저장·실패 항목을 지우기 전에 한 번 물어봄. 임시저장 창에 붙인 자료 이름 목록과 하나씩 빼기(✕). 재전송 시 자료 뒤바뀜 방지(자료마다 고정 저장 번호). 긴 녹음(조각 전송)을 다시 보낼 때 고친 제목·자료 반영(서버 update_pending_memo, PC가 조각을 다 받기 전까지 · 늦었으면 안내). 채팅·공유함 파일 이름 칩 — 폰에서 APK·압축·한글·오피스 파일은 크롬 대신 앱이 직접 저장(사진·영상·PDF는 그대로 열기). 다운로드 실패 사유 표시. 다운로드 멈춤 감지 10분 → 시작 대기 45초/진행 멈춤 2분. v7.8: 홈 「길찾기」 카드 — 누르면 네이버 지도 앱이 바로 열림(nmap://map, 앱 없거나 PC판이면 웹 지도). 임시저장을 다시 열어 제목 고치기 — 치는 동안엔 목록만, 녹음이 든 임시저장 쓰기는 입력을 마쳤을 때·보내기·창 닫힐 때 한 번, 비우면 기본 이름. 회의자료 중복 붙이기 방지·요약 상한 안내. 실패 항목을 삭제한 뒤에도 자동 전송되던 문제(삭제 시 dropPending). 「작업 현황」 화살표 위치. v7.7: 안읽음 실시간 갱신(O-0134) — 앱을 껐다 켜야만 새 메시지·홈 케이 말풍선이 보이던 문제. 화면이 보이는 동안 30초마다 케이 방송·다른 기기 대화를 조용히 받고, 앱 복귀·홈 복귀 즉시 한 번 받음, 화면 꺼짐·백그라운드면 멈춤. 방송·대화 조회 15초 타임아웃 + 굳은 '조회 중' 45초 뒤 풀기. 안읽음 계산·알림 제외·OS 알림/아이콘 배지는 그대로. v7.6: 홈 「오늘 한눈에」 일정 [길찾기](O-0133) — 장소가 기관·주소인 일정 옆 버튼 → 네이버 지도 앱 검색(nmap://search, 좌표·키 없음, [도착] 한 번 더 = 현재 위치 출발 대중교통), 앱 없으면 웹 지도, 방 이름만·온라인 회의는 버튼 숨김, PC판은 웹 지도. v7.5: 홈 「오늘 한눈에」(O-0129) — 녹음·케이 버튼 아래 카드 한 장: 오늘 일정(지금·다음 강조, 지난 일정은 접음)·답할 메일(제목·보낸 사람)·챙길 일(작업 현황 미완료, 확인 필요 먼저)+[말로 일정 잡기](채팅 열고 음성 대화). 일정·메일은 PC가 07~21시 매시 읽기 전용으로 만든 서버 요약(get_home_digest, 연동 암호), 할 일은 작업 현황 결과 재사용. 누르면 상세 시트→채팅 초안만(보내지 않음). + 건강기록 잠그기(O-0130) — 건강 탭 조회·저장과 푸시 토큰 등록을 연동 암호 게이트 RPC(health_list·health_upsert·push_token_register)로 옮김: 공개 키만으로는 건강기록·토큰을 읽거나 고칠 수 없게. 암호가 없으면 연동 암호 창, 폰에만 남은 값은 암호가 들어오면 올림. v7.4: 음성 대화 케이 무대(O-0124) — 「음성 대화」를 켜면 채팅 화면 위쪽 40%에 케이가 크게(말할 땐 talk 영상·들을 땐 idle, 기본머리 외·영상 실패는 정지 사진+끄덕임), 상태 줄 「듣는 중/답하는 중/말하는 중」, 대화 글은 무대 아래 상자에서 스크롤(위 가장자리 흐림), 음성 대화 중엔 맨 위 「스마트비서」 줄 접기, 키보드가 올라오면 무대 축소, 무대가 안 보이면 영상 정지·헤더 작은 얼굴 영상은 멈춤. 끄면 예전 화면 그대로. v7.3: 홈 「PC 케이에게 직접」 고침(O-0120) — 바로 claude.ai/code를 열어 새 클라우드 작업 시트가 뜨던 것을, 먼저 3줄 안내 시트(✕로 닫기 → Code 목록에서 PC 세션 고르기) + [Claude 앱 열기]로. 세션 제목·주소는 PC_K_* 상수 한 곳. v7.2: 통합 배포(O-0118) — 홈 케이 말풍선(O-0117, 숫자 배지 대신 「대표님, ○○」)·「문제」 표정 판정 좁히기 + 케이 전신 시작 인사(O-0116, 자막 멘트 13개·목소리 없음·설정 하루 첫 실행만(기본)/켤 때마다/끄기·[지금 보기]) + 꾸미기 전신 10벌(누르면 인사는 버건디만) + 네이티브 시작화면 다크(#070B1D) 통일 + 홈 「PC 케이에게 직접」(claude.ai/code 바깥으로 열기). v7.1: 글을 먼저 쓰면 첨부가 안 되던 문제 수정(O-0108) — 폰 입력 바의 ＋/카메라가 네이티브 파일 선택(NativeInput.pickFiles)으로 직접 골라 첨부 대기줄(window.SmartAttach)에 붙임·첨부만 보내기 가능·옛 APK는 예전 방식 + 채팅 긴 메시지 접기(O-0111) — 20줄 넘는 본문은 15줄까지만+아래 흐림+[전체 보기 ▼]/[접기 ▲], 펼친 상태는 다시 그려도 유지. v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -1550,9 +1550,12 @@
   //   · 말한 지 3초가 넘으면 SILENCE_LONG_MS(1100)로 — 긴 말 중간에 생각하며 잠깐 쉬어도 덜 끊기게. 짧은 대답은 900ms에 바로 보냄.
   //   · POLL 160 → 100ms: 끝 판정이 최대 0.16초 늦던 것을 0.1초로. MIN_SPEECH 400ms(헛기침·잡음 한 번으로 말 시작 판정 안 함) 유지.
   //   · 근거·시험: _jobs_output\20261003_o0177_voice_speed_bargein\vad_sim_test.js (합성 진폭 6가지 경우 시험)
-  var HF = { THRESH: 0.05, POLL: 100, SILENCE_MS: 900, SILENCE_LONG_MS: 1100, LONG_AFTER_MS: 3000, NOSPEECH_MS: 7000,
-             MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3,
-             CALIB_MS: 500, NOISE_MUL: 1.8, NOISE_ADD: 0.02, THRESH_MAX: 0.3 };   // ⚠️ 시험 파일(vad_sim_test.js)의 NEW 와 같은 값
+  //   ▶ O-0189(v8.9, 대표님 「말하고 있는데 끊고 전송해 버린다」): 900/1100ms 는 너무 짧았다 → 무음 기다림은 아래 「말 끝 기다림」 설정값
+  //     (짧게 1.2초 / 보통 2.0초(기본) / 길게 3.0초)을 그대로 쓴다(applyEndWait 가 SILENCE_MS·SILENCE_LONG_MS 를 채움). 소음 적응은 유지.
+  //     한 번에 말할 수 있는 길이 30초 → 60초.
+  var HF = { THRESH: 0.05, POLL: 100, SILENCE_MS: 2000, SILENCE_LONG_MS: 2000, LONG_AFTER_MS: 3000, NOSPEECH_MS: 7000,
+             MAX_TURN_MS: 60000, MIN_SPEECH_MS: 400, MAX_MISS: 3,
+             CALIB_MS: 500, NOISE_MUL: 1.8, NOISE_ADD: 0.02, THRESH_MAX: 0.3 };   // 소음 적응 값은 시험 파일(vad_sim_test.js)의 NEW 와 같음
   var HF_OLD = { THRESH: 0.05, POLL: 160, SILENCE_MS: 1600, NOSPEECH_MS: 7000, MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3 };
   /* ---- O-0177 음성 대화 속도 개선 스위치(하나씩 끌 수 있음 — false 면 그 부분만 예전 그대로) ----
    *  STREAM    ① 케이 답을 첫 문장부터 조각 목소리로(meta.vstream=1 요청). PC 스위치(o0177_switch.json voice_stream)가 꺼져 있으면
@@ -1562,8 +1565,28 @@
    *  TAP_CUT   ④ 케이가 말하는(또는 답을 만드는) 중 무대(케이 얼굴)를 누르면 즉시 멈추고 듣기. 목소리로 끼어들기는 만들지 않음(대표님 결정).
    *  POLL_FAST_MS  음성 대화로 답을 기다리는 동안 확인 간격(평소 2500ms). 서버 호출은 get_voice_memo(연동 토큰) 그대로. */
   var VC = { STREAM: true, DEVICE_STT: true, ADAPT_VAD: true, TAP_CUT: true, POLL_FAST_MS: 600,
-             STT_END_MS: 900, STT_END_LONG_MS: 1200, STT_NOSPEECH_MS: 7000, STT_MAX_MS: 30000, STT_FINAL_WAIT_MS: 1200 };
+             STT_NOSPEECH_MS: 8000, STT_MAX_MS: 60000, STT_FINAL_WAIT_MS: 1200,
+             STT_LOUD_DB: 5,            // 소리 크기가 그 자리 바닥값보다 이만큼(dB) 크면 「아직 말하는 중일 수 있음」
+             STT_MUTE_RESTART: true };  // 일반 인식기(기기 내 인식 아님)가 다시 들을 때 삑 소리를 0.7초 끔(기기 내 인식기는 해당 없음)
   if (!VC.ADAPT_VAD) HF = HF_OLD;
+  /* ---- O-0189 「말 끝 기다림」 설정(이 기기에 저장) ----
+   *  말을 멈춘 뒤 이만큼 조용하면 보낸다. 짧게 1.2초 / 보통 2.0초(기본) / 길게 3.0초. 무대의 「기다림」 칩을 누를 때마다 바뀐다.
+   *  기다리기 싫으면 무대의 [다 말했어요]로 바로 보낸다. 폰 받아쓰기·녹음 경로 둘 다 같은 값을 쓴다. */
+  var ENDWAIT_KEY = 'smart_convo_endwait';
+  var ENDWAIT = { short: { ms: 1200, name: '짧게', sec: '1.2초' }, normal: { ms: 2000, name: '보통', sec: '2초' }, long: { ms: 3000, name: '길게', sec: '3초' } };
+  var endWaitMode = (function () { try { var v = localStorage.getItem(ENDWAIT_KEY); return ENDWAIT[v] ? v : 'normal'; } catch (e) { return 'normal'; } })();
+  function endWaitMs() { return ENDWAIT[endWaitMode].ms; }
+  function applyEndWait() {
+    if (HF !== HF_OLD) { HF.SILENCE_MS = endWaitMs(); HF.SILENCE_LONG_MS = endWaitMs(); }
+    var chip = $('chatKStageWait');
+    if (chip) chip.textContent = '기다림 ' + ENDWAIT[endWaitMode].name + ' · ' + ENDWAIT[endWaitMode].sec;
+  }
+  function cycleEndWait() {
+    endWaitMode = endWaitMode === 'short' ? 'normal' : (endWaitMode === 'normal' ? 'long' : 'short');
+    try { localStorage.setItem(ENDWAIT_KEY, endWaitMode); } catch (e) {}
+    applyEndWait();
+    toast('말 끝 기다림: ' + ENDWAIT[endWaitMode].name + '(' + ENDWAIT[endWaitMode].sec + ') — 말을 멈추고 이만큼 지나면 보내요.');
+  }
 
   /* ---- v5.8 「오퍼스 5.5」 1회 지정 ----
    * 대표님 지시(2026-09-25): "중요 작업을 지시할 경우에만 오퍼스를 체크해서 진행하겠다."
@@ -2608,7 +2631,7 @@
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
     OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
-                                      sttDevice: dev, vstream: vs }).then(function () {
+                                      sttDevice: dev, vstream: vs, vend: o.vend || null }).then(function () {
       meMsg.uploading = false; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
@@ -2661,7 +2684,7 @@
     if (t.indexOf('말하는') !== -1) { st = 'talk'; big = '케이가 말하는 중…'; small = '말이 끝나면 다시 들을게요'; stageLive(''); }
     else if (t.indexOf('답하는') !== -1) { st = 'think'; big = '케이가 답하는 중…'; small = '잠시만 기다려 주세요'; }
     else if (t.indexOf('기다려요') !== -1) { st = 'listen'; big = '듣는 중…'; small = '말씀을 기다리고 있어요'; }
-    else if (t) { st = 'listen'; big = '듣는 중…'; small = '말씀이 끝나면 자동으로 보내요'; }
+    else if (t) { st = 'listen'; big = '듣는 중…'; small = '다 말씀하셨으면 아래 [다 말했어요]'; }
     chatKStage.setAttribute('data-state', st);
     if (chatKStageText) chatKStageText.textContent = big;
     if (chatKStageHint) chatKStageHint.textContent = small;
@@ -2750,13 +2773,17 @@
   var KS = null;
   try { if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) { KS = null; }
   var ks = { checked: false, ok: false, onDevice: false, fails: 0, off: false, p: null };
-  var stt = { on: false, text: '', first: 0, last: 0, t0: 0, timer: null, finishing: false, finWait: null };
-  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off); }
+  // O-0189: stt.s = 말 끝 판정 상태(vad.js KVad.stt*) — 이어 붙인 글(acc)·지금 토막(cur)·마지막으로 말한 때·큰 소리 난 때
+  var stt = { on: false, s: null, timer: null, finishing: false, finWait: null, why: '' };
+  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off && window.KVad && KVad.sttNew); }
   function ksInit() {
     if (!VC.DEVICE_STT || !KS) return Promise.resolve(false);
     if (ks.p) return ks.p;
     try {
       KS.addListener('partial', function (e) { sttOnPartial(e && e.text); });
+      KS.addListener('segment', function (e) { sttOnSegment(e || {}); });      // O-0189: 인식기가 스스로 끝낸 토막(다시 듣는 중)
+      KS.addListener('rms', function (e) { sttOnRms(e && e.db); });            // O-0189: 소리 크기
+      KS.addListener('speech', function () { if (stt.on && stt.s) stt.s.lastLoud = Date.now(); });
       KS.addListener('final', function (e) { sttOnFinal(e && e.text); });
       KS.addListener('error', function (e) { sttOnError(e || {}); });
     } catch (e) {}
@@ -2769,15 +2796,27 @@
   function stageLive(t, mode) {
     var el = $('chatKStageLive'); if (!el) return;
     t = String(t || '');
+    if (t.length > 64) t = '…' + t.slice(-62);     // O-0189: 이어 붙여 길어지면 끝부분(방금 한 말)이 보이게
     el.textContent = t;
     el.className = 'kstage-live' + (mode ? ' ' + mode : '');
   }
+  /* O-0189(v8.9) 말 끝 판정 — 「말하고 있는데 끊고 보내 버린다」 고침
+   *  v8.8 이 끊은 조건 두 가지(코드로 확인):
+   *   (가) 부분 결과(글자)가 0.9초(3초 넘게 말했으면 1.2초) 안 바뀌면 끝 — 생각하며 1초만 쉬어도 걸린다. 인식기 자체 판정보다 늘 먼저 걸리는 쪽.
+   *   (나) 인식기가 스스로 끝내 결과(onResults)를 주면 곧바로 전송 — v8.8 은 인식기에 「1.2~1.5초 조용하면 끝」이라고까지 알려 줬다.
+   *  이제: 인식기는 이어 듣기(continuous) — 스스로 끝내도 보내지 않고 곧바로 다시 들으며 글을 이어 붙인다.
+   *        보내는 때는 ① 새 글자도 큰 소리도 없이 「말 끝 기다림」(기본 2초)이 지났을 때 ② [다 말했어요]를 눌렀을 때 ③ 60초를 채웠을 때뿐.
+   *  끝난 이유(quiet/manual/max)·말한 길이·토막 수는 meta.vend 로 PC에 보내 [지연] 로그에 남는다(글 내용 아님 — 다음에 원인 추적용). */
+  function sttCfg() { return { endMs: endWaitMs(), noSpeechMs: VC.STT_NOSPEECH_MS, maxMs: VC.STT_MAX_MS }; }
   function sttListen() {
-    stt = { on: true, text: '', first: 0, last: Date.now(), t0: Date.now(), timer: null, finishing: false, finWait: null };
+    var now = Date.now();
+    stt = { on: true, s: KVad.sttNew(now), timer: null, finishing: false, finWait: null, why: '' };
     setChatMic(true);
     setConvoStatus('말씀하세요… (끝나면 자동으로 보내요)');
     stageLive('');
-    KS.start({ lang: 'ko-KR', partial: true, completeMs: 1500, possiblyMs: 1200 }).catch(function (e) {
+    var w = endWaitMs();
+    KS.start({ lang: 'ko-KR', partial: true, continuous: true, muteRestart: !!VC.STT_MUTE_RESTART,
+               completeMs: w + 1500, possiblyMs: w + 1000, minMs: 3000 }).catch(function (e) {
       sttOnError({ reason: (e && e.code) || 'start' });
     });
     stt.timer = setInterval(sttTick, 150);
@@ -2796,51 +2835,70 @@
       if (convoOn) setConvoStatus('말씀을 기다려요…');
       return;
     }
-    var need = (stt.first && now - stt.first >= 3000) ? VC.STT_END_LONG_MS : VC.STT_END_MS;
-    if (stt.text && now - stt.last >= need) { sttFinish(); return; }
-    if (!stt.text && now - stt.t0 >= VC.STT_NOSPEECH_MS) { sttCleanup(); try { KS.cancel(); } catch (e) {} listenMiss('nospeech'); return; }
-    if (now - stt.t0 >= VC.STT_MAX_MS) { sttFinish(); return; }
+    var r = KVad.sttCheck(stt.s, now, sttCfg());
+    if (r === 'quiet' || r === 'max') { sttFinish(r); return; }
+    if (r === 'nospeech') { sttCleanup(); try { KS.cancel(); } catch (e) {} listenMiss('nospeech'); return; }
   }
-  function sttFinish() {
-    stt.finishing = true;
+  function sttFinish(why) {
+    if (!stt.on || stt.finishing) return;
+    stt.finishing = true; stt.why = why || 'quiet';
     if (stt.timer) { clearInterval(stt.timer); stt.timer = null; }
     try { KS.stop(); } catch (e) {}
-    stt.finWait = setTimeout(function () { try { KS.cancel(); } catch (e) {} sttDone(stt.text); }, VC.STT_FINAL_WAIT_MS);
+    stt.finWait = setTimeout(function () { try { KS.cancel(); } catch (e) {} sttDone(); }, VC.STT_FINAL_WAIT_MS);
   }
   function sttOnPartial(t) {
     if (!stt.on || stt.finishing) return;
-    t = String(t || '').trim();
-    if (!t || t === stt.text) return;
-    stt.text = t; stt.last = Date.now(); if (!stt.first) stt.first = stt.last;
-    stageLive(t);
+    if (KVad.sttPartial(stt.s, t, Date.now())) stageLive(KVad.sttText(stt.s));
+  }
+  function sttOnSegment(e) {                          // 인식기가 스스로 끝냄 → 글만 이어 붙이고 계속 듣는다(보내지 않음)
+    if (!stt.on || stt.finishing) return;
+    KVad.sttSegment(stt.s, e.text, Date.now());
+    stageLive(KVad.sttText(stt.s));
+  }
+  function sttOnRms(db) {
+    if (!stt.on || stt.finishing) return;
+    KVad.sttRms(stt.s, Number(db), Date.now(), VC.STT_LOUD_DB);
   }
   function sttOnFinal(t) {
     if (!stt.on) return;
-    sttDone(String(t || '').trim() || stt.text);
+    if (!stt.finishing) { sttOnSegment({ text: t }); return; }   // 마무리를 시킨 적이 없는데 온 결과(옛 방식 응답) → 토막으로만
+    KVad.sttSegment(stt.s, t, Date.now());
+    sttDone();
   }
   function sttOnError(e) {
     if (!stt.on) return;
     var why = String(e.reason || '');
-    if (why === 'nospeech' || why === 'nomatch') {    // 말이 없었음(정상) — 들은 게 있으면 그걸 보냄
-      if (stt.text) sttDone(stt.text); else { sttCleanup(); listenMiss('nospeech'); }
+    var has = !!KVad.sttText(stt.s);
+    if (stt.finishing) { if (has) sttDone(); else { sttCleanup(); listenMiss('nospeech'); } return; }
+    if (why === 'nospeech' || why === 'nomatch') {    // 이어 듣기가 안 되는 상황에서 온 「말 없음」 — 들은 게 있으면 그걸로
+      if (has) { stt.why = 'rec-' + why; stt.finishing = true; sttDone(); } else { sttCleanup(); listenMiss('nospeech'); }
       return;
     }
     ks.fails++;
     if (why === 'permission' || why === 'unavailable' || ks.fails >= 2) ks.off = true;
-    if (stt.text && stt.finishing) { sttDone(stt.text); return; }
+    if (has) { stt.why = 'err-' + (why || 'x'); stt.finishing = true; sttDone(); return; }   // 이미 들은 말은 버리지 않고 보냄
     sttCleanup(); try { KS.cancel(); } catch (x) {}
     if (convoOn && isOpen(chatView)) startRecListen(true);   // 같은 턴을 녹음 경로로 바로 이어서
   }
-  function sttDone(text) {
+  function sttDone() {
     if (!stt.on) return;
+    var s = stt.s, why = stt.why || 'quiet';
     sttCleanup();
-    text = String(text || '').trim();
+    if (s.cur) KVad.sttSegment(s, '', Date.now());   // 남은 부분 결과가 있으면 이어 붙임
+    var text = KVad.sttText(s);
     if (!text) { listenMiss('nospeech'); return; }
     convoMiss = 0; ks.fails = 0;
     var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
     if (convoOn) setConvoStatus('케이가 답하는 중…');
     stageLive(text, 'sent');
-    sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus() });
+    var vend = { p: 'dev', end: why, wait: endWaitMs(), ms: Math.max(0, (s.lastAct || 0) - (s.first || s.t0)),
+                 total: Date.now() - s.t0, segs: s.segs, od: ks.onDevice ? 1 : 0 };
+    sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus(), vend: vend });
+  }
+  // O-0189 [다 말했어요] — 기다리지 않고 지금 보내기(받아쓰기·녹음 경로 공통)
+  function sayDone() {
+    if (stt.on) { if (!stt.finishing) sttFinish('manual'); return; }
+    if (chatRecording) { endListen('manualsend'); return; }
   }
   function listenMiss(reason) {
     if (convoOn) {
@@ -2868,6 +2926,13 @@
     startListen(true);
   }
   if (chatKStage) { chatKStage.addEventListener('click', onStageTap); if (!VC.TAP_CUT) chatKStage.classList.add('notap'); }
+  // O-0189: 무대의 [다 말했어요](지금 보내기) · 「기다림」 칩(짧게/보통/길게) — 무대 탭(말 끊기)으로 번지지 않게 stopPropagation
+  (function () {
+    var b = $('chatKStageSend'), w = $('chatKStageWait');
+    if (b) b.addEventListener('click', function (ev) { ev.stopPropagation(); sayDone(); });
+    if (w) w.addEventListener('click', function (ev) { ev.stopPropagation(); cycleEndWait(); });
+    applyEndWait();
+  })();
   function endListen(reason) {
     if (!chatRecording) return;
     stopAmpPoll();
@@ -2883,7 +2948,8 @@
       convoMiss = 0;
       var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
       if (convoOn) setConvoStatus('케이가 답하는 중…');
-      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus() });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회
+      var vend = convoOn ? { p: 'rec', end: lsnReason, wait: endWaitMs(), total: Date.now() - lsnStartTs } : null;   // O-0189 끝난 이유(로그용)
+      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus(), vend: vend });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회
     } else {
       listenMiss(lsnReason);                     // 말이 없었음/취소(O-0177: 받아쓰기 경로와 같은 처리로 묶음)
     }

@@ -646,6 +646,8 @@
     if (opts.sttDevice && !audioBlob) { meta.voice = true; meta.stt = 'device'; }
     // O-0177 ① 조각 목소리 요청(PC 스위치가 꺼져 있으면 무시되고 예전처럼 voice_url 한 덩어리)
     if (opts.vstream) meta.vstream = 1;
+    // O-0189: 음성 턴이 왜 끝났는지(조용함/직접 보냄/최대 길이)·말한 길이 — 글 내용 아님, PC [지연] 로그용
+    if (opts.vend && typeof opts.vend === 'object') meta.vend = opts.vend;
     var imgMeta = [];
     function uploadImages(i) {
       if (i >= files.length) return Promise.resolve();
