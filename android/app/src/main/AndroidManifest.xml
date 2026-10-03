@@ -112,26 +112,8 @@
 
         </activity>
 
-        <!-- v8.3(O-0161) 앱 서랍의 두 번째 아이콘 「케이 음성」 — 누르면 곧바로 케이와 음성 대화.
-             갤럭시 「측면 버튼 → 두 번 누르기 → 앱 열기」는 앱 목록만 고를 수 있어서 런처 아이콘을 하나 더 둔다.
-             화면 없는 입구(KVoiceLaunchActivity)가 v8.2 바로가기 「음성 대화」와 같은 인텐트(k_shortcut=voice)로
-             MainActivity 를 열고 바로 닫힌다. 자기 작업(taskAffinity="")·최근 앱 목록 제외라 누를 때마다 새로 떠서 매번 동작.
-             새 권한 없음. -->
-        <activity
-            android:name=".KVoiceLaunchActivity"
-            android:label="@string/voice_launcher_label"
-            android:icon="@mipmap/ic_kvoice"
-            android:roundIcon="@mipmap/ic_kvoice"
-            android:theme="@android:style/Theme.NoDisplay"
-            android:taskAffinity=""
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <!-- (O-0176·O-0175) 앱 서랍 두 번째 아이콘 「케이 음성」(v8.3 KVoiceLaunchActivity)은 대표님 결정으로 뺐다.
+             음성 대화는 아이콘 길게 누르기 바로가기 「음성 대화」(res/xml/shortcuts.xml)·채팅 [음성 대화 시작]으로 그대로 들어간다. -->
 
         <!-- 녹음 소유 포그라운드 서비스(마이크). 화면 꺼짐/앱 전환에도 녹음 지속 -->
         <service

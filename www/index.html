@@ -78,6 +78,7 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="currentColor"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
+  <symbol id="i-calc" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 7.5h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.6 12h.01M12 12h.01M15.4 12h.01M8.6 16.2h.01M12 16.2h.01M15.4 16.2h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
   <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -148,34 +149,37 @@
            연동 암호가 없거나 아직 불러오기 전이면 숨김. 일정·메일은 PC가 만든 서버 요약(home_digest)을 읽기만 한다. -->
       <div class="card today" id="todayCard" style="display:none;" aria-live="polite"></div>
 
-      <!-- 액션 카드 -->
-      <div class="actions">
-        <button class="card action" id="btnPhoto"><span class="ic blue"><svg><use href="#i-cam"/></svg></span><span class="tx"><b>사진 보내기</b><small>찍거나 골라서 PC로</small></span></button>
-        <button class="card action" id="btnVideo"><span class="ic cyan"><svg><use href="#i-video"/></svg></span><span class="tx"><b>영상 보내기</b><small>화면·현장 녹화</small></span></button>
+      <!-- (O-0176·O-0178) 「도구」 격자 — 예전 넓은 카드 12개+작은 카드 2개를 4칸×2줄(계산기 추가) + 「PC 연결」 넓은 줄 둘로.
+           (대표님 추가 의견) 사진 보내기·영상 보내기 칸은 뺐다 — 일반 사진은 채팅 첨부(케이에게)로, 채팅에 없던 두 길(명함 등록·사진 PC 정리 /
+           영상 정리·긴 녹화 조각 전송)은 채팅 입력줄 [＋] 고르기 창으로 옮김(app.js openAttachMenu). 숨은 photoInput·videoInput 은 그대로 씀.
+           홈에서 뺀 것: 작업 현황(→ 오늘 한눈에 「챙길 일」 + 채팅 📋), 예약한 알림(→ 오늘 한눈에 한 줄), 저장한 답(→ 채팅 ☆),
+           회의 요약·지난 메모(→ 「회의록」 하나, 홈엔 진행 중인 것만). 버튼 id 는 예전 그대로라 app.js 동작은 같다. -->
+      <div class="sec-title tools-title">도구</div>
+      <div class="tools" id="homeTools">
+        <button class="tool" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><b>회의록</b><small>녹음 정리</small></button>
+        <button class="tool" id="btnDocs"><span class="ic cyan"><svg><use href="#i-doc"/></svg></span><b>문서 뷰어</b><small>한글·PDF</small></button>
+        <button class="tool" id="btnHealth"><span class="ic blue"><svg><use href="#i-heart"/></svg></span><b>건강</b><small>혈당·식단</small></button>
+        <!-- (O-0178) 계산기: 기본 + 공학용, 계산 기록, [케이에게 묻기]. 화면 js/calculator.js · 계산 js/calc-engine.js -->
+        <button class="tool" id="btnCalc"><span class="ic cyan"><svg><use href="#i-calc"/></svg></span><b>계산기</b><small>공학용</small></button>
+        <button class="tool" id="btnLocker"><span class="ic blue"><svg><use href="#i-copy"/></svg></span><b>공유함</b><small>PC↔폰</small></button>
+        <button class="tool" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><b>아이디어</b><small>말로 제안</small></button>
+        <button class="tool" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><b>명함 검색</b><small>이름·기관</small></button>
+        <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱(nmap://map). 동작은 today-card.js openMapHome -->
+        <button class="tool" id="btnRoute"><span class="ic cyan"><svg><use href="#i-route"/></svg></span><b>길찾기</b><small>네이버 지도</small></button>
+        <div class="tools-sub">PC 연결</div>
+        <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
+             ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
+             ② PC 원격 제어 = 크롬 원격 데스크톱으로 PC 화면을 직접 보고 조작 — 문서 뷰어 편집 시트 [PC 원격 제어 열기]와 같은 동작(SmartDocs.openRemote) -->
+        <button class="tool wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tw"><b>Claude Code 연결</b><small>PC 케이와 대화방에서 직접 일 시키기</small></span></button>
+        <button class="tool wide" id="btnPcScreen"><span class="ic blue"><svg><use href="#i-monitor"/></svg></span><span class="tw"><b>PC 원격 제어</b><small>PC 화면을 보며 직접 조작</small></span></button>
       </div>
-      <!-- (O-0118 → O-0120 v7.3) PC 케이에게 직접: 누르면 안내 시트(3줄) → [Claude 앱 열기]로 claude.ai/code 를 바깥으로 연다.
-           세션 제목·주소 상수는 app.js의 PC_K_SESSION_TITLE / PC_K_OPEN_URL / PC_K_SESSION_URL 한 곳에 모음 -->
-      <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱을 연다(nmap://map). 앱이 없거나 PC판이면 웹 지도. 동작은 today-card.js openMapHome -->
-      <button class="card action wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tx"><b>길찾기</b><small>누르면 네이버 지도가 바로 열려요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>PC 케이에게 직접</b><small>24시간 PC의 케이와 바로 대화</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <!-- v8.7(O-0173) PC 화면: 크롬 원격 데스크톱 앱을 바로 연다(없으면 플레이 스토어). PC판은 원격 데스크톱 웹 새 탭.
-           「PC 케이에게 직접」(Claude 앱 대화)과 다른 일 — 이쪽은 PC 화면을 직접 보고 조작. 여는 방법은 docviewer.js editOpenRemote 한 곳(SmartDocs.openRemote) -->
-      <button class="card action wide" id="btnPcScreen"><span class="ic blue"><svg><use href="#i-monitor"/></svg></span><span class="tx"><b>PC 화면</b><small>크롬 원격 데스크톱으로 PC 직접 조작</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <!-- v8.3(O-0161) ⏰ 말로 맡긴 알림 목록·취소 / ⭐ 채팅에서 저장한 케이 답 모아 보기 -->
-      <button class="card action wide" id="btnReminders"><span class="ic cyan"><svg><use href="#i-alarm"/></svg></span><span class="tx"><b>예약한 알림</b><small>말로 맡긴 알림 보기·취소</small></span><span id="remindersBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnStars"><span class="ic blue"><svg><use href="#i-star"/></svg></span><span class="tx"><b>저장한 답</b><small>⭐ 저장해 둔 케이 답 모아 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnDocs"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>문서 뷰어</b><small>한글·워드·엑셀·PPT·PDF 폰에서 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnLocker"><span class="ic cyan"><svg><use href="#i-copy"/></svg></span><span class="tx"><b>PC↔폰 공유함</b><small>케이 없이 두 기기끼리 글·파일 공유</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
-      <button class="card action wide" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><span class="tx"><b>회의 요약</b><small>PC에서 정리한 회의·녹음 요약본 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
 
-      <!-- 지난 메모 -->
-      <div class="sec-title">지난 메모 <span id="historyCount"></span></div>
-      <div id="historyList" class="list">
-        <div class="empty-note">녹음·사진·영상·명함을 보내면 여기에 쌓여요.</div>
+      <!-- (O-0176 D) 진행 중인 메모 — 이 폰에서 보낸 녹음·사진·영상 중 아직 안 끝난 것(정리 중·임시저장·실패)만. 없으면 칸째 숨김.
+           끝난 것은 「회의록」에서(같은 목록을 회의록 맨 위 「진행 중」 칸에도 그린다). 그리기는 app.js renderHistory -->
+      <div id="homeProgress" style="display:none;">
+        <!-- (O-0176) 제목을 누르면 접기·펼치기(이 기기에 기억 'smart_prog_fold') — 접혀도 건수는 보인다 -->
+        <button type="button" class="sec-title prog-head" id="homeProgHead" aria-expanded="true">진행 중인 메모 <span id="historyCount"></span><svg class="prog-chev"><use href="#i-chev-r"/></svg></button>
+        <div id="historyList" class="list"></div>
       </div>
     </section>
 
@@ -340,12 +344,37 @@
       <input type="file" id="lockerFileInput" multiple style="display:none">
     </section>
 
-    <!-- ===================== 회의 요약(서버 요약본 열람 전용, v5.2) ===================== -->
+    <!-- ===================== 회의록(O-0176 D: 예전 「회의 요약」+「지난 메모」) =====================
+         맨 위 「진행 중」 = 이 폰에서 보낸 것 중 정리 중·임시저장·실패(누르면 예전처럼 재전송·임시저장 자료 붙이기·삭제).
+         가운데 = 서버에 정리된 회의 요약(모든 기기 공통, 연동 암호). 맨 아래 접힘 = 이 폰에서 보낸 끝난 것(사진·영상·명함 결과 포함). -->
     <section id="meetingsView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">회의 요약</span><span class="spacer"></span></div>
-      <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">회의록</span><span class="spacer"></span></div>
+      <div id="mtgTop">
+        <div class="sec-title mtg-sec">진행 중 <span id="mtgProgCount"></span></div>
+        <div id="mtgProgress" class="list"></div>
+        <div class="sec-title mtg-sec">정리된 회의록</div>
+        <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
+      </div>
       <div id="meetingsList"></div>
+      <details id="mtgLocalWrap" class="mtg-local" style="display:none;"><summary>이 폰에서 보낸 기록 <span id="mtgLocalCount"></span></summary><div id="mtgLocal" class="list"></div></details>
       <div id="meetingsDetail" style="display:none;"></div>
+    </section>
+
+    <!-- ===================== (O-0178) 계산기 — 기본 + 공학용 · 계산 기록 · 케이에게 묻기 =====================
+         자판·식·기록은 js/calculator.js 가 그린다. 넓은 화면(700px↑)에서는 공학용 자판이 옆에 함께 보인다(styles.css body.calc-open). -->
+    <section id="calcView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">계산기</span><span class="spacer end"><button class="iconbtn" id="calcHistBtn" aria-label="계산 기록" title="계산 기록"><svg><use href="#i-list"/></svg></button></span></div>
+      <div class="calc-disp">
+        <div class="calc-top"><button type="button" class="calc-chip" id="calcAngle">DEG</button><span class="calc-mem" id="calcMem" style="display:none;"></span><span class="calc-sp"></span><button type="button" class="calc-chip ask" id="calcAskK"><svg><use href="#i-chat"/></svg>케이에게 묻기</button></div>
+        <div class="calc-expr" id="calcExpr" aria-label="식"></div>
+        <div class="calc-res" id="calcRes" aria-live="polite"></div>
+      </div>
+      <div class="calc-hist" id="calcHist" style="display:none;"></div>
+      <button type="button" class="calc-scitoggle" id="calcSciToggle" aria-expanded="false">공학용 펼치기 ▾</button>
+      <div class="calc-pads">
+        <div class="calc-sci" id="calcSci"></div>
+        <div class="calc-basic" id="calcBasic"></div>
+      </div>
     </section>
 
     <!-- ===================== 작업 현황(v5.8) — PC 지시 대장의 서버 사본 ===================== -->
@@ -359,7 +388,7 @@
     <section id="remindersView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">예약한 알림</span><span class="spacer end"><button class="iconbtn" id="remindersRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
       <div class="chatsearchinfo" style="display:block">⏰ 케이에게 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀하시면, 케이가 한 번 되물은 뒤 여기에 예약해요. 정한 시각에 앱 알림이 와요.</div>
-      <button type="button" class="card action wide rm-ask" id="remindersAsk"><span class="ic cyan"><svg><use href="#i-mic"/></svg></span><span class="tx"><b>케이에게 알림 부탁하기</b><small>누르면 케이와 음성 대화가 바로 시작돼요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button type="button" class="card action wide rm-ask" id="remindersAsk"><span class="ic cyan"><svg><use href="#i-mic"/></svg></span><span class="tx"><b>말로 맡기기 (일정·알림)</b><small>누르면 케이와 음성 대화가 바로 시작돼요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <div id="remindersBody"></div>
     </section>
 
@@ -708,6 +737,8 @@
 <script src="js/k-character.js"></script>
 <script src="js/app.js"></script>
 <script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->
+<script src="js/calc-engine.js"></script><!-- O-0178 계산 엔진(직접 만든 파서 · eval 없음) -->
+<script src="js/calculator.js"></script><!-- O-0178 계산기 화면(app.js 의 SmartHome 을 씀) -->
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
      네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
 <script src="js/native-input.js"></script>

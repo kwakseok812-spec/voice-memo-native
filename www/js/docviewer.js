@@ -1369,7 +1369,7 @@
   /* ============ O-0171 ✏️ PC에서 편집하기 (한글·워드·엑셀·PPT) ============
    * 대표님(삼성 DeX: 폴드8 + 모니터·키보드·마우스)이 보던 문서를 「진짜 프로그램」으로 고치는 흐름:
    *   [✏️ 편집하기] → PC가 그 파일을 한글/워드/엑셀/PowerPoint로 열고 창을 최대화·맨 앞으로(edit_worker.py)
-   *   → [🖥️ 원격 화면 열기] = 크롬 원격 데스크톱 앱(폰) / 원격 데스크톱 웹(PC판) → 원격으로 고치고 [저장]
+   *   → [🖥️ PC 원격 제어 열기](O-0176 용어 통일, 옛 「원격 화면 열기」) = 크롬 원격 데스크톱 앱(폰) / 원격 데스크톱 웹(PC판) → 원격으로 고치고 [저장]
    *   → [다 됐어요] → PC가 저장본을 폰용 PDF로 돌려줌 → [고친 문서 보기]·[파일 받기]
    *   · 원본은 다시 올리지 않는 길을 먼저: PC 경로(케이 첨부에 pc_path) > 사무소 서버 주소(케이 첨부·공유함) > 폰 파일.
    *   · 진행 중인 편집은 기기에 적어 둔다(앱을 껐다 켜도 [다 됐어요]를 누를 수 있게) — 문서 키별 1건, 1일 보관.
@@ -1441,13 +1441,13 @@
     h += '<button class="dvs-close" type="button" data-eact="close">' + esc(v.closeLabel || '닫기') + '</button>';
     $('dvePanel').innerHTML = h;
   }
-  function remoteBtn(primary) { return { act: 'remote', label: isNativeApp() ? '🖥️ 원격 화면 열기' : '🖥️ 원격 데스크톱 열기', cls: primary ? 'dvs-big' : 'dvs-big dve-2nd' }; }
+  function remoteBtn(primary) { return { act: 'remote', label: '🖥️ PC 원격 제어 열기', cls: primary ? 'dvs-big' : 'dvs-big dve-2nd' }; }
   function doneBtn(primary) { return { act: 'finish', label: '✅ 다 됐어요 (고친 문서 받기)', cls: primary ? 'dvs-big dve-ok' : 'dvs-big dve-ok dve-2nd' }; }
   function remoteTip() {
     var prog = esc(EDITABLE[(editCtx || {}).ext] || '프로그램');
     return isNativeApp()
-      ? '원격 화면에서 고치신 뒤 <b>' + prog + '의 [저장](Ctrl+S)</b>을 꼭 누르고, 이 앱으로 돌아와 <b>[다 됐어요]</b>를 눌러 주세요.'
-      : '지금 이 화면이 <b>24시간 PC</b>라면 ' + prog + ' 창이 이미 맨 앞에 떠 있어요. 다른 PC라면 [원격 데스크톱 열기]로 들어가세요. 고친 뒤 <b>[저장]</b> → <b>[다 됐어요]</b>.';
+      ? 'PC 원격 제어 화면에서 고치신 뒤 <b>' + prog + '의 [저장](Ctrl+S)</b>을 꼭 누르고, 이 앱으로 돌아와 <b>[다 됐어요]</b>를 눌러 주세요.'
+      : '지금 이 화면이 <b>24시간 PC</b>라면 ' + prog + ' 창이 이미 맨 앞에 떠 있어요. 다른 PC라면 [PC 원격 제어 열기]로 들어가세요. 고친 뒤 <b>[저장]</b> → <b>[다 됐어요]</b>.';
   }
   function editShowOpened(e) {
     var prog = e.program || EDITABLE[(editCtx || {}).ext] || '프로그램';
@@ -1455,8 +1455,8 @@
     var flash = e.window === 'flash';
     editRender({ step: 3, icon: locked ? '🔒' : '✓', tone: (locked || flash) ? 'warn' : 'ok',
       msg: locked ? 'PC에서 ' + prog + '로 열었어요 — PC 화면이 잠겨 있어요' : ('PC에서 ' + prog + '로 열었어요' + (e.reused ? ' (이미 열려 있던 창)' : '')),
-      sub: locked ? '원격으로 들어가 잠금을 푸시면 ' + prog + ' 창이 맨 앞에 떠 있어요.'
-         : (flash ? prog + ' 창을 맨 앞으로 올리지 못했어요. 원격 화면 아래 작업 표시줄에서 깜박이는 ' + prog + '를 눌러 주세요.'
+      sub: locked ? 'PC 원격 제어로 들어가 잠금을 푸시면 ' + prog + ' 창이 맨 앞에 떠 있어요.'
+         : (flash ? prog + ' 창을 맨 앞으로 올리지 못했어요. PC 원격 제어 화면 아래 작업 표시줄에서 깜박이는 ' + prog + '를 눌러 주세요.'
                   : '창을 화면 가득 키워 맨 앞에 띄워 두었어요.'),
       tip: remoteTip(), btns: [remoteBtn(true), doneBtn(false)] });
   }
@@ -1484,7 +1484,7 @@
       return;
     }
     editRender({ step: 1, icon: '🖥️', msg: 'PC의 ' + prog + '로 열어 드릴까요?',
-      sub: src.how + '. 그다음 원격 화면으로 PC를 보면서 키보드·마우스로 고치시면 돼요.',
+      sub: src.how + '. 그다음 「PC 원격 제어」로 PC 화면을 보면서 키보드·마우스로 고치시면 돼요.',
       tip: '고친 파일은 PC의 「SmartEdit」 폴더에 남고, 처음 원본도 1부 따로 보관해요.',
       btns: [{ act: 'start', label: '✏️ PC에서 ' + prog + '로 열기' }] });
   }
@@ -1616,7 +1616,7 @@
   function editOpenRemote() {
     if (!isNativeApp()) { try { global.open(CRD_WEB, '_blank', 'noopener'); } catch (e) { location.href = CRD_WEB; } return; }
     var EA = global.Capacitor.Plugins && global.Capacitor.Plugins.ExternalApp;
-    if (!EA || typeof EA.launchApp !== 'function') { toast('앱을 새 버전으로 바꾸면 원격 화면을 바로 열 수 있어요. 지금은 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.'); return; }
+    if (!EA || typeof EA.launchApp !== 'function') { toast('앱을 새 버전으로 바꾸면 PC 원격 제어를 바로 열 수 있어요. 지금은 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.'); return; }
     EA.launchApp({ pkg: CRD_PKG }).then(function (r) {
       if (r && r.opened) return;
       if (r && r.reason === 'not_installed') {
@@ -1625,8 +1625,8 @@
         }, { positive: true, icon: 'i-monitor' });
         return;
       }
-      toast('원격 화면 앱을 열지 못했어요. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
-    }, function () { toast('원격 화면 앱을 열지 못했어요.'); });
+      toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했어요. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
+    }, function () { toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했어요.'); });
   }
   function editViewReturned() {
     var c = editCtx, r = c && c.result; if (!r || !r.doc || !r.doc.pdf_url) return;
@@ -1913,7 +1913,7 @@
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
-    openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 화면」 — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
+    openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
