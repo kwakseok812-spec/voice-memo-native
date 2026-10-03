@@ -212,4 +212,8 @@
     <!-- v6.7: [다운로드]로 받은 APK(스마트비서 새 버전)를 바로 설치 화면으로 넘기기 위한 권한.
          실제 설치 허용은 사용자가 설정의 「이 출처 허용」에서 한 번 켜야 한다(앱이 임의로 켤 수 없음). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- O-0171 PC에서 편집하기: 「크롬 원격 데스크톱」 앱이 설치됐는지 알고 바로 열기(Android 11+ 패키지 가시성). 이 앱 하나만. -->
+    <queries>
+        <package android:name="com.google.chromeremotedesktop" />
+    </queries>
 </manifest>

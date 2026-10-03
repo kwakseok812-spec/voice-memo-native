@@ -251,3 +251,63 @@ html[data-fs] #docRoot .dv-tabmain{font-size:calc(14px * var(--fsx))}
 html[data-fs] #docRoot .dvs-note{font-size:calc(13px * var(--fsx))}
 html[data-fs] #docOverlay .msg{font-size:calc(17px * var(--fsx))}
 html[data-fs] #docOverlay .sub{font-size:calc(14px * var(--fsx))}
+
+/* ============================================================================
+ * O-0171 ✏️ PC에서 편집하기 — 왼쪽 아래 버튼 + 진행 시트(단계 띠·상태·큰 버튼)
+ *   폰(390)·펼친 화면(750)·DeX 큰 창(1280~1920·마우스) 모두: 시트는 최대 560px, 넓은 창(900px↑)에선 가운데 대화상자.
+ * ==========================================================================*/
+#docRoot .dv-editfab{position:absolute; left:12px; bottom:12px; display:inline-flex; align-items:center; gap:7px;
+  min-height:50px; padding:0 18px 0 15px; border:2px solid var(--brand); border-radius:999px; background:var(--card); color:var(--brand);
+  font-family:inherit; font-size:16px; font-weight:800; letter-spacing:-.2px; white-space:nowrap; cursor:pointer;
+  box-shadow:0 6px 18px rgba(15,23,42,.18), 0 1px 3px rgba(0,0,0,.18);}
+#docRoot .dv-editfab svg{width:20px; height:20px; flex:none;}
+#docRoot .dv-editfab:active{transform:scale(.97);}
+#docRoot .dv-editfab.live{background:#ecfdf5; border-color:#059669; color:#065f46;}
+#docRoot .dv-editfab.live::after{content:''; width:9px; height:9px; border-radius:50%; background:#10b981; margin-left:2px; box-shadow:0 0 0 3px rgba(16,185,129,.25);}
+#docRoot.dark .dv-editfab{box-shadow:0 6px 18px rgba(0,0,0,.55);}
+#docRoot.dark .dv-editfab.live{background:#0f2a1d; color:#a7f3d0; border-color:#10b981;}
+@media (hover:hover){ #docRoot .dv-editfab:hover{filter:brightness(.97);} #docRoot .dv-askfab:hover{filter:brightness(1.06);} }
+
+#docRoot #dvEdit{display:none; position:absolute; inset:0; z-index:22; background:rgba(20,24,31,.55); align-items:flex-end; justify-content:center;}
+#docRoot #dvEdit.on{display:flex;}
+#docRoot .dve-panel{overflow-y:auto; max-height:92%;}
+#docRoot .dve-file{display:flex; align-items:center; gap:10px; margin-top:-4px;}
+#docRoot .dve-fname{flex:1; min-width:0; font-size:15.5px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#docRoot .dve-steps{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+#docRoot .dve-steps span{display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; border-radius:12px; background:var(--bg);
+  border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--sub); text-align:center; line-height:1.25; word-break:keep-all;}
+#docRoot .dve-steps b{display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--line); color:var(--sub); font-size:13px;}
+#docRoot .dve-steps .on{border-color:var(--brand); color:var(--ink); background:var(--focus-bg);}
+#docRoot .dve-steps .on b{background:var(--brand); color:#fff;}
+#docRoot .dve-steps .done b{background:#10b981; color:#fff;}
+#docRoot .dve-steps .done{color:var(--ink);}
+#docRoot .dve-status{display:flex; gap:12px; align-items:flex-start; padding:14px; border-radius:16px; background:var(--bg); border:1px solid var(--line);}
+#docRoot .dve-status.ok{border-color:#a7f3d0; background:#ecfdf5;}
+#docRoot .dve-status.warn{border-color:#fcd34d; background:#fffbeb;}
+#docRoot .dve-status.err{border-color:#fca5a5; background:#fef2f2;}
+#docRoot.dark .dve-status.ok{background:#0f2a1d; border-color:#14532d;}
+#docRoot.dark .dve-status.warn{background:#2a2410; border-color:#713f12;}
+#docRoot.dark .dve-status.err{background:#2a1212; border-color:#7f1d1d;}
+#docRoot .dve-ic{flex:none; font-size:26px; line-height:1.1;}
+#docRoot .dve-spin{flex:none; width:26px; height:26px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--brand); animation:dveSpin .9s linear infinite;}
+@keyframes dveSpin{to{transform:rotate(360deg)}}
+#docRoot .dve-msg{flex:1; min-width:0;}
+#docRoot .dve-big{font-size:17.5px; font-weight:800; line-height:1.35; word-break:keep-all;}
+#docRoot .dve-sub{margin-top:4px; font-size:14px; font-weight:600; color:var(--sub); line-height:1.45; word-break:keep-all;}
+#docRoot .dve-bar{margin-top:9px; height:7px; border-radius:99px; background:var(--line); overflow:hidden;}
+#docRoot .dve-bar i{display:block; height:100%; background:var(--brand); border-radius:99px; transition:width .3s;}
+#docRoot .dve-tip{font-size:14px; line-height:1.5; color:var(--ink); padding:2px 4px; word-break:keep-all;}
+#docRoot .dve-2nd{background:var(--card); color:var(--brand); border:2px solid var(--brand);}
+#docRoot .dve-ok{background:#059669;}
+#docRoot .dve-ok.dve-2nd{background:var(--card); color:#047857; border-color:#059669;}
+#docRoot.dark .dve-ok.dve-2nd{color:#6ee7b7;}
+@media (hover:hover){ #docRoot .dvs-big:hover, #docRoot .dvs-close:hover{filter:brightness(1.05);} }
+/* 넓은 화면(삼성 DeX 창·태블릿 가로·PC판): 아래에서 올라오는 시트 대신 가운데 대화상자 */
+@media (min-width:900px){
+  #docRoot #dvEdit{align-items:center;}
+  #docRoot .dve-panel{border-radius:20px; max-height:88%; padding-bottom:18px;}
+  #docRoot .dv-editfab, #docRoot .dv-askfab{bottom:16px;}
+  #docRoot .dv-editfab{left:16px;}
+}
+html[data-fs] #docRoot .dve-big{font-size:calc(17.5px * var(--fsx))}
+html[data-fs] #docRoot .dve-sub, html[data-fs] #docRoot .dve-tip{font-size:calc(14px * var(--fsx))}

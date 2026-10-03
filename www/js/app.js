@@ -4846,7 +4846,8 @@
     if (window.SmartDocs && SmartDocs.showPick) { try { SmartDocs.showPick(); } catch (e) {} }
   }
   // v6.9: 최근 연 문서 삭제·비우기 확인은 앱 확인 시트로(confirm() 금지)
-  if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); }, ask: askKFromDoc }); } catch (e) {} }
+  if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); }, ask: askKFromDoc,
+    edit: { download: downloadAttachment } }); } catch (e) {} }   // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
 
   /* ---- v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기] ----
    * 대표님이 보던 문서(변환된 PDF / 엑셀 원본)를 채팅 첨부 통로로 케이에게 보낸다. 새 서버 테이블 없음.

@@ -59,6 +59,8 @@
   // v8.1(O-0154) 케이에게 묻기·맡기기
   var askEl = null, askBtn = null, askHandler = null, askChip = null;
   var parked = false;              // 케이에게 묻느라 뷰어를 잠시 나옴 → 탭이 1개라도 「열어 둔 문서」로 남긴다
+  // O-0171 PC에서 편집하기: 지금 문서의 「원본」을 어디서 다시 구할 수 있나(폰 파일 / 서버 주소 전체 / PC 경로)
+  var curOrig = null, curSrcFull = null, curPcPath = null;
 
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function blobToBuf(blob) {
@@ -225,7 +227,7 @@
     if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
     snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
     curKey = null; openIntent = null; pendingRestore = null;
-    closeAsk();
+    closeAsk(); closeEdit();
     if (tabs.length >= 2 || (parked && tabs.length)) { clearDocView(); liveTabId = null; }   // v8.1: 케이에게 묻고 나가면 1개라도 남긴다
     else { tabs = []; activeIdx = -1; liveTabId = null; parked = false; }
     if (rootEl) rootEl.classList.remove('on');
@@ -329,6 +331,7 @@
     isExcelDoc = false; xlToggleBtn.style.display = 'none';
     curKey = null; curSrcUrl = opts.srcUrl || null; resumePage = 0;
     curFileInfo = { name: file.name || '문서', ext: ext, size: file.size || 0 };
+    curOrig = file; curSrcFull = opts.srcFull || null; curPcPath = opts.pcPath || null;   // O-0171
     clearDocView();                                     // 앞 문서가 새 파일 이름 아래 남아 보이지 않게
     showViewer(); fnameLabel.textContent = file.name;
     showLoading('문서를 확인하는 중…', '전에 열어 본 문서면 변환 없이 바로 보여 드려요.'); setProgress(4);
@@ -385,6 +388,8 @@
         return;
       }
       curKey = meta.key; curSrcUrl = meta.srcUrl || curSrcUrl; resumePage = meta.lastPage || 0;
+      if (file) curOrig = file;                                        // O-0171: 원본(있으면) — 편집하기에 쓴다
+      if (!curSrcFull && isServerFileUrl(meta.srcUrl)) curSrcFull = meta.srcUrl;   // 공유함 공개 주소는 토큰이 없어 그대로 쓸 수 있다
       curFileInfo = { name: meta.name, ext: meta.ext || extOf(meta.name), size: meta.size || 0 };
       DocStore.touch(meta.key, { openedAt: Date.now() });
       if (meta.kind === 'excel' && b.orig) {
@@ -1070,6 +1075,8 @@
               ext: info.ext || extOf(info.name), size: info.size || 0, kind: kind, state: {} };
     if (kind === 'excel') { t.file = excelFile; t.pdfBlob = excelPdfBlob || null; }
     else { t.blob = pendingPdfBlob; t.isPpt = curIsPpt; }
+    t.orig = (kind === 'excel') ? (excelFile || curOrig) : curOrig;   // O-0171 편집하기용 원본
+    t.srcFull = curSrcFull || null; t.pcPath = curPcPath || null;
     pendingPdfBlob = null; openIntent = null;
     tabs.push(t); activeIdx = tabs.length - 1; liveTabId = t.id;
     renderTabs();
@@ -1096,6 +1103,7 @@
     clearDocView();
     curKey = t.key || null; curSrcUrl = t.srcUrl || null; resumePage = 0;
     curFileInfo = { name: t.name, ext: t.ext, size: t.size };
+    curOrig = t.orig || null; curSrcFull = t.srcFull || null; curPcPath = t.pcPath || null;   // O-0171
     showViewer(); fnameLabel.textContent = t.name; renderTabs(); renderOpenCard();
     openIntent = 'restore'; pendingRestore = copyState(t.state);
     if (t.kind === 'excel' && t.file) { openExcelFile(t.file, { pdfBlob: t.pdfBlob || null, stored: true }); return; }
@@ -1123,6 +1131,7 @@
     if (!viewerOpen()) { leaveViewer(); return; }
     if (sheetEl && sheetEl.classList.contains('on')) { closeSheet(); return; }
     if (askEl && askEl.classList.contains('on')) { closeAsk(); return; }   // v8.1
+    if (editEl && editEl.classList.contains('on')) { closeEdit(); return; }   // O-0171
     if (openIntent === 'new' && tabs.length) { abortOpen(); return; }
     leaveViewer();
   }
@@ -1133,6 +1142,7 @@
     tabsEl.style.display = (viewerOpen() && tabs.length >= 1) ? 'flex' : 'none';
     if (tabAddBtn) { tabAddBtn.textContent = tabs.length <= 1 ? '＋ 파일 더 열기' : '＋'; tabAddBtn.classList.toggle('wide', tabs.length <= 1); }
     updateAskBtn();                                                  // v8.1: [케이에게 묻기]는 문서가 화면에 다 그려졌을 때만
+    updateEditBtn();                                                 // O-0171: [편집하기]도 같은 때(한글·워드·엑셀·PPT만)
     if (!tabListEl) return;
     tabListEl.innerHTML = tabs.map(function (t, i) {
       var b = TYPE_BADGE[t.ext || extOf(t.name)] || ['', 't-etc'];
@@ -1195,6 +1205,7 @@
       if (op !== opToken) return;
       if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서예요.'); abortOpen(); return; }
       isExcelDoc = false; xlToggleBtn.style.display = 'none'; curSrcUrl = null;
+      curOrig = null; curSrcFull = null; curPcPath = null;              // O-0171
       openStored(meta, op, null);
     });
   }
@@ -1355,6 +1366,310 @@
     var cl = $('dvaClose'); if (cl) cl.onclick = closeAsk;
   }
 
+  /* ============ O-0171 ✏️ PC에서 편집하기 (한글·워드·엑셀·PPT) ============
+   * 대표님(삼성 DeX: 폴드8 + 모니터·키보드·마우스)이 보던 문서를 「진짜 프로그램」으로 고치는 흐름:
+   *   [✏️ 편집하기] → PC가 그 파일을 한글/워드/엑셀/PowerPoint로 열고 창을 최대화·맨 앞으로(edit_worker.py)
+   *   → [🖥️ 원격 화면 열기] = 크롬 원격 데스크톱 앱(폰) / 원격 데스크톱 웹(PC판) → 원격으로 고치고 [저장]
+   *   → [다 됐어요] → PC가 저장본을 폰용 PDF로 돌려줌 → [고친 문서 보기]·[파일 받기]
+   *   · 원본은 다시 올리지 않는 길을 먼저: PC 경로(케이 첨부에 pc_path) > 사무소 서버 주소(케이 첨부·공유함) > 폰 파일.
+   *   · 진행 중인 편집은 기기에 적어 둔다(앱을 껐다 켜도 [다 됐어요]를 누를 수 있게) — 문서 키별 1건, 1일 보관.
+   *   · 보내기는 연동 암호 확인 RPC(submit_memo)로만. 암호가 없거나 틀리면 앱의 연동 암호 창이 뜬다(smartBadPass).
+   * ==========================================================================*/
+  var EDITABLE = { hwp: '한글', hwpx: '한글', doc: '워드', docx: '워드', xls: '엑셀', xlsx: '엑셀', ppt: 'PowerPoint', pptx: 'PowerPoint' };
+  var CRD_PKG = 'com.google.chromeremotedesktop', CRD_WEB = 'https://remotedesktop.google.com/access';
+  var EDIT_STORE = 'smartedit_sessions_v1', EDIT_KEEP_MS = 24 * 3600 * 1000;
+  var editEl = null, editBtn = null, editOpts = null, editCtx = null, editPollT = null, editSeq = 0, editPickInput = null;
+  function isNativeApp() { var C = global.Capacitor; return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()); }
+  function isServerFileUrl(u) {
+    u = String(u || ''); if (!global.OfficeBridge) return false;
+    var b = OfficeBridge.CONFIG.url + '/storage/v1/object/';
+    return u.indexOf(b + 'sign/voice-docs/') === 0 || u.indexOf(b + 'public/locker/') === 0;
+  }
+  function editsLoad() { try { return JSON.parse(localStorage.getItem(EDIT_STORE) || '{}') || {}; } catch (e) { return {}; } }
+  function editsSave(m) {
+    try {
+      var now = Date.now(), o = {};
+      Object.keys(m).forEach(function (k) { if (m[k] && now - (m[k].ts || 0) < EDIT_KEEP_MS) o[k] = m[k]; });
+      localStorage.setItem(EDIT_STORE, JSON.stringify(o));
+    } catch (e) {}
+  }
+  function editKeyOf(t) { return (t && (t.key || ('n:' + t.name + ':' + (t.size || 0)))) || ''; }
+  function editSessGet(t) { var j = editsLoad()[editKeyOf(t)]; return (j && Date.now() - (j.ts || 0) < EDIT_KEEP_MS) ? j : null; }
+  function editSessPut(t, j) { var m = editsLoad(); j.ts = Date.now(); m[editKeyOf(t)] = j; editsSave(m); }
+  function editSessDel(t) { var m = editsLoad(); delete m[editKeyOf(t)]; editsSave(m); }
+  function editSrcOf(t) {
+    if (!t) return null;
+    var ext = t.ext || extOf(t.name);
+    if (t.pcPath) return { pcPath: t.pcPath, name: t.name, ext: ext, how: 'PC에 있는 원본을 그대로 열어요' };
+    if (t.srcFull && isServerFileUrl(t.srcFull)) return { url: t.srcFull, name: t.name, ext: ext, how: '사무소 서버에 있는 파일을 PC가 바로 받아요' };
+    if (t.orig) return { file: t.orig, name: t.name, ext: ext, how: '폰에 있는 원본을 PC로 보내요(' + fmtSize(t.orig.size || 0) + ')' };
+    return null;
+  }
+  function updateEditBtn() {
+    if (!editBtn) return;
+    var t = activeTab();
+    var ok = !!(editOpts && viewerOpen() && t && liveTabId === t.id && EDITABLE[t.ext || extOf(t.name)]);
+    editBtn.style.display = ok ? 'inline-flex' : 'none';
+    if (ok) { var s = editSessGet(t); editBtn.classList.toggle('live', !!(s && s.phase && s.phase !== 'returned')); }
+  }
+  // ---- 시트 그리기: 단계 띠 ① PC로 보내기 ② PC에서 열기 ③ 원격으로 고치고 저장 ④ 다 됐어요 ----
+  function editStepsHtml(step) {
+    var names = ['PC로 보내기', 'PC에서 열기', '원격으로 고치고 저장', '다 됐어요'];
+    return '<div class="dve-steps">' + names.map(function (n, i) {
+      var s = i + 1;
+      return '<span class="' + (s < step ? 'done' : (s === step ? 'on' : '')) + '"><b>' + (s < step ? '✓' : s) + '</b>' + esc(n) + '</span>';
+    }).join('') + '</div>';
+  }
+  function editRender(v) {
+    if (!editEl) return;
+    var c = editCtx || {}, b = TYPE_BADGE[c.ext] || [String(c.ext || '').toUpperCase().slice(0, 4), 't-etc'];
+    var h = '<div class="dvs-title">✏️ PC에서 편집하기</div>' +
+      '<div class="dve-file"><span class="dv-tbadge big ' + b[1] + '">' + esc(b[0]) + '</span>' +
+      '<span class="dve-fname">' + esc(c.name || '문서') + '</span></div>' + editStepsHtml(v.step || 1);
+    h += '<div class="dve-status ' + (v.tone || '') + '">' +
+      (v.icon ? '<span class="dve-ic">' + v.icon + '</span>' : (v.spin ? '<span class="dve-spin"></span>' : '')) +
+      '<div class="dve-msg"><div class="dve-big">' + esc(v.msg || '') + '</div>' + (v.sub ? '<div class="dve-sub">' + esc(v.sub) + '</div>' : '') +
+      (v.pct != null ? '<div class="dve-bar"><i style="width:' + Math.max(3, Math.min(100, v.pct)) + '%"></i></div>' : '') + '</div></div>';
+    if (v.tip) h += '<div class="dve-tip">' + v.tip + '</div>';
+    (v.btns || []).forEach(function (x) { h += '<button class="' + (x.cls || 'dvs-big') + '" type="button" data-eact="' + x.act + '">' + esc(x.label) + '</button>'; });
+    h += '<button class="dvs-close" type="button" data-eact="close">' + esc(v.closeLabel || '닫기') + '</button>';
+    $('dvePanel').innerHTML = h;
+  }
+  function remoteBtn(primary) { return { act: 'remote', label: isNativeApp() ? '🖥️ 원격 화면 열기' : '🖥️ 원격 데스크톱 열기', cls: primary ? 'dvs-big' : 'dvs-big dve-2nd' }; }
+  function doneBtn(primary) { return { act: 'finish', label: '✅ 다 됐어요 (고친 문서 받기)', cls: primary ? 'dvs-big dve-ok' : 'dvs-big dve-ok dve-2nd' }; }
+  function remoteTip() {
+    var prog = esc(EDITABLE[(editCtx || {}).ext] || '프로그램');
+    return isNativeApp()
+      ? '원격 화면에서 고치신 뒤 <b>' + prog + '의 [저장](Ctrl+S)</b>을 꼭 누르고, 이 앱으로 돌아와 <b>[다 됐어요]</b>를 눌러 주세요.'
+      : '지금 이 화면이 <b>24시간 PC</b>라면 ' + prog + ' 창이 이미 맨 앞에 떠 있어요. 다른 PC라면 [원격 데스크톱 열기]로 들어가세요. 고친 뒤 <b>[저장]</b> → <b>[다 됐어요]</b>.';
+  }
+  function editShowOpened(e) {
+    var prog = e.program || EDITABLE[(editCtx || {}).ext] || '프로그램';
+    var locked = e.window === 'locked' || e.state === 'opened_locked';
+    var flash = e.window === 'flash';
+    editRender({ step: 3, icon: locked ? '🔒' : '✓', tone: (locked || flash) ? 'warn' : 'ok',
+      msg: locked ? 'PC에서 ' + prog + '로 열었어요 — PC 화면이 잠겨 있어요' : ('PC에서 ' + prog + '로 열었어요' + (e.reused ? ' (이미 열려 있던 창)' : '')),
+      sub: locked ? '원격으로 들어가 잠금을 푸시면 ' + prog + ' 창이 맨 앞에 떠 있어요.'
+         : (flash ? prog + ' 창을 맨 앞으로 올리지 못했어요. 원격 화면 아래 작업 표시줄에서 깜박이는 ' + prog + '를 눌러 주세요.'
+                  : '창을 화면 가득 키워 맨 앞에 띄워 두었어요.'),
+      tip: remoteTip(), btns: [remoteBtn(true), doneBtn(false)] });
+  }
+  function openEdit() {
+    var t = activeTab();
+    if (!editEl || !t || liveTabId !== t.id) { toast('문서가 다 열린 뒤에 눌러 주세요.'); return; }
+    closeSheet(); closeAsk();
+    editCtx = { tab: t, name: t.name, ext: t.ext || extOf(t.name), seq: ++editSeq };
+    editEl.classList.add('on');
+    var s = editSessGet(t);
+    if (s && s.id && (s.phase === 'opened' || s.phase === 'finishing' || s.phase === 'not_saved' || s.phase === 'opening')) {
+      editCtx.sess = s;
+      if (s.phase === 'finishing' && s.fid) { editCtx.step = 4; editPoll(s.fid, s.tok, 'finish'); return; }
+      if (s.phase === 'opening') { editPoll(s.id, s.tok, 'open'); return; }
+      editShowOpened(s.edit || {}); return;
+    }
+    editShowStart();
+  }
+  function editShowStart() {
+    var c = editCtx, prog = EDITABLE[c.ext], src = editSrcOf(c.tab);
+    if (!src) {
+      editRender({ step: 1, icon: '📁', tone: 'warn', msg: '이 문서의 원본 파일이 폰에 없어요',
+        sub: '「최근 연 문서」에는 보기용 사본만 남아 있어요. 같은 파일을 한 번 더 골라 주시면 PC로 보내 ' + prog + '로 열어 드려요.',
+        btns: [{ act: 'pick', label: '📁 원본 파일 고르기' }] });
+      return;
+    }
+    editRender({ step: 1, icon: '🖥️', msg: 'PC의 ' + prog + '로 열어 드릴까요?',
+      sub: src.how + '. 그다음 원격 화면으로 PC를 보면서 키보드·마우스로 고치시면 돼요.',
+      tip: '고친 파일은 PC의 「SmartEdit」 폴더에 남고, 처음 원본도 1부 따로 보관해요.',
+      btns: [{ act: 'start', label: '✏️ PC에서 ' + prog + '로 열기' }] });
+  }
+  function editFail(msg, sub, retryAct) {
+    editRender({ step: (editCtx && editCtx.step) || 1, icon: '⚠️', tone: 'err', msg: msg, sub: sub || '',
+      btns: retryAct ? [{ act: retryAct, label: '🔄 다시 시도' }] : [] });
+  }
+  function friendlyErr(e) {
+    if (e && e.badpass) return ['연동 암호가 필요해요', '연동 암호를 넣으신 뒤 다시 눌러 주세요.'];
+    if (e && e.notready) return ['PC 편집 기능이 서버에 아직 준비되지 않았어요', '소장에게 알려 주세요(서버 설정 한 가지가 남았어요).'];
+    return ['PC로 보내지 못했어요', (e && (e.friendly || e.message)) || '인터넷 연결을 확인하고 다시 눌러 주세요.'];
+  }
+  function editStart() {
+    var c = editCtx; if (!c || !global.OfficeBridge) return;
+    var t = c.tab, src = editSrcOf(t); if (!src) { editShowStart(); return; }
+    var seq = c.seq, id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    c.step = 1;
+    editRender({ step: 1, spin: true, msg: src.file ? 'PC로 보내는 중…' : 'PC에 요청하는 중…', sub: c.name, pct: src.file ? 2 : null });
+    OfficeBridge.sendEditOpen({ id: id, token: tok, title: ('편집: ' + c.name).slice(0, 60) }, src, {
+      onBytes: function (sent, total) {
+        if (seq !== editSeq) return;
+        var p = 100 * sent / (total || 1);
+        editRender({ step: 1, spin: true, msg: 'PC로 보내는 중… ' + Math.floor(p) + '%', sub: fmtSize(sent) + ' / ' + fmtSize(total), pct: p });
+      }
+    }).then(function () {
+      editSessPut(t, { id: id, tok: tok, phase: 'opening', name: c.name, ext: c.ext });
+      if (seq === editSeq) editPoll(id, tok, 'open');
+    }, function (e) {
+      if (seq !== editSeq) return;
+      var f = friendlyErr(e); editFail(f[0], f[1], 'start');
+    });
+  }
+  function editFinish() {
+    var c = editCtx; if (!c) return;
+    var s = c.sess || editSessGet(c.tab); if (!s || !s.id) { editShowStart(); return; }
+    var fid = OfficeBridge.uuid(), seq = c.seq;
+    c.step = 4;
+    editRender({ step: 4, spin: true, msg: 'PC에서 저장본을 확인하는 중…', sub: c.name });
+    OfficeBridge.sendEditFinish({ id: fid, token: s.tok, title: ('다 됐어요: ' + c.name).slice(0, 60) }, s.id).then(function () {
+      s.phase = 'finishing'; s.fid = fid; editSessPut(c.tab, s); c.sess = s;
+      if (seq === editSeq) editPoll(fid, s.tok, 'finish');
+    }, function (e) {
+      if (seq !== editSeq) return;
+      var f = friendlyErr(e); editFail(f[0], f[1], 'finish');
+    });
+  }
+  // PC 응답 기다리기(2초마다). 3분 넘게 pending 이면 「PC가 응답하지 않아요」 + [다시 시도](같은 요청을 이어서 기다림).
+  function editPoll(rid, tok, mode) {
+    var c = editCtx, seq = c && c.seq, t0 = Date.now(), netFail = 0;
+    if (editPollT) { clearTimeout(editPollT); editPollT = null; }
+    (function loop() {
+      if (!editCtx || seq !== editSeq || !editEl.classList.contains('on')) return;
+      OfficeBridge.poll(rid, tok).then(function (res) {
+        if (!editCtx || seq !== editSeq) return;
+        netFail = 0;
+        var st = res && res.status, w = Date.now() - t0;
+        if (st === 'rejected') { editFail('PC가 요청을 거절했어요', '연동 암호 확인이 되지 않았어요. 연동 암호를 다시 넣고 시도해 주세요.', mode === 'open' ? 'start' : 'finish'); return; }
+        if (st === 'done') { editDone(res, mode); return; }
+        var pm = (res && res.progress_msg) || '';
+        if (mode === 'open') {
+          editRender({ step: 2, spin: true, msg: (pm || 'PC가 요청을 받는 중') + '…',
+            sub: w > 30000 ? 'PC가 조금 늦어요. PC가 켜져 있는지 확인해 주세요. (' + fmtDur(w) + ')' : c.name });
+        } else {
+          editRender({ step: 4, spin: true, msg: (pm || 'PC에서 저장본을 확인하는 중') + '…', sub: c.name });
+        }
+        if (st !== 'processing' && w > 3 * 60 * 1000) {
+          c.lastPoll = { rid: rid, tok: tok, mode: mode };
+          editFail('PC가 3분 동안 응답하지 않아요', 'PC가 꺼져 있거나 편집 도우미가 멈췄을 수 있어요. 요청은 PC에 남아 있어요.', 'repoll');
+          return;
+        }
+        editPollT = setTimeout(loop, 2000);
+      }, function () {
+        if (!editCtx || seq !== editSeq) return;
+        if (!netFail) netFail = Date.now();
+        if (Date.now() - netFail > 120000) {
+          c.lastPoll = { rid: rid, tok: tok, mode: mode };
+          editFail('인터넷 연결이 끊겨 PC 소식을 받지 못했어요', '연결을 확인한 뒤 [다시 시도]를 눌러 주세요.', 'repoll');
+          return;
+        }
+        editPollT = setTimeout(loop, 3000);
+      });
+    })();
+  }
+  function editDone(res, mode) {
+    var c = editCtx, t = c.tab, e = OfficeBridge.editResultFrom(res) || {};
+    var s = editSessGet(t) || c.sess || {};
+    if (mode === 'open') {
+      if (e.state === 'opened' || e.state === 'opened_locked') {
+        s.phase = 'opened'; s.edit = e; editSessPut(t, s); c.sess = s; c.step = 3;
+        editShowOpened(e); updateEditBtn();
+        if (e.window === 'locked' || e.window === 'flash') {   // 잠금이 풀려 PC가 창을 앞으로 올리면 글을 바꾼다(최대 15분)
+          var seq = c.seq, n = 0;
+          (function watch() {
+            if (!editCtx || seq !== editSeq || !editEl.classList.contains('on') || ++n > 300) return;
+            OfficeBridge.poll(s.id, s.tok).then(function (r2) {
+              var e2 = OfficeBridge.editResultFrom(r2) || {};
+              if (e2.window === 'front') { s.edit = e2; editSessPut(t, s); if (seq === editSeq && editCtx && editCtx.step === 3) editShowOpened(e2); return; }
+              setTimeout(watch, 3000);
+            }, function () { setTimeout(watch, 5000); });
+          })();
+        }
+        return;
+      }
+      editSessDel(t); updateEditBtn();
+      editFail('PC에서 열지 못했어요', e.msg || (res && res.error) || '', 'start');
+      return;
+    }
+    if (e.state === 'returned') {
+      var doc = (res.summary_json || {}).doc || null;
+      s.phase = 'returned'; s.result = { file: e.file || null, doc: doc, chat: !!e.chat }; editSessPut(t, s); updateEditBtn();
+      c.result = s.result; c.step = 5;
+      editRender({ step: 5, icon: '🎉', tone: 'ok', msg: '고친 문서를 받았어요',
+        sub: (e.msg ? e.msg + ' ' : '') + (e.pages ? e.pages + '쪽 · ' : '') + 'PC에도 저장본이 남아 있어요' + (e.chat ? ' · 채팅에도 보내 드렸어요' : '') + '.',
+        btns: [].concat(doc && doc.pdf_url ? [{ act: 'viewret', label: '📄 고친 문서 보기' }] : [])
+                .concat(e.file && e.file.url ? [{ act: 'dlret', label: '⬇ 파일 받기 (' + (e.file.name || '') + ')', cls: 'dvs-big dve-2nd' }] : [])
+                .concat([{ act: 'again', label: '✏️ 이어서 더 고치기', cls: 'dvs-big dve-2nd' }]) });
+      return;
+    }
+    if (e.state === 'not_saved') {
+      s.phase = 'not_saved'; editSessPut(t, s); c.sess = s; c.step = 3;
+      editRender({ step: 3, icon: '💾', tone: 'warn', msg: 'PC에서 아직 저장 안 했어요', sub: e.msg || '',
+        tip: remoteTip(), btns: [remoteBtn(false), doneBtn(true)] });
+      return;
+    }
+    if (e.state === 'no_session') { editSessDel(t); updateEditBtn(); editFail('PC에 이 편집 기록이 없어요', e.msg || '처음부터 다시 [PC에서 열기]를 눌러 주세요.', 'start'); return; }
+    s.phase = 'opened'; editSessPut(t, s);
+    editFail('고친 문서를 받지 못했어요', e.msg || (res && res.error) || '', 'finish');
+  }
+  function editOpenRemote() {
+    if (!isNativeApp()) { try { global.open(CRD_WEB, '_blank', 'noopener'); } catch (e) { location.href = CRD_WEB; } return; }
+    var EA = global.Capacitor.Plugins && global.Capacitor.Plugins.ExternalApp;
+    if (!EA || typeof EA.launchApp !== 'function') { toast('앱을 새 버전으로 바꾸면 원격 화면을 바로 열 수 있어요. 지금은 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.'); return; }
+    EA.launchApp({ pkg: CRD_PKG }).then(function (r) {
+      if (r && r.opened) return;
+      if (r && r.reason === 'not_installed') {
+        askThen('크롬 원격 데스크톱 앱이 없어요', '플레이 스토어에서 「Chrome 원격 데스크톱」(무료, 구글)을 설치해 주세요. 설치 후 대표님 구글 계정으로 로그인하면 24시간 PC가 목록에 보여요.', '스토어 열기', function () {
+          EA.openStore({ pkg: CRD_PKG }).catch(function () {});
+        });
+        return;
+      }
+      toast('원격 화면 앱을 열지 못했어요. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
+    }, function () { toast('원격 화면 앱을 열지 못했어요.'); });
+  }
+  function editViewReturned() {
+    var c = editCtx, r = c && c.result; if (!r || !r.doc || !r.doc.pdf_url) return;
+    var nm = askBase(c.name) + ' (고친 문서).pdf';
+    closeEdit();
+    viewChatAttachment({ url: r.doc.pdf_url, name: nm, mime: 'application/pdf' });
+  }
+  function closeEdit() {
+    if (editPollT) { clearTimeout(editPollT); editPollT = null; }
+    editSeq++;
+    if (editEl) editEl.classList.remove('on');
+    editCtx = null;
+  }
+  function onEditAct(act) {
+    var c = editCtx; if (!c) return;
+    if (act === 'close') { closeEdit(); return; }
+    if (act === 'start') { editStart(); return; }
+    if (act === 'pick') { if (editPickInput) editPickInput.click(); return; }
+    if (act === 'remote') { editOpenRemote(); return; }
+    if (act === 'finish') { editFinish(); return; }
+    if (act === 'repoll') { var lp = c.lastPoll; if (lp) editPoll(lp.rid, lp.tok, lp.mode); return; }
+    if (act === 'viewret') { editViewReturned(); return; }
+    if (act === 'dlret') { var f = c.result && c.result.file; if (f && editOpts && editOpts.download) editOpts.download(f.url, f.name); return; }
+    if (act === 'again') {
+      var s = editSessGet(c.tab);
+      if (s && s.id) { s.phase = 'opened'; editSessPut(c.tab, s); c.sess = s; c.step = 3; editShowOpened(s.edit || {}); } else editShowStart();
+    }
+  }
+  function initEdit() {
+    editEl = $('dvEdit'); editBtn = $('dvEditBtn');
+    if (editBtn) editBtn.onclick = openEdit;
+    if (!editEl) return;
+    editEl.addEventListener('click', function (e) {
+      if (e.target === editEl) { closeEdit(); return; }
+      var b = e.target.closest ? e.target.closest('[data-eact]') : null;
+      if (b) onEditAct(b.getAttribute('data-eact'));
+    });
+    editPickInput = document.createElement('input'); editPickInput.type = 'file'; editPickInput.accept = '*/*'; editPickInput.style.display = 'none';
+    document.body.appendChild(editPickInput);
+    editPickInput.addEventListener('change', function () {
+      var f = this.files && this.files[0]; this.value = '';
+      var c = editCtx; if (!f || !c) return;
+      var ext = extOf(f.name);
+      if (!EDITABLE[ext]) { toast('한글·워드·엑셀·PPT 파일만 PC에서 편집으로 열 수 있어요.'); return; }
+      c.tab.orig = f; c.tab.pcPath = null; c.tab.srcFull = null; c.tab.ext = ext; c.ext = ext; c.name = f.name;
+      editShowStart();
+    });
+  }
+
   // ============ 진입점 ============
   function handleLocalFile(file) {
     if (!file) return;
@@ -1370,6 +1685,7 @@
     if (!att || !att.url) { toast('열 수 있는 파일이 아니에요.'); return; }
     beginOpen();                                                    // v8.0: 보던 문서는 탭으로 남긴다
     opToken++; var op = opToken; var name = att.name || '문서', src = srcBase(att.url);
+    curOrig = null; curSrcFull = att.url; curPcPath = att.pc_path || null;   // O-0171: 편집하기 때 PC가 이 주소·경로에서 원본을 받는다
     showViewer(); setViewMode('pdf'); fnameLabel.textContent = name;
     showLoading('문서를 여는 중…', '문서를 불러오고 있어요.'); setProgress(15);
     DocStore.findBySrc(src).then(function (meta) {
@@ -1381,7 +1697,7 @@
         curSrcUrl = src; openStored(meta, op, null); return;
       }
       fetch(att.url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.blob(); })
-        .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f, { srcUrl: src }); })
+        .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f, { srcUrl: src, srcFull: att.url, pcPath: att.pc_path || null }); })
         .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했어요.', (e && e.message) || String(e)); });
     });
   }
@@ -1483,6 +1799,8 @@
     initTabs();
     if (typeof opts.ask === 'function') askHandler = opts.ask;      // v8.1(O-0154) 케이에게 묻기 — 보내기는 app.js
     initAsk();
+    if (opts.edit) editOpts = opts.edit;                            // O-0171 PC에서 편집하기 — {download(url,name)}
+    initEdit();
 
     // 야간 초기화
     (function () { var on = false; try { on = localStorage.getItem(DARK_STORE) === '1'; } catch (e) {} applyDark(on); })();
@@ -1592,6 +1910,7 @@
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
+    editState: function () { return { ctx: editCtx ? { name: editCtx.name, ext: editCtx.ext, step: editCtx.step || 0 } : null, sessions: editsLoad() }; },   // O-0171 점검용
     openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
     _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관

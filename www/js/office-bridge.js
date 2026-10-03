@@ -243,7 +243,7 @@
    *  · 서버에 RPC 가 없으면(404) 예전 길로 자동 폴백.
    *  · 암호가 틀리면 'smartBadPass' 이벤트 → app.js 가 연동 암호 창을 띄운다.
    *  · audio·doc·locker 는 그대로(케이 지시 경로 아님). 반환 규약은 예전과 같다: true | 'exists' | 오류 던짐. */
-  var PROTECTED_KINDS = { chat: 1, photo: 1, video: 1, search: 1, idea: 1 };
+  var PROTECTED_KINDS = { chat: 1, photo: 1, video: 1, search: 1, idea: 1, edit: 1 };   // O-0171: edit(PC 편집 열기)도 연동 암호 확인 RPC로만
   function _syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
   function _passErr(msg, need) {
     var e = new Error(msg); e.badpass = true; e.friendly = msg;
@@ -262,7 +262,9 @@
         if (r.status === 401 || r.status === 403 || /BAD_PASSCODE/.test(t || '')) {
           throw _passErr('연동 암호가 맞지 않아요 — 연동 암호를 다시 넣어 주세요.', false);
         }
-        throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
+        var ex = new Error('메모 등록 실패(HTTP ' + r.status + ')');
+        if (/BAD_KIND/.test(t || '')) ex.notready = true;   // O-0171: 서버가 아직 이 종류(edit)를 받지 않음(SQL 미적용)
+        throw ex;
       });
     });
   }
@@ -979,7 +981,8 @@
     var sj = res && res.summary_json;
     if (sj && sj.attachments && sj.attachments.length) {
       sj.attachments.forEach(function (a) {
-        if (a && a.url) out.push({ name: a.name || '파일', url: a.url, mime: a.mime || '', size: a.size || 0, kind: a.kind || '' });
+        if (a && a.url) out.push({ name: a.name || '파일', url: a.url, mime: a.mime || '', size: a.size || 0, kind: a.kind || '',
+                                   pc_path: a.pc_path || null });   // O-0171: PC에서 온 파일이면 그 경로(편집 때 PC 원본을 바로 연다)
       });
     }
     // 기존 문서 생성 필드도 첨부로 흡수(있을 때만)
@@ -1476,6 +1479,59 @@
       .then(function (a) { return Array.isArray(a) ? a : []; });
   }
 
+  /* ---------- O-0171 ✏️ PC에서 편집하기 (kind='edit') ----------
+   * 문서 뷰어 [편집하기] → PC가 그 파일을 진짜 프로그램(한글·워드·엑셀·PPT)으로 열고 창을 최대화·맨 앞으로.
+   * 대표님은 크롬 원격 데스크톱으로 그 화면을 보며 고치고 [저장] → 앱 [다 됐어요] → PC가 저장본을 돌려준다.
+   * ▶ 행은 반드시 연동 암호 확인 RPC(submit_memo)로만 만든다(PROTECTED_KINDS.edit) — PC 워커(edit_worker.py)는
+   *   서버의 「확인됨」 표시(sender_verified_at)가 없는 행을 거절한다. 공개 키로 직접 넣는 길은 서버가 막는다.
+   * ▶ 원본 고르기(src): {pcPath,name,ext}  PC 파일(케이 첨부에 pc_path 가 있을 때) — 올리기 없음
+   *                     {url,name,ext}     사무소 서버 파일(케이 첨부 서명주소·공유함 공개주소) — 올리기 없음
+   *                     {file,name,ext}    폰에 있는 원본 — 문서 뷰어와 같은 조각 업로드(voice-audio {id}/src.ext | part_k)
+   * ▶ 결과(poll → summary_json.edit): open  {state:'opened'|'opened_locked'|'failed', program, name, window:'front'|'flash'|'locked'}
+   *                                    finish {state:'returned'|'not_saved'|'failed'|'no_session', file:{name,url,size}, msg}
+   *                                    + summary_json.doc(문서 뷰어용 PDF — docResultFrom 그대로) */
+  function _insertEditRow(memo, meta) {
+    return _insertRow({ id: memo.id, title: memo.title || '편집', status: 'pending', kind: 'edit', note: null,
+                        client_token: memo.token, meta: meta });
+  }
+  function sendEditOpen(memo, src, opts) {
+    opts = opts || {}; src = src || {};
+    var base = { app: 'voice-memo-test', from: 'phone', action: 'open' };
+    if (src.pcPath) { base.source = { type: 'pc_path', path: src.pcPath, name: src.name || '', ext: src.ext || '' }; return _insertEditRow(memo, base); }
+    if (src.url) { base.source = { type: 'url', url: src.url, name: src.name || '', ext: src.ext || '' }; return _insertEditRow(memo, base); }
+    var file = src.file;
+    if (!file) return Promise.reject(new Error('보낼 원본 파일이 없어요.'));
+    if ((file.size || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));
+    var ext = (src.ext || extForFile(file, 'file')).toLowerCase();
+    var size = file.size || 0, chunked = size > CHUNK_SIZE, total = chunked ? Math.max(1, Math.ceil(size / CHUNK_SIZE)) : 1;
+    var name = src.name || file.name || ('문서.' + ext);
+    var ctl = opts.ctl || { cancelled: false }, k = 0, sentBase = 0;
+    function keyOf(i) { return chunked ? (memo.id + '/part_' + i + '.' + ext) : (memo.id + '/src.' + ext); }
+    function step() {
+      if (ctl.cancelled) return Promise.reject(voiceErr('cancelled', {}));
+      if (k >= total) return Promise.resolve();
+      var start = k * CHUNK_SIZE, end = Math.min(size, (k + 1) * CHUNK_SIZE);
+      var info = { name: name + (chunked ? ' (조각 ' + (k + 1) + '/' + total + ')' : ''), size: end - start };
+      return _uploadDocPart(keyOf(k), file.slice(start, end), info, function (sent) {
+        if (opts.onBytes) opts.onBytes(Math.min(size, sentBase + sent), size);
+      }, ctl, null).then(function () { sentBase = end; k++; return step(); });
+    }
+    return step().then(function () {
+      var f = { ext: ext, name: name, size: size, mime: file.type || '' };
+      if (!chunked) f.key = keyOf(0);
+      base.source = chunked ? { type: 'upload', file: f, chunked: true, total: total, ext: ext } : { type: 'upload', file: f };
+      return _insertEditRow(memo, base);
+    });
+  }
+  // [다 됐어요] — token 은 열기 때와 같은 것(PC가 같은 기기인지 대조)
+  function sendEditFinish(memo, editId) {
+    return _insertEditRow(memo, { app: 'voice-memo-test', from: 'phone', action: 'finish', edit_id: editId });
+  }
+  function editResultFrom(res) {
+    var e = res && res.summary_json && res.summary_json.edit;
+    return e || null;
+  }
+
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
@@ -1483,6 +1539,7 @@
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendChatDocAsk: sendChatDocAsk,     // v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기]
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
+    sendEditOpen: sendEditOpen, sendEditFinish: sendEditFinish, editResultFrom: editResultFrom,   // O-0171 PC에서 편집하기
     fmtSize: fmtSize,                   // v6.9: 문서 뷰어 진행 안내(○MB / ○MB)
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,
     listChatPage: listChatPage,         // v7.0: 대화+방송 한 쪽씩(개수 상한 없음, 이전 대화 더 보기)
