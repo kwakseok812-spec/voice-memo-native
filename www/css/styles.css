@@ -1076,6 +1076,20 @@ html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(
 @keyframes kstWave{0%,100%{height:6px}50%{height:20px}}
 @keyframes kstDot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
 @media (prefers-reduced-motion:reduce){.kst-ic i{animation:none !important;height:12px}}
+/* O-0177 ④ 무대 탭으로 말 끊기 — 무대 전체가 누르는 자리(손가락 모양·누름 느낌). 안내 알약은 케이가 말하거나 답을 만드는 중에만.
+   ② 받아쓰기 실시간 글자 — 상태 줄 아래 한두 줄(길면 앞을 흐리고 끝부분이 보이게). 비어 있으면 자리 차지 안 함. */
+#chatView.convo-on .kstage{cursor:pointer;-webkit-tap-highlight-color:transparent}
+#chatView.convo-on .kstage:active .kstage-photo{filter:brightness(.94)}
+.kstage-tap{display:none;position:absolute;left:50%;bottom:12px;transform:translateX(-50%);max-width:calc(100% - 24px);
+  padding:6px 13px;border-radius:999px;background:rgba(15,18,40,.62);color:#fff;font-size:12.5px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.kstage[data-state="talk"] .kstage-tap,.kstage[data-state="think"] .kstage-tap{display:block}
+.kstage.notap .kstage-tap{display:none !important}
+.kstage-live{font-size:15px;font-weight:700;line-height:1.4;color:var(--text);text-align:center;padding:0 16px 10px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all}
+.kstage-live:empty{display:none}
+.kstage-live.sent{color:var(--muted)}
+.kstage-live.sent::before{content:'보냄 · ';font-weight:800}
 /* 키보드가 올라와 화면이 낮아지면(입력줄에 글을 쓸 때) 무대를 줄여 대화 글·입력줄 자리를 남긴다 */
 @media (max-height:600px){.kstage-photo{height:clamp(96px,22vh,180px);height:clamp(96px,22dvh,180px)}.kstage-photo .kface .kf-img,.kstage-photo .kface .kf-vid{object-position:50% 44%}.kstage-status{min-height:40px;padding:4px 12px}}
 

@@ -1451,7 +1451,27 @@
   // 핸즈프리: 무음 자동 감지 → 자동 전송 → (음성)답 → 재생 끝나면 자동 다시 듣기
   var convoOn = false, convoMiss = 0, ampTimer = null, ampBusy = false, nextListenArmed = false;
   var lsnSpoke = false, lsnSpeechMs = 0, lsnStartTs = 0, lsnLastSound = 0, lsnPendingSend = false, lsnReason = '';
-  var HF = { THRESH: 0.05, POLL: 160, SILENCE_MS: 1600, NOSPEECH_MS: 7000, MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3 };
+  // O-0177 ③ 말 끝 기다림(녹음→PC 전사 경로 = 받아쓰기 미지원·PC판·받아쓰기 실패 때): 1600 → 900ms + 주변 소음 적응.
+  //   · 시작 0.5초(CALIB_MS) 동안 진폭을 재서 그 방의 잡음 수준을 잡고, 말 판정선 = max(THRESH, 잡음×NOISE_MUL + NOISE_ADD)(상한 THRESH_MAX).
+  //     조용한 방은 예전 0.05 그대로, 시끄러운 곳은 판정선이 올라가 잡음을 말로 오인해 끝나지 않는 일을 막는다.
+  //     ⚠️ 측정 중 이미 말을 시작하셨으면(진폭이 THRESH×4 이상) 그 값은 잡음으로 치지 않는다.
+  //   · 말한 지 3초가 넘으면 SILENCE_LONG_MS(1100)로 — 긴 말 중간에 생각하며 잠깐 쉬어도 덜 끊기게. 짧은 대답은 900ms에 바로 보냄.
+  //   · POLL 160 → 100ms: 끝 판정이 최대 0.16초 늦던 것을 0.1초로. MIN_SPEECH 400ms(헛기침·잡음 한 번으로 말 시작 판정 안 함) 유지.
+  //   · 근거·시험: _jobs_output\20261003_o0177_voice_speed_bargein\vad_sim_test.js (합성 진폭 6가지 경우 시험)
+  var HF = { THRESH: 0.05, POLL: 100, SILENCE_MS: 900, SILENCE_LONG_MS: 1100, LONG_AFTER_MS: 3000, NOSPEECH_MS: 7000,
+             MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3,
+             CALIB_MS: 500, NOISE_MUL: 1.8, NOISE_ADD: 0.02, THRESH_MAX: 0.3 };   // ⚠️ 시험 파일(vad_sim_test.js)의 NEW 와 같은 값
+  var HF_OLD = { THRESH: 0.05, POLL: 160, SILENCE_MS: 1600, NOSPEECH_MS: 7000, MAX_TURN_MS: 30000, MIN_SPEECH_MS: 400, MAX_MISS: 3 };
+  /* ---- O-0177 음성 대화 속도 개선 스위치(하나씩 끌 수 있음 — false 면 그 부분만 예전 그대로) ----
+   *  STREAM    ① 케이 답을 첫 문장부터 조각 목소리로(meta.vstream=1 요청). PC 스위치(o0177_switch.json voice_stream)가 꺼져 있으면
+   *              PC가 예전처럼 한 덩어리 voice_url 로 답하므로 앱도 자동으로 예전처럼 재생한다.
+   *  DEVICE_STT ② 폰에서 바로 받아쓰기(안드로이드 SpeechRecognizer, 기기 내 인식 우선) → 글자로 보냄. 미지원·실패·PC판이면 녹음 경로.
+   *  ADAPT_VAD ③ 위 HF(900ms+소음 적응). false 면 HF_OLD(1600ms 고정) 그대로.
+   *  TAP_CUT   ④ 케이가 말하는(또는 답을 만드는) 중 무대(케이 얼굴)를 누르면 즉시 멈추고 듣기. 목소리로 끼어들기는 만들지 않음(대표님 결정).
+   *  POLL_FAST_MS  음성 대화로 답을 기다리는 동안 확인 간격(평소 2500ms). 서버 호출은 get_voice_memo(연동 토큰) 그대로. */
+  var VC = { STREAM: true, DEVICE_STT: true, ADAPT_VAD: true, TAP_CUT: true, POLL_FAST_MS: 600,
+             STT_END_MS: 900, STT_END_LONG_MS: 1200, STT_NOSPEECH_MS: 7000, STT_MAX_MS: 30000, STT_FINAL_WAIT_MS: 1200 };
+  if (!VC.ADAPT_VAD) HF = HF_OLD;
 
   /* ---- v5.8 「오퍼스 5.5」 1회 지정 ----
    * 대표님 지시(2026-09-25): "중요 작업을 지시할 경우에만 오퍼스를 체크해서 진행하겠다."
@@ -1502,7 +1522,15 @@
         ['ended', 'pause', 'error', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (window.KChar) KChar.setTalking(false); }); });
         kaiAudio.addEventListener('ended', function () {
           if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
+          if (vqHasMore()) { vqPump(); return; }  // O-0177 ①: 다음 목소리 조각이 이미 와 있으면 곧장 이어서
+          if (convoOn && vqWaiting()) { setConvoStatus('케이가 답하는 중…'); return; }   // 다음 조각을 아직 만드는 중
           if (convoOn) scheduleNextListen(350);   // 케이 목소리 끝 → 다음 말 듣기(연속 대화)
+        });
+        // O-0177: 조각 하나를 못 읽어도(주소 만료·네트워크) 멈추지 않고 다음 조각 → 없으면 다음 듣기
+        kaiAudio.addEventListener('error', function () {
+          if (!kaiAudio.src || kaiAudio.src.indexOf('data:') === 0) return;
+          if (vqHasMore()) { setTimeout(vqPump, 120); return; }
+          if (kaiQ.rid && convoOn && !vqWaiting()) scheduleNextListen(500);
         });
       } catch (e) {}
     }
@@ -1526,10 +1554,53 @@
       var p = a.play();
       if (p && p.then) p.catch(function () {
         if (bubbleEl) bubbleEl.classList.remove('playing'); playingBubbleEl = null;
+        if (vqHasMore()) { setTimeout(vqPump, 150); return; }   // O-0177: 조각 하나가 막혀도 다음 조각으로
+        if (convoOn && vqWaiting()) return;
         if (convoOn) scheduleNextListen(900);   // 자동재생 막혀도 대화 루프는 이어감
         else toast('🔊 소리를 들으려면 "듣기"를 눌러 주세요.');
       });
     } catch (e) {}
+  }
+
+  /* ==================== O-0177 ① 케이 목소리 조각 차례 재생 ====================
+   * PC(o0177_switch voice_stream 켜짐)가 케이 답의 첫 문장이 나오는 즉시 목소리 조각을 만들어,
+   * 처리 중인 행의 summary_json.voice_parts=[{u,t}] 에 하나씩 붙인다(get_voice_memo 로 읽음 — 연동 토큰 그대로, 새 통로 없음).
+   * 앱은 음성 대화로 답을 기다리는 동안 VC.POLL_FAST_MS 마다 확인해 새 조각을 차례로 이어 재생한다.
+   * 답이 끝나면(done) 남은 조각까지 이어 재생하고, 다 끝나면 다음 듣기. 조각이 하나도 없으면 예전 voice_url 그대로.
+   * 무대를 눌러 끊으면(TAP_CUT) 그 턴의 남은 조각은 버린다(m.vcut) — 답 글은 그대로 채팅에 남는다. */
+  var kaiQ = { rid: null, list: [], next: 0, pre: [] };
+  function vqHasMore() { return !!(kaiQ.rid && kaiQ.next < kaiQ.list.length && convoOn); }
+  function vqWaiting() {                         // 이 턴의 조각이 더 올 수 있음(아직 답이 안 끝남)
+    if (!kaiQ.rid) return false;
+    var m = findMsg(kaiQ.rid);
+    return !!(m && !m.answered && !m.vcut);
+  }
+  function vqReset(rid) { kaiQ = { rid: rid || null, list: [], next: 0, pre: [] }; }
+  function vqFeed(m, parts) {
+    if (!m || m.vcut || !convoOn || !Array.isArray(parts)) return;
+    if (kaiQ.rid !== m.id) vqReset(m.id);
+    for (var i = kaiQ.list.length; i < parts.length; i++) {
+      var u = parts[i] && (parts[i].u || parts[i].url);
+      if (!u) continue;
+      kaiQ.list.push(u);
+      try { var pa = new Audio(); pa.preload = 'auto'; pa.src = u; kaiQ.pre.push(pa); } catch (e) {}   // 이어 재생 틈을 줄이려 미리 받아 둠
+    }
+    vqPump();
+  }
+  function vqPump() {
+    // ⚠️ kaiPlaying() 은 currentTime>0 을 보므로 막 시작한 조각을 「안 나옴」으로 볼 수 있다 → paused 로 직접 확인(덮어쓰기 방지)
+    if (!vqHasMore() || (kaiAudio && !kaiAudio.paused && !kaiAudio.ended)) return;
+    var u = kaiQ.list[kaiQ.next++];
+    setConvoStatus('케이가 말하는 중…');
+    stageLive('');
+    playKaiVoice(u, null);
+  }
+  function vqCut() {                              // 끊기: 지금 소리 멈추고 남은 조각·앞으로 올 조각 버림
+    chatMsgs.forEach(function (m) { if (m.role === 'me' && !m.answered && m.id && m.token) m.vcut = true; });
+    vqReset(null);
+    try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
+    try { if (window.KChar && KChar.voice && KChar.voice.speaking && KChar.voice.speaking()) KChar.voice.stop(); } catch (e) {}
+    if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
   }
 
   function getChatThread() {
@@ -2433,14 +2504,19 @@
     if (!text && !imgs.length && !blob) return;
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var dispFiles = imgs.map(function (f) { return { name: f.name || '사진', size: f.size || 0, mime: f.type || '', kind: 'image' }; });
+    var dev = !!(o.sttDevice && text && !blob);   // O-0177 ②: 폰 받아쓰기 글자(음성 턴으로 보냄 — PC가 전사를 건너뜀)
+    var vs = !!(VC.STREAM && convoOn && (blob || dev));   // O-0177 ①: 음성 대화 턴만 조각 목소리 요청
     var meMsg = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false,
                   files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob, opus: !!o.opus };
+    if (dev) meMsg.vdev = true;
+    if (vs) meMsg.vs = true;
     chatMsgs.push(meMsg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var note = text;                              // 사진만 있고 말/글이 없으면 기본 질문
     if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주세요.';
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
-    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null }).then(function () {
+    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
+                                      sttDevice: dev, vstream: vs }).then(function () {
       meMsg.uploading = false; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
@@ -2490,7 +2566,7 @@
     if (!chatKStage) return;
     t = String(t || '');
     var st = 'idle', big = '음성 대화', small = '';
-    if (t.indexOf('말하는') !== -1) { st = 'talk'; big = '케이가 말하는 중…'; small = '말이 끝나면 다시 들을게요'; }
+    if (t.indexOf('말하는') !== -1) { st = 'talk'; big = '케이가 말하는 중…'; small = '말이 끝나면 다시 들을게요'; stageLive(''); }
     else if (t.indexOf('답하는') !== -1) { st = 'think'; big = '케이가 답하는 중…'; small = '잠시만 기다려 주세요'; }
     else if (t.indexOf('기다려요') !== -1) { st = 'listen'; big = '듣는 중…'; small = '말씀을 기다리고 있어요'; }
     else if (t) { st = 'listen'; big = '듣는 중…'; small = '말씀이 끝나면 자동으로 보내요'; }
@@ -2521,23 +2597,36 @@
   function stopAmpPoll() { if (ampTimer) { clearInterval(ampTimer); ampTimer = null; } }
   function kaiPlaying() { return !!(kaiAudio && !kaiAudio.paused && !kaiAudio.ended && kaiAudio.currentTime > 0); }
 
+  // O-0177: 「기다리는 답」 중 무대 탭으로 끊은 턴(m.vcut)은 빼고 본다 — 끊은 뒤엔 그 답을 기다리지 않고 새 말을 듣는다.
+  //   (anyAwaiting 은 그대로 둔다: 입력창·안내 등 다른 곳은 예전 그대로)
+  function awaitingLive() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && !m.vcut; }); }
+
   // 한 번의 듣기 turn 시작. auto=연속 대화 루프의 일부인지.
   function startListen(auto) {
-    if (chatRecording) return;
+    if (chatRecording || stt.on) return;
     if (!isOpen(chatView)) return;
-    if (anyAwaiting()) return;                    // 답 기다리는 중엔 안 들음
-    if (kaiPlaying()) return;                     // ⚠️ 케이 목소리 재생 중엔 녹음 안 함(자기 목소리 오인 방지)
+    if (awaitingLive()) return;                   // 답 기다리는 중엔 안 들음
+    if (kaiPlaying() || vqHasMore()) return;      // ⚠️ 케이 목소리 재생 중엔 녹음 안 함(자기 목소리 오인 방지) — O-0177 결정: 이 게이트 유지
     if (isRecording) { toast('먼저 홈의 녹음을 마쳐 주세요.'); if (convoOn) stopConvo(true); return; }
+    // O-0177 ②: 음성 대화 중이고 폰 받아쓰기가 되면 그걸로(실패하면 이 턴부터 아래 녹음 경로)
+    if (auto && convoOn && sttUsable()) { unlockKaiAudio(); sttListen(); return; }
+    startRecListen(auto);
+  }
+  function startRecListen(auto) {
+    if (chatRecording || stt.on) return;
     if (!RecordingModule.isSupported()) { toast('이 기기에서는 음성 입력을 쓸 수 없어요.'); if (convoOn) stopConvo(true); return; }
     unlockKaiAudio();
     var r = ensureChatRecorder();
     lsnSpoke = false; lsnSpeechMs = 0; lsnStartTs = Date.now(); lsnLastSound = Date.now(); lsnPendingSend = false; lsnReason = '';
+    lsnVad = (window.KVad ? KVad.create(HF, lsnStartTs) : null);   // O-0177 ③ 소음 적응 판정(vad.js 없으면 아래 예전 판정)
     chatRecording = true; setChatMic(true);
     if (auto) setConvoStatus('말씀하세요… (끝나면 자동으로 보내요)');
+    stageLive('');
     r.start();
     stopAmpPoll();
     ampTimer = setInterval(pollAmp, HF.POLL);
   }
+  var lsnVad = null;
   function pollAmp() {
     if (!chatRecording) { stopAmpPoll(); return; }
     var r = chatRecorder; if (!r || !r.getAmplitude) return;
@@ -2546,12 +2635,147 @@
       ampBusy = false;
       if (!chatRecording) return;
       var now = Date.now();
+      if (lsnVad) {
+        var res = KVad.step(lsnVad, level, now);
+        lsnSpoke = lsnVad.spoke;
+        if (res) endListen(res);
+        return;
+      }
       if (level >= HF.THRESH) { lsnLastSound = now; lsnSpeechMs += HF.POLL; if (lsnSpeechMs >= HF.MIN_SPEECH_MS) lsnSpoke = true; }
       if (lsnSpoke && (now - lsnLastSound) >= HF.SILENCE_MS) { endListen('silence'); return; }
       if (!lsnSpoke && (now - lsnStartTs) >= HF.NOSPEECH_MS) { endListen('nospeech'); return; }
       if ((now - lsnStartTs) >= HF.MAX_TURN_MS) { endListen(lsnSpoke ? 'max' : 'nospeech'); return; }
     }).catch(function () { ampBusy = false; });
   }
+
+  /* ==================== O-0177 ② 폰에서 바로 받아쓰기(KSpeech 네이티브 플러그인) ====================
+   * 말하는 동안 안드로이드 인식기가 부분 결과(글자)를 계속 준다 → 무대 아래에 실시간 표시.
+   * 말 끝: 부분 결과가 STT_END_MS(0.9초, 3초 넘게 말했으면 1.2초) 동안 바뀌지 않으면 인식기에 「마무리」를 시키고
+   *        최종 글자(없으면 마지막 부분 결과)를 기존 글 경로(submit_memo)로 보낸다 — meta.voice+meta.stt='device'(음성 턴, PC 전사 생략).
+   * 폴백: 플러그인 없음(옛 APK·PC판)·「사용 불가」·시작 실패·인식 오류 → 같은 턴을 곧장 녹음→PC 전사 경로로.
+   *       실패가 두 번 쌓이거나 권한 거부면 이번 실행 동안은 받아쓰기를 끄고 녹음 경로만 쓴다(같은 실패를 매번 겪지 않게).
+   * ⚠️ 소리 파일을 만들지 않으므로 서버에 오디오가 올라가지 않는다(지금보다 개인정보 노출이 줄어든다). */
+  var KS = null;
+  try { if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) { KS = null; }
+  var ks = { checked: false, ok: false, onDevice: false, fails: 0, off: false, p: null };
+  var stt = { on: false, text: '', first: 0, last: 0, t0: 0, timer: null, finishing: false, finWait: null };
+  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off); }
+  function ksInit() {
+    if (!VC.DEVICE_STT || !KS) return Promise.resolve(false);
+    if (ks.p) return ks.p;
+    try {
+      KS.addListener('partial', function (e) { sttOnPartial(e && e.text); });
+      KS.addListener('final', function (e) { sttOnFinal(e && e.text); });
+      KS.addListener('error', function (e) { sttOnError(e || {}); });
+    } catch (e) {}
+    ks.p = KS.available().then(function (r) {
+      ks.checked = true; ks.ok = !!(r && r.available); ks.onDevice = !!(r && r.onDevice);
+      return ks.ok;
+    }).catch(function () { ks.checked = true; ks.ok = false; return false; });
+    return ks.p;
+  }
+  function stageLive(t, mode) {
+    var el = $('chatKStageLive'); if (!el) return;
+    t = String(t || '');
+    el.textContent = t;
+    el.className = 'kstage-live' + (mode ? ' ' + mode : '');
+  }
+  function sttListen() {
+    stt = { on: true, text: '', first: 0, last: Date.now(), t0: Date.now(), timer: null, finishing: false, finWait: null };
+    setChatMic(true);
+    setConvoStatus('말씀하세요… (끝나면 자동으로 보내요)');
+    stageLive('');
+    KS.start({ lang: 'ko-KR', partial: true, completeMs: 1500, possiblyMs: 1200 }).catch(function (e) {
+      sttOnError({ reason: (e && e.code) || 'start' });
+    });
+    stt.timer = setInterval(sttTick, 150);
+  }
+  function sttCleanup() {
+    if (stt.timer) { clearInterval(stt.timer); stt.timer = null; }
+    if (stt.finWait) { clearTimeout(stt.finWait); stt.finWait = null; }
+    stt.on = false; stt.finishing = false;
+    setChatMic(false);
+  }
+  function sttTick() {
+    if (!stt.on || stt.finishing) return;
+    var now = Date.now();
+    if (!isOpen(chatView) || document.hidden) {      // 화면을 떠나면 조용히 멈춤(돌아오면 visibilitychange 가 다시 듣기)
+      sttCleanup(); try { KS.cancel(); } catch (e) {}
+      if (convoOn) setConvoStatus('말씀을 기다려요…');
+      return;
+    }
+    var need = (stt.first && now - stt.first >= 3000) ? VC.STT_END_LONG_MS : VC.STT_END_MS;
+    if (stt.text && now - stt.last >= need) { sttFinish(); return; }
+    if (!stt.text && now - stt.t0 >= VC.STT_NOSPEECH_MS) { sttCleanup(); try { KS.cancel(); } catch (e) {} listenMiss('nospeech'); return; }
+    if (now - stt.t0 >= VC.STT_MAX_MS) { sttFinish(); return; }
+  }
+  function sttFinish() {
+    stt.finishing = true;
+    if (stt.timer) { clearInterval(stt.timer); stt.timer = null; }
+    try { KS.stop(); } catch (e) {}
+    stt.finWait = setTimeout(function () { try { KS.cancel(); } catch (e) {} sttDone(stt.text); }, VC.STT_FINAL_WAIT_MS);
+  }
+  function sttOnPartial(t) {
+    if (!stt.on || stt.finishing) return;
+    t = String(t || '').trim();
+    if (!t || t === stt.text) return;
+    stt.text = t; stt.last = Date.now(); if (!stt.first) stt.first = stt.last;
+    stageLive(t);
+  }
+  function sttOnFinal(t) {
+    if (!stt.on) return;
+    sttDone(String(t || '').trim() || stt.text);
+  }
+  function sttOnError(e) {
+    if (!stt.on) return;
+    var why = String(e.reason || '');
+    if (why === 'nospeech' || why === 'nomatch') {    // 말이 없었음(정상) — 들은 게 있으면 그걸 보냄
+      if (stt.text) sttDone(stt.text); else { sttCleanup(); listenMiss('nospeech'); }
+      return;
+    }
+    ks.fails++;
+    if (why === 'permission' || why === 'unavailable' || ks.fails >= 2) ks.off = true;
+    if (stt.text && stt.finishing) { sttDone(stt.text); return; }
+    sttCleanup(); try { KS.cancel(); } catch (x) {}
+    if (convoOn && isOpen(chatView)) startRecListen(true);   // 같은 턴을 녹음 경로로 바로 이어서
+  }
+  function sttDone(text) {
+    if (!stt.on) return;
+    sttCleanup();
+    text = String(text || '').trim();
+    if (!text) { listenMiss('nospeech'); return; }
+    convoMiss = 0; ks.fails = 0;
+    var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
+    if (convoOn) setConvoStatus('케이가 답하는 중…');
+    stageLive(text, 'sent');
+    sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus() });
+  }
+  function listenMiss(reason) {
+    if (convoOn) {
+      convoMiss++;
+      if (convoMiss >= HF.MAX_MISS) { stopConvo(true); toast('말씀이 없어 대화를 멈췄어요. 다시 시작하려면 「음성 대화」를 켜세요.'); }
+      else { setConvoStatus('말씀을 기다려요…'); scheduleNextListen(500); }
+    } else if (reason === 'nospeech') toast('말씀이 안 들렸어요. 다시 눌러 말씀해 주세요.');
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && convoOn && isOpen(chatView) && !stt.on && !chatRecording) scheduleNextListen(500);
+  });
+
+  /* ==================== O-0177 ④ 무대(케이 얼굴) 탭 → 말 끊고 듣기 ====================
+   * 대표님 결정(2026-10-03): 「케이 얼굴 눌러서 내가 다시 말하는 게 낫겠어」 — 목소리로 끼어들기는 만들지 않는다
+   * (케이 재생 중 마이크를 끄는 기존 게이트 그대로). 무대 전체가 누르는 자리.
+   *   · 케이가 말하는 중·답을 만드는 중 → 소리 즉시 멈춤 + 남은 조각 버림 + 「듣고 있어요」 + 바로 듣기.
+   *     PC 쪽 답 만들기는 계속되고, 그 답은 글로 채팅에 남는다(목소리는 안 나옴). 새 말은 다음 턴으로.
+   *   · 이미 듣는 중이면 안내만. */
+  function onStageTap() {
+    if (!VC.TAP_CUT || !convoOn) return;
+    if (stt.on || chatRecording) { toast('듣고 있어요. 말씀하세요.'); return; }
+    vqCut();
+    nextListenArmed = false;
+    toast('듣고 있어요.');
+    startListen(true);
+  }
+  if (chatKStage) { chatKStage.addEventListener('click', onStageTap); if (!VC.TAP_CUT) chatKStage.classList.add('notap'); }
   function endListen(reason) {
     if (!chatRecording) return;
     stopAmpPoll();
@@ -2569,14 +2793,7 @@
       if (convoOn) setConvoStatus('케이가 답하는 중…');
       sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus() });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회
     } else {
-      // 말이 없었음/취소
-      if (convoOn) {
-        convoMiss++;
-        if (convoMiss >= HF.MAX_MISS) { stopConvo(true); toast('말씀이 없어 대화를 멈췄어요. 다시 시작하려면 「음성 대화」를 켜세요.'); }
-        else { setConvoStatus('말씀을 기다려요…'); scheduleNextListen(500); }
-      } else {
-        if (lsnReason === 'nospeech') toast('말씀이 안 들렸어요. 다시 눌러 말씀해 주세요.');
-      }
+      listenMiss(lsnReason);                     // 말이 없었음/취소(O-0177: 받아쓰기 경로와 같은 처리로 묶음)
     }
   }
   function scheduleNextListen(delay) {
@@ -2584,19 +2801,27 @@
     nextListenArmed = true;
     setTimeout(function () {
       nextListenArmed = false;
-      if (convoOn && isOpen(chatView) && !anyAwaiting() && !kaiPlaying()) startListen(true);
+      if (convoOn && isOpen(chatView) && !awaitingLive() && !kaiPlaying() && !vqHasMore()) startListen(true);
     }, delay || 400);
   }
   function startConvo() {
     if (convoOn) return;
     convoOn = true; convoMiss = 0; updateConvoToggle();
+    restartChatReconcile();                       // O-0177: 음성 대화 중엔 답 확인을 빠르게
     toast('음성 대화를 시작해요. 말씀하시면 자동으로 오가요. 끝내려면 다시 누르세요.');
-    if (!anyAwaiting() && !kaiPlaying()) startListen(true);
-    else setConvoStatus('케이가 답하는 중…');
+    // O-0177 ②: 받아쓰기 가능 여부를 먼저 확인(첫 확인만 0.1초 안팎) → 그다음 듣기 시작
+    ksInit().then(function () {
+      if (!convoOn) return;
+      if (!awaitingLive() && !kaiPlaying()) startListen(true);
+      else setConvoStatus('케이가 답하는 중…');
+    });
   }
   function stopConvo(auto) {
     convoOn = false; nextListenArmed = false; convoMiss = 0;
     updateConvoToggle(); stopAmpPoll();
+    restartChatReconcile();                       // O-0177: 확인 간격을 평소(2.5초)로
+    if (stt.on) { sttCleanup(); try { KS.cancel(); } catch (e) {} }   // O-0177 ②
+    vqReset(null); stageLive('');
     if (chatRecording) { chatRecording = false; lsnPendingSend = false; try { chatRecorder.stop(); } catch (e) {} }
     try { if (kaiAudio) kaiAudio.pause(); } catch (e) {}
     setConvoStatus(null);
@@ -2731,9 +2956,11 @@
   function startChatReconcile() {
     if (chatTimer) return;
     reconcileChat();
-    chatTimer = setInterval(reconcileChat, 2500);
+    // O-0177: 음성 대화 중엔 VC.POLL_FAST_MS(0.6초)마다 — 목소리 조각·답을 빨리 받는다. 평소엔 예전 2.5초.
+    chatTimer = setInterval(reconcileChat, (convoOn && VC.POLL_FAST_MS) ? VC.POLL_FAST_MS : 2500);
   }
   function stopChatReconcile() { if (chatTimer) { clearInterval(chatTimer); chatTimer = null; } }
+  function restartChatReconcile() { if (chatTimer) { stopChatReconcile(); startChatReconcile(); } }
   // 대기 중인 질문들의 답을 RPC로 확인해 반영(화면 밖에서도 계속 — 대원칙: 다른 기능과 독립)
   function reconcileChat() {
     var pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
@@ -2766,12 +2993,20 @@
         if (chatMsgs.indexOf(m) === -1) return;    // 사이에 이 질문이 삭제됐으면 답을 붙이지 않음
         if (m.answered || m._doneShown) return;    // 하드 타임아웃 sweep 이 이미 풀었으면 중복 처리 안 함
         if (res && res.status !== 'done') setAwaitProg(m, res);       // v8.4(O-0162) 진행 표시
+        // O-0177 ①: 처리 중에도 목소리 조각이 붙어 있으면 바로 이어 재생(음성 대화 중·끊지 않은 턴만)
+        if (res && res.status !== 'done' && m.vs && res.summary_json && Array.isArray(res.summary_json.voice_parts) &&
+            convoOn && !m.vcut && isOpen(chatView)) {
+          if (m.vin && !m.text && res.transcript) { m.text = String(res.transcript).trim(); saveChatMsgs(); renderChat(); }   // 내 말풍선도 먼저 채움
+          vqFeed(m, res.summary_json.voice_parts);
+        }
         if (res && res.status === 'done') {
           m.answered = true; m._doneShown = true; m.prog = '';
           if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
           var vurl = res.summary_json && res.summary_json.voice_url;   // 케이 목소리(mp3)
+          var vparts = res.summary_json && Array.isArray(res.summary_json.voice_parts) ? res.summary_json.voice_parts : null;   // O-0177 ①
+          if (m.vcut) { vurl = null; vparts = null; }   // O-0177 ④: 무대 탭으로 끊은 턴 — 답은 글로만
           var kmsg = { role: 'k', text: reply, ts: Date.now(), rid: m.id };   // v4.0: 답도 같은 행 id(삭제 시 함께 숨김)
           if (atts.length) kmsg.files = atts;
           if (vurl) kmsg.vurl = vurl;
@@ -2780,7 +3015,10 @@
           setTimeout(pollOrderCards, 1500);          // v5.8: 답이 오면 작업 카드도 곧바로 갱신(PC가 대장에 결과를 막 적은 직후)
           if (isOpen(chatView)) {
             renderChat();
-            if (vurl) {                          // 음성 대화 모드 답 → 즉시 자동재생(끝나면 다음 듣기)
+            if (vparts && vparts.length && convoOn) {   // O-0177 ①: 조각 목소리 — 남은 조각까지 이어 재생, 다 끝나면 다음 듣기
+              vqFeed(m, vparts);
+              if (!(kaiAudio && !kaiAudio.paused && !kaiAudio.ended) && !vqHasMore()) scheduleNextListen(350);
+            } else if (vurl) {                   // 음성 대화 모드 답 → 즉시 자동재생(끝나면 다음 듣기)
               if (convoOn) setConvoStatus('케이가 말하는 중…');
               setTimeout(function () {
                 var ks = chatLog.querySelectorAll('.bubble.k .voiceplay');

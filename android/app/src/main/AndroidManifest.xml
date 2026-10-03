@@ -215,5 +215,9 @@
     <!-- O-0171 PC에서 편집하기: 「크롬 원격 데스크톱」 앱이 설치됐는지 알고 바로 열기(Android 11+ 패키지 가시성). 이 앱 하나만. -->
     <queries>
         <package android:name="com.google.chromeremotedesktop" />
+        <!-- O-0177 폰에서 바로 받아쓰기: Android 11+ 에서 음성 인식 서비스를 찾으려면 이 선언이 있어야 한다(없으면 「사용 불가」로 나와 녹음 경로로 폴백) -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 </manifest>
