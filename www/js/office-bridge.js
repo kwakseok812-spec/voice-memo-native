@@ -230,7 +230,43 @@
       return _storagePost(path, buf, (blob && blob.type) || 'audio/webm', { name: '녹음', size: blob && blob.size });
     });
   }
+  /* ---------- v8.2(O-0158) 발신자 확인 ----------
+   * 케이·claude 지시로 이어지는 행(채팅·사진·영상·명함검색·아이디어)은 공개 키 직접 INSERT 대신
+   * 연동 암호 확인 RPC submit_memo 로 만든다 → 서버가 「확인됨」 표시(sender_verified_at)를 남기고,
+   * PC 워커는 그 표시가 있는 행만 처리한다(전환기간엔 표시 없는 행도 처리·로그만).
+   *  · 이 기기에 연동 암호가 없으면 예전 길(직접 INSERT) — 전환기간 동안만 통한다(마지막 단계 후엔 막혀 암호 창 안내).
+   *  · 서버에 RPC 가 없으면(404) 예전 길로 자동 폴백.
+   *  · 암호가 틀리면 'smartBadPass' 이벤트 → app.js 가 연동 암호 창을 띄운다.
+   *  · audio·doc·locker 는 그대로(케이 지시 경로 아님). 반환 규약은 예전과 같다: true | 'exists' | 오류 던짐. */
+  var PROTECTED_KINDS = { chat: 1, photo: 1, video: 1, search: 1, idea: 1 };
+  function _syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
+  function _passErr(msg, need) {
+    var e = new Error(msg); e.badpass = true; e.friendly = msg;
+    try { global.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: !!need } })); } catch (x) {}
+    return e;
+  }
+  function _submitMemo(body, pass) {
+    return fetch(CONFIG.url + '/rest/v1/rpc/submit_memo', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_row: body, p_pass: pass })
+    }).then(function (r) {
+      if (r.ok) return r.json().then(function (v) { return v === 'exists' ? 'exists' : true; }, function () { return true; });
+      if (r.status === 404) return null;                 // RPC 없음 → 예전 길
+      return r.text().then(function (t) {
+        if (r.status === 401 || r.status === 403 || /BAD_PASSCODE/.test(t || '')) {
+          throw _passErr('연동 암호가 맞지 않아요 — 연동 암호를 다시 넣어 주세요.', false);
+        }
+        throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
+      });
+    });
+  }
   function _insertRow(body) {
+    var pass = (body && PROTECTED_KINDS[body.kind]) ? _syncPass() : '';
+    if (pass) return _submitMemo(body, pass).then(function (res) { return res === null ? _insertRowDirect(body) : res; });
+    return _insertRowDirect(body);
+  }
+  function _insertRowDirect(body) {
     return fetch(CONFIG.url + '/rest/v1/' + CONFIG.table, {
       method: 'POST',
       headers: {
@@ -245,6 +281,10 @@
       //   v7.9: 409 는 'exists'(참 값)로 돌려 "새로 만든 것"과 구분한다 — 긴 녹음 재전송이 제목·자료를 고쳐 넣을 때 쓴다.
       if (r.ok) return true;
       if (r.status === 409) return 'exists';
+      // v8.2(O-0158): 마지막 단계(공개 키 직접 등록 막힘) 뒤 암호 없는 기기 → 연동 암호 창 안내
+      if ((r.status === 401 || r.status === 403) && body && PROTECTED_KINDS[body.kind]) {
+        throw _passErr('보내려면 연동 암호가 필요해요 — 연동 암호를 넣어 주세요.', true);
+      }
       throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
     });
   }

@@ -34,7 +34,8 @@ public class KReplyReceiver extends BroadcastReceiver {
             public void run() {
                 try {
                     JSONObject item = KChatSender.send(app, text, thread);
-                    if (item != null) {
+                    String why = item == null ? KChatSender.ERR_NET : item.optString("error", "");
+                    if (why.length() == 0) {
                         KBridgePlugin.addOutbox(app, item);
                         KNotify.markSent(app, text);
                         KWidgetProvider.markReplied(app);
@@ -45,9 +46,10 @@ public class KReplyReceiver extends BroadcastReceiver {
                             failed.put("failed", true);
                             failed.put("text", text);
                             failed.put("ts", System.currentTimeMillis());
+                            failed.put("why", why);
                             KBridgePlugin.addOutbox(app, failed);
                         } catch (Exception ignored) {}
-                        KNotify.markFailed(app, text);
+                        KNotify.markFailed(app, text, why);
                     }
                 } finally {
                     pr.finish();

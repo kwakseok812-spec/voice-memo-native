@@ -20,9 +20,8 @@ import java.util.List;
  * v8.2(O-0157) 웹(app.js·share-in.js) ↔ 네이티브 연결 창구 「KBridge」.
  *
  *  웹 → 네이티브
- *   - setContext({thread, url, key}) : 알림 [답장]이 쓸 대화방(thread)·서버 주소·공개 키를 기억.
- *       ⚠️ 공개(publishable) 키만 받는다. 연동 암호는 받지도 저장하지도 않는다
- *          — 채팅 보내기 자체가 원래 공개 키 경로(voice_memos insert)라 암호가 필요 없다.
+ *   - setContext({thread, url, key, pass}) : 알림 [답장]이 쓸 대화방(thread)·서버 주소·공개 키·연동 암호를 기억.
+ *       공개(publishable) 키만 받는다(비밀 키 형태는 거절). 연동 암호(O-0158)는 KSecret 이 Keystore 로 암호화해 보관.
  *   - updateWidget({count, title, line, at, hide}) : 바탕화면 케이 위젯 내용 갱신.
  *   - takeOutbox() : 앱이 꺼져 있을 때 알림 [답장]으로 보낸 메시지 목록을 넘겨받고 비운다
  *       (app.js 가 채팅 목록에 「내 말풍선」으로 넣고 평소처럼 답을 기다림).
@@ -75,6 +74,9 @@ public class KBridgePlugin extends Plugin {
         // 공개 키만(비밀 키 실수 방지: service_role·sb_secret 형태는 거절)
         if (key != null && key.length() > 0 && key.indexOf("secret") < 0 && key.indexOf("service_role") < 0) ed.putString("key", key);
         ed.apply();
+        // v8.2(O-0158) 연동 암호: 알림 [답장]이 연동 암호 확인 RPC(submit_memo)로 보내므로 Keystore 로 암호화해 보관.
+        //   빈 값이면 지운다(앱에서 암호가 틀려 지웠을 때). 값은 어디에도 로그로 남기지 않는다.
+        if (call.getData().has("pass")) KSecret.putPass(getContext(), call.getString("pass", ""));
         call.resolve();
     }
 

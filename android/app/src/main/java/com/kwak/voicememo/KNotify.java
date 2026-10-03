@@ -99,9 +99,15 @@ final class KNotify {
         post(c, "보냈어요 ✓ 케이가 확인하고 있어요", true);
     }
 
-    static void markFailed(Context c, String myText) {
+    static void markFailed(Context c, String myText, String why) {
         addHist(c, "me", myText + "  (못 보냄)");
-        post(c, "못 보냈어요 — 인터넷을 확인하고 다시 [답장]을 눌러 주세요", true);
+        String msg;
+        if (KChatSender.ERR_NOPASS.equals(why) || KChatSender.ERR_BADPASS.equals(why)) {
+            msg = "못 보냈어요 — 앱을 열어 연동 암호를 확인해 주세요";   // O-0158: 알림 답장도 연동 암호가 있어야 보냄
+        } else {
+            msg = "못 보냈어요 — 인터넷을 확인하고 다시 [답장]을 눌러 주세요";
+        }
+        post(c, msg, true);
     }
 
     /** 빈 답장 등으로 입력 표시(빙글빙글)만 지울 때 — 소리 없이 다시 그린다. */
