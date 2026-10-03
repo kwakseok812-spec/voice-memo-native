@@ -54,6 +54,9 @@
   var openIntent = null;           // 'new' = 새 문서를 탭으로 여는 중 · 'restore' = 탭 다시 그리는 중 · null
   var pendingRestore = null, pendingPdfBlob = null, loadSeq = 0, STALE = { stale: true };
   var tabsEl, tabListEl, tabAddBtn, sheetEl;
+  // v8.1(O-0154) 케이에게 묻기·맡기기
+  var askEl = null, askBtn = null, askHandler = null, askChip = null;
+  var parked = false;              // 케이에게 묻느라 뷰어를 잠시 나옴 → 탭이 1개라도 「열어 둔 문서」로 남긴다
 
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function blobToBuf(blob) {
@@ -220,8 +223,9 @@
     if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
     snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
     curKey = null; openIntent = null; pendingRestore = null;
-    if (tabs.length >= 2) { clearDocView(); liveTabId = null; }
-    else { tabs = []; activeIdx = -1; liveTabId = null; }
+    closeAsk();
+    if (tabs.length >= 2 || (parked && tabs.length)) { clearDocView(); liveTabId = null; }   // v8.1: 케이에게 묻고 나가면 1개라도 남긴다
+    else { tabs = []; activeIdx = -1; liveTabId = null; parked = false; }
     if (rootEl) rootEl.classList.remove('on');
     renderTabs(); renderOpenCard();
     renderRecent();
@@ -773,6 +777,7 @@
         if (!rs) toast('📖 ' + want + '쪽부터 이어서 보여 드려요');
       }
       if (curKey) DocStore.touch(curKey, { pages: pdfDoc.numPages });
+      var lt = activeTab(); if (lt && liveTabId === lt.id) lt.pages = pdfDoc.numPages;   // v8.1: 케이에게 「전체 ○쪽」
       updatePageBadge(); updateFeatureButtons();
     }).catch(function (err) { if (err === STALE) return; showError('문서를 표시하지 못했습니다.', (err && err.message) ? err.message : ''); });
   }
@@ -1044,6 +1049,7 @@
     var st = t.state || (t.state = {});
     if (isExcelDoc) {
       st.excelView = excelView; st.sheet = parseInt(sheetSel.value, 10) || 0; st.font = tableFontPx;
+      if (excelWorkbook) { st.sheetName = excelWorkbook.SheetNames[st.sheet] || ''; st.sheetCount = excelWorkbook.SheetNames.length; }   // v8.1 케이에게 묻기
       if (excelView === 'table') { st.ttop = scroller.scrollTop; st.tleft = scroller.scrollLeft; }
       if (!excelPdfBlob && excelPdfBuf) { try { excelPdfBlob = new Blob([excelPdfBuf], { type: 'application/pdf' }); } catch (e) {} }
       if (excelPdfBlob) t.pdfBlob = excelPdfBlob;
@@ -1084,7 +1090,7 @@
     o = o || {}; if (i < 0 || i >= tabs.length) return;
     if (!o.noSnap) snapshotActive();
     opToken++; var op = opToken; cancelUpload(); releaseWake(); hideOverlay(); closeSlideshow();
-    var t = tabs[i]; activeIdx = i; liveTabId = null;
+    var t = tabs[i]; activeIdx = i; liveTabId = null; parked = false;
     clearDocView();
     curKey = t.key || null; curSrcUrl = t.srcUrl || null; resumePage = 0;
     curFileInfo = { name: t.name, ext: t.ext, size: t.size };
@@ -1106,7 +1112,7 @@
     var wasActive = (i === activeIdx);
     if (wasActive) snapshotActive(true);
     tabs.splice(i, 1);
-    if (!tabs.length) { activeIdx = -1; liveTabId = null; leaveViewer(); return; }
+    if (!tabs.length) { activeIdx = -1; liveTabId = null; parked = false; leaveViewer(); return; }
     if (wasActive) activateTab(Math.min(i, tabs.length - 1), { noSnap: true });
     else { if (i < activeIdx) activeIdx--; renderTabs(); }
   }
@@ -1114,6 +1120,7 @@
   function backAction() {
     if (!viewerOpen()) { leaveViewer(); return; }
     if (sheetEl && sheetEl.classList.contains('on')) { closeSheet(); return; }
+    if (askEl && askEl.classList.contains('on')) { closeAsk(); return; }   // v8.1
     if (openIntent === 'new' && tabs.length) { abortOpen(); return; }
     leaveViewer();
   }
@@ -1123,6 +1130,7 @@
     if (!tabsEl) return;
     tabsEl.style.display = (viewerOpen() && tabs.length >= 1) ? 'flex' : 'none';
     if (tabAddBtn) { tabAddBtn.textContent = tabs.length <= 1 ? '＋ 파일 더 열기' : '＋'; tabAddBtn.classList.toggle('wide', tabs.length <= 1); }
+    updateAskBtn();                                                  // v8.1: [케이에게 묻기]는 문서가 화면에 다 그려졌을 때만
     if (!tabListEl) return;
     tabListEl.innerHTML = tabs.map(function (t, i) {
       var b = TYPE_BADGE[t.ext || extOf(t.name)] || ['', 't-etc'];
@@ -1145,7 +1153,7 @@
   // 문서 고르기 화면의 「열어 둔 문서」(탭 2개 이상 두고 나갔을 때)
   function renderOpenCard() {
     var w = $('docOpenWrap'); if (!w) return;
-    if (tabs.length < 2 || viewerOpen()) { w.style.display = 'none'; return; }
+    if ((tabs.length < 2 && !(parked && tabs.length)) || viewerOpen()) { w.style.display = 'none'; return; }
     w.style.display = '';
     var info = $('docOpenInfo'); if (info) info.textContent = tabs.length + '개';
     var nm = $('docOpenNames');
@@ -1198,7 +1206,151 @@
       var ls = $('dvsList'); if (ls) ls.addEventListener('click', function (e) { var r = e.target.closest ? e.target.closest('.dvs-row') : null; if (r) openRecentKey(r.getAttribute('data-key')); });
     }
     var rs = $('docOpenResume'); if (rs) rs.onclick = function () { if (!tabs.length) { renderOpenCard(); return; } showViewer(); activateTab(Math.max(0, Math.min(activeIdx, tabs.length - 1)), { noSnap: true }); };
-    var ca = $('docOpenCloseAll'); if (ca) ca.onclick = function () { tabs = []; activeIdx = -1; liveTabId = null; renderOpenCard(); renderTabs(); toast('열어 둔 문서를 모두 닫았어요. (최근 연 문서에는 남아 있어요)'); };
+    var ca = $('docOpenCloseAll'); if (ca) ca.onclick = function () { tabs = []; activeIdx = -1; liveTabId = null; parked = false; renderOpenCard(); renderTabs(); toast('열어 둔 문서를 모두 닫았어요. (최근 연 문서에는 남아 있어요)'); };
+  }
+
+  /* ============ v8.1(O-0154) 케이에게 묻기·맡기기 ============
+   * 대표님 지시: 보고 있는 문서를 케이 채팅으로 넘겨 「이 규정 핵심만」「3쪽 표 설명해 줘」「1차안과 뭐가 달라?」를 묻고,
+   *   문서를 바탕으로 한 지시(공문 초안·보고서)도 바로 맡긴다.
+   *   · 화면 오른쪽 아래 [케이에게 묻기] → 시트: 빠른 칩(묻기 3 + 맡기기 2, 탭 2개 이상이면 「차이점」) + 직접 적기
+   *     + (탭 2개 이상) 「열린 문서 함께 보내기」.
+   *   · 보내기는 app.js 가 넘겨 준 askHandler 가 맡는다(채팅 화면으로 넘어가 첨부와 함께 전송 — 기존 채팅 첨부 통로).
+   *   · 여기서는 「무엇을 보고 있었나」(문서 이름·보던 쪽·전체 쪽·시트)와 「보낼 파일」(변환된 PDF / 엑셀 원본,
+   *     PC가 이미 변환해 서버에 둔 PDF가 있으면 그 번호)만 모아 넘긴다. 문서 원본·서버 테이블은 새로 만들지 않는다.
+   * ==========================================================================*/
+  var ASK_REF_MAX_AGE = 5 * 24 * 3600 * 1000;   // PC 변환본(voice-docs view.pdf)을 다시 쓰는 기간 — 장부 보관(6일)보다 짧게
+  // 받침 따라 을/를 (마지막 한글 글자 기준, 한글이 없으면 '을(를)')
+  function josaEulReul(w) {
+    var s = String(w || '');
+    for (var i = s.length - 1; i >= 0; i--) { var c = s.charCodeAt(i); if (c >= 0xAC00 && c <= 0xD7A3) return ((c - 0xAC00) % 28) ? '을' : '를'; if (/[0-9A-Za-z]/.test(s[i])) break; }
+    return '을(를)';
+  }
+  function askBase(name) { var n = String(name || '문서'); var i = n.lastIndexOf('.'); return i > 0 ? n.slice(0, i) : n; }
+  function askItem(t, i) {
+    var st = t.state || {}, ext = t.ext || extOf(t.name), excel = t.kind === 'excel';
+    var it = { name: t.name, ext: ext, kind: t.kind, active: i === activeIdx, view: excel ? (st.excelView || 'table') : 'pdf',
+               page: st.page || 0, pages: t.pages || 0, sheet: st.sheetName || '', sheets: st.sheetCount || 0,
+               pdf: null, orig: null, ref: null, sendName: '' };
+    if (excel) {
+      it.orig = t.file || null; it.sendName = t.name;               // 엑셀은 원본 그대로(숫자·수식을 케이가 직접 연다)
+      if (!it.orig && t.pdfBlob) { it.pdf = t.pdfBlob; it.sendName = askBase(t.name) + '.pdf'; }
+    } else {
+      it.pdf = t.blob || null; it.sendName = (ext === 'pdf') ? t.name : (askBase(t.name) + '.pdf');
+    }
+    // PC가 이미 변환해 서버(voice-docs)에 올려 둔 PDF 가 있으면 다시 올리지 않고 그 요청 번호만 넘긴다(PDF 원본은 해당 없음).
+    if (!excel && ext !== 'pdf' && t.key) {
+      var j = jobGet(t.key);
+      if (j && j.id && j.tok && j.doneAt && Date.now() - j.doneAt < ASK_REF_MAX_AGE) it.ref = { id: j.id, tok: j.tok };
+    }
+    return it;
+  }
+  // 지금 열린 문서들의 「보던 자리 + 보낼 파일」. 화면에 그려진 문서가 없으면 null.
+  function askContext() {
+    var t = activeTab(); if (!t || liveTabId !== t.id) return null;
+    snapshotActive();
+    if (pdfDoc && viewMode === 'pdf') t.pages = t.pages || pdfDoc.numPages;
+    return { active: activeIdx, items: tabs.map(askItem) };
+  }
+  function askWhere(it) {                                            // 「8쪽」·「시트 '1학기'」
+    if (it.kind === 'excel' && it.view !== 'pdf') return it.sheet ? ('「' + it.sheet + '」 시트') : '표';
+    return it.page ? (it.page + '쪽') : '';
+  }
+  var ASK_CHIPS = [
+    { g: 'ask', id: 'sum', label: '핵심만 요약', q: function () { return '이 문서 핵심만 쉽게 요약해 줘.'; } },
+    { g: 'ask', id: 'here', label: function (it) { return '지금 보는 ' + (askWhere(it) || '부분') + ' 설명'; },
+      q: function (it) { return '지금 보고 있는 ' + (askWhere(it) || '부분') + ' 내용을 쉽게 설명해 줘.'; } },
+    { g: 'ask', id: 'nums', label: '표·숫자 정리', q: function () { return '이 문서의 표와 숫자를 한눈에 보기 쉽게 정리해 줘.'; } },
+    { g: 'ask', id: 'diff', multi: true, label: '열린 문서 차이점', q: function () { return '열어 둔 문서들을 비교해서 무엇이 달라졌는지 알려 줘.'; } },
+    { g: 'do', id: 'memo', label: '이 문서로 공문 초안', q: function () { return '이 문서를 바탕으로 공문 초안을 만들어 줘.'; } },
+    { g: 'do', id: 'rep', label: '요점으로 보고서 1쪽', q: function () { return '이 문서 요점으로 1쪽짜리 보고서를 만들어 줘.'; } }
+  ];
+  function chipLabel(c, it) { return typeof c.label === 'function' ? c.label(it) : c.label; }
+  function updateAskBtn() {
+    if (!askBtn) return;
+    var t = activeTab();
+    askBtn.style.display = (askHandler && viewerOpen() && t && liveTabId === t.id) ? 'inline-flex' : 'none';
+  }
+  function openAsk() {
+    if (!askEl || !askHandler) return;
+    var ctx = askContext();
+    if (!ctx) { toast('문서가 다 열린 뒤에 눌러 주세요.'); return; }
+    closeSheet();
+    var it = ctx.items[ctx.active], multi = ctx.items.length >= 2;
+    var where = askWhere(it);
+    var wp = where || '문서';
+    $('dvaNote').textContent = '「' + it.name + '」 ' + wp + josaEulReul(wp) + ' 보고 계세요. 이 문서를 케이에게 함께 보내요.';
+    function chipsHtml(g) {
+      return ASK_CHIPS.filter(function (c) { return c.g === g && (!c.multi || multi); }).map(function (c) {
+        return '<button class="dva-chip' + (c.g === 'do' ? ' do' : '') + '" type="button" data-chip="' + c.id + '">' + esc(chipLabel(c, it)) + '</button>';
+      }).join('');
+    }
+    $('dvaAskChips').innerHTML = chipsHtml('ask');
+    $('dvaDoChips').innerHTML = chipsHtml('do');
+    var mw = $('dvaMultiWrap'), cb = $('dvaMulti');
+    if (multi) {
+      mw.style.display = '';
+      cb.checked = false;
+      $('dvaMultiLbl').textContent = '열린 문서 ' + ctx.items.length + '개 함께 보내기 (차이점 묻기)';
+      $('dvaMultiNames').innerHTML = ctx.items.map(function (x, i) {
+        return '<div class="dva-mrow' + (x.active ? ' on' : '') + '"><b>' + (i + 1) + '</b> ' + esc(x.name) +
+          (askWhere(x) ? ' <span>· ' + esc(askWhere(x)) + (x.active ? ' 보는 중' : (x.kind === 'excel' && x.view !== 'pdf' ? '' : '까지 봄')) + '</span>' : '') + '</div>';
+      }).join('');
+    } else { mw.style.display = 'none'; cb.checked = false; }
+    var tx = $('dvaText'); tx.value = ''; askChip = null;
+    askEl.classList.add('on'); askEl._ctx = ctx;
+    updateAskSend();
+  }
+  function closeAsk() { if (askEl) { askEl.classList.remove('on'); askEl._ctx = null; } }
+  function updateAskSend() {
+    var b = $('dvaSend'); if (!b) return;
+    b.disabled = !String($('dvaText').value || '').trim();
+  }
+  function onAskChip(id) {
+    var ctx = askEl && askEl._ctx; if (!ctx) return;
+    var c = null; ASK_CHIPS.forEach(function (x) { if (x.id === id) c = x; }); if (!c) return;
+    var it = ctx.items[ctx.active];
+    $('dvaText').value = c.q(it); askChip = id;
+    if (c.multi) $('dvaMulti').checked = true;
+    Array.prototype.forEach.call(askEl.querySelectorAll('.dva-chip'), function (b) { b.classList.toggle('on', b.getAttribute('data-chip') === id); });
+    updateAskSend();
+  }
+  function sendAsk() {
+    var ctx = askEl && askEl._ctx; if (!ctx) return;
+    var q = String($('dvaText').value || '').trim(); if (!q) { toast('물어보실 말씀을 골라 주시거나 적어 주세요.'); return; }
+    var all = !!($('dvaMulti') && $('dvaMulti').checked && ctx.items.length >= 2);
+    var items = all ? ctx.items : [ctx.items[ctx.active]];
+    var miss = items.filter(function (x) { return !x.pdf && !x.orig && !x.ref; });
+    if (miss.length === items.length) { toast('이 문서는 보낼 사본이 없어요. 문서를 다시 열고 눌러 주세요.'); return; }
+    var payload = { question: q, chip: askChip, all: all, items: items.filter(function (x) { return x.pdf || x.orig || x.ref; }),
+                    missing: miss.map(function (x) { return x.name; }) };
+    closeAsk();
+    parked = true;                                                   // 채팅을 보고 돌아오면 「열어 둔 문서 · 이어서 보기」
+    try { askHandler(payload); } catch (e) { toast('케이에게 보내지 못했어요. 다시 눌러 주세요.'); }
+  }
+  // 이미 서버에 있는 PC 변환본이 지금도 살아 있는지 확인(요청 행 + 서명 주소). 실패하면 null → 폰 사본을 올린다.
+  function checkRef(ref) {
+    if (!ref || !global.OfficeBridge) return Promise.resolve(null);
+    return OfficeBridge.poll(ref.id, ref.tok).then(function (res) {
+      var d = res && res.status === 'done' ? OfficeBridge.docResultFrom(res) : null;
+      if (!d || !d.pdf_url) return null;
+      return fetch(d.pdf_url, { method: 'GET', headers: { Range: 'bytes=0-0' } }).then(function (r) {
+        try { if (r.body && r.body.cancel) r.body.cancel(); } catch (e) {}
+        return (r.ok || r.status === 206) ? { id: ref.id, tok: ref.tok, pages: d.pages || 0 } : null;
+      });
+    }).catch(function () { return null; });
+  }
+  function initAsk() {
+    askEl = $('dvAsk'); askBtn = $('dvAskBtn');
+    if (askBtn) askBtn.onclick = openAsk;
+    if (!askEl) return;
+    askEl.addEventListener('click', function (e) {
+      if (e.target === askEl) { closeAsk(); return; }
+      var c = e.target.closest ? e.target.closest('[data-chip]') : null;
+      if (c) onAskChip(c.getAttribute('data-chip'));
+    });
+    var tx = $('dvaText'); if (tx) tx.addEventListener('input', updateAskSend);
+    var sb = $('dvaSend'); if (sb) sb.onclick = sendAsk;
+    var cl = $('dvaClose'); if (cl) cl.onclick = closeAsk;
   }
 
   // ============ 진입점 ============
@@ -1327,6 +1479,8 @@
     // v8.0(O-0153) 탭 띠·파일 더 열기 시트
     tabsEl = $('dvTabs'); tabListEl = $('dvTabList'); tabAddBtn = $('dvTabAdd'); sheetEl = $('dvSheet');
     initTabs();
+    if (typeof opts.ask === 'function') askHandler = opts.ask;      // v8.1(O-0154) 케이에게 묻기 — 보내기는 app.js
+    initAsk();
 
     // 야간 초기화
     (function () { var on = false; try { on = localStorage.getItem(DARK_STORE) === '1'; } catch (e) {} applyDark(on); })();
@@ -1433,6 +1587,9 @@
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
+    askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
+    checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
+    setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
     openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
     _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관

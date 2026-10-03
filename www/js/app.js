@@ -4620,7 +4620,90 @@
     if (window.SmartDocs && SmartDocs.showPick) { try { SmartDocs.showPick(); } catch (e) {} }
   }
   // v6.9: 최근 연 문서 삭제·비우기 확인은 앱 확인 시트로(confirm() 금지)
-  if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); } }); } catch (e) {} }
+  if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); }, ask: askKFromDoc }); } catch (e) {} }
+
+  /* ---- v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기] ----
+   * 대표님이 보던 문서(변환된 PDF / 엑셀 원본)를 채팅 첨부 통로로 케이에게 보낸다. 새 서버 테이블 없음.
+   *   · PC가 이미 변환해 서버에 둔 PDF(문서 요청 행)가 살아 있으면 다시 올리지 않고 그 번호만 넘긴다(SmartDocs.checkRef).
+   *   · 질문 글(note)에 「어느 문서 몇 쪽을 보다가」를 함께 적는다 → 케이 즉답·작업실 지시(원문) 어디로 가도 그대로 따라간다.
+   *     meta.doc_ctx 에도 같은 내용을 구조로 남긴다(PC 응답기의 「큰 문서 나눠 읽기」 안내용).
+   *   · 케이 답은 평소처럼 채팅(음성 대화 중이면 목소리로도). 보던 문서는 「문서 보기 → 이어서 보기」에 남는다. */
+  // 받침 따라 을/를 (마지막 한글 글자 기준, 한글이 없으면 '을(를)')
+  function josaEulReul(w) {
+    var s = String(w || '');
+    for (var i = s.length - 1; i >= 0; i--) { var c = s.charCodeAt(i); if (c >= 0xAC00 && c <= 0xD7A3) return ((c - 0xAC00) % 28) ? '을' : '를'; if (/[0-9A-Za-z]/.test(s[i])) break; }
+    return '을(를)';
+  }
+  function docAskWhere(it) {
+    if (it.kind === 'excel' && it.view !== 'pdf') return it.sheet ? ('「' + it.sheet + '」 시트') : '';
+    return it.page ? (it.page + '쪽') : '';
+  }
+  function docAskLine(it, i, sent) {
+    var w = docAskWhere(it), tot = (it.kind === 'excel' && it.view !== 'pdf') ? (it.sheets ? '시트 ' + it.sheets + '개' : '') : (it.pages ? '전체 ' + it.pages + '쪽' : '');
+    var what = it.kind === 'excel' ? (sent.isPdf ? 'PDF로 바꾼 것' : '엑셀 원본') : (it.ext === 'pdf' ? 'PDF 원본' : 'PC가 PDF로 바꾼 것');
+    return (i + 1) + ') ' + it.name + ' → 첨부 「' + sent.name + '」(' + what + ')' +
+      (w ? ' · ' + (it.active ? '보던 곳 ' : '본 곳 ') + w : '') + (tot ? ' / ' + tot : '') + (it.active ? ' ← 지금 보던 문서' : '');
+  }
+  function askKFromDoc(p) {
+    if (!p || !p.items || !p.items.length || !window.OfficeBridge) return;
+    var items = p.items, act = items.filter(function (x) { return x.active; })[0] || items[0];
+    var where = docAskWhere(act), wp = (where || '문서') + (items.length > 1 ? ' 외 ' + (items.length - 1) + '개' : '');
+    var dispCap = '📄 「' + act.name + '」 ' + wp + josaEulReul(wp) + ' 보며';
+    openChat();                                                     // 뷰어는 「열어 둔 문서」로 남는다(docviewer parked)
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var dispFiles = items.map(function (x) {
+      var b = x.orig || x.pdf;
+      return { name: x.orig ? x.name : x.sendName, size: (b && b.size) || 0, mime: x.orig ? (x.orig.type || '') : 'application/pdf', kind: 'document' };
+    });
+    var msg = { role: 'me', text: dispCap + '\n' + p.question, ts: Date.now(), id: id, token: tok, answered: false,
+                files: dispFiles, up: true, uploading: true };
+    chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
+    function fail(text) {
+      msg.answered = true; msg.uploading = false;
+      chatMsgs.push({ role: 'k', text: text, ts: Date.now() });
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+    }
+    var checks = items.map(function (x) { return (x.ref && SmartDocs.checkRef) ? SmartDocs.checkRef(x.ref) : Promise.resolve(null); });
+    Promise.all(checks).then(function (refs) {
+      var entries = [], lines = [], dropped = [], ctxDocs = [];
+      items.forEach(function (x, i) {
+        var r = refs[i], blob = x.orig || x.pdf, name = x.orig ? x.name : x.sendName;
+        if (r && !x.orig) {
+          if (!x.pages && r.pages) x.pages = r.pages;
+          entries.push({ ref: r, name: name, size: (x.pdf && x.pdf.size) || 0 });
+        } else if (blob) {
+          var single = items.length === 1;
+          if ((blob.size || 0) > CHAT_CHUNK_LIMIT && !single) { dropped.push(x.name); return; }   // 여러 개 묶음엔 45MB까지만
+          entries.push({ file: new File([blob], name, { type: x.orig ? (x.orig.type || 'application/octet-stream') : 'application/pdf' }) });
+        } else { dropped.push(x.name); return; }
+        lines.push(docAskLine(x, entries.length - 1, { name: name, isPdf: !x.orig }));
+        ctxDocs.push({ name: x.name, file: name, ext: x.ext, kind: x.kind, view: x.view, page: x.page || 0, pages: x.pages || 0,
+                       sheet: x.sheet || '', sheets: x.sheets || 0, active: !!x.active, reused: !!(r && !x.orig) });
+      });
+      (p.missing || []).forEach(function (n) { dropped.push(n); });
+      if (!entries.length) { fail('보던 문서를 보내지 못했어요. 문서를 다시 열고 [케이에게 묻기]를 눌러 주세요.'); return; }
+      var hw = where || '문서';
+      var head = '[문서 보며 질문] 대표님이 스마트비서 문서 뷰어에서 「' + act.name + '」 ' + hw +
+                 (act.pages && !(act.kind === 'excel' && act.view !== 'pdf') ? '(전체 ' + act.pages + '쪽)' : '') + josaEulReul(hw) + ' 보다가 보내셨어요.';
+      var note = p.question + '\n\n' + head + '\n보낸 문서:\n' + lines.join('\n') +
+                 (dropped.length ? '\n(못 보낸 문서: ' + dropped.join(', ') + ' — 내용은 추측하지 말 것)' : '');
+      var memo = { id: id, token: tok, thread: chatThread, title: act.name.slice(0, 40), note: note,
+                   extraMeta: { speak: !!convoOn, doc_ctx: { v: 1, all: !!p.all, chip: p.chip || null, docs: ctxDocs } } };
+      if (dropped.length) toast('너무 크거나 사본이 없는 문서는 빼고 보냈어요: ' + dropped.join(', '));
+      var one = entries.length === 1 && entries[0].file && entries[0].file.size > CHAT_CHUNK_LIMIT;
+      var work = one ? OfficeBridge.sendChatChunked(memo, entries[0].file) : OfficeBridge.sendChatDocAsk(memo, entries);
+      if (one) toast('큰 문서라 나눠 올려요 — 시간이 걸릴 수 있어요.');
+      return work.then(function () {
+        msg.uploading = false; saveChatMsgs();
+        if (isOpen(chatView)) renderChat();
+        startChatReconcile(); kickOrderPoll();
+        toast('보던 문서는 「문서 보기 → 이어서 보기」에 그대로 있어요.');
+      });
+    }).catch(function (e) {
+      var why = (e && (e.friendly || e.message)) || String(e);
+      fail('문서를 케이에게 보내지 못했어요(' + why + '). 인터넷 연결을 확인하고 문서 화면에서 다시 눌러 주세요.');
+    });
+  }
   if ($('btnDocs')) $('btnDocs').addEventListener('click', openDocs);
   // 채팅 첨부(케이가 보낸 문서)의 [뷰어로 보기] → 문서 뷰어 화면으로 바로 표시
   function openDocFromChat(att) {

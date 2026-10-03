@@ -476,6 +476,9 @@
           <div id="pages"></div>
           <div id="tableview"></div>
         </div>
+        <!-- v8.1(O-0154) 케이에게 묻기·맡기기 — 보던 문서를 케이 채팅으로(쪽 번호와 함께) -->
+        <div class="dv-askdock"><button id="dvAskBtn" class="dv-askfab" type="button" style="display:none;" aria-label="이 문서로 케이에게 묻기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm3 6.5a1.5 1.5 0 1 0 0 .01zm5 0a1.5 1.5 0 1 0 0 .01zm5 0a1.5 1.5 0 1 0 0 .01z"/></svg>케이에게 묻기</button></div>
         <div id="bottombar">
           <div class="grp" id="pageNavGrp">
             <button class="btn icon" id="dvPrev" title="이전 쪽">◀</button>
@@ -499,6 +502,24 @@
           <div class="dvs-sub">최근 연 문서에서 열기</div>
           <div id="dvsList"></div>
           <button class="dvs-close" id="dvsClose" type="button">닫기</button>
+        </div>
+      </div>
+      <!-- v8.1(O-0154) 케이에게 묻기·맡기기 시트 -->
+      <div id="dvAsk">
+        <div class="dvs-panel dva-panel">
+          <div class="dvs-title">케이에게 묻기 · 맡기기</div>
+          <div class="dvs-note" id="dvaNote"></div>
+          <div class="dvs-sub">물어보기</div>
+          <div class="dva-chips" id="dvaAskChips"></div>
+          <div class="dvs-sub">맡기기 <span class="dva-subhint">— 다 되면 채팅으로 파일을 보내 드려요</span></div>
+          <div class="dva-chips" id="dvaDoChips"></div>
+          <div class="dva-multi" id="dvaMultiWrap" style="display:none;">
+            <label class="dva-check"><input type="checkbox" id="dvaMulti"><span id="dvaMultiLbl">열린 문서 함께 보내기</span></label>
+            <div class="dva-mlist" id="dvaMultiNames"></div>
+          </div>
+          <textarea id="dvaText" class="dva-text" rows="2" placeholder="직접 적기 — 예: 1차안과 뭐가 달라?"></textarea>
+          <button class="dvs-big" id="dvaSend" type="button" disabled>케이에게 보내기</button>
+          <button class="dvs-close" id="dvaClose" type="button">닫기</button>
         </div>
       </div>
     </div>

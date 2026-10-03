@@ -640,6 +640,7 @@
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', files: filesMeta };
     if (memo.modelPref) meta.model_pref = memo.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
     if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) meta[k] = extra[k];
+    if (memo.extraMeta) for (var k2 in memo.extraMeta) if (memo.extraMeta.hasOwnProperty(k2)) meta[k2] = memo.extraMeta[k2];   // v8.1 doc_ctx·speak
     return _insertRow({
       id: memo.id, title: memo.title || '파일', status: 'pending', kind: 'chat',
       note: memo.note || null, client_token: memo.token, meta: meta
@@ -687,6 +688,37 @@
       }
       return step();
     });
+  }
+
+  /* ---------- v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기] ----------
+   * 채팅 파일 첨부 통로(sendChatBatch 와 같은 행·같은 버킷)를 그대로 쓴다. 다른 점 두 가지:
+   *   (1) entries 에 「이미 서버에 있는 PC 변환본」이 섞일 수 있다 → 올리지 않고
+   *       meta.files[i] = {ref:'doc', doc_id, doc_token, name, ext:'pdf', size} 만 적는다.
+   *       chat_responder 가 그 문서 요청 행(kind=doc)의 client_token 을 대조한 뒤 voice-docs `{doc_id}/view.pdf` 를 받는다(지우지 않음).
+   *   (2) memo.extraMeta(doc_ctx·speak)가 meta 에 함께 들어간다.
+   * entries: [{file:File} | {ref:{id,tok}, name, size}] — 순서 = 케이에게 보이는 순서. 파일은 각 45MB 이하만(큰 1개는 app.js 가 청크로). */
+  function sendChatDocAsk(memo, entries, onProgress) {
+    var files = entries.filter(function (e) { return e.file; }).map(function (e) { return e.file; });
+    var big = firstTooBig(files);
+    if (big) return Promise.reject(big);
+    var filesMeta = [], idx = 0;
+    function step() {
+      if (idx >= entries.length) return _insertChatFileRow(memo, filesMeta);
+      var e = entries[idx], i = idx;
+      if (e.ref) {
+        filesMeta.push({ ref: 'doc', doc_id: e.ref.id, doc_token: e.ref.tok, name: e.name || ('doc' + i + '.pdf'),
+                         ext: 'pdf', size: e.size || 0, mime: 'application/pdf' });
+        idx++; onProgress && onProgress(idx, entries.length);
+        return step();
+      }
+      var file = e.file, ext = extForFile(file, 'file'), key = memo.id + '/' + i + '.' + ext;
+      return uploadObject(key, file).then(function () {
+        filesMeta.push({ key: key, ext: ext, name: file.name || ('file' + i + '.' + ext), size: file.size || 0, mime: file.type || '' });
+        idx++; onProgress && onProgress(idx, entries.length);
+        return step();
+      });
+    }
+    return step();
   }
 
   /* ---------- 문서 뷰어: 폰 문서 → PC 변환(PDF) → 폰 표시 ----------
@@ -1346,6 +1378,7 @@
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
+    sendChatDocAsk: sendChatDocAsk,     // v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기]
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,
     fmtSize: fmtSize,                   // v6.9: 문서 뷰어 진행 안내(○MB / ○MB)
     listOfficePushes: listOfficePushes, listChatHistory: listChatHistory, hideMemo: hideMemo,

@@ -205,3 +205,40 @@
 .dv-openrow b{display:inline-block; min-width:22px; text-align:center; border-radius:7px; background:var(--p1); color:#fff; font-size:12.5px; margin-right:6px}
 .dv-open-acts{display:flex; gap:10px; align-items:center; margin-top:10px}
 .dv-open-acts .btn.primary{flex:1; width:auto; height:54px; font-size:17px}
+
+/* ============================================================================
+ * v8.1(O-0154) 케이에게 묻기·맡기기
+ * ==========================================================================*/
+/* 아래 도구줄 바로 위 오른쪽에 떠 있는 버튼(높이 0 띠 안에 붙여 문서 스크롤과 무관) */
+#docRoot .dv-askdock{position:relative; height:0; z-index:5;}
+#docRoot .dv-askfab{position:absolute; right:12px; bottom:12px; display:inline-flex; align-items:center; gap:7px;
+  min-height:50px; padding:0 18px 0 15px; border:0; border-radius:999px; background:var(--brand); color:#fff;
+  font-family:inherit; font-size:16px; font-weight:800; letter-spacing:-.2px; white-space:nowrap; cursor:pointer;
+  box-shadow:0 6px 18px rgba(37,99,235,.42), 0 1px 3px rgba(0,0,0,.25);}
+#docRoot .dv-askfab svg{width:21px; height:21px; flex:none;}
+#docRoot .dv-askfab:active{background:var(--brand-d); transform:scale(.97);}
+#docRoot.dark .dv-askfab{box-shadow:0 6px 18px rgba(0,0,0,.55);}
+/* 시트 — 파일 더 열기 시트와 같은 모양 */
+#docRoot #dvAsk{display:none; position:absolute; inset:0; z-index:21; background:rgba(20,24,31,.55); align-items:flex-end; justify-content:center;}
+#docRoot #dvAsk.on{display:flex;}
+#docRoot .dva-panel{overflow-y:auto; max-height:92%;}
+#docRoot .dva-subhint{font-weight:600; color:var(--sub); font-size:12px;}
+#docRoot .dva-chips{display:flex; flex-wrap:wrap; gap:7px;}
+#docRoot .dva-chip{flex:none; min-height:44px; padding:0 14px; border-radius:999px; border:1.5px solid var(--line); background:var(--bg);
+  color:var(--ink); font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; word-break:keep-all;}
+#docRoot .dva-chip.do{border-color:#a7f3d0; background:#ecfdf5; color:#065f46;}
+#docRoot.dark .dva-chip.do{border-color:#14532d; background:#0f2a1d; color:#a7f3d0;}
+#docRoot .dva-chip.on{border-color:var(--brand); background:var(--focus-bg); color:var(--ink);}
+#docRoot .dva-chip:active{opacity:.75;}
+#docRoot .dva-multi{border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:var(--bg);}
+#docRoot .dva-check{display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; cursor:pointer; min-height:36px;}
+#docRoot .dva-check input{width:22px; height:22px; accent-color:var(--brand); flex:none;}
+#docRoot .dva-mlist{margin-top:6px; display:flex; flex-direction:column; gap:3px;}
+#docRoot .dva-mrow{font-size:13.5px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+#docRoot .dva-mrow b{display:inline-block; min-width:20px; text-align:center; border-radius:6px; background:#64748B; color:#fff; font-size:12px; margin-right:5px;}
+#docRoot .dva-mrow.on b{background:var(--brand);}
+#docRoot .dva-mrow span{color:var(--sub); font-weight:600;}
+#docRoot .dva-text{width:100%; min-height:58px; resize:none; border-radius:14px; border:1.5px solid var(--line); background:var(--bg); color:var(--ink);
+  font-family:inherit; font-size:16px; line-height:1.45; padding:11px 12px;}
+#docRoot .dva-text:focus{outline:none; border-color:var(--brand);}
+#docRoot #dvaSend:disabled{opacity:.45;}
