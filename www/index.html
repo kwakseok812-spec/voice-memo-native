@@ -78,6 +78,7 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="currentColor"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.8a4 4 0 0 1 0 6.4M19 6.2a7.5 7.5 0 0 1 0 11.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -157,6 +158,9 @@
       <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱을 연다(nmap://map). 앱이 없거나 PC판이면 웹 지도. 동작은 today-card.js openMapHome -->
       <button class="card action wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tx"><b>길찾기</b><small>누르면 네이버 지도가 바로 열려요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>PC 케이에게 직접</b><small>24시간 PC의 케이와 바로 대화</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <!-- v8.7(O-0173) PC 화면: 크롬 원격 데스크톱 앱을 바로 연다(없으면 플레이 스토어). PC판은 원격 데스크톱 웹 새 탭.
+           「PC 케이에게 직접」(Claude 앱 대화)과 다른 일 — 이쪽은 PC 화면을 직접 보고 조작. 여는 방법은 docviewer.js editOpenRemote 한 곳(SmartDocs.openRemote) -->
+      <button class="card action wide" id="btnPcScreen"><span class="ic blue"><svg><use href="#i-monitor"/></svg></span><span class="tx"><b>PC 화면</b><small>크롬 원격 데스크톱으로 PC 직접 조작</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <!-- v8.3(O-0161) ⏰ 말로 맡긴 알림 목록·취소 / ⭐ 채팅에서 저장한 케이 답 모아 보기 -->
       <button class="card action wide" id="btnReminders"><span class="ic cyan"><svg><use href="#i-alarm"/></svg></span><span class="tx"><b>예약한 알림</b><small>말로 맡긴 알림 보기·취소</small></span><span id="remindersBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
@@ -512,7 +516,7 @@
           <div id="tableview"></div>
         </div>
         <!-- v8.1(O-0154) 케이에게 묻기·맡기기 — 보던 문서를 케이 채팅으로(쪽 번호와 함께) -->
-        <div class="dv-askdock"><!-- O-0171 PC에서 편집하기(docviewer.js EDIT_ON_EXTS 형식일 때만 보임 — 지금은 한글만) -->
+        <div class="dv-askdock"><!-- O-0171 PC에서 편집하기(docviewer.js EDIT_ON_EXTS 형식일 때만 보임 — v8.7(O-0174)부터 한글·워드·엑셀·PPT) -->
           <button id="dvEditBtn" class="dv-editfab" type="button" style="display:none;" aria-label="PC에서 편집하기">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>편집하기</button>
           <button id="dvAskBtn" class="dv-askfab" type="button" style="display:none;" aria-label="이 문서로 케이에게 묻기">

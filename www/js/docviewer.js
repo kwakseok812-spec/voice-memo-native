@@ -1376,10 +1376,11 @@
    *   · 보내기는 연동 암호 확인 RPC(submit_memo)로만. 암호가 없거나 틀리면 앱의 연동 암호 창이 뜬다(smartBadPass).
    * ==========================================================================*/
   var EDITABLE = { hwp: '한글', hwpx: '한글', doc: '워드', docx: '워드', xls: '엑셀', xlsx: '엑셀', ppt: 'PowerPoint', pptx: 'PowerPoint' };
-  // ★ [편집하기]를 보여 줄 형식 — 이 한 줄이 켜고 끄는 곳(2026-10-03 대표님 「일단 한글부터」).
-  //   워드·엑셀·PPT 를 켜려면 'doc','docx','xls','xlsx','ppt','pptx' 를 더한다(PC 변환기 O-0172 패치 적용됨).
-  //   PC 쪽도 edit_config.json 의 enabled_exts 를 같이 넓혀야 한다(안 넓히면 PC가 정중히 거절).
-  var EDIT_ON_EXTS = ['hwp', 'hwpx'];
+  // ★ [편집하기]를 보여 줄 형식 — 이 한 줄이 켜고 끄는 곳.
+  //   2026-10-03 대표님 「일단 한글부터」 → 같은 날 v8.7(O-0174) 「워드, 엑셀, ppt도 한글처럼」으로 6개 형식 추가.
+  //   (PC 변환기 O-0172 패치 적용 · PC 편집 워커는 워드·엑셀·PPT 창을 COM 으로 정확한 경로의 문서만 찾음(O-0174))
+  //   PC 쪽 edit_config.json 의 enabled_exts 와 같이 바꿀 것(안 맞으면 PC가 정중히 거절). 한글만으로 되돌리기 = ['hwp', 'hwpx'].
+  var EDIT_ON_EXTS = ['hwp', 'hwpx', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
   var CRD_PKG = 'com.google.chromeremotedesktop', CRD_WEB = 'https://remotedesktop.google.com/access';
   var EDIT_STORE = 'smartedit_sessions_v1', EDIT_KEEP_MS = 24 * 3600 * 1000;
   var editEl = null, editBtn = null, editOpts = null, editCtx = null, editPollT = null, editSeq = 0, editPickInput = null;
@@ -1621,7 +1622,7 @@
       if (r && r.reason === 'not_installed') {
         askThen('크롬 원격 데스크톱 앱이 없어요', '플레이 스토어에서 「Chrome 원격 데스크톱」(무료, 구글)을 설치해 주세요. 설치 후 대표님 구글 계정으로 로그인하면 24시간 PC가 목록에 보여요.', '스토어 열기', function () {
           EA.openStore({ pkg: CRD_PKG }).catch(function () {});
-        });
+        }, { positive: true, icon: 'i-monitor' });
         return;
       }
       toast('원격 화면 앱을 열지 못했어요. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
@@ -1750,8 +1751,8 @@
       }).join('');
     });
   }
-  function askThen(title, msg, label, fn) {
-    if (confirmFn) { try { confirmFn(title, msg, label, fn); return; } catch (e) {} }
+  function askThen(title, msg, label, fn, opts) {   // opts.positive: 지우기가 아닌 여는 동작 → 빨간 휴지통 대신 보통 버튼(v8.7)
+    if (confirmFn) { try { confirmFn(title, msg, label, fn, opts); return; } catch (e) {} }
     fn();   // 확인 시트가 없으면(시험용 단독 화면) 바로 실행 — confirm() 은 쓰지 않는다
   }
   function onRecentClick(ev) {
@@ -1912,6 +1913,7 @@
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
+    openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 화면」 — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
