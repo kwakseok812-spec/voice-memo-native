@@ -14,6 +14,10 @@
     window.__smartSharedDoc = function (name, mime, b64) { window.__smartSharedDocQueue.push({ name: name, mime: mime, b64: b64 }); };
     window.__smartSharedDocError = function (msg, name) { window.__smartSharedDocQueue.push({ error: msg, name: name }); };
   </script>
+  <script>
+    /* v8.4(O-0162) 글자 크기: 그리기 전에 먼저 붙인다(깜빡임 방지). 값은 app.js SmartFont 와 같은 키. */
+    try { var _fs = localStorage.getItem('smart_font_size'); if (_fs === 'sm' || _fs === 'lg' || _fs === 'xl') document.documentElement.setAttribute('data-fs', _fs); } catch (e) {}
+  </script>
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json">
@@ -92,6 +96,8 @@
     <div class="brand"><span class="mark"><svg><use href="#i-spark"/></svg></span>스마트비서</div>
     <div class="top-right">
       <!-- 상단 "대기 중" 상태 표시는 2026-09-20 대표님 지시로 제거(무슨 뜻인지 알기 어렵고 화면만 복잡) -->
+      <!-- v8.4(O-0162) 글자 크기 4단계(작게·보통·크게·아주 크게) — 누르면 고르기 창 -->
+      <button class="iconbtn fsbtn" id="fontBtn" aria-label="글자 크기" title="글자 크기"><span class="fsbtn-a">가</span><span class="fsbtn-b">가</span></button>
       <button class="iconbtn" id="themeToggle" aria-label="화면 밝기 전환" title="다크/라이트 전환"><svg class="ic-moon"><use href="#i-moon"/></svg><svg class="ic-sun"><use href="#i-sun"/></svg></button>
     </div>
   </header>
@@ -274,7 +280,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><button type="button" class="khead" id="kHeadBtn" aria-label="케이 프로필 보기"><span class="kface sm" data-kface="head" aria-hidden="true"></span><span class="khead-tx"><b>케이</b><small>소장</small></span></button><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatStarsBtn" aria-label="저장한 답" title="저장한 답"><svg><use href="#i-star"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><button type="button" class="khead" id="kHeadBtn" aria-label="케이 프로필 보기"><span class="kface sm" data-kface="head" aria-hidden="true"></span><i class="kstat" id="kHeadDot" style="display:none;" aria-hidden="true"></i><span class="khead-tx"><b>케이</b><small id="kHeadSub">소장</small></span></button><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatStarsBtn" aria-label="저장한 답" title="저장한 답"><svg><use href="#i-star"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
       <!-- 대화 검색바(🔍 누르면 나타남) -->
       <div id="chatSearchBar" class="chatsearchbar" style="display:none;">
         <div class="input filled chatsearchinput"><svg class="lead"><use href="#i-search"/></svg><input id="chatSearchInput" type="text" placeholder="대화에서 찾기 (이름·단어)"></div>
@@ -417,6 +423,9 @@
       <!-- v8.2(O-0157): 바탕화면 케이 위젯 — 폰에서만 보임(app.js initKBridge 가 켬) -->
       <div class="kw-sec" id="kwWidgetSec" style="display:none;"><b>바탕화면 위젯</b><small>바탕화면 길게 누르기 → 위젯</small></div>
       <label class="card toggle kw-motion" id="kwWidgetRow" style="display:none;"><span><b>위젯에 내용 숨기기</b><small>켜면 위젯에 「새 소식 N건」만 보이고 글 내용은 안 보여요</small></span><input type="checkbox" id="kwWidgetHide" hidden><span class="switch"></span></label>
+      <!-- v8.4(O-0162): 글자 크기 — 채팅 말풍선·입력창·홈 카드·문서 뷰어 표에 적용 -->
+      <div class="kw-sec"><b>글자 크기</b><small>이 폰에만 저장돼요</small></div>
+      <button type="button" class="card toggle kw-motion" id="kwFontRow"><span><b>글자 크기 바꾸기</b><small id="kwFontNow">지금: 보통</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <!-- O-0116: 시작 인사 설정 -->
       <div class="kw-sec"><b>시작 인사</b><small id="kwIntroWhy"></small></div>
       <div class="card kw-intro">
@@ -627,6 +636,8 @@
     <div class="kprof-body">
       <div class="kprof-name">케이 <small>· 소장</small></div>
       <div class="kprof-intro">대표님의 일을 챙기고, 정리해서 보고드리는 AI 사무소 소장입니다.</div>
+      <!-- v8.4(O-0162) PC 케이 상태(머리줄 점의 뜻). 상태를 모르면 숨김 -->
+      <div class="kprof-stat" id="kProfStat" style="display:none;"></div>
       <div class="kprof-btns">
         <button type="button" class="kprof-btn" id="kProfClose">닫기</button>
         <button type="button" class="kprof-btn primary" id="kProfWardrobe">케이 꾸미기</button>

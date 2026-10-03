@@ -32,6 +32,8 @@
   var viewMode = 'pdf';
   var isExcelDoc = false, excelWorkbook = null, excelFile = null, excelName = '', excelView = 'table', excelPdfBuf = null;
   var tableFontPx = 15; var TABLE_FONT_MIN = 9, TABLE_FONT_MAX = 40, TABLE_FONT_DEFAULT = 15;
+  // v8.4(O-0162) 글자 크기 4단계: 엑셀 표의 「처음 크기」(시트 바꾸기·[맞춤])를 설정 배율에 맞춘다(15px × 0.9~1.3). 손가락 확대·축소는 그대로.
+  function tableFontBase() { var k = 1; try { k = (window.SmartFont && SmartFont.scale) ? (SmartFont.scale() || 1) : 1; } catch (e) {} return Math.round(TABLE_FONT_DEFAULT * k); }
   var pdfDoc = null, baseScale = 1, userZoom = 1, renderedZoom = 1, userRotation = 0, curIsPpt = false;
   var pdfPaged = false, pageModeCur = 1;
   try { pdfPaged = localStorage.getItem('docviewer_paged') === '1'; } catch (e) {}
@@ -451,7 +453,7 @@
     if (!excelWorkbook) return;
     idx = Math.max(0, Math.min(excelWorkbook.SheetNames.length - 1, idx || 0));
     var ws = excelWorkbook.Sheets[excelWorkbook.SheetNames[idx]];
-    sheetSel.value = String(idx); tableviewEl.innerHTML = ''; tableFontPx = TABLE_FONT_DEFAULT; applyTableFont();
+    sheetSel.value = String(idx); tableviewEl.innerHTML = ''; tableFontPx = tableFontBase(); applyTableFont();
     if (!ws || !ws['!ref']) { var e = document.createElement('div'); e.style.cssText = 'padding:24px;color:var(--sub);font-size:16px;'; e.textContent = '빈 시트입니다.'; tableviewEl.appendChild(e); }
     else tableviewEl.appendChild(buildSheetTable(ws));
     scroller.scrollTop = 0; scroller.scrollLeft = 0;
@@ -1496,7 +1498,7 @@
     $('dvBack').onclick = backAction;
     $('dvZoomIn').onclick = function () { if (viewMode === 'table') stepTableFont(1.15); else stepZoom(1.25); };
     $('dvZoomOut').onclick = function () { if (viewMode === 'table') stepTableFont(1 / 1.15); else stepZoom(0.8); };
-    $('zoomFit').onclick = function () { if (viewMode === 'table') { tableFontPx = TABLE_FONT_DEFAULT; applyTableFont(); return; } userZoom = 1; applyZoom(); };
+    $('zoomFit').onclick = function () { if (viewMode === 'table') { tableFontPx = tableFontBase(); applyTableFont(); return; } userZoom = 1; applyZoom(); };
     prevBtn.onclick = function () { goToPage(getCurrentPage() - 1); };
     nextBtn.onclick = function () { goToPage(getCurrentPage() + 1); };
     pageBadge.onclick = promptGoToPage;

@@ -302,9 +302,35 @@
     pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
   });
 
+  /* v8.4(O-0162) 다른 앱에서 공유받은 녹음 파일(통화 녹음·음성 녹음기 m4a·mp3·wav 등) → 회의록.
+   *   앱 녹음이 끝났을 때와 같은 「녹음 완료」 화면(pendingBlob)에 올려 둔다 → 보내는 길(OfficeBridge.send / sendAudioChunked),
+   *   PC 처리(collect.py·video_worker 전사·요약·회의자료 반영)는 앱 녹음과 완전히 같다. 화면 머리글·[다시 녹음] 글만 잠깐 바꾼다. */
+  function recPanelMode(shared) {
+    var ttl = recordedPanel ? recordedPanel.querySelector('.subbar .title') : null;
+    if (ttl) ttl.textContent = shared ? '녹음 파일 정리' : '녹음 완료';
+    if (btnRetake) btnRetake.innerHTML = shared ? '<svg><use href="#i-x"/></svg>취소' : '<svg><use href="#i-mic"/></svg>다시 녹음';
+  }
+  function titleFromAudioName(n) {
+    var t = String(n || '').replace(/\.[A-Za-z0-9]{2,5}$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return t.slice(0, 40);
+  }
+  function audioToMeeting(f) {
+    if (!f) return;
+    if (isRecording) { toast('지금 녹음 중이에요. 녹음을 마친 뒤 다시 공유해 주세요.', 3500); return; }
+    hideBanner();
+    pendingBlob = f; pendingMaterials = []; renderMatList();
+    if (memoTitle) memoTitle.value = titleFromAudioName(f.name) || defaultTitle();
+    var mb = (f.size || 0) / 1024 / 1024;
+    if (recDoneBadge) recDoneBadge.textContent = '📎 공유받은 녹음 파일 · ' + (f.name || '녹음') + (mb ? ' · ' + (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + 'MB' : '');
+    recPanelMode(true);
+    openScreen(recordedPanel);
+    setStatus('녹음 파일 — 제목 정하고 보내기', 'idle');
+    toast('제목을 확인하고, 필요하면 회의자료를 붙인 뒤 [PC로 보내 정리하기]를 누르세요.', 4000);
+  }
   function onRecorded(blob) {
     stopRecTimer(); isRecording = false;
     if (recCancelled) { recCancelled = false; pendingBlob = null; showHome(); return; }
+    recPanelMode(false);                       // v8.4: 공유 파일 화면이었다면 원래 글로
     pendingBlob = blob;
     renderMatList();     // 준비 화면에서 붙인 회의자료를 그대로 이어받고, 완료 화면에서 더 붙일 수 있게(2026-09-21)
     if (memoTitle) memoTitle.value = defaultTitle();
@@ -2245,10 +2271,16 @@
       return;
     }
     if (anyAwaiting()) {
-      html += kRowHtml(prevKind !== 'k', '<div class="bubble k typing"><span></span><span></span><span></span></div>', ' ktyping');
+      // v8.4(O-0162): 점 세 개 옆에 「케이가 지금 뭐 하는지」(PC가 처리 중 행에 남긴 progress_msg). 없으면 예전처럼 점만.
+      var ptx = awaitingProg();
+      html += kRowHtml(prevKind !== 'k', '<div class="bubble k typing"><span></span><span></span><span></span>' +
+        '<em class="tprog"' + (ptx ? '' : ' style="display:none"') + '>' + esc(ptx) + '</em></div>', ' ktyping');
       // 답이 늦으면(약 35초 이상) "멈춘 것처럼" 보이지 않게 안내를 함께 띄운다
       var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
-      if (slowWait) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
+      if (kStatState === 'down') html += '<div class="waitnote down">PC가 응답하지 않아요. PC가 켜져 있는지 확인해 주세요. 켜지면 이어서 답해요.</div>';
+      else if (slowWait && !ptx) html += '<div class="waitnote">케이가 PC에서 확인 중이에요. 조금 걸릴 수 있어요.</div>';
+    } else if (kStatState === 'down') {                    // v8.4: 기다리는 답이 없어도 PC가 꺼져 있으면 맨 아래 한 줄로 알림
+      html += '<div class="waitnote down">PC가 응답하지 않아요. 지금 보내 두시면 PC가 켜진 뒤 답해요.</div>';
     }
     chatLog.innerHTML = chatMoreHtml() + html;         // v7.0: 맨 위 [이전 대화 더 보기] / 「여기가 대화의 처음이에요」
     applyChatFolds();                                    // O-0111: 긴 말풍선 접기(아래 스크롤 계산 '전'에 높이를 확정)
@@ -2321,6 +2353,7 @@
     // C4: 공유함과 동일 — 연동 암호가 없으면 조용히 넘기지 말고 매번 안내(암호 없으면 기기 간 대화가 안 보임).
     if (!getSyncPass()) showSyncGate(true);
     else refreshStarIds(false);                   // v8.3: 다른 기기에서 저장·해제한 ⭐ 표시도 맞춘다(1분에 한 번까지)
+    try { refreshKStat(true); } catch (e) {}      // v8.4(O-0162) 머리줄 PC 케이 상태 점
     if (anyAwaiting()) startChatReconcile();
     // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
@@ -2732,8 +2765,9 @@
         m._polling = false;
         if (chatMsgs.indexOf(m) === -1) return;    // 사이에 이 질문이 삭제됐으면 답을 붙이지 않음
         if (m.answered || m._doneShown) return;    // 하드 타임아웃 sweep 이 이미 풀었으면 중복 처리 안 함
+        if (res && res.status !== 'done') setAwaitProg(m, res);       // v8.4(O-0162) 진행 표시
         if (res && res.status === 'done') {
-          m.answered = true; m._doneShown = true;
+          m.answered = true; m._doneShown = true; m.prog = '';
           if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
           var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '답을 못 만들었어요. 다시 물어봐 주세요.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
@@ -2766,6 +2800,104 @@
       }).catch(function () { m._polling = false; });
     });
   }
+  /* ==================== v8.4(O-0162) ① 케이가 지금 뭐 하는지 · ② PC 케이 상태 점 ====================
+   * ① PC 채팅 응답기가 처리 중인 행의 progress_msg 에 「캘린더 확인 중…」「문서 읽는 중…」 같은 한 줄을 남긴다.
+   *    앱은 원래 2.5초마다 부르던 get_voice_memo(poll) 결과에서 그 줄만 꺼내 점 세 개 옆에 보여 준다(서버 호출 추가 없음).
+   *    PC 스위치(v84_switch.json progress_live)가 꺼져 있거나 옛 PC면 줄이 없으니 예전처럼 점만.
+   * ② get_k_status(연동 암호)로 PC 응답기의 하트비트(60초)를 읽어 머리줄 얼굴 옆 점: 초록=정상 · 주황=바쁨 · 빨강=PC 응답 없음(3분 넘게 소식 없음).
+   *    채팅 화면이 보일 때만 30초마다 1번. 서버 함수가 없거나 PC가 아직 한 번도 안 남겼으면 점을 숨긴다(예전 머리줄 그대로). */
+  function progLabel(res) {
+    if (!res || res.status !== 'processing') return '';
+    var p = String(res.progress_msg || '').trim();
+    var mm = /^받는 중 (\d+)\/(\d+)$/.exec(p);                 // 큰 첨부 조각 받기(기존 PC 문구)
+    if (mm) return '보내신 파일 받는 중… (' + mm[1] + '/' + mm[2] + ')';
+    return p.slice(0, 40);
+  }
+  function awaitingProg() {
+    for (var i = 0; i < chatMsgs.length; i++) {
+      var m = chatMsgs[i];
+      if (m.role === 'me' && !m.answered && m.id && m.token && m.prog) return m.prog;
+    }
+    return '';
+  }
+  function setAwaitProg(m, res) {
+    var p = progLabel(res);
+    if (p === (m.prog || '')) return;
+    m.prog = p;
+    updateTypingProg();
+  }
+  function updateTypingProg() {
+    var p = awaitingProg();
+    var el = chatLog ? chatLog.querySelector('.ktyping .tprog') : null;
+    if (el) {
+      el.textContent = p; el.style.display = p ? '' : 'none';
+      var wn = chatLog.querySelector('.waitnote:not(.down)'); if (wn && p) wn.style.display = 'none';   // 진행이 보이면 「조금 걸릴 수 있어요」는 접음
+    }
+    if (convoOn && chatKStage && chatKStage.getAttribute('data-state') === 'think' && chatKStageHint) chatKStageHint.textContent = p || '잠시만 기다려 주세요';
+  }
+
+  var kStatState = null, kStatData = null, kStatBusy = false, kStatMissing = false, kStatLast = 0;
+  var KSTAT_DOWN_S = 180;                        // PC 하트비트 60초 × 3 — 이보다 오래 소식이 없으면 「PC 응답 없음」
+  function kStatCalc(d) {
+    if (!d || !d.updated_at) return null;
+    var up = Date.parse(d.updated_at); if (isNaN(up)) return null;
+    var now = Date.parse(d.server_now); if (isNaN(now)) now = Date.now();   // 서버 시계 기준(폰 시계가 틀려도 맞게)
+    if (d.stopping || (now - up) / 1000 > KSTAT_DOWN_S) return 'down';
+    return d.busy ? 'busy' : 'ok';
+  }
+  function kStatSentence() {
+    var d = kStatData || {};
+    if (kStatState === 'ok') return '🟢 PC 케이가 켜져 있어요. 보내시면 바로 답해요.';
+    if (kStatState === 'busy') return d.busy_kind === 'other'
+      ? '🟠 케이가 다른 창구 일을 하는 중이에요. 보내시면 끝나는 대로 답해요.'
+      : '🟠 케이가 앞의 질문에 답하는 중이에요. 보내시면 차례대로 답해요.';
+    if (kStatState === 'down') {
+      var mins = 0;
+      try { mins = Math.round((Date.parse(d.server_now) - Date.parse(d.updated_at)) / 60000); } catch (e) {}
+      return '🔴 PC가 ' + (mins > 0 && mins < 600 ? mins + '분째 ' : '') + '응답이 없어요. PC가 켜져 있는지, 인터넷이 되는지 확인해 주세요. 보내 두시면 PC가 살아난 뒤 답해요.';
+    }
+    return '';
+  }
+  function renderKStat() {
+    var dot = $('kHeadDot'), sub = $('kHeadSub'), btn = $('kHeadBtn'), ps = $('kProfStat');
+    if (!dot || !sub) return;
+    if (!kStatState) {
+      dot.style.display = 'none'; sub.textContent = '소장'; sub.className = '';
+      if (btn) btn.setAttribute('aria-label', '케이 프로필 보기');
+      if (ps) ps.style.display = 'none';
+      return;
+    }
+    dot.className = 'kstat ' + kStatState; dot.style.display = '';
+    sub.className = 'kst-' + kStatState;
+    // 좁은 폰(접은 폴드 등)은 머리줄 자리가 없어 점 색만(글자는 「소장」 그대로) — 넓은 화면(펼친 폴드·PC)에서만 「· 정상」 같은 글을 붙인다(CSS .kst-w)
+    var word = kStatState === 'ok' ? '정상' : (kStatState === 'busy' ? '바쁨' : 'PC 응답 없음');
+    sub.innerHTML = '소장<span class="kst-w"> · ' + word + '</span>';
+    if (btn) btn.setAttribute('aria-label', '케이 프로필 보기 — PC 케이 ' + word);
+    if (ps) { ps.textContent = kStatSentence(); ps.style.display = ''; }
+  }
+  function refreshKStat(force) {
+    var pass = getSyncPass();
+    if (!pass || kStatMissing || !window.OfficeBridge || !OfficeBridge.getKStatus) { if (kStatState) { kStatState = null; renderKStat(); } return; }
+    if (kStatBusy) return;
+    if (!force && Date.now() - kStatLast < 25000) return;
+    kStatBusy = true; kStatLast = Date.now();
+    OfficeBridge.getKStatus(pass).then(function (d) {
+      kStatBusy = false;
+      var prev = kStatState;
+      kStatData = d; kStatState = kStatCalc(d);
+      renderKStat();
+      if (prev !== kStatState && isOpen(chatView) && (prev === 'down' || kStatState === 'down')) renderChat();   // 「PC 응답 없음」 안내 줄을 붙이거나 뗀다
+    }).catch(function (e) {
+      kStatBusy = false;
+      if (e && (e.notready || e.badpass)) {          // 서버 함수 없음 → 이번 실행 동안 다시 묻지 않음 / 암호 틀림 → 숨김
+        if (e.notready) kStatMissing = true;
+        kStatState = null; renderKStat();
+      }                                              // 인터넷 끊김 등은 마지막 상태를 그대로 둔다
+    });
+  }
+  setInterval(function () { try { if (!document.hidden && isOpen(chatView)) refreshKStat(false); } catch (e) {} }, 30000);
+  document.addEventListener('visibilitychange', function () { try { if (!document.hidden && isOpen(chatView)) refreshKStat(true); } catch (e) {} });
+
   /* ---- 케이가 먼저 보낸 사무소 방송(office_broadcast) 되읽기 ----
    * PC(notify_app.py)가 넣은 방송 행을 list_office_pushes RPC 로 가져와 케이 말풍선으로 추가한다.
    * · 중복방지: 이미 그린 방송은 bid(=행 id)로 걸러 다시 안 그린다(앱 재시작 후에도 유지).
@@ -4144,6 +4276,64 @@
     $('chatSearchInput').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChatSearch(); });
   }
 
+  /* ===================== v8.4(O-0162) 글자 크기 4단계 =====================
+   * 작게(0.9)·보통(1, 예전 그대로)·크게(1.15)·아주 크게(1.3). <html data-fs="sm|lg|xl"> 하나로 CSS(styles.css·docviewer.css 끝)가
+   *   채팅 말풍선·입력창·홈 카드(오늘 한눈에·버튼 카드·지난 메모)·문서 뷰어 글(엑셀 표 포함)을 키운다. PDF 그림(캔버스)은 확대 기능이 따로 있어 제외.
+   * 폰(이 기기)에만 저장(localStorage) — 폴드 안·밖 화면, PC판이 각자. 폰 네이티브 입력 바는 열 때 크기를 넘긴다(native-input.js).
+   * 고르는 곳: 맨 위 「가가」 버튼 · 케이 꾸미기 → 「글자 크기」. 보통이면 속성을 아예 지워 예전과 한 글자도 다르지 않게. */
+  var FS_KEY = 'smart_font_size';
+  var FS_LIST = [{ k: 'sm', n: '작게', s: 0.9 }, { k: 'md', n: '보통', s: 1 }, { k: 'lg', n: '크게', s: 1.15 }, { k: 'xl', n: '아주 크게', s: 1.3 }];
+  function fsGet() { var v = 'md'; try { v = localStorage.getItem(FS_KEY) || 'md'; } catch (e) {} return FS_LIST.some(function (x) { return x.k === v; }) ? v : 'md'; }
+  function fsInfo(k) { for (var i = 0; i < FS_LIST.length; i++) if (FS_LIST[i].k === k) return FS_LIST[i]; return FS_LIST[1]; }
+  function fsApply(k) {
+    if (k === 'md') document.documentElement.removeAttribute('data-fs');
+    else document.documentElement.setAttribute('data-fs', k);
+    var now = $('kwFontNow'); if (now) now.textContent = '지금: ' + fsInfo(k).n;
+  }
+  function fsSet(k) {
+    try { localStorage.setItem(FS_KEY, k); } catch (e) {}
+    fsApply(k);
+    try { if (isOpen(chatView)) renderChat(); } catch (e) {}           // 긴 말풍선 접기 높이 다시 재기
+    try { if (window.TodayCard) TodayCard.render(); } catch (e) {}
+  }
+  window.SmartFont = { get: fsGet, set: fsSet, scale: function () { return fsInfo(fsGet()).s; } };
+  fsApply(fsGet());
+  var fsSheet = null;
+  function closeFontSheet() { if (fsSheet) { fsSheet.remove(); fsSheet = null; } }
+  function openFontSheet() {
+    closeFontSheet();
+    var cur = fsGet();
+    fsSheet = document.createElement('div');
+    fsSheet.className = 'sheet fs-sheet';
+    var h = '<div class="sheet-box" role="dialog" aria-label="글자 크기"><div class="sheet-head">글자 크기</div>' +
+      '<div class="fs-seg" role="radiogroup">';
+    FS_LIST.forEach(function (x) {
+      h += '<button type="button" class="fs-opt' + (x.k === cur ? ' on' : '') + '" data-fs-k="' + x.k + '" role="radio" aria-checked="' + (x.k === cur) + '">' +
+        '<span class="fs-a" style="font-size:' + Math.round(17 * x.s) + 'px">가</span><small>' + x.n + '</small></button>';
+    });
+    h += '</div><div class="fs-preview"><div class="bubble k">대표님, 오늘 오후 3시에 학과 회의가 있어요. 회의자료는 아침에 보내 드렸어요.</div>' +
+      '<div class="bubble me">고마워, 4시로 옮겨 줘</div></div>' +
+      '<div class="sheet-hint">채팅·입력창·홈 카드·문서 뷰어 글에 적용돼요. 이 폰에만 저장돼요.</div>' +
+      '<button type="button" class="sheet-btn" data-fs-close>닫기</button></div>';
+    fsSheet.innerHTML = h;
+    fsSheet.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-fs-k]') : null;
+      if (b) {
+        var k = b.getAttribute('data-fs-k');
+        fsSet(k);
+        Array.prototype.forEach.call(fsSheet.querySelectorAll('[data-fs-k]'), function (x) {
+          var on = x.getAttribute('data-fs-k') === k; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on));
+        });
+        return;
+      }
+      if (ev.target === fsSheet || (ev.target.closest && ev.target.closest('[data-fs-close]'))) closeFontSheet();
+    });
+    document.body.appendChild(fsSheet);
+    fsSheet.style.display = 'flex';
+  }
+  if ($('fontBtn')) $('fontBtn').addEventListener('click', openFontSheet);
+  if ($('kwFontRow')) $('kwFontRow').addEventListener('click', openFontSheet);
+
   /* ===================== 테마 토글 ===================== */
   if ($('themeToggle')) $('themeToggle').addEventListener('click', function () {
     var cur = document.documentElement.getAttribute('data-style') || 'dark';
@@ -4184,6 +4374,8 @@
     );
   }
   function goBack() {
+    if (fsSheet) { closeFontSheet(); return true; }                        // v8.4: 글자 크기 창
+    if (document.querySelector('.shin-sheet')) { try { document.querySelector('.shin-sheet').remove(); } catch (e) {} return true; }   // v8.4: 공유 고르기 창(문서·녹음)
     if (kProfile && isOpen(kProfile)) { closeKProfile(); return true; }   // v6.0: 케이 프로필 카드
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
@@ -4873,6 +5065,9 @@
       if (o.images && o.images.length) onChatCamPicked(o.images);
       if (o.files && o.files.length) onChatFilesPicked(o.files);
     },
+    // v8.4(O-0162) 공유로 받은 녹음 파일 → 「회의록으로 정리」: 앱에서 녹음을 마친 것과 똑같은 「녹음 완료」 화면으로.
+    //   제목 고치기·회의자료 붙이기·[PC로 보내 정리하기]·[임시 저장]이 그대로 쓰이고, 40MB 넘으면 조각 전송(긴 녹음과 같은 길).
+    audioToMeeting: function (f) { audioToMeeting(f); },
     // v8.2(O-0157) 공유로 받은 문서 1개 → [문서 뷰어로 열기]
     openDocFile: function (f) {
       openScreen(docsView);

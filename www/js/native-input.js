@@ -100,7 +100,8 @@
         colors: readColors(target),
         hasAttach: !!m.attach, hasCamera: !!m.cam,
         hasOpus: !!m.opus,                                                     // v5.8
-        opusOn: !!(m.opus && global.SmartOpus && global.SmartOpus.get())
+        opusOn: !!(m.opus && global.SmartOpus && global.SmartOpus.get()),
+        textSize: Math.round(16 * ((global.SmartFont && global.SmartFont.scale && global.SmartFont.scale()) || 1) * 10) / 10   // v8.4 글자 크기(옛 APK는 무시 → 16)
       });
       if (p && p.catch) p.catch(function () { restoreWebBar(); });  // 열기 실패 시 원복
     } catch (e) { restoreWebBar(); }

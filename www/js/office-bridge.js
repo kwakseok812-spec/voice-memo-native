@@ -50,7 +50,12 @@
     (global.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach(function (_, i) { a[i] = Math.random() * 256 | 0; });
     return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
   }
+  // v8.4(O-0162): 다른 앱에서 [공유]로 받은 녹음 파일(File)은 이름의 확장자를 먼저 쓴다(mp3·m4a·amr 등을
+  //   예전처럼 'webm' 으로 붙이지 않게). 앱 안 녹음(이름 없는 Blob)은 예전과 똑같다.
+  var AUDIO_EXT_OK = /^(m4a|mp3|wav|aac|amr|3gp|3ga|ogg|oga|opus|flac|webm|mp4|wma)$/;
   function extFromBlob(blob) {
+    var nm = (blob && blob.name) || '', mx = /\.([A-Za-z0-9]{2,5})$/.exec(nm);
+    if (mx && AUDIO_EXT_OK.test(mx[1].toLowerCase())) return mx[1].toLowerCase();
     var t = (blob && blob.type) || '';
     if (/webm/.test(t)) return 'webm';
     if (/mp4|m4a|aac/.test(t)) return 'mp4';
@@ -1108,6 +1113,26 @@
       return r.json();
     }).then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
   }
+  /* v8.4(O-0162) 채팅 머리줄 「PC 케이 상태 점」 — PC 채팅 응답기가 60초마다 남기는 하트비트(k_status)를
+   *   연동 암호 게이트 RPC 로 읽는다(공개 키로 표 직접 접근 불가). 서버 함수가 없으면(404) notready → 점을 숨긴다.
+   *   15초 시간 제한(poll 과 같은 이유 — 굳은 요청이 다음 확인을 막지 않게). */
+  function getKStatus(pass) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, 15000) : null;
+    return fetch(CONFIG.url + '/rest/v1/rpc/get_k_status', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_pass: pass || '' }),
+      signal: ac ? ac.signal : undefined
+    }).then(function (r) {
+      if (to) clearTimeout(to);
+      if (r.status === 404) { var n = new Error('NOT_READY'); n.notready = true; throw n; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('PC 상태 조회 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }, function (e) { if (to) clearTimeout(to); throw e; })
+      .then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
+  }
   function listOfficeOrders(limit, pass) {
     return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
   }
@@ -1465,6 +1490,7 @@
     renameMemo: renameMemo,             // v5.3: 회의 요약 항목 이름 변경(title만)
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
     getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
+    getKStatus: getKStatus,         // v8.4(O-0162) 채팅 머리줄 PC 케이 상태 점
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
     listReminders: listReminders, cancelReminder: cancelReminder,                             // v8.3: ⏰ 예약한 알림

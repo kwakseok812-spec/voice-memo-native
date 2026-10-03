@@ -242,3 +242,12 @@
   font-family:inherit; font-size:16px; line-height:1.45; padding:11px 12px;}
 #docRoot .dva-text:focus{outline:none; border-color:var(--brand);}
 #docRoot #dvaSend:disabled{opacity:.45;}
+
+/* v8.4(O-0162) 글자 크기 4단계 — 문서 뷰어의 글(파일 이름·목록·안내). 엑셀 표는 docviewer.js tableFontBase()가 처음 크기를 맞춘다.
+   PDF·한글·워드 쪽 그림(캔버스)은 화면 확대 기능이 따로 있어 제외. 보통(md)은 속성이 없어 예전 그대로. */
+html[data-fs] #docRoot .dvs-nm{font-size:calc(15px * var(--fsx))}
+html[data-fs] #docRoot .toolbar .fname{font-size:calc(14px * var(--fsx))}
+html[data-fs] #docRoot .dv-tabmain{font-size:calc(14px * var(--fsx))}
+html[data-fs] #docRoot .dvs-note{font-size:calc(13px * var(--fsx))}
+html[data-fs] #docOverlay .msg{font-size:calc(17px * var(--fsx))}
+html[data-fs] #docOverlay .sub{font-size:calc(14px * var(--fsx))}

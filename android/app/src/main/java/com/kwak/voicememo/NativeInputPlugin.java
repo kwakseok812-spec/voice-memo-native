@@ -87,6 +87,8 @@ public class NativeInputPlugin extends Plugin {
         }
     }
 
+    private float textSizeSp = 16f;   // v8.4(O-0162) 입력 글자 크기(sp) — 웹 설정 「글자 크기」
+
     @PluginMethod
     public void open(final PluginCall call) {
         final String text = call.getString("text", "");
@@ -96,6 +98,10 @@ public class NativeInputPlugin extends Plugin {
         final boolean hasCamera = call.getBoolean("hasCamera", false);
         final boolean hasOpus = call.getBoolean("hasOpus", false);     // v5.8
         final boolean opusInit = call.getBoolean("opusOn", false);
+        // v8.4(O-0162) 글자 크기 4단계: 웹이 고른 크기(sp)를 받는다. 없거나 엉뚱하면 예전 16sp.
+        Float ts = null;
+        try { ts = call.getFloat("textSize"); } catch (Exception e) { ts = null; }
+        textSizeSp = (ts == null || ts < 12f || ts > 30f) ? 16f : ts;
         getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -300,6 +306,7 @@ public class NativeInputPlugin extends Plugin {
     private void showBar(String text, String hint, JSObject colors, boolean hasAttach, boolean hasCamera,
                          boolean hasOpus, boolean opusInit) {
         if (dialog != null && dialog.isShowing() && edit != null) {
+            edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);   // v8.4
             edit.setText(text);
             edit.setSelection(edit.getText().length());
             edit.setHint(hint);
@@ -387,7 +394,7 @@ public class NativeInputPlugin extends Plugin {
         edit.setPadding(dp(16), dp(10), dp(16), dp(10));
         edit.setTextColor(fg);
         edit.setHintTextColor(hintCol);
-        edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);   // v8.4(O-0162): 예전 16 고정 → 글자 크기 설정
         edit.setHint(hint);
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         edit.setImeOptions(EditorInfo.IME_ACTION_SEND | EditorInfo.IME_FLAG_NO_EXTRACT_UI);

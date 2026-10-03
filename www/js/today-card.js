@@ -21,6 +21,9 @@
  *   · 「3호관 301호」「대회의실」「본관 5층」처럼 건물 안 방 이름만 있으면 버튼을 숨긴다(검색해도 엉뚱한 곳).
  *     기관·주소 + 방 이름이면 방 부분만 떼고 검색(예: 「○○대학교 본관 2층 대회의실」 → 「○○대학교」).
  *     온라인 회의(Zoom·화상·온라인·주소 링크)도 숨긴다.
+ * (v8.4 O-0162) 머리 아래 「출퇴근 날씨·우산」 한 줄 — PC(home_digest.py)가 Open-Meteo(키 없는 무료 날씨)를 파이썬으로 직접 읽어
+ *   요약에 weather.slots(오늘 출근 07~09·퇴근 18~20, 내일 출근·퇴근 — 기온·체감·비 확률·우산 판정)를 넣는다. 서울 기준.
+ *   지금 시각에 맞는 두 칸만 보인다(아침=오늘 출근·퇴근, 낮=오늘 퇴근·내일 출근, 밤=내일 출근·퇴근). 없으면 줄 자체를 숨긴다.
  * ⚠️ confirm() 금지(앱 함정) — 상세는 기존 확인 시트(SmartHome.sheet) 재사용.
  * ⚠️ 연동 암호가 없으면 카드 전체를 숨긴다(메일 제목 등이 암호 없이 보이면 안 됨).
  * ==========================================================================*/
@@ -160,6 +163,40 @@
       (count != null ? '<em>' + count + '</em>' : '') + (more ? '<small>' + more + '</small>' : '') + '</div>' + body + '</div>';
   }
 
+  /* ---------- (v8.4) 출퇴근 날씨·우산 한 줄 ---------- */
+  function wxPick(slots) {
+    var by = {}; (slots || []).forEach(function (x) { if (x && x.key) by[x.key] = x; });
+    var m = nowMin(), keys;
+    if (m < 9 * 60 + 30) keys = ['am', 'pm'];                 // 아침: 오늘 출근 · 퇴근
+    else if (m < 20 * 60 + 30) keys = ['pm', 'tmr_am'];     // 낮: 오늘 퇴근 · 내일 출근
+    else keys = ['tmr_am', 'tmr_pm'];                        // 밤: 내일 출근 · 퇴근
+    return keys.map(function (k) { return by[k]; }).filter(Boolean);
+  }
+  function wxSeg(x) {
+    var feels = (x.feels != null && Math.abs(x.feels - x.temp) >= 3) ? '<i>(체감 ' + esc(x.feels) + '°)</i>' : '';
+    return '<span class="wx-seg"><em>' + esc(x.label) + '</em> ' + esc(x.temp) + '°' + feels + ' · 비 ' + esc(x.prob) + '%</span>';
+  }
+  function wxRow(dg) {
+    var w = dg && dg.weather; if (!w || !w.slots) return '';
+    var pick = wxPick(w.slots); if (!pick.length) return '';
+    var yes = pick.filter(function (x) { return x.umbrella === 'yes'; })[0], maybe = pick.filter(function (x) { return x.umbrella === 'maybe'; })[0];
+    var snow = pick.some(function (x) { return x.snow; });
+    var cls = 'ok', ic = '☀️', tip = '우산 필요 없어요';
+    if (yes) { cls = 'rain'; ic = snow ? '❄️' : '☂️'; tip = (snow ? '눈 소식 — ' : '') + '우산 챙기세요' + (pick.length > 1 ? ' (' + yes.label + ')' : ''); }
+    else if (maybe) { cls = 'maybe'; ic = '🌂'; tip = '작은 우산 있으면 좋아요' + (pick.length > 1 ? ' (' + maybe.label + ')' : ''); }
+    return '<button type="button" class="td-wx ' + cls + '" data-td="wx"><span class="wx-ic" aria-hidden="true">' + ic + '</span>' +
+      '<span class="td-main"><b>' + esc(tip) + '</b><small>' + pick.map(wxSeg).join('<span class="wx-sep"> · </span>') + '</small></span>' +
+      '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
+  }
+  function wxDetail(dg) {
+    var w = dg && dg.weather; if (!w || !w.slots) return '';
+    var um = { yes: '☂️ 우산 챙기세요', maybe: '🌂 작은 우산 있으면 좋아요', no: '우산 필요 없어요' };
+    return w.slots.map(function (x) {
+      return x.label + ' (' + x.from + '~' + x.to + '시)  ' + x.temp + '°' + (x.feels != null ? ' · 체감 ' + x.feels + '°' : '') +
+        ' · 비 ' + x.prob + '%' + (x.mm ? ' · ' + x.mm + 'mm' : '') + (x.snow ? ' · 눈' : '') + '\n   → ' + (um[x.umbrella] || '');
+    }).join('\n') + '\n\n' + (w.place || '서울') + ' 기준 · ' + hmOf(w.fetched_at) + ' 예보(Open-Meteo)';
+  }
+
   /* ---------- 그리기 ---------- */
   function render() {
     var card = $('todayCard'); if (!card) return;
@@ -181,6 +218,7 @@
     var h = '<div class="td-head"><div class="td-ttl"><b>오늘 한눈에</b><span>' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span></div>' +
       '<div class="td-meta">' + hdrNote + '<button type="button" class="td-refresh" data-td="refresh" aria-label="새로 고침"><svg><use href="#i-refresh"/></svg></button></div></div>';
 
+    if (showDigest && dg) h += wxRow(dg);                           // v8.4 출퇴근 날씨·우산(없으면 '')
     var nothing = !evs.length && !mails.length && !tasks.length;
     if (nothing && (dg || !showDigest) && st.orders) {
       h += '<div class="td-empty"><span class="td-empty-ic"><svg><use href="#i-check"/></svg></span>' +
@@ -247,6 +285,10 @@
     var card = $('todayCard'), kind = t.getAttribute('data-td'), S = H();
     if (kind === 'refresh') { st.lastFetch = 0; refresh(false); if (S.refreshOrders) S.refreshOrders(); return; }
     if (kind === 'voice') { if (S.startVoiceSchedule) S.startVoiceSchedule(); return; }
+    if (kind === 'wx') {                                           // v8.4: 출퇴근 날씨 자세히
+      var dgw = st.digest; if (S.sheet && dgw && dgw.weather) S.sheet('출퇴근 날씨', wxDetail(dgw), '케이에게 묻기', 'i-chat', function () { if (S.draft) S.draft('오늘 날씨 관련해서 '); });
+      return;
+    }
     if (kind === 'tasks' || kind === 'evmore') {
       if (kind === 'tasks' && S.openOrders) S.openOrders();
       if (kind === 'evmore') { var all = (card._evs || []).map(function (o) { var e = o.e; return (e.all_day ? '종일' : (e.start || '') + (e.end ? '~' + e.end : '')) + '  ' + (e.title || ''); }).join('\n'); if (S.sheet) S.sheet('오늘 일정 전체', all, '케이에게 묻기', 'i-chat', function () { if (S.draft) S.draft('오늘 일정 중에서 '); }); }
