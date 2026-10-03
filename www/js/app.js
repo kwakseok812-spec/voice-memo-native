@@ -143,7 +143,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), $('calcView'), processing, resultWrap];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -3815,6 +3815,10 @@
     else toast('지도를 열지 못했어요 — 다시 눌러 주세요.');
   });
   if ($('btnLocker')) $('btnLocker').addEventListener('click', openLocker);
+  if ($('btnCalc')) $('btnCalc').addEventListener('click', function () {   // (O-0178) 계산기
+    openScreen($('calcView'));
+    if (window.SmartCalc && SmartCalc.onOpen) SmartCalc.onOpen();
+  });
   if ($('btnMeetings')) $('btnMeetings').addEventListener('click', openMeetings);   // v5.2: 회의 요약 탭
   if ($('lockerSend')) $('lockerSend').addEventListener('click', sendLockerMsg);
   if (lockerInput) {
@@ -4505,6 +4509,10 @@
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     if (isOpen($('remindersView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }   // v8.3: 예약한 알림
+    if (isOpen($('calcView'))) {       // (O-0178) 계산기 — 기록이 열려 있으면 기록만 닫고, 아니면 홈으로
+      if (window.SmartCalc && SmartCalc.closeHistory && SmartCalc.closeHistory()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
       if (meetingsDetailOpen) { showMeetingsList(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -5151,6 +5159,16 @@
     toast: function (msg, ms) { toast(msg, ms); },   // (O-0133) 일정 [길찾기] 안내
     openOrders: function (hlId) { openOrders(false, hlId || ''); },
     openReminders: function () { openReminders(); },   // (O-0176) 오늘 한눈에 「예약한 알림」 한 줄 → 목록·취소
+    // (O-0178) 계산기 [케이에게 묻기] 「이 계산 맞는지 봐 줘」: 채팅을 열고 그 글을 평소 전송 경로(sendChatMsg → submit_memo)로 바로 보낸다.
+    //   입력창에 쓰던 글이 있으면 덮어쓰지 않고 채워만 둔다(대표님이 보고 보내시게).
+    sendText: function (text) {
+      openChat();
+      var ci = $('chatInput'); if (!ci) return;
+      var had = (ci.value || '').trim();
+      ci.value = had ? had + '\n' + (text || '') : (text || '');
+      try { ci.dispatchEvent(new Event('input')); } catch (e) {}
+      if (!had) { try { sendChatMsg(); } catch (e) {} }
+    },
     sheet: function (title, msg, label, icon, action) {
       openSheet(title, msg, label, action);
       if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄(시각·장소·보낸 사람) 왼쪽 정렬로

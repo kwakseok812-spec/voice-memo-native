@@ -1311,29 +1311,31 @@ html[data-fs] .today .td-wx.now .td-main b{font-size:calc(16px * var(--fsx))}
 .wx-sheet .wx-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:14.5px}
 html[data-style="light"] .wx-sheet .wx-h.cur{background:rgba(37,99,235,.10)}
 
-/* ===== (O-0176) 홈 「도구」 격자 · 진행 중인 메모 · 회의록 화면 =====
-   6칸 격자: 보통 칸은 2칸씩(=한 줄 3개), 맨 아래 PC 두 칸(Claude Code 연결·PC 원격 제어)은 한 줄 전체(설명 한 줄까지 보이게 —
-   반 폭이면 390px 폰에서 「Claude Code 연결」이 두 줄로 꺾였다).
+/* ===== (O-0176·O-0178) 홈 「도구」 격자 · 진행 중인 메모 · 회의록 화면 =====
+   4칸 격자: 앱 안 기능 8칸(4×2: 회의록·문서 뷰어·건강·계산기 / 공유함·아이디어·명함 검색·길찾기) + 「PC 연결」 넓은 줄 둘
+   (Claude Code 연결·PC 원격 제어 — 반 폭이면 390px 폰에서 이름이 두 줄로 꺾여 한 줄 전체를 쓴다).
    앱 폭이 520px 로 묶여 있어 DeX·PC 넓은 화면에서도 같은 모양. 새 backdrop-filter 없음(카드 배경색만). */
 .tools-title{margin:26px 0 10px}
-.tools{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
-.tool{grid-column:span 2;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;min-width:0;min-height:104px;padding:14px 6px 12px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);color:var(--text);font-family:inherit;text-align:center;cursor:pointer}
+.tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tool{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;min-width:0;min-height:98px;padding:13px 3px 11px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);color:var(--text);font-family:inherit;text-align:center;cursor:pointer}
 .tool:active{transform:scale(.97)}
 .tool .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--ic-bg);border:1px solid var(--glass-b);flex:none}
 .tool .ic svg{width:22px;height:22px}
 .tool .ic.blue svg{color:var(--p1)} .tool .ic.cyan svg{color:var(--cyan)}
-.tool b{display:block;font-size:15px;font-weight:800;line-height:1.25;word-break:keep-all;overflow-wrap:break-word}
-.tool small{display:block;font-size:11.5px;font-weight:500;line-height:1.3;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
-.tool.wide{grid-column:span 6;flex-direction:row;align-items:center;text-align:left;gap:12px;min-height:64px;padding:11px 14px}
+.tool b{display:block;font-size:14px;font-weight:800;line-height:1.25;word-break:keep-all;overflow-wrap:break-word}
+.tool small{display:block;font-size:11px;font-weight:500;line-height:1.3;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
+.tool.wide{grid-column:1 / -1;flex-direction:row;align-items:center;text-align:left;gap:12px;min-height:64px;padding:11px 14px}
 .tool.wide .tw{min-width:0;flex:1}
+.tool.wide b{font-size:15px}
 .tool.wide small{margin-top:2px;font-size:12.5px}
 html[data-fs] .tool.wide small{font-size:calc(12.5px * var(--fsx))}
-html[data-fs] .tool b{font-size:calc(15px * var(--fsx))}
-html[data-fs] .tool small{font-size:calc(11.5px * var(--fsx))}
-@media (max-width:360px){ .tools{gap:8px} .tool{padding:12px 4px 10px} .tool b{font-size:14px} .tool.wide{padding:10px 12px;gap:10px} .tool.wide .ic{width:38px;height:38px} }
+html[data-fs] .tool b{font-size:calc(14px * var(--fsx))}
+html[data-fs] .tool small{font-size:calc(11px * var(--fsx))}
+html[data-fs] .tool.wide b{font-size:calc(15px * var(--fsx))}
+@media (max-width:360px){ .tools{gap:6px} .tool{padding:11px 2px 9px} .tool b{font-size:13px} .tool small{font-size:10.5px} .tool .ic{width:38px;height:38px} .tool.wide{padding:10px 12px;gap:10px} }
 #homeProgress .sec-title{margin-top:24px}
 /* (O-0176 추가) 「다른 앱으로 열기」 소제목 · 오늘 한눈에·진행 중인 메모 접기 */
-.tools-sub{grid-column:1 / -1;margin:6px 2px -2px;font-size:13px;font-weight:700;color:var(--dim)}
+.tools-sub{grid-column:1 / -1;margin:8px 2px -2px;font-size:13px;font-weight:700;color:var(--dim)}
 html[data-fs] .tools-sub{font-size:calc(13px * var(--fsx))}
 .prog-head{width:100%;border:0;background:transparent;padding:0;font-family:inherit;cursor:pointer;align-items:center;text-align:left}
 .prog-head span{margin-left:auto}
@@ -1364,3 +1366,102 @@ html[data-fs] .today .td-foldline{font-size:calc(14.5px * var(--fsx))}
 #meetingsView .mtg-local summary{cursor:pointer;padding:10px 4px;font-size:14.5px;font-weight:700;color:var(--muted)}
 #meetingsView .mtg-local summary span{font-weight:600;color:var(--dim);margin-left:4px}
 #meetingsView .mtg-local .list{margin-top:4px}
+
+/* ===== (O-0178) 계산기 =====
+   폰 세로: 식·결과 → [공학용 펼치기] → 공학 자판(접힘) → 기본 자판. 넓은 화면(700px↑ = 폰 가로·펼친 폴드·DeX·PC판)은
+   앱 폭을 920px 까지 넓혀 공학 자판(왼쪽)과 기본 자판(오른쪽)을 나란히. 글자 크기 설정(--fsx)·다크/라이트는 변수로 따라간다. 새 blur 없음. */
+.calc-disp{margin-top:6px;padding:12px 14px 12px;border-radius:20px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh)}
+.calc-top{display:flex;align-items:center;gap:8px;min-height:32px}
+.calc-sp{flex:1}
+.calc-chip{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--glass-b2);background:var(--in-bg);color:var(--text);font:800 12.5px/1 inherit;font-family:inherit;letter-spacing:.3px;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.calc-chip.ask{color:var(--p1)}
+.calc-chip svg{width:15px;height:15px}
+.calc-mem{font-size:12px;font-weight:700;color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
+.calc-expr{margin-top:8px;min-height:44px;max-height:118px;overflow-y:auto;text-align:right;font-size:calc(30px * var(--fsx,1));font-weight:700;line-height:1.35;letter-spacing:.2px;color:var(--text);word-break:break-all;font-variant-numeric:tabular-nums;cursor:text}
+.calc-expr.sm{font-size:calc(23px * var(--fsx,1))}
+.calc-expr.xs{font-size:calc(18px * var(--fsx,1))}
+.calc-expr.done{color:var(--muted);font-size:calc(19px * var(--fsx,1));min-height:30px}
+.calc-expr .ct.op{color:var(--p1);padding:0 2px}
+.calc-expr .ct.fn{color:var(--cyan)}
+.calc-expr .calc-ph{color:var(--dim)}
+.calc-cur{display:inline-block;width:2px;height:1.05em;margin:0 -1px;vertical-align:-0.16em;background:var(--p1);border-radius:2px;animation:calcblink 1.1s steps(2,start) infinite}
+@keyframes calcblink{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.calc-cur{animation:none}}
+.calc-res{min-height:calc(26px * var(--fsx,1));margin-top:2px;text-align:right;font-size:calc(18px * var(--fsx,1));font-weight:700;color:var(--dim);word-break:break-all;font-variant-numeric:tabular-nums}
+.calc-res.final{font-size:calc(34px * var(--fsx,1));font-weight:800;color:var(--text);line-height:1.25}
+.calc-res.err{font-size:calc(15px * var(--fsx,1));font-weight:700;color:var(--rec);word-break:keep-all;line-height:1.45}
+.calc-scitoggle{display:block;width:100%;margin:10px 0 0;padding:8px 4px;border:0;background:transparent;color:var(--p1);font:700 13.5px/1.3 inherit;font-family:inherit;text-align:center;cursor:pointer}
+.calc-pads{margin-top:6px}
+.calc-sci{display:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px}
+#calcView.sci-open .calc-sci{display:grid}
+.calc-basic{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.ck{min-width:0;height:56px;border-radius:16px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font:700 calc(22px * var(--fsx,1))/1 inherit;font-family:inherit;display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.ck:active{transform:scale(.96);background:var(--glass2)}
+.ck.num{background:var(--glass2)}
+.ck.op{color:var(--p1);background:var(--ic-bg);font-size:calc(25px * var(--fsx,1))}
+.ck.clr{color:var(--rec)}
+.ck.util{height:44px;font-size:calc(17px * var(--fsx,1));color:var(--muted)}
+.ck.eq{border:0;color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));font-size:calc(26px * var(--fsx,1));box-shadow:var(--glow-s)}
+.calc-sci .ck{height:42px;border-radius:13px;font-size:calc(14.5px * var(--fsx,1));font-weight:700;color:var(--muted)}
+.calc-sci .ck.mem{color:var(--cyan)}
+html[data-fs="xl"] .calc-sci .ck{font-size:15.5px}   /* 가장 큰 글자에서도 sin⁻¹ 이 칸 안에 */
+html[data-fs="xl"] .ck{font-size:25px}
+html[data-fs="xl"] .ck.util{font-size:19px}
+/* 계산 기록(자판 자리에 펼쳐짐) */
+#calcView.hist-open .calc-scitoggle,#calcView.hist-open .calc-pads{display:none}
+.calc-hist{margin-top:10px}
+.ch-head{display:flex;align-items:baseline;justify-content:space-between;padding:2px 4px 8px}
+.ch-head b{font-size:16px;font-weight:800}
+.ch-head span{font-size:12.5px;color:var(--dim);font-weight:600}
+.ch-list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow-y:auto}
+.ch-row{display:flex;align-items:stretch;gap:6px}
+.ch-pick{flex:none;width:40px;border-radius:13px;border:1px solid var(--glass-b);background:var(--glass);color:transparent;display:grid;place-items:center;cursor:pointer}
+.ch-pick svg{width:18px;height:18px}
+.ch-row.on .ch-pick{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border-color:transparent}
+.ch-load{flex:1;min-width:0;padding:9px 12px;border-radius:13px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;text-align:right;cursor:pointer}
+.ch-e{display:block;font-size:calc(13.5px * var(--fsx,1));color:var(--muted);word-break:break-all}
+.ch-e em{font-style:normal;font-size:11px;color:var(--cyan);font-weight:700}
+.ch-r{display:block;font-size:calc(18px * var(--fsx,1));font-weight:800;word-break:break-all;font-variant-numeric:tabular-nums}
+.ch-foot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.ch-foot .btn{flex:1;min-width:140px}
+.ch-tip{margin:8px 4px 0;font-size:12.5px;line-height:1.5;color:var(--dim);word-break:keep-all}
+/* 케이에게 묻기 창 */
+.calc-ask .calc-ask-prev{max-height:120px;overflow-y:auto;padding:10px 12px;border-radius:14px;background:var(--in-bg);border:1px solid var(--glass-b);font-size:14px;line-height:1.55;color:var(--text);word-break:break-all;font-variant-numeric:tabular-nums}
+.calc-ask .sheet-btn{height:auto;min-height:58px;padding:8px 14px;justify-content:flex-start;text-align:left;gap:12px}
+.calc-ask .sheet-btn svg{flex:none;width:22px;height:22px;color:var(--p1)}
+.calc-ask .sheet-btn span b{display:block;font-size:16px;font-weight:800}
+.calc-ask .sheet-btn span small{display:block;font-size:12.5px;font-weight:500;color:var(--muted);margin-top:1px;word-break:keep-all}
+.calc-ask .sheet-btn.calc-ask-close{justify-content:center;min-height:50px}
+#calcHistBtn.on{color:var(--p1)}
+/* 넓은 화면: 공학 자판을 옆에 함께(폰 가로·펼친 폴드·DeX·PC판) */
+@media (min-width:700px){
+  body.calc-open .app{max-width:920px}
+  #calcView .calc-scitoggle{display:none}
+  #calcView .calc-pads{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:14px;align-items:stretch}
+  #calcView .calc-sci{display:grid;margin-bottom:0;gap:8px;grid-auto-rows:1fr}
+  #calcView .calc-sci .ck{height:auto;min-height:48px;font-size:calc(16px * var(--fsx,1))}
+  #calcView.hist-open .calc-pads{display:none}
+  .ch-list{max-height:46vh}
+}
+@media (min-width:700px) and (max-height:520px){   /* 폰 가로: 키를 낮춰 한 화면에 */
+  .ck{height:34px;border-radius:11px;font-size:calc(17px * var(--fsx,1))}
+  .ck.util{height:28px;font-size:calc(14px * var(--fsx,1))}
+  #calcView .calc-sci .ck{min-height:28px;font-size:calc(14px * var(--fsx,1))}
+  .calc-basic{gap:5px} #calcView .calc-sci{gap:5px}
+  .calc-disp{padding:8px 12px 8px}
+  .calc-expr{margin-top:2px;min-height:30px;max-height:44px;font-size:calc(22px * var(--fsx,1))}
+  .calc-expr.done{min-height:22px;font-size:calc(15px * var(--fsx,1))}
+  .calc-res{min-height:22px}
+  .calc-res.final{font-size:calc(24px * var(--fsx,1))}
+}
+@media (min-width:700px) and (max-height:520px){ .ck.op,.ck.eq{font-size:calc(19px * var(--fsx,1))} html[data-fs="xl"] .ck,html[data-fs="xl"] .ck.util,html[data-fs="xl"] .calc-sci .ck{font-size:17px} }
+@media (max-width:360px){ .ck{height:52px} .calc-sci .ck{height:40px;font-size:calc(13.5px * var(--fsx,1))} .calc-basic{gap:6px} }
+/* 폰 세로·폰 가로처럼 자리가 빠듯한 화면: 계산기에서는 맨 위 「스마트비서」 줄을 접어(음성 대화 때와 같은 방식) 자판이 한 화면에 들어오게.
+   공학용을 펼쳤을 때는 키를 조금 낮춘다. */
+@media (max-width:699px), (max-height:520px){
+  body.calc-open .topbar{display:none}
+  #calcView.sci-open .calc-sci .ck{height:38px}
+  #calcView.sci-open .calc-basic .ck{height:52px}
+  #calcView.sci-open .calc-basic .ck.util{height:40px}
+  #calcView.sci-open .calc-scitoggle{margin-top:4px;padding:6px 4px}
+}

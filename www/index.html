@@ -78,6 +78,7 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="currentColor"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
+  <symbol id="i-calc" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 7.5h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.6 12h.01M12 12h.01M15.4 12h.01M8.6 16.2h.01M12 16.2h.01M15.4 16.2h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
   <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -148,22 +149,24 @@
            연동 암호가 없거나 아직 불러오기 전이면 숨김. 일정·메일은 PC가 만든 서버 요약(home_digest)을 읽기만 한다. -->
       <div class="card today" id="todayCard" style="display:none;" aria-live="polite"></div>
 
-      <!-- (O-0176) 「도구」 격자 — 예전 넓은 카드 12개+작은 카드 2개를 앱 안 기능 3칸×2줄 + 「다른 앱으로 열기」 넓은 줄 셋으로.
+      <!-- (O-0176·O-0178) 「도구」 격자 — 예전 넓은 카드 12개+작은 카드 2개를 4칸×2줄(계산기 추가) + 「PC 연결」 넓은 줄 둘로.
            (대표님 추가 의견) 사진 보내기·영상 보내기 칸은 뺐다 — 일반 사진은 채팅 첨부(케이에게)로, 채팅에 없던 두 길(명함 등록·사진 PC 정리 /
            영상 정리·긴 녹화 조각 전송)은 채팅 입력줄 [＋] 고르기 창으로 옮김(app.js openAttachMenu). 숨은 photoInput·videoInput 은 그대로 씀.
            홈에서 뺀 것: 작업 현황(→ 오늘 한눈에 「챙길 일」 + 채팅 📋), 예약한 알림(→ 오늘 한눈에 한 줄), 저장한 답(→ 채팅 ☆),
            회의 요약·지난 메모(→ 「회의록」 하나, 홈엔 진행 중인 것만). 버튼 id 는 예전 그대로라 app.js 동작은 같다. -->
       <div class="sec-title tools-title">도구</div>
       <div class="tools" id="homeTools">
-        <button class="tool" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><b>회의록</b><small>녹음 정리·진행</small></button>
-        <button class="tool" id="btnDocs"><span class="ic cyan"><svg><use href="#i-doc"/></svg></span><b>문서 뷰어</b><small>한글·오피스·PDF</small></button>
-        <button class="tool" id="btnHealth"><span class="ic blue"><svg><use href="#i-heart"/></svg></span><b>건강</b><small>혈당·식단 기록</small></button>
-        <button class="tool" id="btnLocker"><span class="ic cyan"><svg><use href="#i-copy"/></svg></span><b>공유함</b><small>PC↔폰 파일</small></button>
-        <button class="tool" id="btnIdeas"><span class="ic blue"><svg><use href="#i-spark"/></svg></span><b>아이디어</b><small>말하면 제안</small></button>
-        <button class="tool" id="btnSearchToggle"><span class="ic cyan"><svg><use href="#i-card"/></svg></span><b>명함 검색</b><small>이름·기관</small></button>
-        <div class="tools-sub">다른 앱으로 열기</div>
+        <button class="tool" id="btnMeetings"><span class="ic blue"><svg><use href="#i-note"/></svg></span><b>회의록</b><small>녹음 정리</small></button>
+        <button class="tool" id="btnDocs"><span class="ic cyan"><svg><use href="#i-doc"/></svg></span><b>문서 뷰어</b><small>한글·PDF</small></button>
+        <button class="tool" id="btnHealth"><span class="ic blue"><svg><use href="#i-heart"/></svg></span><b>건강</b><small>혈당·식단</small></button>
+        <!-- (O-0178) 계산기: 기본 + 공학용, 계산 기록, [케이에게 묻기]. 화면 js/calculator.js · 계산 js/calc-engine.js -->
+        <button class="tool" id="btnCalc"><span class="ic cyan"><svg><use href="#i-calc"/></svg></span><b>계산기</b><small>공학용</small></button>
+        <button class="tool" id="btnLocker"><span class="ic blue"><svg><use href="#i-copy"/></svg></span><b>공유함</b><small>PC↔폰</small></button>
+        <button class="tool" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><b>아이디어</b><small>말로 제안</small></button>
+        <button class="tool" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><b>명함 검색</b><small>이름·기관</small></button>
         <!-- v7.8 길찾기: 누르면 화면 이동 없이 바로 네이버 지도 앱(nmap://map). 동작은 today-card.js openMapHome -->
-        <button class="tool wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tw"><b>길찾기</b><small>네이버 지도 바로 열기</small></span></button>
+        <button class="tool" id="btnRoute"><span class="ic cyan"><svg><use href="#i-route"/></svg></span><b>길찾기</b><small>네이버 지도</small></button>
+        <div class="tools-sub">PC 연결</div>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
              ② PC 원격 제어 = 크롬 원격 데스크톱으로 PC 화면을 직접 보고 조작 — 문서 뷰어 편집 시트 [PC 원격 제어 열기]와 같은 동작(SmartDocs.openRemote) -->
@@ -355,6 +358,23 @@
       <div id="meetingsList"></div>
       <details id="mtgLocalWrap" class="mtg-local" style="display:none;"><summary>이 폰에서 보낸 기록 <span id="mtgLocalCount"></span></summary><div id="mtgLocal" class="list"></div></details>
       <div id="meetingsDetail" style="display:none;"></div>
+    </section>
+
+    <!-- ===================== (O-0178) 계산기 — 기본 + 공학용 · 계산 기록 · 케이에게 묻기 =====================
+         자판·식·기록은 js/calculator.js 가 그린다. 넓은 화면(700px↑)에서는 공학용 자판이 옆에 함께 보인다(styles.css body.calc-open). -->
+    <section id="calcView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">계산기</span><span class="spacer end"><button class="iconbtn" id="calcHistBtn" aria-label="계산 기록" title="계산 기록"><svg><use href="#i-list"/></svg></button></span></div>
+      <div class="calc-disp">
+        <div class="calc-top"><button type="button" class="calc-chip" id="calcAngle">DEG</button><span class="calc-mem" id="calcMem" style="display:none;"></span><span class="calc-sp"></span><button type="button" class="calc-chip ask" id="calcAskK"><svg><use href="#i-chat"/></svg>케이에게 묻기</button></div>
+        <div class="calc-expr" id="calcExpr" aria-label="식"></div>
+        <div class="calc-res" id="calcRes" aria-live="polite"></div>
+      </div>
+      <div class="calc-hist" id="calcHist" style="display:none;"></div>
+      <button type="button" class="calc-scitoggle" id="calcSciToggle" aria-expanded="false">공학용 펼치기 ▾</button>
+      <div class="calc-pads">
+        <div class="calc-sci" id="calcSci"></div>
+        <div class="calc-basic" id="calcBasic"></div>
+      </div>
     </section>
 
     <!-- ===================== 작업 현황(v5.8) — PC 지시 대장의 서버 사본 ===================== -->
@@ -717,6 +737,8 @@
 <script src="js/k-character.js"></script>
 <script src="js/app.js"></script>
 <script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->
+<script src="js/calc-engine.js"></script><!-- O-0178 계산 엔진(직접 만든 파서 · eval 없음) -->
+<script src="js/calculator.js"></script><!-- O-0178 계산기 화면(app.js 의 SmartHome 을 씀) -->
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
      네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
 <script src="js/native-input.js"></script>
