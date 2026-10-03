@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v8.2(O-0157) 케이 위젯 — 가로 한 줄(4×1): 얼굴 · 제목 · 미리보기 한 줄 · 안읽은 수 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wk_root"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingLeft="10dp" android:paddingRight="12dp" android:paddingTop="6dp" android:paddingBottom="6dp">
+    <ImageView android:id="@+id/wk_face"
+        android:layout_width="42dp" android:layout_height="42dp"
+        android:src="@drawable/k_face_round" android:scaleType="fitCenter"
+        android:contentDescription="케이" />
+    <LinearLayout
+        android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:layout_marginLeft="10dp" android:layout_marginRight="8dp"
+        android:orientation="vertical">
+        <TextView android:id="@+id/wk_title"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:maxLines="1" android:ellipsize="end"
+            android:textColor="#F3F6FF" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/wk_line"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:maxLines="1" android:ellipsize="end"
+            android:textColor="#B8C2E0" android:textSize="12.5sp" />
+    </LinearLayout>
+    <TextView android:id="@+id/wk_badge"
+        android:layout_width="wrap_content" android:layout_height="24dp"
+        android:minWidth="24dp"
+        android:background="@drawable/widget_badge" android:gravity="center"
+        android:paddingLeft="7dp" android:paddingRight="7dp"
+        android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold"
+        android:visibility="gone" />
+</LinearLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v8.2(O-0157) 바로가기 아이콘: 사진 보내기(파랑 원 + 흰 사진) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+  <path android:fillColor="#2563EB" android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0"/>
+  <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M15,14h18c1.1,0 2,0.9 2,2v16c0,1.1 -0.9,2 -2,2H15c-1.1,0 -2,-0.9 -2,-2V16c0,-1.1 0.9,-2 2,-2zM16,31h16l-5,-6.5 -4,5 -2.8,-3.4zM19,20.5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
+</vector>

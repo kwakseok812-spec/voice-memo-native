@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -21,6 +22,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- v8.2(O-0157) 앱 아이콘 길게 누르기 바로가기(음성 대화·녹음·사진 보내기·오늘 한눈에) -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
 
             <!-- 다른 앱(파일관리자·카톡·메일 등)에서 "열기 → 스마트비서"로 문서를 넘길 때(ACTION_VIEW).
                  이 필터가 있어야 공유/열기 시트에 스마트비서가 대상 앱으로 나타난다. -->
@@ -85,6 +89,27 @@
                 <data android:mimeType="application/hwpx" />
             </intent-filter>
 
+            <!-- v8.2(O-0157) 어디서든 [공유] → 케이: 카톡 글·인터넷 링크(text/plain), 갤러리 사진(image/*), 그 밖의 모든 파일.
+                 받은 것은 채팅에 첨부·본문으로 채워 열리고, 문서 1개만 왔으면 [문서 뷰어로 열기]/[케이에게 보내기]를 고른다.
+                 (위의 문서 전용 SEND 필터는 그대로 두었다 — 같은 처리로 들어온다. 「열기(VIEW)」는 예전처럼 곧장 문서 뷰어.) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
         </activity>
 
         <!-- 녹음 소유 포그라운드 서비스(마이크). 화면 꺼짐/앱 전환에도 녹음 지속 -->
@@ -92,6 +117,54 @@
             android:name=".RecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- v8.2(O-0157) FCM 수신: Capacitor 푸시 플러그인의 원래 서비스를 빼고, 그것을 이어받은 KMessagingService 로 바꿔 단다.
+             (FCM 수신 서비스는 한 앱에 하나만 동작 — 둘 다 두면 어느 쪽이 받을지 보장되지 않는다)
+             KMessagingService 는 원래 동작(웹으로 넘기기)을 그대로 하고, 데이터 전용 케이 답장만 [답장] 알림·위젯으로 추가 처리한다. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".KMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- v8.2(O-0157) 알림 [답장] 받는 곳 — 우리 앱 알림만 부를 수 있게 exported=false -->
+        <receiver
+            android:name=".KReplyReceiver"
+            android:exported="false" />
+
+        <!-- v8.2(O-0157) 바탕화면 케이 위젯 3종(한 줄·얼굴·카드). 그림 코드는 KWidgetProvider 하나. -->
+        <receiver
+            android:name=".KWidgetProvider"
+            android:label="@string/widget_label_line"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/k_widget_line" />
+        </receiver>
+        <receiver
+            android:name=".KWidgetFaceProvider"
+            android:label="@string/widget_label_face"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/k_widget_face" />
+        </receiver>
+        <receiver
+            android:name=".KWidgetCardProvider"
+            android:label="@string/widget_label_card"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/k_widget_card" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

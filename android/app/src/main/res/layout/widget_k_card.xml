@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v8.2(O-0157) 케이 위젯 — 카드(4×2 이상, 폴드 펼침 화면): 얼굴 · 제목 · 받은 시각 · 미리보기 3줄 · [케이와 대화] -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wk_root"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <FrameLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
+            <ImageView android:id="@+id/wk_face"
+                android:layout_width="50dp" android:layout_height="50dp"
+                android:layout_margin="3dp"
+                android:src="@drawable/k_face_round" android:scaleType="fitCenter"
+                android:contentDescription="케이" />
+            <TextView android:id="@+id/wk_badge"
+                android:layout_width="wrap_content" android:layout_height="22dp"
+                android:minWidth="22dp" android:layout_gravity="top|end"
+                android:background="@drawable/widget_badge" android:gravity="center"
+                android:paddingLeft="6dp" android:paddingRight="6dp"
+                android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold"
+                android:visibility="gone" />
+        </FrameLayout>
+        <LinearLayout
+            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:layout_marginLeft="10dp" android:orientation="vertical">
+            <TextView android:id="@+id/wk_title"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:maxLines="2" android:ellipsize="end"
+                android:textColor="#F3F6FF" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:id="@+id/wk_time"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:textColor="#8D99BA" android:textSize="11.5sp" />
+        </LinearLayout>
+    </LinearLayout>
+    <TextView android:id="@+id/wk_line"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:maxLines="3" android:ellipsize="end"
+        android:lineSpacingExtra="2dp"
+        android:textColor="#D3DAEE" android:textSize="13.5sp" />
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="end">
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="32dp"
+            android:background="@drawable/widget_pill" android:gravity="center"
+            android:paddingLeft="14dp" android:paddingRight="14dp"
+            android:text="@string/widget_open_chat"
+            android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>
