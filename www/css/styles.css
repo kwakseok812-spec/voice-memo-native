@@ -1256,3 +1256,57 @@ html[data-fs] .today .td-voice small{font-size:calc(12px * var(--fsx))}
 @media (max-width:360px){ html[data-fs] .today .td-time{font-size:calc(14px * var(--fsx));width:calc(46px * var(--fsx))} }
 .today .td-wx .td-main b{white-space:normal;word-break:keep-all}
 .shin-sheet .shin-hint{margin:-4px 6px 4px;font-size:13px;line-height:1.5;color:var(--dim);text-align:center;word-break:keep-all}
+/* v8.5(O-0169) 「지금 날씨」 줄 + 오늘 날씨 시트(지금 크게 · 1시간 단위 가로 줄) */
+.today .td-wx.now .wx-ic{font-size:21px}
+.today .td-wx.now .td-main b{font-size:16px}
+.today .td-wx .wx-now{font-weight:800;color:var(--p1)}
+.today .td-wx .wx-cond{font-weight:700;color:var(--muted)}
+.today .td-wx .td-main b i{font-style:normal;font-weight:600;font-size:.86em;color:var(--dim)}
+.today .td-wx .wx-tip{font-weight:700;color:var(--text)}
+.today .td-wx.rain .wx-tip{color:var(--p1)}
+.today .td-wx.maybe .wx-tip{color:#d97706}
+.today .td-wx.rain .td-main b .wx-cond{color:var(--p1)}
+html[data-fs] .today .td-wx.now .td-main b{font-size:calc(16px * var(--fsx))}
+.wx-sheet .sheet-box{max-height:92vh;overflow-y:auto;overscroll-behavior:contain}
+.wx-sheet .sheet-box>*{flex-shrink:0}   /* 큰 글자에서 창이 화면보다 길어지면 버튼이 눌려 납작해지지 않고 창 안에서 스크롤 */
+.wx-sheet .wx-body{display:flex;flex-direction:column;gap:10px;min-width:0}
+.wx-sheet .wx-nowbox{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:18px;background:var(--in-bg);border:1px solid var(--glass-b)}
+.wx-sheet .wx-big-ic{flex:none;font-size:calc(44px * var(--fsx,1));line-height:1}
+.wx-sheet .wx-nowtx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wx-sheet .wx-big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.wx-sheet .wx-big b{font-size:calc(36px * var(--fsx,1));font-weight:900;line-height:1.05;color:var(--text)}
+.wx-sheet .wx-big span{font-size:calc(17px * var(--fsx,1));font-weight:700;color:var(--muted)}
+.wx-sheet .wx-nowtx small{font-size:calc(14px * var(--fsx,1));color:var(--muted);line-height:1.45}
+.wx-sheet .wx-nowtx small.wx-at{font-size:calc(12.5px * var(--fsx,1));color:var(--dim)}
+.wx-sheet .wx-sum{padding:9px 12px;border-radius:12px;font-size:calc(14.5px * var(--fsx,1));font-weight:700;color:var(--text);background:var(--in-bg);border:1px solid var(--glass-b);word-break:keep-all}
+.wx-sheet .wx-sum i{font-style:normal;font-weight:600;color:var(--dim)}
+.wx-sheet .wx-sum.yes{border-color:rgba(59,130,246,.45);background:rgba(59,130,246,.10);color:var(--p1)}
+.wx-sheet .wx-sum.maybe{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.10)}
+.wx-sheet .wx-lab{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:2px 4px 0}
+.wx-sheet .wx-lab b{font-size:calc(14.5px * var(--fsx,1));font-weight:800;color:var(--text)}
+.wx-sheet .wx-lab span{font-size:calc(12.5px * var(--fsx,1));color:var(--dim);white-space:nowrap}
+.wx-sheet .wx-hours{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:thin}
+.wx-sheet .wx-h{flex:none;width:calc(58px * var(--fsx,1));display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px 9px;border-radius:14px;border:1px solid var(--glass-b);background:var(--in-bg);scroll-snap-align:start}
+.wx-sheet .wx-h.cur{border-color:var(--p1);background:rgba(59,130,246,.14);box-shadow:0 0 0 1px var(--p1) inset}
+.wx-sheet .wx-h.past{opacity:.5}
+.wx-sheet .wx-h.wet{background:rgba(59,130,246,.10)}
+.wx-sheet .wx-hh{font-size:calc(12.5px * var(--fsx,1));font-weight:700;color:var(--muted);white-space:nowrap}
+.wx-sheet .wx-h.cur .wx-hh{color:var(--p1);font-weight:900}
+.wx-sheet .wx-hi{font-size:calc(22px * var(--fsx,1));line-height:1.15;min-height:1.15em}
+.wx-sheet .wx-ht{font-size:calc(16.5px * var(--fsx,1));font-weight:800;color:var(--text)}
+.wx-sheet .wx-hp{font-size:calc(11.5px * var(--fsx,1));font-weight:700;color:var(--p1);white-space:nowrap}
+.wx-sheet .wx-hp i{font-style:normal;font-weight:600;color:var(--dim)}
+.wx-sheet .wx-h.damp .wx-hp{color:#d97706}
+.wx-sheet .wx-hm{font-size:calc(11px * var(--fsx,1));color:var(--muted);white-space:nowrap}
+.wx-sheet .wx-day{flex:none;align-self:stretch;display:flex;align-items:center;padding:0 4px;writing-mode:vertical-rl;font-size:calc(12px * var(--fsx,1));font-weight:800;color:var(--dim);border-left:2px dashed var(--glass-b);margin-left:2px}
+.wx-sheet .wx-swipe{margin-top:-6px;text-align:center;font-size:calc(11.5px * var(--fsx,1));color:var(--dim)}
+.wx-sheet .wx-com{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.wx-sheet .wx-com>div{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"lab tm tp" "pr pr pr" "um um um";align-items:baseline;gap:2px 6px;padding:9px 11px;border-radius:14px;background:var(--in-bg);border:1px solid var(--glass-b)}
+.wx-sheet .wx-com em{grid-area:lab;font-style:normal;font-weight:800;font-size:calc(14px * var(--fsx,1));color:var(--text);white-space:nowrap}
+.wx-sheet .wx-com span:first-of-type{grid-area:tm;font-size:calc(12px * var(--fsx,1));color:var(--dim);white-space:nowrap}
+.wx-sheet .wx-com b{grid-area:tp;font-size:calc(17px * var(--fsx,1));font-weight:800;color:var(--text)}
+.wx-sheet .wx-com span:last-of-type{grid-area:pr;font-size:calc(12.5px * var(--fsx,1));color:var(--muted)}
+.wx-sheet .wx-com small{grid-area:um;font-size:calc(12.5px * var(--fsx,1));font-weight:700;color:var(--text);word-break:keep-all}
+.wx-sheet .wx-src{font-size:calc(12px * var(--fsx,1));color:var(--dim);text-align:center;padding:0 6px}
+.wx-sheet .wx-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:14.5px}
+html[data-style="light"] .wx-sheet .wx-h.cur{background:rgba(37,99,235,.10)}
