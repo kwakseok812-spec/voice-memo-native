@@ -1413,6 +1413,44 @@
   }
   function pendingCount() { return idbAll().then(function (l) { return l.filter(function (r) { return !r.sent; }).length; }); }
 
+  /* ---------- v8.3(O-0161) ⏰ 예약한 알림 · ⭐ 저장한 답 ----------
+   * 서버 표(k_reminders·k_stars)는 공개 키로 직접 열 수 없다(RLS + 권한 회수). 아래 연동 암호 게이트 RPC 로만:
+   *   listReminders(pass)            → [{id, fire_at, body, repeat, status, created_at, last_sent_at, sent_count, created_via}]
+   *   cancelReminder(id, pass)       → true(취소됨) / false(이미 끝났거나 없음)
+   *   setStar(memoId, on, pass)      → true(반영) / false(대상 없음)
+   *   listStars(q, limit, pass)      → [{memo_id, src('chat'|'push'), note, content_md, summary_json, ts, starred_at}]
+   * 공통: 암호 불일치 → err.badpass · 서버 SQL 미적용(404) → err.notready */
+  function _v83Rpc(name, body, what) {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (r.status === 404) { var n = new Error('NOT_READY'); n.notready = true; throw n; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error(what + ' 실패(HTTP ' + r.status + ')');
+      return r.json();
+    });
+  }
+  function listReminders(pass) {
+    return _v83Rpc('reminder_list', { p_pass: pass || '', p_limit: 200 }, '예약한 알림 조회')
+      .then(function (a) { return Array.isArray(a) ? a : []; });
+  }
+  function cancelReminder(id, pass) {
+    if (!id) return Promise.resolve(false);
+    return _v83Rpc('reminder_cancel', { p_id: id, p_pass: pass || '' }, '알림 취소')
+      .then(function (n) { return (typeof n === 'number') ? n > 0 : !!n; });
+  }
+  function setStar(memoId, on, pass) {
+    if (!memoId) return Promise.resolve(false);
+    return _v83Rpc('star_set', { p_id: memoId, p_on: !!on, p_pass: pass || '' }, '저장')
+      .then(function (v) { return v === true; });
+  }
+  function listStars(q, limit, pass) {
+    return _v83Rpc('star_list', { p_q: q || null, p_limit: limit || 200, p_pass: pass || '' }, '저장한 답 조회')
+      .then(function (a) { return Array.isArray(a) ? a : []; });
+  }
+
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
@@ -1429,6 +1467,8 @@
     getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
+    listReminders: listReminders, cancelReminder: cancelReminder,                             // v8.3: ⏰ 예약한 알림
+    setStar: setStar, listStars: listStars,                                                   // v8.3: ⭐ 저장한 답
 
     sendLocker: sendLocker, listLocker: listLocker, lockerPublicUrl: lockerPublicUrl,
     LOCKER_MAX_BYTES: LOCKER_MAX_BYTES,   // v6.3: 공유함 한 파일 최대(서버 전역 한도와 같게)

@@ -15,6 +15,9 @@
     <string name="sc_today_short">오늘 한눈에</string>
     <string name="sc_today_long">오늘 일정·메일·할 일</string>
 
+    <!-- v8.3(O-0161) 앱 서랍 「케이 음성」 아이콘(측면 버튼 두 번 누르기 → 앱 열기에서 고름) -->
+    <string name="voice_launcher_label">케이 음성</string>
+
     <!-- v8.2(O-0157) 바탕화면 위젯 -->
     <string name="widget_desc_line">케이 · 한 줄 — 새 소식 한 줄과 안 읽은 수</string>
     <string name="widget_desc_face">케이 · 얼굴 — 케이 얼굴과 안 읽은 수</string>

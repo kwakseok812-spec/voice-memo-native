@@ -60,6 +60,10 @@
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 4.5V3h6v1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 11l1.7 1.7L13 10M8.5 16.5h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-route" viewBox="0 0 24 24"><path d="M12 21.5s-6.5-6-6.5-11.2a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11.2-6.5 11.2z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/><circle cx="12" cy="10.2" r="2.4" fill="currentColor"/></symbol>
+  <!-- v8.3(O-0161) ⏰ 예약한 알림 · ⭐ 저장한 답 -->
+  <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M12 9.2V13l2.6 1.7M4.5 5.2 7 3M19.5 5.2 17 3" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-star-f" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 12h9M17 12v4M20 12v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -148,6 +152,9 @@
       <button class="card action wide" id="btnRoute"><span class="ic blue"><svg><use href="#i-route"/></svg></span><span class="tx"><b>길찾기</b><small>누르면 네이버 지도가 바로 열려요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tx"><b>PC 케이에게 직접</b><small>24시간 PC의 케이와 바로 대화</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnOrders"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><span class="tx"><b>작업 현황</b><small>시키신 일이 접수·진행·완료됐는지 한눈에</small></span><span id="ordersOpenBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <!-- v8.3(O-0161) ⏰ 말로 맡긴 알림 목록·취소 / ⭐ 채팅에서 저장한 케이 답 모아 보기 -->
+      <button class="card action wide" id="btnReminders"><span class="ic cyan"><svg><use href="#i-alarm"/></svg></span><span class="tx"><b>예약한 알림</b><small>말로 맡긴 알림 보기·취소</small></span><span id="remindersBadge" class="ordbadge" style="display:none;"></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <button class="card action wide" id="btnStars"><span class="ic blue"><svg><use href="#i-star"/></svg></span><span class="tx"><b>저장한 답</b><small>⭐ 저장해 둔 케이 답 모아 보기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnIdeas"><span class="ic cyan"><svg><use href="#i-spark"/></svg></span><span class="tx"><b>💡 아이디어</b><small>떠오른 생각을 말하면 활용 방법을 제안해요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><span class="tx"><b>명함 검색</b><small>이름·기관으로 찾기</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
       <button class="card action wide" id="btnHealth"><span class="ic cyan"><svg><use href="#i-heart"/></svg></span><span class="tx"><b>건강</b><small>혈당·체중·식단·복약 기록</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
@@ -267,7 +274,7 @@
 
     <!-- ===================== 케이와 대화 ===================== -->
     <section id="chatView" style="display:none;">
-      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><button type="button" class="khead" id="kHeadBtn" aria-label="케이 프로필 보기"><span class="kface sm" data-kface="head" aria-hidden="true"></span><span class="khead-tx"><b>케이</b><small>소장</small></span></button><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><button type="button" class="khead" id="kHeadBtn" aria-label="케이 프로필 보기"><span class="kface sm" data-kface="head" aria-hidden="true"></span><span class="khead-tx"><b>케이</b><small>소장</small></span></button><span class="spacer end"><button class="iconbtn" id="chatOrdersBtn" aria-label="작업 현황" title="작업 현황"><svg><use href="#i-tasks"/></svg></button><button class="iconbtn" id="chatStarsBtn" aria-label="저장한 답" title="저장한 답"><svg><use href="#i-star"/></svg></button><button class="iconbtn" id="chatSearchBtn" aria-label="대화 검색" title="대화 검색"><svg><use href="#i-search"/></svg></button><button class="iconbtn" id="chatMenuBtn" aria-label="대화 메뉴" title="대화 메뉴"><svg><use href="#i-more"/></svg></button></span></div>
       <!-- 대화 검색바(🔍 누르면 나타남) -->
       <div id="chatSearchBar" class="chatsearchbar" style="display:none;">
         <div class="input filled chatsearchinput"><svg class="lead"><use href="#i-search"/></svg><input id="chatSearchInput" type="text" placeholder="대화에서 찾기 (이름·단어)"></div>
@@ -336,6 +343,22 @@
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">작업 현황</span><span class="spacer end"><button class="iconbtn" id="ordersRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
       <div class="chatsearchinfo" style="display:block">📒 앱·텔레그램·PC로 시키신 일이 지금 어디까지 왔는지 보여드려요. 자동으로 새로 고쳐져요.</div>
       <div id="ordersBody"></div>
+    </section>
+
+    <!-- ===================== v8.3(O-0161) ⏰ 예약한 알림 ===================== -->
+    <section id="remindersView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">예약한 알림</span><span class="spacer end"><button class="iconbtn" id="remindersRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
+      <div class="chatsearchinfo" style="display:block">⏰ 케이에게 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀하시면, 케이가 한 번 되물은 뒤 여기에 예약해요. 정한 시각에 앱 알림이 와요.</div>
+      <button type="button" class="card action wide rm-ask" id="remindersAsk"><span class="ic cyan"><svg><use href="#i-mic"/></svg></span><span class="tx"><b>케이에게 알림 부탁하기</b><small>누르면 케이와 음성 대화가 바로 시작돼요</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <div id="remindersBody"></div>
+    </section>
+
+    <!-- ===================== v8.3(O-0161) ⭐ 저장한 답 ===================== -->
+    <section id="starsView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">저장한 답</span><span class="spacer end"><button class="iconbtn" id="starsRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
+      <div class="chatsearchinfo" style="display:block">⭐ 채팅에서 케이 답의 [⋯] → 「⭐ 저장」을 누르면 여기에 모여요. 폰·PC 어디서 저장해도 똑같이 보여요. 누르면 그 대화 자리로 가요.</div>
+      <div class="input starsearch"><svg><use href="#i-search"/></svg><input id="starsQuery" type="search" placeholder="저장한 답에서 찾기" autocomplete="off"></div>
+      <div id="starsBody"></div>
     </section>
 
     <!-- ===================== 💡 아이디어 수첩(v5.5) ===================== -->

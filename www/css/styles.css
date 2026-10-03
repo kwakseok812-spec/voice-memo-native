@@ -1158,3 +1158,28 @@ html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(
 .shin-sheet .shin-file .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .shin-sheet .shin-file small{flex:none;color:var(--dim);font-weight:600;font-size:12.5px}
 .shin-sheet .sheet-btn.primary{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}
+
+/* ===================== v8.3(O-0161) ⭐ 저장한 답 · ⏰ 예약한 알림 ===================== */
+.bubble .bstar{position:absolute;right:7px;bottom:5px;font-size:12px;line-height:1;opacity:.9;pointer-events:none}
+.bubble.starhl{box-shadow:0 0 0 3px rgba(250,204,21,.65),0 0 18px rgba(250,204,21,.35);transition:box-shadow .3s}
+.starsearch{min-height:50px;margin:2px 0 6px}
+.starsearch svg{width:20px;height:20px;color:var(--dim);flex:none}
+.star-item{cursor:pointer}
+.star-item .st-src{font-size:12.5px;font-weight:800;color:#f59e0b;background:rgba(245,158,11,.12);border-radius:999px;padding:3px 9px}
+.star-item .st-q{margin-top:8px;font-size:13.5px;font-weight:700;color:var(--muted);line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+.star-item .st-a{margin-top:5px;font-size:15px;font-weight:600;line-height:1.55;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.star-item .oi-foot,.rm-item .oi-foot{margin-top:9px}
+.star-item .st-go{font:inherit;font-size:13px;font-weight:800;color:var(--p1);background:transparent;border:0;padding:4px 0;cursor:pointer}
+.star-item .st-off,.rm-item .rm-cancel{margin-left:auto;font:inherit;font-size:12.5px;font-weight:800;color:var(--muted);background:var(--in-bg);border:1px solid var(--glass-b);border-radius:999px;padding:6px 12px;cursor:pointer}
+.rm-item .rm-cancel{color:var(--rec);background:rgba(244,63,94,.10);border-color:transparent}
+.rm-item .rm-when{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.rm-item .rm-rep,.rm-item .rm-day,.rm-item .rm-st{font-size:12px;font-weight:800;border-radius:999px;padding:3px 9px}
+.rm-item .rm-rep{color:var(--p1);background:rgba(59,130,246,.12)}
+.rm-item .rm-day{margin-left:auto;color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2))}
+.rm-item .rm-st{margin-left:auto;color:var(--muted);background:var(--in-bg)}
+.rm-item .rm-st.ok{color:#10b981;background:rgba(16,185,129,.12)}
+.rm-item .rm-st.bad{color:var(--rec);background:rgba(244,63,94,.10)}
+.rm-item.past{opacity:.72}
+.rm-item .oi-s{margin-top:8px}
+.rm-ask{margin:2px 0 4px}
+#remindersBadge{width:auto;font-size:12px}
