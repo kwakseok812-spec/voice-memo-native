@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- v8.3(O-0161) 「케이 음성」 적응형 아이콘: 케이 얼굴(배경) + 마이크 배지(앞). icons/make_kvoice_icon.py 로 생성 -->
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_kvoice_bg"/>
-    <foreground android:drawable="@mipmap/ic_kvoice_fg"/>
-</adaptive-icon>

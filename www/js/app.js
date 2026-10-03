@@ -370,7 +370,7 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       renderHistory(); showHome();
-      showBanner('⚠️ 전송 실패 — ' + esc(friendlyErr(e)) + '<br>녹음은 안전하게 보관됐어요 — <b>지난 메모</b>에서 다시 눌러 보세요.');
+      showBanner('⚠️ 전송 실패 — ' + esc(friendlyErr(e)) + '<br>녹음은 안전하게 보관됐어요 — <b>회의록</b> 맨 위 「진행 중」에서 다시 눌러 보세요.');
       setStatus('전송 실패', 'err');
     });
   });
@@ -394,7 +394,7 @@
       HistoryModule.add({ id: id, token: tok, title: title, date: t.date, time: t.time, status: 'draft', kind: 'audio' });
       pendingBlob = null; pendingMaterials = [];          // 저장 성공 후에만 비운다(실패 시 녹음 보존)
       renderHistory(); showHome(); setStatus('임시 저장됨', 'idle');
-      toast('임시 저장했어요. 지난 메모에서 자료를 붙여 보낼 수 있어요.');
+      toast('임시 저장했어요. 회의록 「진행 중」에서 자료를 붙여 보낼 수 있어요.');
     }).catch(function () { showBanner('임시 저장에 실패했어요. 녹음은 아직 화면에 있어요.'); });
   });
   /* 임시저장 제목 고치기: 녹음 직후 화면(memoTitle)에서만 되던 제목 수정을 임시저장을 다시 연 창에서도.
@@ -569,7 +569,7 @@
     var why = friendlyErr(err);
     var tail = (err && err.reason === 'unreadable')
       ? ' 폰 저장 공간·앱 상태 문제일 수 있으니 이 항목은 지우지 마시고 소장에게 알려 주세요.'
-      : ' 지난 메모 → 이 항목 → <b>PC로 보내기</b>를 다시 누르면 이어서 보내요(이미 올라간 부분은 건너뜀).';
+      : ' 회의록 → 진행 중 → 이 항목 → <b>PC로 보내기</b>를 다시 누르면 이어서 보내요(이미 올라간 부분은 건너뜀).';
     HistoryModule.update(id, { status: 'draft', error: why }); renderHistory(); showHome();
     showBanner('⚠️ 전송 실패 — ' + esc(why) + '<br>임시 저장한 녹음은 폰에 그대로 있어요.' + tail);
     setStatus('전송 실패', 'err');
@@ -602,7 +602,7 @@
         OfficeBridge.sendAudioChunked(memo, blob, function (phase, done, total) { videoProg[id] = '올리는 중 ' + done + '/' + total + ' 조각'; renderHistory(); })
           .then(function () { OfficeBridge.delDraft(id); HistoryModule.update(id, { status: 'processing', error: null }); videoProg[id] = 'PC에서 정리 준비 중…'; renderHistory(); startVideoPolling(id, memo.token); noticeSkippedMaterials(memo); })
           .catch(function (err) { OfficeBridge.dropPending(id); delete videoProg[id]; draftSendFailed(id, err); });
-        toast('긴 녹음은 조각으로 나눠 보내요. 지난 메모에서 진행 상태를 볼 수 있어요.'); showHome();
+        toast('긴 녹음은 조각으로 나눠 보내요. 홈 「진행 중인 메모」에서 상태를 볼 수 있어요.'); showHome();
       } else {
         HistoryModule.update(id, { status: 'pending', kind: 'audio' }); renderHistory();
         openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
@@ -657,7 +657,7 @@
           OfficeBridge.dropPending(id);                    // 실제 정리 완료 확인 → 폰 원본 삭제(안전)
           renderHistory(); setStatus('정리 완료', 'idle');
           if (isOpen(processing)) showResult(id);            // 기다리는 중이면 결과로 이동
-          else toast('✅ 정리 완료 — 지난 메모에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
+          else toast('✅ 정리 완료 — 「회의록」에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
           return;
         } else if (res.status === 'processing') {
           setProcessing('🖨️ PC에서 정리 중… 잠시만요');
@@ -667,7 +667,7 @@
         // 포그라운드 대기화면 안내(1회) — 폴링은 멈추지 않는다(done/자동복구를 계속 감지해야 하므로).
         if (!bannerShown && isOpen(processing) && Date.now() - started > 5 * 60 * 1000) {
           bannerShown = true; showHome();
-          showBanner('아직 정리 중이에요. PC가 켜져 있는지 확인하고, 잠시 후 <b>지난 메모</b>에서 다시 확인해 주세요.');
+          showBanner('아직 정리 중이에요. PC가 켜져 있는지 확인하고, 잠시 후 <b>회의록</b>에서 다시 확인해 주세요.');
         }
         // 러너웨이 방지: 행이 있어도(정상·느린 정리) 이 시간을 넘기면 폴링을 조용히 멈춘다.
         //   (남은 done 은 다음 앱 실행/열람 시 복원 폴러가 잡는다. 무행 실패는 위 STUCK_MS 로 이미 처리됨.)
@@ -825,6 +825,7 @@
   function openMeetings() {
     openScreen($('meetingsView'));
     showMeetingsList();
+    renderHistory();                                 // (O-0176) 맨 위 「진행 중」·맨 아래 「이 폰에서 보낸 기록」은 암호 없이도(이 폰 기록)
     var host = $('meetingsList'); if (!host) return;
     if (!(window.OfficeBridge && OfficeBridge.listRecentMemos)) {
       host.innerHTML = '<p class="empty" style="padding:16px">이 기능을 아직 쓸 수 없어요(업데이트 필요).</p>'; return;
@@ -832,8 +833,8 @@
     // 🔒 회의 요약은 민감정보 → 채팅·공유함과 동일한 PC 연동 암호 게이트(중복 UI 없이 기존 게이트 재사용).
     var pass = getSyncPass();
     if (!pass) {
-      host.innerHTML = '<p class="empty" style="padding:16px">회의 요약을 보려면 PC 연동 암호가 필요해요.</p>';
-      showSyncGate(true, '회의 요약을 보려면 PC 연동 암호를 입력해 주세요.');
+      host.innerHTML = '<p class="empty" style="padding:16px">정리된 회의록을 보려면 PC 연동 암호가 필요해요.</p>';
+      showSyncGate(true, '회의록을 보려면 PC 연동 암호를 입력해 주세요.');
       return;
     }
     host.innerHTML = '<p class="empty" style="padding:16px">불러오는 중…</p>';
@@ -855,11 +856,13 @@
     if (d) { d.style.display = 'none'; d.innerHTML = ''; }
     if (l) l.style.display = '';
     meetingsDetailOpen = false;
+    var tp = $('mtgTop'); if (tp) tp.style.display = '';            // (O-0176) 상세에서 목록으로 오면 「진행 중」 칸 다시
+    var lw = $('mtgLocalWrap'); if (lw) lw.style.display = (HistoryModule.list().some(function (e) { return e.status === 'done'; })) ? '' : 'none';
     scrollTop();
   }
   function renderMeetingsList() {
     var host = $('meetingsList'); if (!host) return;
-    if (!meetingsRows.length) { host.innerHTML = '<p class="empty" style="padding:16px">아직 정리된 회의 요약이 없어요. 녹음이 정리되면 여기에 쌓여요.</p>'; return; }
+    if (!meetingsRows.length) { host.innerHTML = '<p class="empty" style="padding:16px">아직 정리된 회의록이 없어요. 녹음이 정리되면 여기에 쌓여요.</p>'; return; }
     var lastDate = '', html = '';
     meetingsRows.forEach(function (r, idx) {
       // v6.5 (O-0085): 날짜 묶음은 한국 날짜 기준. 카드의 시각(올린 시각=대표님께 의미 없는 숫자)은 빼고
@@ -908,6 +911,8 @@
     }
     d.innerHTML = html;
     if (l) l.style.display = 'none';
+    var tp = $('mtgTop'); if (tp) tp.style.display = 'none';        // (O-0176) 상세를 볼 땐 「진행 중」·「이 폰 기록」 숨김
+    var lw = $('mtgLocalWrap'); if (lw) lw.style.display = 'none';
     d.style.display = 'block';
     meetingsDetailOpen = true;
     var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', showMeetingsList);
@@ -957,7 +962,7 @@
     var r = meetingsRows[idx]; if (!r) return;
     var pass = getSyncPass();
     if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주세요.'); return; }
-    openSheet('이 회의 요약을 삭제할까요?',
+    openSheet('이 회의록을 삭제할까요?',
       '목록에서 사라져요. 소프트삭제라 서버 원본과 PC 파일은 남아 있어(복구 가능) 안심하셔도 돼요.',
       '삭제', function () {
         OfficeBridge.hideMemo(r.id, getSyncPass()).then(function () {
@@ -971,29 +976,61 @@
       });
   }
 
-  /* ---------- 지난 메모 ---------- */
+  /* ---------- (O-0176 D) 진행 중인 메모 · 회의록 ----------
+   * 예전 홈 「지난 메모」(이 폰 기록)와 「회의 요약」(서버)을 「회의록」 하나로 합쳤다.
+   *   · 홈: 끝나지 않은 것(정리중·임시저장·재시도)이 있을 때만 「진행 중인 메모」 칸(최대 3건 + 「외 N건 · 회의록에서 보기」).
+   *   · 회의록 화면 맨 위 「진행 중」: 같은 목록 전부(없으면 「없어요」 한 줄).
+   *   · 회의록 화면 맨 아래 접힘 「이 폰에서 보낸 기록」: 끝난 것(사진·영상·명함 결과 포함) — 예전 지난 메모의 완료 항목.
+   * 누르면 예전과 같은 onHistoryClick(재전송·임시저장 자료 붙이기·삭제·결과 보기 그대로). */
+  var HOME_PROG_MAX = 3;
   function iconFor(kind) { return kind === 'photo' ? 'i-image' : kind === 'video' ? 'i-video' : kind === 'search' ? 'i-card' : 'i-mic'; }
-  function renderHistory() {
-    var list = HistoryModule.list();
-    if (historyCount) historyCount.textContent = list.length ? list.length + '건' : '';
-    if (!list.length) { historyList.innerHTML = '<div class="empty-note">녹음·사진·영상·명함을 보내면 여기에 쌓여요.</div>'; return; }
-    historyList.innerHTML = list.map(function (e) {
-      var badge, cls;
-      if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
-      else if (e.status === 'draft') { badge = '임시저장'; cls = 'b-draft'; }   // v3.8: 아직 안 보낸 녹음
-      else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
-      else { badge = '정리중'; cls = 'b-proc'; }
-      var vp = (videoProg && videoProg[e.id]) || '';
-      var sub = (vp && e.status !== 'done') ? vp : (e.date || '');
-      return '<button class="card item" data-id="' + e.id + '">' +
-        '<span class="ic"><svg><use href="#' + iconFor(e.kind) + '"/></svg></span>' +
-        '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(sub) + '</small></span>' +
-        '<span class="badge ' + cls + '">' + badge + '</span>' +
-        '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
-    }).join('');
-    Array.prototype.forEach.call(historyList.querySelectorAll('.item'), function (el) {
+  function historyItemHtml(e) {
+    var badge, cls;
+    if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
+    else if (e.status === 'draft') { badge = '임시저장'; cls = 'b-draft'; }   // v3.8: 아직 안 보낸 녹음
+    else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
+    else { badge = '정리중'; cls = 'b-proc'; }
+    var vp = (videoProg && videoProg[e.id]) || '';
+    var sub = (vp && e.status !== 'done') ? vp : (e.date || '');
+    return '<button class="card item" data-id="' + e.id + '">' +
+      '<span class="ic"><svg><use href="#' + iconFor(e.kind) + '"/></svg></span>' +
+      '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(sub) + '</small></span>' +
+      '<span class="badge ' + cls + '">' + badge + '</span>' +
+      '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
+  }
+  function wireHistoryItems(host) {
+    Array.prototype.forEach.call(host.querySelectorAll('.item'), function (el) {
       el.addEventListener('click', function () { onHistoryClick(el.getAttribute('data-id')); });
     });
+  }
+  function renderHistory() {
+    var list = HistoryModule.list();
+    var prog = list.filter(function (e) { return e.status !== 'done'; });
+    var done = list.filter(function (e) { return e.status === 'done'; });
+    // ① 홈 「진행 중인 메모」 — 있을 때만
+    var wrap = $('homeProgress');
+    if (wrap) wrap.style.display = prog.length ? '' : 'none';
+    if (historyCount) historyCount.textContent = prog.length ? prog.length + '건 · 끝나면 「회의록」에' : '';
+    if (historyList) {
+      var rest = prog.length - HOME_PROG_MAX;
+      historyList.innerHTML = prog.slice(0, HOME_PROG_MAX).map(historyItemHtml).join('') +
+        (rest > 0 ? '<button type="button" class="prog-more" id="homeProgMore">외 ' + rest + '건 · 회의록에서 보기</button>' : '');
+      wireHistoryItems(historyList);
+      var pm = $('homeProgMore'); if (pm) pm.addEventListener('click', openMeetings);
+    }
+    // ② 회의록 화면 「진행 중」 칸
+    var mp = $('mtgProgress');
+    if (mp) {
+      mp.innerHTML = prog.length ? prog.map(historyItemHtml).join('')
+        : '<div class="empty-note">지금 정리 중이거나 임시 저장한 녹음이 없어요.</div>';
+      wireHistoryItems(mp);
+    }
+    var mc = $('mtgProgCount'); if (mc) mc.textContent = prog.length ? prog.length + '건' : '';
+    // ③ 회의록 화면 맨 아래 「이 폰에서 보낸 기록」(끝난 것, 접힘)
+    var lw = $('mtgLocalWrap'), ml = $('mtgLocal');
+    if (lw) lw.style.display = (done.length && !meetingsDetailOpen) ? '' : 'none';
+    var lc = $('mtgLocalCount'); if (lc) lc.textContent = done.length ? done.length + '건' : '';
+    if (ml) { ml.innerHTML = done.map(historyItemHtml).join(''); wireHistoryItems(ml); }
   }
   function onHistoryClick(id) {
     var e = HistoryModule.get(id); if (!e) return;
@@ -1209,10 +1246,10 @@
       }).catch(function (e) {
         HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
         delete videoProg[memo.id]; renderHistory();
-        toast('긴 영상 업로드 실패 — 지난 메모에서 다시 시도해 주세요.');
+        toast('긴 영상 업로드 실패 — 홈 「진행 중인 메모」에서 다시 시도해 주세요.');
       });
     });
-    toast('긴 영상은 시간이 걸려요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
+    toast('긴 영상은 시간이 걸려요. 다른 일 하셔도 돼요 — 홈 「진행 중인 메모」에서 상태를 볼 수 있어요.');
     showHome();
   }
   /* 긴 음성(2시간 등): 조각 전송 + 백그라운드 진행(긴 영상과 동일 UX — 다른 기능 안 막음) */
@@ -1233,9 +1270,9 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       delete videoProg[memo.id]; renderHistory();
-      toast('긴 음성 업로드 실패 — ' + friendlyErr(e) + ' 지난 메모에서 다시 보내 주세요.');
+      toast('긴 음성 업로드 실패 — ' + friendlyErr(e) + ' 홈 「진행 중인 메모」에서 다시 보내 주세요.');
     });
-    toast('긴 녹음은 조각으로 나눠 보내요. 다른 일 하셔도 돼요 — 지난 메모에서 진행 상태를 볼 수 있어요.');
+    toast('긴 녹음은 조각으로 나눠 보내요. 다른 일 하셔도 돼요 — 홈 「진행 중인 메모」에서 상태를 볼 수 있어요.');
     showHome();
   }
   function startVideoPolling(id, token) {
@@ -1260,7 +1297,7 @@
           });
           OfficeBridge.dropPending(id);                    // 실제 정리 완료 확인 → 폰 원본 삭제(안전)
           renderHistory();
-          toast((res.kind === 'audio' ? '🎙️ 긴 녹음 정리 완료' : '🎬 영상 정리 완료') + ' — 지난 메모에서 볼 수 있어요.');
+          toast((res.kind === 'audio' ? '🎙️ 긴 녹음 정리 완료' : '🎬 영상 정리 완료') + ' — 「회의록」에서 볼 수 있어요.');
         } else {
           if (res.progress_msg) { videoProg[id] = res.progress_msg; renderHistory(); }
           if (Date.now() - started > 3 * 60 * 60 * 1000) { clearInterval(videoPollers[id]); delete videoPollers[id]; }  // 최장 3시간
@@ -1291,7 +1328,7 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
       renderHistory(); showHome();
-      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. <b>지난 메모</b>에서 다시 눌러 주세요.');
+      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. 홈 <b>진행 중인 메모</b>에서 다시 눌러 주세요.');
     });
   }
   if ($('btnPhoto')) $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
@@ -3700,7 +3737,8 @@
     if (!w) toast('Claude 화면을 열지 못했어요 — 다시 눌러 주세요.');
   }
   if ($('btnPcK')) $('btnPcK').addEventListener('click', function () {
-    openSheet('PC 케이에게 직접',
+    openSheet('Claude Code 연결',
+      'PC 케이와 대화방(Claude 앱)에서 직접 일을 시키는 곳이에요. PC 화면을 직접 보며 조작하려면 「PC 원격 제어」를 누르세요.\n' +
       '① Claude 앱이 열리면 새 작업 창은 ✕로 닫아 주세요.\n' +
       '② Code 대화 목록에서 컴퓨터 표시(초록 점)가 붙은 「' + PC_K_SESSION_TITLE + '」을 고르세요.\n' +
       '③ 그 대화창에 바로 입력하시면 PC 케이에게 전달돼요.',
@@ -4393,7 +4431,7 @@
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
     if (isRecording && isOpen(recView)) { openRecLeaveSheet(); return true; }
-    if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 지난 메모에서 확인하세요.'); return true; }
+    if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속돼요 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
@@ -5056,6 +5094,7 @@
     refreshOrders: function () { try { refreshOrders(true); } catch (e) {} },
     toast: function (msg, ms) { toast(msg, ms); },   // (O-0133) 일정 [길찾기] 안내
     openOrders: function (hlId) { openOrders(false, hlId || ''); },
+    openReminders: function () { openReminders(); },   // (O-0176) 오늘 한눈에 「예약한 알림」 한 줄 → 목록·취소
     sheet: function (title, msg, label, icon, action) {
       openSheet(title, msg, label, action);
       if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄(시각·장소·보낸 사람) 왼쪽 정렬로
@@ -5138,7 +5177,7 @@
     saveStarIds(); if (isOpen(chatView)) renderChat();
     OfficeBridge.setStar(memoId, on, p).then(function (ok) {
       if (!ok) throw new Error('NOT_SAVED');
-      toast(on ? '⭐ 저장했어요 — 홈 「저장한 답」에서 모아 볼 수 있어요.' : '저장을 풀었어요.');
+      toast(on ? '⭐ 저장했어요 — 채팅 맨 위 ☆ 「저장한 답」에서 모아 볼 수 있어요.' : '저장을 풀었어요.');
       if (isOpen($('starsView'))) loadStars();
     }).catch(function (e) {
       if (on) delete starIds[memoId]; else starIds[memoId] = 1;
@@ -5270,9 +5309,10 @@
       .sort(function (a, b) { return (Date.parse(a.fire_at) || 0) - (Date.parse(b.fire_at) || 0); });   // 서버도 정렬하지만 한 번 더
     var done = remRows.filter(function (r) { return !(r.status === 'active' || r.status === 'sending'); });
     setRemBadge(act.length);
+    try { if (window.TodayCard && TodayCard.setReminders) TodayCard.setReminders(remRows); } catch (e) {}   // (O-0176) 오늘 한눈에 한 줄도 맞춤
     var h = '<div class="ord-sec">예약 중 <small>' + act.length + '개 · 가까운 순</small></div>';
     h += act.length ? act.map(function (r) { return remItemHtml(r, true); }).join('')
-      : '<div class="empty-note">예약된 알림이 없어요.<br>위 버튼을 누르고 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀해 보세요.</div>';
+      : '<div class="empty-note">예약된 알림이 없어요.<br>위 [말로 맡기기]를 누르고 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀해 보세요.</div>';
     if (done.length) {
       h += '<div class="ord-sec">지난 알림 <small>최근 30일</small></div>' + done.map(function (r) { return remItemHtml(r, false); }).join('');
     }

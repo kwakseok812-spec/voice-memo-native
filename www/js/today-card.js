@@ -4,6 +4,10 @@
  * 홈 녹음/케이 오브 바로 아래 카드 한 장:
  *   ① 오늘 일정(시간순, 지금·다음 일정 강조)  ② 답할 메일(제목·보낸 사람 한 줄)  ③ 챙길 일(지시 대장 미완료)
  *   + [말로 일정 잡기] → 채팅 열고 음성 대화 시작(등록은 PC 케이가 확인 문구 한 번 뒤에만).
+ * (O-0176) 홈 정리: ④ 「예약한 알림」 한 줄(가장 가까운 알림 + 외 N건, 누르면 목록·취소 화면)을 「챙길 일」 아래에 넣고,
+ *   [말로 일정 잡기]와 예약한 알림 화면의 [케이에게 알림 부탁하기]를 [말로 맡기기 (일정·알림)] 하나로(같은 음성 대화).
+ *   홈 「작업 현황」 카드가 빠졌으므로 「챙길 일」 아래 「작업 현황 보기」 링크는 건수와 무관하게 늘 보인다.
+ *   예약한 알림은 연동 암호 RPC(reminder_list)를 읽기만 한다 — 요약과 같은 1분 간격, 실패하면 이 기기에 남은 개수로.
  *
  * 데이터 경로(앱은 읽기만 한다):
  *   · ①② = 서버 사본 home_digest — PC(home_digest.py 예정)가 주기적으로 구글 캘린더·Gmail 을 「읽기 전용」으로
@@ -35,7 +39,7 @@
   var STALE_MIN = 180;                    // 요약이 3시간보다 오래되면 「오래된 정보」 표시
   var OPEN_ST = { '접수': 1, '진행': 1, '보류': 1, '실패': 1 };
 
-  var st = { digest: null, digestReady: null, orders: null, busy: false, lastFetch: 0, wxLive: null, wxBusy: false, wxAt: 0 };
+  var st = { digest: null, digestReady: null, orders: null, busy: false, lastFetch: 0, wxLive: null, wxBusy: false, wxAt: 0, rems: null };
 
   function H() { return global.SmartHome || {}; }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -157,6 +161,33 @@
       taskChip(o) +
       '<span class="td-main"><b>' + esc(o.summary || '(요지 없음)') + '</b><small>' + esc(o.id) + (o.channel ? ' · ' + esc(o.channel) : '') + '</small></span>' +
       '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
+  }
+  /* ---------- (O-0176) 예약한 알림 한 줄 ---------- */
+  var REM_ACTIVE = { active: 1, sending: 1 };
+  function remDay(iso) {                                           // 「오늘」「내일」「10/5」(한국 날짜)
+    var t = Date.parse(iso || ''); if (isNaN(t)) return '';
+    var a = kst(t), n = kst(Date.now()), n1 = kst(Date.now() + 86400000);
+    if (a.date === n.date) return '오늘';
+    if (a.date === n1.date) return '내일';
+    return (+a.date.slice(5, 7)) + '/' + (+a.date.slice(8, 10));
+  }
+  function remCountCached() { try { return parseInt(localStorage.getItem('smart_rem_count') || '0', 10) || 0; } catch (e) { return 0; } }
+  function remSec() {
+    var list = st.rems, n = list ? list.length : remCountCached();
+    var body;
+    if (list && list.length) {
+      var r = list[0];
+      body = '<button type="button" class="td-row task" data-td="rems">' +
+        '<span class="td-tag next">' + esc(remDay(r.fire_at) || '예약') + '</span>' +
+        '<span class="td-main"><b>' + esc(kstHM(r.fire_at)) + '  ' + esc(r.body || '(내용 없음)') + '</b>' +
+        '<small>' + (list.length > 1 ? '외 ' + (list.length - 1) + '건 · ' : '') + '누르면 목록·취소</small></span>' +
+        '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
+    } else if (!list && n > 0) {
+      body = '<button type="button" class="td-more" data-td="rems">' + n + '건 예약돼 있어요 · 목록·취소 보기</button>';
+    } else {
+      body = '<button type="button" class="td-more" data-td="rems">예약한 알림이 없어요 · 지난 알림 보기</button>';
+    }
+    return sec('i-alarm', '예약한 알림', n || null, body);
   }
   function sec(icon, title, count, body, more) {
     return '<div class="td-sec"><div class="td-sh"><svg><use href="#' + icon + '"/></svg><span>' + title + '</span>' +
@@ -413,7 +444,8 @@
     var nothing = !evs.length && !mails.length && !tasks.length;
     if (nothing && (dg || !showDigest) && st.orders) {
       h += '<div class="td-empty"><span class="td-empty-ic"><svg><use href="#i-check"/></svg></span>' +
-        '<div><b>오늘은 챙길 게 없어요</b><small>일정·답할 메일·기다리는 일이 모두 비어 있어요.</small></div></div>';
+        '<div><b>오늘은 챙길 게 없어요</b><small>일정·답할 메일·기다리는 일이 모두 비어 있어요.</small></div></div>' +
+        '<button type="button" class="td-more" data-td="tasks">작업 현황 보기 (끝난 일 포함)</button>';   // (O-0176) 홈 카드 대신
     } else {
       if (showDigest) {
         if (dg && dg.cal_ok === false) h += sec('i-flag', '오늘 일정', null, '<div class="td-none warn">일정을 못 불러왔어요 · PC가 다시 시도해요</div>');
@@ -439,12 +471,13 @@
       if (st.orders) {
         var tk = tasks.slice(0, MAX_TASK), trest = tasks.length - tk.length;
         h += sec('i-tasks', '챙길 일', tasks.length || null,
-          tasks.length ? tk.map(taskRow).join('') + (trest > 0 ? '<button type="button" class="td-more" data-td="tasks">외 ' + trest + '건 · 작업 현황 보기</button>' : '')
-                       : '<div class="td-none">기다리는 일이 없어요</div>');
+          (tasks.length ? tk.map(taskRow).join('') : '<div class="td-none">기다리는 일이 없어요</div>') +
+          '<button type="button" class="td-more" data-td="tasks">' + (trest > 0 ? '외 ' + trest + '건 · ' : '') + '작업 현황 보기</button>');   // (O-0176) 늘 보임
       }
     }
+    h += remSec();                                                 // (O-0176) 예약한 알림 한 줄(홈 카드 대신)
     h += '<button type="button" class="td-voice" data-td="voice"><span class="td-voice-ic"><svg><use href="#i-mic"/></svg></span>' +
-      '<span><b>말로 일정 잡기</b><small>예) “내일 3시 회의 잡아 줘”</small></span></button>';
+      '<span><b>말로 맡기기 (일정·알림)</b><small>예) “내일 3시 회의 잡아 줘” · “8시에 우산 알려 줘”</small></span></button>';
     card.innerHTML = h;
     card.style.display = '';
     card._evs = evs; card._mails = mails;
@@ -459,6 +492,9 @@
     if (st.busy) return;
     if (silent && Date.now() - st.lastFetch < 60000) { render(); return; }   // 홈 왕복마다 부르지 않게(1분)
     st.busy = true; st.lastFetch = Date.now(); render();
+    if (OB.listReminders) {                                        // (O-0176) 예약한 알림 한 줄 — 읽기만, 실패는 조용히(이 기기 개수로)
+      OB.listReminders(pass).then(function (rows) { setRems(rows); }).catch(function () {});
+    }
     OB.getHomeDigest(pass).then(function (dg) {
       st.busy = false; st.digestReady = true; st.digest = dg || {}; render();
     }).catch(function (e) {
@@ -466,6 +502,13 @@
       if (e && e.notready) st.digestReady = false;                 // 서버 준비 전 → ①② 숨김, ③만
       render();
     });
+  }
+
+  function setRems(rows) {                                         // 서버 행 전체 → 예약 중인 것만 가까운 순
+    st.rems = (Array.isArray(rows) ? rows : []).filter(function (r) { return REM_ACTIVE[r.status]; })
+      .sort(function (a, b) { return (Date.parse(a.fire_at) || 0) - (Date.parse(b.fire_at) || 0); });
+    try { localStorage.setItem('smart_rem_count', String(st.rems.length)); } catch (e) {}
+    render();
   }
 
   /* ---------- 누르면 ---------- */
@@ -476,6 +519,7 @@
     var card = $('todayCard'), kind = t.getAttribute('data-td'), S = H();
     if (kind === 'refresh') { st.lastFetch = 0; refresh(false); wxLiveFetch(true); if (S.refreshOrders) S.refreshOrders(); return; }
     if (kind === 'voice') { if (S.startVoiceSchedule) S.startVoiceSchedule(); return; }
+    if (kind === 'rems') { if (S.openReminders) S.openReminders(); return; }   // (O-0176) 예약한 알림 목록·취소
     if (kind === 'wx') { wxSheetOpen(); return; }                 // v8.5(O-0169): 지금 + 1시간 단위 시트
     if (kind === 'tasks' || kind === 'evmore') {
       if (kind === 'tasks' && S.openOrders) S.openOrders();
@@ -509,6 +553,7 @@
     openMap: openMapHome,                  // v7.8 홈 「길찾기」 카드
     routeQuery: routeQuery,                // (O-0133) 시험용: 장소 → 네이버 검색어('' = 버튼 없음)
     setOrders: function (rows) { st.orders = Array.isArray(rows) ? rows : []; render(); },
+    setReminders: setRems,                 // (O-0176) 예약한 알림 화면에서 새로 받거나 취소한 뒤 한 줄도 맞춤
     closeWeather: function () { if (!wxSheet) return false; wxSheetClose(); return true; },   // (O-0169) 뒤로가기(app.js goBack)
     _setWxLive: function (d) { st.wxLive = d ? wxFromApi(d) : null; st.wxAt = Date.now(); render(); if (wxSheet) wxSheetFill(); },   // 캡처·시험용(Open-Meteo 응답 그대로)
     _setDigest: function (dg, ready) { st.digest = dg; st.digestReady = ready !== false; st.busy = false; render(); }   // 캡처·시험용

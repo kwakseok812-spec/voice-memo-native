@@ -1310,3 +1310,34 @@ html[data-fs] .today .td-wx.now .td-main b{font-size:calc(16px * var(--fsx))}
 .wx-sheet .wx-src{font-size:calc(12px * var(--fsx,1));color:var(--dim);text-align:center;padding:0 6px}
 .wx-sheet .wx-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:14.5px}
 html[data-style="light"] .wx-sheet .wx-h.cur{background:rgba(37,99,235,.10)}
+
+/* ===== (O-0176) 홈 「도구」 격자 · 진행 중인 메모 · 회의록 화면 =====
+   6칸 격자: 보통 칸은 2칸씩(=한 줄 3개), 맨 아래 PC 두 칸(Claude Code 연결·PC 원격 제어)은 한 줄 전체(설명 한 줄까지 보이게 —
+   반 폭이면 390px 폰에서 「Claude Code 연결」이 두 줄로 꺾였다).
+   앱 폭이 520px 로 묶여 있어 DeX·PC 넓은 화면에서도 같은 모양. 새 backdrop-filter 없음(카드 배경색만). */
+.tools-title{margin:26px 0 10px}
+.tools{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.tool{grid-column:span 2;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;min-width:0;min-height:104px;padding:14px 6px 12px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);color:var(--text);font-family:inherit;text-align:center;cursor:pointer}
+.tool:active{transform:scale(.97)}
+.tool .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--ic-bg);border:1px solid var(--glass-b);flex:none}
+.tool .ic svg{width:22px;height:22px}
+.tool .ic.blue svg{color:var(--p1)} .tool .ic.cyan svg{color:var(--cyan)}
+.tool b{display:block;font-size:15px;font-weight:800;line-height:1.25;word-break:keep-all;overflow-wrap:break-word}
+.tool small{display:block;font-size:11.5px;font-weight:500;line-height:1.3;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
+.tool.wide{grid-column:span 6;flex-direction:row;align-items:center;text-align:left;gap:12px;min-height:64px;padding:11px 14px}
+.tool.wide .tw{min-width:0;flex:1}
+.tool.wide small{margin-top:2px;font-size:12.5px}
+html[data-fs] .tool.wide small{font-size:calc(12.5px * var(--fsx))}
+html[data-fs] .tool b{font-size:calc(15px * var(--fsx))}
+html[data-fs] .tool small{font-size:calc(11.5px * var(--fsx))}
+@media (max-width:360px){ .tools{gap:8px} .tool{padding:12px 4px 10px} .tool b{font-size:14px} .tool.wide{padding:10px 12px;gap:10px} .tool.wide .ic{width:38px;height:38px} }
+#homeProgress .sec-title{margin-top:24px}
+.prog-more{display:block;width:100%;margin-top:2px;padding:8px 4px;border:0;background:transparent;color:var(--p1);font:700 13.5px/1.4 inherit;font-family:inherit;text-align:center;cursor:pointer}
+/* 회의록 화면: 진행 중 칸 · 정리된 회의록 · 이 폰에서 보낸 기록(접힘) */
+#meetingsView .mtg-sec{margin:16px 2px 8px;font-size:15.5px}
+#meetingsView .mtg-sec:first-child{margin-top:6px}
+#mtgProgress .empty-note{padding:10px 4px 4px;font-size:14px}
+#meetingsView .mtg-local{margin:18px 0 8px}
+#meetingsView .mtg-local summary{cursor:pointer;padding:10px 4px;font-size:14.5px;font-weight:700;color:var(--muted)}
+#meetingsView .mtg-local summary span{font-weight:600;color:var(--dim);margin-left:4px}
+#meetingsView .mtg-local .list{margin-top:4px}
