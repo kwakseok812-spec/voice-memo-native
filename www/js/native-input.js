@@ -228,6 +228,14 @@
     current = null;
   });
 
+  // v8.2(O-0157) 아이콘 길게 누르기 「사진 보내기」가 입력 바 없이도 네이티브 사진 고르기를 쓰게 내보낸다.
+  //   hookName = SmartAttach 입구 이름('chatCam' 등). 성공하면 true(고르기 창을 띄움), 옛 APK 면 false.
+  global.SmartNativePick = function (hookName, accept) {
+    if (!hasNativePick()) return false;
+    pickNative(hookName, accept || '*/*', null);
+    return true;
+  };
+
   function init() { wire('chat'); wire('locker'); wire('idea'); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

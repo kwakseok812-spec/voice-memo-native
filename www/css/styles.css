@@ -1143,3 +1143,18 @@ html[data-style="light"] #chatView.convo-on .kstage{box-shadow:0 10px 24px rgba(
 .today .td-route span{font-size:10.5px;font-weight:800;letter-spacing:-.3px;line-height:1.2;color:var(--text);white-space:nowrap}
 .today .td-route:active{transform:scale(.95);background:var(--ic-bg)}
 @media (max-width:360px){ .today .td-time{width:46px;font-size:14px} .today .td-ttl span{display:none} }
+
+/* ===== v8.2(O-0157) 어디서든 [공유] → 케이 ===== */
+.sharebar{display:flex;flex-direction:column;gap:8px;margin:2px 0 8px;padding:10px 12px;border-radius:16px;border:1px solid var(--glass-b2);background:var(--glass)}
+.sharebar .sb-head{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--text)}
+.sharebar .sb-head svg{width:17px;height:17px;color:var(--p2);flex:none}
+.sharebar .sb-x{margin-left:auto;flex:none;width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.sharebar .sb-x svg{width:16px;height:16px;color:inherit}
+.sharebar .chips{gap:7px}
+.sharebar .chip.hchip{height:42px;font-size:15.5px}
+.sharebar .sb-hint{font-size:12.5px;line-height:1.45;color:var(--dim)}
+.shin-sheet .shin-file{display:flex;align-items:center;gap:10px;padding:12px 14px;margin:2px 0 4px;border-radius:14px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-size:15px;font-weight:700;min-width:0}
+.shin-sheet .shin-file svg{width:22px;height:22px;color:var(--p1);flex:none}
+.shin-sheet .shin-file .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shin-sheet .shin-file small{flex:none;color:var(--dim);font-weight:600;font-size:12.5px}
+.shin-sheet .sheet-btn.primary{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent;box-shadow:var(--glow-s)}

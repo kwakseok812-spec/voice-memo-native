@@ -25,7 +25,15 @@
   function logi(m) { if (global.console) try { console.log('[push] ' + m); } catch (e) {} }
   function logw(m) { if (global.console) try { console.warn('[push] ' + m); } catch (e) {} }
 
-  var LS_TOKEN = 'smart_push_token', LS_AT = 'smart_push_saved_at';
+  var LS_TOKEN = 'smart_push_token', LS_AT = 'smart_push_saved_at', LS_LABEL = 'smart_push_label';
+  /* v8.2(O-0157) 이 기기가 「알림에서 바로 답장」을 할 수 있다는 표시를 토큰 등록 이름(label)에 붙인다.
+   *   서버(push_sender.py)는 label 에 'nreply' 가 있는 기기에만 케이 답장을 데이터 전용 푸시로 보내
+   *   앱이 [답장] 버튼 달린 알림을 직접 만들게 한다. 옛 APK(이 표시 없음)는 지금처럼 일반 알림을 받는다 → 옛 기기 무영향.
+   *   네이티브 KBridge 플러그인이 있는 APK(v8.2+)에서만 붙인다. */
+  function tokenLabel() {
+    try { if (Cap && Cap.Plugins && Cap.Plugins.KBridge) return '스마트비서|v8.2|nreply'; } catch (e) {}
+    return '스마트비서';
+  }
   var SAVE_MIN_INTERVAL = 12 * 60 * 60 * 1000;   // 같은 토큰은 12시간에 한 번만 재기록(불필요한 쓰기 방지)
 
   var LS_PENDING = 'smart_push_pending';
@@ -42,18 +50,20 @@
     try {
       var prev = localStorage.getItem(LS_TOKEN);
       var at = parseInt(localStorage.getItem(LS_AT) || '0', 10);
-      if (prev === tok && (Date.now() - at) < SAVE_MIN_INTERVAL) { logi('토큰 변동 없음 — 저장 생략'); return Promise.resolve(true); }
+      var prevLabel = localStorage.getItem(LS_LABEL) || '';
+      // v8.2: label(기능 표시)이 바뀌었으면 12시간 안이라도 다시 등록 — 업데이트 직후 바로 서버가 알게
+      if (prev === tok && prevLabel === tokenLabel() && (Date.now() - at) < SAVE_MIN_INTERVAL) { logi('토큰 변동 없음 — 저장 생략'); return Promise.resolve(true); }
     } catch (e) {}
     return fetch(c.url + '/rest/v1/rpc/push_token_register', {
       method: 'POST',
       headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_token: tok, p_platform: 'android', p_label: '스마트비서', p_pass: pass })
+      body: JSON.stringify({ p_token: tok, p_platform: 'android', p_label: tokenLabel(), p_pass: pass })
     }).then(function (r) {
       if (!r.ok) {
         if (r.status === 400 || r.status === 401 || r.status === 403) { try { localStorage.setItem(LS_PENDING, tok); } catch (e) {} }
         throw new Error('토큰 저장 실패(HTTP ' + r.status + ')');
       }
-      try { localStorage.setItem(LS_TOKEN, tok); localStorage.setItem(LS_AT, String(Date.now())); localStorage.removeItem(LS_PENDING); } catch (e) {}
+      try { localStorage.setItem(LS_TOKEN, tok); localStorage.setItem(LS_AT, String(Date.now())); localStorage.setItem(LS_LABEL, tokenLabel()); localStorage.removeItem(LS_PENDING); } catch (e) {}
       logi('토큰 저장 완료');
       return true;
     }).catch(function (e) { logw('토큰 저장 실패: ' + (e && e.message)); return false; });

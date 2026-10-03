@@ -1526,7 +1526,7 @@
       //   chatUnseen 이 부풀고 안 읽은 게 0인데도 배지가 계속 「9+」로 남았다. rid 는 삭제 tombstone(rowIdOf)용.
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus }
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null }
           : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null }; });
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
@@ -1990,6 +1990,7 @@
     return k || any;
   }
   function renderKBubble() {
+    pushWidget(false);                            // v8.2(O-0157): 바탕화면 위젯도 같은 내용으로(값이 바뀔 때만 보냄)
     var wrap = $('kBubbleWrap'), btn = $('kBubble'); if (!wrap || !btn) return;
     var n = chatUnseen > 0 ? chatUnseen : 0;
     var vbtn = $('btnVoiceChat');
@@ -2697,7 +2698,7 @@
     var gaveUp = false;
     pending.forEach(function (m) {
       var limitMs = ((m.files || m.opus) ? 20 : 6) * 60 * 1000;   // v5.8: 오퍼스 지정도 첨부처럼 여유(창구 상한 10분)
-      if ((nowT - (m.ts || 0)) > limitMs) {
+      if ((nowT - (m.waitFrom || m.ts || 0)) > limitMs) {   // v8.2: 알림 답장은 앱이 넘겨받은 때(waitFrom)부터
         m.answered = true; m._polling = false; m._doneShown = true;
         chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
         gaveUp = true;
@@ -2708,7 +2709,7 @@
     pending = chatMsgs.filter(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; });
     if (!pending.length) { stopChatReconcile(); updateSendEnabled(); return; }
     // 답이 늦어지면(약 35초) 한 번만 재렌더 → "케이가 PC에서 확인 중이에요" 안내가 뜨게 한다
-    pending.forEach(function (m) { if (!m._slowShown && (nowT - (m.ts || 0)) > 35000) { m._slowShown = true; slowChanged = true; } });
+    pending.forEach(function (m) { if (!m._slowShown && (nowT - (m.waitFrom || m.ts || 0)) > 35000) { m._slowShown = true; slowChanged = true; } });
     if (slowChanged && isOpen(chatView)) renderChat();
     pending.forEach(function (m) {
       if (m._polling) return; m._polling = true;
@@ -2742,7 +2743,7 @@
           }
           else { chatUnseen++; updateChatBadge(); toast(vurl ? '케이가 음성으로 답했어요.' : (atts.length ? '케이가 파일을 보냈어요.' : '케이 답장이 도착했어요.')); }
           updateSendEnabled();
-        } else if (Date.now() - (m.ts || 0) > ((m.files || m.opus) ? 20 : 6) * 60 * 1000) {   // 파일 첨부·오퍼스 지정은 여유롭게
+        } else if (Date.now() - (m.waitFrom || m.ts || 0) > ((m.files || m.opus) ? 20 : 6) * 60 * 1000) {   // 파일 첨부·오퍼스 지정은 여유롭게
           m.answered = true;
           chatMsgs.push({ role: 'k', text: '시간이 오래 걸려요. 다시 물어봐 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
           saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
@@ -4826,7 +4827,136 @@
     startVoiceSchedule: function () {              // 채팅 열고 음성 대화 시작 → 말씀하시면 PC 케이가 확인 문구 뒤 등록
       openChat();
       setTimeout(function () { try { startConvo(); } catch (e) {} }, 350);
+    },
+    // v8.2(O-0157) 다른 앱 [공유]로 받은 것(share-in.js) → 채팅 첨부 대기줄에 붙이고 채팅 열기(보내지 않음)
+    shareToChat: function (o) {
+      o = o || {};
+      openChat();
+      if (o.images && o.images.length) onChatCamPicked(o.images);
+      if (o.files && o.files.length) onChatFilesPicked(o.files);
+    },
+    // v8.2(O-0157) 공유로 받은 문서 1개 → [문서 뷰어로 열기]
+    openDocFile: function (f) {
+      openScreen(docsView);
+      if (window.SmartDocs && SmartDocs.handleLocalFile) { try { SmartDocs.handleLocalFile(f); } catch (e) { toast('문서를 여는 데 실패했어요.'); } }
+      else toast('문서 뷰어를 준비하지 못했어요.');
     }
   };
   setTimeout(function () { try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {} }, 1600);
+
+  /* ==================== v8.2(O-0157) 네이티브 연결(KBridge) ====================
+   * 폰(APK v8.2+)에서만. PC판·옛 APK 는 KBridge 가 없어 아무것도 하지 않는다.
+   *  ① 알림 [답장]이 쓸 대화방(thread)·서버 주소·공개 키를 네이티브에 알려 둔다(연동 암호는 넘기지 않음 — 필요 없음).
+   *  ② 알림에서 보낸 답장(outbox)을 채팅에 「내 말풍선」으로 넣고, 케이 답을 평소처럼 기다린다.
+   *  ③ 아이콘 길게 누르기 바로가기 · 위젯 · 내 알림 탭 → 해당 화면.
+   *  ④ 바탕화면 위젯 = 홈 케이 말풍선과 같은 내용(안읽음 수·최근 안읽은 한 줄, 알림 notice 제외). */
+  function kbPlugin() {
+    var C = window.Capacitor;
+    if (!C || !C.isNativePlatform || !C.isNativePlatform() || !C.Plugins) return null;
+    return C.Plugins.KBridge || null;
+  }
+  var WIDGET_HIDE_KEY = 'smart_widget_hide';
+  function widgetHide() { try { return localStorage.getItem(WIDGET_HIDE_KEY) === '1'; } catch (e) { return false; } }
+  var widgetSig = '', widgetT = 0, widgetFrom = Date.now() + 6000;   // 시작 직후 6초는 서버 조회가 끝나길 기다렸다가(빈 값으로 위젯을 지우지 않게)
+  function pushWidget(now) {
+    var KB = kbPlugin(); if (!KB || !KB.updateWidget) return;
+    if (!widgetFrom) return;                       // 아직 이 블록이 실행되기 전(앱 시작 중) — 끝에서 한 번 부른다
+    clearTimeout(widgetT);
+    widgetT = setTimeout(function () {
+      var n = chatUnseen > 0 ? chatUnseen : 0;
+      var m = n ? kBubbleLatest() : null;
+      var title = (n && $('kBubbleTitle')) ? ($('kBubbleTitle').textContent || '') : '';
+      var line = n ? kBubblePreview(m) : '';
+      var at = (m && m.ts) ? m.ts : 0;
+      var hide = widgetHide();
+      var sig = [n, title, line, at, hide].join('|');
+      if (sig === widgetSig) return;                // 같은 값이면 보내지 않음(위젯 다시 그리기 최소화)
+      widgetSig = sig;
+      try { KB.updateWidget({ count: String(n), title: title, line: line, at: String(at || 0), hide: hide }); } catch (e) {}
+    }, now ? 0 : Math.max(800, widgetFrom - Date.now()));
+  }
+  function importNotifReplies() {
+    var KB = kbPlugin(); if (!KB || !KB.takeOutbox) return;
+    KB.takeOutbox().then(function (r) {
+      var items = (r && r.items) || [], added = 0, failed = [];
+      items.forEach(function (it) {
+        if (!it) return;
+        if (it.failed) { failed.push(String(it.text || '')); return; }
+        if (!it.id || !it.token || hasChatRow(it.id)) return;   // 이미 동기화로 들어왔으면 건너뜀
+        chatMsgs.push({ role: 'me', text: String(it.text || ''), ts: Number(it.ts) || Date.now(), id: it.id, token: it.token,
+                        answered: false, waitFrom: Date.now(), via: 'notif' });
+        added++;
+      });
+      if (failed.length) {
+        chatMsgs.push({ role: 'k', ts: Date.now(),
+          text: '알림에서 보내신 답장 ' + failed.length + '건은 인터넷 문제로 전송되지 않았어요 — 「' + failed[0].slice(0, 40) + (failed[0].length > 40 ? '…' : '') + '」' + (failed.length > 1 ? ' 외' : '') + '. 필요하면 여기서 다시 보내 주세요.' });
+      }
+      if (added || failed.length) {
+        sortChatByTime(); saveChatMsgs();
+        if (isOpen(chatView)) renderChat();
+        if (added) startChatReconcile();
+      }
+    }).catch(function () {});
+  }
+  function kbSkipIntro() { try { if (window.KIntro && KIntro.active && KIntro.active()) KIntro.skip(); } catch (e) {} }
+  function runShortcut(name) {
+    kbSkipIntro();
+    if (name === 'voice') {                        // 케이와 음성 대화 — 채팅 열고 바로 듣기 시작
+      openChat();
+      setTimeout(function () { try { startConvo(); } catch (e) {} }, 400);
+    } else if (name === 'record') {                // 바로 녹음 시작(이미 녹음 중이면 녹음 화면으로)
+      if (isRecording) { openScreen(recView); return; }
+      showHome();
+      if (btnRecord) btnRecord.click();
+      setTimeout(function () { if (btnStartRec && !isRecording) btnStartRec.click(); }, 250);
+    } else if (name === 'photo') {                 // 케이에게 사진 보내기 — 채팅 열고 사진 고르기 창
+      openChat();
+      setTimeout(function () {
+        var ok = false;
+        try { ok = !!(window.SmartNativePick && SmartNativePick('chatCam', 'image/*')); } catch (e) {}
+        if (!ok) toast('아래 카메라 버튼을 눌러 사진을 골라 주세요.');
+      }, 350);
+    } else if (name === 'today') {                 // 홈 「오늘 한눈에」 카드로
+      showHome();
+      setTimeout(function () {
+        var tc = $('todayCard');
+        if (tc && tc.style.display !== 'none') { try { tc.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+        else toast(getSyncPass() ? '오늘 한눈에를 불러오는 중이에요.' : '오늘 한눈에는 연동 암호를 넣으면 보여요.');
+      }, 700);
+    }
+  }
+  function onKLaunch(ev) {
+    if (!ev) return;
+    if (ev.kind === 'shortcut') { runShortcut(ev.name); return; }
+    if (ev.kind === 'open') {                      // 위젯·[답장] 알림 탭
+      kbSkipIntro();
+      importNotifReplies();
+      if (ev.screen === 'health') openHealth();
+      else if (ev.screen === 'ideas') openIdeas();
+      else openChat();
+    }
+  }
+  (function initKBridge() {
+    var KB = kbPlugin(); if (!KB) return;
+    try { KB.setContext({ thread: chatThread, url: OfficeBridge.CONFIG.url, key: OfficeBridge.CONFIG.key }); } catch (e) {}
+    importNotifReplies();
+    try { KB.addListener('launch', onKLaunch); } catch (e) {}
+    try { KB.addListener('replySent', function () { importNotifReplies(); }); } catch (e) {}
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
+      try { Capacitor.Plugins.App.addListener('appStateChange', function (st) { if (st && st.isActive) importNotifReplies(); }); } catch (e) {}
+    }
+    pushWidget(false);
+    // 「케이 꾸미기」 화면의 위젯 설정(폰에서만 보임)
+    var row = $('kwWidgetRow'), cb = $('kwWidgetHide');
+    if (row) row.style.display = '';
+    if ($('kwWidgetSec')) $('kwWidgetSec').style.display = '';
+    if (cb) {
+      cb.checked = widgetHide();
+      cb.addEventListener('change', function () {
+        try { localStorage.setItem(WIDGET_HIDE_KEY, cb.checked ? '1' : '0'); } catch (e) {}
+        pushWidget(true);
+        toast(cb.checked ? '위젯에는 「새 소식 N건」만 보여요.' : '위젯에 새 소식 한 줄이 보여요.');
+      });
+    }
+  })();
 })();

@@ -391,6 +391,9 @@
       <div id="kwVoices" class="kw-voices"></div>
       <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
       <label class="card toggle kw-motion"><span><b>케이 얼굴 움직이기</b><small>끄면 정지 사진만 보여요(배터리 절약)</small></span><input type="checkbox" id="kwMotion" hidden><span class="switch"></span></label>
+      <!-- v8.2(O-0157): 바탕화면 케이 위젯 — 폰에서만 보임(app.js initKBridge 가 켬) -->
+      <div class="kw-sec" id="kwWidgetSec" style="display:none;"><b>바탕화면 위젯</b><small>바탕화면 길게 누르기 → 위젯</small></div>
+      <label class="card toggle kw-motion" id="kwWidgetRow" style="display:none;"><span><b>위젯에 내용 숨기기</b><small>켜면 위젯에 「새 소식 N건」만 보이고 글 내용은 안 보여요</small></span><input type="checkbox" id="kwWidgetHide" hidden><span class="switch"></span></label>
       <!-- O-0116: 시작 인사 설정 -->
       <div class="kw-sec"><b>시작 인사</b><small id="kwIntroWhy"></small></div>
       <div class="card kw-intro">
@@ -665,6 +668,8 @@
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.
      네이티브가 아니면(PC/브라우저) 아무것도 하지 않아 웹 입력창이 그대로 유지된다. -->
 <script src="js/native-input.js"></script>
+<!-- v8.2(O-0157) 어디서든 [공유] → 케이(폰 전용 — PC판에선 아무것도 안 함). app.js·native-input.js 뒤에 실려야 한다 -->
+<script src="js/share-in.js"></script>
 <!-- install.js (홈 화면 설치 배너)는 2026-09-19 대표님 지시로 제거됨 -->
 <script>
   if ('serviceWorker' in navigator) {
