@@ -9,7 +9,8 @@
  *   KChar.mount() 가 안에 [정지 사진 <img>] + [반복 영상 <video muted loop playsinline>] 을 채운다.
  *   - 평소: idle 반복영상(실패·저전력·움직임 끔 → 정지 사진)
  *   - 케이 목소리 재생 중: talk 영상(없으면 사진이 살짝 움직이는 CSS)
- *   - 새 답장 도착: 그 답의 표정 사진을 잠깐(약 7초) 보여 준 뒤 idle 로 복귀
+ *   - 새 답장 도착: 그 답의 표정 사진을 잠깐(미소·활짝 웃음 약 15초, 걱정·생각 중 약 7초) 보여 준 뒤 idle 로 복귀
+ *   - (O-0226) 정지 사진이 「그대로 보이는」 자리의 기본 얼굴은 미소(REST_EXPR). 움직이는 영상(idle·talk)은 그대로 둔다.
  *
  * ⭐ 표정 규칙은 아래 EXPR_RULES 한 곳에만 있다(위에서부터 먼저 걸리는 것 적용). 고칠 땐 여기만.
  *
@@ -33,16 +34,35 @@
                                 '문제가 생', '문제가 있', '문제가 발생', '문제를 발견', '문제가 발견', '문제로 인해', '문제가 됐', '문제가 되었'] },
     { expr: 'cheer',    words: ['완료', '끝났', '축하'] },
     { expr: 'thinking', words: ['진행 중', '작업 중', '확인 중', '맡겼'] },
-    { expr: 'smile',    words: ['좋은', '됐습니다', '반갑'] }
+    // (O-0226, 2026-10-05) 대표님 「웃는 모습을 보일 수가 없네」 — 미소 낱말이 3개뿐이고 순서도 꼴찌라 실제 답의 4%만 미소였다.
+    //   일상 답(감사·드릴게요·알겠습니다 등)과 「네,」「대표님,」으로 시작하는 답도 미소로. 순서는 그대로 꼴찌 →
+    //   걱정 낱말(죄송·보류·지연…)·완료·진행 중이 하나라도 있으면 그쪽이 먼저 걸린다(걱정할 때 웃지 않는다).
+    //   starts = 글 맨 앞이 이 말로 시작할 때만(띄어쓰기 무시). 「네」가 문장 중간에 든 말("그러네, …")까지 걸리지 않게.
+    { expr: 'smile',    words: ['좋은', '됐습니다', '반갑',
+                                '감사', '고맙', '드릴게요', '드리겠습니다', '좋아요', '좋습니다', '좋네요', '알겠습니다', '안녕', '수고하셨', '다행'],
+                        starts: ['네,', '네.', '네!', '대표님,'] }
   ];
-  var DEFAULT_EXPR = 'neutral';
+  var DEFAULT_EXPR = 'neutral';          // 규칙에 아무것도 안 걸린 답 = 「특별한 표정 없음」(깜짝 표정을 띄우지 않는다)
+  /* (O-0226) 기본 얼굴을 미소로 — 「정지 사진」에만 적용한다.
+   *   · 정지 사진이 그대로 보이는 자리(채팅 말풍선 옆 동그란 얼굴, 프로필 카드 첫 사진, 움직임 끔·절전·영상 실패·잠시 멈춤)에서
+   *     「평소(neutral)」 자리에 미소 사진을 쓴다. 걱정·생각 중·활짝 웃음은 그대로 그 사진.
+   *   · 움직이는 영상(idle·talk)은 손대지 않는다. 영상 속 얼굴은 평소 표정이라, 곧 영상이 덮을 자리의 밑 사진까지 미소로 바꾸면
+   *     화면을 열 때마다 「미소 사진 → 평소 영상」으로 표정이 튄다. 그래서 그 자리는 예전처럼 평소 사진을 밑에 깐다(paintStill).
+   *   · 옷에 미소 사진이 없으면(서버에서 온 새 옷 등) 예전처럼 평소 사진으로 보인다. 기본 단발이 아닌 머리는 사진 한 장 그대로. */
+  var REST_EXPR = 'smile';
+  var FLASH_MS = { smile: 15000, cheer: 15000 };   // 웃는 얼굴은 15초(예전 7초 — 금방 사라져 못 보셨다)
+  var FLASH_MS_BASE = 7000;                         // 걱정·생각 중은 예전 그대로 7초
+  function restExpr(e) { return (!e || e === DEFAULT_EXPR) ? REST_EXPR : e; }
   function exprFor(text) {
     var t = String(text || '').replace(/\s+/g, '');
     if (!t) return DEFAULT_EXPR;
     for (var i = 0; i < EXPR_RULES.length; i++) {
-      var r = EXPR_RULES[i];
-      for (var j = 0; j < r.words.length; j++) {
+      var r = EXPR_RULES[i], j;
+      for (j = 0; j < r.words.length; j++) {
         if (t.indexOf(r.words[j].replace(/\s+/g, '')) !== -1) return r.expr;
+      }
+      if (r.starts) for (j = 0; j < r.starts.length; j++) {
+        if (t.indexOf(r.starts[j].replace(/\s+/g, '')) === 0) return r.expr;
       }
     }
     return DEFAULT_EXPR;
@@ -152,18 +172,21 @@
   // 지금 보이는 조합 사진(기본머리이거나 조합이 없으면 null → 기존 옷 사진·표정·영상)
   function activeCombo() { return comboFor(curHair, outfit().id); }
   function isCur(o) { return !o || o.id === outfit().id; }
-  function exprUrl(e, o) {
+  // (O-0226) raw 를 주지 않으면 「평소」 자리에 미소 사진(REST_EXPR)을 돌려준다. raw=true 는 영상 밑 사진·영상 첫 장면용(진짜 평소 사진).
+  function exprUrl(e, o, raw) {
     var cb = isCur(o) ? activeCombo() : null;
     if (cb) return cb.img;
+    if (!raw) e = restExpr(e);
     o = o || outfit(); return url(o, o.expr[e] || o.expr.neutral);
   }
   // 작은 원형 얼굴용: 얼굴 쪽으로 자른 사진(av_*). 없으면 전체 사진(CSS 로 확대)
-  function avatarUrl(e, o) {
+  function avatarUrl(e, o, raw) {
     var cb = isCur(o) ? activeCombo() : null;
     if (cb) return cb.av || cb.img;
+    if (!raw) e = restExpr(e);
     o = o || outfit();
     var f = o.avatar[e] || o.avatar.neutral;
-    return f ? url(o, f) : exprUrl(e, o);
+    return f ? url(o, f) : exprUrl(e, o, true);
   }
   function hasCrop(o, e) {
     var cb = isCur(o) ? activeCombo() : null;
@@ -365,7 +388,7 @@
     vid.className = 'kf-vid'; vid.muted = true; vid.defaultMuted = true; vid.loop = true;
     vid.setAttribute('muted', ''); vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', '');
     vid.setAttribute('disablepictureinpicture', ''); vid.preload = 'auto';
-    vid.addEventListener('playing', function () { el.classList.add('vid-on'); });
+    vid.addEventListener('playing', function () { el._kBlocked = false; el.classList.add('vid-on'); });
     vid.addEventListener('error', function () { markFail(el, vid.getAttribute('data-kind')); });
     el.appendChild(img); el.appendChild(vid);
     el._kVisible = true;
@@ -375,16 +398,39 @@
     el._kFail = el._kFail || {};
     if (kind) el._kFail[kind + '|' + curId + (activeCombo() ? '|' + curHair : '')] = true;
     el.classList.remove('vid-on');
-    syncVideo(el);
+    paint(el);                                   // (O-0226) 영상을 못 쓰게 됐으니 밑 사진도 다시 고른다(정지 사진 자리 = 미소)
   }
   // (O-0124) 넓은 사진 자리: 프로필·꾸미기·음성 대화 무대(convo). class="kface wide" 도 넓은 자리로 본다.
   function wideFace(el) { var k = el.getAttribute('data-kface'); return k === 'profile' || k === 'wardrobe' || k === 'convo' || el.classList.contains('wide'); }
+  /* (O-0226) 이 자리에서 지금 영상을 틀 수 있는가(화면에 보이는지는 따지지 않는다 — 그건 syncVideo 가 본다).
+   *   영상 종류·파일을 고르는 규칙은 예전 syncVideo 안에 있던 것을 그대로 옮긴 것이다(동작 같음). */
+  function videoPlan(el) {
+    var o = outfit(), cb = activeCombo(), still = !!cb;
+    var kind = talking ? 'talk' : 'idle';
+    var file = still ? '' : o[kind];                                  // 기본머리 외 조합 = 영상 없음(정지 사진)
+    // (O-0042) 조합에 idle 영상이 있으면 평소엔 그것을 반복 재생. 말하는 중엔 기존대로 정지 사진 + 끄덕임 CSS
+    if (still && !talking && cb.idle) file = cb.idle;
+    if (talking && !file && !still) { kind = 'idle'; file = o.idle; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
+    var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
+    var failed = !!(el._kFail && el._kFail[fkey]);
+    return { o: o, cb: cb, still: still, kind: kind, file: file,
+             can: !!file && !failed && !el._kHold && motionOn() && !flashing };
+  }
+  // 밑에 까는 정지 사진만 고른다(영상은 건드리지 않음).
+  function paintStill(el) {
+    var e = flashing || lastExpr;
+    if (wideFace(el)) e = flashing || DEFAULT_EXPR;
+    // 곧 영상이 덮을 자리 = 영상 첫 장면과 같은 평소 사진(raw). 정지 사진이 그대로 보이는 자리 = 미소가 기본.
+    var raw = videoPlan(el).can && !el._kBlocked;
+    var src = wideFace(el) ? exprUrl(e, null, raw) : avatarUrl(e, null, raw);
+    var img = el.querySelector('.kf-img');
+    if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
+  }
   function paint(el) {
     build(el);
     var o = outfit(), e = flashing || lastExpr;
     if (wideFace(el)) e = flashing || DEFAULT_EXPR;
-    var img = el.querySelector('.kf-img'), vid = el.querySelector('.kf-vid');
-    var src = wideFace(el) ? exprUrl(e) : avatarUrl(e);
+    var vid = el.querySelector('.kf-vid');
     el.classList.toggle('kf-crop', !wideFace(el) && !hasCrop(o, e));   // 잘린 얼굴사진이 없으면 전체사진을 CSS로 확대
     // 옷마다 원형 구도가 다를 수 있다(예: 오프숄더는 아래로 넓게) → 영상 확대 비율·중심도 그 옷 값으로
     var cb = activeCombo();
@@ -393,26 +439,19 @@
     el.style.setProperty('--kscale', String(c.scale || 1.35));
     el.style.setProperty('--kox', (c.ox != null ? c.ox : 50) + '%');
     el.style.setProperty('--koy', (c.oy != null ? c.oy : 49) + '%');
-    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
-    var poster = exprUrl(DEFAULT_EXPR);
+    paintStill(el);
+    var poster = exprUrl(DEFAULT_EXPR, null, true);                   // 영상 첫 장면 자리 = 진짜 평소 사진(영상과 같은 표정)
     if (vid.getAttribute('poster') !== poster) vid.setAttribute('poster', poster);
     syncVideo(el);
   }
   function syncVideo(el) {
     var vid = el.querySelector && el.querySelector('.kf-vid'); if (!vid) return;
-    var o = outfit(), cb = activeCombo(), still = !!cb;
-    var kind = talking ? 'talk' : 'idle';
-    var file = still ? '' : o[kind];                                  // 기본머리 외 조합 = 영상 없음(정지 사진)
-    // (O-0042) 조합에 idle 영상이 있으면 평소엔 그것을 반복 재생. 말하는 중엔 기존대로 정지 사진 + 끄덕임 CSS
-    if (still && !talking && cb.idle) file = cb.idle;
-    if (talking && !file && !still) { kind = 'idle'; file = o.idle; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
+    var pl = videoPlan(el), o = pl.o, still = pl.still, kind = pl.kind, file = pl.file;   // (O-0226) 고르는 규칙은 videoPlan 한 곳
     el.classList.toggle('kf-talk', talking);
     // (O-0124) talk 영상을 못 읽었을 때도(네트워크·코덱) 정지 사진 + 끄덕임으로 '말하는 중'을 보여 준다
     var talkFailed = !!(el._kFail && el._kFail['talk|' + curId]);
     el.classList.toggle('kf-talkstill', talking && (still || !o.talk || talkFailed));
-    var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
-    var failed = el._kFail && el._kFail[fkey];
-    var want = !!file && !failed && !el._kHold && motionOn() && !flashing && el._kVisible !== false && !document.hidden;
+    var want = pl.can && el._kVisible !== false && !document.hidden;
     if (!want) {
       el.classList.remove('vid-on');
       if (!vid.paused) try { vid.pause(); } catch (e) {}
@@ -429,7 +468,10 @@
       var p; try { p = vid.play(); } catch (e) { markFail(el, kind); return; }
       if (p && p.catch) p.catch(function (err) {
         // 자동재생 거부(제스처 필요 등)면 정지 사진 유지. 네트워크 오류는 error 이벤트에서 처리.
-        if (err && err.name === 'NotAllowedError') el.classList.remove('vid-on');
+        if (err && err.name === 'NotAllowedError') {
+          el.classList.remove('vid-on');
+          if (!el._kBlocked) { el._kBlocked = true; paintStill(el); }   // (O-0226) 영상이 안 도는 자리 → 정지 사진(미소 기본). 재생은 계속 다시 시도한다
+        }
       });
     } else if (vid.readyState >= 2) el.classList.add('vid-on');
   }
@@ -441,7 +483,7 @@
     });
     if (outfitChanged) {                        // 채팅 말풍선 아바타도 새 옷으로
       Array.prototype.forEach.call(document.querySelectorAll('img.kav[data-kexpr]'), function (im) {
-        im.setAttribute('src', avatarUrl(im.getAttribute('data-kexpr')));
+        im.setAttribute('src', avatarUrl(im.getAttribute('data-kexpr'), null, im.hasAttribute('data-kraw')));   // (O-0226) data-kraw = 웃지 않는 자리(진짜 평소 사진)
       });
     }
   }
@@ -455,7 +497,7 @@
     if (flash && e !== DEFAULT_EXPR && !talking) {
       flashing = e;
       if (flashTimer) clearTimeout(flashTimer);
-      flashTimer = setTimeout(function () { flashing = ''; flashTimer = null; faces().forEach(paint); }, 7000);
+      flashTimer = setTimeout(function () { flashing = ''; flashTimer = null; faces().forEach(paint); }, FLASH_MS[e] || FLASH_MS_BASE);   // (O-0226) 웃는 얼굴 15초, 그 밖 7초
     }
     faces().forEach(paint);
   }
@@ -541,12 +583,13 @@
     build(el);
     el._kHold = !!on;
     if (on) el.classList.remove('vid-on');
-    syncVideo(el);
+    paint(el);                                   // (O-0226) 멈춘 동안은 정지 사진 자리(미소 기본), 풀리면 다시 영상 밑 사진으로
   }
 
   window.KChar = {
     ready: ready,
     exprFor: exprFor, rules: EXPR_RULES, moodFor: moodFor,
+    restExpr: REST_EXPR, flashMs: function (e) { return FLASH_MS[e] || FLASH_MS_BASE; },   // (O-0226) 시험·확인용
     outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange,
     // (O-0040) 머리 스타일 · 서버 카탈로그
     catalogReady: catalogReady, reloadCatalog: loadCatalog, catalogState: function () { return { source: catState.source, url: catState.url, error: catState.error, at: catState.at }; },
