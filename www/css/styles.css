@@ -918,6 +918,17 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
 .ordtag{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(120,140,200,.14);color:var(--muted)}
 .ordtag.ok{background:var(--ok-bg);color:var(--ok)}
 .ordtag.warn{background:var(--warn-bg);color:var(--warn)}
+/* (O-0201 추가) 작업 카드·작업 현황 [승인]·[수정 요청] — 아이디어 [진행해줘]/[보류]와 같은 버튼, 카드 크기에 맞춰 낮게.
+   ⚠️ 채팅 화면 요소라 backdrop-filter 금지(v4.5) */
+.ord-actions{display:flex;gap:8px;margin-top:9px}
+.ord-actions .btn{flex:1 1 0;min-width:0;height:42px;font-size:15px;border-radius:13px;gap:6px;white-space:nowrap}
+.ord-actions .btn svg{width:18px;height:18px}
+.ord-actions .btn.primary{box-shadow:none}
+.ord-actions .btn.ghost{background:rgba(120,140,200,.12);backdrop-filter:none;-webkit-backdrop-filter:none}
+.ord-sent{margin-top:8px;font-size:12.5px;font-weight:700;line-height:1.45;color:var(--ok);word-break:keep-all;overflow-wrap:anywhere}
+.ord-sent.warn{color:var(--warn)}
+.ord-sent.err{color:var(--rec)}
+.ord-item .ord-sent{font-size:13.5px}
 
 /* ============================================================================
    v6.0 소장 「케이」 캐릭터 — 얼굴(사진+반복영상)·말풍선 아바타·헤더·프로필 카드·옷장

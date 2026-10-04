@@ -3800,7 +3800,121 @@
       (ORD_CLOSED[o.status] ? ordEvidenceHtml(o) : '') + ordExtraHtml(o) + '</div>' +
       (act ? '<div class="oc-a">' + esc(act) + '</div>' : '') +
       (line ? '<div class="oc-r">' + esc(line) + '</div>' : '') +
-      (ev ? '<div class="oc-e">근거: ' + esc(ev) + '</div>' : '') + '</div>';
+      (ev ? '<div class="oc-e">근거: ' + esc(ev) + '</div>' : '') +
+      ordDecideHtml(o) + '</div>';                    // (O-0201 추가) 결정 대기일 때만 [승인]·[수정 요청]
+  }
+  /* ===================== (O-0201 추가) 작업 카드에서 [승인]·[수정 요청] =====================
+   * 근거(O-0195): 앱에서 작업실로 간 일의 절반가량이 「확인 필요(대표님 결정 대기)」로 멈추는데, 풀려면 채팅에 「#번호 승인」을 쳐야 했다.
+   * ▷ 새 서버 경로 없음: 버튼은 채팅에 「#작업실번호 승인」 / 「#작업실번호 수정 요청: …」을 대신 보낼 뿐이다(sendPlainChat —
+   *   손으로 치는 것과 같은 글·같은 경로. PC 응답기가 「#번호 승인」을 판정기 없이 바로 이어받는다). 글로 치는 방법도 그대로 된다.
+   * ▷ 보이는 때: 대장 상태가 「보류」이고 작업실 상태가 need_approval(확인 필요)일 때만. 진행 중·완료·실패 카드는 예전 그대로.
+   *   PC 작업실은 끝난 지 48시간 안의 「확인 필요」만 이어받으므로(job_queue.approval_candidates), 그보다 오래된 건은 버튼 대신 안내만.
+   * ▷ 잘못 누름 방지: [승인]은 기존 확인 시트를 한 번 거친다. 보내는 동안 버튼은 꺼지고, 못 보내면 카드에 사유가 남는다.
+   *   이 기기에서 이미 보낸 건은 버튼 대신 「보냈어요 · 시각」(다시 눌러 두 번 접수되지 않게, 이 기기에 기억).
+   * ▷ 모양은 아이디어 화면의 [진행해줘]/[보류]와 같은 버튼(.btn.primary/.btn.ghost) — 채팅 화면이라 backdrop-filter 는 끈다. */
+  var ORD_DECIDED_KEY = 'smart_ord_decided';
+  var ORD_APPROVE_WINDOW_MS = 47 * 3600 * 1000;      // PC 쪽 48시간 창보다 1시간 여유
+  var ordDecided = (function () { try { var o = JSON.parse(localStorage.getItem(ORD_DECIDED_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } })();
+  var ordDecBusy = {}, ordDecErr = {};
+  function saveOrdDecided() {
+    try {
+      var ks = Object.keys(ordDecided);
+      if (ks.length > 100) { ks.sort(function (a, b) { return (ordDecided[a].at || 0) - (ordDecided[b].at || 0); }); ks.slice(0, ks.length - 100).forEach(function (k) { delete ordDecided[k]; }); }
+      localStorage.setItem(ORD_DECIDED_KEY, JSON.stringify(ordDecided));
+    } catch (e) {}
+  }
+  function ordNeedsDecision(o) { return !!(o && o.status === '보류' && o.job_status === 'need_approval' && (o.job_seq | 0) > 0); }
+  function ordDecideHtml(o) {
+    if (!ordNeedsDecision(o)) return '';
+    var id = esc(o.id), d = ordDecided[o.id];
+    if (d && d.seq === (o.job_seq | 0)) {
+      return '<div class="ord-sent">✓ ' + (d.k === 'revise' ? '수정 요청을' : '승인을') + ' 보냈어요 · ' + esc(fmtKst(new Date(d.at).toISOString())) +
+        ' — 케이 답은 채팅에서 확인해 주세요</div>';
+    }
+    var t = Date.parse(o.u || o.updated_at || '');
+    if (!isNaN(t) && Date.now() - t > ORD_APPROVE_WINDOW_MS) {
+      return '<div class="ord-sent warn">결정을 기다린 지 이틀이 넘어 버튼으로는 이어받지 못해요. 채팅으로 말씀해 주세요.</div>';
+    }
+    var busy = !!ordDecBusy[o.id];
+    return '<div class="ord-actions">' +
+      '<button type="button" class="btn primary" data-ord-approve="' + id + '"' + (busy ? ' disabled' : '') + '><svg><use href="#i-check"/></svg>' + (busy ? '보내는 중…' : '승인') + '</button>' +
+      '<button type="button" class="btn ghost" data-ord-revise="' + id + '"' + (busy ? ' disabled' : '') + '>수정 요청</button></div>' +
+      (ordDecErr[o.id] ? '<div class="ord-sent err">' + esc(ordDecErr[o.id]) + '</div>' : '');
+  }
+  function ordDecideFind(id) {
+    var o = ordFind(id); if (o) return o;
+    for (var k in orderCards) { if (orderCards[k] && orderCards[k].id === id) return orderCards[k]; }
+    return null;
+  }
+  function ordDecideRedraw() {
+    if (isOpen(chatView)) renderChat();
+    if (isOpen(ordersView)) renderOrders(ordersRows);
+  }
+  function ordApproveText(o) { return '#' + (o.job_seq | 0) + ' 승인'; }
+  function ordReviseText(o, t) {
+    return '#' + (o.job_seq | 0) + ' 수정 요청: ' + t + '\n(이 작업을 그대로 실행하지 말고, 위 내용대로 고쳐서 다시 보고해 주세요.)';
+  }
+  function ordDecideSend(o, kind, text) {
+    if (!getSyncPass()) { showSyncGate(true, (kind === 'revise' ? '수정 요청을' : '승인을') + ' 보내려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (ordDecBusy[o.id]) return;
+    ordDecBusy[o.id] = true; delete ordDecErr[o.id];
+    ordDecideRedraw();
+    unlockKaiAudio();
+    sendPlainChat(text, false).then(function (ok) {
+      delete ordDecBusy[o.id];
+      if (ok) {
+        ordDecided[o.id] = { k: kind, at: Date.now(), seq: (o.job_seq | 0) }; saveOrdDecided();
+        toast((kind === 'revise' ? '수정 요청을' : '승인을') + ' 케이에게 보냈어요. 채팅에서 답을 확인하세요.');
+      } else {
+        ordDecErr[o.id] = '보내지 못했어요 — 인터넷 연결을 확인하고 다시 눌러 주세요.';
+        toast('보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+      }
+      ordDecideRedraw();
+    });
+  }
+  function confirmApproveOrder(id) {
+    var o = ordDecideFind(id); if (!o || !ordNeedsDecision(o) || ordDecBusy[id]) return;
+    var s = (o.summary || '').replace(/\s+/g, ' ').trim(); if (s.length > 60) s = s.slice(0, 60) + '…';
+    // 무엇을 승인하는지 = 대장에 이미 있는 결과 요약(작업실 보고 첫머리)을 그대로 쓴다. 앞의 「작업실 #N 확인 필요(대표님 결정 대기) · 」 머리말만 뗀다.
+    var r = (o.result || '').replace(/\s+/g, ' ').replace(/^작업실 #\d+ 확인 필요\(대표님 결정 대기\)\s*·\s*/, '').trim(); if (r.length > 120) r = r.slice(0, 120) + '…';
+    openSheet('작업 #' + (o.job_seq | 0) + ' 승인할까요?',
+      (s ? '「' + s + '」\n' : '') + (r ? '보고: ' + r + '\n' : '') +
+      '\n승인하면 케이가 이 작업을 이어받아, 보고에서 여쭌 것(발송·배포 등)을 실행해요.\n채팅에는 「' + ordApproveText(o) + '」이라고 전달돼요.',
+      '승인', function () { ordDecideSend(o, 'approve', ordApproveText(o)); });
+    if (sheetMsg) sheetMsg.classList.add('pck');     // 여러 줄 안내(왼쪽 정렬·줄바꿈 유지·높이 제한 해제) — 기존 시트 모양 재사용
+    if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-check'); }   // 긍정 동작 — 빨간 휴지통 대신 ✓(아이디어 [진행해줘]와 같게)
+  }
+  function openReviseOrder(id) {
+    var o = ordDecideFind(id); if (!o || !ordNeedsDecision(o) || ordDecBusy[id]) return;
+    modalTitle.textContent = '작업 #' + (o.job_seq | 0) + ' 수정 요청';
+    modalBody.innerHTML = '<div class="card rcard"><div class="h"><svg><use href="#i-note"/></svg>어떻게 고칠까요?</div>' +
+      '<div style="padding:2px 2px 8px;line-height:1.6">한 줄로 적어 주시면 케이에게 채팅으로 보내요. 승인이 아니라서, 고친 뒤 다시 보고받아요.</div>' +
+      '<input id="ordRevInput" type="text" maxlength="200" ' +
+      'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="예: 표는 빼고 2쪽으로 줄여 줘"></div>' +
+      '<div class="btnrow">' +
+      '<button id="ordRevSend" class="btn primary"><svg><use href="#i-check"/></svg>보내기</button>' +
+      '<button id="ordRevCancel" class="btn ghost sm"><svg><use href="#i-x"/></svg>취소</button>' +
+      '</div>';
+    var inp = $('ordRevInput');
+    $('ordRevCancel').addEventListener('click', closeModal);
+    function go() {
+      var t = ((inp && inp.value) || '').replace(/\s+/g, ' ').trim();
+      if (!t) { toast('어떻게 고칠지 한 줄 적어 주세요.'); return; }
+      if (t.length > 200) t = t.slice(0, 200);
+      closeModal();
+      ordDecideSend(o, 'revise', ordReviseText(o, t));
+    }
+    $('ordRevSend').addEventListener('click', go);
+    if (inp) inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); go(); } });
+    modal.style.display = 'flex';
+    setTimeout(function () { if (inp) try { inp.focus(); } catch (e) {} }, 60);
+  }
+  // 카드 안 버튼을 눌렀으면 처리하고 true(카드 전체 누르기 = 작업 현황 열기보다 먼저 본다)
+  function ordDecideClick(ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null; if (!t) return false;
+    var a = t.closest('[data-ord-approve]'); if (a) { ev.preventDefault(); if (!a.disabled) confirmApproveOrder(a.getAttribute('data-ord-approve')); return true; }
+    var r = t.closest('[data-ord-revise]'); if (r) { ev.preventDefault(); if (!r.disabled) openReviseOrder(r.getAttribute('data-ord-revise')); return true; }
+    return false;
   }
   // 이번에 조회할 원본 id: (전체 1회) 최근 내 메시지 40개 / (평소) 안 끝난 카드 + 최근 15분 내 보낸 카드 없는 메시지
   function orderPollIds(full) {
@@ -3836,8 +3950,9 @@
         if (!r || !r.source_id) return;
         var old = orderCards[r.source_id];
         var nv = { id: r.id, status: r.status, result: r.result || '', summary: r.summary || '', model: r.model || '', u: r.updated_at || '', _t: Date.now(),
-                   activity: r.activity || null, evidence: r.evidence || null, nudge: r.nudge || null, reviewed_by: r.reviewed_by || '', model_pref: r.model_pref || '' };   // v5.8 검수 칸
-        var sig = function (x) { return x ? JSON.stringify([x.id, x.status, x.result, x.model, x.activity, x.evidence, x.nudge, x.reviewed_by]) : ''; };
+                   activity: r.activity || null, evidence: r.evidence || null, nudge: r.nudge || null, reviewed_by: r.reviewed_by || '', model_pref: r.model_pref || '',   // v5.8 검수 칸
+                   job_seq: r.job_seq || 0, job_status: r.job_status || '' };   // (O-0201 추가) 결정 대기 판정([승인]·[수정 요청])
+        var sig = function (x) { return x ? JSON.stringify([x.id, x.status, x.result, x.model, x.activity, x.evidence, x.nudge, x.reviewed_by, x.job_seq || 0, x.job_status || '']) : ''; };
         if (sig(old) !== sig(nv)) changed = true;
         orderCards[r.source_id] = nv;
       });
@@ -3891,6 +4006,7 @@
       (ordActivityLine(o) ? '<div class="oi-a">' + esc(ordActivityLine(o)) + '</div>' : '') +
       (o.result ? '<div class="oi-r">' + esc(o.result) + '</div>' : '') +
       (ORD_CLOSED[o.status] && o.evidence && o.evidence.text ? '<div class="oi-r oi-e">근거: ' + esc(o.evidence.text) + '</div>' : '') +
+      ordDecideHtml(o) +                               // (O-0201 추가) 결정 대기일 때만 [승인]·[수정 요청]
       '<div class="oi-foot"><span class="oi-r" style="font-size:12px;color:var(--dim)">접수 ' + esc(fmtKst(o.received_at)) + (o.job_seq ? ' · 작업실 #' + esc(o.job_seq) : '') + '</span>' +
       (ORD_HIDEABLE[o.status] ? '<button type="button" class="oi-del" data-ord-del="' + esc(o.id) + '" aria-label="이 항목 지우기" title="목록에서 지우기"><svg><use href="#i-trash"/></svg>지우기</button>' : '') +
       '</div></div>';
@@ -3963,6 +4079,7 @@
   }
   if (ordersBody) ordersBody.addEventListener('click', function (ev) {
     var t = ev.target.closest ? ev.target : null; if (!t) return;
+    if (ordDecideClick(ev)) return;                    // (O-0201 추가) [승인]·[수정 요청]
     var d = t.closest('[data-ord-del]'); if (d) { ev.preventDefault(); confirmHideOrder(d.getAttribute('data-ord-del')); return; }
     if (t.closest('#ordersClearDone')) { ev.preventDefault(); confirmClearDoneOrders(); return; }
     if (t.closest('#ordersRestore')) { ev.preventDefault(); confirmRestoreOrders(); return; }
@@ -4650,6 +4767,7 @@
     // 링크 탭 → 외부로 열기(선택 복사와 별개)
     var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
+    if (ordDecideClick(ev)) return;                    // (O-0201 추가) 작업 카드 안 [승인]·[수정 요청]
     var oc = ev.target.closest ? ev.target.closest('.ordcard[data-ord]') : null;   // v5.8: 작업 카드 → 작업 현황(그 항목 강조)
     if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
     // ⋯ 메뉴 → 복사·삭제 시트
