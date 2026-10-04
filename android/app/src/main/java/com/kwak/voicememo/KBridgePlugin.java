@@ -22,7 +22,7 @@ import java.util.List;
  *  웹 → 네이티브
  *   - setContext({thread, url, key, pass}) : 알림 [답장]이 쓸 대화방(thread)·서버 주소·공개 키·연동 암호를 기억.
  *       공개(publishable) 키만 받는다(비밀 키 형태는 거절). 연동 암호(O-0158)는 KSecret 이 Keystore 로 암호화해 보관.
- *   - updateWidget({count, title, line, at, hide}) : 바탕화면 케이 위젯 내용 갱신.
+ *   - updateWidget({count, title, line, at, hide, maxts}) : 바탕화면 케이 위젯 내용 갱신(maxts 는 v9.1 — 없어도 됨).
  *   - takeOutbox() : 앱이 꺼져 있을 때 알림 [답장]으로 보낸 메시지 목록을 넘겨받고 비운다
  *       (app.js 가 채팅 목록에 「내 말풍선」으로 넣고 평소처럼 답을 기다림).
  *
@@ -83,14 +83,16 @@ public class KBridgePlugin extends Plugin {
     @PluginMethod
     public void updateWidget(PluginCall call) {
         // 숫자는 JS 쪽에서 문자열로 넘긴다(JSON 숫자는 크기에 따라 Integer/Long/Double 로 갈려 읽기가 불안정).
-        long at = 0L; int count = 0;
+        long at = 0L; int count = 0; long maxTs = 0L;
         try { at = Long.parseLong(call.getString("at", "0")); } catch (Exception ignored) {}
         try { count = Integer.parseInt(call.getString("count", "0")); } catch (Exception ignored) {}
+        // v9.1(O-0209) maxts = 가장 최근 안읽은 메시지의 서버 시각(ms, 모르면 0) — 「다른 기기에서 읽음」 때 위젯 수를 견주는 데 쓴다
+        try { maxTs = Long.parseLong(call.getString("maxts", "0")); } catch (Exception ignored) {}
         Boolean hide = call.getBoolean("hide", false);
-        KWidgetProvider.saveState(getContext(), count,
+        KWidgetProvider.setFromApp(getContext(), count,
                 call.getString("title", ""),
                 call.getString("line", ""),
-                at, hide != null && hide);
+                at, hide != null && hide, maxTs);
         KWidgetProvider.refreshAll(getContext());
         call.resolve();
     }

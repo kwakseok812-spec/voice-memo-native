@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
+import android.service.notification.StatusBarNotification;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.Person;
@@ -60,11 +61,15 @@ final class KNotify {
     // ---------------- 알림 안의 짧은 대화 기록(앱 저장소, 최근 6줄) ----------------
     private static SharedPreferences sp(Context c) { return KBridgePlugin.prefs(c); }
 
-    static synchronized void addHist(Context c, String who, String text) {
+    static synchronized void addHist(Context c, String who, String text) { addHist(c, who, text, 0L); }
+
+    /** sts = 서버가 푸시에 붙인 보낸 시각 표(ms, 없으면 0). v9.1(O-0209): 「그 시각까지 읽음」과 견줄 때 쓴다. */
+    static synchronized void addHist(Context c, String who, String text, long sts) {
         try {
             JSONArray a = new JSONArray(sp(c).getString("notif_hist", "[]"));
             JSONObject o = new JSONObject();
             o.put("w", who); o.put("t", clip(text, 400)); o.put("at", System.currentTimeMillis());
+            if (sts > 0) o.put("s", sts);
             a.put(o);
             while (a.length() > MAX_HIST) a.remove(0);
             sp(c).edit().putString("notif_hist", a.toString()).apply();
@@ -82,9 +87,9 @@ final class KNotify {
     }
 
     /** 케이 답장(또는 알림)이 왔을 때. replyable=false 면 [답장] 버튼 없이. */
-    static void showIncoming(Context c, String title, String body, String thread, String screen, boolean replyable) {
+    static void showIncoming(Context c, String title, String body, String thread, String screen, boolean replyable, long sts) {
         if (body == null || body.length() == 0) body = "답장이 도착했어요.";
-        addHist(c, "k", body);
+        addHist(c, "k", body, sts);
         sp(c).edit()
             .putString("n_title", title == null ? "" : title)
             .putString("n_thread", thread == null ? "" : thread)
@@ -118,6 +123,51 @@ final class KNotify {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(NOTIF_ID);
         } catch (Exception ignored) {}
+    }
+
+    /* ---------------- v9.1(O-0209) 다른 기기에서 읽음 → 읽은 줄만 내리기 ----------------
+     * 알림 속 케이 줄 중 보낸 시각 표(s)가 pupto 이하인 것 = 이미 PC판에서 읽은 것 → 뺀다.
+     *  · 케이 줄이 하나도 안 남으면 알림을 내리고 기록도 비운다(앱을 열었을 때와 같은 정리).
+     *  · 아직 안 읽은 케이 줄이 남으면 그 줄만 남겨 소리 없이 다시 그린다(알림이 지금 떠 있을 때만 — 손으로 밀어 지운 알림을 되살리지 않는다).
+     *  · 표가 없는 줄(서버가 바뀌기 전에 온 것)은 건드리지 않는다. 반환: 뺀 케이 줄 수. */
+    static synchronized int clearUpTo(Context c, long pupto) {
+        if (pupto <= 0) return 0;
+        try {
+            SharedPreferences p = sp(c);
+            JSONArray a = new JSONArray(p.getString("notif_hist", "[]"));
+            if (a.length() == 0) return 0;
+            JSONArray keep = new JSONArray();
+            int removed = 0, kLeft = 0;
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                boolean isK = "k".equals(o.optString("w"));
+                long s = o.optLong("s", 0L);
+                if (isK && s > 0 && s <= pupto) { removed++; continue; }
+                if (isK) kLeft++;
+                else if (kLeft == 0) continue;          // 남은 첫 케이 줄보다 앞선 「내 답장」은 지워진 줄에 딸린 것 → 함께 뺀다
+                keep.put(o);
+            }
+            if (removed == 0) return 0;
+            if (kLeft == 0) { cancel(c); resetHist(c); return removed; }
+            p.edit().putString("notif_hist", keep.toString()).apply();
+            if (isShowing(c)) post(c, null, true);
+            return removed;
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private static boolean isShowing(Context c) {
+        try {
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return false;
+            StatusBarNotification[] act = nm.getActiveNotifications();
+            if (act == null) return false;
+            for (StatusBarNotification sbn : act) {
+                if (sbn.getId() == NOTIF_ID && sbn.getTag() == null) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private static void post(Context c, String status, boolean silent) {
