@@ -1591,7 +1591,11 @@
   /* ---- O-0223 「음성 대화 효과음」 설정(이 기기에 저장, 케이 꾸미기 화면) ----
    *  대표님 말씀(2026-10-04): 「듣는 과정 중에 계속 소리 나는 거 불편」 「말이 끝나고 또 띠링… 생각보다 크고 불편해」.
    *  그 삑·띠링은 안드로이드 받아쓰기(SpeechRecognizer)가 듣기 시작·끝낼 때 스스로 내는 소리다(앱이 만든 소리 아님).
-   *  폰 플러그인(KSpeech sfx)이 듣는 동안만 미디어·시스템 소리를 줄이거나 꺼서 막는다. 끝나면 원래 음량으로 되돌린다.
+   *  폰 플러그인(KSpeech sfx)이 듣는 동안만 폰의 「알림 소리」를 줄이거나 꺼서 막는다. 끝나면 원래 음량으로 되돌린다.
+   *  (O-0233, 2026-10-05: v9.1 은 미디어·시스템 소리를 줄였는데 대표님 폰에서는 「끔」에서도 소리가 났다. 폰 음량 막대에서 「알림」을 끄니
+   *   사라졌다 → 이 폰의 받아쓰기 신호음은 알림 통로로 난다. 그래서 줄이는 통로를 알림 소리로 바꿨다. 벨소리·미디어는 건드리지 않는다.
+   *   부작용: 듣는 몇 초 동안은 카카오톡 같은 다른 앱의 알림 소리도 같이 작아지거나 안 난다(알림 자체는 온다).
+   *   진동·무음·방해 금지 중에는 아무것도 바꾸지 않는다.)
    *    soft(기본) = 「작게」: 듣기 시작 삑만 지금 음량의 30%로 남기고, 그 뒤 다시 듣기·끝 띠링은 끔
    *    off        = 「끔」  : 듣는 동안 모두 끔(시작 신호도 없음 — 화면의 「말씀하세요…」로만 알 수 있음)
    *    on         = 「켬」  : 예전 그대로
@@ -1611,8 +1615,8 @@
       sfxMode = v;
       try { localStorage.setItem(SFX_KEY, v); } catch (e) {}
       renderSfx();
-      toast(v === 'off' ? '음성 대화 효과음을 껐어요. 다음 듣기부터 적용돼요.'
-          : v === 'soft' ? '음성 대화 효과음을 작게 했어요. 듣기 시작 신호만 작게 나요.'
+      toast(v === 'off' ? '음성 대화 효과음을 껐어요. 듣는 동안은 다른 앱 알림 소리도 안 나요.'
+          : v === 'soft' ? '음성 대화 효과음을 작게 했어요. 듣는 동안은 다른 앱 알림 소리도 작아져요.'
           : '음성 대화 효과음을 예전처럼 켰어요.');
     });
   });
@@ -3001,8 +3005,9 @@
       KS.addListener('segment', function (e) { sttOnSegment(e || {}); });      // O-0189: 인식기가 스스로 끝낸 토막(다시 듣는 중)
       KS.addListener('rms', function (e) { sttOnRms(e && e.db); });            // O-0189: 소리 크기
       KS.addListener('speech', function () { if (stt.on && stt.s) stt.s.lastLoud = Date.now(); });
-      KS.addListener('final', function (e) { sttOnFinal(e && e.text); });
-      KS.addListener('error', function (e) { sttOnError(e || {}); });
+      KS.addListener('final', function (e) { sttDiag(e); sttOnFinal(e && e.text); });
+      KS.addListener('error', function (e) { sttDiag(e); sttOnError(e || {}); });
+      KS.addListener('diag', function (e) { if (e && e.k) sttDiag({ diag: e }); });   // O-0233: 듣기 시작(s)·준비됨(r) 때의 소리 통로 상태
     } catch (e) {}
     ks.p = KS.available().then(function (r) {
       ks.checked = true; ks.ok = !!(r && r.available); ks.onDevice = !!(r && r.onDevice);
@@ -3025,15 +3030,39 @@
    *        보내는 때는 ① 새 글자도 큰 소리도 없이 「말 끝 기다림」(기본 2초)이 지났을 때 ② [다 말했어요]를 눌렀을 때 ③ 60초를 채웠을 때뿐.
    *  끝난 이유(quiet/manual/max)·말한 길이·토막 수는 meta.vend 로 PC에 보내 [지연] 로그에 남는다(글 내용 아님 — 다음에 원인 추적용). */
   function sttCfg() { return { endMs: endWaitMs(), noSpeechMs: VC.STT_NOSPEECH_MS, maxMs: VC.STT_MAX_MS }; }
+  /* O-0233 효과음 진단 값 — 폰 플러그인이 알려 주는 「소리 통로 상태」를 이번 턴에 모아 두었다가 meta.vend.dg 로 PC에 보낸다.
+   *  들어가는 것: 적용한 효과음 값·통로별 음량과 음소거 여부·줄이기 호출의 결과(성공/안 먹힘/예외 이름)·소리 출력 기기 종류·
+   *              실제로 쓴 인식기·듣는 동안 소리를 낸 재생기의 쓰임새. 글 내용·소리·개인정보는 없다.
+   *  s=듣기 시작 직후, r=준비됨 0.35초 뒤, e=끝(되돌리기 전). 옛 APK(v9.1 이하)는 이 값을 주지 않으므로 dg 칸이 그냥 빠진다. */
+  function sttDiag(e) {
+    if (!e || !stt.on) return;
+    if (typeof e.onDevice === 'boolean') stt.od = e.onDevice;       // 실제로 쓴 인식기(기기 내/일반)
+    var d = e.diag;
+    if (!d || typeof d !== 'object' || !d.k) return;
+    var k = String(d.k); if (k !== 's' && k !== 'r' && k !== 'e') return;
+    var c = {}; for (var x in d) { if (x !== 'k' && Object.prototype.hasOwnProperty.call(d, x)) c[x] = d[x]; }
+    (stt.dg = stt.dg || {})[k] = c;
+  }
+  function sttDiagTake() {
+    var d = stt.dg; if (!d) return null;
+    try {
+      if (JSON.stringify(d).length <= 2400) return d;
+      ['s', 'r', 'e'].forEach(function (k) { if (d[k]) { delete d[k].pb; delete d[k].pl; } });   // 너무 길면 재생기 목록부터 뺌
+      return JSON.stringify(d).length <= 2400 ? d : { s: { m: d.s && d.s.m, act: d.s && d.s.act, cut: 1 } };
+    } catch (x) { return null; }
+  }
   function sttListen() {
     var now = Date.now();
-    stt = { on: true, s: KVad.sttNew(now), timer: null, finishing: false, finWait: null, why: '' };
+    stt = { on: true, s: KVad.sttNew(now), timer: null, finishing: false, finWait: null, why: '', dg: null, od: null };
     setChatMic(true);
     setConvoStatus('말씀하세요… (끝나면 자동으로 보내요)');
     stageLive('');
     var w = endWaitMs();
+    var me = stt;
     KS.start({ lang: 'ko-KR', partial: true, continuous: true, muteRestart: !!VC.STT_MUTE_RESTART, sfx: sfxMode,   // O-0223 효과음
-               completeMs: w + 1500, possiblyMs: w + 1000, minMs: 3000 }).catch(function (e) {
+               completeMs: w + 1500, possiblyMs: w + 1000, minMs: 3000 }).then(function (r) {
+      if (me === stt && r && typeof r.onDevice === 'boolean' && stt.od === null) stt.od = r.onDevice;   // O-0233: 이번에 실제로 만든 인식기
+    }).catch(function (e) {
       sttOnError({ reason: (e && e.code) || 'start' });
     });
     stt.timer = setInterval(sttTick, 150);
@@ -3109,9 +3138,12 @@
     var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
     if (convoOn) setConvoStatus('케이가 답하는 중…');
     stageLive(text, 'sent');
+    // O-0233: od = 이번 턴에 「실제로 쓴」 인식기(예전에는 앱을 켤 때 한 번 물어본 값이라, 기기 내 인식이 안 돼 일반 인식기로 넘어가도 기기내로 찍혔다)
     var vend = { p: 'dev', end: why, wait: endWaitMs(), ms: Math.max(0, (s.lastAct || 0) - (s.first || s.t0)),
-                 total: Date.now() - s.t0, segs: s.segs, od: ks.onDevice ? 1 : 0,
-                 fin: stt.finAt ? Math.max(0, Date.now() - stt.finAt) : 0 };   // O-0210: 말 끝 판정 → 보내기까지(마지막 글자 기다림)
+                 total: Date.now() - s.t0, segs: s.segs, od: (typeof stt.od === 'boolean' ? stt.od : ks.onDevice) ? 1 : 0,
+                 fin: stt.finAt ? Math.max(0, Date.now() - stt.finAt) : 0,   // O-0210: 말 끝 판정 → 보내기까지(마지막 글자 기다림)
+                 sfx: sfxMode };                                               // O-0233: 이 턴에 고른 효과음 값
+    var dg = sttDiagTake(); if (dg) vend.dg = dg;                              // O-0233: 소리 통로 진단 값(있을 때만)
     sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus(), vend: vend });
   }
   // O-0189 [다 말했어요] — 기다리지 않고 지금 보내기(받아쓰기·녹음 경로 공통)
