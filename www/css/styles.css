@@ -1384,6 +1384,8 @@ html[data-fs] .tools-sub{font-size:calc(13px * var(--fsx))}
 .today .td-foldline{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin-top:2px;padding:6px 10px;border:1px solid var(--glass-b);border-radius:14px;background:var(--in-bg);color:var(--text);font:700 14.5px/1.4 inherit;font-family:inherit;text-align:left;cursor:pointer}
 .today .td-foldline span{flex:1;min-width:0;word-break:keep-all}
 .today .td-foldline i{font-style:normal;color:var(--dim);font-weight:500}
+/* (O-0201 추가) 접힌 한 줄에서 「못 불러왔어요」 — 펼친 카드의 .td-none.warn 과 같은 색 */
+.today .td-foldline b{font-weight:inherit;color:var(--warn)}
 .today .td-foldline small{flex:none;font-size:12.5px;font-weight:700;color:var(--p1)}
 html[data-fs] .today .td-foldline{font-size:calc(14.5px * var(--fsx))}
 /* (O-0176 추가) 채팅 ＋ 고르기 창 */

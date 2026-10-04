@@ -173,8 +173,15 @@
     var w = showDigest ? wxData(dg) : null, n = wxNow(w);
     if (n) parts.push(wxCond(n.code, n.night)[0] + ' ' + esc(n.temp) + '°');
     if (showDigest && dg) {
-      parts.push('일정 ' + evs.length);                             // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
-      parts.push('메일 ' + mails.length);
+      // (O-0201 추가) 펼친 카드와 같은 판단을 쓴다: PC가 못 불러온 칸(cal_ok/mail_ok === false)은 숫자 0 이 아니라
+      //   펼친 카드와 같은 말 「못 불러왔어요」로 — 값이 없는 것을 0 으로 보이면 「오늘 일정 없음」으로 읽힌다.
+      //   (요약이 오래됐을 때의 「HH:MM 기준」은 머리줄에 접힘·펼침 공통으로 이미 나온다.)
+      var calBad = dg.cal_ok === false, mailBad = dg.mail_ok === false;
+      if (calBad && mailBad) parts.push('<b>일정·메일 못 불러왔어요</b>');
+      else {
+        parts.push(calBad ? '<b>일정 못 불러왔어요</b>' : '일정 ' + evs.length);   // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
+        parts.push(mailBad ? '<b>메일 못 불러왔어요</b>' : '메일 ' + mails.length);
+      }
     }
     if (st.orders) parts.push('챙길 일 ' + tasks.length);
     var rn = st.rems ? st.rems.length : remCountCached();
