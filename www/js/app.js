@@ -1818,27 +1818,45 @@
     var focus = true; try { if (document.hasFocus) focus = document.hasFocus(); } catch (e) {}
     return focus && readWithin(readActAt, READ_ACTIVE_MS);
   }
-  // 경계(hw) 뒤에 온 안읽음 수 — 케이 말풍선(방송·답) 1건씩 + 아직 답이 없는 다른 기기 질문. 알림(notice)은 예전처럼 제외.
+  // 경계(hw) 뒤에 온 안읽음 수 — 서버에 있는 케이 말풍선(방송·답) 1건씩 + 아직 답이 없는 다른 기기 질문. 알림(notice)은 예전처럼 제외.
+  //   · 시각은 서버가 매긴 것으로 잰다: 방송·다른 기기 대화는 ts 가 곧 서버 시각, 이 기기에서 묻고 받은 답은 sts(readStampOwn 이 달아 줌, 없으면 도착 시각).
+  //   · 이 기기에만 있는 안내 말풍선(「전송이 안 됐어요」 등 — 서버 행 없음)은 세지 않는다(다른 기기에서 읽을 수 없는 것이라 숫자가 안 내려가게 된다).
   function chatUnreadAfter(hw) {
     var n = 0, kc = {}, i, m;
     for (i = 0; i < chatMsgs.length; i++) { m = chatMsgs[i]; if (m && m.role === 'k' && m.cid) kc[m.cid] = 1; }
     for (i = 0; i < chatMsgs.length; i++) {
       m = chatMsgs[i];
-      if (!m || m.notice || (m.ts || 0) <= hw) continue;
-      if (m.role === 'k') n++;
+      if (!m || m.notice || (m.sts || m.ts || 0) <= hw) continue;
+      if (m.role === 'k') { if (m.bid || m.cid || m.rid) n++; }
       else if (m.role === 'me' && m.remote && !(m.cid && kc[m.cid])) n++;
     }
     return n;
   }
-  // 서버 읽음 기준을 이 기기에 반영. 숫자는 「내려가기만」 한다(서버 기준 때문에 안읽음이 새로 생기지 않게).
+  // 지금 경계 기준으로 안읽음을 다시 세어, 줄었으면 반영한다. 숫자는 「내려가기만」 한다(서버 기준 때문에 안읽음이 새로 생기지 않게).
+  function readRecount() {
+    var n = chatUnreadAfter(getSeenHW());
+    if (n < chatUnseen) { chatUnseen = n; updateChatBadge(); }   // 홈 케이 말풍선·바탕화면 위젯까지 함께 내려간다
+  }
+  // 이 기기에서 묻고 받은 답은 「도착한 때의 기기 시계」로 적혀 있다 → 서버가 그 대화 줄에 매긴 시각(row.ts)을 sts 로 달아 둔다.
+  //   (대화 동기화가 이 기기 것이라 건너뛰는 줄에서 부른다. 달라진 것이 있으면 true)
+  function readStampOwn(row, own) {
+    var ms = readTsMs(row.ts), m = own[row.id];
+    if (!ms || !m || m.sts === ms) return false;
+    m.sts = ms; return true;
+  }
+  function readOwnAnswers() {                      // 이 기기에서 물은 질문의 행 id → 그 답 말풍선
+    var o = {}, i, m;
+    for (i = 0; i < chatMsgs.length; i++) { m = chatMsgs[i]; if (m && m.role === 'k' && m.rid && !m.cid && !m.bid) o[m.rid] = m; }
+    return o;
+  }
+  // 서버 읽음 기준을 이 기기에 반영.
   function readApply(iso) {
     var ms = readTsMs(iso); if (!ms) return;
     if (ms > readSrvMs) readSrvMs = ms;
     if (ms <= getSeenHW()) return;
     setSeenHW(ms);
     if (getSeenHW() < ms) return;                  // 저장 실패(사생활 보호 창 등) → 손대지 않음(예전 동작)
-    var n = chatUnreadAfter(ms);
-    if (n < chatUnseen) { chatUnseen = n; updateChatBadge(); }   // 홈 케이 말풍선·바탕화면 위젯까지 함께 내려간다
+    readRecount();
   }
   function readNote(ts) {                          // 부르는 쪽이 「채팅을 보고 있음」(readPresent)을 확인한 뒤 부른다
     var ms = readTsMs(ts); if (!ms) return;
@@ -3458,7 +3476,7 @@
         if (isOpen(chatView)) { renderChat(); if (!document.hidden) setSeenHW(maxTs); }   // 보고 있으면 방금 것까지 '본 것'으로 굳힘(재시작 후 재계산 방지) · v5.9: 앱이 뒤로 가 있을 땐 굳히지 않음(복귀 때 새 메시지 위치로)
         else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('케이가 새 소식을 보냈어요.'); }
       }
-      if (isOpen(chatView) && readPresent()) readNote(readLoadedMs);   // (O-0201) 채팅을 보고 있으면 방금 것까지 다른 기기에도 「읽음」
+      if (isOpen(chatView) && !chatSearchOn && readPresent()) readNote(readLoadedMs);   // (O-0201) 채팅을 보고 있으면 방금 것까지 다른 기기에도 「읽음」(검색 중 제외)
       officeHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋되어 전체 재동기화됨
     }).catch(function () { officeLoading = false; });
   }
@@ -3628,11 +3646,12 @@
       syncLoading = false;
       if (!rows || !rows.length) return;
       var added = 0, unseenAdded = 0, maxTs = since;
+      var ownK = readOwnAnswers(), stamped = false;   // (O-0201) 이 기기에서 묻고 받은 답에 서버 시각 달기
       rows.forEach(function (row) {
         if (!row || !row.id) return;
         if (row.ts && row.ts > maxTs) maxTs = row.ts;
         readLoaded(row.ts);                         // (O-0201) 이 기기에서 묻고 받은 답의 서버 시각도 여기서 안다(건너뛰는 줄 포함)
-        if (hasChatRow(row.id)) return;             // 내가 보낸 것/이미 받은 것 → 건너뜀(중복 방지)
+        if (hasChatRow(row.id)) { if (readStampOwn(row, ownK)) stamped = true; return; }   // 내가 보낸 것/이미 받은 것 → 건너뜀(중복 방지)
         if (isDeletedBid(row.id)) return;           // 개별 삭제한 것(tombstone)
         if (isBeforeCleared(row.ts)) return;        // 「전체 삭제」 경계 이전은 이 기기서 안 그림
         var q = (row.note || '').trim();
@@ -3657,7 +3676,8 @@
         if (isOpen(chatView)) { renderChat(); if (!document.hidden) setSeenHW(maxTs); }   // v5.9: 앱이 뒤로 가 있을 땐 '본 것'으로 굳히지 않음(복귀 때 새 메시지 위치로)
         else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('다른 기기에서 보낸 대화가 도착했어요.'); }
       }
-      if (isOpen(chatView) && readPresent()) readNote(readLoadedMs);   // (O-0201)
+      if (stamped) readRecount();                  // (O-0201) 서버 시각을 새로 안 답이 있으면 — 다른 기기에서 이미 읽은 것일 수 있다
+      if (isOpen(chatView) && !chatSearchOn && readPresent()) readNote(readLoadedMs);   // (O-0201) 검색 중(결과만 보는 중)에는 올리지 않음
       chatSyncHW = maxTs;   // v4.0: 세션 high-water 전진(메모리). 열 때 EPOCH 로 리셋됨
     }).catch(function (e) {
       syncLoading = false;
@@ -3835,7 +3855,7 @@
     }
     var t = Date.parse(o.u || o.updated_at || '');
     if (!isNaN(t) && Date.now() - t > ORD_APPROVE_WINDOW_MS) {
-      return '<div class="ord-sent warn">결정을 기다린 지 이틀이 넘어 버튼으로는 이어받지 못해요. 채팅으로 말씀해 주세요.</div>';
+      return '<div class="ord-sent warn">결정을 기다린 지 이틀 가까이 지나 버튼으로는 이어받지 못해요. 채팅으로 케이에게 말씀해 주세요.</div>';
     }
     var busy = !!ordDecBusy[o.id];
     return '<div class="ord-actions">' +
@@ -3862,7 +3882,12 @@
     ordDecBusy[o.id] = true; delete ordDecErr[o.id];
     ordDecideRedraw();
     unlockKaiAudio();
-    sendPlainChat(text, false).then(function (ok) {
+    // 「작업 현황」에서 눌렀을 때: sendPlainChat 이 채팅을 다시 그리며 예약하는 '맨 아래로' 스크롤이 이 화면(같은 문서 스크롤)을 끌어내리지 않게 취소한다.
+    var keepScroll = function () { if (!isOpen(chatView)) chatScrollSeq++; };
+    var sending = sendPlainChat(text, false);
+    keepScroll();
+    sending.then(function (ok) {
+      keepScroll();
       delete ordDecBusy[o.id];
       if (ok) {
         ordDecided[o.id] = { k: kind, at: Date.now(), seq: (o.job_seq | 0) }; saveOrdDecided();
@@ -5470,9 +5495,10 @@
   //   이렇게 하면 그전에 쌓인 과거 방송·대화는 '본 것'으로 간주돼, 아래 loadOfficePushes/loadChatSync 가
   //   그것들을 다시 안읽음으로 세지 않는다(대표님 증상: 새 메시지 없는데 +9 → 해소). 이후 새로 오는 것만 배지.
   // (O-0201) 세기 전에 서버 읽음 기준부터 받는다 → 다른 기기에서 이미 읽은 것은 처음부터 세지 않는다(숫자가 떴다 사라지지 않게).
-  //   서버에 기준이 있으면 그것을 따르고(첫 실행 포함), 없거나 못 받으면(암호 없음·SQL 미적용·오프라인·2.5초 초과) 예전 그대로.
+  //   못 받으면(암호 없음·SQL 미적용·오프라인·2.5초 초과) 예전 그대로. 첫 실행의 '지금' 심기는 예전처럼 기다리지 않고 바로 한다
+  //   (서버를 기다리는 동안 경계가 비어 있으면 그 틈에 온 조회가 옛 메시지를 전부 안읽음으로 센다).
+  if (!getSeenHW()) setSeenHW(Date.now());
   readPull(function () {
-    if (!getSeenHW()) setSeenHW(Date.now());
     loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
     loadChatSync();       // 시작 시, 다른 기기에서 온 대화도 한 번 확인(암호 설정돼 있을 때만)
   });
