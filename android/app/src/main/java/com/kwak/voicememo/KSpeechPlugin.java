@@ -3,6 +3,7 @@ package com.kwak.voicememo;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -38,9 +39,21 @@ import java.util.ArrayList;
  *    다시 들을 때 삑 소리: 기기 내 인식기는 보통 없음. 일반 인식기(구글 앱)는 날 수 있어 muteRestart=true 면 다시 듣는 0.7초 동안만
  *    미디어·시스템 소리를 잠깐 끈다(끝나면 반드시 되돌림 — 화면 나감·플러그인 종료 때도).
  *
+ *  ▶ O-0223(2026-10-04) 「듣는 동안 띠링 소리가 크고 불편하다」 — 효과음 줄이기(sfx)
+ *    삑·띠링 소리는 앱이 내는 소리가 아니라 안드로이드 받아쓰기(SpeechRecognizer)가 듣기 시작·끝낼 때 스스로 내는 소리다.
+ *    인식기에는 「소리 끄기」 옵션이 없어서, 듣는 동안만 그 소리가 나가는 길(미디어·시스템 소리)을 줄이거나 끈다.
+ *      sfx='on'   : 예전 그대로(일반 인식기가 다시 들을 때만 0.7초 끔 — muteRestart).
+ *      sfx='soft' : (기본) 첫 「듣기 시작」 삑만 작게(지금 음량의 30%) 남기고, 그 뒤 다시 듣기·끝 띠링은 끈다.
+ *      sfx='off'  : 듣는 동안 처음부터 끝까지 끈다(시작 삑도 없음).
+ *    듣기가 끝나면(final·error·cancel, 끝 띠링이 지나가도록 0.4~0.6초 뒤) 원래 음량·음소거 상태·벨소리 모드로 반드시 되돌린다.
+ *    화면을 나가거나(일시정지)·플러그인이 끝나면 즉시 되돌린다. 앱이 강제 종료돼 되돌리지 못했으면
+ *    다음에 앱이 켜질 때(load) 저장해 둔 원래 값으로 되돌린다(SharedPreferences 'ksfx').
+ *    ⚠️ 부작용: 듣는 그 몇 초 동안은 다른 앱의 음악·시스템 소리도 같이 작아지거나 꺼진다(케이 목소리는 듣는 동안 나오지 않으므로 영향 없음).
+ *       대표님이 이미 꺼 둔 소리는 건드리지 않는다. 음량 고정 기기(isVolumeFixed)는 아무것도 하지 않는다.
+ *
  *  - JS: Capacitor.Plugins.KSpeech
  *      available()                  → {available, onDevice, sdk}
- *      start({lang, partial, continuous, muteRestart, completeMs, possiblyMs, minMs}) → 바로 resolve, 이후 이벤트로 결과
+ *      start({lang, partial, continuous, muteRestart, sfx, completeMs, possiblyMs, minMs}) → 바로 resolve, 이후 이벤트로 결과
  *      stop()  : 지금까지 들은 것으로 마무리(final 이벤트)     cancel(): 버림(아무 이벤트 없이 끝)
  *    이벤트(addListener): 'ready' · 'speech'(소리 시작 감지) · 'partial'{text} · 'end'(인식기가 말 끝이라고 봄)
  *                        · 'segment'{text, why}(이어 듣기 중 인식기가 스스로 끝낸 한 토막 — 곧바로 다시 듣는 중)
@@ -76,6 +89,27 @@ public class KSpeechPlugin extends Plugin {
     private boolean muted = false;
     private final Runnable unmuteTask = new Runnable() { public void run() { unmute(); } };
 
+    // O-0223 효과음 줄이기 상태(메인 스레드에서만 만짐)
+    private static final float SFX_SOFT_FRAC = 0.3f;           // 「작게」 = 지금 음량의 30%
+    private static final int SFX_SOFT_HOLD_MS = 500;           // 「작게」: 준비됨 뒤 이만큼(시작 삑이 지나간 뒤) 끈다
+    private static final int[] SFX_STREAMS = { AudioManager.STREAM_MUSIC, AudioManager.STREAM_SYSTEM };
+    private static final String SFX_PREFS = "ksfx";
+    private String sfx = "on";
+    private boolean sfxActive = false;                          // 지금 음량을 바꿔 둔 상태인가
+    private boolean sfxQuieted = false;                         // 「작게」에서 시작 삑 뒤 끄기를 이미 했나
+    private int[] sfxOrig = new int[SFX_STREAMS.length];       // 바꾸기 전 음량(-1 = 건드리지 않음)
+    private int[] sfxSet = new int[SFX_STREAMS.length];        // 우리가 낮춘 음량(되돌릴 때 대표님이 그새 바꿨는지 보려고)
+    private boolean[] sfxMuted = new boolean[SFX_STREAMS.length];
+    private int sfxRinger = -1;
+    private final Runnable sfxRestoreTask = new Runnable() { public void run() { sfxRestore(); } };
+    private final Runnable sfxQuietTask = new Runnable() { public void run() { sfxQuiet(); } };
+
+    @Override
+    public void load() {
+        super.load();
+        sfxRecover();                                          // 지난번 강제 종료로 못 되돌린 음량이 있으면 되돌림
+    }
+
     @PluginMethod
     public void available(PluginCall call) {
         JSObject o = new JSObject();
@@ -110,6 +144,7 @@ public class KSpeechPlugin extends Plugin {
         final boolean partial = call.getBoolean("partial", true);
         final boolean cont = call.getBoolean("continuous", false);
         final boolean mute = call.getBoolean("muteRestart", false);
+        final String sfxOpt = call.getString("sfx", "on");
         final int completeMs = call.getInt("completeMs", 0);
         final int possiblyMs = call.getInt("possiblyMs", 0);
         final int minMs = call.getInt("minMs", 0);
@@ -117,7 +152,8 @@ public class KSpeechPlugin extends Plugin {
             public void run() {
                 destroyRec();
                 session++;
-                continuous = cont; stopping = false; muteRestart = mute;
+                sfx = ("soft".equals(sfxOpt) || "off".equals(sfxOpt)) ? sfxOpt : "on";
+                continuous = cont; stopping = false; muteRestart = mute && "on".equals(sfx);   // 줄이기를 쓰면 예전 0.7초 끄기는 안 씀(겹치지 않게)
                 quickFails = 0; restarts = 0;
                 Intent it = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                 it.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -133,11 +169,13 @@ public class KSpeechPlugin extends Plugin {
                 if (minMs > 0) it.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, (long) minMs);
                 lastIntent = it;
                 if (!createRec()) { call.reject("이 기기에서는 받아쓰기를 쓸 수 없어요.", "unavailable"); return; }
+                sfxBegin();                        // O-0223: 듣기 시작 삑이 나기 전에 줄이거나 끔(sfx='on' 이면 아무것도 안 함)
                 try {
                     listenAt = System.currentTimeMillis();
                     rec.startListening(it);
                 } catch (Exception e) {
                     destroyRec();
+                    sfxRestore();
                     call.reject("받아쓰기를 시작하지 못했어요.", "client");
                     return;
                 }
@@ -172,6 +210,9 @@ public class KSpeechPlugin extends Plugin {
             public void onReadyForSpeech(Bundle b) {
                 if (my != session) return;
                 main.removeCallbacks(unmuteTask); main.postDelayed(unmuteTask, 250);   // 삑 소리가 지나간 뒤 소리 되돌림
+                if (sfxActive && "soft".equals(sfx) && !sfxQuieted) {                 // O-0223 「작게」: 시작 삑이 지나간 뒤부터는 끔
+                    main.removeCallbacks(sfxQuietTask); main.postDelayed(sfxQuietTask, SFX_SOFT_HOLD_MS);
+                }
                 notifyListeners("ready", new JSObject());
             }
             public void onBeginningOfSpeech() { if (my == session) notifyListeners("speech", new JSObject()); }
@@ -241,6 +282,7 @@ public class KSpeechPlugin extends Plugin {
         o.put("text", text == null ? "" : text); o.put("onDevice", isDev);
         notifyListeners("final", o);
         destroyRec();
+        sfxRestoreLater(600);                      // O-0223: 끝 띠링이 지나간 뒤 원래 음량으로
     }
 
     private void emitError(int code, String reason, boolean isDev) {
@@ -248,6 +290,7 @@ public class KSpeechPlugin extends Plugin {
         o.put("code", code); o.put("reason", reason); o.put("onDevice", isDev);
         notifyListeners("error", o);
         destroyRec();
+        sfxRestoreLater(400);
     }
 
     /** 이어 듣기: 같은 세션으로 다시 듣는다. recreate=true 면 인식기를 새로 만든다(바쁨·클라이언트 오류 뒤). 메인 스레드. */
@@ -325,6 +368,7 @@ public class KSpeechPlugin extends Plugin {
                 stopping = true;
                 unmute();
                 destroyRec();
+                sfxRestoreLater(400);
                 call.resolve();
             }
         });
@@ -333,13 +377,142 @@ public class KSpeechPlugin extends Plugin {
     @Override
     protected void handleOnPause() {
         try { unmute(); } catch (Exception ignored) {}
+        try { sfxRestore(); } catch (Exception ignored) {}      // O-0223: 화면을 나가면 즉시 원래 음량
         super.handleOnPause();
     }
 
     @Override
     protected void handleOnDestroy() {
         try { session++; unmute(); destroyRec(); } catch (Exception ignored) {}
+        try { sfxRestore(); } catch (Exception ignored) {}
         super.handleOnDestroy();
+    }
+
+    // ── O-0223 효과음 줄이기(sfx='soft'|'off') ─────────────────────────────────────────────
+    private AudioManager am() {
+        try { return (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE); } catch (Exception e) { return null; }
+    }
+
+    /** 듣기 시작 직전. 원래 값을 저장(강제 종료 대비 파일에도)하고 「작게」면 30%로, 「끔」이면 음소거. 메인 스레드. */
+    private void sfxBegin() {
+        main.removeCallbacks(sfxQuietTask);
+        if (sfxActive) sfxRestore();       // 앞 턴 되돌리기가 남아 있으면(0.4~0.6초 대기 중) 먼저 끝냄
+        if ("on".equals(sfx)) return;
+        AudioManager a = am();
+        if (a == null) return;
+        try { if (a.isVolumeFixed()) return; } catch (Exception ignored) {}
+        boolean any = false;
+        try { sfxRinger = a.getRingerMode(); } catch (Exception e) { sfxRinger = -1; }
+        for (int i = 0; i < SFX_STREAMS.length; i++) {
+            int s = SFX_STREAMS[i];
+            sfxOrig[i] = -1; sfxSet[i] = -1; sfxMuted[i] = false;
+            try {
+                if (a.isStreamMute(s)) continue;               // 대표님이 이미 꺼 둔 소리는 건드리지 않음
+                int cur = a.getStreamVolume(s);
+                if (cur <= 0) continue;
+                sfxOrig[i] = cur;
+                any = true;
+            } catch (Exception ignored) {}
+        }
+        if (!any) return;
+        sfxActive = true; sfxQuieted = false;
+        sfxSave();
+        for (int i = 0; i < SFX_STREAMS.length; i++) {
+            if (sfxOrig[i] < 0) continue;
+            int s = SFX_STREAMS[i];
+            try {
+                if ("soft".equals(sfx)) {
+                    int v = Math.max(1, Math.round(sfxOrig[i] * SFX_SOFT_FRAC));
+                    if (v < sfxOrig[i]) { a.setStreamVolume(s, v, 0); sfxSet[i] = v; }
+                } else {
+                    a.adjustStreamVolume(s, AudioManager.ADJUST_MUTE, 0); sfxMuted[i] = true;
+                }
+            } catch (Exception ignored) {}
+        }
+        sfxSave();
+        if ("soft".equals(sfx)) {
+            // 인식기가 「준비됨」을 안 알려 오는 기기 대비: 1.5초 뒤엔 어쨌든 끔(시작 삑은 그 전에 남)
+            main.postDelayed(sfxQuietTask, 1500);
+        }
+    }
+
+    /** 「작게」: 시작 삑이 지나간 뒤 — 이번 듣기의 나머지(다시 듣기 삑·끝 띠링)는 끔. */
+    private void sfxQuiet() {
+        main.removeCallbacks(sfxQuietTask);
+        if (!sfxActive || sfxQuieted) return;
+        sfxQuieted = true;
+        AudioManager a = am();
+        if (a == null) return;
+        for (int i = 0; i < SFX_STREAMS.length; i++) {
+            if (sfxOrig[i] < 0 || sfxMuted[i]) continue;
+            try { a.adjustStreamVolume(SFX_STREAMS[i], AudioManager.ADJUST_MUTE, 0); sfxMuted[i] = true; } catch (Exception ignored) {}
+        }
+        sfxSave();
+    }
+
+    private void sfxRestoreLater(int ms) {
+        main.removeCallbacks(sfxQuietTask);
+        if (!sfxActive) return;
+        main.removeCallbacks(sfxRestoreTask);
+        main.postDelayed(sfxRestoreTask, ms);
+    }
+
+    /** 원래대로: 음소거 풀기 → 낮춘 음량 되돌리기(그새 대표님이 직접 바꿨으면 그 값 존중) → 벨소리 모드가 바뀌었으면 되돌리기. */
+    private void sfxRestore() {
+        main.removeCallbacks(sfxRestoreTask);
+        main.removeCallbacks(sfxQuietTask);
+        if (!sfxActive) return;
+        sfxActive = false;
+        AudioManager a = am();
+        if (a != null) {
+            for (int i = 0; i < SFX_STREAMS.length; i++) {
+                int s = SFX_STREAMS[i];
+                if (sfxMuted[i]) { try { a.adjustStreamVolume(s, AudioManager.ADJUST_UNMUTE, 0); } catch (Exception ignored) {} }
+                if (sfxOrig[i] >= 0 && sfxSet[i] >= 0) {
+                    try { if (a.getStreamVolume(s) == sfxSet[i]) a.setStreamVolume(s, sfxOrig[i], 0); } catch (Exception ignored) {}
+                }
+                sfxMuted[i] = false; sfxSet[i] = -1; sfxOrig[i] = -1;
+            }
+            // 시스템 소리가 벨소리와 묶인 폰에서 음소거가 진동 모드로 바꿨을 수 있다 → 원래 모드로
+            try { if (sfxRinger >= 0 && a.getRingerMode() != sfxRinger) a.setRingerMode(sfxRinger); } catch (Exception ignored) {}
+        }
+        sfxRinger = -1;
+        sfxClearSaved();
+    }
+
+    private void sfxSave() {
+        try {
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < SFX_STREAMS.length; i++) {
+                b.append(sfxOrig[i]).append(',').append(sfxSet[i]).append(',').append(sfxMuted[i] ? 1 : 0).append(';');
+            }
+            getContext().getSharedPreferences(SFX_PREFS, Context.MODE_PRIVATE).edit()
+                    .putString("st", b.toString()).putInt("ringer", sfxRinger).apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void sfxClearSaved() {
+        try { getContext().getSharedPreferences(SFX_PREFS, Context.MODE_PRIVATE).edit().clear().apply(); } catch (Exception ignored) {}
+    }
+
+    /** 앱이 켜질 때: 지난번에 되돌리지 못한 값이 남아 있으면 되돌린다. */
+    private void sfxRecover() {
+        try {
+            SharedPreferences p = getContext().getSharedPreferences(SFX_PREFS, Context.MODE_PRIVATE);
+            String st = p.getString("st", null);
+            if (st == null || st.length() == 0) return;
+            String[] parts = st.split(";");
+            for (int i = 0; i < SFX_STREAMS.length && i < parts.length; i++) {
+                String[] f = parts[i].split(",");
+                if (f.length < 3) continue;
+                sfxOrig[i] = Integer.parseInt(f[0]); sfxSet[i] = Integer.parseInt(f[1]); sfxMuted[i] = "1".equals(f[2]);
+            }
+            sfxRinger = p.getInt("ringer", -1);
+            sfxActive = true;
+            sfxRestore();
+        } catch (Exception e) {
+            sfxClearSaved();
+        }
     }
 
     private void destroyRec() {

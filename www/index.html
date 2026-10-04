@@ -465,6 +465,16 @@
       <!-- v8.2(O-0157): 바탕화면 케이 위젯 — 폰에서만 보임(app.js initKBridge 가 켬) -->
       <div class="kw-sec" id="kwWidgetSec" style="display:none;"><b>바탕화면 위젯</b><small>바탕화면 길게 누르기 → 위젯</small></div>
       <label class="card toggle kw-motion" id="kwWidgetRow" style="display:none;"><span><b>위젯에 내용 숨기기</b><small>켜면 위젯에 「새 소식 N건」만 보이고 글 내용은 안 보여요</small></span><input type="checkbox" id="kwWidgetHide" hidden><span class="switch"></span></label>
+      <!-- O-0223: 음성 대화 효과음(안드로이드 받아쓰기의 삑·띠링) — 켬/작게(기본)/끔, 이 폰에만 저장 -->
+      <div class="kw-sec"><b>음성 대화 효과음</b><small>듣기 시작·끝의 삑·띠링 소리</small></div>
+      <div class="card kw-intro">
+        <div class="hseg kw-intro-seg">
+          <button type="button" class="hseg-btn" data-ksfx="on" aria-pressed="false">켬</button>
+          <button type="button" class="hseg-btn" data-ksfx="soft" aria-pressed="false">작게</button>
+          <button type="button" class="hseg-btn" data-ksfx="off" aria-pressed="false">끔</button>
+        </div>
+        <div class="kw-intro-row"><small>「작게」는 듣기 시작할 때만 작게 «삑» 하고, 말씀이 끝난 뒤 «띠링»은 나지 않아요. 「끔」은 듣는 동안 소리가 전혀 안 나요(듣는 몇 초 동안은 다른 앱 소리도 잠깐 줄어요).</small></div>
+      </div>
       <!-- v8.4(O-0162): 글자 크기 — 채팅 말풍선·입력창·홈 카드·문서 뷰어 표에 적용 -->
       <div class="kw-sec"><b>글자 크기</b><small>이 폰에만 저장돼요</small></div>
       <button type="button" class="card toggle kw-motion" id="kwFontRow"><span><b>글자 크기 바꾸기</b><small id="kwFontNow">지금: 보통</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
