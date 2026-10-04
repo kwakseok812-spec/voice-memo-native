@@ -110,6 +110,32 @@
       .catch(function () { openWebMap('', 'noapp'); });
   }
 
+  /* (O-0217) 케이 답의 [길찾기] 칩 — 같은 통로(ExternalApp.openUri → 앱 없으면 웹 지도).
+   *   · 좌표가 있으면(PC가 카카오 장소 검색으로 찾은 값) 네이버 지도 길찾기 화면으로 바로:
+   *       nmap://route/public|walk|car?dlat&dlng&dname&appname  (출발지 slat·slng 를 비우면 네이버 앱이 현재 위치로 잡는다 — 실기기 미확인)
+   *   · 좌표가 없으면 예전 일정 [길찾기]와 똑같이 장소 검색(nmap://search) → 대표님이 [도착] 한 번 더.
+   *   · AI 가 좌표를 짐작해 넣지 않는다(좌표는 PC 의 장소 검색 결과만, 앱은 국내 범위 밖이면 버림 — office-bridge.js). */
+  var NAV_MODES = { 'public': 1, 'walk': 1, 'car': 1 };
+  function navUri(nav, mode) {
+    var m = NAV_MODES[mode] ? mode : (NAV_MODES[nav.mode] ? nav.mode : 'public');
+    if (nav.lat != null && nav.lng != null) {
+      return 'nmap://route/' + m + '?dlat=' + nav.lat + '&dlng=' + nav.lng +
+        '&dname=' + encodeURIComponent(nav.name || nav.dest) + '&appname=' + NMAP_APPNAME;
+    }
+    return 'nmap://search?query=' + encodeURIComponent(nav.dest) + '&appname=' + NMAP_APPNAME;
+  }
+  function openRoute(nav, mode) {
+    if (!nav || !nav.dest) return;
+    var q = nav.addr && nav.lat != null ? (nav.name || nav.dest) : nav.dest;
+    var C = global.Capacitor;
+    var native = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+    var EA = native && C.Plugins && C.Plugins.ExternalApp;
+    if (!EA || !EA.openUri) { openWebMap(q); return; }                // PC판·옛 APK → 웹 지도 검색
+    EA.openUri({ uri: navUri(nav, mode), pkg: NMAP_PKG })
+      .then(function (r) { if (!r || !r.opened) openWebMap(q, 'noapp'); })
+      .catch(function () { openWebMap(q, 'noapp'); });
+  }
+
   /* ---------- 일정: 지금/다음 판정 ---------- */
   function markEvents(evs) {
     var now = nowMin(), nextDone = false;
@@ -592,6 +618,8 @@
     render: render,
     openMap: openMapHome,                  // v7.8 홈 「길찾기」 카드
     routeQuery: routeQuery,                // (O-0133) 시험용: 장소 → 네이버 검색어('' = 버튼 없음)
+    openRoute: openRoute,                  // (O-0217) 케이 답 [길찾기] 칩
+    navUri: navUri,                        // (O-0217) 시험용: 칩 정보 → 네이버 지도 주소
     setOrders: function (rows) { st.orders = Array.isArray(rows) ? rows : []; render(); },
     setReminders: setRems,                 // (O-0176) 예약한 알림 화면에서 새로 받거나 취소한 뒤 한 줄도 맞춤
     closeWeather: function () { if (!wxSheet) return false; wxSheetClose(); return true; },   // (O-0169) 뒤로가기(app.js goBack)

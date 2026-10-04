@@ -1927,9 +1927,40 @@
     if (DOC_VIEW_EXTS.indexOf(ext) !== -1) return true;
     return /pdf|word|excel|spreadsheet|presentation|officedocument|hwp/i.test(f.mime || '');
   }
+  /* (O-0217) 길 안내 칩 — 케이가 「○○까지 길 안내」에 답하며 붙인 목적지. 누르면 네이버 지도(today-card.js openRoute).
+   *   좌표가 있으면 [대중교통]·[도보]·[자동차] 세 갈래로 바로 길찾기, 없으면 [네이버 지도에서 찾기] 하나(도착 → 길찾기 한 번 더). */
+  var NAV_LABEL = { 'public': '대중교통', 'walk': '도보', 'car': '자동차' };
+  function navChip(f) {
+    var n = f.nav, data = ' data-nav="' + esc(JSON.stringify(n)) + '"';
+    var title = '<svg><use href="#i-route"/></svg><span class="an">' + esc((n.name || n.dest) + ' 길찾기') + '</span>';
+    var html;
+    if (n.lat != null && n.lng != null) {
+      // 장소 이름표(누르는 곳 아님) + 세 갈래 버튼 — 같은 일을 하는 버튼을 둘 두지 않는다(기능 중복 금지)
+      html = '<div class="attach navtitle">' + title + '</div>' +
+        '<div class="navmodes">' + ['public', 'walk', 'car'].map(function (k) {
+          return '<button type="button" class="attach-dl navgo' + (k === (n.mode || 'public') ? ' on' : '') + '"' + data +
+            ' data-nav-mode="' + k + '">' + NAV_LABEL[k] + '</button>';
+        }).join('') + '</div>' +
+        (n.addr ? '<small class="navhint">' + esc(n.addr) + ' — 장소가 맞는지 확인하고 출발하세요</small>' : '');
+    } else {
+      html = '<button type="button" class="attach navgo"' + data + ' data-nav-mode="">' + title + '<span class="asz">네이버 지도</span></button>' +
+        '<small class="navhint">지도에서 장소를 고른 뒤 [도착] → 길찾기를 누르세요</small>';
+    }
+    return '<div class="attachitem navitem">' + html + '</div>';
+  }
+  function navChipClick(ev) {
+    var b = ev.target.closest ? ev.target.closest('.navgo[data-nav]') : null;
+    if (!b) return false;
+    var nav = null;
+    try { nav = JSON.parse(b.getAttribute('data-nav') || 'null'); } catch (e) {}
+    if (!nav || !window.TodayCard || !TodayCard.openRoute) { toast('지도를 열지 못했어요 — 다시 눌러 주세요.'); return true; }
+    TodayCard.openRoute(nav, b.getAttribute('data-nav-mode') || '');
+    return true;
+  }
   function attachChips(files, isUp) {
     if (!files || !files.length) return '';
     return '<div class="attachlist">' + files.map(function (f) {
+      if (f && f.kind === 'nav' && f.nav) return navChip(f);    // (O-0217) 케이 답의 길 안내 칩
       var sz = f.size ? '<span class="asz">' + esc(fmtBytes(f.size)) + '</span>' : '';
       var attrs = (!isUp && f.url) ? (' data-att-url="' + esc(f.url) + '" data-att-name="' + esc(f.name || '파일') + '"') : ' disabled';   // 이름: v7.9 폰에서 칩을 눌렀을 때 저장으로 보낼지 판정
       var chip = '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
@@ -4795,6 +4826,7 @@
     var ln = ev.target.closest ? ev.target.closest('a.chatlink,[data-link]') : null;
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했어요.'); return; }
     if (ordDecideClick(ev)) return;                    // (O-0201 추가) 작업 카드 안 [승인]·[수정 요청]
+    if (navChipClick(ev)) return;                      // (O-0217) 케이 답의 [길찾기] 칩 → 네이버 지도
     var oc = ev.target.closest ? ev.target.closest('.ordcard[data-ord]') : null;   // v5.8: 작업 카드 → 작업 현황(그 항목 강조)
     if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
     // ⋯ 메뉴 → 복사·삭제 시트

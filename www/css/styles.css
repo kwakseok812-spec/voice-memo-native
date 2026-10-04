@@ -1502,3 +1502,11 @@ html[data-fs="xl"] .ck.util{font-size:19px}
   #calcView.sci-open .calc-basic .ck.util{height:40px}
   #calcView.sci-open .calc-scitoggle{margin-top:4px;padding:6px 4px}
 }
+
+/* (O-0217) 케이 답의 [길찾기] 칩 — 기존 첨부 칩(.attach·.attach-dl) 모양을 그대로 쓰고 세 갈래 줄·안내 한 줄만 더한다 */
+.navitem .navmodes{display:flex;gap:6px}
+.navitem .navmodes .attach-dl{flex:1;min-width:0}
+.navitem .navmodes .attach-dl.on{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border-color:transparent}
+.navitem .navhint{display:block;font-size:12px;opacity:.72;line-height:1.4;padding:0 2px}
+.navitem .navtitle{cursor:default}
+.navitem .navtitle:active{transform:none}

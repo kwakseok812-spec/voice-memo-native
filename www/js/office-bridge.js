@@ -996,6 +996,19 @@
       var u = res && res[d[0]];
       if (u && !out.some(function (x) { return x.url === u; })) out.push({ name: d[1], url: u, mime: d[2], size: 0, kind: 'document' });
     });
+    // (O-0217) 케이 답의 길 안내 — PC 응답기가 [[NAV: 목적지 | 수단]] 표식을 summary_json.nav 로 바꿔 둔다.
+    //   첨부 칩 줄에 「길찾기」 칩으로 붙인다(새 카드·새 화면 없이 기존 첨부 자리 재사용). url 이 없으므로 다운로드·뷰어 대상이 아니다.
+    var nv = sj && sj.nav;
+    (Array.isArray(nv) ? nv : (nv ? [nv] : [])).slice(0, 3).forEach(function (n) {
+      var dest = n && String(n.dest || '').trim();
+      if (!dest) return;
+      var lat = +n.lat, lng = +n.lng;
+      var hasXY = isFinite(lat) && isFinite(lng) && lat > 31 && lat < 45 && lng > 122 && lng < 133;   // 국내 범위만(엉뚱한 좌표 차단)
+      out.push({ name: (n.name || dest) + ' 길찾기', url: '', mime: '', size: 0, kind: 'nav',
+                 nav: { dest: dest.slice(0, 60), mode: /^(walk|car|public)$/.test(n.mode || '') ? n.mode : 'public',
+                        name: String(n.name || dest).slice(0, 60), addr: String(n.addr || '').slice(0, 80),
+                        lat: hasXY ? lat : null, lng: hasXY ? lng : null } });
+    });
     return out;
   }
 
