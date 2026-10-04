@@ -1807,14 +1807,16 @@
   var READ_RETRY_MS = 10 * 60 * 1000;   // 서버에 함수가 없다고(404) 나오면 10분 쉬었다 다시 물어본다(SQL 적용·되돌림과 앱 실행 순서가 엇갈려도 스스로 맞춰짐)
   var readMissAt = 0, readPulling = false, readPullAt = 0, readPushing = false, readPushT = 0, readFailAt = 0;
   function readNative() { try { var C = window.Capacitor; return !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) { return false; } }
-  function readSyncOn() { return !!((!readMissAt || (Date.now() - readMissAt) > READ_RETRY_MS) && window.OfficeBridge && OfficeBridge.getChatRead && OfficeBridge.markChatRead && getSyncPass()); }
+  // 「at 으로부터 ms 안쪽인가」 — 기기 시계가 뒤로 맞춰져(자동 시각 보정 등) 차이가 음수가 되면 '안쪽 아님'으로 본다(쉬는 시간이 끝없이 늘어나지 않게).
+  function readWithin(at, ms) { var d = Date.now() - at; return !!at && d >= 0 && d < ms; }
+  function readSyncOn() { return !!(!readWithin(readMissAt, READ_RETRY_MS) && window.OfficeBridge && OfficeBridge.getChatRead && OfficeBridge.markChatRead && getSyncPass()); }
   function readTsMs(ts) { if (typeof ts === 'number') return ts > 0 ? ts : 0; var n = ts ? Date.parse(ts) : NaN; return isNaN(n) ? 0 : n; }
   function readLoaded(ts) { var ms = readTsMs(ts); if (ms > readLoadedMs) readLoadedMs = ms; }
   function readPresent() {
     if (document.hidden || liveAppActive === false) return false;
     if (readNative()) return true;
     var focus = true; try { if (document.hasFocus) focus = document.hasFocus(); } catch (e) {}
-    return focus && (Date.now() - readActAt) < READ_ACTIVE_MS;
+    return focus && readWithin(readActAt, READ_ACTIVE_MS);
   }
   // 경계(hw) 뒤에 온 안읽음 수 — 케이 말풍선(방송·답) 1건씩 + 아직 답이 없는 다른 기기 질문. 알림(notice)은 예전처럼 제외.
   function chatUnreadAfter(hw) {
@@ -1849,7 +1851,7 @@
   }
   function readPush() {
     if (readPushing || !readSyncOn() || readCandMs <= readSrvMs) return;
-    if (Date.now() - readFailAt < 20000) return;   // 방금 실패했으면 20초 쉼(다음 정기 조회 때 다시)
+    if (readWithin(readFailAt, 20000)) return;     // 방금 실패했으면 20초 쉼(다음 정기 조회 때 다시)
     readPushing = true;
     var sent = readCandMs;
     OfficeBridge.markChatRead(new Date(sent).toISOString(), getSyncPass(), readNative() ? 'phone' : 'pc').then(function (d) {
@@ -1867,7 +1869,7 @@
   function readPull(done) {
     var fin = function () { if (done) { var d = done; done = null; d(); } };
     if (!readSyncOn()) { fin(); return; }
-    if (readPulling && (Date.now() - readPullAt) < 20000) { fin(); return; }
+    if (readPulling && readWithin(readPullAt, 20000)) { fin(); return; }
     readPulling = true; readPullAt = Date.now();
     var cap = done ? setTimeout(fin, READ_GATE_MS) : 0;
     OfficeBridge.getChatRead(getSyncPass()).then(function (d) {
