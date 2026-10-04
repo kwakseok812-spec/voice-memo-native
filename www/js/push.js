@@ -7,6 +7,7 @@
  * 화면 전환은 이 파일이 직접 하지 않고, window 이벤트로 app.js 에 넘긴다(결합 최소화):
  *   - smartOpenChat : 알림을 탭했을 때 → 케이 대화 열기
  *   - smartChatPush : 앱이 열려 있을 때 알림 수신 → 답을 즉시 당겨오기(배지 갱신)
+ *   - smartReadClear: (v9.1) 다른 기기에서 읽었다는 조용한 푸시 수신 → 읽음 기준만 바로 받아 숫자 내리기
  *
  * 여기 쓰는 키는 **공개(publishable) 키뿐**(office-bridge.js 와 동일). 발송은 PC 가 비밀 키로 한다(앱엔 없음).
  * v7.5(O-0130): 표 직접 쓰기(anon 정책)를 없애고 연동 암호 게이트 RPC push_token_register 로만 등록한다
@@ -30,8 +31,11 @@
    *   서버(push_sender.py)는 label 에 'nreply' 가 있는 기기에만 케이 답장을 데이터 전용 푸시로 보내
    *   앱이 [답장] 버튼 달린 알림을 직접 만들게 한다. 옛 APK(이 표시 없음)는 지금처럼 일반 알림을 받는다 → 옛 기기 무영향.
    *   네이티브 KBridge 플러그인이 있는 APK(v8.2+)에서만 붙인다. */
+  /* v9.1(O-0209) 'rclr' = 이 기기는 「다른 기기에서 읽음」 조용한 푸시(data.k_clear)를 받아 알림·위젯을 스스로 내릴 수 있다.
+   *   서버(push_sender.py)는 이 표시가 있는 기기에만 조용한 푸시를 보내고, 채팅 화면 알림에 꼬리표(tag)를 붙인다.
+   *   옛 APK(v9.0 이하)는 이 표시가 없어 지금과 똑같은 푸시만 받는다 → 옛 기기 무영향. */
   function tokenLabel() {
-    try { if (Cap && Cap.Plugins && Cap.Plugins.KBridge) return '스마트비서|v8.2|nreply'; } catch (e) {}
+    try { if (Cap && Cap.Plugins && Cap.Plugins.KBridge) return '스마트비서|v8.2|nreply|rclr'; } catch (e) {}
     return '스마트비서';
   }
   var SAVE_MIN_INTERVAL = 12 * 60 * 60 * 1000;   // 같은 토큰은 12시간에 한 번만 재기록(불필요한 쓰기 방지)
@@ -82,8 +86,11 @@
     PN.addListener('registrationError', function (e) { logw('등록 오류: ' + (e && (e.error || JSON.stringify(e)))); });
 
     // 앱이 포그라운드일 때 수신 → 케이 답을 즉시 당겨오기(app.js 가 배지/토스트 처리)
-    PN.addListener('pushNotificationReceived', function () {
-      try { global.dispatchEvent(new CustomEvent('smartChatPush')); } catch (e) {}
+    PN.addListener('pushNotificationReceived', function (n) {
+      // v9.1(O-0209) 「다른 기기에서 읽음」 조용한 푸시 → 새 답을 당겨올 일은 없고, 읽음 기준만 바로 받아 숫자를 내린다(app.js)
+      var clr = false;
+      try { clr = !!(n && n.data && String(n.data.k_clear) === '1'); } catch (e) {}
+      try { global.dispatchEvent(new CustomEvent(clr ? 'smartReadClear' : 'smartChatPush')); } catch (e) {}
     });
     // 알림 탭 → 화면 열기. data.screen 으로 분기(건강 리마인더 → 건강 탭, 그 외 → 케이 대화)
     PN.addListener('pushNotificationActionPerformed', function (a) {
