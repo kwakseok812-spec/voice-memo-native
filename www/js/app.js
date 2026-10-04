@@ -1588,6 +1588,36 @@
     toast('말 끝 기다림: ' + ENDWAIT[endWaitMode].name + '(' + ENDWAIT[endWaitMode].sec + ') — 말을 멈추고 이만큼 지나면 보내요.');
   }
 
+  /* ---- O-0223 「음성 대화 효과음」 설정(이 기기에 저장, 케이 꾸미기 화면) ----
+   *  대표님 말씀(2026-10-04): 「듣는 과정 중에 계속 소리 나는 거 불편」 「말이 끝나고 또 띠링… 생각보다 크고 불편해」.
+   *  그 삑·띠링은 안드로이드 받아쓰기(SpeechRecognizer)가 듣기 시작·끝낼 때 스스로 내는 소리다(앱이 만든 소리 아님).
+   *  폰 플러그인(KSpeech sfx)이 듣는 동안만 미디어·시스템 소리를 줄이거나 꺼서 막는다. 끝나면 원래 음량으로 되돌린다.
+   *    soft(기본) = 「작게」: 듣기 시작 삑만 지금 음량의 30%로 남기고, 그 뒤 다시 듣기·끝 띠링은 끔
+   *    off        = 「끔」  : 듣는 동안 모두 끔(시작 신호도 없음 — 화면의 「말씀하세요…」로만 알 수 있음)
+   *    on         = 「켬」  : 예전 그대로
+   *  옛 APK(플러그인에 sfx 가 없는 판)는 이 값을 모른 척하므로 예전과 똑같이 동작한다. PC판은 받아쓰기를 안 써서 해당 없음. */
+  var SFX_KEY = 'smart_convo_sfx';
+  var SFX_MODES = { on: '켬', soft: '작게', off: '끔' };
+  var sfxMode = (function () { try { var v = localStorage.getItem(SFX_KEY); return SFX_MODES[v] ? v : 'soft'; } catch (e) { return 'soft'; } })();
+  function renderSfx() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ksfx]'), function (b) {
+      var on = b.getAttribute('data-ksfx') === sfxMode;
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ksfx]'), function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-ksfx'); if (!SFX_MODES[v]) return;
+      sfxMode = v;
+      try { localStorage.setItem(SFX_KEY, v); } catch (e) {}
+      renderSfx();
+      toast(v === 'off' ? '음성 대화 효과음을 껐어요. 다음 듣기부터 적용돼요.'
+          : v === 'soft' ? '음성 대화 효과음을 작게 했어요. 듣기 시작 신호만 작게 나요.'
+          : '음성 대화 효과음을 예전처럼 켰어요.');
+    });
+  });
+  renderSfx();
+
   /* ---- v5.8 「오퍼스 5.5」 1회 지정 ----
    * 대표님 지시(2026-09-25): "중요 작업을 지시할 경우에만 오퍼스를 체크해서 진행하겠다."
    *  · 기본 꺼짐(평소처럼 PC 케이가 알아서 모델 선택). 켜고 보낸 「그 1건」에만 meta.model_pref='opus'.
@@ -2942,7 +2972,7 @@
     setConvoStatus('말씀하세요… (끝나면 자동으로 보내요)');
     stageLive('');
     var w = endWaitMs();
-    KS.start({ lang: 'ko-KR', partial: true, continuous: true, muteRestart: !!VC.STT_MUTE_RESTART,
+    KS.start({ lang: 'ko-KR', partial: true, continuous: true, muteRestart: !!VC.STT_MUTE_RESTART, sfx: sfxMode,   // O-0223 효과음
                completeMs: w + 1500, possiblyMs: w + 1000, minMs: 3000 }).catch(function (e) {
       sttOnError({ reason: (e && e.code) || 'start' });
     });
