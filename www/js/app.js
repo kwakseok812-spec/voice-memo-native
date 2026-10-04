@@ -1634,6 +1634,10 @@
         kaiAudio = new Audio(); kaiAudio.preload = 'auto';
         // v6.0: 케이 목소리가 나오는 동안 얼굴을 talk 영상으로(무음 언락 재생은 제외)
         kaiAudio.addEventListener('playing', function () { if (window.KChar && kaiAudio.src && kaiAudio.src.indexOf('data:') !== 0) KChar.setTalking(true); });
+        // O-0210: 이 음성 턴의 케이 목소리가 처음 실제로 나기 시작한 때(측정용). 다른 말풍선 [듣기]를 누른 재생은 세지 않는다.
+        kaiAudio.addEventListener('playing', function () {
+          if (vlat && !vlat.play && kaiAudio.src && kaiAudio.src.indexOf('data:') !== 0 && (kaiQ.rid === vlat.id || vlat.done)) vlat.play = Date.now();
+        });
         ['ended', 'pause', 'error', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (window.KChar) KChar.setTalking(false); }); });
         kaiAudio.addEventListener('ended', function () {
           if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
@@ -1684,6 +1688,18 @@
    * 답이 끝나면(done) 남은 조각까지 이어 재생하고, 다 끝나면 다음 듣기. 조각이 하나도 없으면 예전 voice_url 그대로.
    * 무대를 눌러 끊으면(TAP_CUT) 그 턴의 남은 조각은 버린다(m.vcut) — 답 글은 그대로 채팅에 남는다. */
   var kaiQ = { rid: null, list: [], next: 0, pre: [] };
+  /* ---- O-0210 음성 턴의 폰 쪽 시각(측정용 — 화면·동작은 그대로) ----
+   * 보낸 순간부터 잰 ms: sub=서버에 등록됨 · p1=첫 목소리 조각을 받음 · play=소리가 나기 시작 · done=답 전체를 받음.
+   * 다음 음성 턴을 보낼 때 meta.vprev 로 실어 PC [지연] 로그에 「폰직전=」으로 남는다(글 내용 아님, 서버 호출 추가 없음).
+   * 대화의 마지막 턴은 실어 보낼 다음 턴이 없어 남지 않는다. 옛 PC 응답기는 이 칸을 모르고 지나간다. */
+  var vlat = null;
+  function vlatStart(id) { vlat = { id: id, t0: Date.now(), sub: 0, p1: 0, play: 0, done: 0 }; }
+  function vlatMark(id, k) { if (vlat && vlat.id === id && !vlat[k]) vlat[k] = Date.now(); }
+  function vlatTake() {
+    var v = vlat; if (!v || !v.sub) return null;
+    function d(x) { return x ? Math.max(0, x - v.t0) : null; }
+    return { id: String(v.id).slice(0, 8), sub: d(v.sub), p1: d(v.p1), play: d(v.play), done: d(v.done) };
+  }
   function vqHasMore() { return !!(kaiQ.rid && kaiQ.next < kaiQ.list.length && convoOn); }
   function vqWaiting() {                         // 이 턴의 조각이 더 올 수 있음(아직 답이 안 끝남)
     if (!kaiQ.rid) return false;
@@ -2748,6 +2764,9 @@
     var dispFiles = imgs.map(function (f) { return { name: f.name || '사진', size: f.size || 0, mime: f.type || '', kind: 'image' }; });
     var dev = !!(o.sttDevice && text && !blob);   // O-0177 ②: 폰 받아쓰기 글자(음성 턴으로 보냄 — PC가 전사를 건너뜀)
     var vs = !!(VC.STREAM && convoOn && (blob || dev));   // O-0177 ①: 음성 대화 턴만 조각 목소리 요청
+    var vturn = !!(convoOn && (blob || dev));     // O-0210: 음성 대화 턴이면 직전 턴의 폰 쪽 시각을 싣고, 이번 턴을 재기 시작
+    var vprev = vturn ? vlatTake() : null;
+    if (vturn) vlatStart(id);
     var meMsg = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false,
                   files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob, opus: !!o.opus };
     if (dev) meMsg.vdev = true;
@@ -2758,7 +2777,8 @@
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
     OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
-                                      sttDevice: dev, vstream: vs, vend: o.vend || null }).then(function () {
+                                      sttDevice: dev, vstream: vs, vend: o.vend || null, vprev: vprev }).then(function () {
+      vlatMark(id, 'sub');                        // O-0210
       meMsg.uploading = false; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
@@ -2969,6 +2989,7 @@
   function sttFinish(why) {
     if (!stt.on || stt.finishing) return;
     stt.finishing = true; stt.why = why || 'quiet';
+    stt.finAt = Date.now();                       // O-0210: 측정용(말 끝 기다림 값은 건드리지 않음)
     if (stt.timer) { clearInterval(stt.timer); stt.timer = null; }
     try { KS.stop(); } catch (e) {}
     stt.finWait = setTimeout(function () { try { KS.cancel(); } catch (e) {} sttDone(); }, VC.STT_FINAL_WAIT_MS);
@@ -3019,7 +3040,8 @@
     if (convoOn) setConvoStatus('케이가 답하는 중…');
     stageLive(text, 'sent');
     var vend = { p: 'dev', end: why, wait: endWaitMs(), ms: Math.max(0, (s.lastAct || 0) - (s.first || s.t0)),
-                 total: Date.now() - s.t0, segs: s.segs, od: ks.onDevice ? 1 : 0 };
+                 total: Date.now() - s.t0, segs: s.segs, od: ks.onDevice ? 1 : 0,
+                 fin: stt.finAt ? Math.max(0, Date.now() - stt.finAt) : 0 };   // O-0210: 말 끝 판정 → 보내기까지(마지막 글자 기다림)
     sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus(), vend: vend });
   }
   // O-0189 [다 말했어요] — 기다리지 않고 지금 보내기(받아쓰기·녹음 경로 공통)
@@ -3282,6 +3304,7 @@
         if (res && res.status !== 'done' && m.vs && res.summary_json && Array.isArray(res.summary_json.voice_parts) &&
             convoOn && !m.vcut && isOpen(chatView)) {
           if (m.vin && !m.text && res.transcript) { m.text = String(res.transcript).trim(); saveChatMsgs(); renderChat(); }   // 내 말풍선도 먼저 채움
+          if (res.summary_json.voice_parts.length) vlatMark(m.id, 'p1');   // O-0210
           vqFeed(m, res.summary_json.voice_parts);
         }
         if (res && res.status === 'done') {
@@ -3291,6 +3314,13 @@
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
           var vurl = res.summary_json && res.summary_json.voice_url;   // 케이 목소리(mp3)
           var vparts = res.summary_json && Array.isArray(res.summary_json.voice_parts) ? res.summary_json.voice_parts : null;   // O-0177 ①
+          if (vparts && vparts.length) vlatMark(m.id, 'p1');
+          vlatMark(m.id, 'done');                     // O-0210
+          // O-0210 ⑥: PC가 목소리를 못 만든 턴(voice_fail: 못 만든 조각 수, 전부면 -1)은 알려 준다. 옛 PC는 이 칸을 안 보낸다 = 예전 그대로.
+          var vfail = res.summary_json ? Number(res.summary_json.voice_fail || 0) : 0;
+          if (vfail && convoOn && !m.vcut && isOpen(chatView)) {
+            toast(vfail < 0 ? '목소리를 만들지 못했어요. 답은 글로 남겼어요.' : '목소리 일부를 만들지 못했어요. 답 전체는 글로 확인해 주세요.');
+          }
           if (m.vcut) { vurl = null; vparts = null; }   // O-0177 ④: 무대 탭으로 끊은 턴 — 답은 글로만
           var kmsg = { role: 'k', text: reply, ts: Date.now(), rid: m.id };   // v4.0: 답도 같은 행 id(삭제 시 함께 숨김)
           if (atts.length) kmsg.files = atts;

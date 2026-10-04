@@ -648,6 +648,8 @@
     if (opts.vstream) meta.vstream = 1;
     // O-0189: 음성 턴이 왜 끝났는지(조용함/직접 보냄/최대 길이)·말한 길이 — 글 내용 아님, PC [지연] 로그용
     if (opts.vend && typeof opts.vend === 'object') meta.vend = opts.vend;
+    // O-0210: 직전 음성 턴의 폰 쪽 시각(등록·첫 조각 받음·소리 남·답 받음, ms) — 글 내용 아님, PC [지연] 로그용
+    if (opts.vprev && typeof opts.vprev === 'object') meta.vprev = opts.vprev;
     var imgMeta = [];
     function uploadImages(i) {
       if (i >= files.length) return Promise.resolve();
