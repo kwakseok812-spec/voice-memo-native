@@ -1142,6 +1142,26 @@
     }, function (e) { if (to) clearTimeout(to); throw e; })
       .then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
   }
+  /* (O-0201) 읽음 기준 기기 간 공유 — 「어디까지 읽었나」를 서버 한 줄(k_read_state)에 두고 폰·PC가 함께 쓴다.
+   *   getChatRead(pass)            → {seen_upto, updated_at, via, server_now}   (아직 아무도 안 올렸으면 seen_upto = null)
+   *   markChatRead(upto, pass, via) → 같은 모양(서버가 받아들인 뒤의 값). upto = 서버가 메시지에 매긴 시각(ISO).
+   *     서버가 「지금 값보다 클 때만」 바꾸고 「서버 지금」을 넘지 못하게 깎는다 → 뒤로 가지 않고, 기기 시계와 무관.
+   *   🔒 연동 암호 게이트(틀리면 err.badpass). 서버 SQL 미적용(404)이면 err.notready → 앱은 예전처럼 기기별 기준으로 동작.
+   *   8초 시간 제한 — 굳은 요청이 다음 확인을 막지 않게(fetchT). */
+  function _readRpc(name, body) {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }, 8000).then(function (r) {
+      if (r.status === 404) { var n = new Error('NOT_READY'); n.notready = true; throw n; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) { var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e; }
+      if (!r.ok) throw new Error('읽음 기준 동기화 실패(HTTP ' + r.status + ')');
+      return r.json();
+    }).then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
+  }
+  function getChatRead(pass) { return _readRpc('get_chat_read', { p_pass: pass || '' }); }
+  function markChatRead(upto, pass, via) { return _readRpc('mark_chat_read', { p_upto: upto || null, p_pass: pass || '', p_via: via || '' }); }
   function listOfficeOrders(limit, pass) {
     return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
   }
@@ -1554,6 +1574,7 @@
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
     getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
     getKStatus: getKStatus,         // v8.4(O-0162) 채팅 머리줄 PC 케이 상태 점
+    getChatRead: getChatRead, markChatRead: markChatRead,   // (O-0201) 읽음 기준 기기 간 공유
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
     listReminders: listReminders, cancelReminder: cancelReminder,                             // v8.3: ⏰ 예약한 알림
