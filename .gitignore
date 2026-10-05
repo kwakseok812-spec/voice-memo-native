@@ -4,6 +4,7 @@ _uiux_backup_*/
 _design_review_*/
 android/app/build/
 android/build/
+android/mirror/build/
 android/.gradle/
 android/capacitor-cordova-android-plugins/build/
 *.log

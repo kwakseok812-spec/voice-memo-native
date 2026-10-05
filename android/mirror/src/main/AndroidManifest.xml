@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 미러링(O-0247) 모듈의 선언. 빌드 때 스마트비서 매니페스트에 합쳐진다.
+     스마트비서에 새로 생기는 권한은 BLUETOOTH_CONNECT(「근처 기기」), BLUETOOTH(안드로이드 11 이하에서만),
+     FOREGROUND_SERVICE_MEDIA_PROJECTION 셋이다. 나머지(INTERNET·WAKE_LOCK·FOREGROUND_SERVICE·POST_NOTIFICATIONS)는
+     스마트비서가 이미 가진 것이고, 이 모듈만 봐도 무엇을 쓰는지 알 수 있게 다시 적어 두었다.
+     허용 창은 미러링 화면에서 「시작」을 누를 때만 요청한다(다른 화면에서는 요청하는 코드가 없다). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- local network link to the glasses app (no internet endpoints are used) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Bluetooth serial link to the already-paired glasses (no scanning, no new pairing, no location).
+         Android 12+ asks once ("nearby devices"); older versions use the install-time BLUETOOTH permission. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <!-- "keep the screen on while sending": holds the screen on while another app is in front
+         (install-time permission, no dialog). Held only between start and stop. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- screen sharing must run as a visible foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- the "sending to glasses" notification with its stop button (Android 13+ asks once) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <application>
+
+        <!-- 홈 「도구」 > 「미러링」(MirrorPlugin)과 「보내는 중」 알림에서만 연다. 바깥 앱은 열 수 없다(exported=false). -->
+        <activity
+            android:name=".MirrorActivity"
+            android:exported="false"
+            android:label="@string/mirror_title"
+            android:launchMode="singleTask"
+            android:theme="@style/MirrorTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+
+        <activity
+            android:name=".RegionActivity"
+            android:exported="false"
+            android:label="@string/mirror_region_title"
+            android:theme="@style/MirrorTheme" />
+
+        <service
+            android:name=".CaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+    </application>
+</manifest>

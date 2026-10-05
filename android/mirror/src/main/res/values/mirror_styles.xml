@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 스마트비서의 어두운 바탕(#070B1D)에 맞춘 미러링 화면. 화면 구성·글자 크기는 별도 앱 v0.4 그대로다. -->
+    <style name="MirrorTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/mirror_bg</item>
+        <item name="android:colorAccent">#3B82F6</item>
+        <item name="android:statusBarColor">@color/mirror_bg</item>
+        <item name="android:navigationBarColor">@color/mirror_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <color name="mirror_bg">#070B1D</color>
+</resources>

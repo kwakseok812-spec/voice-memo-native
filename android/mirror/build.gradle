@@ -1,0 +1,51 @@
+// 미러링(O-0247): 폰 화면을 로키드 안경에 비추는 기능. 별도 앱 「미러링」 v0.4 의 폰 쪽을 그대로 옮겨 온 모듈이다.
+//  - 코틀린은 이 모듈 안에서만 쓴다(아래 buildscript). 앱 모듈(:app)과 맨 위 build.gradle 은 자바 그대로다.
+//  - 통신·변환(core 패키지)은 안경 앱 「미러링(안경)」 v0.4 와 같은 파일이다. 규약을 바꾸면 안경 앱도 다시 깔아야 하므로 손대지 않는다.
+//  - 권한·화면·서비스 선언은 이 모듈의 AndroidManifest.xml 에 있고, 빌드 때 앱 매니페스트에 합쳐진다.
+//  - 떼어 내려면: settings.gradle 의 include ':mirror' · app/build.gradle 의 implementation project(':mirror') ·
+//    MirrorPlugin.java 와 MainActivity 의 등록 한 줄 · 홈 「미러링」 칸을 지우면 된다.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // 앱이 이미 싣고 있는 kotlin-stdlib(androidx·firebase 가 끌어옴)과 같은 계열. 새 라이브러리를 더하지 않는다.
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace = "io.github.kwakseok812.glassmap.phone"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        // 앱과 같은 값(24). 미러링 자체는 안드로이드 10(29) 이상에서만 열린다 — MirrorPlugin·MirrorActivity 가 막는다.
+        minSdkVersion rootProject.ext.minSdkVersion
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    lint {
+        abortOnError = false
+    }
+    testOptions {
+        unitTests.all {
+            testLogging {
+                events "passed", "failed", "skipped"
+            }
+        }
+    }
+}
+
+dependencies {
+    // 변환·통신 JVM 시험(./gradlew :mirror:testDebugUnitTest). 앱에 들어가는 라이브러리는 없다.
+    testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:2.0.21"
+}

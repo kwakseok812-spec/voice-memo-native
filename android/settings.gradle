@@ -3,3 +3,6 @@ include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
 apply from: 'capacitor.settings.gradle'
+
+// 미러링(O-0247) 모듈 — android/mirror (폰 화면을 로키드 안경에 비추기)
+include ':mirror'

@@ -7,8 +7,8 @@ android {
         applicationId "com.kwak.voicememo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 44
-        versionName "9.2"
+        versionCode 45
+        versionName "9.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -70,6 +70,8 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // v9.3(O-0247) 미러링 모듈(android/mirror) — 코틀린은 그 모듈 안에서만 쓴다
+    implementation project(':mirror')
 }
 
 apply from: 'capacitor.build.gradle'

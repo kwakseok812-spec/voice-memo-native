@@ -51,6 +51,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(KBridgePlugin.class);
         // O-0177: 음성 대화 — 폰에서 바로 받아쓰기(SpeechRecognizer, 기기 내 인식 우선). 실패하면 JS 가 녹음→PC 전사로
         registerPlugin(KSpeechPlugin.class);
+        // v9.3(O-0247): 홈 「도구」 > 「미러링」 — 미러링 화면(android/mirror 모듈) 열기
+        registerPlugin(MirrorPlugin.class);
         super.onCreate(savedInstanceState);
         // 앱이 꺼진 상태에서 "열기/공유 → 스마트비서"(또는 바로가기·위젯·알림)로 시작된 경우.
         //   v8.2: 화면이 다시 만들어지는 경우(savedInstanceState 있음)엔 같은 공유를 두 번 처리하지 않게 건너뛴다.

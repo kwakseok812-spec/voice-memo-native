@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mirror_title">미러링</string>
+    <string name="mirror_region_title">영역 맞추기</string>
+</resources>
