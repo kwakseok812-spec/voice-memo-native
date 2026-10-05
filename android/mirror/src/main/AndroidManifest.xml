@@ -25,12 +25,16 @@
 
     <application>
 
-        <!-- 홈 「도구」 > 「미러링」(MirrorPlugin)과 「보내는 중」 알림에서만 연다. 바깥 앱은 열 수 없다(exported=false). -->
+        <!-- 홈 「도구」 > 「미러링」(MirrorPlugin)과 「보내는 중」 알림에서만 연다. 바깥 앱은 열 수 없다(exported=false).
+             taskAffinity 를 따로 준 까닭: 미러링 화면이 스마트비서 본 화면(MainActivity, singleTask)과 같은 작업 묶음에 있으면,
+             알림으로 미러링 화면만 먼저 열린 뒤 앱을 켜고 홈의 「미러링」을 누를 때 본 화면이 닫혀 버린다(에뮬레이터 시험에서 확인).
+             묶음을 나누면 본 화면은 어떤 순서로도 건드려지지 않는다. 별도 앱이던 때와 같이 최근 앱 목록에 「미러링」 카드가 따로 보인다. -->
         <activity
             android:name=".MirrorActivity"
             android:exported="false"
             android:label="@string/mirror_title"
             android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.mirror"
             android:theme="@style/MirrorTheme"
             android:windowSoftInputMode="stateHidden|adjustResize" />
 
@@ -38,6 +42,7 @@
             android:name=".RegionActivity"
             android:exported="false"
             android:label="@string/mirror_region_title"
+            android:taskAffinity="${applicationId}.mirror"
             android:theme="@style/MirrorTheme" />
 
         <service
