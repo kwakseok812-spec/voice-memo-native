@@ -2,6 +2,8 @@
  * k-character.js — 소장 「케이」 캐릭터(얼굴·표정·움직임·옷장·목소리) v6.0 1차
  * ----------------------------------------------------------------------------
  * 데이터 기반: 옷 목록은 assets/k/wardrobe.json 한 파일만 읽는다.
+ *   (v9.4) 옷 20벌. 새 옷 10벌은 idle/talk 영상이 없어 정지 사진으로 보인다(말하는 중엔 사진이 끄덕이는 효과).
+ *          expr_hd = 큰 자리용 선명한 사진, poses = 일하는 자세 그림(배경 없는 WebP — 지금은 기본 옷만), bow = 전신 인사 영상(6벌 — 버건디·네이비·니트·한복·청바지 셔츠·맨투맨. bow_cue = 자막 시점, bow_len = 길이: 영상을 재서 넣은 값).
  *   옷을 늘리려면 에셋 폴더(assets/k/<옷id>/)와 wardrobe.json 만 바꾸면 되고 코드는 그대로다.
  *   (에셋 생성 도구: Claude Code\apps\k-character\tools\build_app_assets.py)
  *
@@ -142,6 +144,9 @@
     n.talk = o.talk === undefined ? (o.expr && !Array.isArray(o.expr) ? '' : 'loop_talk_small.mp4') : (o.talk || '');
     // (O-0116/O-0118) 전신 사진 = 옷 10벌 모두 · 인사 영상 = 버건디 정장만. 없으면 '' → 꾸미기 화면은 상반신만
     n.fullbody = o.fullbody || ''; n.bow = o.bow || ''; n.bowPoster = o.bow_poster || o.bowPoster || '';
+    // v9.4: 큰 자리용 선명한 사진(expr_hd — 지금은 웃는 상반신 1080 한 장) · 일하는 자세 그림(poses — 배경 없는 그림, 있는 옷만)
+    n.exprHd = (o.expr_hd && typeof o.expr_hd === 'object') ? o.expr_hd : {};
+    n.poses = (o.poses && typeof o.poses === 'object') ? o.poses : {};
     return n;
   }
   function setData(d) {
@@ -173,11 +178,20 @@
   function activeCombo() { return comboFor(curHair, outfit().id); }
   function isCur(o) { return !o || o.id === outfit().id; }
   // (O-0226) raw 를 주지 않으면 「평소」 자리에 미소 사진(REST_EXPR)을 돌려준다. raw=true 는 영상 밑 사진·영상 첫 장면용(진짜 평소 사진).
-  function exprUrl(e, o, raw) {
+  //   hd=true 면 그 표정의 선명한 사진(있을 때만 — 홈 큰 카드처럼 크게 보이는 정지 사진 자리).
+  function exprUrl(e, o, raw, hd) {
     var cb = isCur(o) ? activeCombo() : null;
     if (cb) return cb.img;
     if (!raw) e = restExpr(e);
-    o = o || outfit(); return url(o, o.expr[e] || o.expr.neutral);
+    o = o || outfit();
+    if (hd && o.exprHd && o.exprHd[e]) return url(o, o.exprHd[e]);
+    return url(o, o.expr[e] || o.expr.neutral);
+  }
+  // v9.4 일하는 자세 그림(배경 없는 그림): 기본 머리 + 그 자세 그림이 있는 옷일 때만 주소, 아니면 ''(→ 부르는 쪽이 표정 사진으로 대신)
+  function poseUrl(name, o) {
+    if (isCur(o) && activeCombo()) return '';          // 다른 머리 조합 사진이 보이는 중 → 자세 그림(기본 머리)은 쓰지 않는다
+    o = o || outfit();
+    return (o.poses && o.poses[name]) ? url(o, o.poses[name]) : '';
   }
   // 작은 원형 얼굴용: 얼굴 쪽으로 자른 사진(av_*). 없으면 전체 사진(CSS 로 확대)
   function avatarUrl(e, o, raw) {
@@ -414,7 +428,7 @@
     var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
     var failed = !!(el._kFail && el._kFail[fkey]);
     return { o: o, cb: cb, still: still, kind: kind, file: file,
-             can: !!file && !failed && !el._kHold && motionOn() && !flashing };
+             can: !!file && !failed && !el._kHold && motionOn() && !flashing && !el.hasAttribute('data-kstill') };   // v9.4 data-kstill = 정지 사진만 쓰는 자리(홈 큰 카드)
   }
   // 밑에 까는 정지 사진만 고른다(영상은 건드리지 않음).
   function paintStill(el) {
@@ -422,7 +436,10 @@
     if (wideFace(el)) e = flashing || DEFAULT_EXPR;
     // 곧 영상이 덮을 자리 = 영상 첫 장면과 같은 평소 사진(raw). 정지 사진이 그대로 보이는 자리 = 미소가 기본.
     var raw = videoPlan(el).can && !el._kBlocked;
-    var src = wideFace(el) ? exprUrl(e, null, raw) : avatarUrl(e, null, raw);
+    // v9.4: 그 자리에만 잠깐 보이는 표정(faceFlash — 홈 카드의 아침 인사). 새 답의 표정(flashing)이 뜨는 동안은 그쪽이 먼저.
+    //   lastExpr·flashing 을 건드리지 않으므로 다른 자리·채팅 얼굴의 표정은 바뀌지 않는다.
+    if (el._kTemp && !flashing) { e = el._kTemp; raw = false; }
+    var src = wideFace(el) ? exprUrl(e, null, raw, el.hasAttribute('data-khd')) : avatarUrl(e, null, raw);
     var img = el.querySelector('.kf-img');
     if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
   }
@@ -586,6 +603,15 @@
     paint(el);                                   // (O-0226) 멈춘 동안은 정지 사진 자리(미소 기본), 풀리면 다시 영상 밑 사진으로
   }
 
+  // v9.4: 한 자리(el)에만 ms 동안 그 표정 사진을 보인다(정지 사진 자리용). 채팅 얼굴 등 다른 자리는 그대로.
+  function faceFlash(el, expr, ms) {
+    if (!el || !expr) return;
+    build(el);
+    el._kTemp = expr; paintStill(el);
+    clearTimeout(el._kTempT);
+    el._kTempT = setTimeout(function () { el._kTemp = ''; paintStill(el); }, ms || 8000);
+  }
+
   window.KChar = {
     ready: ready,
     exprFor: exprFor, rules: EXPR_RULES, moodFor: moodFor,
@@ -599,8 +625,9 @@
     lookName: function () { return outfit().name + (activeCombo() ? ' · ' + hair().name : ''); },
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
+    poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
     mount: function () { faces().forEach(paint); },
-    restartFace: restartFace, hold: hold,
+    restartFace: restartFace, hold: hold, faceFlash: faceFlash,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },
     setTalking: setTalking, isTalking: function () { return talking; },
     motionOn: motionOn, motionPref: motionPref, setMotionPref: setMotionPref, motionBlockReason: motionBlockReason,

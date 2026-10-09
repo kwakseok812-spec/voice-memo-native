@@ -18,7 +18,7 @@
  *   'daily'  = 하루 첫 실행만(기본값 · 소장 추천)   'always' = 켤 때마다   'off' = 끄기
  *   ※ 「실행」은 앱을 완전히 새로 켤 때만이다. 다른 앱 갔다 돌아오는 것(백그라운드 복귀)은 인사하지 않는다.
  *
- * 인사 영상이 있는 옷: 아래 BOWS 표(지금은 버건디 정장 1벌). 없는 옷을 입고 있으면 기본 옷(버건디 정장) 인사를 쓴다.
+ * 인사 영상이 있는 옷: 아래 BOWS 표(v9.4: 버건디 정장 · 네이비 정장 · 니트 · 한복 · 청바지 셔츠 · 맨투맨 6벌). 없는 옷을 입고 있으면 그 옷의 전신 사진 + 자막으로 인사한다(영상 없음).
  *   옷을 늘릴 땐 assets/k/<옷id>/bow.mp4 · bow_poster.jpg 를 넣고 이 표에 한 줄 추가.
  * ==========================================================================*/
 (function () {
@@ -48,13 +48,26 @@
   var LAST_KEY = 'smart_k_intro_last';
   var LINE_KEY = 'smart_k_intro_line';      // 직전에 나온 멘트 id
   var DEFAULT_PREF = 'daily';
+  // (v9.4) 인사 영상이 있는 옷 6벌. 옷마다 영상 길이(3.25~4.58초)와 숙이는 박자가 다르다.
+  //   cue = 그 영상에서 허리를 숙이는 것이 눈에 띄기 시작하는 때(초 — 자막이 나타나는 때). 영상마다 재서 넣은 값이다(고정값 아님).
+  //         이 표는 손으로 고치지 않는다 — 영상을 넣는 스크립트(integrate_bows.py)가 재서 wardrobe.json(bow_cue)과 함께 맞춘다.
+  //   길이는 적지 않는다 — 재생이 끝나는 것(ended)으로 닫고, 안전 장치(아래 capFor)도 영상의 실제 길이에서 구한다.
   var BOWS = {
-    burgundy_suit: { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg' }
+    burgundy_suit:  { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.04 },
+    navy_suit:      { video: 'assets/k/navy_suit/bow.mp4', poster: 'assets/k/navy_suit/bow_poster.jpg', cue: 0.88 },
+    knit:           { video: 'assets/k/knit/bow.mp4', poster: 'assets/k/knit/bow_poster.jpg', cue: 1.08 },
+    hanbok:         { video: 'assets/k/hanbok/bow.mp4', poster: 'assets/k/hanbok/bow_poster.jpg', cue: 0.88 },
+    jeans_shirt:    { video: 'assets/k/jeans_shirt/bow.mp4', poster: 'assets/k/jeans_shirt/bow_poster.jpg', cue: 1.04 },
+    sweatshirt:     { video: 'assets/k/sweatshirt/bow.mp4', poster: 'assets/k/sweatshirt/bow_poster.jpg', cue: 1.08 }
   };
   var DEFAULT_OUTFIT = 'burgundy_suit';
-  var CUE_AT = 1.0;           // 영상 몇 초에 멘트가 나타나는지(허리 숙이기 시작하는 순간)
+  var CUE_AT = 1.0;           // cue 가 없는 영상의 기본값
+  var STILL_CUE = 500;        // (v9.4) 인사 영상이 없는 옷: 전신 사진을 띄우고 이만큼 뒤에 자막
+  var STILL_HOLD = 2800;      //        그리고 이만큼 보여 준 뒤 닫는다
   var START_TIMEOUT = 1800;   // 이 안에 영상이 시작 안 되면 조용히 건너뜀
-  var HARD_CAP = 7000;        // 어떤 경우에도 이 시간 뒤엔 닫힘
+  var HARD_CAP = 7000;        // 영상 길이를 아직 모를 때의 안전 장치(이 시간 뒤엔 닫힘). 길이를 알게 되면 capFor(길이)로 바꾼다
+  var CAP_SLACK = 2500;       // 영상이 끝나고도 이만큼 지나면(끝남 신호를 못 받은 경우) 닫는다
+  function capFor(dur) { return (isFinite(dur) && dur > 0) ? Math.round(dur * 1000) + CAP_SLACK : HARD_CAP; }
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
@@ -90,12 +103,16 @@
     try { if (navigator.connection && navigator.connection.saveData) return '데이터 절약 모드'; } catch (e) {}
     return '';
   }
+  // (v9.4) 입은 옷의 인사 영상이 있으면 그것. 없으면 그 옷의 전신 사진 + 자막(still) — 예전엔 버건디 영상이 대신 나와 「옷은 네이비인데 인사는 버건디」였다.
+  //   옷 이름은 영문·숫자·밑줄만 받는다(저장값이 이상하면 기본 옷).
   function bowFor() {
     var o = lsGet('smart_k_outfit') || DEFAULT_OUTFIT;
-    return BOWS[o] || BOWS[DEFAULT_OUTFIT];
+    if (!/^[a-z0-9_]+$/i.test(o)) o = DEFAULT_OUTFIT;
+    if (BOWS[o]) return BOWS[o];
+    return { still: true, poster: 'assets/k/' + o + '/fullbody.jpg' };
   }
 
-  var root = null, vid = null, cap = null, timers = [], active = false, forced = false, cued = false, raf = 0, line = null;
+  var root = null, vid = null, cap = null, timers = [], active = false, forced = false, cued = false, raf = 0, line = null, cueAt = CUE_AT;
   function clearTimers() { timers.forEach(function (t) { clearTimeout(t); }); timers = []; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
 
   function build() {
@@ -130,7 +147,7 @@
     (function tick() {
       raf = 0;
       if (!active) return;
-      if (!cued && vid.currentTime >= CUE_AT) {
+      if (!cued && vid.currentTime >= cueAt) {
         cued = true;
         root.classList.add('cap-on');
       }
@@ -151,15 +168,40 @@
     root.__line = line.id;
     root.className = 'kintro show';
     document.documentElement.classList.add('kintro-on');
-    root.querySelector('.kintro-poster').setAttribute('src', b.poster);
+    var posterEl = root.querySelector('.kintro-poster');
+    posterEl.setAttribute('src', b.poster);
     root.querySelector('.kintro-bg').setAttribute('src', b.poster);
+    cueAt = b.cue != null ? b.cue : CUE_AT;
+    root.__mode = b.still ? 'still' : 'video';
+    requestAnimationFrame(function () { requestAnimationFrame(function () { if (active) root.classList.add('in'); }); });
+    timers.push(setTimeout(function () { if (active) root.classList.add('hint-on'); }, 900));
+    if (b.still) {
+      // 인사 영상이 없는 옷: 그 옷 전신 사진 + 자막. 사진을 못 읽으면(서버에서 온 옷 등) 조용히 건너뛴다.
+      try { vid.removeAttribute('src'); vid.removeAttribute('poster'); } catch (e) {}
+      posterEl.onerror = function () { posterEl.onerror = null; finish('nophoto'); };
+      if (!forced) lsSet(LAST_KEY, today());
+      timers.push(setTimeout(function () { if (active) { cued = true; root.classList.add('cap-on'); } }, STILL_CUE));
+      timers.push(setTimeout(function () { finish('still'); }, STILL_HOLD));
+      return true;
+    }
+    posterEl.onerror = null;
     vid.setAttribute('poster', b.poster);
     vid.setAttribute('src', b.video);
     try { vid.currentTime = 0; } catch (e) {}
-    requestAnimationFrame(function () { requestAnimationFrame(function () { if (active) root.classList.add('in'); }); });
-    timers.push(setTimeout(function () { if (active) root.classList.add('hint-on'); }, 900));
     timers.push(setTimeout(function () { if (active && !root.classList.contains('playing')) finish('slow'); }, START_TIMEOUT));
-    timers.push(setTimeout(function () { finish('cap'); }, HARD_CAP));
+    // 안전 장치: 영상의 실제 길이를 알게 되면 그 길이 + 여유로 다시 건다(옷마다 길이가 달라 고정값을 쓰지 않는다)
+    var capT = setTimeout(function () { finish('cap'); }, HARD_CAP);
+    timers.push(capT);
+    var onMeta = function () {
+      vid.removeEventListener('loadedmetadata', onMeta);
+      if (!active || root.__mode !== 'video') return;
+      clearTimeout(capT);
+      capT = setTimeout(function () { finish('cap'); }, capFor(vid.duration));
+      timers.push(capT);
+      root.__cap = capFor(vid.duration);
+    };
+    root.__cap = HARD_CAP;
+    vid.addEventListener('loadedmetadata', onMeta);
     try {
       var p = vid.play();
       if (p && p.catch) p.catch(function () { finish('blocked'); });
@@ -213,6 +255,7 @@
     greetings: function () { return GREETINGS.slice(); },
     candidates: candidates, pickGreeting: pickGreeting,   // 시험·점검용(시각을 넣으면 그 시각의 후보)
     lastShown: function () { return lsGet(LAST_KEY) || ''; },
+    bows: function () { var o = {}; Object.keys(BOWS).forEach(function (k) { o[k] = { video: BOWS[k].video, poster: BOWS[k].poster, cue: BOWS[k].cue }; }); return o; },   // 시험·점검용(wardrobe.json 과 같은지 본다)
     play: function () { return play(true); },          // 「지금 보기」(설정 화면) — 오늘 인사 기록은 안 바꾼다
     skip: function () { finish('api'); },
     active: function () { return active; }

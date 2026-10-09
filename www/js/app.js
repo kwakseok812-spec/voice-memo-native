@@ -92,7 +92,18 @@
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function setStatus(t, k) { if (statusText) statusText.textContent = t; if (statusDot) statusDot.className = 'dot ' + (k || 'idle'); }
   function setExportMsg(m, k) { if (exportMsg) { exportMsg.textContent = m || ''; exportMsg.className = 'exportmsg ' + (k || ''); } }
-  function setProcessing(t) { if (processingText) processingText.textContent = t; }
+  /* v9.4 일하는 케이(보내는 중 화면): stage = 'send' 올리는 중 · 'got' PC 가 실제로 받은 뒤 · 'retry' 정리하다 문제가 생겨 다시 하는 중.
+   *   「잘 받았습니다」는 올리기가 끝난 뒤(got)에만 말한다. what = 'memo'(녹음 → 회의록) | 'media'(사진·영상). */
+  var PROC_SAY = {
+    send:  { pose: 'idle',  memo: 'PC로 보내고 있습니다.', media: 'PC로 올리고 있습니다.' },
+    got:   { pose: 'idle',  memo: '잘 받았습니다. 정리해서 회의록에 올려 두겠습니다. 다른 일 보셔도 됩니다.', media: '잘 받았습니다. 살펴보고 있습니다. 다른 일 보셔도 됩니다.' },
+    retry: { pose: 'sorry', memo: '죄송합니다, 정리하다 문제가 있었습니다. 잠시 뒤 다시 해 보겠습니다.', media: '죄송합니다, 살펴보다 문제가 있었습니다. 잠시 뒤 다시 해 보겠습니다.' }
+  };
+  function setProcessing(t, stage, what) {
+    if (processingText) processingText.textContent = t;
+    var d = PROC_SAY[stage]; if (!d || !window.KScene) return;
+    KScene.set('kscProc', d.pose, d[what === 'media' ? 'media' : 'memo']);
+  }
   function showBanner(m) { if (banner) { banner.style.display = 'block'; banner.innerHTML = m; } }
   function hideBanner() { if (banner && RecordingModule.isSupported()) banner.style.display = 'none'; }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -147,9 +158,28 @@
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
+  // v9.4: 홈이 보일 때만 html.home-on — 폴드 펼침(넓은 화면)에서 홈만 2단으로 넓힌다(다른 화면 폭은 그대로).
+  function syncHomeOn() { try { document.documentElement.classList.toggle('home-on', isOpen(homeView)); } catch (e) {} }
+  /* v9.4 홈 큰 카드의 인사 한 줄 — 앱을 켠 뒤 한 번 정한다(때에 맞는 인사: k-intro.js 의 GREETINGS 목록을 그대로 쓴다 · 시작 인사에 방금 나온 말은 뺀다).
+   *   아침(04~11시)에는 홈 카드의 얼굴만 8초 동안 밝게 웃는다(KChar.faceFlash — 채팅·머리줄 얼굴의 표정은 바꾸지 않는다). */
+  var homeGreetDone = false;
+  function paintHomeGreet() {
+    if (homeGreetDone) return;
+    var h1 = $('homeGreet'); if (!h1 || !window.KIntro || !KIntro.pickGreeting) return;
+    homeGreetDone = true;
+    try {
+      var last = null; try { last = localStorage.getItem('smart_k_intro_line'); } catch (e) {}
+      var g = KIntro.pickGreeting(null, last);
+      if (g && g.text) { h1.setAttribute('data-kg', g.id || ''); h1.innerHTML = esc(g.text).replace('대표님', '<em>대표님</em>'); }
+      var hr = new Date(Date.now() + 9 * 3600000).getUTCHours(), band = (hr >= 4 && hr < 11) ? 'morning' : (hr >= 11 && hr < 17) ? 'day' : 'evening';
+      h1.setAttribute('data-kband', band);
+      var face = document.querySelector('#kHero .kface');
+      if (band === 'morning' && face && window.KChar && KChar.faceFlash) KChar.ready.then(function () { KChar.faceFlash(face, 'cheer', 8000); });
+    } catch (e) {}
+  }
   function showHome() {
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
-    SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop();
+    SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
     updateRecIndicator();
     try { renderKBubble(); } catch (e) {}                 // (O-0117) 홈에 돌아오면 케이 말풍선 꼬리 위치·문구 다시 맞춤
@@ -164,7 +194,7 @@
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
     if (el !== searchPanelRef()) clearSearch();
-    show(el); scrollTop();
+    show(el); scrollTop(); syncHomeOn();
     if (homeFooter) homeFooter.style.display = 'none';   // 다른 화면에선 숨김
     updateRecIndicator();
     syncConvoMode();                                      // (O-0124) 음성 대화 중 채팅으로 돌아오면 무대 화면으로
@@ -180,15 +210,23 @@
   if (recIndicator) recIndicator.addEventListener('click', function () { openScreen(recView); });
 
   /* ---------- 녹음 ---------- */
+  // v9.4 일하는 케이: 녹음 중 = 받아 적는 모습 + 한마디(값 = 녹음 시작 뒤 지난 분 — 타이머와 같은 시계)
+  function recScene(sec) {
+    if (!window.KScene) return;
+    var min = Math.floor((sec || 0) / 60);
+    KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째예요.' : '받아 적고 있습니다. 편하게 말씀하세요.');
+  }
   function startRecTimer() {
     recStart = Date.now();
     if (recTimerEl) recTimerEl.textContent = '00:00';
     if (recIndTime) recIndTime.textContent = '00:00';
     if (recInterval) clearInterval(recInterval);
+    recScene(0);
     recInterval = setInterval(function () {
       var s = (Date.now() - recStart) / 1000;
       if (recTimerEl) recTimerEl.textContent = fmtSec(s);
       if (recIndTime) recIndTime.textContent = fmtSec(s);   // 미니 배너 시간도 함께 갱신
+      recScene(s);
     }, 500);
   }
   function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
@@ -362,10 +400,10 @@
     }
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending' });
     renderHistory();
-    openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
+    openScreen(processing); setProcessing('🖥️ PC로 보내는 중…', 'send');
     OfficeBridge.send(memo, blob).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
-      setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
+      setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)', 'got');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
@@ -605,11 +643,11 @@
         toast('긴 녹음은 조각으로 나눠 보내요. 홈 「진행 중인 메모」에서 상태를 볼 수 있어요.'); showHome();
       } else {
         HistoryModule.update(id, { status: 'pending', kind: 'audio' }); renderHistory();
-        openScreen(processing); setProcessing('🖥️ PC로 보내는 중…');
+        openScreen(processing); setProcessing('🖥️ PC로 보내는 중…', 'send');
         OfficeBridge.send(memo, blob).then(function () {
           OfficeBridge.delDraft(id);
           HistoryModule.update(id, { status: 'processing', error: null }); renderHistory();
-          setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)');
+          setProcessing('🖨️ PC에서 정리 중… 잠시만요 (처음엔 1~2분 걸릴 수 있어요)', 'got');
           startPolling(id, memo.token);
           noticeSkippedMaterials(memo);
         }).catch(function (err) {
@@ -660,9 +698,9 @@
           else toast('✅ 정리 완료 — 「회의록」에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
           return;
         } else if (res.status === 'processing') {
-          setProcessing('🖨️ PC에서 정리 중… 잠시만요');
+          setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got');
         } else if (res.error) {
-          setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…');
+          setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…', 'retry');
         }
         // 포그라운드 대기화면 안내(1회) — 폴링은 멈추지 않는다(done/자동복구를 계속 감지해야 하므로).
         if (!bannerShown && isOpen(processing) && Date.now() - started > 5 * 60 * 1000) {
@@ -822,32 +860,54 @@
    * 서버(list_recent_memos)를 단일 소스로 직접 보여준다(HistoryModule 병합 안 함).
    * 요약이 주(主), 원문(전사/상세)은 <details> 로 접어 옵션으로 펼친다. 삭제·재전송 없음. */
   var meetingsRows = [], meetingsDetailOpen = false;
+  /* v9.4 일하는 케이(회의록 맨 위) — 값은 이 화면이 이미 가진 것만:
+   *   이 폰에서 보낸 녹음 중 「보내는 중·정리 중」인 수(HistoryModule — 임시 저장·실패는 세지 않는다) · 서버 정리본 목록(meetingsRows) · 불러오기 상태(mtgState). */
+  var mtgState = '';                                 // '' 아직 | 'loading' | 'ok' | 'nopass' | 'fail' | 'na'(기능 없음)
+  function cutText(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; }
+  function meetingsScene() {
+    if (!window.KScene) return;
+    var working = HistoryModule.list().filter(function (e) { return e.status === 'pending' || e.status === 'processing'; }).length;
+    var pose = '', text = '';
+    if (working) { pose = 'desk'; text = '녹음 ' + working + '건을 정리하고 있습니다. 끝나면 여기에 올려 두겠습니다.'; }
+    else if (mtgState === 'loading') { pose = 'idle'; text = '회의록을 가져오고 있습니다.'; }
+    else if (mtgState === 'nopass') { pose = 'guide'; text = '연동 암호를 넣어 주시면 정리된 회의록을 보여 드리겠습니다.'; }
+    else if (mtgState === 'fail') { pose = 'sorry'; text = '죄송합니다, 회의록을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'; }
+    else if (mtgState === 'ok' && meetingsRows.length) { pose = 'report'; text = '「' + cutText(meetingsRows[0].title || '회의 요약', 18) + '」 정리본이 준비돼 있습니다.'; }
+    else if (mtgState === 'ok') { pose = 'guide'; text = '아직 정리본이 없습니다. 녹음하시면 제가 정리해 두겠습니다.'; }
+    KScene.set('kscMeetings', pose, text);
+  }
   function openMeetings() {
     openScreen($('meetingsView'));
     showMeetingsList();
+    mtgState = '';
     renderHistory();                                 // (O-0176) 맨 위 「진행 중」·맨 아래 「이 폰에서 보낸 기록」은 암호 없이도(이 폰 기록)
     var host = $('meetingsList'); if (!host) return;
     if (!(window.OfficeBridge && OfficeBridge.listRecentMemos)) {
-      host.innerHTML = '<p class="empty" style="padding:16px">이 기능을 아직 쓸 수 없어요(업데이트 필요).</p>'; return;
+      host.innerHTML = '<p class="empty" style="padding:16px">이 기능을 아직 쓸 수 없어요(업데이트 필요).</p>'; mtgState = 'na'; meetingsScene(); return;
     }
     // 🔒 회의 요약은 민감정보 → 채팅·공유함과 동일한 PC 연동 암호 게이트(중복 UI 없이 기존 게이트 재사용).
     var pass = getSyncPass();
     if (!pass) {
-      host.innerHTML = '<p class="empty" style="padding:16px">정리된 회의록을 보려면 PC 연동 암호가 필요해요.</p>';
+      host.innerHTML = '';                            // v9.4: 안내는 맨 위 케이가 말한다(같은 말을 두 번 하지 않게)
+      mtgState = 'nopass'; meetingsScene();
       showSyncGate(true, '회의록을 보려면 PC 연동 암호를 입력해 주세요.');
       return;
     }
-    host.innerHTML = '<p class="empty" style="padding:16px">불러오는 중…</p>';
+    host.innerHTML = '';
+    mtgState = 'loading'; meetingsScene();
     OfficeBridge.listRecentMemos(100, pass).then(function (rows) {
       meetingsRows = Array.isArray(rows) ? rows : [];
+      mtgState = 'ok';
       renderMeetingsList();
     }).catch(function (e) {
       if (e && e.badpass) {                          // 암호 불일치/미설정 → 저장 암호 지우고 재입력 유도(기존 게이트)
         setSyncPass('');
         host.innerHTML = '<p class="empty" style="padding:16px">암호가 맞지 않아요. 다시 입력해 주세요.</p>';
+        mtgState = 'nopass'; meetingsScene();
         if (isOpen($('meetingsView'))) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.');
       } else {
-        host.innerHTML = '<p class="empty" style="padding:16px">목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>';
+        host.innerHTML = '';
+        mtgState = 'fail'; meetingsScene();
       }
     });
   }
@@ -862,7 +922,8 @@
   }
   function renderMeetingsList() {
     var host = $('meetingsList'); if (!host) return;
-    if (!meetingsRows.length) { host.innerHTML = '<p class="empty" style="padding:16px">아직 정리된 회의록이 없어요. 녹음이 정리되면 여기에 쌓여요.</p>'; return; }
+    meetingsScene();
+    if (!meetingsRows.length) { host.innerHTML = ''; return; }     // v9.4: 「아직 정리본이 없습니다」는 맨 위 케이가 말한다
     var lastDate = '', html = '';
     meetingsRows.forEach(function (r, idx) {
       // v6.5 (O-0085): 날짜 묶음은 한국 날짜 기준. 카드의 시각(올린 시각=대표님께 의미 없는 숫자)은 빼고
@@ -1031,9 +1092,10 @@
     var mp = $('mtgProgress');
     if (mp) {
       mp.innerHTML = prog.length ? prog.map(historyItemHtml).join('')
-        : '<div class="empty-note">지금 정리 중이거나 임시 저장한 녹음이 없어요.</div>';
+        : '<div class="empty-note">정리 중이거나 임시 저장한 녹음은 없습니다.</div>';
       wireHistoryItems(mp);
     }
+    try { if (isOpen($('meetingsView'))) meetingsScene(); } catch (e) {}      // v9.4: 정리 중인 수가 바뀌면 케이 한마디도
     var mc = $('mtgProgCount'); if (mc) mc.textContent = prog.length ? prog.length + '건' : '';
     // ③ 회의록 화면 맨 아래 「이 폰에서 보낸 기록」(끝난 것, 접힘)
     var lw = $('mtgLocalWrap'), ml = $('mtgLocal');
@@ -1053,7 +1115,7 @@
     } else if (e.status === 'processing') {
       openProcessingModal(e);      // v5.1: 정리중 — 상태 안내 + [계속 기다리기]/[삭제](굳었을 때 직접 지울 수 있게)
     } else {
-      openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(id, e.token);
+      openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got'); startPolling(id, e.token);
     }
   }
   /* ---------- 정리중(processing) 항목: 상태 안내 + 계속 기다리기 + 삭제 (v5.1) ----------
@@ -1075,7 +1137,7 @@
       '</div>';
     modalBody.innerHTML = html;
     $('mProcWait').addEventListener('click', function () {
-      closeModal(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요'); startPolling(e.id, e.token);
+      closeModal(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got'); startPolling(e.id, e.token);
     });
     $('mProcDel').addEventListener('click', function () {
       if (videoPollers[e.id]) { clearInterval(videoPollers[e.id]); delete videoPollers[e.id]; }
@@ -1332,12 +1394,12 @@
     };
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
     renderHistory();
-    openScreen(processing); setProcessing('⬆️ 올리는 중… (' + files.length + '개)');
+    openScreen(processing); setProcessing('⬆️ 올리는 중… (' + files.length + '개)', 'send', 'media');
     OfficeBridge.sendBatch(memo, files, function (done, total) {
       setProcessing('⬆️ 올리는 중… ' + done + '/' + total);
     }).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
-      setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록해요)' : '🎬 영상 분석 중… (조금 걸릴 수 있어요)');
+      setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록해요)' : '🎬 영상 분석 중… (조금 걸릴 수 있어요)', 'got', 'media');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
@@ -2418,12 +2480,16 @@
     var wrap = $('kBubbleWrap'), btn = $('kBubble'); if (!wrap || !btn) return;
     var n = chatUnseen > 0 ? chatUnseen : 0;
     var vbtn = $('btnVoiceChat');
+    var side = wrap.parentNode;                                   // v9.4 .kh-side — 말풍선이 뜨면 그 위의 「오늘 보고 한 줄」은 내린다
     if (!n) {
       clearTimeout(kBubbleSettleT);
       wrap.classList.remove('on', 'pop', 'settled'); btn.setAttribute('tabindex', '-1'); kBubbleKey = '';
       if (vbtn) vbtn.setAttribute('aria-label', '소장 K(케이)와 대화');
+      if (side) side.classList.remove('bub-on');
+      try { if (window.TodayCard && TodayCard.paintSay) TodayCard.paintSay(); } catch (e) {}
       return;
     }
+    if (side) side.classList.add('bub-on');
     var m = kBubbleLatest();
     var mood = (m && m.role === 'k' && window.KChar && KChar.moodFor) ? KChar.moodFor(m.text || '') : { kind: 'news', expr: 'neutral' };
     var seed = m ? String(m.ts || '') + '|' + String(m.text || '').slice(0, 20) : 'n';
@@ -2586,7 +2652,8 @@
     if (chatComposing) { chatRenderDeferred = true; return; }
     var q = chatSearchOn ? chatSearchQuery.trim().toLowerCase() : '';
     if (!chatMsgs.length && !q) {
-      chatLog.innerHTML = chatLockHtml() + '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>' +
+      chatLog.innerHTML = chatLockHtml() + '<div class="chatintro">' +
+        (window.KScene ? KScene.figHtml('guide', 'intro') : '<div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>') +
         '<b>안녕하세요, 대표님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
       chatRenderedUids = {};
       return;
@@ -4140,7 +4207,7 @@
   function openOrders(fromChat, hlId) {
     ordersFromChat = !!fromChat; ordersHl = hlId || '';
     openScreen(ordersView);
-    if (ordersBody && !ordersBody.innerHTML) ordersBody.innerHTML = '<div class="ord-empty">불러오는 중…</div>';
+    if (ordersBody && !ordersBody.innerHTML) { ordersBody.innerHTML = '<div class="ord-empty">가져오고 있습니다…</div>'; ordersScene('loading'); }
     refreshOrders(false);
     if (!ordersTimer) ordersTimer = setInterval(function () {
       if (!isOpen(ordersView)) { clearInterval(ordersTimer); ordersTimer = null; return; }
@@ -4152,7 +4219,8 @@
     var pass = getSyncPass();
     if (!pass) {
       if (!silent && isOpen(ordersView)) showSyncGate(true, '작업 현황을 보려면 PC 연동 암호를 입력해 주세요.');
-      if (ordersBody) ordersBody.innerHTML = '<div class="ord-empty">PC 연동 암호를 넣으면 작업 현황이 보여요.</div>';
+      if (ordersBody) ordersBody.innerHTML = '';     // v9.4: 안내는 맨 위 케이가 말한다
+      ordersScene('nopass');
       return;
     }
     if (ordersBusy) return; ordersBusy = true;
@@ -4163,8 +4231,32 @@
     }).catch(function (e) {
       ordersBusy = false;
       if (e && e.badpass) { setSyncPass(''); if (isOpen(ordersView)) showSyncGate(true, '암호가 맞지 않아요. 다시 입력해 주세요.'); return; }
-      if (ordersBody && !silent) ordersBody.innerHTML = '<div class="ord-err">작업 현황을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침을 눌러 주세요.</div>';
+      if (ordersBody && !silent) { ordersBody.innerHTML = '<div class="ord-err">인터넷 연결을 확인하고 새로고침을 눌러 주세요.</div>'; ordersScene('fail'); }
     });
+  }
+  /* v9.4 일하는 케이(작업 현황 맨 위) — 값은 방금 받은 목록(ordersRows)뿐:
+   *   지금 돌아가는 일(activity.live) → 책상에서 일하는 모습 + 그 일의 요지 / 대표님 결정을 기다리는 일(보류 + 작업실 need_approval, 아직 답 안 보냄) → 서류 건네기 + 건수
+   *   / 그 밖 → 평소 모습 + 남은 건수. state: 'loading' | 'nopass' | 'fail' | (없음 = 목록 기준) */
+  function ordersScene(state) {
+    if (!window.KScene) return;
+    var pose = 'idle', text = '';
+    if (state === 'loading') text = '작업 현황을 가져오고 있습니다.';
+    else if (state === 'nopass') { pose = 'guide'; text = '연동 암호를 넣어 주시면 작업 현황을 보여 드리겠습니다.'; }
+    else if (state === 'fail') { pose = 'sorry'; text = '죄송합니다, 작업 현황을 불러오지 못했습니다.'; }
+    else {
+      var open = ordersRows.filter(function (o) { return !ORD_CLOSED[o.status]; });
+      var live = null, wait = 0;
+      open.forEach(function (o) {
+        if (!live && o.activity && o.activity.live) live = o;
+        var d = ordDecided[o.id];
+        if (ordNeedsDecision(o) && !(d && d.seq === (o.job_seq | 0))) wait++;
+      });
+      if (live) { pose = 'desk'; text = '「' + cutText(live.summary || live.id, 20) + '」 — 지금 만들고 있습니다.'; }
+      else if (wait) { pose = 'report'; text = '확인해 주실 일이 ' + wait + '건 있습니다.'; }
+      else if (open.length) text = '아직 안 끝난 일이 ' + open.length + '건 있습니다.';
+      else text = '맡기신 일은 다 끝났습니다.';
+    }
+    KScene.set('kscOrders', pose, text);
   }
   function ordItemHtml(o) {
     var when = o.closed_at ? ('끝남 ' + fmtKst(o.closed_at)) : ('갱신 ' + fmtKst(o.updated_at || o.received_at));
@@ -4190,12 +4282,13 @@
     updateOrdersBadge(open.length);
     ordersRows = rows;
     var h = '<div class="ord-sec">아직 안 끝난 일 <small>' + open.length + '건</small></div>';
-    h += open.length ? open.map(ordItemHtml).join('') : '<div class="ord-empty">지금 진행 중이거나 기다리는 일이 없어요.</div>';
+    h += open.length ? open.map(ordItemHtml).join('') : '<div class="ord-empty">지금 진행 중이거나 기다리는 일이 없습니다.</div>';
     h += '<div class="ord-sec">최근 끝난 일 <small>' + done.length + '건' +
       (done.length ? ' <button type="button" class="ord-clear" id="ordersClearDone"><svg><use href="#i-trash"/></svg>모두 지우기</button>' : '') + '</small></div>';
     h += done.length ? done.map(ordItemHtml).join('') : '<div class="ord-empty">아직 없어요.</div>';
     h += '<div class="ord-restore"><button type="button" class="ord-restore-btn" id="ordersRestore">지운 항목 다시 보기</button></div>';   // v5.9: 숨김 되살리기
     ordersBody.innerHTML = h;
+    ordersScene();
     if (ordersHl) {                                  // 카드에서 들어왔으면 그 항목으로 스크롤(한 번만)
       var el = ordersBody.querySelector('[data-oid="' + ordersHl.replace(/"/g, '') + '"]');
       if (el) try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
@@ -4726,7 +4819,8 @@
   if ($('kwFull')) $('kwFull').addEventListener('click', function () {
     if (!window.KChar) return;
     var v = $('kwFullVid'), fb = this, bow = KChar.bowUrl ? KChar.bowUrl() : '';
-    if (!bow || !KChar.motionOn() || !v) return;          // 인사 영상이 없거나 움직임 꺼짐 → 사진 그대로
+    if (!bow) { toast('인사 영상은 준비 중입니다'); return; }      // v9.4: 인사 영상이 없는 옷·머리 — 눌러도 아무 일 없던 것을 한 줄 안내로
+    if (!KChar.motionOn() || !v) return;                  // 움직임 꺼짐 → 사진 그대로
     if (fb.classList.contains('bowing')) { stopKFullBow(); return; }
     if (v.getAttribute('src') !== bow) { v.setAttribute('src', bow); try { v.load(); } catch (e) {} }
     try { v.currentTime = 0; } catch (e) {}
@@ -5942,6 +6036,7 @@
     }
   };
   setTimeout(function () { try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {} }, 1600);
+  syncHomeOn(); paintHomeGreet();                                  // v9.4 홈 큰 카드: 폴드 2단 표시 + 때에 맞는 인사 한 줄(앱을 켠 뒤 한 번)
 
   /* ==================== v8.3(O-0161) ⭐ 저장한 답 · ⏰ 예약한 알림 ====================
    * 둘 다 서버 표(k_stars·k_reminders)를 연동 암호 게이트 RPC 로만 읽고 쓴다(공개 키로 표 직접 접근 불가 — O-0158 원칙).

@@ -113,38 +113,43 @@
 
       <!-- (설치 안내 배너는 2026-09-19 대표님 지시로 삭제됨) -->
 
-      <div class="greet"><h1>안녕하세요, <em>대표님</em></h1><p>무엇을 도와드릴까요?</p></div>
-
-      <!-- (O-0117) 케이 말풍선: 안 읽은 메시지가 있으면 케이가 「대표님, ○○」 하고 말을 건다(숫자 배지 대신).
-           0건이면 숨김. 누르면 채팅(첫 안읽음 위치)으로. 내용은 app.js renderKBubble() 가 채운다. -->
-      <div class="kbub-wrap" id="kBubbleWrap" aria-live="polite">
-        <div class="kbub-in">
-          <button type="button" class="kbub" id="kBubble" tabindex="-1">
-            <span class="kbub-title" id="kBubbleTitle"></span>
-            <span class="kbub-prev" id="kBubblePrev"></span>
-          </button>
+      <!-- v9.4 홈 「나」(대표님 확정): 케이 상반신 큰 카드 — 카드 전체가 「소장 K」 들어가기(#btnVoiceChat 그대로).
+           인사말(때에 맞는 인사 + 오늘 보고 한 줄)과 케이 말풍선(안 읽은 말)은 사진 위에 얹는다. 말풍선이 뜨면 보고 한 줄은 내린다(같은 자리에서 두 번 말하지 않게).
+           큰 카드는 선명한 정지 사진(data-kstill · data-khd — 512 영상을 이 크기로 틀면 흐리고 움직임은 눈 깜빡임뿐이라 사진을 기본으로 했다).
+           넓은 화면(폴드 펼침 700px 이상)에서는 .kh-left(케이·녹음) | .kh-right(오늘 한눈에·도구) 2단. -->
+      <div class="kh-left">
+        <div class="kh-hero" id="kHero">
+          <div class="orbwrap kh-k">
+            <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
+              <span class="core kcore"><span class="kface wide" data-kface="home" data-kstill data-khd aria-hidden="true"></span></span>
+            </button>
+            <div class="orblabel">소장 K</div>
+          </div>
+          <div class="kh-side">
+            <div class="greet"><h1 id="homeGreet">안녕하세요, <em>대표님</em></h1><p id="homeSay">무엇을 도와드릴까요?</p></div>
+            <!-- (O-0117) 케이 말풍선: 안 읽은 메시지가 있으면 케이가 「대표님, ○○」 하고 말을 건다. 0건이면 숨김. 누르면 채팅(첫 안읽음 위치)으로. 내용은 app.js renderKBubble() -->
+            <div class="kbub-wrap" id="kBubbleWrap" aria-live="polite">
+              <div class="kbub-in">
+                <button type="button" class="kbub" id="kBubble" tabindex="-1">
+                  <span class="kbub-title" id="kBubbleTitle"></span>
+                  <span class="kbub-prev" id="kBubblePrev"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 녹음 = 카드 아래 큰 단추(기존 #btnRecord). #orbLabel·#orbHint 는 app.js 가 잡고 있어 숨긴 채 둔다 -->
+        <div class="orbrow">
+          <div class="orbwrap">
+            <button class="orbbtn" id="btnRecord" aria-label="회의 녹음 시작">
+              <span class="core"><svg><use href="#i-mic"/></svg></span><b class="kh-reclab">회의 녹음</b>
+            </button>
+            <div class="orblabel" id="orbLabel" hidden>녹음</div>
+            <div class="orbhint" id="orbHint" hidden>눌러서 회의 녹음</div>
+          </div>
         </div>
       </div>
-
-      <!-- 홈 오브 2개: 녹음(음성메모) / 소장 K(케이) 대화 -->
-      <div class="orbrow">
-        <div class="orbwrap">
-          <button class="orbbtn" id="btnRecord" aria-label="녹음 시작">
-            <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
-            <span class="core"><svg><use href="#i-mic"/></svg></span>
-          </button>
-          <div class="orblabel" id="orbLabel">녹음</div>
-          <div class="orbhint" id="orbHint">눌러서 회의 녹음</div>
-        </div>
-        <div class="orbwrap">
-          <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
-            <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
-            <span class="core kcore"><span class="kface" data-kface="home" aria-hidden="true"></span></span>
-          </button>
-          <div class="orblabel">소장 K</div>
-          <div class="orbhint">케이와 대화</div>
-        </div>
-      </div>
+      <div class="kh-right">
 
       <!-- (O-0129) 오늘 한눈에: 오늘 일정 · 답할 메일 · 챙길 일 + [말로 일정 잡기]. 내용은 js/today-card.js 가 채운다.
            연동 암호가 없거나 아직 불러오기 전이면 숨김. 일정·메일은 PC가 만든 서버 요약(home_digest)을 읽기만 한다. -->
@@ -187,6 +192,7 @@
         <button type="button" class="sec-title prog-head" id="homeProgHead" aria-expanded="true">진행 중인 메모 <span id="historyCount"></span><svg class="prog-chev"><use href="#i-chev-r"/></svg></button>
         <div id="historyList" class="list"></div>
       </div>
+      </div><!-- /.kh-right -->
     </section>
 
     <!-- 숨은 파일 입력 -->
@@ -218,9 +224,10 @@
 
     <!-- ===================== 녹음 중 ===================== -->
     <section id="recView" style="display:none;">
-      <div class="rec-center">
-        <div class="timer" id="recTimer">00:00</div>
-        <div class="rec-state"><i></i>듣고 있어요 · 편하게 말씀하세요</div>
+      <!-- v9.4 일하는 케이: 타이머 옆에서 받아 적는 케이. 한마디는 app.js 의 녹음 타이머가 맞춘다(「받아 적고 있습니다. N분째예요.」) -->
+      <div class="ksc rec" id="kscRec" data-pose="note" role="status">
+        <div class="ksc-l"><div class="timer" id="recTimer">00:00</div><div class="ksp"><b>케이</b><p>받아 적고 있습니다. 편하게 말씀하세요.</p></div></div>
+        <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
       </div>
       <div class="wave" id="recWave">
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -304,7 +311,7 @@
       <!-- (O-0124) 음성 대화 무대: 「음성 대화」를 켜면(#chatView.convo-on) 케이가 화면 위쪽에 크게 나온다.
            말할 때 talk 영상 · 듣는 중/대기 idle(KChar.setTalking 흐름 그대로). 꺼지면 CSS 로 완전히 숨음(지금 화면 그대로). -->
       <div id="chatKStage" class="kstage" data-state="idle" aria-live="polite">
-        <div class="kstage-photo"><span class="kface wide" data-kface="convo" aria-hidden="true"></span>
+        <div class="kstage-photo"><span class="kface wide" data-kface="convo" data-khd aria-hidden="true"></span>
           <!-- O-0177 ④ 무대 전체가 누르는 자리: 케이가 말하거나 답을 만드는 중에 누르면 멈추고 바로 듣는다(안내 알약은 그때만 보임) -->
           <span class="kstage-tap" aria-hidden="true">케이 얼굴을 누르면 말을 끊고 말씀하실 수 있어요</span></div>
         <div class="kstage-status"><span class="kst-ic" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="kst-tx"><b id="chatKStageText">음성 대화</b><small id="chatKStageHint"></small></span></div>
@@ -365,10 +372,14 @@
     <section id="meetingsView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">회의록</span><span class="spacer"></span></div>
       <div id="mtgTop">
+        <!-- v9.4 일하는 케이: 정리 중=책상 / 정리본 있음=건네기 / 없음=안내(app.js meetingsScene). 예전 고정 안내글 자리 -->
+        <div class="ksc" id="kscMeetings" style="display:none" role="status">
+          <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
+          <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
+        </div>
         <div class="sec-title mtg-sec">진행 중 <span id="mtgProgCount"></span></div>
         <div id="mtgProgress" class="list"></div>
         <div class="sec-title mtg-sec">정리된 회의록</div>
-        <div class="chatsearchinfo" style="display:block">🗂️ PC에서 정리한 회의·녹음 요약본이에요. 요약이 먼저 보이고, 원문 전체는 접혀 있어요(펼쳐 보세요).</div>
       </div>
       <div id="meetingsList"></div>
       <details id="mtgLocalWrap" class="mtg-local" style="display:none;"><summary>이 폰에서 보낸 기록 <span id="mtgLocalCount"></span></summary><div id="mtgLocal" class="list"></div></details>
@@ -395,7 +406,11 @@
     <!-- ===================== 작업 현황(v5.8) — PC 지시 대장의 서버 사본 ===================== -->
     <section id="ordersView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">작업 현황</span><span class="spacer end"><button class="iconbtn" id="ordersRefresh" aria-label="새로고침" title="새로고침"><svg><use href="#i-refresh"/></svg></button></span></div>
-      <div class="chatsearchinfo" style="display:block">📒 앱·PC로 시키신 일이 지금 어디까지 왔는지 보여드려요. 자동으로 새로 고쳐져요.</div>
+      <!-- v9.4 일하는 케이: 상태에 따라 자세·한마디가 바뀐다(app.js ordersScene — 진행 중=책상 / 확인 대기=건네기 / 그 밖=평소). 예전 고정 안내글 자리 -->
+      <div class="ksc" id="kscOrders" style="display:none" role="status">
+        <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
+        <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
+      </div>
       <div id="ordersBody"></div>
     </section>
 
@@ -439,7 +454,7 @@
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">케이 꾸미기</span><span class="spacer"></span></div>
       <div class="kw-hero" id="kwHero">
         <div class="kw-hero-main">
-          <span class="kface wide" data-kface="wardrobe" aria-hidden="true"></span>
+          <span class="kface wide" data-kface="wardrobe" data-khd aria-hidden="true"></span>
           <div class="kw-hero-cap"><small>지금 모습</small><b id="kwCurName">버건디 정장</b></div>
         </div>
         <!-- O-0116: 전신(있는 옷만 보임). 누르면 인사 영상 -->
@@ -661,11 +676,16 @@
     <!-- ===================== 처리 중 ===================== -->
     <section id="processing" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>홈으로</button><span class="title">보내는 중</span><span class="spacer"></span></div>
+      <!-- v9.4 일하는 케이: 올리는 동안 「PC로 보내고 있습니다.」 → PC가 실제로 받은 뒤에만 「잘 받았습니다 …」(app.js setProcessing 의 stage). 예전 안내글 자리 -->
+      <div class="ksc proc" id="kscProc" style="display:none" role="status">
+        <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
+        <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
+      </div>
       <div class="processing">
         <span class="spinner"></span>
         <span id="processingText">PC에서 정리 중…</span>
       </div>
-      <div class="proc-hint">정리는 뒤에서 계속돼요. <b>홈으로</b> 나가 다른 일을 하셔도 되고,<br>다 되면 <b>회의록</b>에서 확인할 수 있어요.</div>
+
     </section>
 
     <!-- ===================== 결과 ===================== -->
@@ -695,7 +715,7 @@
 <!-- v6.0 케이 프로필 카드(헤더·말풍선 사진을 누르면) -->
 <div id="kProfile" class="kprof" style="display:none;" role="dialog" aria-modal="true" aria-label="케이 프로필">
   <div class="kprof-box">
-    <div class="kprof-photo"><span class="kface wide" data-kface="profile" aria-hidden="true"></span></div>
+    <div class="kprof-photo"><span class="kface wide" data-kface="profile" data-khd aria-hidden="true"></span></div>
     <div class="kprof-body">
       <div class="kprof-name">케이 <small>· 소장</small></div>
       <div class="kprof-intro">대표님의 일을 챙기고, 정리해서 보고드리는 AI 사무소 소장입니다.</div>
@@ -759,6 +779,7 @@
 <script src="js/health.js"></script>
 <script src="js/docviewer.js"></script>
 <script src="js/k-character.js"></script>
+<script src="js/k-scene.js"></script><!-- v9.4 일하는 케이(장면·한마디) -->
 <script src="js/vad.js"></script><!-- O-0177 ③ 말 끝 판정(소음 적응) -->
 <script src="js/app.js"></script>
 <script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->

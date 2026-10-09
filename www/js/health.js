@@ -332,6 +332,10 @@
   /* ---------- 올리기(읽고 → 합치고 → 통째로 올림). 한 번에 한 날짜씩 차례로 ---------- */
   var chain = Promise.resolve(), queued = {}, busyDate = null;
   var retryTimer = null, retryMs = 0, lastFail = '';   // lastFail: '' | 'net' | 'pass'
+  // v9.4: 마지막 실패가 「연결 끊김」이었나(요청이 아예 나가지 못함). 서버가 오류로 답한 경우는 false — 케이가 「연결이 끊겨」라고 말해도 되는지 가리는 데만 쓴다(다시 올리는 규칙과 무관).
+  var lastCut = false;
+  function isCut(e) { return !(e && (e.badpass || /^(HTTP \d|UPSERT_FALSE|NO_CONFIG)/.test(String(e.message || '')))); }
+  function failKind(e) { var bp = !!(e && e.badpass); lastCut = !bp && isCut(e); return bp ? 'pass' : 'net'; }
   function syncDate(dateStr) {
     if (queued[dateStr]) return queued[dateStr];
     var p = chain.then(function () { delete queued[dateStr]; return doSync(dateStr); });
@@ -382,7 +386,7 @@
       if (rec && rec.log_date === dateStr) paintState();
       return st;
     }, function (e) {
-      busyDate = null; lastFail = (e && e.badpass) ? 'pass' : 'net';
+      busyDate = null; lastFail = failKind(e);
       if (rec && rec.log_date === dateStr) paintState();
       return (e && e.badpass) ? 'nopass' : 'pending';
     });
@@ -435,6 +439,51 @@
     return true;
   }
 
+  /* ---------- v9.4 케이 한마디(머리줄) + 9칸을 다 채운 순간의 반응 ----------
+   * 머리줄의 케이는 늘 작게 접힌 모습(머리 + 한 줄)이다 — 화면 길이·약 칸 위치는 예전(「N / 9 기록됨」 줄)과 같다.
+   * 한 줄은 이 화면이 가진 값(9칸 중 채워진 수 · 비어 있는 칸 이름)으로만 만든다. 수치의 높고 낮음은 말하지 않는다.
+   * 「오늘 기록」에서 대표님이 방금 누른 것으로 9칸이 다 찼을 때만(서버에서 받아 온 값으로 찬 것은 아님) 웃는 케이가 크게 한마디 한다 — 하루 한 번, 4초.
+   *   화면 아래쪽에 떠 있기만 한다(누르는 곳 아님 · 뒤 화면 누르기를 막지 않음 · 화면을 밀어내지 않음 — 누르던 칸이 움직이지 않게). */
+  var SAY_ORDER = ['fasting_glucose', 'weight', 'sleep_hours', 'med_morning', 'med_evening', 'supplement', 'breakfast', 'lunch', 'dinner'];   // 화면에 놓인 순서
+  var CHEER_KEY = 'smart_health_cheer', CHEER_MS = 4000;
+  var lastCount = -1, cheerT = null;
+  function sayText() {
+    var N = REQUIRED.length;
+    var miss = SAY_ORDER.filter(function (k) { return REQUIRED.indexOf(k) >= 0 && !isSet(rec[k]); }).map(function (k) { return SHORT[k]; });
+    var n = N - miss.length;
+    if (mode === 'past') return miss.length ? N + '칸 중 ' + n + '칸 적혀 있습니다' : N + '칸 다 적혀 있습니다';
+    if (!miss.length) return '오늘 ' + N + '칸 다 적혀 있습니다';
+    return N + '칸 중 ' + n + '칸 · ' + (miss.length === 1 ? miss[0] + '만 남았습니다' : miss[0] + ' 등 ' + miss.length + '칸 남았습니다');
+  }
+  // user=true: 대표님이 방금 누른 변화(→ 9칸이 막 찼으면 반응). false: 화면을 그리거나 서버 값을 받아 온 것.
+  function paintSay(user) {
+    var sc = $('kscHealth'); if (!sc || !rec) return;
+    var n = recordedCount(), t = sayText();
+    if (global.KScene) global.KScene.set(sc, 'clip', t);
+    else { var pp = $('hSay'); if (pp) pp.textContent = t; }
+    sc.setAttribute('data-n', String(n));
+    if (user && mode === 'today' && rec.log_date === todayStr() && n === REQUIRED.length && lastCount >= 0 && lastCount < REQUIRED.length) cheer(rec.log_date);
+    lastCount = n;
+  }
+  function cheer(ds) {
+    var done = ''; try { done = localStorage.getItem(CHEER_KEY) || ''; } catch (e) {}
+    if (done === ds) return;                                   // 오늘 이미 한 번 했다
+    try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}
+    var view = $('healthView'); if (!view || !global.KScene) return;
+    var old = $('kscHCheer'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    var el = document.createElement('div');
+    el.id = 'kscHCheer'; el.className = 'ksc hcheer'; el.setAttribute('role', 'status');
+    el.innerHTML = '<div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div><span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>';
+    view.appendChild(el);
+    global.KScene.set(el, 'idle', '오늘 기록 다 적으셨어요.');
+    setTimeout(function () { el.classList.add('on'); }, 30);
+    clearTimeout(cheerT);
+    cheerT = setTimeout(function () {
+      el.classList.remove('on');
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+    }, CHEER_MS);
+  }
+
   /* ---------- 저장 상태 표시 ---------- */
   function isNative() { try { var C = global.Capacitor; return !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) { return false; } }
   function hereWord() { return isNative() ? '폰에만' : '이 기기에만'; }
@@ -449,15 +498,17 @@
     });
     var saving = force === 'saving' || busyDate === rec.log_date || !!(saveTimer && saveTimerDate === rec.log_date);
     if (el) {
-      if (saving) { el.textContent = '저장 중…'; el.className = 'hsave work'; }
-      else if (dk.length) { el.textContent = hereWord() + ' 저장됨'; el.className = 'hsave pend'; }
-      else { el.textContent = '저장됨'; el.className = 'hsave ok'; }
+      if (saving) { el.textContent = '적고 있습니다…'; el.className = 'hsave work'; }
+      else if (dk.length) { el.textContent = hereWord() + ' 적어 둠'; el.className = 'hsave pend'; }
+      else { el.textContent = '적어 두었습니다'; el.className = 'hsave ok'; }
     }
     if (box) {
       if (dk.length && !saving) {
         var nopass = !syncPass() || lastFail === 'pass';
-        box.innerHTML = '<b>' + esc(hereWord()) + ' 저장됨</b> — ' +
-          (nopass ? '연동 암호를 넣으면 올립니다' : '연결되면 자동으로 올립니다') +
+        // v9.4 케이 말투. 「연결이 끊겨」는 마지막 실패가 실제로 끊김이었을 때만 말한다(lastCut).
+        var why = nopass ? '연동 암호가 없어 ' : (lastFail === 'net' && lastCut) ? '연결이 끊겨 ' : '';
+        box.innerHTML = '<b>' + esc(why + hereWord()) + ' 적어 두었습니다.</b> ' +
+          (nopass ? '암호를 넣어 주시면 올려 두겠습니다.' : '연결되면 제가 올려 두겠습니다.') +
           '<span class="hlocal-k">' + esc(dk.map(function (k) { return SHORT[k]; }).join(' · ')) + '</span>';
         box.className = 'hlocal' + (nopass ? ' tap' : '');
         box.style.display = '';
@@ -551,9 +602,13 @@
         ? '<div class="hpast" role="status"><span class="hpast-tx"><b>' + full + '</b> 기록을 고치는 중</span>' +
           '<button type="button" class="hpast-btn" data-act="today">오늘로 돌아가기</button></div>'
         : '') +
-      '<div class="hhead"><div class="hdate">' + esc(fmtDayLabel(rec.log_date)) + '</div>' +
-      '<span id="hSaveState" class="hsave"></span></div>' +
-      '<div class="hprog"><b id="hProgN">' + recordedCount() + '</b> / ' + REQUIRED.length + ' 기록됨 · <span class="hprog-sub">간식은 선택</span></div>' +
+      // v9.4: 머리줄 = 날짜·저장 상태 + 케이 한 줄(작게 접힌 모습 고정 — 예전 「N / 9 기록됨」 줄 자리, 화면 길이 그대로)
+      '<div class="ksc health" id="kscHealth" role="status">' +
+        '<div class="ksc-l"><div class="hhead"><div class="hdate">' + esc(fmtDayLabel(rec.log_date)) + '</div>' +
+        '<span id="hSaveState" class="hsave"></span></div>' +
+        '<div class="ksp"><b>케이</b><p id="hSay"></p></div></div>' +
+        '<span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>' +
+      '</div>' +
       '<div id="hLocal" class="hlocal" style="display:none" role="status"></div>' +
 
       '<div class="hgroup">' +
@@ -581,6 +636,8 @@
         : '');
 
     paintedDay = todayStr();
+    lastCount = -1;                                  // 새로 그린 화면 — 「방금 다 채움」 판정은 여기서부터 다시
+    paintSay(false);
     bindToday();
     paintState();
   }
@@ -597,13 +654,14 @@
     renderToday();
   }
 
-  function refreshChk(k) {
+  // quiet=true: 서버 값을 받아 다시 맞추는 중(대표님이 누른 것이 아님 → 「다 채움」 반응 없음)
+  function refreshChk(k, quiet) {
     var host = $('hToday'); if (!host) return;
     var item = host.querySelector('.hitem[data-k="' + k + '"]');
     if (item) { var c = item.querySelector('.hchk'); if (c) c.className = 'hchk' + (isSet(rec[k]) ? ' on' : ''); }
-    var n = $('hProgN'); if (n) n.textContent = recordedCount();
+    paintSay(quiet !== true);
   }
-  function refreshAllChk() { FIELDS.forEach(refreshChk); }
+  function refreshAllChk() { FIELDS.forEach(function (k) { refreshChk(k, true); }); }
 
   function bindToday() {
     var host = $('hToday'); if (!host) return;
@@ -784,23 +842,28 @@
   }
   function renderHistory() {
     var host = $('hHistory'); if (!host) return;
-    host.innerHTML = '<div class="empty-note">불러오는 중…</div>';
+    host.innerHTML = '<div class="empty-note">기록을 가져오고 있습니다…</div>';
     var to = todayStr(), from = daysAgoStr(HIST_DAYS - 1);
     listRange(from, to, false).then(function (rows) {
       rangeRows = rows.slice().sort(function (a, b) { return a.log_date < b.log_date ? 1 : -1; });
       lastRemember();
       drawHistory(false);
-    }, function () { drawHistory(true); });
+    }, function (e) { drawHistory(true, isCut(e)); });
   }
-  function drawHistory(failed) {
+  // failed=true 면 서버에서 못 읽은 것. cut=true 는 그 까닭이 연결 끊김(요청이 못 나감)일 때만.
+  function kEmpty(pose, text) { return global.KScene ? global.KScene.emptyHtml(pose, text) : '<div class="empty-note">' + esc(text) + '</div>'; }
+  function drawHistory(failed, cut) {
     var host = $('hHistory'); if (!host) return;
     var ov = overlayLocal(failed ? [] : rangeRows), rows = ov.rows;
     var html = '';
-    if (failed) html += '<div class="empty-note">기록을 불러오지 못했어요.<br>연결을 확인한 뒤 「기록 보기」를 다시 눌러 주세요.</div>';
+    // v9.4: 못 불러왔을 때는 케이가 사과하고, 빈 화면은 케이가 안내한다. 폰에 적어 둔 것이 있으면(아래 목록이 있으면) 짧은 한 줄만.
+    var sorry = '죄송합니다, ' + (cut ? '연결이 끊겨 ' : '') + '기록을 불러오지 못했습니다.';
     if (!rows.length) {
-      if (!failed) html = '<div class="empty-note">아직 기록이 없어요.<br>‘오늘 기록’에서 몇 가지만 눌러 보세요.</div>';
-      host.innerHTML = html; return;
+      host.innerHTML = failed ? kEmpty('sorry', sorry + ' 「기록 보기」를 다시 눌러 주세요.')
+        : kEmpty('guide', '아직 적으신 기록이 없습니다. 「오늘 기록」에서 몇 가지만 눌러 보세요.');
+      return;
     }
+    if (failed) html += '<div class="empty-note">' + esc(sorry + ' ' + (isNative() ? '폰' : '이 기기') + '에 적어 둔 것만 보여 드립니다.') + '</div>';
     // rows: 최신순. 그래프는 과거→현재(오름차순)로.
     var asc = rows.slice().sort(function (a, b) { return a.log_date < b.log_date ? -1 : 1; });
     var gluc = asc.filter(function (r) { return isSet(r.fasting_glucose); }).map(function (r) { return { d: r.log_date, v: +r.fasting_glucose }; });
@@ -958,7 +1021,7 @@
       softRender();                                 // 값이 안 바뀌었어도 「지난 기록」 안내는 새로 그린다
       if (res.push.length) syncDate(ds).then(function (st) { if (st === 'pending') flush(); });
     }, function (e) {
-      lastFail = (e && e.badpass) ? 'pass' : 'net';
+      lastFail = failKind(e);
       if (rec === r) paintState();
       if (pendList().length && lastFail === 'net') flush();
     });
@@ -997,7 +1060,7 @@
       tellLost(res.lost, ds);
       if (res.changed) softRender(); else paintState();
       if (res.push.length) syncDate(ds).then(function (st) { if (st === 'pending') flush(); });
-    }, function (e) { lastFail = (e && e.badpass) ? 'pass' : 'net'; if (rec === r) paintState(); });
+    }, function (e) { lastFail = failKind(e); if (rec === r) paintState(); });
   }
 
   // 연동 암호를 막 넣었을 때(app.js): 지난 날짜를 고치던 중이면 그 화면에 머문 채 다시 올리고, 아니면 오늘 기록을 다시 불러온다.

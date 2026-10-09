@@ -194,6 +194,33 @@
       '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
   }
   /* ---------- (O-0176) 접힌 카드 한 줄 요약 ---------- */
+  /* v9.4 케이의 오늘 보고 한 줄(홈 큰 카드의 인사말 둘째 줄).
+   *   값은 이 카드가 이미 가진 것만: 오늘 일정 수(evs) · 답할 메일 수(mails) · 챙길 일 수(tasks). 못 불러온 칸(cal_ok/mail_ok === false)은 말하지 않는다.
+   *   카드가 안 보이는 상태(연동 암호 없음)·아직 값이 없으면 '' → 홈은 기본 문구(「무엇을 도와드릴까요?」).
+   *   케이 말풍선(안 읽은 말)이 떠 있으면 말풍선이 먼저 — 한 줄은 내린다(app.js renderKBubble 이 bub-on 을 붙이고 paintSay 를 부른다). */
+  var NO_SAY = { text: '', cal: false, mail: false, task: false };
+  var sayNow = NO_SAY;                              // 지금 케이가 말하고 있는 한 줄과, 그 안에서 말한 수(cal 일정 · mail 메일 · task 챙길 일)
+  function sayText(dg, showDigest, evs, mails, tasks) {
+    var parts = [], calOk = !!(showDigest && dg && dg.cal_ok !== false), mailOk = !!(showDigest && dg && dg.mail_ok !== false);
+    var o = { text: '', cal: false, mail: false, task: false };
+    if (calOk && evs.length) { parts.push('오늘 일정 ' + evs.length + '건'); o.cal = true; }
+    if (mailOk && mails.length) { parts.push('답하실 메일 ' + mails.length + '건'); o.mail = true; }
+    if (st.orders && tasks.length) { parts.push('챙기실 일 ' + tasks.length + '건'); o.task = true; }
+    if (parts.length) o.text = parts.join(', ') + '입니다.';
+    else if (calOk && mailOk && st.orders) { o.text = '오늘은 잡힌 일정도, 답하실 메일도 없습니다.'; o.cal = o.mail = true; }
+    return o;
+  }
+  function bubbleOn() { var w = $('kBubbleWrap'); return !!(w && w.classList.contains('on')); }
+  function paintSay(o) {
+    if (o !== undefined) paintSay.last = o || NO_SAY;
+    var p = $('homeSay'); if (!p) { sayNow = NO_SAY; return; }
+    sayNow = (bubbleOn() || !paintSay.last.text) ? NO_SAY : paintSay.last;
+    var txt = sayNow.text || '무엇을 도와드릴까요?';
+    if (p.textContent !== txt) p.textContent = txt;
+    p.classList.toggle('ksay-on', !!sayNow.text);
+  }
+  paintSay.last = NO_SAY;
+
   function foldLine(dg, showDigest, evs, mails, tasks) {
     var parts = [];
     var w = showDigest ? wxData(dg) : null, n = wxNow(w);
@@ -203,13 +230,14 @@
       //   펼친 카드와 같은 말 「못 불러왔어요」로 — 값이 없는 것을 0 으로 보이면 「오늘 일정 없음」으로 읽힌다.
       //   (요약이 오래됐을 때의 「HH:MM 기준」은 머리줄에 접힘·펼침 공통으로 이미 나온다.)
       var calBad = dg.cal_ok === false, mailBad = dg.mail_ok === false;
+      // v9.4: 케이가 방금 위에서 말한 수(일정·메일·챙길 일)는 접힌 줄에서 뺀다 — 같은 수를 두 번 말하지 않게. 「못 불러왔어요」는 케이가 말하지 않으므로 그대로 둔다.
       if (calBad && mailBad) parts.push('<b>일정·메일 못 불러왔어요</b>');
       else {
-        parts.push(calBad ? '<b>일정 못 불러왔어요</b>' : '일정 ' + evs.length);   // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
-        parts.push(mailBad ? '<b>메일 못 불러왔어요</b>' : '메일 ' + mails.length);
+        if (calBad) parts.push('<b>일정 못 불러왔어요</b>'); else if (!sayNow.cal) parts.push('일정 ' + evs.length);   // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
+        if (mailBad) parts.push('<b>메일 못 불러왔어요</b>'); else if (!sayNow.mail) parts.push('메일 ' + mails.length);
       }
     }
-    if (st.orders) parts.push('챙길 일 ' + tasks.length);
+    if (st.orders && !sayNow.task) parts.push('챙길 일 ' + tasks.length);
     var rn = st.rems ? st.rems.length : remCountCached();
     parts.push('알림 ' + rn);
     return '<button type="button" class="td-foldline" data-td="fold" aria-label="오늘 한눈에 펼치기">' +
@@ -476,13 +504,14 @@
   function render() {
     var card = $('todayCard'); if (!card) return;
     var pass = H().getSyncPass ? H().getSyncPass() : '';
-    if (!pass) { card.style.display = 'none'; return; }            // 암호 없으면 카드 자체를 안 보인다
+    if (!pass) { card.style.display = 'none'; paintSay(null); return; }            // 암호 없으면 카드 자체를 안 보인다(케이 한마디도 기본 문구)
     var d = new Date();
     var dg = st.digest && st.digest.date === todayKey(d) ? st.digest : null;   // 어제 요약이면 일정·메일은 쓰지 않음
     var showDigest = st.digestReady !== false;                     // 서버 미준비(404)면 ①② 숨김
     var tasks = openTasks();
     var evs = dg ? markEvents(dg.events || []) : [];
     var mails = dg ? (dg.mails || []) : [];
+    paintSay(sayText(dg, showDigest, evs, mails, tasks));          // v9.4: 케이의 오늘 보고 한 줄(접힌 줄보다 먼저 정해야 겹침을 뺄 수 있다)
 
     var hdrNote = '';
     if (showDigest && dg && dg.generated_at) {
@@ -621,6 +650,8 @@
     openRoute: openRoute,                  // (O-0217) 케이 답 [길찾기] 칩
     navUri: navUri,                        // (O-0217) 시험용: 칩 정보 → 네이버 지도 주소
     setOrders: function (rows) { st.orders = Array.isArray(rows) ? rows : []; render(); },
+    paintSay: function () { var was = sayNow.text; paintSay(); if (was !== sayNow.text) { try { var c = $('todayCard'); if (c && c.offsetParent) render(); } catch (e) {} } },   // v9.4 말풍선이 뜨고 질 때(app.js) — 접힌 줄도 다시
+    saying: function () { return sayNow.text; },
     setReminders: setRems,                 // (O-0176) 예약한 알림 화면에서 새로 받거나 취소한 뒤 한 줄도 맞춤
     closeWeather: function () { if (!wxSheet) return false; wxSheetClose(); return true; },   // (O-0169) 뒤로가기(app.js goBack)
     _setWxLive: function (d) { st.wxLive = d ? wxFromApi(d) : null; st.wxAt = Date.now(); render(); if (wxSheet) wxSheetFill(); },   // 캡처·시험용(Open-Meteo 응답 그대로)

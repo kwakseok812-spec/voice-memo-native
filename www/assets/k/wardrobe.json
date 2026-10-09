@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "default": "burgundy_suit",
  "expressions": [
   "neutral",
@@ -32,7 +32,21 @@
    "talk": "talk.mp4",
    "fullbody": "fullbody.jpg",
    "bow": "bow.mp4",
-   "bow_poster": "bow_poster.jpg"
+   "bow_poster": "bow_poster.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "poses": {
+    "note": "pose_note.webp",
+    "report": "pose_report.webp",
+    "desk": "pose_desk.webp",
+    "guide": "pose_guide.webp",
+    "clip": "pose_clipboard.webp",
+    "sorry": "pose_apology.webp",
+    "idle": "pose_idle.webp"
+   },
+   "bow_cue": 1.04,
+   "bow_len": 4.21
   },
   {
    "id": "navy_suit",
@@ -55,7 +69,14 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "bow": "bow.mp4",
+   "bow_poster": "bow_poster.jpg",
+   "bow_cue": 0.88,
+   "bow_len": 3.5
   },
   {
    "id": "knit",
@@ -78,7 +99,14 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "bow": "bow.mp4",
+   "bow_poster": "bow_poster.jpg",
+   "bow_cue": 1.08,
+   "bow_len": 4.58
   },
   {
    "id": "hanbok",
@@ -101,7 +129,14 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "bow": "bow.mp4",
+   "bow_poster": "bow_poster.jpg",
+   "bow_cue": 0.88,
+   "bow_len": 3.25
   },
   {
    "id": "jeans_shirt",
@@ -124,7 +159,14 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "bow": "bow.mp4",
+   "bow_poster": "bow_poster.jpg",
+   "bow_cue": 1.04,
+   "bow_len": 4.33
   },
   {
    "id": "sweatshirt",
@@ -147,7 +189,14 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   },
+   "bow": "bow.mp4",
+   "bow_poster": "bow_poster.jpg",
+   "bow_cue": 1.08,
+   "bow_len": 4.33
   },
   {
    "id": "floral_dress",
@@ -170,7 +219,10 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
   },
   {
    "id": "black_dress",
@@ -193,7 +245,10 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
   },
   {
    "id": "offshoulder",
@@ -221,7 +276,10 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
   },
   {
    "id": "red_evening",
@@ -244,7 +302,250 @@
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
-   "fullbody": "fullbody.jpg"
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "bow_blouse",
+   "name": "리본 블라우스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "silver_halter",
+   "name": "실버 홀터넥 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "emerald_one_shoulder",
+   "name": "에메랄드 원숄더 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "champagne_satin_blouse",
+   "name": "샴페인 새틴 블라우스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "purple_velvet",
+   "name": "퍼플 벨벳 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "sapphire_mandarin",
+   "name": "사파이어 차이나 칼라 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "rosegold_sequin",
+   "name": "로즈골드 시퀸 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "kimono",
+   "name": "기모노",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "sari",
+   "name": "사리",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "flamenco",
+   "name": "플라멩코 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "새 옷",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
   }
  ]
 }

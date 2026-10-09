@@ -1593,3 +1593,151 @@ html[data-style="light"] .wx-sheet .wx-src{font-size:calc(12.5px * var(--fsx,1))
 html[data-style="light"] .hsvg .hax{font-size:11px}
 #appVer{opacity:.6;font-size:11.5px}                         /* (index.html 에 붙어 있던 글자 모양을 옮김 — 어두운 화면은 예전 그대로) */
 html[data-style="light"] #appVer{opacity:1;font-size:12.5px}
+
+
+/* ============================================================================
+   v9.4 「케이를 크게 · 일하는 케이」 (대표님 확정 2026-10-10)
+   ① 홈 「나」: 케이 상반신 큰 카드(카드 전체 = 소장 K 들어가기) · 녹음은 카드 아래 큰 단추 · 넓은 화면 2단
+   ② 일하는 케이: 화면마다 허리 위 모습(배경 없는 그림)이 서 있고 옆 말풍선으로 한마디(js/k-scene.js)
+   ③ 채팅: 머리줄·말풍선 얼굴 48px · 프로필 카드 폭 가득 · 빈 대화의 큰 케이
+   새 backdrop-filter 없음. 장면·말풍선은 누르는 곳이 아니다(새 버튼 없음).
+   ============================================================================ */
+/* ---------- ① 홈 ---------- */
+.kh-hero{position:relative;margin-top:8px;border-radius:26px;overflow:hidden;height:min(330px,86vw);border:1px solid var(--glass-b);box-shadow:var(--card-sh);background:#dfe3ea}
+.kh-hero .orbwrap{position:absolute;inset:0;margin:0;max-width:none;display:block}
+.kh-hero #btnVoiceChat{display:block;width:100%;height:100%;border-radius:0}
+.kh-hero #btnVoiceChat .core{width:100%;height:100%;border-radius:0;padding:0;background:#dfe3ea;box-shadow:none}
+.kh-hero #btnVoiceChat:active .core{transform:none;filter:brightness(.95)}
+.kh-hero #btnVoiceChat .kface{border-radius:0;box-shadow:none;width:100%;height:100%}
+.kh-hero #btnVoiceChat .kface .kf-img,.kh-hero #btnVoiceChat .kface .kf-vid{object-position:50% 22%}
+/* 글자 뒤 어두운 바탕은 글자 덩어리(.kh-side)에 붙인다 — 말풍선이 떠서 인사말이 위로 올라가도, 밝은 옷·밝은 화면에서도 글자 대비가 유지된다
+   (인사말 첫 줄 자리의 진하기 .44 · 한마디 자리 .66 이상 — 옷 20벌 × 말풍선 있음/없음 × 밝은·어두운 화면에서 인사말·강조색 3.0, 한마디 4.5 이상을 실측으로 확인. 얼굴을 덜 가리려고 필요한 만큼만 어둡게 했다). */
+.kh-hero .orbwrap .orblabel{position:absolute;z-index:2;right:12px;top:12px;margin:0;color:#fff;pointer-events:none;font-size:14px;padding:5px 11px;border-radius:999px;background:rgba(5,8,20,.58)}
+.kh-side{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:50px 16px 14px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(5,8,20,0) 0,rgba(5,8,20,.44) 46px,rgba(5,8,20,.66) 96px,rgba(5,8,20,.88) 100%)}
+.kh-side .greet{margin:0}
+.kh-side .greet h1{color:#fff;font-size:22px;line-height:1.3;word-break:keep-all;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.kh-side .greet h1 em{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:#B9EEFF;-webkit-text-fill-color:#B9EEFF}
+.kh-side .greet p{color:#fff;font-size:15.5px;font-weight:700;margin-top:4px;line-height:1.45;word-break:keep-all;text-shadow:0 1px 5px rgba(0,0,0,.55)}
+.kh-side .kbub-wrap{pointer-events:auto;--kbub-tail:50%}
+.kh-side .kbub-wrap.on{margin-top:8px}
+.kh-side .kbub{width:100%;margin:0}
+.kh-side .kbub::after{display:none}
+.kh-side.bub-on .greet p{display:none}                              /* 말풍선이 뜨면 보고 한 줄은 내린다 */
+html[data-fs] .kh-side .greet h1{font-size:calc(22px * var(--fsx))}
+html[data-fs] .kh-side .greet p{font-size:calc(15.5px * var(--fsx))}
+/* 녹음 = 카드 아래 큰 단추 */
+.kh-left .orbrow{margin-top:12px;display:block}
+.kh-left .orbrow .orbwrap{max-width:none;display:block}
+.kh-left #btnRecord{width:100%;height:62px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:12px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);color:var(--text);font-family:inherit}
+.kh-left #btnRecord .core{width:42px;height:42px}
+.kh-left #btnRecord .core svg{width:22px;height:22px}
+.kh-reclab{font-size:18px;font-weight:800;letter-spacing:-.3px}
+html[data-fs] .kh-reclab{font-size:calc(18px * var(--fsx))}
+.kh-right > .card.today{margin-top:16px}
+/* 넓은 화면(폴드 펼침): 홈일 때만 폭을 넓혀 2단(html.home-on — app.js showHome/openScreen) */
+@media (min-width:700px){
+  html.home-on .app{max-width:760px}
+  html.home-on #homeView{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:22px;align-items:start}
+  html.home-on #homeView > #banner{grid-column:1 / -1}
+  html.home-on .kh-hero{height:420px}
+  html.home-on .kh-right > .card.today{margin-top:8px}
+  html.home-on .kh-right .tools-title{margin-top:18px}
+}
+@media (min-width:700px){ html.home-on footer{max-width:760px} }
+
+/* ---------- ③ 채팅 ---------- */
+/* 머리줄 얼굴 38 → 48px(56px 는 390px 폭에서 「뒤로」·이름이 두 줄로 꺾여 48 로 정함) · 말풍선 옆 얼굴 36 → 48px */
+.khead{gap:7px}
+.app section > .subbar .khead{padding-right:8px}
+.khead .kface.sm{width:48px;height:48px}
+.khead-tx b{white-space:nowrap}
+#chatView .subbar .back{white-space:nowrap}
+.krow .kavcol{width:48px}
+.krow img.kav{width:48px;height:48px}
+/* 얼굴을 누르면 뜨는 프로필 카드: 화면 폭 가득에 가깝게 */
+.kprof{padding:10px}
+.kprof-box{max-width:460px}
+/* 빈 대화의 큰 케이(안내 손짓 — 자세 그림이 없는 옷·머리는 표정 사진 동그라미) */
+.chatintro{padding:14px 20px}
+.chatintro .kfigw.intro{display:block;height:250px;margin:0 auto 6px;line-height:0;text-align:center}
+.chatintro .kfigw.intro.cut .kfig{height:100%;width:auto;filter:drop-shadow(0 8px 16px rgba(0,0,0,.38))}
+.chatintro .kfigw.intro.photo{width:min(230px,60vw);height:min(230px,60vw);border-radius:50%;overflow:hidden;background:#dfe3ea;box-shadow:0 0 0 4px var(--glass-b2),var(--glow-s);margin-bottom:16px}
+.chatintro .kfigw.intro.photo .kfig{width:100%;height:100%;object-fit:cover;object-position:50% 18%;display:block}
+
+/* ---------- ② 일하는 케이(장면) ---------- */
+.ksc{--kh:200px;position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:4px;min-height:var(--kh);margin:0 0 -6px;pointer-events:none}
+.ksc > *{pointer-events:auto}
+.ksc-l{flex:1;min-width:0;align-self:center;display:flex;flex-direction:column;gap:8px;padding-bottom:10px}
+/* 말풍선: 꼬리는 케이 쪽(오른쪽) */
+.ksp{position:relative;padding:11px 14px 12px;border-radius:18px;background:var(--kbub-bg,var(--glass2));border:1px solid var(--kbub-b,var(--glass-b2));box-shadow:var(--card-sh);color:var(--text)}
+.ksp::after{content:"";position:absolute;right:-7px;top:50%;width:13px;height:13px;margin-top:-7px;background:inherit;border-top:1px solid var(--kbub-b,var(--glass-b2));border-right:1px solid var(--kbub-b,var(--glass-b2));transform:rotate(45deg);border-top-right-radius:3px}
+.ksp b{display:block;font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:2px}
+.ksp p{font-size:16px;font-weight:700;line-height:1.45;word-break:keep-all;overflow-wrap:break-word}
+/* 서 있는 케이(배경 없는 그림): 아래 끝(허리)이 다음 카드 위 끝에 걸친다 */
+.kfigw{flex:none;display:block;height:var(--kh);line-height:0}
+.ksc.cut .kfig{height:100%;width:auto;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,.38))}
+html[data-style="light"] .ksc.cut .kfig{filter:drop-shadow(0 8px 14px rgba(30,41,99,.22))}
+.ksc + *{position:relative;z-index:1}
+/* 자세 그림이 없는 옷·머리: 그 옷의 표정 사진을 기울인 액자처럼 세운다(초라해 보이지 않게 크게) */
+.ksc.photo .kfigw{height:calc(var(--kh) - 26px);aspect-ratio:1/1.08;margin:0 4px 16px 6px;border-radius:24px;overflow:hidden;border:3px solid rgba(255,255,255,.9);box-shadow:0 12px 26px rgba(0,0,0,.4);transform:rotate(2.5deg);background:#dfe3ea}
+.ksc.photo .kfig{width:100%;height:100%;object-fit:cover;object-position:50% 16%;display:block}
+
+/* ---- 녹음 중: 타이머 + 말풍선(왼쪽) · 받아 적는 케이(오른쪽, 크게) ---- */
+.ksc.rec{--kh:268px;margin:6px 0 0}
+.ksc.rec .ksc-l{align-self:stretch;justify-content:center;padding-bottom:0}
+.ksc.rec .timer{font-size:54px;line-height:1.1;text-align:left;margin:0 0 4px 2px}
+#recView .wave{margin-top:2px}
+#recView .orbwrap{margin-top:6px !important}
+#recView .orbbtn.stop{width:150px;height:150px}
+#recView .orbbtn.stop .core{width:118px;height:118px}
+#recView .orblabel{margin-top:14px}
+
+/* ---- 보내는 중 ---- */
+.ksc.proc{--kh:210px;margin:6px 0 14px;flex-direction:column-reverse;align-items:center;gap:0}
+.ksc.proc .ksc-l{align-self:stretch;padding:0}
+.ksc.proc .ksp::after{right:auto;left:50%;top:-7px;margin:0 0 0 -7px;transform:rotate(-45deg)}
+#kscOrders[data-pose="idle"]{--kh:176px}
+.kempty{padding:6px 4px 16px;color:var(--text)}
+
+/* ---- 작업 현황 · 회의록 ---- */
+#kscOrders{--kh:196px;margin-top:2px}
+#kscOrders[data-pose="desk"]{--kh:186px}
+#kscOrders[data-pose="desk"] .kfigw{margin-right:-14px}
+#kscMeetings{--kh:206px;margin-top:0}
+#meetingsView #mtgTop > .mtg-sec:first-of-type{margin-top:10px}
+
+/* ---- 건강(소장 결정): 머리줄의 케이는 늘 작게 접힌 모습(머리 + 한 줄) — 화면 길이·약 칸 위치는 예전 그대로.
+        9칸을 방금 다 채운 순간에만 웃는 케이가 화면 아래쪽에 크게 떠서 한마디 하고 4초 뒤 사라진다(하루 한 번 · health.js cheer).
+        떠 있기만 한다: 누르는 곳이 아니고, 뒤 화면 누르기를 막지 않고, 화면을 밀어내지 않는다(누르던 칸이 움직이지 않게). ---- */
+.ksc.health{--kh:58px;align-items:center;margin:0 0 4px;min-height:58px}
+.ksc.health .ksc-l{gap:2px;padding-bottom:0}
+.ksc.health .hhead{margin-bottom:0;gap:0 8px;flex-wrap:wrap;justify-content:flex-start}
+.ksc.health .hdate{white-space:nowrap}
+.ksc.health .hsave{white-space:nowrap;font-size:12.5px}
+html[data-style="light"] .ksc.health .hsave.ok{color:#047857}          /* 밝은 화면: 초록 글씨 대비 3.4 → 5 이상 */
+.ksc.health .kfigw{height:58px;overflow:hidden;margin-right:4px;border-radius:0 0 14px 14px}
+.ksc.health.cut .kfig{height:150px;width:auto;filter:none}
+.ksc.health .ksp{padding:0;border:0;background:transparent;box-shadow:none}
+.ksc.health .ksp::after,.ksc.health .ksp b{display:none}
+.ksc.health .ksp p{font-size:14px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.ksc.health.photo .kfigw{height:54px;aspect-ratio:1/1;margin:0 2px 0 6px;border:2px solid rgba(255,255,255,.9);border-radius:50%;transform:none;box-shadow:none}
+.ksc.hcheer{--kh:170px;position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;width:min(372px,calc(100vw - 24px));margin:0;min-height:0;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.ksc.hcheer > *{pointer-events:none}
+.ksc.hcheer.on{opacity:1}
+.ksc.hcheer .ksp{box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.ksc.hcheer.cut .kfig{filter:drop-shadow(0 10px 22px rgba(0,0,0,.6))}
+html[data-style="light"] .ksc.hcheer.cut .kfig{filter:drop-shadow(0 10px 18px rgba(30,41,99,.35))}
+@media (prefers-reduced-motion:reduce){ .ksc.hcheer{transition:none} }
+
+/* ---- 빈 화면·오류: 케이가 크게 + 말풍선(아래, 꼬리는 위) ---- */
+.kempty{display:flex;flex-direction:column;align-items:center;gap:0;padding-top:6px;text-align:left}
+.kempty .kfigw{height:236px}
+.kempty.cut .kfig{height:100%;width:auto;filter:drop-shadow(0 8px 16px rgba(0,0,0,.38))}
+.kempty.photo .kfigw{height:200px;aspect-ratio:1/1.08;border-radius:24px;overflow:hidden;border:3px solid rgba(255,255,255,.9);box-shadow:0 12px 26px rgba(0,0,0,.4);margin-bottom:16px}
+.kempty.photo .kfig{width:100%;height:100%;object-fit:cover;object-position:50% 16%}
+.kempty .ksp{max-width:320px}
+.kempty .ksp::after{right:auto;left:50%;top:-7px;margin:0 0 0 -7px;transform:rotate(-45deg)}
+
+/* 폴드 펼침: 장면 폭이 넓어져도 케이는 오른쪽에 그대로 */
+@media (min-width:700px){ .ksc.rec{--kh:300px} }
