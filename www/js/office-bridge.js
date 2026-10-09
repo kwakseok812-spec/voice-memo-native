@@ -1018,7 +1018,7 @@
    * 케이(PC)가 notify_app.py 로 넣은 kind='chat', meta.thread='office_broadcast' 행들을
    * 전용 RPC(list_office_pushes)로 되읽는다. 이 RPC 는 broadcast 행의 필요한 필드만
    * (id, content_md, summary_json, ts) 시간순으로 돌려준다 — voice_memos 전체를 열지 않으므로
-   * 다른 채팅·음성·건강 데이터는 새지 않는다. 토큰 불필요(대표님 1인 앱, broadcast 전용).
+   * 다른 채팅·음성·건강 데이터는 새지 않는다. (v9.3 까지는 암호 없이 읽혔다 → v9.4(O-0353)부터 연동 암호 필요 — 아래 listOfficePushes)
    *   since : ISO 문자열(그 시각 '이후'에 처리된 방송만). 반환: [{id, content_md, summary_json, ts}] */
   // v7.7(O-0134): 되읽기 조회 하드 타임아웃 — 폰이 뒤로 가 있는 사이(화면 꺼짐·WiFi↔LTE 전환) 소켓이 멈추면
   //   fetch 가 영영 끝나지 않아 앱의 officeLoading/syncLoading 이 true 로 굳고, 그 뒤로는 방송·대화를
@@ -1030,13 +1030,41 @@
     return fetch(url, opt).then(function (r) { if (to) clearTimeout(to); return r; },
                                 function (e) { if (to) clearTimeout(to); throw e; });
   }
-  function listOfficePushes(since) {
-    return fetchT(CONFIG.url + '/rest/v1/rpc/list_office_pushes', {
+  /* v9.4(O-0353) 알림·보고 목록 잠금 — 연동 암호를 아는 기기만 읽는다.
+   *   새 경로 list_office_pushes_v2(p_since, p_pass): 다른 조회(list_chat_history·get_chat_read·health_list)와 같은 암호 확인
+   *     (_sync_pass_ok) · 같은 실패 동작(BAD_PASSCODE → err.badpass).
+   *   · 연동 암호가 없는 기기는 서버를 부르지 않는다(err.nopass) — 앱이 「연동 암호를 넣으면 보입니다」 안내를 보인다.
+   *   · 새 경로가 서버에 아직 없으면(404 = 1단계 SQL 적용 전) 옛 경로 list_office_pushes(p_since)로 물러난다 → 앱이 먼저 나가도 안 깨진다.
+   *     없다고 안 뒤 10분 동안은 옛 경로로 바로 가고(되풀이해 묻지 않음), 옛 경로가 막혀 있으면(2단계 뒤 401·403·404) 다음엔 새 경로부터 다시 본다.
+   *   반환: [{id, content_md, summary_json, ts}] (옛 경로와 같은 모양) */
+  var _pushV2MissingAt = 0;
+  function _pushRpc(name, body) {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/' + name, {
       method: 'POST',
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_since: since || null })
-    }).then(function (r) { if (!r.ok) throw new Error('방송 조회 실패(HTTP ' + r.status + ')'); return r.json(); })
-      .then(function (arr) { return Array.isArray(arr) ? arr : []; });
+      body: JSON.stringify(body)
+    });
+  }
+  function listOfficePushes(since, pass) {
+    if (!pass) { var n = new Error('NO_PASS'); n.nopass = true; return Promise.reject(n); }
+    function oldWay() {
+      return _pushRpc('list_office_pushes', { p_since: since || null }).then(function (r) {
+        if (r.status === 401 || r.status === 403 || r.status === 404) _pushV2MissingAt = 0;
+        if (!r.ok) throw new Error('방송 조회 실패(HTTP ' + r.status + ')');
+        return r.json();
+      });
+    }
+    var p = (_pushV2MissingAt && Date.now() - _pushV2MissingAt < 600000) ? oldWay()
+      : _pushRpc('list_office_pushes_v2', { p_since: since || null, p_pass: pass }).then(function (r) {
+          if (r.status === 404) { _pushV2MissingAt = Date.now(); return oldWay(); }   // 서버 SQL(1단계) 적용 전
+          _pushV2MissingAt = 0;
+          if (r.status === 400 || r.status === 401 || r.status === 403) {
+            var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;             // 암호 불일치(또는 미설정)
+          }
+          if (!r.ok) throw new Error('방송 조회 실패(HTTP ' + r.status + ')');
+          return r.json();
+        });
+    return p.then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }
 
   /* ---------- PC↔폰 채팅 동기화(1단계) 되읽기 ----------
@@ -1099,7 +1127,7 @@
       if (r.status === 400 || r.status === 401 || r.status === 403) {
         var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;   // 암호 불일치(또는 미설정)
       }
-      if (!r.ok) throw new Error('회의 요약 목록 조회 실패(HTTP ' + r.status + ')');
+      if (!r.ok) throw new Error('회의록 목록 조회 실패(HTTP ' + r.status + ')');
       return r.json();
     }).then(function (arr) { return Array.isArray(arr) ? arr : []; });
   }

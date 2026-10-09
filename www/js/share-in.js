@@ -125,7 +125,7 @@
         '<div class="sheet-head">이 녹음을 어떻게 할까요?</div>' +
         '<div class="shin-file"><svg><use href="#i-mic"/></svg><span class="nm">' + esc(file.name) + '</span><small>' + esc(sizeLabel(file.size)) + '</small></div>' +
         '<button type="button" class="sheet-btn primary" data-act="meet"><svg><use href="#i-note"/></svg><span>회의록으로 정리</span></button>' +
-        '<div class="shin-hint">앱에서 녹음한 것처럼 PC가 받아 적고 요약해 「회의 요약」에 올려요. 회의자료도 붙일 수 있어요.</div>' +
+        '<div class="shin-hint">앱에서 녹음한 것처럼 PC가 받아 적고 요약해 「회의록」에 올려요. 회의자료도 붙일 수 있어요.</div>' +
         '<button type="button" class="sheet-btn" data-act="chat"><svg><use href="#i-chat"/></svg><span>케이에게 보내기</span></button>' +
         '<button type="button" class="sheet-btn" data-act="cancel">취소</button>' +
       '</div>';
