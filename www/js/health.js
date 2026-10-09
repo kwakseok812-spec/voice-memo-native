@@ -36,18 +36,25 @@
   }
   var _toast = function () {};
 
-  /* ---------- 날짜 ---------- */
+  /* ---------- 날짜 — 「오늘」은 한국 시간(KST, UTC+9) 기준 ----------
+   * v9.3 까지는 기기 시간대의 날짜였다(한국에서는 같은 값). 건강 알림·케이(PC, 한국 시간)와 같은 날짜가 되도록
+   * 기기 시간대가 달라도 한국 날짜로 센다. DAY_TZ_MIN 을 null 로 두면 예전처럼 기기 시간대를 따른다. */
+  var DAY_TZ_MIN = 540;
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
-  function dstr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-  function todayStr() { return dstr(new Date()); }
-  function daysAgoStr(n) { var d = new Date(); d.setDate(d.getDate() - n); return dstr(d); }
+  function tzMs(ms) { return (DAY_TZ_MIN === null ? -new Date(ms).getTimezoneOffset() : DAY_TZ_MIN) * 60000; }
+  function dstrMs(ms) {                          // 그 순간의 날짜 'YYYY-MM-DD'
+    var d = new Date(ms + tzMs(ms));
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  }
+  function todayStr() { return dstrMs(Date.now()); }
+  function daysAgoStr(n) { return dstrMs(Date.now() - n * 86400000); }
+  function msToMidnight() { var now = Date.now(); return 86400000 - ((now + tzMs(now)) % 86400000); }   // 다음 자정까지
+  function dayNum(s) { var p = (s || '').split('-'); return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000); }
   function fmtDayLabel(s) {
     // 'YYYY-MM-DD' → 'M월 D일 (요일)' + 오늘/어제 표시
     var p = (s || '').split('-'); if (p.length !== 3) return s;
-    var d = new Date(+p[0], +p[1] - 1, +p[2]);
-    var wd = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-    var t = new Date(); t.setHours(0, 0, 0, 0);
-    var diff = Math.round((t - d) / 86400000);
+    var wd = ['일', '월', '화', '수', '목', '금', '토'][new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay()];
+    var diff = dayNum(todayStr()) - dayNum(s);
     var rel = diff === 0 ? ' · 오늘' : diff === 1 ? ' · 어제' : diff === 2 ? ' · 그제' : '';
     return (+p[1]) + '월 ' + (+p[2]) + '일 (' + wd + ')' + rel;
   }
@@ -183,7 +190,7 @@
     if (k === 'weight') return 70;
     return 0;
   }
-  function startFor(k) { var l = lastBefore(k, rec.log_date); return l ? l.v : defaultFor(k); }
+  function startFor(k, dateStr) { var l = lastBefore(k, dateStr || rec.log_date); return l ? l.v : defaultFor(k); }
   function lastHint(k) {
     var l = lastBefore(k, rec.log_date); if (!l) return '';
     return '지난 기록 ' + (k === 'fasting_glucose' ? Math.round(l.v) : Math.round(l.v * 10) / 10);
@@ -221,6 +228,30 @@
     gateShownAt = Date.now();
     try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {}
   }
+  /* 폰 시계 ↔ 서버 시계 차이(skewMs = 서버 − 폰). 「같은 칸을 두 기기가 고쳤을 때 더 나중 쪽」을 가릴 때
+   *   내 고친 시각(폰 시계)을 서버 시계로 옮겨 비교한다 → 폰 시계가 몇 분 틀려도 판정이 어긋나지 않는다.
+   *   ① 건강 조회·저장 응답의 Date 머리글(올 때마다 새로 잼) ② 그 머리글을 못 읽는 환경이면 읽음 기준 조회(get_chat_read)의 server_now 로 한 번.
+   *   둘 다 안 되면 0(= 예전처럼 폰 시계 그대로). */
+  var skewMs = 0, skewKnown = false, skewTried = false;
+  function noteServerClock(resp, t0) {
+    try {
+      var h = resp && resp.headers && resp.headers.get('Date'); if (!h) return;
+      var s = Date.parse(h); if (isNaN(s)) return;
+      skewMs = (s + 500) - (t0 + Date.now()) / 2;   // Date 머리글은 초 단위(버림)라 0.5초를 더하고, 보낸 때와 받은 때의 가운데와 비교
+      skewKnown = true;
+    } catch (e) {}
+  }
+  function clockReady() {
+    if (skewKnown || skewTried) return Promise.resolve();
+    var OB = global.OfficeBridge, pass = syncPass();
+    if (!(OB && OB.getChatRead) || !pass) return Promise.resolve();
+    skewTried = true;
+    var t0 = Date.now();
+    return OB.getChatRead(pass).then(function (d) {
+      var s = d && d.server_now ? Date.parse(d.server_now) : NaN;
+      if (!isNaN(s)) { skewMs = s - (t0 + Date.now()) / 2; skewKnown = true; }
+    }, function (e) { if (!(e && (e.notready || e.badpass))) skewTried = false; });   // 끊김이면 다음에 다시 해 본다
+  }
   // quiet=true: 건강 화면 밖에서 밀린 칸을 조용히 다시 올릴 때 — 암호 창을 띄우지 않는다(다른 일 하시는 중에 끼어들지 않게).
   function rpc(name, body, quiet) {
     var c = cfg(); if (!c) return Promise.reject(new Error('NO_CONFIG'));
@@ -230,11 +261,13 @@
       var e0 = new Error('NO_PASS'); e0.badpass = true; return Promise.reject(e0);
     }
     body.p_pass = pass;
+    var t0 = Date.now();
     return fetch(c.url + '/rest/v1/rpc/' + name, {
       method: 'POST',
       headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).then(function (r) {
+      noteServerClock(r, t0);
       if (r.status === 400 || r.status === 401 || r.status === 403) {
         if (!quiet) needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했어요. 다시 입력해 주세요.');
         var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;
@@ -246,7 +279,8 @@
   // 조회: 실패하면 거절(reject)한다 — 「못 불러옴」과 「기록 없음」을 구분해야 덮어쓰기 사고가 없다.
   function listRange(fromStr, toStr, quiet) {
     return rpc('health_list', { p_from: fromStr, p_to: toStr }, quiet)
-      .then(function (rows) { if (!Array.isArray(rows)) throw new Error('BAD_SHAPE'); return rows; });
+      .then(function (rows) { if (!Array.isArray(rows)) throw new Error('BAD_SHAPE'); return rows; })
+      .then(function (rows) { return clockReady().then(function () { return rows; }); });   // 서버 값과 맞추기 전에 시계 차이를 알아 둔다
   }
   function listOne(dateStr, quiet) {
     return listRange(dateStr, dateStr, quiet).then(function (rows) { return rows[0] || null; });
@@ -266,7 +300,7 @@
    * r 의 각 칸을 서버의 그날 행(row, 없으면 null)과 맞춘다.
    *  · 내가 고치지 않은 칸        → 서버 값을 그대로 따른다(다른 기기가 고친 것이 보이고, 내 옛 값으로 덮지 않는다).
    *  · 내가 고친 칸(_dirty)       → ① 서버에 이미 같은 값이면 끝 ② 서버 값이 「내가 고치기 전에 알던 값(base)」 그대로면 내 값을 올린다
-   *                                  ③ 서버 값이 그 사이 바뀌었으면(다른 기기가 고침) 더 나중 쪽: 내 고친 시각(t) > 서버 행 updated_at 이면 내 값,
+   *                                  ③ 서버 값이 그 사이 바뀌었으면(다른 기기가 고침) 더 나중 쪽: 내 고친 시각(t, 서버 시계로 옮긴 값) > 서버 행 updated_at 이면 내 값,
    *                                     아니면 서버 값을 따르고 내 값은 내려놓는다(lost 로 돌려줘 화면에 알린다).
    * 반환 {changed: 화면 값이 바뀜, push: 올릴 칸들, lost: [{k, mine, theirs}]} */
   function applyServer(r, row) {
@@ -277,7 +311,7 @@
       var sv = row ? norm(row[k]) : null, e = d[k];
       if (!e) { if (!eq(r[k], sv)) { r[k] = sv; out.changed = true; } return; }
       if (eq(r[k], sv)) { delete d[k]; return; }
-      if (eq(e.base, sv) || !(srvT > e.t)) { out.push.push(k); return; }
+      if (eq(e.base, sv) || !(srvT > e.t + (e.q ? 0 : skewMs))) { out.push.push(k); return; }
       if (!e.q) out.lost.push({ k: k, mine: r[k], theirs: sv });
       r[k] = sv; delete d[k]; out.changed = true;
     });
@@ -337,7 +371,7 @@
           if (e.t === snap[k]) delete r._dirty[k];      // 올리는 사이에 또 고치지 않았으면 끝
           else e.base = body[k];                         // 또 고쳤으면 그 칸은 다음 회차에 다시 올린다
         });
-        var up = { log_date: dateStr, updated_at: new Date().toISOString() };
+        var up = { log_date: dateStr, updated_at: new Date(Date.now() + skewMs).toISOString() };   // 서버가 방금 매긴 시각(어림)
         FIELDS.forEach(function (k) { up[k] = body[k]; });
         putRow(up);
         persist(r);
@@ -378,25 +412,26 @@
     var d = saveTimerDate; saveTimerDate = null;
     if (d) syncDate(d).then(function (st) { if (st === 'pending') flush(); });
   }
-  function scheduleSave() {
-    persist(rec);
-    paintState('saving');
-    if (saveTimer && saveTimerDate && saveTimerDate !== rec.log_date) flushSaveTimer();
+  // r = 값이 바뀐 기록(그 날짜로 저장된다). 화면에 떠 있는 기록이 아닐 수도 있다(화면을 넘기는 순간 확정된 값 — bindToday 참고).
+  function scheduleSave(r) {
+    persist(r);
+    if (r === rec) paintState('saving');
+    if (saveTimer && saveTimerDate && saveTimerDate !== r.log_date) flushSaveTimer();
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimerDate = rec.log_date;
+    saveTimerDate = r.log_date;
     saveTimer = setTimeout(function () {
       var d = saveTimerDate; saveTimer = null; saveTimerDate = null;
       syncDate(d).then(function (st) { if (st === 'pending') flush(); });
     }, 500);
   }
-  // 한 칸의 값을 바꾼다 = 「이 기기에서 고친 칸」으로 표시(고친 시각 + 고치기 전에 알던 서버 값). 원래 값으로 되돌리면 표시를 뗀다.
-  function setField(k, v) {
+  // 기록 r 의 한 칸을 바꾼다 = 「이 기기에서 고친 칸」으로 표시(고친 시각 + 고치기 전에 알던 서버 값). 원래 값으로 되돌리면 표시를 뗀다.
+  function setField(r, k, v) {
     v = norm(v);
-    if (eq(rec[k], v)) return false;
-    var d = rec._dirty || (rec._dirty = {}), e = d[k];
+    if (eq(r[k], v)) return false;
+    var d = r._dirty || (r._dirty = {}), e = d[k];
     if (e && !e.q && eq(e.base, v)) delete d[k];
-    else d[k] = { t: Date.now(), base: (e && !e.q) ? e.base : norm(rec[k]) };
-    rec[k] = v;
+    else d[k] = { t: Date.now(), base: (e && !e.q) ? e.base : norm(r[k]) };
+    r[k] = v;
     return true;
   }
 
@@ -415,7 +450,7 @@
     var saving = force === 'saving' || busyDate === rec.log_date || !!(saveTimer && saveTimerDate === rec.log_date);
     if (el) {
       if (saving) { el.textContent = '저장 중…'; el.className = 'hsave work'; }
-      else if (dk.length) { el.textContent = hereWord() + ' 저장됨'; el.className = 'hsave err'; }
+      else if (dk.length) { el.textContent = hereWord() + ' 저장됨'; el.className = 'hsave pend'; }
       else { el.textContent = '저장됨'; el.className = 'hsave ok'; }
     }
     if (box) {
@@ -545,6 +580,7 @@
         ? '<button type="button" class="hpast-foot" data-act="today"><span>' + md + ' 기록을 고치는 중</span><b>오늘로 돌아가기</b></button>'
         : '');
 
+    paintedDay = todayStr();
     bindToday();
     paintState();
   }
@@ -571,6 +607,23 @@
 
   function bindToday() {
     var host = $('hToday'); if (!host) return;
+    // 이 화면이 그려진 기록(날짜)과 모드를 붙들어 둔다 — 화면이 다른 날짜로 넘어가는 순간 확정된 값이 엉뚱한 날짜에 들어가지 않게.
+    var R = rec, M = mode;
+    // 이 화면의 조작이 들어갈 기록: 같은 날짜가 아직 떠 있으면 그 기록, 화면이 다른 날짜로 넘어갔으면 붙들어 둔 그 날짜의 기록.
+    function T() { return (rec && rec.log_date === R.log_date) ? rec : R; }
+    // 「오늘 기록」으로 그린 화면인데 자정이 지나 그 날짜가 더는 오늘이 아니면(화면을 켜 둔 채 날짜가 넘어감):
+    //   어제 기록에는 손대지 않고, 오늘 화면을 새로 열어 같은 조작을 거기에 한 번 넣는다(replay). 「지난 날짜 고치는 중」 화면은 해당 없음.
+    function moved(replay) {
+      if (M !== 'today' || R.log_date === todayStr()) return false;
+      if (!healthShown() || host.style.display === 'none') return true;       // 보이지 않는 옛 화면의 조작 — 아무 데도 적지 않는다
+      if (!(mode === 'today' && rec && rec.log_date === todayStr())) {
+        open(); wake();
+        _toast('날짜가 바뀌어 오늘(' + fmtMD(todayStr()) + ') 기록으로 새로 열었어요.');
+      }
+      try { if (replay) replay($('hToday')); } catch (e) {}
+      return true;
+    }
+    function fire(el, type) { if (el) el.dispatchEvent(new Event(type, { bubbles: true })); }
 
     // 지난 날짜 고치는 중: [오늘로 돌아가기](위·아래)
     Array.prototype.forEach.call(host.querySelectorAll('[data-act="today"]'), function (b) {
@@ -592,19 +645,29 @@
       function commit() {
         var raw = (input.value || '').trim(), nv = null;
         if (raw !== '') { var num = parseFloat(raw); nv = isNaN(num) ? null : fix(num); }
-        var ch = setField(k, nv);
-        input.value = isSet(rec[k]) ? rec[k] : '';
-        refreshChk(k); if (ch) scheduleSave();
+        var typed = !eq(nv, R[k]);                  // 이 화면에서 실제로 고쳐 친 값인가(그대로 둔 옛 값은 옮기지 않는다)
+        if (moved(function (h) {
+          var i = h.querySelector('.hitem[data-k="' + k + '"] .hval');
+          if (i && typed) { i.value = raw; fire(i, 'change'); }
+        })) return;
+        var t = T(), ch = setField(t, k, nv);
+        input.value = isSet(t[k]) ? t[k] : '';
+        if (t === rec) refreshChk(k);
+        if (ch) scheduleSave(t);
       }
       Array.prototype.forEach.call(row.querySelectorAll('.hstepbtn'), function (b) {
         b.addEventListener('click', function () {
           var d = parseFloat(b.getAttribute('data-d')) || 1;
+          if (moved(function (h) { var nb = h.querySelector('.hitem[data-k="' + k + '"] .hstepbtn[data-d="' + b.getAttribute('data-d') + '"]'); if (nb) nb.click(); })) return;
+          var t = T();
           // 비어 있으면 「그 칸의 가장 최근 기록값」에서 한 칸 움직인다(없으면 예전 고정값). 누르기 전에는 아무것도 기록되지 않는다.
-          var cur = isSet(rec[k]) ? parseFloat(rec[k]) : startFor(k);
+          var cur = isSet(t[k]) ? parseFloat(t[k]) : startFor(k, t.log_date);
           var nv = cur + d * step;
           if (nv < 0) nv = 0;
-          var ch = setField(k, fix(nv));
-          input.value = rec[k]; refreshChk(k); if (ch) scheduleSave();
+          var ch = setField(t, k, fix(nv));
+          input.value = t[k];
+          if (t === rec) refreshChk(k);
+          if (ch) scheduleSave(t);
         });
       });
       input.addEventListener('change', commit);
@@ -617,10 +680,15 @@
       var selH = sleepBlock.querySelector('.hsel-h');
       var selM = sleepBlock.querySelector('.hsel-m');
       var commitSleep = function () {
+        if (moved(function (h) {
+          var nh = h.querySelector('.hsleep .hsel-h'), nm = h.querySelector('.hsleep .hsel-m');
+          if (nh && nm) { nh.value = selH.value; nm.value = selM.value; fire(nh, 'change'); }
+        })) return;
         var nv = null;
         if (selH.value !== '') { var total = hmToHours(selH.value, selM.value); nv = total > 0 ? total : null; }
-        var ch = setField('sleep_hours', nv);
-        refreshChk('sleep_hours'); if (ch) scheduleSave();
+        var t = T(), ch = setField(t, 'sleep_hours', nv);
+        if (t === rec) refreshChk('sleep_hours');
+        if (ch) scheduleSave(t);
       };
       selH.addEventListener('change', commitSleep);
       selM.addEventListener('change', commitSleep);
@@ -629,13 +697,18 @@
     // 식단: 접힌 한 줄 → 펼치기 / [접기] / 칩 + 직접입력
     Array.prototype.forEach.call(host.querySelectorAll('.hmeal'), function (block) {
       var k = block.getAttribute('data-k');
+      function newBlock(h) { return h.querySelector('.hmeal[data-k="' + k + '"]'); }
       var sum = block.querySelector('.hmeal-sum');
-      if (sum) { sum.addEventListener('click', function () { openMeals[k] = 1; renderToday(); }); return; }
+      if (sum) { sum.addEventListener('click', function () { if (moved() || rec !== T()) return; openMeals[k] = 1; renderToday(); }); return; }
       var cl = block.querySelector('.hmeal-close');
-      if (cl) cl.addEventListener('click', function () { delete openMeals[k]; renderToday(); });
+      if (cl) cl.addEventListener('click', function () { if (moved() || rec !== T()) return; delete openMeals[k]; renderToday(); });
       Array.prototype.forEach.call(block.querySelectorAll('.hchip'), function (chip) {
         chip.addEventListener('click', function () {
           var food = chip.getAttribute('data-food');
+          if (moved(function (h) {
+            var nb = newBlock(h);
+            Array.prototype.forEach.call(nb ? nb.querySelectorAll('.hchip') : [], function (c) { if (c.getAttribute('data-food') === food) c.click(); });
+          })) return;
           if (k === 'snack' && food === '없음') {
             // '없음'은 배타 선택
             var turningOn = !chip.classList.contains('on');
@@ -647,16 +720,21 @@
             chip.classList.toggle('on');
             if (chip.classList.contains('on')) foodBump(food);
           }
-          recombineMeal(block, k);
+          recombineMeal(block, k, T());
         });
       });
       var ci = block.querySelector('.hcustomin');
       if (ci) {
-        ci.addEventListener('change', function () {
-          mealTokens(ci.value).forEach(function (t) { foodBump(t); });
-          recombineMeal(block, k);
-        });
-        ci.addEventListener('blur', function () { recombineMeal(block, k); });
+        var commitCustom = function (learn) {
+          if (moved(function (h) {
+            var nb = newBlock(h), ni = nb && nb.querySelector('.hcustomin');
+            if (ni && ci.value !== ci.defaultValue) { ni.value = ci.value; fire(ni, 'change'); }   // 이 화면에서 새로 친 글만 옮긴다
+          })) return;
+          if (learn) mealTokens(ci.value).forEach(function (x) { foodBump(x); });
+          recombineMeal(block, k, T());
+        };
+        ci.addEventListener('change', function () { commitCustom(true); });
+        ci.addEventListener('blur', function () { commitCustom(false); });
       }
     });
 
@@ -664,23 +742,26 @@
     Array.prototype.forEach.call(host.querySelectorAll('.htogbtn'), function (btn) {
       var k = btn.getAttribute('data-k');
       btn.addEventListener('click', function () {
-        var v = rec[k];
-        setField(k, (v === null || v === undefined) ? true : (v === true ? false : true));
-        btn.className = 'htogbtn ' + togCls(rec[k]);
-        btn.textContent = togTxt(rec[k]);
-        refreshChk(k); scheduleSave();
+        if (moved(function (h) { var nb = h.querySelector('.htogbtn[data-k="' + k + '"]'); if (nb) nb.click(); })) return;
+        var t = T(), v = t[k];
+        setField(t, k, (v === null || v === undefined) ? true : (v === true ? false : true));
+        btn.className = 'htogbtn ' + togCls(t[k]);
+        btn.textContent = togTxt(t[k]);
+        if (t === rec) refreshChk(k);
+        scheduleSave(t);
       });
     });
   }
-  function recombineMeal(block, k) {
+  function recombineMeal(block, k, t) {
     var chips = block.querySelectorAll('.hchip.on');
     var sel = [];
     Array.prototype.forEach.call(chips, function (c) { sel.push(c.getAttribute('data-food')); });
     var ci = block.querySelector('.hcustomin');
-    if (ci) mealTokens(ci.value).forEach(function (t) { if (sel.indexOf(t) < 0) sel.push(t); });
-    openMeals[k] = 1;                               // 고르는 중인 끼니는 다시 그려도 접지 않는다
-    var ch = setField(k, sel.join(', ') || null);
-    refreshChk(k); if (ch) scheduleSave();
+    if (ci) mealTokens(ci.value).forEach(function (x) { if (sel.indexOf(x) < 0) sel.push(x); });
+    if (t === rec) openMeals[k] = 1;                // 고르는 중인 끼니는 다시 그려도 접지 않는다
+    var ch = setField(t, k, sel.join(', ') || null);
+    if (t === rec) refreshChk(k);
+    if (ch) scheduleSave(t);
   }
 
   /* ============================ 기록 보기 ============================ */
@@ -825,14 +906,43 @@
     if ($('hTabToday')) $('hTabToday').addEventListener('click', function () { open(); });
     if ($('hTabHistory')) $('hTabHistory').addEventListener('click', function () { flushSaveTimer(); switchTab('history'); });
     // 밀린 칸 자동으로 다시 올리기: 연결이 돌아왔을 때 · 앱으로 돌아왔을 때 · 앱을 켰을 때(조금 뒤)
+    //   앱으로 돌아올 때마다 날짜가 넘어갔는지부터 본다(밤새 뒤에 있다가 아침에 다시 연 경우 — 어제 날짜에 오늘 것을 적지 않게).
     global.addEventListener('online', wake);
+    var onBack = function () { if (document.hidden) return; dayCheck(); wake(); };
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; } return; }
-      // 자정이 지나 날짜가 바뀌었으면 「오늘 기록」을 새 날짜로(어제 것에 오늘 것을 적는 일 방지)
-      if (mode === 'today' && rec && rec.log_date !== todayStr() && healthShown()) { open(); return; }
-      wake();
+      onBack();
     });
+    global.addEventListener('focus', onBack);
+    global.addEventListener('pageshow', onBack);
+    document.addEventListener('resume', onBack);                                   // 폰 앱(Capacitor)이 앞으로 돌아올 때
+    try {
+      var CA = global.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App;
+      if (CA && CA.addListener) CA.addListener('appStateChange', function (st) { if (st && st.isActive) onBack(); });
+    } catch (e) {}
+    armMidnight();
     setTimeout(function () { if (pendList().length) flush(); }, 4000);
+  }
+
+  /* ---------- 날짜 넘어감 ----------
+   * 화면 맨 위 날짜와 실제 저장 날짜는 늘 같은 값(rec.log_date)이다. 문제는 「오늘 기록」을 켜 둔 채 자정이 지나는 경우 —
+   * 그 화면은 어제 날짜의 기록인데 「오늘」처럼 보인다. 그래서 ① 자정에 맞춘 타이머 ② 앱으로 돌아올 때 ③ 건강 탭을 다시 열 때(open)
+   * ④ 값을 넣기 직전(bindToday 의 moved)에 확인해, 「오늘 기록」이었으면 안 올라간 것을 먼저 보내고 오늘 날짜로 새로 연다.
+   * 「지난 날짜 고치는 중」은 일부러 고른 날짜라 그대로 둔다(「어제·그제」 꼬리표만 새로 그린다). */
+  var paintedDay = '', midTimer = null;
+  function dayCheck() {
+    var t = todayStr();
+    if (!rec || paintedDay === t) return false;
+    if (!healthShown()) return false;               // 건강 화면 밖 — 다음에 열 때 open() 이 오늘로 연다
+    var pT = $('hToday'), listOn = !!(pT && pT.style.display === 'none');
+    if (listOn) { paintedDay = t; switchTab('history'); return true; }        // 기록 보기 목록: 「오늘·어제」 꼬리표를 새로
+    if (mode === 'today' && rec.log_date !== t) { open(); return true; }      // open() 이 기다리던 저장을 먼저 보내고 오늘로 연다
+    softRender();                                                             // 지난 날짜 고치는 중 — 날짜는 그대로
+    return false;
+  }
+  function armMidnight() {
+    if (midTimer) clearTimeout(midTimer);
+    midTimer = setTimeout(function () { try { dayCheck(); wake(); } catch (e) {} armMidnight(); }, msToMidnight() + 1500);
   }
 
   // 서버의 최근 30일을 한 번 받아: 지금 날짜의 값 맞추기 + ＋/− 시작값 + 기록 보기 사본

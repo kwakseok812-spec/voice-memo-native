@@ -11,7 +11,7 @@
   --text:#F3F6FF; --muted:#A7B3D1; --dim:#6F7D9E;
   --p1:#3B82F6; --p2:#8B5CF6; --cyan:#22D3EE;
   --ok:#34D399; --ok-bg:rgba(52,211,153,.18); --rec:#FB7185;
-  --warn:#FBBF24; --warn-bg:rgba(251,191,36,.12);
+  --warn:#FBBF24; --warn-bg:rgba(251,191,36,.12); --warn-t:#FBBF24;   /* --warn-t = 주황 '글씨' 색(v9.4 건강 탭 「폰에만」·「고치는 중」) */
   --glass:rgba(255,255,255,.06); --glass2:rgba(255,255,255,.10);
   --glass-b:rgba(255,255,255,.12); --glass-b2:rgba(255,255,255,.22);
   --card-sh:0 10px 30px rgba(0,0,0,.25); --ic-bg:rgba(255,255,255,.08);
@@ -29,7 +29,7 @@ html[data-style="light"] {
   --text:#0F172A; --muted:#55627D; --dim:#5B6781;   /* v9.4(O-0344): 흐린 글씨 #8A95AC(바탕 대비 2.4~3.0:1) → #5B6781(4.5:1 이상). 어두운 화면 값은 그대로 */
   --p1:#2563EB; --p2:#7C3AED; --cyan:#0891B2;
   --ok:#059669; --ok-bg:rgba(5,150,105,.14); --rec:#E11D48;
-  --warn:#B45309; --warn-bg:rgba(180,83,9,.10);
+  --warn:#B45309; --warn-bg:rgba(180,83,9,.10); --warn-t:#92400E;     /* 밝은 화면: 옅은 주황 바탕 위에서도 4.5:1 이상이 되게 글씨만 더 진하게 */
   --glass:rgba(255,255,255,.72); --glass2:rgba(255,255,255,.9);
   --glass-b:rgba(99,102,241,.16); --glass-b2:rgba(99,102,241,.30);
   --card-sh:0 8px 26px rgba(30,41,99,.08); --ic-bg:rgba(99,102,241,.10);
@@ -512,7 +512,7 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
 .hdate{font-size:20px;font-weight:800;letter-spacing:-.3px}
 .hsave{font-size:13px;font-weight:700;color:var(--dim)}
-.hsave.ok{color:var(--ok)} .hsave.work{color:var(--p1)} .hsave.err{color:var(--rec)}
+.hsave.ok{color:var(--ok)} .hsave.work{color:var(--p1)} .hsave.err{color:var(--rec)} .hsave.pend{color:var(--warn-t)}
 .hprog{font-size:14.5px;color:var(--muted);font-weight:600;margin-bottom:14px}
 .hprog b{color:var(--cyan);font-size:17px;font-weight:800}
 .hprog-sub{color:var(--dim);font-weight:500}
@@ -566,13 +566,13 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hitem-r{display:flex;align-items:center;gap:8px;min-width:0;flex:none;max-width:60%}
 .hlast{min-width:0;font-size:13px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hlast:empty{display:none}
-.hpend{display:none;font-style:normal;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--warn-bg);color:var(--warn);font-size:12.5px;font-weight:800;white-space:nowrap;vertical-align:1px}
+.hpend{display:none;font-style:normal;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--warn-bg);color:var(--warn-t);font-size:12.5px;font-weight:800;white-space:nowrap;vertical-align:1px}
 .pend > .hitem-top .hpend,.pend > .hmeal-sum .hpend,.htcell.pend .hpend,.hpend.on{display:inline-block}
 .htcell .hpend{align-self:center;margin:-2px 0 0;padding:0 7px}
 .pend > .hitem-top .hlast{display:none}                 /* 안 올라간 칸은 「지난 기록」 안내 자리에 「폰에만」 표시가 온다(한 줄 유지) */
 .hlab{white-space:nowrap}
 .hlocal{margin:-4px 0 12px;padding:10px 13px;border-radius:14px;border:1px solid var(--warn);background:var(--warn-bg);color:var(--text);font-size:14px;font-weight:600;line-height:1.5;word-break:keep-all}
-.hlocal b{color:var(--warn);font-weight:800}
+.hlocal b{color:var(--warn-t);font-weight:800}
 .hlocal.tap{cursor:pointer}
 .hlocal-k{display:block;margin-top:2px;font-size:13px;font-weight:700;color:var(--muted)}
 .hmeal.fold{padding:0}
@@ -586,12 +586,12 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 /* v9.4(O-0344) 지난 날짜를 고치는 중 — 오늘 것으로 착각하지 않게 맨 위 띠 + 맨 아래 한 줄 + 날짜 색 */
 .hpast{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:10px 10px 10px 14px;border-radius:16px;border:1.5px solid var(--warn);background:var(--warn-bg)}
 .hpast-tx{min-width:0;font-size:15px;font-weight:700;color:var(--text);line-height:1.4;word-break:keep-all}
-.hpast-tx b{color:var(--warn);font-weight:800}
+.hpast-tx b{color:var(--warn-t);font-weight:800}
 .hpast-btn{flex:none;height:44px;padding:0 13px;border-radius:12px;border:1px solid var(--warn);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap}
-.hpastmode .hdate{color:var(--warn)}
+.hpastmode .hdate{color:var(--warn-t)}
 .hpastmode .hgroup{border-color:var(--warn)}
 .hpast-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;margin-top:14px;padding:8px 14px;border-radius:14px;border:1px dashed var(--warn);background:transparent;color:var(--muted);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:left}
-.hpast-foot b{flex:none;color:var(--warn);font-weight:800}
+.hpast-foot b{flex:none;color:var(--warn-t);font-weight:800}
 .hsec small{margin-left:6px;font-size:12.5px;font-weight:600;color:var(--dim)}
 
 /* 기록 보기 — 그래프 */
