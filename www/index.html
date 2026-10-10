@@ -457,21 +457,12 @@
           <span class="kw-fb-tag">전신<small id="kwFullTip">· 눌러 보세요</small></span>
         </button>
       </div>
-      <!-- O-0040: 옷 / 머리 탭 -->
-      <div class="hseg kw-seg">
-        <button type="button" class="hseg-btn on" id="kwTabOutfit">옷</button>
-        <button type="button" class="hseg-btn" id="kwTabHair">머리</button>
-      </div>
+      <!-- v9.6: 옷 / 머리 탭과 머리 고르기 칸을 뺐다(대표님 2026-10-10 — 머리는 지금 모양으로 고정). 옷장만 남는다. -->
       <div id="kwOutfitPane">
         <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입습니다</small></div>
         <div id="kwGrid" class="kw-grid"></div>
         <!-- v9.5: 연동 암호가 없는 기기에만 보이는 한 줄(서버에서 받는 옷 움직임·자세 그림·새 옷은 암호가 있어야 받는다) -->
         <div id="kwAssetNote" class="kw-note" style="display:none"></div>
-      </div>
-      <div id="kwHairPane" style="display:none;">
-        <div class="kw-sec"><b>머리 · <span id="kwHairCount">1</span>가지</b><small>누르면 바로 바꿉니다</small></div>
-        <div id="kwHairGrid" class="kw-grid"></div>
-        <div id="kwHairNote" class="kw-note"></div>
       </div>
       <div class="kw-note">바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀝니다.</div>
       <div class="kw-sec"><b>목소리</b><small>무료 음성만 씁니다</small></div>

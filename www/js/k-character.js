@@ -114,12 +114,18 @@
   var CAT_URL_KEY = 'smart_k_catalog_url';         // 시험용 덮어쓰기(비우면 기본 주소, 'off' 면 서버 안 읽음)
   var CATALOG_URL = 'https://nasizwclypmaojvwfxnn.supabase.co/storage/v1/object/public/kchar/catalog.json';
   var DEFAULT_HAIR = 'h01';
+  /* v9.6 머리 고정(대표님 2026-10-10 「머리 모양은 빼자. 지금 머리 스타일로 고정」) — 고르는 화면을 없애고 케이의 머리를 아래 하나로 고정한다.
+   *   ★ 고정할 머리를 바꾸려면 이 값만 바꾼다(서버 카탈로그의 머리 id: h01 기본 단발 · h02 긴 생머리 … h10). 기본 머리(h01)가 아니면
+   *     그 머리 × 옷 조합 사진(서버 카탈로그 combos)을 쓰고, 조합 사진이 없는 옷은 기본 머리 사진으로 보인다(표정·움직임·자세 그림·인사 영상은 기본 머리에만 있다).
+   *   예전에 폰에 골라 둔 머리(localStorage smart_k_hair)는 더 쓰지 않으므로 지운다 — 어느 기기에서나 같은 머리로 보인다. */
+  var FIXED_HAIR = DEFAULT_HAIR;
   var BUNDLED_HAIRS = [{ id: DEFAULT_HAIR, name: '기본 단발', desc: '앞머리 있는 단발 · 표정·움직임 전부 지원', thumb: '' }];
   var hairsList = BUNDLED_HAIRS.slice();
   var combos = {};                         // 'h02|burgundy_suit' → {img, av, thumb, crop}
   var broken = {};                         // 못 읽은 서버 사진 → 기본머리/기본옷으로 대신
   var urlIndex = {};                       // 서버 사진 주소 → broken 키(이미지 오류 때 찾기)
-  var curHair = lsGet(HAIR_KEY) || DEFAULT_HAIR;
+  var curHair = FIXED_HAIR;
+  try { if (lsGet(HAIR_KEY) != null) lsSet(HAIR_KEY, null); } catch (e) {}
   var catState = { source: 'bundle', url: '', error: '', at: 0 };
   var lastExpr = DEFAULT_EXPR, flashTimer = null, flashing = '', talking = false;
 
@@ -264,25 +270,7 @@
 
   /* ---- 머리 ---- */
   function findHair(id) { for (var i = 0; i < hairsList.length; i++) if (hairsList[i].id === id) return hairsList[i]; return null; }
-  // 저장된 머리가 (아직) 목록에 없으면 기본머리로 보이되 저장값은 지우지 않는다
   function hair() { return findHair(curHair) || hairsList[0]; }
-  // 머리 목록 썸네일: 지금 옷으로 한 모습 → 없으면 그 머리 대표 사진 → 기본머리면 지금 옷 사진
-  function hairThumbUrl(h) {
-    h = h || hair();
-    var cb = comboFor(h.id, outfit().id);
-    if (cb) return cb.thumb || cb.img;
-    if (h.id === DEFAULT_HAIR || !h.thumb || broken['h|' + h.id]) {
-      var o = outfit(); return url(o, o.thumb || o.expr.neutral);
-    }
-    return h.thumb;
-  }
-  function hasLook(hairId, outfitId) { return hairId === DEFAULT_HAIR || !!comboFor(hairId, outfitId || outfit().id); }
-  function setHair(id) {
-    if (!findHair(id) || id === hair().id) return false;
-    curHair = id; lsSet(HAIR_KEY, id === DEFAULT_HAIR ? null : id);
-    refreshAll(true); notify();
-    return true;
-  }
   function stillMode() { return !!activeCombo(); }
 
   /* ---- 서버 카탈로그 ----
@@ -309,6 +297,7 @@
         if (h.desc) nHairs[0].desc = String(h.desc);
         return;
       }
+      if (id !== FIXED_HAIR) return;             // v9.6: 고정 머리 말고는 목록에 넣지 않는다(다른 머리의 사진·영상은 받지 않는다)
       if (seen[id]) return; seen[id] = 1;
       var t = abs(h.thumb); if (t) nIndex[t] = 'h|' + id;
       nHairs.push({ id: id, name: String(h.name || id), desc: String(h.desc || ''), thumb: t });
@@ -327,7 +316,7 @@
     });
     var nCombos = {};
     (Array.isArray(cat.combos) ? cat.combos : []).forEach(function (c) {
-      if (!c || !c.hair || !c.outfit || !c.img || String(c.hair) === DEFAULT_HAIR) return;
+      if (!c || !c.hair || !c.outfit || !c.img || String(c.hair) === DEFAULT_HAIR || String(c.hair) !== FIXED_HAIR) return;   // v9.6: 고정 머리의 조합만
       var k = String(c.hair) + '|' + String(c.outfit);
       var e = { img: abs(c.img), av: abs(c.av), thumb: abs(c.thumb), crop: c.crop || null,
                 idle: abs(c.idle),
@@ -933,9 +922,8 @@
     outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange,
     // (O-0040) 머리 스타일 · 서버 카탈로그
     catalogReady: catalogReady, reloadCatalog: loadCatalog, catalogState: function () { return { source: catState.source, url: catState.url, error: catState.error, at: catState.at }; },
-    defaultHair: DEFAULT_HAIR, hair: hair, hairs: function () { return hairsList.slice(); }, setHair: setHair,
-    hairThumbUrl: hairThumbUrl, hasLook: hasLook, stillMode: stillMode,
-    // 지금 「보이는」 모습 이름(조합 사진이 없어 기본머리로 보일 땐 옷 이름만 — 안내는 머리 탭 아래 문구가 맡는다)
+    defaultHair: DEFAULT_HAIR, fixedHair: FIXED_HAIR, hair: hair, stillMode: stillMode,   // v9.6: 머리 고르기(setHair·hairs·hairThumbUrl·hasLook)는 없앴다
+    // 지금 「보이는」 모습 이름(조합 사진이 없어 기본머리로 보일 땐 옷 이름만)
     lookName: function () { return outfit().name + (activeCombo() ? ' · ' + hair().name : ''); },
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl, bowPick: bowPick, bowList: bowList,        // (O-0116) · v9.6 인사 영상 여러 개
