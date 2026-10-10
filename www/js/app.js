@@ -2816,9 +2816,12 @@
       // 답이 늦으면(약 35초 이상) "멈춘 것처럼" 보이지 않게 안내를 함께 띄운다
       var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
       if (kStatState === 'down') html += '<div class="waitnote down">PC가 응답하지 않아 지금은 답을 드리지 못합니다. PC가 켜져 있는지 확인해 주세요. 켜지면 이어서 답하겠습니다.</div>';
+      else if (kStatState === 'login') html += '<div class="waitnote down">PC의 로그인이 풀려 지금은 답을 드리지 못합니다. PC에서 다시 로그인해 주시면 이어서 답하겠습니다.</div>';
       else if (slowWait) html += '<div class="waitnote">조금 더 걸립니다. 다른 일 보셔도 됩니다.</div>';
     } else if (kStatState === 'down') {                    // v8.4: 기다리는 답이 없어도 PC가 꺼져 있으면 맨 아래 한 줄로 알림
       html += '<div class="waitnote down">PC가 응답하지 않아 지금은 답을 드리지 못합니다. 보내 두시면 PC가 켜진 뒤 답하겠습니다.</div>';
+    } else if (kStatState === 'login') {                   // v9.6: PC는 켜져 있지만 로그인이 풀린 때
+      html += '<div class="waitnote down">PC의 로그인이 풀려 지금은 답을 드리지 못합니다. PC에서 다시 로그인해 주시면 이어서 답하겠습니다.</div>';
     }
     chatLog.innerHTML = chatLockHtml() + chatMoreHtml() + html;         // v7.0: 맨 위 [이전 대화 더 보기] / 「여기가 대화의 처음이에요」
     applyChatFolds();                                    // O-0111: 긴 말풍선 접기(아래 스크롤 계산 '전'에 높이를 확정)
@@ -3701,14 +3704,32 @@
     var up = Date.parse(d.updated_at); if (isNaN(up)) return null;
     var now = Date.parse(d.server_now); if (isNaN(now)) now = Date.now();   // 서버 시계 기준(폰 시계가 틀려도 맞게)
     if (d.stopping || (now - up) / 1000 > KSTAT_DOWN_S) return 'down';
+    if (kLoginOf(d) === 'expired') return 'login';        // v9.6: PC는 켜져 있지만 클로드 로그인이 풀려 답을 만들지 못하는 상태
     return d.busy ? 'busy' : 'ok';
   }
+  /* v9.6 (O-0356 ①의 앱 쪽) PC가 알려 주는 로그인 상태 — k_status 의 login 칸 { state: 'ok'|'soon'|'dying'|'expired', login_until, answer_until }.
+   *   PC 스위치(o0356_switch.json 의 kstatus)가 켜졌을 때만 온다. 칸이 없으면 '' → 예전과 똑같이 동작한다.
+   *   expired = 지금 답을 못 만든다(상태 'login') · dying = 로그인은 풀렸고 answer_until 까지만 답할 수 있다 · soon = login_until 에 만료 예정. */
+  function kLoginOf(d) { var l = d && d.login; return (l && typeof l.state === 'string') ? l.state : ''; }
+  function kLoginWhen(iso) {
+    var t = Date.parse(iso || ''); if (isNaN(t)) return '';
+    var d = new Date(t + 9 * 3600000), n = new Date(Date.now() + 9 * 3600000), hm = d.getUTCHours() + '시' + (d.getUTCMinutes() ? ' ' + d.getUTCMinutes() + '분' : '');
+    return (d.getUTCMonth() === n.getUTCMonth() && d.getUTCDate() === n.getUTCDate()) ? '오늘 ' + hm : (d.getUTCMonth() + 1) + '월 ' + d.getUTCDate() + '일 ' + hm;
+  }
+  function kLoginTail() {                                  // 자리에 있을 때(정상·바쁨) 상태 문장 뒤에 붙이는 한 줄
+    var d = kStatData || {}, s = kLoginOf(d), l = d.login || {}, w;
+    if (s === 'dying') { w = kLoginWhen(l.answer_until); return ' 다만 PC의 로그인이 풀려' + (w ? ' ' + w + '까지만' : ' 곧') + ' 답할 수 있습니다. PC에서 다시 로그인해 주세요.'; }
+    if (s === 'soon') { w = kLoginWhen(l.login_until); return w ? ' PC의 로그인이 ' + w + '에 만료됩니다.' : ''; }
+    return '';
+  }
+  function kAway() { return kStatState === 'down' || kStatState === 'login'; }   // 지금 답을 드리지 못하는 상태인가
   function kStatSentence() {
     var d = kStatData || {};
-    if (kStatState === 'ok') return '🟢 지금 자리에 있습니다. 보내시면 바로 답하겠습니다.';
-    if (kStatState === 'busy') return d.busy_kind === 'other'
+    if (kStatState === 'ok') return '🟢 지금 자리에 있습니다. 보내시면 바로 답하겠습니다.' + kLoginTail();
+    if (kStatState === 'busy') return (d.busy_kind === 'other'
       ? '🟠 지금 다른 창구의 일을 하고 있습니다. 보내시면 끝나는 대로 답하겠습니다.'
-      : '🟠 지금 앞의 질문에 답하고 있습니다. 보내시면 차례대로 답하겠습니다.';
+      : '🟠 지금 앞의 질문에 답하고 있습니다. 보내시면 차례대로 답하겠습니다.') + kLoginTail();
+    if (kStatState === 'login') return '🔴 PC의 클로드 로그인이 풀려 지금은 제가 답을 드리지 못합니다. PC에서 다시 로그인해 주시면 이어서 답하겠습니다.';
     if (kStatState === 'down') {
       var mins = 0;
       try { mins = Math.round((Date.parse(d.server_now) - Date.parse(d.updated_at)) / 60000); } catch (e) {}
@@ -3726,6 +3747,7 @@
         try { mins = Math.round((Date.parse(d.server_now) - Date.parse(d.updated_at)) / 60000); } catch (e) {}
         return { kind: 'down', text: 'PC와 연결이 끊겨 지금은 답을 드리지 못합니다.' + (mins > 0 && mins < 600 ? ' ' + mins + '분째입니다.' : '') };
       }
+      if (kStatState === 'login') return { kind: 'down', text: 'PC의 로그인이 풀려 지금은 답을 드리지 못합니다.' };
       var live = null;
       (ordersRows || []).forEach(function (o) { if (!live && !ORD_CLOSED[o.status] && o.activity && o.activity.live) live = o; });
       if (live) return { kind: 'work', text: '「' + cutText(live.summary || live.id, 18) + '」 — 지금 만들고 있습니다.' };
@@ -3737,7 +3759,7 @@
     try { if (window.TodayCard && TodayCard.paintSay) TodayCard.paintSay(); } catch (e) {}
     // PC가 응답하지 않는 것을 처음 알게 된 때 한 번, 홈 카드의 얼굴만 8초 동안 걱정하는 표정(움직임 설정과 무관한 정지 사진 한 장 — 다른 자리 얼굴은 그대로)
     try {
-      if (kStatState !== 'down') { homeDownShown = false; return; }
+      if (!kAway()) { homeDownShown = false; return; }
       var f = document.querySelector('#kHero .kface');
       if (!homeDownShown && f && isOpen(homeView) && window.KChar && KChar.faceFlash) { homeDownShown = true; KChar.ready.then(function () { KChar.faceFlash(f, 'concern', 8000); }); }
     } catch (e) {}
@@ -3751,10 +3773,11 @@
       if (ps) ps.style.display = 'none';
       return;
     }
-    dot.className = 'kstat ' + kStatState; dot.style.display = '';
-    sub.className = 'kst-' + kStatState;
+    var kcls = kStatState === 'login' ? 'down' : kStatState;   // 로그인 풀림은 「응답 없음」과 같은 빨간 점
+    dot.className = 'kstat ' + kcls; dot.style.display = '';
+    sub.className = 'kst-' + kcls;
     // 좁은 폰(접은 폴드 등)은 머리줄 자리가 없어 점 색만(글자는 「소장」 그대로) — 넓은 화면(펼친 폴드·PC)에서만 「· 정상」 같은 글을 붙인다(CSS .kst-w)
-    var word = kStatState === 'ok' ? '정상' : (kStatState === 'busy' ? '바쁨' : 'PC 응답 없음');
+    var word = kStatState === 'ok' ? '정상' : (kStatState === 'busy' ? '바쁨' : (kStatState === 'login' ? '로그인 풀림' : 'PC 응답 없음'));
     sub.innerHTML = '소장<span class="kst-w"> · ' + word + '</span>';
     if (btn) btn.setAttribute('aria-label', '케이 프로필 보기 — PC 케이 ' + word);
     if (ps) { ps.textContent = kStatSentence(); ps.style.display = ''; }
@@ -3771,7 +3794,7 @@
       kStatData = d; kStatState = kStatCalc(d);
       renderKStat();
       if (prev !== kStatState) homeSayRepaint();          // v9.6: 홈 카드 한 줄도 그 상태로
-      if (prev !== kStatState && isOpen(chatView) && (prev === 'down' || kStatState === 'down')) renderChat();   // 「PC 응답 없음」 안내 줄을 붙이거나 뗀다
+      if (prev !== kStatState && isOpen(chatView) && (prev === 'down' || prev === 'login' || kAway())) renderChat();   // 「PC 응답 없음」 안내 줄을 붙이거나 뗀다
     }).catch(function (e) {
       kStatBusy = false;
       if (e && (e.notready || e.badpass)) {          // 서버 함수 없음 → 이번 실행 동안 다시 묻지 않음 / 암호 틀림 → 숨김
