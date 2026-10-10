@@ -599,14 +599,31 @@
     return first.then(function () { return kaFetchManifest(true); }).then(function () { writePlan(); });
   }
   // 꾸미기 화면을 열 때: 서버 옷의 옷장 사진을 받는다(목록도 한 번 새로 본다)
+  //   v9.6.1: 새 목록에서 옷장 사진이 바뀐 서버 옷은 그 사진 한 장을 받아 바로 바꾼다. 예전에는 묶음이 바뀐 옷은 「입었을 때」만 새 묶음으로 넘어가서,
+  //   서버에서 옷장 사진을 바꿔도 입어 보지 않은 옷은 목록에 옛 사진이 그대로 남았다. 바꾸는 것은 옷장 사진 자리 하나뿐 — 나머지 파일은 예전처럼 입었을 때 넘어간다.
   function ensureThumbs() {
     return kaFetchManifest(false).then(function () {
       if (!ka.m) return false;
-      var need = [];
+      var need = [], swap = [];
       Object.keys(ka.eff).forEach(function (id) { var f = ka.eff[id].files || {}; if (f.expr && f.thumb && !KStore.url(f.thumb)) need.push(f.thumb); });
+      (ka.m.outfits || []).forEach(function (e) {
+        var c = e && e.id ? ka.eff[e.id] : null, nt = e && e.files ? e.files.thumb : '';
+        if (c && c.files && c.files.expr && c.files.thumb && typeof nt === 'string' && nt && nt !== c.files.thumb) { swap.push({ id: e.id, thumb: nt }); if (need.indexOf(nt) < 0 && !KStore.url(nt)) need.push(nt); }
+      });
       var again = ensureOutfit(outfit().id);                    // 지난번에 못 받은 것이 있으면 이때 다시 받는다
-      if (!need.length) return again;
-      return kaFetchAll(need).then(function () { kaRepaint(); return true; });
+      if (!need.length && !swap.length) return again;
+      return kaFetchAll(need).then(function () {
+        var changed = false;
+        swap.forEach(function (w) {
+          var c = ka.eff[w.id];
+          if (!c || !c.files || c.files.thumb === w.thumb || !kaReady([w.thumb])) return;      // 못 받았으면 옛 사진 그대로(다음에 열 때 다시)
+          var n = JSON.parse(JSON.stringify(c)); n.files.thumb = w.thumb; ka.eff[w.id] = n; changed = true;
+        });
+        if (changed) kaSave();
+        kaRepaint();
+        if (changed) kaGc();                                    // 새 사진으로 다시 그린 뒤에 옛 사진을 지운다
+        return true;
+      });
     });
   }
   // (v9.6) 지금 모습의 세로 영상 묶음: 실제로 틀 수 있는 것만 { listen, think, talk:[…], poster }. 다른 머리 조합이 보이는 중이면 없음(기본 머리 영상이라).
