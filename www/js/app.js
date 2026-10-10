@@ -3167,7 +3167,12 @@
 
   // 한 번의 듣기 turn 시작. auto=연속 대화 루프의 일부인지.
   function startListen(auto) {
-    if (chatRecording || stt.on) return;
+    if (chatRecording || stt.on) {
+      // v9.6: 이미 듣고 있던 중이면(음성 대화 중 대화를 펼쳐 「글」로 보내 목소리 답을 받은 경우 등) 듣기를 새로 열지는 않는다.
+      //   다만 케이 목소리가 끝난 뒤의 차례(auto)인데 상태 알약이 「케이가 말하는 중…」으로 남아 있으면 아무도 되돌리지 않으므로, 여기서 듣는 문구로 되돌린다(문구는 듣기를 열 때 쓰는 것 그대로).
+      if (auto && convoOn && isOpen(chatView)) setConvoStatus('말씀하세요… (끝나면 자동으로 보냅니다)');
+      return;
+    }
     if (!isOpen(chatView)) return;
     if (awaitingLive()) return;                   // 답 기다리는 중엔 안 들음
     if (kaiPlaying() || vqHasMore()) return;      // ⚠️ 케이 목소리 재생 중엔 녹음 안 함(자기 목소리 오인 방지) — O-0177 결정: 이 게이트 유지
