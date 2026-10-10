@@ -53,12 +53,15 @@
   /* ---- 한마디가 말하듯 찍히기 ----
    * p 안을 [보이는 부분][아직 안 보이는 부분(투명)] 두 조각으로 두고 경계만 옮긴다 → 줄 수·높이가 처음부터 그대로다.
    * p.textContent 는 언제 읽어도 전체 문장이다. */
-  function stopType(p) { if (p._kt) { clearInterval(p._kt); p._kt = 0; } }
+  // 찍히는 동안에는 그 알림 자리(role="status")를 aria-busy 로 두어 화면 읽기가 30ms 마다 바뀌는 조각을 읽지 않게 하고, 끝나면 풀어 전체 문장을 한 번 읽게 한다.
+  function busy(p, on) { var h = p.closest ? p.closest('[role="status"]') : null; if (!h) return; if (on) h.setAttribute('aria-busy', 'true'); else h.removeAttribute('aria-busy'); }
+  function stopType(p) { if (p._kt) { clearInterval(p._kt); p._kt = 0; } busy(p, false); }
   function type(p, text) {
     stopType(p);
     if (calm() || text.length < 3) { p.textContent = text; return; }
     var on = document.createElement('span'), off = document.createElement('span');
     off.className = 'kt-off';
+    busy(p, true);
     p.textContent = ''; p.appendChild(on); p.appendChild(off);
     off.textContent = text;
     var total = Math.max(TYPE_MIN, Math.min(TYPE_MAX, text.length * TYPE_STEP));
@@ -66,7 +69,7 @@
     p._kt = setInterval(function () {
       i = Math.min(text.length, i + per);
       on.textContent = text.slice(0, i); off.textContent = text.slice(i);
-      if (i >= text.length) { stopType(p); p.textContent = text; }
+      if (i >= text.length) { p.textContent = text; stopType(p); }
     }, TYPE_STEP);
   }
   // 장면 하나 맞추기. text 가 비면 숨긴다. opt.quiet = 움직임 없이 바로(빨리 쓰는 화면).

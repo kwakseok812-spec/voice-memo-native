@@ -1,5 +1,5 @@
 {
- "version": 4,
+ "version": 5,
  "default": "burgundy_suit",
  "expressions": [
   "neutral",
@@ -26,7 +26,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "기본",
+   "category": "정장·블라우스",
    "thumb": "thumb.jpg",
    "idle": "idle.mp4",
    "talk": "talk.mp4",
@@ -65,7 +65,55 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "기본",
+   "category": "정장·블라우스",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "bow_blouse",
+   "name": "리본 블라우스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "정장·블라우스",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "champagne_satin_blouse",
+   "name": "샴페인 새틴 블라우스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "정장·블라우스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -89,7 +137,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "캐주얼",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -113,7 +161,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "매력",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -137,7 +185,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "매력",
+   "category": "원피스·드레스",
    "crop": {
     "scale": 1.191,
     "ox": 50.0,
@@ -166,31 +214,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "매력",
-   "thumb": "thumb.jpg",
-   "fullbody": "fullbody.jpg",
-   "expr_hd": {
-    "smile": "expr_smile_hd.jpg"
-   }
-  },
-  {
-   "id": "bow_blouse",
-   "name": "리본 블라우스",
-   "expr": {
-    "neutral": "expr_neutral.jpg",
-    "smile": "expr_smile.jpg",
-    "cheer": "expr_cheer.jpg",
-    "concern": "expr_concern.jpg",
-    "thinking": "expr_thinking.jpg"
-   },
-   "avatar": {
-    "neutral": "av_neutral.jpg",
-    "smile": "av_smile.jpg",
-    "cheer": "av_cheer.jpg",
-    "concern": "av_concern.jpg",
-    "thinking": "av_thinking.jpg"
-   },
-   "category": "새 옷",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -214,7 +238,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "새 옷",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -238,31 +262,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "새 옷",
-   "thumb": "thumb.jpg",
-   "fullbody": "fullbody.jpg",
-   "expr_hd": {
-    "smile": "expr_smile_hd.jpg"
-   }
-  },
-  {
-   "id": "champagne_satin_blouse",
-   "name": "샴페인 새틴 블라우스",
-   "expr": {
-    "neutral": "expr_neutral.jpg",
-    "smile": "expr_smile.jpg",
-    "cheer": "expr_cheer.jpg",
-    "concern": "expr_concern.jpg",
-    "thinking": "expr_thinking.jpg"
-   },
-   "avatar": {
-    "neutral": "av_neutral.jpg",
-    "smile": "av_smile.jpg",
-    "cheer": "av_cheer.jpg",
-    "concern": "av_concern.jpg",
-    "thinking": "av_thinking.jpg"
-   },
-   "category": "새 옷",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -286,31 +286,7 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "새 옷",
-   "thumb": "thumb.jpg",
-   "fullbody": "fullbody.jpg",
-   "expr_hd": {
-    "smile": "expr_smile_hd.jpg"
-   }
-  },
-  {
-   "id": "sapphire_mandarin",
-   "name": "사파이어 차이나 칼라 드레스",
-   "expr": {
-    "neutral": "expr_neutral.jpg",
-    "smile": "expr_smile.jpg",
-    "cheer": "expr_cheer.jpg",
-    "concern": "expr_concern.jpg",
-    "thinking": "expr_thinking.jpg"
-   },
-   "avatar": {
-    "neutral": "av_neutral.jpg",
-    "smile": "av_smile.jpg",
-    "cheer": "av_cheer.jpg",
-    "concern": "av_concern.jpg",
-    "thinking": "av_thinking.jpg"
-   },
-   "category": "새 옷",
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {
@@ -334,7 +310,31 @@
     "concern": "av_concern.jpg",
     "thinking": "av_thinking.jpg"
    },
-   "category": "새 옷",
+   "category": "원피스·드레스",
+   "thumb": "thumb.jpg",
+   "fullbody": "fullbody.jpg",
+   "expr_hd": {
+    "smile": "expr_smile_hd.jpg"
+   }
+  },
+  {
+   "id": "sapphire_mandarin",
+   "name": "사파이어 차이나 칼라 드레스",
+   "expr": {
+    "neutral": "expr_neutral.jpg",
+    "smile": "expr_smile.jpg",
+    "cheer": "expr_cheer.jpg",
+    "concern": "expr_concern.jpg",
+    "thinking": "expr_thinking.jpg"
+   },
+   "avatar": {
+    "neutral": "av_neutral.jpg",
+    "smile": "av_smile.jpg",
+    "cheer": "av_cheer.jpg",
+    "concern": "av_concern.jpg",
+    "thinking": "av_thinking.jpg"
+   },
+   "category": "원피스·드레스",
    "thumb": "thumb.jpg",
    "fullbody": "fullbody.jpg",
    "expr_hd": {

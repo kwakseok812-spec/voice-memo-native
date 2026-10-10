@@ -282,11 +282,15 @@
     greetings: function () { return GREETINGS.slice(); },
     candidates: candidates, pickGreeting: pickGreeting,   // 시험·점검용(시각을 넣으면 그 시각의 후보)
     lastShown: function () { return lsGet(LAST_KEY) || ''; },
-    source: sourceFor, defaultBow: function () { return { video: DEFAULT_BOW.video, poster: DEFAULT_BOW.poster, cue: DEFAULT_BOW.cue }; },   // 시험·점검용
     play: function () { return play(true); },          // 「지금 보기」(설정 화면) — 오늘 인사 기록은 안 바꾼다
     skip: function () { finish('api'); },
     active: function () { return active; }
   };
 
+  // 시험 환경(로컬 시험 서버 127.0.0.1 + 가짜 통신)에서만 여는 점검 창. 배포본에는 없다.
+  if (location.hostname === '127.0.0.1' && window.__mock) {
+    window.KIntro.source = sourceFor;
+    window.KIntro.defaultBow = function () { return { video: DEFAULT_BOW.video, poster: DEFAULT_BOW.poster, cue: DEFAULT_BOW.cue }; };
+  }
   if (shouldAuto()) play(false);
 })();

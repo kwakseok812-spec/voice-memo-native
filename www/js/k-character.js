@@ -405,7 +405,11 @@
       return n;
     });
     catRemote.forEach(function (o) { if (!have[o.id]) { have[o.id] = 1; outs.push(o); } });
-    Object.keys(ka.eff).forEach(function (id) {       // 앱에 없는 서버 옷: 옷장 사진을 받은 것만 목록에(사진을 다 받기 전에는 pending)
+    // 앱에 없는 서버 옷: 옷장 사진을 받은 것만 목록에(사진을 다 받기 전에는 pending). 순서 = 서버 목록에 적힌 순서(올리는 도구가 meta.json 의 order 로 정한다)
+    var srvIds = [];
+    if (ka.m && Array.isArray(ka.m.outfits)) ka.m.outfits.forEach(function (e) { if (e && e.id && ka.eff[e.id] && srvIds.indexOf(e.id) < 0) srvIds.push(e.id); });
+    Object.keys(ka.eff).forEach(function (id) { if (srvIds.indexOf(id) < 0) srvIds.push(id); });
+    srvIds.forEach(function (id) {
       var e = ka.eff[id], f = e && e.files;
       if (have[id] || !f || !f.expr || !f.thumb || !kaReady([f.thumb])) return;
       var n = { id: id, name: e.name || id, desc: e.desc || '', category: e.category || '새 옷', crop: e.crop || null, base: '', remote: true, srv: true, server: true,
@@ -426,19 +430,64 @@
     return S.load(names);
   }
   function kaRepaint() { compose(); refreshAll(true); notify(); writePlan(); }
+  var KA_LIST_MS = 8000, KA_FILE_MS = 45000;      // 시간 제한: 목록 8초 · 파일 45초(느린 연결의 0.7MB 영상 기준). 넘으면 그만두고 다음 기회에 다시
+  // 시간 제한이 있는 받기(멈춘 연결 때문에 영영 끝나지 않는 일이 없게). 넘으면 요청을 끊고 실패로 돌려준다.
+  function kaTimed(url, opt, ms) {
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null, done = false;
+    opt = opt || {}; if (ac) opt.signal = ac.signal;
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { if (done) return; done = true; try { if (ac) ac.abort(); } catch (e) {} rej(new Error('시간 초과')); }, ms);
+      fetch(url, opt).then(function (r) { if (done) return; res({ r: r, end: function () { done = true; clearTimeout(t); } }); },
+                           function (e) { if (done) return; done = true; clearTimeout(t); rej(e); });
+    });
+  }
+  /* 받은 것이 정말 그 파일인가 — 공용 와이파이 로그인 화면처럼 「200 인데 다른 것」이나 받다가 끊긴 것을 저장하지 않으려고 본다.
+   *   ① 크기가 목록(bytes)에 적힌 값과 같은가 ② 파일 머리가 그 형식인가(JPEG FF D8 FF · WebP RIFF…WEBP · MP4 ….ftyp).
+   *   이름이 곧 내용이라 한 번 저장하면 다시 받지 않는다 → 틀린 것을 저장하면 영영 남는다. 그래서 저장 전에 확인한다. */
+  function kaLooksRight(name, blob) {
+    var want = ka.m && ka.m.bytes && ka.m.bytes[name];
+    if (!blob || !blob.size) return Promise.resolve(false);
+    if (typeof want === 'number' && blob.size !== want) return Promise.resolve(false);
+    return new Promise(function (res) {
+      try {
+        var fr = new FileReader();
+        fr.onerror = function () { res(false); };
+        fr.onload = function () {
+          var b = new Uint8Array(fr.result), ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1] || '';
+          function at(i, str) { for (var k = 0; k < str.length; k++) if (b[i + k] !== str.charCodeAt(k)) return false; return true; }
+          if (ext === 'jpg') return res(b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF);
+          if (ext === 'webp') return res(at(0, 'RIFF') && at(8, 'WEBP'));
+          if (ext === 'mp4') return res(at(4, 'ftyp'));
+          res(false);
+        };
+        fr.readAsArrayBuffer(blob.slice(0, 16));
+      } catch (e) { res(false); }
+    });
+  }
   function kaFetchFile(name) {
     var S = window.KStore; if (!S || !ka.m || !ka.m.base) return Promise.resolve(false);
     if (S.has(name)) return S.load([name]).then(function (r) { return r.length > 0; });
     if (ka.busy[name]) return ka.busy[name];
-    var p = fetch(ka.m.base + name).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
-      .then(function (b) { return S.put(name, b); }).then(function () { delete ka.busy[name]; return true; },
-        function () { delete ka.busy[name]; return false; });
+    var p = kaTimed(ka.m.base + name, {}, KA_FILE_MS)
+      .then(function (x) { if (!x.r.ok) { x.end(); throw new Error('HTTP ' + x.r.status); } return x.r.blob().then(function (b) { x.end(); return b; }); })
+      .then(function (b) { return kaLooksRight(name, b).then(function (ok) { if (!ok) throw new Error('다른 파일'); return S.put(name, b); }); })
+      .then(function () { delete ka.busy[name]; return true; }, function () { delete ka.busy[name]; return false; });
     ka.busy[name] = p;
     return p;
   }
-  function kaFetchAll(names) {             // 차례로 받는다(한 번에 하나 — 느린 연결에서 화면이 먼저다). 전부 됐으면 true
+  // 이미 저장해 둔 것 중 크기가 목록과 다른 것(예전에 잘못 저장된 것)은 지운다 → 다음에 다시 받는다
+  function kaDropWrong() {
+    var S = window.KStore, by = ka.m && ka.m.bytes;
+    if (!S || !S.sizes || !by) return Promise.resolve();
+    var names = S.names().filter(function (n) { return typeof by[n] === 'number'; });
+    return S.sizes(names).then(function (sz) {
+      var bad = names.filter(function (n) { return typeof sz[n] === 'number' && sz[n] !== by[n]; });
+      return bad.length ? S.del(bad) : null;
+    }, function () {});
+  }
+  function kaFetchAll(names, onEach) {     // 차례로 받는다(한 번에 하나 — 느린 연결에서 화면이 먼저다). 전부 됐으면 true. onEach = 하나 받을 때마다
     var ok = true;
-    return names.reduce(function (pr, n) { return pr.then(function () { return kaFetchFile(n); }).then(function (r) { if (!r) ok = false; }); }, Promise.resolve()).then(function () { return ok; });
+    return names.reduce(function (pr, n) { return pr.then(function () { return kaFetchFile(n); }).then(function (r) { if (!r) ok = false; else if (onEach) onEach(n); }); }, Promise.resolve()).then(function () { return ok; });
   }
   /* 그 옷의 자산을 받는다. opt.bow = 인사 영상을 꼭 받는다(전신을 직접 누름 — 데이터 절약 모드여도).
    *   새 목록의 묶음(next)이 지금 쓰는 묶음(eff)과 다르면 새 파일을 다 받은 뒤에 바꾼다. */
@@ -458,7 +507,7 @@
     // 먼저 지금 쓰는 묶음에서 빠진 것(사진 → 자세 그림 → 영상 순)
     var order = kaNames(cur, 'core').concat(kaNames(cur, 'pose'));
     var vids = vidsOf(cur);
-    return kaFetchAll(order.filter(function (n) { return !KStore.has(n) || !KStore.url(n); })).then(function () { paintSome(); return kaFetchAll(vids.filter(function (n) { return !KStore.has(n) || !KStore.url(n); })); })
+    return kaFetchAll(order.filter(function (n) { return !KStore.has(n) || !KStore.url(n); })).then(function () { paintSome(); return kaFetchAll(vids.filter(function (n) { return !KStore.has(n) || !KStore.url(n); }), paintSome); })   // 영상은 하나 받을 때마다 바로 쓴다(평소 영상이 인사 영상을 기다리지 않게)
       .then(function () {
         if (cur === next || JSON.stringify(cur) === JSON.stringify(next)) { paintSome(); return true; }
         return kaFetchAll(wanted(next).filter(function (n) { return !KStore.has(n) || !KStore.url(n); })).then(function (ok) {
@@ -479,7 +528,10 @@
   }
   // 새 목록을 받아들인다: 처음 보는 옷은 바로 새 묶음, 이미 쓰던 옷은 그대로 두고(입었을 때 새 파일을 다 받으면 바뀐다) 없어진 옷은 뺀다
   function kaAdopt(m) {
-    if (!m || typeof m !== 'object' || !Array.isArray(m.outfits)) return false;
+    if (!m || typeof m !== 'object' || !Array.isArray(m.outfits) || typeof m.base !== 'string' || !m.base) return false;
+    // 옷이 하나도 없거나 쓸 수 있는 묶음이 하나도 없는 목록은 받아들이지 않는다(서버 실수 한 번으로 폰에 받아 둔 자산이 다 지워지지 않게).
+    var usable = m.outfits.filter(function (e) { return e && e.id && /^[a-z0-9_]+$/i.test(e.id) && e.files && typeof e.files === 'object' && kaNames(e).length > 0; });
+    if (!usable.length) return false;
     ka.m = m;
     var seen = {};
     m.outfits.forEach(function (e) {
@@ -501,15 +553,15 @@
     if (ka.fetching) return ka.fetching;
     if (!force && Date.now() - ka.lastFetch < 60000) return Promise.resolve(false);
     ka.lastFetch = Date.now();
-    ka.fetching = fetch(C.url + '/rest/v1/rpc/get_k_assets', { method: 'POST',
-      headers: { 'apikey': C.key, 'Authorization': 'Bearer ' + C.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_pass: pass }) })
-      .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.status = r.status; throw e; } return r.json(); })
+    ka.fetching = kaTimed(C.url + '/rest/v1/rpc/get_k_assets', { method: 'POST',
+      headers: { 'apikey': C.key, 'Authorization': 'Bearer ' + C.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_pass: pass }) }, KA_LIST_MS)
+      .then(function (x) { if (!x.r.ok) { x.end(); var e = new Error('HTTP ' + x.r.status); e.status = x.r.status; throw e; } return x.r.json().then(function (m) { x.end(); return m; }); })
       .then(function (m) {
         ka.fetching = null;
-        if (!m) { ka.state = 'empty'; return false; }            // 서버에 아직 목록이 없다
-        if (!kaAdopt(m)) { ka.state = 'bad'; return false; }
+        if (!m) { ka.state = 'empty'; return false; }            // 서버에 아직 목록이 없다 → 아무것도 바꾸지 않는다
+        if (!kaAdopt(m)) { ka.state = 'bad'; return false; }     // 비었거나 형식이 이상한 목록 → 받아들이지 않고, 받아 둔 파일도 지우지 않는다
         ka.state = 'ok';
-        return kaLoadStored().then(function () { kaRepaint(); kaGc(); return ensureOutfit(outfit().id); }).then(function () { return true; });
+        return kaDropWrong().then(kaLoadStored).then(function () { kaRepaint(); kaGc(); return ensureOutfit(outfit().id); }).then(function () { return true; });
       }, function (e) { ka.fetching = null; ka.state = (e && e.status === 404) ? 'noserver' : (e && (e.status === 403 || e.status === 401 || e.status === 400)) ? 'badpass' : 'offline'; return false; });
     return ka.fetching;
   }
@@ -845,8 +897,7 @@
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState,
     assets: { state: function () { return ka.state; }, refresh: function () { return kaFetchManifest(true); }, ensureOutfit: ensureOutfit, ensureThumbs: ensureThumbs,
-              wanting: function () { return ka.want; }, saveData: saveData,
-              info: function () { return { state: ka.state, outfits: Object.keys(ka.eff), stored: window.KStore ? KStore.names().length : 0, updated: ka.m && ka.m.updated }; } },
+              wanting: function () { return ka.want; }, saveData: saveData },
     mount: function () { faces().forEach(paint); },
     restartFace: restartFace, hold: hold, faceFlash: faceFlash,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },
@@ -859,6 +910,11 @@
       isFemaleGuess: function (v) { return !!(v && FEMALE_HINTS.test(v.name || '')); }
     }
   };
+  // 시험 환경(로컬 시험 서버 127.0.0.1 + 가짜 통신)에서만: 받은 자산 상태를 들여다보는 창. 배포본(폰 앱 · PC판)에는 없다.
+  if (location.hostname === '127.0.0.1' && window.__mock) {
+    window.KChar.assets.info = function () { return { state: ka.state, outfits: Object.keys(ka.eff), stored: window.KStore ? KStore.names().length : 0, updated: ka.m && ka.m.updated }; };
+    try { if (window.__kaTimeouts) { KA_LIST_MS = window.__kaTimeouts[0] || KA_LIST_MS; KA_FILE_MS = window.__kaTimeouts[1] || KA_FILE_MS; } } catch (e) {}   // 시험에서 시간 제한을 짧게
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window.KChar.mount(); });
   else window.KChar.mount();
 })();

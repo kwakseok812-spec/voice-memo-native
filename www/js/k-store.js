@@ -79,12 +79,17 @@
       });
     });
   }
+  // 저장된 파일의 크기(바이트). 목록에 적힌 크기와 다른 것(받다가 끊긴 것 등)을 가려내는 데 쓴다. 없는 이름은 빠진다.
+  function sizes(names) {
+    var out = {};
+    return Promise.all((names || []).map(function (n) { return getBlob(n).then(function (b) { if (b) out[n] = b.size; }); })).then(function () { return out; });
+  }
   window.KStore = {
     ready: opened,
     has: function (n) { return !!have[n]; },
     url: function (n) { return urls[n] || ''; },
     names: function () { return Object.keys(have); },
-    load: load, put: put, del: del, blob: getBlob,
+    load: load, put: put, del: del, blob: getBlob, sizes: sizes,
     persistent: function () { return !!db; }
   };
 })();

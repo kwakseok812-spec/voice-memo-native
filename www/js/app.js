@@ -4262,7 +4262,8 @@
    *   true        = 대장 상태가 「진행」인 일이 있어도 책상에서 일하는 모습. 한마디는 사실대로 「…일을 진행하고 있습니다.」
    *                 (지금 실제로 손이 움직이는 중인지는 모르므로 「지금 만들고 있습니다」라고 하지 않는다). */
   var ORD_DESK_ON_PROGRESS = false;
-  try { if (window.__ordDeskOnProgress === true) ORD_DESK_ON_PROGRESS = true; } catch (e) {}       // 시험·시안용 덮어쓰기(앱 화면에는 스위치 없음)
+  // 시험 환경(로컬 시험 서버 127.0.0.1 + 가짜 통신)에서만 켜 볼 수 있다. 배포본(폰 앱 · PC판)에서는 위 상수만 본다 — 화면 밖에서 바꿀 길이 없다.
+  try { if (location.hostname === '127.0.0.1' && window.__mock && window.__ordDeskOnProgress === true) ORD_DESK_ON_PROGRESS = true; } catch (e) {}
   function ordersScene(state) {
     if (!window.KScene) return;
     var pose = 'idle', text = '';
@@ -4784,8 +4785,12 @@
     if ($('kwCount')) $('kwCount').textContent = String(list.length);
     var g = $('kwGrid');
     if (g) {
-      var lastCat = null, cats = {};
-      list.forEach(function (o) { var c = o.category || ''; cats[c] = (cats[c] || 0) + 1; });
+      var lastCat = null, cats = {}, catOrder = [];
+      list.forEach(function (o) { var c = o.category || ''; if (!cats[c]) catOrder.push(c); cats[c] = (cats[c] || 0) + 1; });
+      // v9.5: 같은 묶음끼리 이어지게 모은다(묶음 순서 = 처음 나온 순서, 묶음 안 순서는 그대로) — 서버에서 온 새 옷도 자기 묶음 끝에 붙는다
+      list = list.map(function (o, i) { return { o: o, i: i }; }).sort(function (a, b) {
+        var d = catOrder.indexOf(a.o.category || '') - catOrder.indexOf(b.o.category || ''); return d || (a.i - b.i);
+      }).map(function (x) { return x.o; });
       var multiCat = Object.keys(cats).length > 1;
       g.innerHTML = list.map(function (o) {
         var on = o.id === cur.id, head = '';
