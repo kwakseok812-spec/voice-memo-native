@@ -112,7 +112,12 @@
     }
     startState(st, false);
   }
-  function start(st) { on = true; state = st || state || 'idle'; if (host) host._fail = 0; startState(state, false); }
+  function start(st) {
+    on = true; state = st || state || 'idle'; if (host) host._fail = 0; startState(state, false);
+    // 통화를 시작했는데 지금 입은 옷의 세로 영상을 아직 못 받았으면(앱을 켤 때 연결이 끊겼던 경우 등) 지금 받기 시작한다.
+    // 받는 대로 refresh() 가 그림 → 포스터 → 영상으로 바꿔 준다. 꾸미기를 열 때와 같은 길(목록은 1분에 한 번만 새로 본다 · 데이터 절약 모드면 영상은 받지 않는다).
+    try { var K = window.KChar; if (K && K.assets && K.assets.ensureThumbs && !(K.callSet && K.callSet())) K.assets.ensureThumbs(); } catch (e) {}
+  }
   function stop() { on = false; token++; stopVideos(); }
   // 옷·머리를 바꿨거나 서버 자산을 다 받았을 때: 지금 상태를 새 자산으로 다시
   function refresh() { if (on) startState(state, false); }
