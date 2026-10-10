@@ -2674,8 +2674,16 @@
     }, { passive: true });
   })();
   function renderChat() {
+    chatFx = null;
     try { renderChatInner(); } finally { try { callCaption(); } catch (e) {} }   // v9.6: 답이 올 때마다 전체 화면 자막도
+    // v9.6(O-0387 2번) 채팅 보내기 움직임: 새로 그린 「뒤」에, 방금 보낸 말·방금 온 말·보낸 말 아래 한 줄이 바뀐 곳에만 얹는다(그리기·스크롤은 이미 끝났다)
+    try {
+      if (chatFx && window.KMotion && KMotion.chat && chatLog && isOpen(chatView) && !chatSearchOn)
+        KMotion.chat(chatLog, { mine: chatFx.mine, incoming: chatFx.incoming, convo: convoOn, send: chatSend, face: chatView.querySelector('#kHeadBtn .kface') });
+    } catch (e) {}
+    chatFx = null;
   }
+  var chatFx = null;
   /* v9.6 (O-0356 ③⑤) 채팅의 날짜 줄 · 보낸 말 아래 한 줄 · 대기 줄
    *  날짜 줄: 한국시간으로 날짜가 바뀌는 자리에 「10월 9일 목요일」 한 줄(해가 다르면 연도까지). 검색 중에는 넣지 않는다.
    *  보낸 말 아래: 「보내는 중…」 → 「보냄」(서버에 올라간 것을 확인) → 「받았습니다」(PC의 케이가 받아 처리를 시작한 것을 확인).
@@ -2698,7 +2706,7 @@
   function msgStatHtml(m) {
     if (!msgWaiting(m) || m.uploading) return '';
     var t = m.got ? '받았습니다' : (m.sent ? (kStatState === 'down' ? '보냄 · PC가 응답하지 않아 아직 받지 못했습니다' : '보냄') : '보내는 중…');
-    return '<div class="msgstat' + (m.got ? ' got' : '') + '">' + t + '</div>';
+    return '<div class="msgstat' + (m.got ? ' got' : '') + '" data-ms="' + msgUid(m) + '">' + t + '</div>';
   }
   function progSay(p) {
     p = String(p || '').replace(/[.…]+$/, '').trim();
@@ -2729,7 +2737,7 @@
     var wasNearBottom = viewOpen ? chatNearBottom() : true;
     var keepView = (viewOpen && !wasNearBottom) ? chatCaptureView() : null;
     var prevUids = chatRenderedUids, nowUids = {};
-    var firstUnreadUid = '', newIncomingUid = '', newMine = false;
+    var firstUnreadUid = '', newIncomingUid = '', newMine = false, newMineUid = '';
     if (anchorOn) {                                     // 붙잡아 둔 경계 이후 첫 안읽음(내용 있는 말풍선만)
       for (var ai = 0; ai < chatMsgs.length; ai++) {
         var am = chatMsgs[ai];
@@ -2772,7 +2780,7 @@
         nowUids[uid] = 1;
         if (prevUids && !prevUids[uid]) {
           if (isIncomingMsg(m)) { if (!newIncomingUid) newIncomingUid = uid; }
-          else newMine = true;                              // 이 기기에서 방금 보낸 내 메시지
+          else { newMine = true; newMineUid = uid; }        // 이 기기에서 방금 보낸 내 메시지
         }
         if (uid === chatNewDivUid && shown > 0) divider = '<div class="chatnewdiv"><span>여기부터 새 메시지</span></div>';
       }
@@ -2823,6 +2831,7 @@
     } else if (kStatState === 'login') {                   // v9.6: PC는 켜져 있지만 로그인이 풀린 때
       html += '<div class="waitnote down">PC의 로그인이 풀려 지금은 답을 드리지 못합니다. PC에서 다시 로그인해 주시면 이어서 답하겠습니다.</div>';
     }
+    chatFx = { mine: newMineUid, incoming: newIncomingUid };   // v9.6(O-0387 2번): 다 그린 뒤 renderChat 이 움직임 효과를 얹는다
     chatLog.innerHTML = chatLockHtml() + chatMoreHtml() + html;         // v7.0: 맨 위 [이전 대화 더 보기] / 「여기가 대화의 처음이에요」
     applyChatFolds();                                    // O-0111: 긴 말풍선 접기(아래 스크롤 계산 '전'에 높이를 확정)
     chatRenderedUids = nowUids;
@@ -3122,6 +3131,9 @@
     on = !!on;
     if (!chatView || chatView.classList.contains('convo-on') === on) { syncConvoMode(); return; }
     var wasBottom = chatNearBottom();              // 레이아웃이 바뀌기 전 위치(끌 때: 맨 아래였으면 맨 아래로 복귀)
+    // v9.6(O-0387 7번): 효과가 시작할 자리(누른 단추의 지금 위치)와, 끌 때 통화 화면이 화면 전체였는지를 화면을 바꾸기 「전」에 재 둔다
+    var kmFrom = null, kmWasFull = false;
+    try { if (window.KMotion && chatConvoToggle) { kmFrom = chatConvoToggle.getBoundingClientRect(); kmWasFull = !on && KMotion.fullStage(chatView); } } catch (e) {}
     chatView.classList.toggle('convo-on', on);
     chatView.classList.toggle('convo-full', on);   // v9.6: 음성 대화 = 전체 화면
     chatView.classList.remove('convo-log');
@@ -3134,6 +3146,13 @@
     }
     if (on) { scrollTop(); chatScrollBottom(); }   // 켤 때: 최근 대화가 무대 아래 상자 맨 아래에 보이게
     else if (wasBottom) chatScrollBottom();
+    // v9.6(O-0387 7번): 화면은 위에서 이미 바뀌었다 — 그 위에 움직임만 얹는다(마이크·듣기 시작·종료 처리는 이 줄과 무관하게 예전 그 시점에 돈다)
+    try {
+      if (window.KMotion && isOpen(chatView)) {
+        if (on) KMotion.callStart(kmFrom, chatView);
+        else KMotion.callEnd(chatConvoToggle ? chatConvoToggle.getBoundingClientRect() : null, chatView, kmWasFull);
+      }
+    } catch (e) {}
   }
   function stopAmpPoll() { if (ampTimer) { clearInterval(ampTimer); ampTimer = null; } }
   function kaiPlaying() { return !!(kaiAudio && !kaiAudio.paused && !kaiAudio.ended && kaiAudio.currentTime > 0); }

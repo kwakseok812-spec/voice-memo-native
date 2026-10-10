@@ -1795,3 +1795,16 @@ html[data-fs] .processing.with-k{font-size:calc(14px * var(--fsx))}
 .kmo-shine{position:absolute;top:-20%;bottom:-20%;left:0;width:38%;background:linear-gradient(90deg,transparent,#fff,transparent);opacity:0;transform:translateX(-160%) skewX(-18deg);pointer-events:none}
 .kmo-spk{position:absolute;z-index:2;color:#FFF1B8;pointer-events:none;transform:scale(0);opacity:0}
 .kmo-spk svg{display:block;width:100%;height:100%;filter:drop-shadow(0 0 4px #FFF1B8)}
+/* 1번 단추 누름: 물결(불투명 단추에만 잠깐 붙는다) */
+.kmo-rel{position:relative}
+.kmo-clip{overflow:hidden}
+.kmo-rp{position:absolute;border-radius:50%;background:rgba(255,255,255,.38);pointer-events:none;transform:scale(0);opacity:0}
+html[data-style="light"] .tool .kmo-rp,html[data-style="light"] .hseg-btn:not(.on) .kmo-rp,html[data-style="light"] .htogbtn:not(.on) .kmo-rp{background:rgba(79,70,229,.22)}
+/* 3번 건강: 색종이 · 굴러 바뀌는 숫자 */
+.kmo-pt{position:fixed;z-index:60;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:2px;pointer-events:none;opacity:0}
+.kmo-pt.r{border-radius:50%}
+.kmo-num{display:inline-block;font-weight:inherit}
+/* 7번 음성 대화: 누른 단추 자리에서 퍼지는(끝날 때 오므라드는) 원 — 누름을 받지 않는다 */
+.kmo-wash{position:fixed;border-radius:50%;pointer-events:none;transform:scale(0)}
+.kmo-wash.in{z-index:14;background:linear-gradient(135deg,#F43F5E,#A855F7)}      /* 통화 화면(z 15) 바로 아래 · 채팅 화면 위 */
+.kmo-wash.out{z-index:18;background:radial-gradient(circle at 50% 40%,#D6D6E0,#B9B9C9)}   /* 돌아온 채팅 화면 위를 덮었다가 단추로 오므라든다 */

@@ -475,6 +475,8 @@
     if (global.KScene) global.KScene.set(sc, 'clip', t, { quiet: true });      // 빨리 쓰는 화면 — 등장·글자 찍힘 없이 바로
     else { var pp = $('hSay'); if (pp) pp.textContent = t; }
     sc.setAttribute('data-n', String(n));
+    // v9.6(O-0387 3번): 대표님이 방금 누른 변화로 칸 수가 바뀌었을 때만 숫자가 굴러 바뀐다(서버 값을 받아 맞출 때는 그대로)
+    try { if (user && lastCount >= 0 && n !== lastCount && global.KMotion) global.KMotion.rollNumber(sc.querySelector('.ksp p'), n, n > lastCount); } catch (e) {}
     if (user && mode === 'today' && rec.log_date === todayStr() && n === REQUIRED.length && lastCount >= 0 && lastCount < REQUIRED.length) cheer(rec.log_date);
     lastCount = n;
   }
@@ -490,7 +492,7 @@
     try { global.KScene.set(el, 'idle', '오늘 기록 다 적으셨습니다.'); }
     catch (e) { if (el.parentNode) el.parentNode.removeChild(el); return; }
     try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}  // 장면을 실제로 띄운 뒤에 적는다(하루 한 번)
-    setTimeout(function () { el.classList.add('on'); }, 30);
+    setTimeout(function () { el.classList.add('on'); try { if (global.KMotion) global.KMotion.cheer(el); } catch (e) {} }, 30);   // v9.6(O-0387 3번): 작은 축하(색종이) — 하루 한 번은 위에서 이미 지킨다
     clearTimeout(cheerT);
     cheerT = setTimeout(function () {
       el.classList.remove('on');
@@ -512,9 +514,12 @@
     });
     var saving = force === 'saving' || busyDate === rec.log_date || !!(saveTimer && saveTimerDate === rec.log_date);
     if (el) {
+      var wasWork = el.className.indexOf('work') >= 0;
       if (saving) { el.textContent = '적고 있습니다…'; el.className = 'hsave work'; }
       else if (dk.length) { el.textContent = hereWord() + ' 적어 둠'; el.className = 'hsave pend'; }
       else { el.textContent = '적어 두었습니다'; el.className = 'hsave ok'; }
+      // v9.6(O-0387 3번): 「적고 있습니다…」에서 「적어 두었습니다」로 바뀌는 순간에만 살짝 떠오른다
+      try { if (wasWork && el.className === 'hsave ok' && global.KMotion) global.KMotion.saved(el); } catch (e) {}
     }
     if (box) {
       if (dk.length && !saving) {
@@ -678,7 +683,15 @@
   function refreshChk(k, quiet) {
     var host = $('hToday'); if (!host) return;
     var item = host.querySelector('.hitem[data-k="' + k + '"]');
-    if (item) { var c = item.querySelector('.hchk'); if (c) c.className = 'hchk' + (isSet(rec[k]) ? ' on' : ''); }
+    if (item) {
+      var c = item.querySelector('.hchk');
+      if (c) {
+        var wasOn = c.className.indexOf(' on') >= 0, nowOn = isSet(rec[k]);
+        c.className = 'hchk' + (nowOn ? ' on' : '');
+        // v9.6(O-0387 3번): 대표님이 방금 눌러 칸이 「처음 채워진」 순간에만 체크를 그린다(＋/− 를 연달아 눌러 값만 바뀔 때·서버 값을 받아 맞출 때는 그대로)
+        try { if (quiet !== true && nowOn && !wasOn && global.KMotion) global.KMotion.checkDraw(c); } catch (e) {}
+      }
+    }
     paintSay(quiet !== true);
   }
   function refreshAllChk() { FIELDS.forEach(function (k) { refreshChk(k, true); }); }
@@ -862,6 +875,8 @@
     if (t === rec) {
       if (on) delete openMeals[k]; else openMeals[k] = 1;
       renderToday();
+      // v9.6(O-0387 3번): 「안 먹음」을 켜 그 끼니가 한 줄로 접힌 순간 — 다른 칸과 같이 체크를 그린다(화면을 새로 그린 뒤라 접힌 줄의 체크를 찾아서)
+      try { if (on && global.KMotion) { var hh = $('hToday'), ci = hh && hh.querySelector('.hmeal[data-k="' + k + '"] .hchk'); if (ci) global.KMotion.checkDraw(ci); } } catch (e) {}
       lastCount = before; paintSay(true);
     }
     if (ch) scheduleSave(t);
