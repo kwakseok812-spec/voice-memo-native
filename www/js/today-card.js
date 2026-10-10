@@ -80,7 +80,7 @@
     return q.slice(0, 60);
   }
   function openWebMap(q, why) {
-    var url = q ? 'https://map.naver.com/p/search/' + encodeURIComponent(q) : 'https://map.naver.com/';   // q 없음 = 홈 「길찾기」 카드(지도만)
+    var url = q ? 'https://map.naver.com/p/search/' + encodeURIComponent(q) : 'https://map.naver.com/';
     var w = null;
     try { w = global.open(url, '_blank'); } catch (e) {}
     var S = H();
@@ -96,18 +96,6 @@
     EA.openUri({ uri: 'nmap://search?query=' + encodeURIComponent(q) + '&appname=' + NMAP_APPNAME, pkg: NMAP_PKG })
       .then(function (r) { if (!r || !r.opened) openWebMap(q, 'noapp'); })
       .catch(function () { openWebMap(q, 'noapp'); });
-  }
-
-  /* v7.8 홈 「길찾기」 카드 — 검색어 없이 네이버 지도만 연다. 공식 URL Scheme 의 지도 화면(nmap://map, 좌표·줌은 선택).
-   *   일정 [길찾기]와 같은 통로(ExternalApp.openUri → 앱 없으면 웹 지도). PC판·옛 APK 는 바로 웹 지도. */
-  function openMapHome() {
-    var C = global.Capacitor;
-    var native = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
-    var EA = native && C.Plugins && C.Plugins.ExternalApp;
-    if (!EA || !EA.openUri) { openWebMap(''); return; }
-    EA.openUri({ uri: 'nmap://map?appname=' + NMAP_APPNAME, pkg: NMAP_PKG })
-      .then(function (r) { if (!r || !r.opened) openWebMap('', 'noapp'); })
-      .catch(function () { openWebMap('', 'noapp'); });
   }
 
   /* (O-0217) 케이 답의 [길찾기] 칩 — 같은 통로(ExternalApp.openUri → 앱 없으면 웹 지도).
@@ -649,7 +637,6 @@
   global.TodayCard = {
     refresh: refresh,
     render: render,
-    openMap: openMapHome,                  // v7.8 홈 「길찾기」 카드
     routeQuery: routeQuery,                // (O-0133) 시험용: 장소 → 네이버 검색어('' = 버튼 없음)
     openRoute: openRoute,                  // (O-0217) 케이 답 [길찾기] 칩
     navUri: navUri,                        // (O-0217) 시험용: 칩 정보 → 네이버 지도 주소
