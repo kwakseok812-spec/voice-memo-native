@@ -187,6 +187,9 @@ html[data-style="light"] #themeToggle .ic-sun{display:block}
 .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;cursor:pointer}
 .toggle b{font-size:16.5px;font-weight:700;display:block}
 .toggle small{display:block;font-size:13px;color:var(--dim);font-weight:500;margin-top:2px}
+/* 누르면 다음 화면으로 가는 설정 줄(꾸미기 → 글자 크기 바꾸기)의 화살표: 크기를 정하지 않아 큰 그림(224×150)으로 나오고 글자가 가운데로 몰리던 것 */
+.toggle .chev{width:20px;height:20px;color:var(--dim);flex:none}
+button.toggle{text-align:left;width:100%}
 .switch{width:54px;height:32px;border-radius:999px;background:var(--sw-off);border:1px solid var(--glass-b);position:relative;flex:none;transition:background .2s}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:left .2s}
 #isCard:checked ~ .switch{background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
