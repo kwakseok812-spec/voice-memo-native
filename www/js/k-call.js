@@ -11,7 +11,12 @@
  *   ③ 그 옷 전신 사진의 위쪽 절반
  *   ④ 그 옷의 얼굴 사진(1080) — 마지막 대체
  *   세로 영상이 일부만 있으면 있는 것만 쓴다: think 가 없으면 listen, talk 가 없으면 listen, listen 도 없으면 포스터(정지 사진).
- * 이음매: 영상 요소 두 개를 번갈아 쓰며 0.28초 겹쳐 넘긴다(반복 지점 · 클립 사이 · 상태 전환 모두). 겹치는 0.28초만 두 영상이 함께 돈다.
+ * 이음매: 영상 요소 두 개를 번갈아 쓴다.
+ *   · 반복 지점 · 말하는 클립 사이(끝 장면과 다음 첫 장면의 자세가 같다): 0.28초 겹쳐 넘긴다. 겹치는 0.28초만 두 영상이 함께 돈다.
+ *   · 상태 전환(듣기 ↔ 말하기 — 도는 영상의 「중간」에서 다른 영상의 첫 장면으로): v9.6.1 부터 0.12초로 짧게 넘긴다.
+ *     몸이 움직이는 영상(v9.6.1 버건디 — 머리가 첫 장면에서 최대 24px(720 폭) 떨어져 있다)은 0.28초 동안 두 자세가 겹쳐 눈·어깨가 둘로 보였다.
+ *     나가는 영상은 그 장면에 멈춰 불투명한 채로 밑에 깔아 두고, 새 영상을 그 「위」에 0.12초 동안 올린 뒤 밑의 것을 치운다(밑그림이 비쳐 셋이 겹치는 일도 없다).
+ *     목소리가 나오는 때 · 듣기를 여는 때는 건드리지 않는다(영상이 한 바퀴 끝나기를 기다리지 않는다).
  * 숨쉬기: 영상이든 정지 그림이든 케이 전체(.kcall-in)가 아주 약하게 숨 쉬듯 움직인다(styles.css kcallBreath — 3.4초 · 1.4% · 축은 얼굴 가운데라 얼굴은 제자리).
  * 영상이 없어 정지 그림(②③④·포스터)이 보일 때: 말하는 중에는 그 그림이 가볍게 끄덕인다(kcallTalk).
  * 움직임 끔 · 절전 · 폰 「움직임 줄이기」: 영상은 틀지 않고 포스터(없으면 ②③④)만 보인다(숨쉬기·끄덕임도 쉰다).
@@ -19,9 +24,11 @@
  * ==========================================================================*/
 (function () {
   'use strict';
-  var FADE = 280;                    // 겹쳐 넘기는 시간(ms)
+  var FADE = 280;                    // 겹쳐 넘기는 시간(ms) — 반복 지점 · 말하는 클립 사이
+  var CUT = 120;                     // v9.6.1: 상태가 바뀌어 도는 영상의 중간에서 넘길 때(ms). ★ 0.28초로 되돌리려면 이 값을 FADE 와 같게(280) 두면 예전처럼 겹쳐 넘긴다
   var POSE = { listen: 'note', think: 'clip', talk: 'guide', idle: 'guide' };   // ② 상태별 허리 위 자세 그림
   var host = null, vids = [], cur = -1, state = 'idle', on = false, lastTalk = '', loopT = null, token = 0, shownKind = '';
+  var held = null, heldT = null;     // 짧게 넘기는 동안 밑에 깔아 둔(멈춘) 나가는 영상
   function $(id) { return document.getElementById(id); }
   function calm() { try { return !window.KChar || !KChar.motionOn() || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; } }
   function build() {
@@ -61,8 +68,18 @@
     showStill('face', K.exprUrl('smile', null, false, true));
   }
   function clearLoop() { if (loopT) { clearTimeout(loopT); loopT = null; } }
+  // 밑에 깔아 둔 나가는 영상을 치운다(흐려지는 시간 없이 바로 — 이미 새 영상이 다 덮었다)
+  function dropHeld() {
+    if (heldT) { clearTimeout(heldT); heldT = null; }
+    if (!held) return;
+    var h = held; held = null;
+    h.style.transitionDuration = '0ms'; h.classList.remove('on');
+    try { h.pause(); } catch (e) {}
+  }
   // 영상 하나를 겹쳐 넘기며 튼다. 끝나기 0.28초 전에 다음 것(같은 상태의 반복 또는 다른 말하는 클립)을 미리 걸어 이음매를 가린다.
-  function playClip(url, my) {
+  // quick = 상태가 바뀌어 넘기는 것(도는 영상의 중간에서) → 짧게. 반복·말하는 클립 사이는 예전처럼 0.28초.
+  function playClip(url, my, quick) {
+    dropHeld();                                            // 앞 전환에서 깔아 둔 것이 아직 있으면 먼저 치운다(그 요소를 지금 다시 쓴다)
     var next = (cur + 1) % vids.length, v = vids[next], old = cur >= 0 ? vids[cur] : null;
     v.loop = false;
     if (v.getAttribute('src') !== url) { v.setAttribute('src', url); try { v.load(); } catch (e) {} }
@@ -70,8 +87,19 @@
     var started = false;
     function go() {
       if (started || my !== token) return; started = true;
+      var cut = !!quick && CUT < FADE && !!old && old !== v && old.classList.contains('on');
+      v.style.zIndex = '2'; v.style.transitionDuration = (cut ? CUT : FADE) + 'ms';      // 들어오는 영상이 늘 위(요소 순서와 무관하게)
       v.classList.add('on'); host.classList.add('vid');
-      if (old && old !== v) { old.classList.remove('on'); setTimeout(function () { if (my === token || !old.classList.contains('on')) { try { old.pause(); } catch (e) {} } }, FADE + 60); }
+      if (old && old !== v) {
+        old.style.zIndex = '1';
+        if (cut) {                                         // 나가는 영상: 그 장면에 멈춰 불투명한 채로 두었다가, 새 영상이 다 올라오면 치운다
+          try { old.pause(); } catch (e) {}
+          held = old; heldT = setTimeout(dropHeld, CUT + 40);
+        } else {
+          old.style.transitionDuration = FADE + 'ms';
+          old.classList.remove('on'); setTimeout(function () { if (my === token || !old.classList.contains('on')) { try { old.pause(); } catch (e) {} } }, FADE + 60);
+        }
+      }
       cur = next;
       clearLoop();
       var left = (isFinite(v.duration) && v.duration > 0) ? (v.duration - v.currentTime) * 1000 - FADE : 3000;
@@ -82,7 +110,7 @@
     try { var pr = v.play(); if (pr && pr.catch) pr.catch(function () { if (my === token) host.classList.remove('vid'); }); } catch (e) {}
   }
   function stopVideos() {
-    clearLoop();
+    clearLoop(); dropHeld();
     vids.forEach(function (v) { v.classList.remove('on'); try { v.pause(); } catch (e) {} });
     if (host) host.classList.remove('vid');
     cur = -1;
@@ -97,7 +125,7 @@
     host.classList.toggle('calm', calm());                 // 움직임 끔 · 절전 · 「움직임 줄이기」: 숨쉬기·끄덕임(styles.css kcallBreath·kcallTalk)도 쉰다
     if (!url) { stopVideos(); return; }
     // 같은 상태의 같은 영상을 다시 거는 것(반복)도 다른 요소로 겹쳐 넘긴다
-    playClip(url, my);
+    playClip(url, my, !isLoop);
   }
   // app.js 가 부른다: 상태가 바뀔 때마다(듣는 중 listen · 답하는 중 think · 말하는 중 talk · 그 밖 idle)
   function sync(st) {
