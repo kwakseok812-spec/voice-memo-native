@@ -4965,8 +4965,22 @@
   if ($('kProfClose')) $('kProfClose').addEventListener('click', closeKProfile);
   if (kProfile) kProfile.addEventListener('click', function (ev) { if (ev.target === kProfile) closeKProfile(); });
   if ($('kProfWardrobe')) $('kProfWardrobe').addEventListener('click', function () { closeKProfile(); openKWardrobe(); });
+  // v9.6: 꾸미기 화면의 「옷 / 설정」 탭. 옷 탭 = 옷장만 · 설정 탭 = 설정만(목소리 → 움직임 → 음성 대화 효과음 → (폰만) 바탕화면 위젯 → 글자 크기 → 시작 인사).
+  //   고른 탭은 저장하지 않는다 — 꾸미기를 열 때마다 「옷」에서 시작한다(예전 「옷 / 머리」 탭도 저장하지 않았다 → 남아 있는 옛 선택값이 없다).
+  //   모르는 값(옛 'hair' 등)이 와도 「옷」으로 본다.
+  function setKwTab(which, user) {
+    var set = which === 'set';
+    [['kwTabOutfit', !set], ['kwTabSet', set]].forEach(function (x) { var b = $(x[0]); if (b) { b.classList.toggle('on', x[1]); b.setAttribute('aria-selected', x[1] ? 'true' : 'false'); } });
+    if ($('kwOutfitPane')) $('kwOutfitPane').style.display = set ? 'none' : '';
+    if ($('kwSetPane')) $('kwSetPane').style.display = set ? '' : 'none';
+    // 직접 「설정」을 눌렀을 때: 탭 줄이 화면 위쪽에 오게 올려, 목소리 → 움직임 → 음성 대화 효과음이 한 화면에 들어오게 한다(큰 사진은 위로 넘어간다)
+    if (user && set) { try { var seg = document.querySelector('#kWardrobeView .kw-seg'); if (seg) seg.scrollIntoView({ block: 'start' }); } catch (e) {} }
+  }
+  if ($('kwTabOutfit')) $('kwTabOutfit').addEventListener('click', function () { setKwTab('outfit', true); });
+  if ($('kwTabSet')) $('kwTabSet').addEventListener('click', function () { setKwTab('set', true); });
   function openKWardrobe() {
     kwFrom = isOpen(chatView) ? 'chat' : 'home';
+    setKwTab('outfit');
     openScreen($('kWardrobeView'));
     renderKWardrobe();
     if (window.KChar) KChar.mount();

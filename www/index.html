@@ -459,21 +459,24 @@
           <span class="kw-fb-tag">전신<small id="kwFullTip">· 눌러 보세요</small></span>
         </button>
       </div>
-      <!-- v9.6: 옷 / 머리 탭과 머리 고르기 칸을 뺐다(대표님 2026-10-10 — 머리는 지금 모양으로 고정). 옷장만 남는다. -->
-      <div id="kwOutfitPane">
+      <!-- v9.6: 머리 고르기는 뺐다(대표님 2026-10-10 — 머리는 지금 모양으로 고정). 탭은 「옷 / 설정」 — 옷 탭에는 옷장만, 설정 탭에는 설정만 보인다(같은 설정이 두 곳에 보이지 않는다). -->
+      <div class="hseg kw-seg" role="tablist" aria-label="케이 꾸미기">
+        <button type="button" class="hseg-btn on" id="kwTabOutfit" role="tab" aria-selected="true" aria-controls="kwOutfitPane">옷</button>
+        <button type="button" class="hseg-btn" id="kwTabSet" role="tab" aria-selected="false" aria-controls="kwSetPane">설정</button>
+      </div>
+      <div id="kwOutfitPane" role="tabpanel">
         <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입습니다</small></div>
         <div id="kwGrid" class="kw-grid"></div>
         <!-- v9.5: 연동 암호가 없는 기기에만 보이는 한 줄(서버에서 받는 옷 움직임·자세 그림·새 옷은 암호가 있어야 받는다) -->
         <div id="kwAssetNote" class="kw-note" style="display:none"></div>
+        <div class="kw-note">바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀝니다.</div>
       </div>
-      <div class="kw-note">바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀝니다.</div>
+      <!-- 설정 탭: 목소리 → 움직임 → 음성 대화 효과음 → (폰만) 바탕화면 위젯 → 글자 크기 → 시작 인사 -->
+      <div id="kwSetPane" role="tabpanel" style="display:none">
       <div class="kw-sec"><b>목소리</b><small>무료 음성만 씁니다</small></div>
       <div id="kwVoices" class="kw-voices"></div>
       <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
       <label class="card toggle kw-motion"><span><b>케이 얼굴 움직이기</b><small>끄면 정지 사진만 보입니다(배터리 절약)</small></span><input type="checkbox" id="kwMotion" hidden><span class="switch"></span></label>
-      <!-- v8.2(O-0157): 바탕화면 케이 위젯 — 폰에서만 보임(app.js initKBridge 가 켬) -->
-      <div class="kw-sec" id="kwWidgetSec" style="display:none;"><b>바탕화면 위젯</b><small>바탕화면 길게 누르기 → 위젯</small></div>
-      <label class="card toggle kw-motion" id="kwWidgetRow" style="display:none;"><span><b>위젯에 내용 숨기기</b><small>켜면 위젯에 「새 소식 N건」만 보이고 글 내용은 보이지 않습니다</small></span><input type="checkbox" id="kwWidgetHide" hidden><span class="switch"></span></label>
       <!-- O-0223: 음성 대화 효과음(안드로이드 받아쓰기의 삑·띠링) — 켬/작게(기본)/끔, 이 폰에만 저장 -->
       <div class="kw-sec"><b>음성 대화 효과음</b><small>듣기 시작·끝의 삑·띠링 소리</small></div>
       <div class="card kw-intro">
@@ -484,6 +487,9 @@
         </div>
         <div class="kw-intro-row"><small>「작게」는 듣기 시작할 때만 작게 «삑» 하고, 말씀이 끝난 뒤 «띠링»은 나지 않습니다. 「끔」은 듣는 동안 «삑»·«띠링»이 나지 않습니다. 이 소리는 폰의 «알림 소리»로 나기 때문에, 듣는 몇 초 동안은 카카오톡 같은 다른 앱의 알림 소리도 같이 작아지거나 나지 않습니다(알림은 그대로 옵니다). 전화 벨소리와 음악 소리는 건드리지 않고, 듣기가 끝나면 알림 소리를 원래대로 되돌립니다. 진동·무음·방해 금지 중에는 아무것도 바꾸지 않습니다.</small></div>
       </div>
+      <!-- v8.2(O-0157): 바탕화면 케이 위젯 — 폰에서만 보임(app.js initKBridge 가 켬) -->
+      <div class="kw-sec" id="kwWidgetSec" style="display:none;"><b>바탕화면 위젯</b><small>바탕화면 길게 누르기 → 위젯</small></div>
+      <label class="card toggle kw-motion" id="kwWidgetRow" style="display:none;"><span><b>위젯에 내용 숨기기</b><small>켜면 위젯에 「새 소식 N건」만 보이고 글 내용은 보이지 않습니다</small></span><input type="checkbox" id="kwWidgetHide" hidden><span class="switch"></span></label>
       <!-- v8.4(O-0162): 글자 크기 — 채팅 말풍선·입력창·홈 카드·문서 뷰어 표에 적용 -->
       <div class="kw-sec"><b>글자 크기</b><small>이 폰에만 저장됩니다</small></div>
       <button type="button" class="card toggle kw-motion" id="kwFontRow"><span><b>글자 크기 바꾸기</b><small id="kwFontNow">지금: 보통</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
@@ -496,6 +502,7 @@
           <button type="button" class="hseg-btn" data-kintro="off">끄기</button>
         </div>
         <div class="kw-intro-row"><small>앱을 켜면 케이가 전신으로 인사하고, 화면 아래에 인사 한마디가 나옵니다(시간대·요일에 맞춰 매번 다릅니다). 화면을 누르면 바로 넘어갑니다.</small><button type="button" class="btn ghost sm" id="kwIntroTry">지금 보기</button></div>
+      </div>
       </div>
     </section>
 
