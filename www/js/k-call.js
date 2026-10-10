@@ -36,6 +36,8 @@
     host._built = true;
     vids = Array.prototype.slice.call(host.querySelectorAll('video'));
     vids.forEach(function (v) { v.muted = true; v.defaultMuted = true; v.playsInline = true; v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.preload = 'auto'; });
+    // v9.6.1: 영상 두 개의 위아래 순서(z 1·2)가 이 묶음 「안에서만」 통하게 한다 — 묶음 밖의 자막·상태 줄·단추 위로 올라가는 일이 없게(숨쉬기 움직임이 꺼져 있어도)
+    try { var inn = host.querySelector('.kcall-in'); if (inn) inn.style.isolation = 'isolate'; } catch (e) {}
     return true;
   }
   // 그 상태에 틀 세로 영상(없으면 '')
