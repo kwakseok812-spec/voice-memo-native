@@ -5,14 +5,16 @@
  * — 화면 배치는 styles.css(#chatView.convo-full), 상태·자막·펼치기는 app.js 가 맡는다.
  *
  * 무엇을 보이나 (위에서부터 있는 것을 쓴다 — 상반신이 보이는 쪽이 먼저):
- *   ① 그 옷의 세로 영상(720×1280 · 소리 없음): 듣는 모습 listen · 생각하는 모습 think · 말하는 모습 talk(여러 개를 번갈아)
+ *   ① 그 옷의 세로 영상(720×1280 · 소리 없음): 듣는 모습 listen · 생각하는 모습 think · 말하는 모습 talk(여러 개면 번갈아 · 하나면 그것을 되풀이)
+ *      (지금 만드는 영상 = 기준 얼굴 영상의 머리 + 그 옷 그림의 몸 → 몸은 움직이지 않는다. 생각하는 모습은 따로 없어 듣는 모습을 쓴다.)
  *   ② 그 옷의 허리 위 자세 그림(배경 없는 그림): 듣는 중 = 받아 적기 · 생각 중 = 기록판 · 말하는 중 = 안내 손짓
  *   ③ 그 옷 전신 사진의 위쪽 절반
  *   ④ 그 옷의 얼굴 사진(1080) — 마지막 대체
  *   세로 영상이 일부만 있으면 있는 것만 쓴다: think 가 없으면 listen, talk 가 없으면 listen, listen 도 없으면 포스터(정지 사진).
  * 이음매: 영상 요소 두 개를 번갈아 쓰며 0.28초 겹쳐 넘긴다(반복 지점 · 클립 사이 · 상태 전환 모두). 겹치는 0.28초만 두 영상이 함께 돈다.
- * 영상이 없어 정지 그림(②③④·포스터)이 보일 때: 말하는 중에는 가볍게 끄덕이고, 그 밖에는 아주 느리게 숨 쉬듯 움직인다(styles.css — 완전히 멈춘 사진처럼 보이지 않게).
- * 움직임 끔 · 절전 · 폰 「움직임 줄이기」: 영상은 틀지 않고 포스터(없으면 ②③④)만 보인다(위의 가벼운 움직임도 쉰다).
+ * 숨쉬기: 영상이든 정지 그림이든 케이 전체(.kcall-in)가 아주 약하게 숨 쉬듯 움직인다(styles.css kcallBreath — 3.4초 · 1.4% · 축은 얼굴 가운데라 얼굴은 제자리).
+ * 영상이 없어 정지 그림(②③④·포스터)이 보일 때: 말하는 중에는 그 그림이 가볍게 끄덕인다(kcallTalk).
+ * 움직임 끔 · 절전 · 폰 「움직임 줄이기」: 영상은 틀지 않고 포스터(없으면 ②③④)만 보인다(숨쉬기·끄덕임도 쉰다).
  * 영상은 화면에 보일 때만 돈다(음성 대화가 꺼지거나 앱이 뒤로 가면 멈춘다 — stop()).
  * ==========================================================================*/
 (function () {
@@ -92,7 +94,7 @@
     var my = ++token;
     var url = calm() || (host._fail || 0) >= 3 ? '' : clipFor(st, set);
     host.setAttribute('data-state', st);
-    host.classList.toggle('calm', calm());                 // 움직임 끔 · 절전 · 「움직임 줄이기」: 정지 그림의 가벼운 움직임(styles.css kcallTalk·kcallBreath)도 쉰다
+    host.classList.toggle('calm', calm());                 // 움직임 끔 · 절전 · 「움직임 줄이기」: 숨쉬기·끄덕임(styles.css kcallBreath·kcallTalk)도 쉰다
     if (!url) { stopVideos(); return; }
     // 같은 상태의 같은 영상을 다시 거는 것(반복)도 다른 요소로 겹쳐 넘긴다
     playClip(url, my);
@@ -102,7 +104,13 @@
     st = st || 'idle';
     if (!on) { state = st; return; }
     if (st === state && cur >= 0) return;                  // 같은 상태 — 지금 도는 것을 그대로
-    state = st; startState(st, false);
+    var prev = state; state = st;
+    // 생각하는 모습이 따로 없는 옷(듣는 모습을 같이 쓴다): 듣는 중 ↔ 답하는 중 사이에는 지금 도는 듣는 영상을 끊지 않고 그대로 둔다(처음부터 다시 틀지 않는다)
+    if (cur >= 0 && st !== 'talk' && prev !== 'talk' && host && host.classList.contains('vid')) {
+      var K = window.KChar, set = (K && K.callSet) ? K.callSet() : null;
+      if (set && !set.think && set.listen && vids[cur].getAttribute('src') === set.listen && !calm()) { host.setAttribute('data-state', st); return; }
+    }
+    startState(st, false);
   }
   function start(st) { on = true; state = st || state || 'idle'; if (host) host._fail = 0; startState(state, false); }
   function stop() { on = false; token++; stopVideos(); }

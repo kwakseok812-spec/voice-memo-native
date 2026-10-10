@@ -1766,6 +1766,8 @@
           if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
           if (vqHasMore()) { vqPump(); return; }  // O-0177 ①: 다음 목소리 조각이 이미 와 있으면 곧장 이어서
           if (convoOn && vqWaiting()) { setConvoStatus('케이가 답하는 중…'); return; }   // 다음 조각을 아직 만드는 중
+          // v9.6: 목소리가 끝난 그 순간 통화 화면의 케이는 바로 「듣는 모습」으로(입이 소리보다 오래 움직이지 않게). 그림만 먼저 바꾼다 — 다음 듣기를 여는 시점·값(아래 350)은 그대로.
+          try { if (convoOn && window.KCall && KCall.active()) KCall.sync('listen'); } catch (e) {}
           if (convoOn) scheduleNextListen(350);   // 케이 목소리 끝 → 다음 말 듣기(연속 대화)
         });
         // O-0177: 조각 하나를 못 읽어도(주소 만료·네트워크) 멈추지 않고 다음 조각 → 없으면 다음 듣기

@@ -390,7 +390,7 @@
     if (!kind || kind === 'core') { add(f.expr); add(f.avatar); add(f.thumb); add(f.fullbody); add(f.expr_hd); }
     if (kind === 'thumb') add(f.thumb);
     if (!kind || kind === 'pose') add(f.poses);
-    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_listen); add(f.call_think); add(f.call_talk); add(f.call_poster); }
+    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_poster); add(f.call_listen); add(f.call_think); add(f.call_talk); }   // 받는 순서이기도 하다: 통화 포스터(작다)를 통화 영상보다 먼저 — 통화 중에 받게 되면 포스터부터 보이게
     if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); add(f.bow_alt); add(f.bow_alt_poster); }
     return out;
   }

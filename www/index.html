@@ -311,9 +311,11 @@
         <!-- v9.6 음성 대화 전체 화면: 케이가 화면 전체에 허리 위 상반신으로(js/k-call.js — 세로 영상 → 허리 위 자세 그림 → 전신 위쪽 → 얼굴 사진 순).
              대화를 펼친 상태(#chatView.convo-log)와 넓은 화면의 오른쪽 칸에서는 예전 무대(아래 kstage-photo)가 그대로 쓰인다. -->
         <div class="kcall" id="kCall" data-state="idle" aria-hidden="true">
-          <img class="kcall-still" alt="" draggable="false">
-          <video class="kcall-v" muted playsinline webkit-playsinline disablepictureinpicture></video>
-          <video class="kcall-v" muted playsinline webkit-playsinline disablepictureinpicture></video>
+          <div class="kcall-in">
+            <img class="kcall-still" alt="" draggable="false">
+            <video class="kcall-v" muted playsinline webkit-playsinline disablepictureinpicture></video>
+            <video class="kcall-v" muted playsinline webkit-playsinline disablepictureinpicture></video>
+          </div>
         </div>
         <div class="kstage-photo"><span class="kface wide" data-kface="convo" data-khd aria-hidden="true"></span>
           <!-- O-0177 ④ 무대 전체가 누르는 자리: 케이가 말하거나 답을 만드는 중에 누르면 멈추고 바로 듣는다(안내 알약은 그때만 보임) -->

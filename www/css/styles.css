@@ -1682,15 +1682,18 @@ html[data-style="light"] .ksc.hcheer.cut .kfig{filter:drop-shadow(0 10px 18px rg
 .kcall-v.on{opacity:1}
 .kcall-still{object-fit:cover;object-position:50% 0}
 .kcall-still.swap{animation:kfigSwap .28s ease backwards}
-/* 영상이 없어 정지 그림이 보이는 동안의 가벼운 움직임(세로 영상이 오면 영상이 대신한다): 말하는 중 = 가볍게 끄덕임 · 그 밖 = 느린 숨.
-   자리 잡기에 transform 을 쓰므로 움직임은 translate·scale 낱개 속성으로 준다(모르는 화면에서는 그냥 멈춰 보일 뿐 깨지지 않는다). 움직임 끔(.calm)이면 쉰다. */
+/* 숨쉬기(O-0393 뒤 새 통화 영상 = 머리만 움직이고 몸은 그림): 케이 전체(.kcall-in = 정지 그림 + 영상 두 개)가 아주 약하게 커졌다 작아진다.
+   3.4초 주기 · 1.4% · 축 = 얼굴 가운데(50% 26% — 세로 영상·포스터의 얼굴 자리)라 얼굴은 제자리에 있고 어깨·몸만 살짝 움직인다.
+   자막·상태·단추는 이 상자 밖이라 움직이지 않는다. 영상이든 정지 그림이든 같은 상자라 겹쳐 넘길 때도 숨이 끊기지 않는다. 움직임 끔(.calm)·「움직임 줄이기」면 쉰다.
+   영상이 없어 정지 그림이 보이는 동안: 말하는 중에는 그 그림이 가볍게 끄덕인다(숨쉬기 위에 얹힌다 — 세로 영상이 오면 영상이 대신한다).
+   자리 잡기에 transform 을 쓰므로 움직임은 translate·scale 낱개 속성으로 준다(모르는 화면에서는 그냥 멈춰 보일 뿐 깨지지 않는다). */
 @keyframes kcallTalk{0%,100%{translate:0 0;scale:1}50%{translate:0 -.7%;scale:1.008}}
-@keyframes kcallBreath{0%,100%{scale:1}50%{scale:1.007}}
-.kcall:not(.vid):not(.calm) .kcall-still{transform-origin:50% 100%;animation:kcallBreath 4.8s ease-in-out infinite}
-.kcall:not(.vid):not(.calm)[data-state="talk"] .kcall-still{animation:kcallTalk 2.2s ease-in-out infinite}
-.kcall:not(.vid):not(.calm) .kcall-still.swap{animation:kfigSwap .28s ease backwards,kcallBreath 4.8s ease-in-out infinite}
+@keyframes kcallBreath{0%,100%{scale:1}50%{scale:1.014}}
+.kcall-in{position:absolute;inset:0;transform-origin:50% 26%}
+.kcall:not(.calm) .kcall-in{animation:kcallBreath 3.4s ease-in-out infinite}
+.kcall:not(.vid):not(.calm)[data-state="talk"] .kcall-still{transform-origin:50% 100%;animation:kcallTalk 2.2s ease-in-out infinite}
 .kcall:not(.vid):not(.calm)[data-state="talk"] .kcall-still.swap{animation:kfigSwap .28s ease backwards,kcallTalk 2.2s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.kcall .kcall-still{animation:none !important}}
+@media (prefers-reduced-motion:reduce){.kcall .kcall-still,.kcall .kcall-in{animation:none !important}}
 /* ② 허리 위 자세 그림(배경 없는 그림): 무대 배경 위에 세운다 — 머리 꼭대기 11% · 손이 자막 위(약 60%)에 오게 */
 .kcall[data-kind="pose"] .kcall-still{inset:auto;left:50%;top:10.5%;width:auto;height:61%;transform:translateX(-50%);object-fit:contain;
   -webkit-mask-image:linear-gradient(180deg,#000 86%,transparent 100%);mask-image:linear-gradient(180deg,#000 86%,transparent 100%)}   /* 허리에서 잘린 선이 보이지 않게 아래 끝을 흐린다 */
