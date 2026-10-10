@@ -190,7 +190,7 @@ public class KSpeechPlugin extends Plugin {
     @PermissionCallback
     private void afterPerm(PluginCall call) {
         if (getPermissionState("microphone") == PermissionState.GRANTED) doStart(call);
-        else call.reject("마이크 권한이 필요해요.", "permission");
+        else call.reject("마이크 권한이 필요합니다.", "permission");
     }
 
     private void doStart(final PluginCall call) {
@@ -222,7 +222,7 @@ public class KSpeechPlugin extends Plugin {
                 if (possiblyMs > 0) it.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, (long) possiblyMs);
                 if (minMs > 0) it.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, (long) minMs);
                 lastIntent = it;
-                if (!createRec()) { call.reject("이 기기에서는 받아쓰기를 쓸 수 없어요.", "unavailable"); return; }
+                if (!createRec()) { call.reject("이 기기에서는 받아쓰기를 쓸 수 없습니다.", "unavailable"); return; }
                 String dgBefore = "";
                 try {
                     if (sfxActive || sfxPending) sfxRestore();   // 앞 턴 되돌리기가 남아 있으면(0.4~0.6초 대기 중·미뤄 둠) 먼저 끝냄
@@ -237,7 +237,7 @@ public class KSpeechPlugin extends Plugin {
                     destroyRec();
                     sfxRestore();
                     dgStopSoon();
-                    call.reject("받아쓰기를 시작하지 못했어요.", "client");
+                    call.reject("받아쓰기를 시작하지 못했습니다.", "client");
                     return;
                 }
                 JSObject r = new JSObject(); r.put("onDevice", recOnDevice);

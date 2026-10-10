@@ -151,10 +151,19 @@
     n.poses = (o.poses && typeof o.poses === 'object') ? o.poses : {};
     // v9.5: 인사 영상의 자막 시점·길이(영상을 재서 넣은 값) · 자세 영상 자리(앞으로 — 있으면 재생, 없으면 그림)
     n.bowCue = (typeof o.bow_cue === 'number') ? o.bow_cue : null; n.bowLen = (typeof o.bow_len === 'number') ? o.bow_len : null;
+    // v9.6: 인사 영상을 한 옷에 여러 개(깊은 인사 + 가벼운 목례 등) — bow 가 첫째, bow_alt[] 가 그다음. 포스터·자막 시점·길이는 같은 차례의 bow_alt_poster[] · bow_alt_cue[] · bow_alt_len[]
+    n.bowAlt = bowAltList(o.bow_alt, o.bow_alt_poster, o.bow_alt_cue, o.bow_alt_len, function (x) { return x || ''; });
     n.poseVideos = (o.pose_videos && typeof o.pose_videos === 'object') ? o.pose_videos : {};
     // v9.6: 음성 대화 전체 화면용 세로 영상(720×1280 · 소리 없음) — call: { listen, think, talk:[…], poster }. 없으면 빈 것(→ k-call.js 가 대체 그림)
     n.call = (o.call && typeof o.call === 'object') ? o.call : {};
     return n;
+  }
+  function bowAltList(vs, ps, cues, lens, wrap) {
+    return (Array.isArray(vs) ? vs : (vs ? [vs] : [])).map(function (v, i) {
+      if (!v || typeof v !== 'string') return null;
+      var po = Array.isArray(ps) ? ps[i] : (i === 0 ? ps : ''), c = Array.isArray(cues) ? cues[i] : null, l = Array.isArray(lens) ? lens[i] : null;
+      return { video: wrap(v), poster: (po && typeof po === 'string') ? wrap(po) : '', cue: (typeof c === 'number') ? c : null, len: (typeof l === 'number') ? l : null };
+    }).filter(Boolean);
   }
   function setData(d) {
     var arr = Array.isArray(d) ? d : (d && d.outfits) || [];
@@ -237,9 +246,20 @@
     o = o || outfit(); return url(o, o.fullbody);
   }
   // 인사 영상은 기본머리 + 그 옷에 bow 가 있을 때만(다른 머리 조합 영상은 아직 없음)
-  function bowUrl(o) {
-    if (isCur(o) && activeCombo()) return '';
-    o = o || outfit(); return url(o, o.bow);
+  // v9.6: 한 옷에 인사 영상이 여러 개일 수 있다 — 틀 수 있는(다 받아 둔) 것만 차례대로 [{video, poster, cue}]
+  function bowList(o) {
+    if (isCur(o) && activeCombo()) return [];
+    o = o || outfit();
+    var all = (o.bow ? [{ video: o.bow, poster: o.bowPoster, cue: o.bowCue }] : []).concat(o.bowAlt || []), out = [];
+    all.forEach(function (b) { var u = url(o, b.video); if (u) out.push({ video: u, f: b.video, poster: b.poster, cue: b.cue }); });
+    return out;
+  }
+  function bowUrl(o) { var l = bowList(o); return l.length ? l[0].video : ''; }     // 인사 영상이 있나(첫째 것) — 예전과 같은 뜻
+  var bowTurn = {};
+  function bowPick(o) {                     // 누를 때마다 번갈아(하나뿐이면 늘 그것)
+    o = o || outfit(); var l = bowList(o); if (!l.length) return '';
+    var i = (bowTurn[o.id] == null ? 0 : (bowTurn[o.id] + 1)) % l.length; bowTurn[o.id] = i;
+    return l[i].video;
   }
 
   /* ---- 머리 ---- */
@@ -382,7 +402,7 @@
     if (kind === 'thumb') add(f.thumb);
     if (!kind || kind === 'pose') add(f.poses);
     if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_listen); add(f.call_think); add(f.call_talk); add(f.call_poster); }
-    if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); }
+    if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); add(f.bow_alt); add(f.bow_alt_poster); }
     return out;
   }
   function kaHas(names) { var S = window.KStore; return !!S && names.every(function (n) { return S.has(n); }); }
@@ -408,6 +428,7 @@
       if (!n.idle && f.idle) n.idle = ks(f.idle);
       if (!n.talk && f.talk) n.talk = ks(f.talk);
       if (!n.bow && f.bow) { n.bow = ks(f.bow); n.bowPoster = ks(f.bow_poster); n.bowCue = e.bow_cue; n.bowLen = e.bow_len; }
+      if (!(n.bowAlt || []).length && f.bow_alt) n.bowAlt = bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks);
       if (!Object.keys(n.poses || {}).length && f.poses) n.poses = ksMap(f.poses);
       if (!Object.keys(n.poseVideos || {}).length && f.pose_videos) n.poseVideos = ksMap(f.pose_videos);
       if (!Object.keys(n.exprHd || {}).length && f.expr_hd) n.exprHd = ksMap(f.expr_hd);
@@ -426,6 +447,7 @@
       var n = { id: id, name: e.name || id, desc: e.desc || '', category: e.category || '새 옷', crop: e.crop || null, base: '', remote: true, srv: true, server: true,
         expr: ksMap(f.expr), avatar: ksMap(f.avatar), thumb: ks(f.thumb), fullbody: ks(f.fullbody), exprHd: ksMap(f.expr_hd),
         idle: ks(f.idle), talk: ks(f.talk), bow: ks(f.bow), bowPoster: ks(f.bow_poster), bowCue: e.bow_cue, bowLen: e.bow_len,
+        bowAlt: bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks),
         poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos), call: ksCall(f) };
       n.pending = !kaReady(kaNames(e, 'core'));
       outs.push(n);
@@ -611,8 +633,8 @@
   function bowState(o) {
     o = o || outfit();
     if (isCur(o) && activeCombo()) return 'none';
-    if (!o.bow) return 'none';
-    return url(o, o.bow) ? 'ready' : 'pending';
+    if (!o.bow && !(o.bowAlt || []).length) return 'none';
+    return bowList(o).length ? 'ready' : 'pending';
   }
   // 시작 인사가 볼 한 줄: 지금 옷의 인사 영상(다 받아 둔 것만) 또는 전신 사진
   function writePlan() {
@@ -621,6 +643,10 @@
       function ref(f) { if (!f) return null; if (isKs(f)) { var n = f.slice(3); return (window.KStore && KStore.has(n)) ? { s: n } : null; } return { b: isAbs(f) ? f : o.base + f }; }
       var vid = ref(o.bow), pos = ref(o.bowPoster);
       if (vid && pos) { plan.video = vid; plan.poster = pos; if (typeof o.bowCue === 'number') plan.cue = o.bowCue; }
+      // v9.6: 인사 영상이 더 있으면(다 받아 둔 것만) 함께 적는다 — 시작 인사가 번갈아 고른다
+      var alts = [];
+      (o.bowAlt || []).forEach(function (b) { var v2 = ref(b.video), p2 = ref(b.poster); if (v2 && p2) { var a = { video: v2, poster: p2 }; if (typeof b.cue === 'number') a.cue = b.cue; alts.push(a); } });
+      if (alts.length) plan.alts = alts;
       var fb = ref(o.fullbody); if (fb) plan.still = fb;
       lsSet(KA_PLAN_KEY, JSON.stringify(plan));
     } catch (e) {}
@@ -912,7 +938,7 @@
     // 지금 「보이는」 모습 이름(조합 사진이 없어 기본머리로 보일 땐 옷 이름만 — 안내는 머리 탭 아래 문구가 맡는다)
     lookName: function () { return outfit().name + (activeCombo() ? ' · ' + hair().name : ''); },
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
-    fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
+    fullbodyUrl: fullbodyUrl, bowUrl: bowUrl, bowPick: bowPick, bowList: bowList,        // (O-0116) · v9.6 인사 영상 여러 개
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState, callSet: callSet,

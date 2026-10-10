@@ -134,7 +134,7 @@
       else if (st.cur > 0) { st.tk.splice(st.cur - 1, 1); st.cur--; }
     } else if (k === 'clear') { st.tk = []; st.cur = 0; st.done = false; st.shown = null; }
     else if (k === 'eq') { equals(); return; }
-    else if (k === 'mc') { st.mem = 0; lsSet('smart_calc_mem', '0'); toast('메모리를 비웠어요.'); }
+    else if (k === 'mc') { st.mem = 0; lsSet('smart_calc_mem', '0'); toast('메모리를 비웠습니다.'); }
     else if (k === 'mr') { startFresh(false); ins(numTokens(st.mem)); }
     else if (k === 'm+' || k === 'm-') {
       var v = currentValue();
@@ -203,7 +203,7 @@
     if (!st.histOpen) { box.style.display = 'none'; return; }
     var n = histSel().length;
     var h = '<div class="ch-head"><b>계산 기록</b><span>' + (st.hist.length ? st.hist.length + '줄 · 이 기기에만 저장' : '') + '</span></div>';
-    if (!st.hist.length) h += '<div class="empty-note">아직 기록이 없어요. 계산하고 = 을 누르면 여기에 쌓여요.</div>';
+    if (!st.hist.length) h += '<div class="empty-note">아직 기록이 없습니다. 계산하고 = 을 누르면 여기에 쌓입니다.</div>';
     else {
       h += '<div class="ch-list">' + st.hist.map(function (x, i) {
         return '<div class="ch-row' + (st.picked[x.t] ? ' on' : '') + '">' +
@@ -212,7 +212,7 @@
       }).join('') + '</div>';
       h += '<div class="ch-foot"><button type="button" class="btn ghost sm" id="calcHistAsk"><svg><use href="#i-chat"/></svg>' + (n ? '고른 ' + n + '줄 케이에게' : '케이에게 묻기') + '</button>' +
         '<button type="button" class="btn ghost sm danger" id="calcHistClear"><svg><use href="#i-trash"/></svg>' + (n ? '고른 줄 지우기' : '기록 모두 지우기') + '</button></div>';
-      h += '<div class="ch-tip">줄을 누르면 그 식을 다시 불러와요. 왼쪽 동그라미로 여러 줄을 골라 케이에게 보낼 수 있어요.</div>';
+      h += '<div class="ch-tip">줄을 누르면 그 식을 다시 불러옵니다. 왼쪽 동그라미로 여러 줄을 골라 케이에게 보낼 수 있습니다.</div>';
     }
     box.innerHTML = h; box.style.display = '';
   }
@@ -230,9 +230,9 @@
       var sel = histSel(), S = H();
       var doIt = function () {
         st.hist = sel.length ? st.hist.filter(function (z) { return !st.picked[z.t]; }) : [];
-        st.picked = {}; lsSet(HIST_KEY, JSON.stringify(st.hist)); renderHist(); toast('기록을 지웠어요.');
+        st.picked = {}; lsSet(HIST_KEY, JSON.stringify(st.hist)); renderHist(); toast('기록을 지웠습니다.');
       };
-      if (S.sheet) S.sheet(sel.length ? '고른 ' + sel.length + '줄을 지울까요?' : '계산 기록을 모두 지울까요?', '이 기기에 저장된 계산 기록만 지워져요. 되돌릴 수 없어요.', '지우기', 'i-trash', doIt);
+      if (S.sheet) S.sheet(sel.length ? '고른 ' + sel.length + '줄을 지울까요?' : '계산 기록을 모두 지울까요?', '이 기기에 저장된 계산 기록만 지워집니다. 되돌릴 수 없습니다.', '지우기', 'i-trash', doIt);
       else doIt();
     }
   });
@@ -257,9 +257,9 @@
     sh.className = 'sheet shin-sheet calc-ask';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="케이에게 묻기"><div class="sheet-head">케이에게 묻기</div>' +
       '<div class="calc-ask-prev">' + lines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') + '</div>' +
-      '<button type="button" class="sheet-btn" data-ca="check"><svg><use href="#i-check"/></svg><span><b>이 계산 맞는지 봐 줘</b><small>바로 케이에게 보내요</small></span></button>' +
-      '<button type="button" class="sheet-btn" data-ca="use"><svg><use href="#i-spark"/></svg><span><b>이 값으로 ○○ 구해 줘</b><small>채팅 입력창에 채워 둬요 — ○○만 고쳐 보내세요</small></span></button>' +
-      '<button type="button" class="sheet-btn" data-ca="free"><svg><use href="#i-chat"/></svg><span><b>직접 적기</b><small>식만 채팅 입력창에 넣어 둬요</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-ca="check"><svg><use href="#i-check"/></svg><span><b>이 계산 맞는지 봐 줘</b><small>바로 케이에게 보냅니다</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-ca="use"><svg><use href="#i-spark"/></svg><span><b>이 값으로 ○○ 구해 줘</b><small>채팅 입력창에 채워 둡니다 — ○○만 고쳐 보내세요</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-ca="free"><svg><use href="#i-chat"/></svg><span><b>직접 적기</b><small>식만 채팅 입력창에 넣어 둡니다</small></span></button>' +
       '<button type="button" class="sheet-btn calc-ask-close" data-ca="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('[data-ca]') : null;

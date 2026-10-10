@@ -334,7 +334,7 @@
     curOrig = file; curSrcFull = opts.srcFull || null; curPcPath = opts.pcPath || null;   // O-0171
     clearDocView();                                     // 앞 문서가 새 파일 이름 아래 남아 보이지 않게
     showViewer(); fnameLabel.textContent = file.name;
-    showLoading('문서를 확인하는 중…', '전에 열어 본 문서면 변환 없이 바로 보여 드려요.'); setProgress(4);
+    showLoading('문서를 확인하는 중…', '전에 열어 본 문서면 변환 없이 바로 보여 드립니다.'); setProgress(4);
     function proceed() {
       if (op !== opToken) return;
       if (isExcelExt(ext)) { openExcelFile(file); return; }
@@ -378,13 +378,13 @@
   function openStored(meta, op, file) {
     if (pdfDoc || excelWorkbook) clearDocView();
     showViewer(); fnameLabel.textContent = meta.name;
-    showLoading('저장해 둔 문서를 여는 중…', '전에 변환해 둔 문서라 바로 열려요.'); setProgress(40);
+    showLoading('저장해 둔 문서를 여는 중…', '전에 변환해 둔 문서라 바로 열립니다.'); setProgress(40);
     DocStore.getBlobs(meta.key).then(function (b) {
       if (op !== opToken) return;
       if (!b || !(b.pdf || b.orig)) {
         DocStore.del(meta.key); renderRecent();
         if (file) { curKey = meta.key; if (isExcelExt(extOf(file.name))) openExcelFile(file); else convertAndShowPdf(file); }
-        else showError('폰에 저장해 둔 문서가 없어졌어요.', '원래 파일을 다시 골라 주세요.');
+        else showError('폰에 저장해 둔 문서가 없어졌습니다.', '원래 파일을 다시 골라 주세요.');
         return;
       }
       curKey = meta.key; curSrcUrl = meta.srcUrl || curSrcUrl; resumePage = meta.lastPage || 0;
@@ -397,13 +397,13 @@
         openExcelFile(f, { pdfBlob: b.pdf || null, stored: true });
         return;
       }
-      if (!b.pdf) { showError('저장본을 열지 못했어요.', '원래 파일을 다시 골라 주세요.'); return; }
+      if (!b.pdf) { showError('저장본을 열지 못했습니다.', '원래 파일을 다시 골라 주세요.'); return; }
       setProgress(70);
       pendingPdfBlob = b.pdf;                                       // v8.0: 탭이 들고 있을 PDF(저장본 = 기기 저장소 사본)
       blobToBuf(b.pdf).then(function (buf) {
         if (op !== opToken) return;
         loadPdf({ data: new Uint8Array(buf) }, meta.name, meta.isPpt);
-      }, function () { if (op === opToken) showError('저장본을 읽지 못했어요.', '원래 파일을 다시 골라 주세요.'); });
+      }, function () { if (op === opToken) showError('저장본을 읽지 못했습니다.', '원래 파일을 다시 골라 주세요.'); });
     });
   }
   // 지금 문서를 최근 목록에 저장(변환 결과 PDF 또는 엑셀 원본). 조용히 실패해도 보기에는 영향 없음.
@@ -412,9 +412,9 @@
     var key = curKey;
     DocStore.save({ key: key, name: curFileInfo.name, ext: curFileInfo.ext, kind: kind, isPpt: !!isPpt,
                     size: curFileInfo.size, srcUrl: curSrcUrl || null }, blobs).then(function (r) {
-      if (r && r.removed > 0) toast('저장 공간을 위해 오래 안 연 문서 ' + r.removed + '개를 목록에서 정리했어요.');
-      if (r && r.skipped === 'quota') toast('폰 저장 공간이 모자라 이 문서는 최근 목록에 넣지 못했어요.');
-      if (r && r.skipped === 'unavailable' && !idbWarned) { idbWarned = true; toast('이 기기에서는 목록 저장을 쓸 수 없어요. 문서 보기는 그대로 돼요.'); }
+      if (r && r.removed > 0) toast('저장 공간을 위해 오래 안 연 문서 ' + r.removed + '개를 목록에서 정리했습니다.');
+      if (r && r.skipped === 'quota') toast('폰 저장 공간이 모자라 이 문서는 최근 목록에 넣지 못했습니다.');
+      if (r && r.skipped === 'unavailable' && !idbWarned) { idbWarned = true; toast('이 기기에서는 목록 저장을 쓸 수 없습니다. 문서 보기는 그대로 됩니다.'); }
       if (key === curKey && pdfDoc) DocStore.touch(key, { pages: pdfDoc.numPages });
     });
   }
@@ -524,13 +524,13 @@
   }
   function openExcelAsPdf() {
     if (!excelFile) return;
-    showLoading('PDF로 변환 중…', 'PC 문서를 폰용으로 변환하고 있어요.'); setProgress(6);
+    showLoading('PDF로 변환 중…', 'PC 문서를 폰용으로 변환하고 있습니다.'); setProgress(6);
     var k = excelKey;
     convertViaOffice(excelFile, excelName, function (buf) {
       excelPdfBuf = buf; excelView = 'pdf';
       if (k) { try { excelPdfBlob = new Blob([buf], { type: 'application/pdf' }); curKey = k; saveCurrent('excel', { pdf: excelPdfBlob }); } catch (e) {} }
       loadPdf({ data: new Uint8Array(excelPdfBuf.slice(0)) }, excelName, false); updateXlToggle();
-    }, function (msg, resumable) { showError(resumable ? '아직 PDF로 열지 못했어요.' : 'PDF로 변환하지 못했습니다.', msg, openExcelAsPdf); }, k);
+    }, function (msg, resumable) { showError(resumable ? '아직 PDF로 열지 못했습니다.' : 'PDF로 변환하지 못했습니다.', msg, openExcelAsPdf); }, k);
   }
 
   // ============ 변환(스마트비서 우편함 — OfficeBridge) ============
@@ -547,9 +547,9 @@
       fr.readAsArrayBuffer(file);
       return;
     }
-    showLoading('문서를 여는 중…', 'PC 문서를 폰용으로 변환하고 있어요. 처음 한 번은 1~2분 걸릴 수 있어요.'); setProgress(10);
+    showLoading('문서를 여는 중…', 'PC 문서를 폰용으로 변환하고 있습니다. 처음 한 번은 1~2분 걸릴 수 있습니다.'); setProgress(10);
     convertViaOffice(file, file.name, function (buf) { openPdfArrayBuffer(buf, file.name, wasPpt); },
-      function (msg, resumable) { showError(resumable ? '아직 문서를 열지 못했어요.' : '이 문서를 열지 못했습니다.', msg, function () { convertAndShowPdf(file); }); },
+      function (msg, resumable) { showError(resumable ? '아직 문서를 열지 못했습니다.' : '이 문서를 열지 못했습니다.', msg, function () { convertAndShowPdf(file); }); },
       curKey);
   }
 
@@ -607,14 +607,14 @@
       xhr.open('GET', url, true); xhr.responseType = 'arraybuffer';
       xhr.onprogress = function (e) { if (e.lengthComputable && onPct) onPct(e.loaded / e.total); };
       xhr.onload = function () { if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response); else reject(new Error('내려받기 실패(' + xhr.status + ')')); };
-      xhr.onerror = function () { reject(new Error('인터넷 연결이 끊겨 변환된 문서를 받지 못했어요.')); };
+      xhr.onerror = function () { reject(new Error('인터넷 연결이 끊겨 변환된 문서를 받지 못했습니다.')); };
       xhr.send();
     });
   }
 
   // onErr(글, 이어하기가능) — 이어하기 가능이면 [다시 시도] 때 처음부터 다시 올리지 않는다.
   function convertViaOffice(file, name, onDone, onErr, key) {
-    if (!global.OfficeBridge) { onErr('연결 모듈을 찾지 못했어요.', false); return; }
+    if (!global.OfficeBridge) { onErr('연결 모듈을 찾지 못했습니다.', false); return; }
     var op = ++opToken;
     var jk = key || ('f:' + (file.name || '') + '|' + (file.size || 0) + '|' + (file.lastModified || 0));
     var size = file.size || 0, big = size >= BIG_DOC;
@@ -625,10 +625,10 @@
       if (!alive()) return;
       releaseWake(); curCtl = null;
       if (!keep) jobDel(jk);
-      onErr(msg + (suffix != null ? suffix : (keep ? ' [다시 시도]를 누르면 처음부터 다시 올리지 않고 이어서 해요.' : '')), !!keep);
+      onErr(msg + (suffix != null ? suffix : (keep ? ' [다시 시도]를 누르면 처음부터 다시 올리지 않고 이어서 합니다.' : '')), !!keep);
     }
     var CONV_MAX = big ? CONV_MAX_BIG : CONV_MAX_SMALL;
-    var STUCK_SUFFIX = ' [다시 시도]를 누르면 PC에 새로 요청해요(문서를 처음부터 다시 올려요).';
+    var STUCK_SUFFIX = ' [다시 시도]를 누르면 PC에 새로 요청합니다(문서를 처음부터 다시 올립니다).';
     // v6.9 검토 반영: PC 워커가 변환 중에 죽으면 서버 행이 processing 에 굳는다(워커는 pending 만 집음).
     //   그 요청을 계속 기다리면 영영 안 끝나므로, 한 번 시간 초과(convTimedOut)했거나 변환 시작 뒤 한도의 2배가
     //   지났으면 [다시 시도] 때 옛 요청을 버리고 새 요청으로 처음부터 올린다(PC 쪽 수정이 없어도 빠져나옴).
@@ -643,7 +643,7 @@
     }
     function upload(job) {
       var ctl = curCtl = { cancelled: false };
-      var baseHint = big ? '큰 문서예요. 다 올라갈 때까지 이 화면을 켜 둔 채 기다려 주세요.' : '';
+      var baseHint = big ? '큰 문서입니다. 다 올라갈 때까지 이 화면을 켜 둔 채 기다려 주세요.' : '';
       var resumed = Object.keys(job.parts || {}).length > 0;
       var label = resumed ? '남은 부분을 이어서 올리는 중… ' : '문서를 올리는 중… ';
       setLoading({ step: 1, msg: label, sub: job.name + ' · ' + fmtSize(size), pct: 3, pctText: '', hint: baseHint });
@@ -656,7 +656,7 @@
           setLoading({ msg: label + Math.floor(p * 100) + '%', pct: 3 + p * 55, pctText: fmtSize(sent) + ' / ' + fmtSize(total) });
         },
         onPartOk: function (k, total) { job.parts[k] = true; job.total = total; jobPut(jk, job); if (alive()) setLoading({ hint: baseHint }); },
-        onRetry: function (k, n) { if (alive()) setLoading({ hint: '전송이 끊겨 다시 올리는 중이에요(' + (n + 1) + '번째 시도)…' }); },
+        onRetry: function (k, n) { if (alive()) setLoading({ hint: '전송이 끊겨 다시 올리는 중입니다(' + (n + 1) + '번째 시도)…' }); },
         onRowSent: function () { job.rowSent = true; jobPut(jk, job); }
       }).then(function (r) {
         if (!alive()) return;
@@ -671,7 +671,7 @@
     }
     function waitConvert(job) {
       var tWait = Date.now(), lastProg = -1, netFail = 0;
-      setLoading({ step: 2, msg: 'PC에 전달했어요', sub: 'PC가 받아 변환을 시작하면 알려 드려요.', pct: 60, pctText: '', hint: '' });
+      setLoading({ step: 2, msg: 'PC에 전달했습니다', sub: 'PC가 받아 변환을 시작하면 알려 드립니다.', pct: 60, pctText: '', hint: '' });
       (function loop() {
         if (!alive()) return;
         OfficeBridge.poll(job.id, job.tok).then(function (res) {
@@ -680,7 +680,7 @@
           if (res && res.status === 'done') {
             var d = OfficeBridge.docResultFrom(res);
             if (d && d.pdf_url) { openResult(job, d, false); return; }
-            fail((d && d.error) || '이 문서는 변환하지 못했어요. 암호가 걸렸거나 형식이 특수할 수 있어요.', false);
+            fail((d && d.error) || '이 문서는 변환하지 못했습니다. 암호가 걸렸거나 형식이 특수할 수 있습니다.', false);
             return;
           }
           var st = res && res.status, prog = (res && res.progress) | 0, ptot = (res && res.progress_total) | 0;
@@ -693,48 +693,48 @@
             var extra = (pmsg && !/^받는 중/.test(pmsg)) ? pmsg : '';          // PC가 변환 진행 글을 쓰면 그대로
             setLoading({ step: 2, msg: 'PC에서 변환 중… ' + fmtDur(el), sub: extra || (job.name + ' · ' + fmtSize(size)),
                          pct: 62 + 30 * Math.min(1, el / (big ? 240000 : 90000)), pctText: '',
-                         hint: el > 60000 ? (big ? '큰 문서라 변환에 몇 분 걸려요. 최대 10분까지 기다려요.' : '조금 오래 걸리고 있어요. 최대 5분까지 기다려요.') : '' });
+                         hint: el > 60000 ? (big ? '큰 문서라 변환에 몇 분 걸립니다. 최대 10분까지 기다립니다.' : '조금 오래 걸리고 있습니다. 최대 5분까지 기다립니다.') : '' });
             if (el > CONV_MAX) {
               job.convTimedOut = true; jobPut(jk, job);
-              fail('PC가 ' + (big ? '10' : '5') + '분 넘게 변환 중이에요. PC가 멈췄을 수 있어요.', true, STUCK_SUFFIX); return;
+              fail('PC가 ' + (big ? '10' : '5') + '분 넘게 변환 중입니다. PC가 멈췄을 수 있습니다.', true, STUCK_SUFFIX); return;
             }
           } else if (st === 'processing') {
             if (prog !== lastProg) { lastProg = prog; tWait = now; }
-            setLoading({ step: 2, msg: 'PC가 문서를 받는 중… ' + prog + '/' + ptot, sub: '다 받으면 바로 변환을 시작해요.', pct: 60 + 2 * (ptot ? prog / ptot : 0), pctText: '', hint: '' });
-            if (now - tWait > QUEUE_MAX) { job.convTimedOut = true; jobPut(jk, job); fail('PC가 문서를 받다가 멈췄어요.', true, STUCK_SUFFIX); return; }
+            setLoading({ step: 2, msg: 'PC가 문서를 받는 중… ' + prog + '/' + ptot, sub: '다 받으면 바로 변환을 시작합니다.', pct: 60 + 2 * (ptot ? prog / ptot : 0), pctText: '', hint: '' });
+            if (now - tWait > QUEUE_MAX) { job.convTimedOut = true; jobPut(jk, job); fail('PC가 문서를 받다가 멈췄습니다.', true, STUCK_SUFFIX); return; }
           } else {
             var w = now - tWait;
             setLoading({ step: 2, msg: 'PC 차례를 기다리는 중… ' + fmtDur(w),
-                         sub: w > 20000 ? 'PC가 앞 문서를 처리하고 있거나 잠시 꺼져 있을 수 있어요. 요청은 PC에 남아 있어요.' : 'PC가 곧 받아 갈 거예요.',
+                         sub: w > 20000 ? 'PC가 앞 문서를 처리하고 있거나 잠시 꺼져 있을 수 있습니다. 요청은 PC에 남아 있습니다.' : 'PC가 곧 받아 갈 겁니다.',
                          pct: 60, pctText: '', hint: '' });
-            if (w > QUEUE_MAX) { fail('PC가 15분 동안 이 문서를 받아 가지 않았어요. PC가 켜져 있는지 확인해 주세요.', true); return; }
+            if (w > QUEUE_MAX) { fail('PC가 15분 동안 이 문서를 받아 가지 않았습니다. PC가 켜져 있는지 확인해 주세요.', true); return; }
           }
           setTimeout(loop, 2500);
         }, function () {
           if (!alive()) return;
           if (!netFail) netFail = Date.now();
           var nf = Date.now() - netFail;
-          if (nf > 20000) setLoading({ hint: '인터넷 연결을 확인하는 중이에요… (' + fmtDur(nf) + ')' });
-          if (nf > QUEUE_MAX) { fail('인터넷 연결이 오래 끊겨 있어요.', true); return; }
+          if (nf > 20000) setLoading({ hint: '인터넷 연결을 확인하는 중입니다… (' + fmtDur(nf) + ')' });
+          if (nf > QUEUE_MAX) { fail('인터넷 연결이 오래 끊겨 있습니다.', true); return; }
           setTimeout(loop, 3500);
         });
       })();
     }
     function openResult(job, d, reused) {
       setLoading({ step: 3, msg: reused ? '이미 변환된 문서를 받는 중…' : ('변환 완료' + (d.pages ? '(' + d.pages + '쪽)' : '') + ' · 폰으로 받는 중…'),
-                   sub: reused ? '지난번에 PC가 변환해 둔 결과라 다시 올리지 않아요.' : '', pct: 92, pctText: '', hint: '' });
+                   sub: reused ? '지난번에 PC가 변환해 둔 결과라 다시 올리지 않습니다.' : '', pct: 92, pctText: '', hint: '' });
       job.doneAt = Date.now(); jobPut(jk, job);
       downloadPdf(d.pdf_url, function (p) { if (alive()) setLoading({ pct: 92 + 8 * p, pctText: Math.floor(p * 100) + '%' }); })
         .then(function (buf) { if (!alive()) return; releaseWake(); onDone(buf); }, function (e) {
           if (!alive()) return;
           if (reused) { jobDel(jk); startFresh(); return; }   // 지난 결과 주소가 만료 → 새로
-          fail((e && e.message) || '변환된 문서를 받지 못했어요.', true);
+          fail((e && e.message) || '변환된 문서를 받지 못했습니다.', true);
         });
     }
     // 시작: 장부에 지난 요청이 있으면 먼저 서버에 물어본다.
     var prev = jobGet(jk);
     if (!prev) { startFresh(); return; }
-    setLoading({ step: 2, msg: '지난번 요청을 확인하는 중…', sub: '이미 PC에 보낸 문서인지 확인하고 있어요.', pct: 8, pctText: '', hint: '' });
+    setLoading({ step: 2, msg: '지난번 요청을 확인하는 중…', sub: '이미 PC에 보낸 문서인지 확인하고 있습니다.', pct: 8, pctText: '', hint: '' });
     OfficeBridge.poll(prev.id, prev.tok).then(function (res) {
       if (!alive()) return;
       prev.parts = prev.parts || {};
@@ -750,7 +750,7 @@
       if (res.status === 'processing' && isStuck(prev, Date.now())) { jobDel(jk); startFresh(); return; }   // 굳은 요청 → 새로
       waitConvert(prev);                                      // PC가 아직 처리 중 → 이어서 기다림
     }, function () {
-      fail('인터넷 연결을 확인할 수 없어요. 연결을 확인해 주세요.', true);
+      fail('인터넷 연결을 확인할 수 없습니다. 연결을 확인해 주세요.', true);
     });
   }
 
@@ -781,7 +781,7 @@
         requestAnimationFrame(function () { if (seq !== loadSeq) return; listSetPos(pagesEl, scroller, rs.pos); if (rs.left) scroller.scrollLeft = rs.left; updatePageBadge(); });
       } else if (want > 1) {                               // v6.9: 지난번 본 쪽부터(옛 독립 뷰어의 이어보기)
         if (!pdfPaged) requestAnimationFrame(function () { goToPage(want, true); updatePageBadge(); });
-        if (!rs) toast('📖 ' + want + '쪽부터 이어서 보여 드려요');
+        if (!rs) toast('📖 ' + want + '쪽부터 이어서 보여 드립니다');
       }
       if (curKey) DocStore.touch(curKey, { pages: pdfDoc.numPages });
       var lt = activeTab(); if (lt && liveTabId === lt.id) lt.pages = pdfDoc.numPages;   // v8.1: 케이에게 「전체 ○쪽」
@@ -1000,7 +1000,7 @@
       pageFlip.on('changeState', function (e) { if (e.data === 'read') renderFlipWindow(mySeq); });
       try { pageFlip.turnToPage(Math.max(0, Math.min(pdfDoc.numPages - 1, flipCur - 1))); } catch (e) {}
       renderFlipWindow(mySeq); updateFlipBadge();
-    } catch (err) { destroyPageFlip(); bookActive = false; ssEl.classList.remove('book'); ssStage.style.display = ''; setBookFlipPref(false); updateFlipUI(); renderSlide(ssIndex); showFlipHint('책 넘김을 열지 못해 기본 보기로 전환했어요'); }
+    } catch (err) { destroyPageFlip(); bookActive = false; ssEl.classList.remove('book'); ssStage.style.display = ''; setBookFlipPref(false); updateFlipUI(); renderSlide(ssIndex); showFlipHint('책 넘김을 열지 못해 기본 보기로 전환했습니다'); }
   }
   function scheduleBookRebuild() { if (!bookActive) return; if (flipResizeT) clearTimeout(flipResizeT); flipResizeT = setTimeout(function () { if (ssOpen && bookActive) buildBook(); }, 220); }
   function setBookFlipPref(v) { bookFlip = !!v; try { localStorage.setItem('docviewer_bookflip', v ? '1' : '0'); } catch (e) {} }
@@ -1013,7 +1013,7 @@
   function updateFlipUI() { var on = bookActive; ssFlipBtn.classList.toggle('on', on); ssZoomOutBtn.style.display = on ? 'none' : 'inline-flex'; ssFitBtn.style.display = on ? 'none' : 'inline-flex'; ssZoomInBtn.style.display = on ? 'none' : 'inline-flex'; ssRotateBtn.style.display = on ? 'none' : 'inline-flex'; }
   function toggleBookFlip() {
     if (!flipAvailable()) { showFlipHint('이 기기에선 책 넘김을 쓸 수 없어 기본 보기로 봅니다'); return; } if (ssMode !== 'page') return;
-    if (bookActive) { setBookFlipPref(false); exitBookFlip(); showFlipHint('기본 보기로 돌아왔어요 (확대·팬·회전 가능)'); }
+    if (bookActive) { setBookFlipPref(false); exitBookFlip(); showFlipHint('기본 보기로 돌아왔습니다 (확대·팬·회전 가능)'); }
     else { setBookFlipPref(true); enterBookFlip(); showFlipHint('책 넘김 · 확대하려면 📖를 다시 끄세요'); }
   }
 
@@ -1028,7 +1028,7 @@
   function activeTab() { return (activeIdx >= 0 && tabs[activeIdx]) || null; }
   function viewerOpen() { return !!(rootEl && rootEl.classList.contains('on')); }
   function copyState(st) { var o = {}; if (st) for (var k in st) if (st.hasOwnProperty(k)) o[k] = st[k]; return o; }
-  function capToast() { toast('문서는 ' + MAX_TABS + '개까지 함께 열 수 있어요. 위 탭의 ✕로 하나를 닫고 다시 열어 주세요.'); }
+  function capToast() { toast('문서는 ' + MAX_TABS + '개까지 함께 열 수 있습니다. 위 탭의 ✕로 하나를 닫고 다시 열어 주세요.'); }
   function refreshFname() {
     var t = activeTab(); if (fnameLabel && t && liveTabId === t.id) fnameLabel.textContent = t.name;
   }
@@ -1080,7 +1080,7 @@
     pendingPdfBlob = null; openIntent = null;
     tabs.push(t); activeIdx = tabs.length - 1; liveTabId = t.id;
     renderTabs();
-    if (tabs.length === 2) toast('📑 두 번째 문서를 열었어요. 위 탭을 눌러 왔다갔다 보세요.');
+    if (tabs.length === 2) toast('📑 두 번째 문서를 열었습니다. 위 탭을 눌러 왔다갔다 보세요.');
   }
   // 새 문서 열기를 그만둠(취소·실패·한도) → 보던 탭으로. 탭이 없으면 예전처럼 뷰어를 닫는다.
   function abortOpen() {
@@ -1091,7 +1091,7 @@
   function failRestore() {
     openIntent = null; var i = activeIdx;
     if (tabs[i]) tabs.splice(i, 1);
-    toast('이 탭의 문서를 다시 열지 못해 탭을 닫았어요. 「최근 연 문서」에서 다시 열어 주세요.');
+    toast('이 탭의 문서를 다시 열지 못해 탭을 닫았습니다. 「최근 연 문서」에서 다시 열어 주세요.');
     if (tabs.length) activateTab(Math.min(i, tabs.length - 1), { noSnap: true }); else { activeIdx = -1; leaveViewer(); }
   }
   // 탭 하나를 화면에 다시 그린다(들고 있는 PDF·엑셀 원본으로 — 변환·내려받기 없음).
@@ -1177,12 +1177,12 @@
     if (!sheetEl) { if (fileInput) fileInput.click(); return; }
     if (tabs.length >= MAX_TABS) { capToast(); return; }
     sheetEl.classList.add('on');
-    var note = $('dvsNote'); if (note) note.textContent = '지금 보던 문서는 위 탭에 그대로 남아요 · 최대 ' + MAX_TABS + '개';
+    var note = $('dvsNote'); if (note) note.textContent = '지금 보던 문서는 위 탭에 그대로 남습니다 · 최대 ' + MAX_TABS + '개';
     var list = $('dvsList'); if (!list) return;
     list.innerHTML = '<div class="dvs-empty">불러오는 중…</div>';
     DocStore.list().then(function (items) {
       if (!sheetEl.classList.contains('on')) return;
-      if (!items.length) { list.innerHTML = '<div class="dvs-empty">아직 최근 연 문서가 없어요.</div>'; return; }
+      if (!items.length) { list.innerHTML = '<div class="dvs-empty">아직 최근 연 문서가 없습니다.</div>'; return; }
       list.innerHTML = items.slice(0, 20).map(function (m) {
         var b = TYPE_BADGE[m.ext || extOf(m.name)] || [String(m.ext || '문서').toUpperCase().slice(0, 4), 't-etc'];
         var open = tabByKey(m.key) >= 0;
@@ -1203,7 +1203,7 @@
     beginOpen(); opToken++; var op = opToken;
     DocStore.get(key).then(function (meta) {
       if (op !== opToken) return;
-      if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서예요.'); abortOpen(); return; }
+      if (!meta) { renderRecent(); toast('목록에서 이미 지워진 문서입니다.'); abortOpen(); return; }
       isExcelDoc = false; xlToggleBtn.style.display = 'none'; curSrcUrl = null;
       curOrig = null; curSrcFull = null; curPcPath = null;              // O-0171
       openStored(meta, op, null);
@@ -1219,7 +1219,7 @@
       var ls = $('dvsList'); if (ls) ls.addEventListener('click', function (e) { var r = e.target.closest ? e.target.closest('.dvs-row') : null; if (r) openRecentKey(r.getAttribute('data-key')); });
     }
     var rs = $('docOpenResume'); if (rs) rs.onclick = function () { if (!tabs.length) { renderOpenCard(); return; } showViewer(); activateTab(Math.max(0, Math.min(activeIdx, tabs.length - 1)), { noSnap: true }); };
-    var ca = $('docOpenCloseAll'); if (ca) ca.onclick = function () { tabs = []; activeIdx = -1; liveTabId = null; parked = false; renderOpenCard(); renderTabs(); toast('열어 둔 문서를 모두 닫았어요. (최근 연 문서에는 남아 있어요)'); };
+    var ca = $('docOpenCloseAll'); if (ca) ca.onclick = function () { tabs = []; activeIdx = -1; liveTabId = null; parked = false; renderOpenCard(); renderTabs(); toast('열어 둔 문서를 모두 닫았습니다. (최근 연 문서에는 남아 있습니다)'); };
   }
 
   /* ============ v8.1(O-0154) 케이에게 묻기·맡기기 ============
@@ -1291,7 +1291,7 @@
     var it = ctx.items[ctx.active], multi = ctx.items.length >= 2;
     var where = askWhere(it);
     var wp = where || '문서';
-    $('dvaNote').textContent = '「' + it.name + '」 ' + wp + josaEulReul(wp) + ' 보고 계세요. 이 문서를 케이에게 함께 보내요.';
+    $('dvaNote').textContent = '「' + it.name + '」 ' + wp + josaEulReul(wp) + ' 보고 계세요. 이 문서를 케이에게 함께 보냅니다.';
     function chipsHtml(g) {
       return ASK_CHIPS.filter(function (c) { return c.g === g && (!c.multi || multi); }).map(function (c) {
         return '<button class="dva-chip' + (c.g === 'do' ? ' do' : '') + '" type="button" data-chip="' + c.id + '">' + esc(chipLabel(c, it)) + '</button>';
@@ -1333,12 +1333,12 @@
     var all = !!($('dvaMulti') && $('dvaMulti').checked && ctx.items.length >= 2);
     var items = all ? ctx.items : [ctx.items[ctx.active]];
     var miss = items.filter(function (x) { return !x.pdf && !x.orig && !x.ref; });
-    if (miss.length === items.length) { toast('이 문서는 보낼 사본이 없어요. 문서를 다시 열고 눌러 주세요.'); return; }
+    if (miss.length === items.length) { toast('이 문서는 보낼 사본이 없습니다. 문서를 다시 열고 눌러 주세요.'); return; }
     var payload = { question: q, chip: askChip, all: all, items: items.filter(function (x) { return x.pdf || x.orig || x.ref; }),
                     missing: miss.map(function (x) { return x.name; }) };
     closeAsk();
     parked = true;                                                   // 채팅을 보고 돌아오면 「열어 둔 문서 · 이어서 보기」
-    try { askHandler(payload); } catch (e) { toast('케이에게 보내지 못했어요. 다시 눌러 주세요.'); }
+    try { askHandler(payload); } catch (e) { toast('케이에게 보내지 못했습니다. 다시 눌러 주세요.'); }
   }
   // 이미 서버에 있는 PC 변환본이 지금도 살아 있는지 확인(요청 행 + 서명 주소). 실패하면 null → 폰 사본을 올린다.
   function checkRef(ref) {
@@ -1406,9 +1406,9 @@
   function editSrcOf(t) {
     if (!t) return null;
     var ext = t.ext || extOf(t.name);
-    if (t.pcPath) return { pcPath: t.pcPath, name: t.name, ext: ext, how: 'PC에 있는 원본을 그대로 열어요' };
-    if (t.srcFull && isServerFileUrl(t.srcFull)) return { url: t.srcFull, name: t.name, ext: ext, how: '사무소 서버에 있는 파일을 PC가 바로 받아요' };
-    if (t.orig) return { file: t.orig, name: t.name, ext: ext, how: '폰에 있는 원본을 PC로 보내요(' + fmtSize(t.orig.size || 0) + ')' };
+    if (t.pcPath) return { pcPath: t.pcPath, name: t.name, ext: ext, how: 'PC에 있는 원본을 그대로 엽니다' };
+    if (t.srcFull && isServerFileUrl(t.srcFull)) return { url: t.srcFull, name: t.name, ext: ext, how: '사무소 서버에 있는 파일을 PC가 바로 받습니다' };
+    if (t.orig) return { file: t.orig, name: t.name, ext: ext, how: '폰에 있는 원본을 PC로 보냅니다(' + fmtSize(t.orig.size || 0) + ')' };
     return null;
   }
   function updateEditBtn() {
@@ -1447,17 +1447,17 @@
     var prog = esc(EDITABLE[(editCtx || {}).ext] || '프로그램');
     return isNativeApp()
       ? 'PC 원격 제어 화면에서 고치신 뒤 <b>' + prog + '의 [저장](Ctrl+S)</b>을 꼭 누르고, 이 앱으로 돌아와 <b>[다 됐어요]</b>를 눌러 주세요.'
-      : '지금 이 화면이 <b>24시간 PC</b>라면 ' + prog + ' 창이 이미 맨 앞에 떠 있어요. 다른 PC라면 [PC 원격 제어 열기]로 들어가세요. 고친 뒤 <b>[저장]</b> → <b>[다 됐어요]</b>.';
+      : '지금 이 화면이 <b>24시간 PC</b>라면 ' + prog + ' 창이 이미 맨 앞에 떠 있습니다. 다른 PC라면 [PC 원격 제어 열기]로 들어가세요. 고친 뒤 <b>[저장]</b> → <b>[다 됐어요]</b>.';
   }
   function editShowOpened(e) {
     var prog = e.program || EDITABLE[(editCtx || {}).ext] || '프로그램';
     var locked = e.window === 'locked' || e.state === 'opened_locked';
     var flash = e.window === 'flash';
     editRender({ step: 3, icon: locked ? '🔒' : '✓', tone: (locked || flash) ? 'warn' : 'ok',
-      msg: locked ? 'PC에서 ' + prog + '로 열었어요 — PC 화면이 잠겨 있어요' : ('PC에서 ' + prog + '로 열었어요' + (e.reused ? ' (이미 열려 있던 창)' : '')),
-      sub: locked ? 'PC 원격 제어로 들어가 잠금을 푸시면 ' + prog + ' 창이 맨 앞에 떠 있어요.'
-         : (flash ? prog + ' 창을 맨 앞으로 올리지 못했어요. PC 원격 제어 화면 아래 작업 표시줄에서 깜박이는 ' + prog + '를 눌러 주세요.'
-                  : '창을 화면 가득 키워 맨 앞에 띄워 두었어요.'),
+      msg: locked ? 'PC에서 ' + prog + '로 열었습니다 — PC 화면이 잠겨 있습니다' : ('PC에서 ' + prog + '로 열었습니다' + (e.reused ? ' (이미 열려 있던 창)' : '')),
+      sub: locked ? 'PC 원격 제어로 들어가 잠금을 푸시면 ' + prog + ' 창이 맨 앞에 떠 있습니다.'
+         : (flash ? prog + ' 창을 맨 앞으로 올리지 못했습니다. PC 원격 제어 화면 아래 작업 표시줄에서 깜박이는 ' + prog + '를 눌러 주세요.'
+                  : '창을 화면 가득 키워 맨 앞에 띄워 두었습니다.'),
       tip: remoteTip(), btns: [remoteBtn(true), doneBtn(false)] });
   }
   function openEdit() {
@@ -1478,14 +1478,14 @@
   function editShowStart() {
     var c = editCtx, prog = EDITABLE[c.ext], src = editSrcOf(c.tab);
     if (!src) {
-      editRender({ step: 1, icon: '📁', tone: 'warn', msg: '이 문서의 원본 파일이 폰에 없어요',
-        sub: '「최근 연 문서」에는 보기용 사본만 남아 있어요. 같은 파일을 한 번 더 골라 주시면 PC로 보내 ' + prog + '로 열어 드려요.',
+      editRender({ step: 1, icon: '📁', tone: 'warn', msg: '이 문서의 원본 파일이 폰에 없습니다',
+        sub: '「최근 연 문서」에는 보기용 사본만 남아 있습니다. 같은 파일을 한 번 더 골라 주시면 PC로 보내 ' + prog + '로 열어 드립니다.',
         btns: [{ act: 'pick', label: '📁 원본 파일 고르기' }] });
       return;
     }
     editRender({ step: 1, icon: '🖥️', msg: 'PC의 ' + prog + '로 열어 드릴까요?',
-      sub: src.how + '. 그다음 「PC 원격 제어」로 PC 화면을 보면서 키보드·마우스로 고치시면 돼요.',
-      tip: '고친 파일은 PC의 「SmartEdit」 폴더에 남고, 처음 원본도 1부 따로 보관해요.',
+      sub: src.how + '. 그다음 「PC 원격 제어」로 PC 화면을 보면서 키보드·마우스로 고치시면 됩니다.',
+      tip: '고친 파일은 PC의 「SmartEdit」 폴더에 남고, 처음 원본도 1부 따로 보관합니다.',
       btns: [{ act: 'start', label: '✏️ PC에서 ' + prog + '로 열기' }] });
   }
   function editFail(msg, sub, retryAct) {
@@ -1493,9 +1493,9 @@
       btns: retryAct ? [{ act: retryAct, label: '🔄 다시 시도' }] : [] });
   }
   function friendlyErr(e) {
-    if (e && e.badpass) return ['연동 암호가 필요해요', '연동 암호를 넣으신 뒤 다시 눌러 주세요.'];
-    if (e && e.notready) return ['PC 편집 기능이 서버에 아직 준비되지 않았어요', '소장에게 알려 주세요(서버 설정 한 가지가 남았어요).'];
-    return ['PC로 보내지 못했어요', (e && (e.friendly || e.message)) || '인터넷 연결을 확인하고 다시 눌러 주세요.'];
+    if (e && e.badpass) return ['연동 암호가 필요합니다', '연동 암호를 넣으신 뒤 다시 눌러 주세요.'];
+    if (e && e.notready) return ['PC 편집 기능이 서버에 아직 준비되지 않았습니다', '저에게 알려 주세요(서버 설정 한 가지가 남았습니다).'];
+    return ['PC로 보내지 못했습니다', (e && (e.friendly || e.message)) || '인터넷 연결을 확인하고 다시 눌러 주세요.'];
   }
   function editStart() {
     var c = editCtx; if (!c || !global.OfficeBridge) return;
@@ -1541,18 +1541,18 @@
         if (!editCtx || seq !== editSeq) return;
         netFail = 0;
         var st = res && res.status, w = Date.now() - t0;
-        if (st === 'rejected') { editFail('PC가 요청을 거절했어요', '연동 암호 확인이 되지 않았어요. 연동 암호를 다시 넣고 시도해 주세요.', mode === 'open' ? 'start' : 'finish'); return; }
+        if (st === 'rejected') { editFail('PC가 요청을 거절했습니다', '연동 암호 확인이 되지 않았습니다. 연동 암호를 다시 넣고 시도해 주세요.', mode === 'open' ? 'start' : 'finish'); return; }
         if (st === 'done') { editDone(res, mode); return; }
         var pm = (res && res.progress_msg) || '';
         if (mode === 'open') {
           editRender({ step: 2, spin: true, msg: (pm || 'PC가 요청을 받는 중') + '…',
-            sub: w > 30000 ? 'PC가 조금 늦어요. PC가 켜져 있는지 확인해 주세요. (' + fmtDur(w) + ')' : c.name });
+            sub: w > 30000 ? 'PC가 조금 늦습니다. PC가 켜져 있는지 확인해 주세요. (' + fmtDur(w) + ')' : c.name });
         } else {
           editRender({ step: 4, spin: true, msg: (pm || 'PC에서 저장본을 확인하는 중') + '…', sub: c.name });
         }
         if (st !== 'processing' && w > 3 * 60 * 1000) {
           c.lastPoll = { rid: rid, tok: tok, mode: mode };
-          editFail('PC가 3분 동안 응답하지 않아요', 'PC가 꺼져 있거나 편집 도우미가 멈췄을 수 있어요. 요청은 PC에 남아 있어요.', 'repoll');
+          editFail('PC가 3분 동안 응답하지 않습니다', 'PC가 꺼져 있거나 편집 도우미가 멈췄을 수 있습니다. 요청은 PC에 남아 있습니다.', 'repoll');
           return;
         }
         editPollT = setTimeout(loop, 2000);
@@ -1561,7 +1561,7 @@
         if (!netFail) netFail = Date.now();
         if (Date.now() - netFail > 120000) {
           c.lastPoll = { rid: rid, tok: tok, mode: mode };
-          editFail('인터넷 연결이 끊겨 PC 소식을 받지 못했어요', '연결을 확인한 뒤 [다시 시도]를 눌러 주세요.', 'repoll');
+          editFail('인터넷 연결이 끊겨 PC 소식을 받지 못했습니다', '연결을 확인한 뒤 [다시 시도]를 눌러 주세요.', 'repoll');
           return;
         }
         editPollT = setTimeout(loop, 3000);
@@ -1589,15 +1589,15 @@
         return;
       }
       editSessDel(t); updateEditBtn();
-      editFail('PC에서 열지 못했어요', e.msg || (res && res.error) || '', 'start');
+      editFail('PC에서 열지 못했습니다', e.msg || (res && res.error) || '', 'start');
       return;
     }
     if (e.state === 'returned') {
       var doc = (res.summary_json || {}).doc || null;
       s.phase = 'returned'; s.result = { file: e.file || null, doc: doc, chat: !!e.chat }; editSessPut(t, s); updateEditBtn();
       c.result = s.result; c.step = 5;
-      editRender({ step: 5, icon: '🎉', tone: 'ok', msg: '고친 문서를 받았어요',
-        sub: (e.msg ? e.msg + ' ' : '') + (e.pages ? e.pages + '쪽 · ' : '') + 'PC에도 저장본이 남아 있어요' + (e.chat ? ' · 채팅에도 보내 드렸어요' : '') + '.',
+      editRender({ step: 5, icon: '🎉', tone: 'ok', msg: '고친 문서를 받았습니다',
+        sub: (e.msg ? e.msg + ' ' : '') + (e.pages ? e.pages + '쪽 · ' : '') + 'PC에도 저장본이 남아 있습니다' + (e.chat ? ' · 채팅에도 보내 드렸습니다' : '') + '.',
         btns: [].concat(doc && doc.pdf_url ? [{ act: 'viewret', label: '📄 고친 문서 보기' }] : [])
                 .concat(e.file && e.file.url ? [{ act: 'dlret', label: '⬇ 파일 받기 (' + (e.file.name || '') + ')', cls: 'dvs-big dve-2nd' }] : [])
                 .concat([{ act: 'again', label: '✏️ 이어서 더 고치기', cls: 'dvs-big dve-2nd' }]) });
@@ -1605,28 +1605,28 @@
     }
     if (e.state === 'not_saved') {
       s.phase = 'not_saved'; editSessPut(t, s); c.sess = s; c.step = 3;
-      editRender({ step: 3, icon: '💾', tone: 'warn', msg: 'PC에서 아직 저장 안 했어요', sub: e.msg || '',
+      editRender({ step: 3, icon: '💾', tone: 'warn', msg: 'PC에서 아직 저장하지 않았습니다', sub: e.msg || '',
         tip: remoteTip(), btns: [remoteBtn(false), doneBtn(true)] });
       return;
     }
-    if (e.state === 'no_session') { editSessDel(t); updateEditBtn(); editFail('PC에 이 편집 기록이 없어요', e.msg || '처음부터 다시 [PC에서 열기]를 눌러 주세요.', 'start'); return; }
+    if (e.state === 'no_session') { editSessDel(t); updateEditBtn(); editFail('PC에 이 편집 기록이 없습니다', e.msg || '처음부터 다시 [PC에서 열기]를 눌러 주세요.', 'start'); return; }
     s.phase = 'opened'; editSessPut(t, s);
-    editFail('고친 문서를 받지 못했어요', e.msg || (res && res.error) || '', 'finish');
+    editFail('고친 문서를 받지 못했습니다', e.msg || (res && res.error) || '', 'finish');
   }
   function editOpenRemote() {
     if (!isNativeApp()) { try { global.open(CRD_WEB, '_blank', 'noopener'); } catch (e) { location.href = CRD_WEB; } return; }
     var EA = global.Capacitor.Plugins && global.Capacitor.Plugins.ExternalApp;
-    if (!EA || typeof EA.launchApp !== 'function') { toast('앱을 새 버전으로 바꾸면 PC 원격 제어를 바로 열 수 있어요. 지금은 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.'); return; }
+    if (!EA || typeof EA.launchApp !== 'function') { toast('앱을 새 버전으로 바꾸면 PC 원격 제어를 바로 열 수 있습니다. 지금은 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.'); return; }
     EA.launchApp({ pkg: CRD_PKG }).then(function (r) {
       if (r && r.opened) return;
       if (r && r.reason === 'not_installed') {
-        askThen('크롬 원격 데스크톱 앱이 없어요', '플레이 스토어에서 「Chrome 원격 데스크톱」(무료, 구글)을 설치해 주세요. 설치 후 대표님 구글 계정으로 로그인하면 24시간 PC가 목록에 보여요.', '스토어 열기', function () {
+        askThen('크롬 원격 데스크톱 앱이 없습니다', '플레이 스토어에서 「Chrome 원격 데스크톱」(무료, 구글)을 설치해 주세요. 설치 후 대표님 구글 계정으로 로그인하면 24시간 PC가 목록에 보입니다.', '스토어 열기', function () {
           EA.openStore({ pkg: CRD_PKG }).catch(function () {});
         }, { positive: true, icon: 'i-monitor' });
         return;
       }
-      toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했어요. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
-    }, function () { toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했어요.'); });
+      toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했습니다. 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
+    }, function () { toast('PC 원격 제어(크롬 원격 데스크톱) 앱을 열지 못했습니다.'); });
   }
   function editViewReturned() {
     var c = editCtx, r = c && c.result; if (!r || !r.doc || !r.doc.pdf_url) return;
@@ -1670,7 +1670,7 @@
       var f = this.files && this.files[0]; this.value = '';
       var c = editCtx; if (!f || !c) return;
       var ext = extOf(f.name);
-      if (!editOn(ext)) { toast(EDIT_ON_EXTS.length <= 2 ? '지금은 한글 파일(hwp·hwpx)만 PC에서 편집으로 열 수 있어요.' : '이 형식은 PC에서 편집으로 열 수 없어요.'); return; }
+      if (!editOn(ext)) { toast(EDIT_ON_EXTS.length <= 2 ? '지금은 한글 파일(hwp·hwpx)만 PC에서 편집으로 열 수 있습니다.' : '이 형식은 PC에서 편집으로 열 수 없습니다.'); return; }
       c.tab.orig = f; c.tab.pcPath = null; c.tab.srcFull = null; c.tab.ext = ext; c.ext = ext; c.name = f.name;
       editShowStart();
     });
@@ -1680,20 +1680,20 @@
   function handleLocalFile(file) {
     if (!file) return;
     if (!isViewable(file.name, file.type)) {
-      if (liveTabId) { toast('이 형식은 뷰어에서 열 수 없어요. (' + (extOf(file.name) || file.name) + ')'); return; }   // v8.0: 보던 문서는 그대로
-      opToken++; showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없어요.', extOf(file.name) || file.name); return;
+      if (liveTabId) { toast('이 형식은 뷰어에서 열 수 없습니다. (' + (extOf(file.name) || file.name) + ')'); return; }   // v8.0: 보던 문서는 그대로
+      opToken++; showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없습니다.', extOf(file.name) || file.name); return;
     }
     beginOpen(); opToken++;
     handleFile(file);
   }
   // 채팅·공유함 [뷰어로 보기]. v6.9: 같은 주소로 전에 연 문서면 내려받기조차 없이 저장본을 연다.
   function viewChatAttachment(att) {
-    if (!att || !att.url) { toast('열 수 있는 파일이 아니에요.'); return; }
+    if (!att || !att.url) { toast('열 수 있는 파일이 아닙니다.'); return; }
     beginOpen();                                                    // v8.0: 보던 문서는 탭으로 남긴다
     opToken++; var op = opToken; var name = att.name || '문서', src = srcBase(att.url);
     curOrig = null; curSrcFull = att.url; curPcPath = att.pc_path || null;   // O-0171: 편집하기 때 PC가 이 주소·경로에서 원본을 받는다
     showViewer(); setViewMode('pdf'); fnameLabel.textContent = name;
-    showLoading('문서를 여는 중…', '문서를 불러오고 있어요.'); setProgress(15);
+    showLoading('문서를 여는 중…', '문서를 불러오고 있습니다.'); setProgress(15);
     DocStore.findBySrc(src).then(function (meta) {
       if (op !== opToken) return;
       if (meta) {
@@ -1704,7 +1704,7 @@
       }
       fetch(att.url).then(function (r) { if (!r.ok) throw new Error('내려받기 실패(' + r.status + ')'); return r.blob(); })
         .then(function (blob) { if (op !== opToken) return; var f = new File([blob], name, { type: blob.type || att.mime || 'application/octet-stream' }); handleFile(f, { srcUrl: src, srcFull: att.url, pcPath: att.pc_path || null }); })
-        .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했어요.', (e && e.message) || String(e)); });
+        .catch(function (e) { if (op === opToken) showError('문서를 여는 데 실패했습니다.', (e && e.message) || String(e)); });
     });
   }
 
@@ -1738,7 +1738,7 @@
         var bits = [fmtWhen(m.openedAt)];
         if (m.kind === 'excel') bits.push('표로 보기'); else if (m.pages) bits.push(m.pages + '쪽');
         if (m.size) bits.push(fmtSize(m.size));
-        var last = (m.kind !== 'excel' && m.lastPage > 1) ? '<span class="dv-rlast">📖 ' + m.lastPage + '쪽까지 보셨어요</span>' : '';
+        var last = (m.kind !== 'excel' && m.lastPage > 1) ? '<span class="dv-rlast">📖 ' + m.lastPage + '쪽까지 보셨습니다</span>' : '';
         return '<div class="dv-ritem' + (m.fav ? ' fav' : '') + '" data-key="' + esc(m.key) + '">' +
           '<button class="dv-rmain" data-act="open" type="button">' +
             '<span class="dv-rbadge ' + b[1] + '">' + esc(b[0]) + '</span>' +
@@ -1766,14 +1766,14 @@
       DocStore.get(key).then(function (meta) {
         if (!meta) return;
         DocStore.touch(key, { fav: !meta.fav }).then(function () {
-          renderRecent(); toast(meta.fav ? '즐겨찾기를 풀었어요.' : '즐겨찾기 했어요. 자동 정리에서 빠져요.');
+          renderRecent(); toast(meta.fav ? '즐겨찾기를 풀었습니다.' : '즐겨찾기 했습니다. 자동 정리에서 빠집니다.');
         });
       });
     } else if (act === 'del') {
       DocStore.get(key).then(function (meta) {
         if (!meta) { renderRecent(); return; }
-        askThen('이 문서를 목록에서 지울까요?', '「' + meta.name + '」 — 이 기기에 저장해 둔 사본(' + fmtSize(meta.bytes) + ')만 지워요. 원래 파일은 그대로예요.', '지우기', function () {
-          DocStore.del(key).then(function () { renderRecent(); toast('목록에서 지웠어요.'); });
+        askThen('이 문서를 목록에서 지울까요?', '「' + meta.name + '」 — 이 기기에 저장해 둔 사본(' + fmtSize(meta.bytes) + ')만 지웁니다. 원래 파일은 그대로입니다.', '지우기', function () {
+          DocStore.del(key).then(function () { renderRecent(); toast('목록에서 지웠습니다.'); });
         });
       });
     }
@@ -1781,8 +1781,8 @@
   function onRecentClear() {
     DocStore.usage().then(function (u) {
       if (!u.count) { renderRecent(); return; }
-      askThen('최근 연 문서를 모두 비울까요?', u.count + '개(' + fmtSize(u.bytes) + ')를 이 기기에서 지워요. 즐겨찾기도 함께 지워지고, 원래 파일은 그대로예요.', '모두 비우기', function () {
-        DocStore.clearAll().then(function () { renderRecent(); toast('최근 연 문서를 비웠어요.'); });
+      askThen('최근 연 문서를 모두 비울까요?', u.count + '개(' + fmtSize(u.bytes) + ')를 이 기기에서 지웁니다. 즐겨찾기도 함께 지워지고, 원래 파일은 그대로입니다.', '모두 비우기', function () {
+        DocStore.clearAll().then(function () { renderRecent(); toast('최근 연 문서를 비웠습니다.'); });
       });
     });
   }

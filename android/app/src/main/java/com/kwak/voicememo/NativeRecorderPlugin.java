@@ -43,7 +43,7 @@ public class NativeRecorderPlugin extends Plugin {
         if (getPermissionState("microphone") == PermissionState.GRANTED) {
             doStart(call);
         } else {
-            call.reject("마이크 권한이 필요해요. 설정에서 허용해 주세요.");
+            call.reject("마이크 권한이 필요합니다. 설정에서 허용해 주세요.");
         }
     }
 
@@ -78,7 +78,7 @@ public class NativeRecorderPlugin extends Plugin {
                         RecordingService svc = RecordingService.instance;
                         if (svc != null && !svc.isRecording()) svc.stopAndFinalize();
                     } catch (Exception ignored) {}
-                    call.reject("녹음을 시작하지 못했어요. 마이크가 다른 앱에서 쓰이고 있는지 확인하고 다시 시작해 주세요.");
+                    call.reject("녹음을 시작하지 못했습니다. 마이크가 다른 앱에서 쓰이고 있는지 확인하고 다시 시작해 주세요.");
                 }
             }
         }).start();

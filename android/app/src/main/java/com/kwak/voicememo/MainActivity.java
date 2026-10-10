@@ -158,7 +158,7 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         } catch (Exception e) {
-            JSObject o = new JSObject(); o.put("error", "공유된 내용을 읽지 못했어요.");
+            JSObject o = new JSObject(); o.put("error", "공유된 내용을 읽지 못했습니다.");
             KBridgePlugin.emit("shareIn", o);
             return;
         }
@@ -269,20 +269,20 @@ public class MainActivity extends BridgeActivity {
                     String mime = cr.getType(uri);
                     if (mime == null || mime.length() == 0) mime = "application/octet-stream";
                     InputStream is = cr.openInputStream(uri);
-                    if (is == null) { postError("문서를 읽을 수 없어요.", name); return; }
+                    if (is == null) { postError("문서를 읽을 수 없습니다.", name); return; }
                     ByteArrayOutputStream bos = new ByteArrayOutputStream();
                     byte[] buf = new byte[8192];
                     int n; long total = 0;
                     while ((n = is.read(buf)) != -1) {
                         total += n;
-                        if (total > MAX_DOC_BYTES) { try { is.close(); } catch (Exception ig) {} postError("파일이 너무 커서 이 방식으로는 열 수 없어요(60MB 초과).", name); return; }
+                        if (total > MAX_DOC_BYTES) { try { is.close(); } catch (Exception ig) {} postError("파일이 너무 커서 이 방식으로는 열 수 없습니다(60MB 초과).", name); return; }
                         bos.write(buf, 0, n);
                     }
                     try { is.close(); } catch (Exception ig) {}
                     String b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
                     postToWeb(name, mime, b64);
                 } catch (Exception e) {
-                    postError("문서를 여는 데 실패했어요.", name);
+                    postError("문서를 여는 데 실패했습니다.", name);
                 }
             }
         }).start();

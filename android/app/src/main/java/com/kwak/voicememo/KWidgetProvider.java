@@ -73,7 +73,7 @@ public class KWidgetProvider extends AppWidgetProvider {
     static void onIncoming(Context c, String title, String body, long sts) {
         SharedPreferences sp = KBridgePlugin.prefs(c);
         int n = sp.getInt(P + "count", 0) + 1;
-        String t = n > 1 ? "대표님, 새 메시지 " + (n > 99 ? "99+" : String.valueOf(n)) + "건이 와 있어요" : "대표님, 케이 답장이 왔어요";
+        String t = n > 1 ? "대표님, 새 메시지 " + (n > 99 ? "99+" : String.valueOf(n)) + "건이 와 있습니다" : "대표님, 케이 답장이 왔습니다";
         saveState(c, n, t, firstLine(body), System.currentTimeMillis(), sp.getBoolean(P + "hide", false));
         if (sts > 0) {
             try {
@@ -89,7 +89,7 @@ public class KWidgetProvider extends AppWidgetProvider {
     /** 알림에서 답장을 보냈다 = 읽은 것. */
     static void markReplied(Context c) {
         SharedPreferences sp = KBridgePlugin.prefs(c);
-        saveState(c, 0, "", "방금 케이에게 답장을 보냈어요", System.currentTimeMillis(), sp.getBoolean(P + "hide", false));
+        saveState(c, 0, "", "방금 케이에게 답장을 보냈습니다", System.currentTimeMillis(), sp.getBoolean(P + "hide", false));
         sp.edit().putString(P + "stamps", "[]").putLong(P + "jsmax", 0L).apply();
         refreshAll(c);
     }
@@ -194,12 +194,12 @@ public class KWidgetProvider extends AppWidgetProvider {
         String head, sub;
         if (n > 0) {
             head = (title != null && title.length() > 0) ? title
-                    : (n > 1 ? "대표님, 새 메시지 " + n + "건이 와 있어요" : "대표님, 새 소식이 있어요");
-            sub = hide ? "내용은 앱에서 볼 수 있어요 · 눌러서 열기" : (line == null || line.length() == 0 ? "눌러서 확인하기" : line);
+                    : (n > 1 ? "대표님, 새 메시지 " + n + "건이 와 있습니다" : "대표님, 새 소식이 있습니다");
+            sub = hide ? "내용은 앱에서 볼 수 있습니다 · 눌러서 열기" : (line == null || line.length() == 0 ? "눌러서 확인하기" : line);
         } else {
             head = "케이";
             sub = (line != null && line.length() > 0 && !hide && at > 0 && System.currentTimeMillis() - at < 6 * 3600 * 1000L)
-                    ? line : "새 소식 없어요 · 눌러서 케이와 대화";
+                    ? line : "새 소식이 없습니다 · 눌러서 케이와 대화";
         }
 
         if (layout == R.layout.widget_k_face) {

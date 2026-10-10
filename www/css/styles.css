@@ -342,7 +342,7 @@ html.no-blur[data-style="light"]{--glass:rgba(255,255,255,.92);--glass2:rgba(255
    .dropping 은 채팅(#chatView)·공유함(#lockerView)에 JS가 붙였다 뗀다. 폰(터치)에선 발생하지 않는다. */
 #chatView.dropping, #lockerView.dropping{position:relative}
 #chatView.dropping::after, #lockerView.dropping::after{
-  content:"여기에 놓으면 첨부돼요";
+  content:"여기에 놓으면 첨부됩니다";
   position:absolute; inset:6px; z-index:60;
   display:flex; align-items:center; justify-content:center;
   border:2px dashed var(--p1, #3B82F6); border-radius:20px;
@@ -1870,3 +1870,22 @@ html[data-style="light"] .ksc.hcheer.cut .kfig{filter:drop-shadow(0 10px 18px rg
 @media (min-width:700px) and (max-aspect-ratio:1/1){
   #chatView.convo-full .kcall[data-kind="pose"][data-pose="guide"] .kcall-still{transform:translateX(-65%)}
 }
+
+/* ============================================================================
+   v9.6 2부 (O-0356 「함께하는 느낌」)
+   ============================================================================ */
+/* 채팅 날짜 줄: 날짜가 바뀌는 자리에 한 줄 */
+.chatday{display:flex;align-items:center;justify-content:center;margin:6px 0 0;-webkit-user-select:none;user-select:none}
+.chatday span{padding:4px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-b);color:var(--muted);font-size:12.5px;font-weight:700;letter-spacing:-.2px}
+html[data-fs] .chatday span{font-size:calc(12.5px * var(--fsx))}
+/* 보낸 말 아래 한 줄: 보내는 중… → 보냄 → 받았습니다 */
+.msgstat{align-self:flex-end;margin:-6px 4px 0 0;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:-.2px;-webkit-user-select:none;user-select:none}
+.msgstat.got{color:var(--cyan)}
+html[data-style="light"] .msgstat.got{color:var(--p1)}
+html[data-fs] .msgstat{font-size:calc(12px * var(--fsx))}
+/* 홈 큰 카드 한 줄: PC가 응답하지 않을 때 */
+.kh-side .greet p.ksay-down{color:#FFD9A8}
+/* 보내는 중 화면: 케이가 한마디를 하는 동안 아래 진행 줄은 작은 한 줄로(같은 말을 두 번 하지 않게) */
+.processing.with-k{margin-top:10px;padding:10px 14px;gap:10px;justify-content:center;background:transparent;border-color:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:var(--muted);font-size:14px;font-weight:600}
+.processing.with-k .spinner{width:18px;height:18px;border-width:2px}
+html[data-fs] .processing.with-k{font-size:calc(14px * var(--fsx))}

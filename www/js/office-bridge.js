@@ -166,21 +166,21 @@
     info = info || {};
     var nm = info.name ? '「' + info.name + '」 ' : '';
     var table = {
-      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
-      too_big_server: nm + '파일이 서버가 한 번에 받는 크기를 넘었어요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
-      network: '인터넷 연결이 끊겨 보내지 못했어요. 와이파이·데이터를 확인하고 다시 보내 주세요.',
-      unreadable: nm + '폰에 저장된 파일을 읽지 못했어요.',
-      bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
-      auth: '서버가 권한 문제로 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
-      server: '서버가 잠시 응답하지 않아요(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
+      too_big: nm + '파일이 너무 큽니다(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있습니다.',
+      too_big_server: nm + '파일이 서버가 한 번에 받는 크기를 넘었습니다(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있습니다.',
+      network: '인터넷 연결이 끊겨 보내지 못했습니다. 와이파이·데이터를 확인하고 다시 보내 주세요.',
+      unreadable: nm + '폰에 저장된 파일을 읽지 못했습니다.',
+      bad_key: nm + '서버가 저장 경로를 거절했습니다(파일 이름 문제). 저에게 알려 주세요.',
+      auth: '서버가 권한 문제로 거절했습니다(HTTP ' + (info.status || '?') + '). 저에게 알려 주세요.',
+      server: '서버가 잠시 응답하지 않습니다(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
       // v6.9 문서 뷰어 업로드(sendDoc)용
-      stalled: nm + '올리는 중에 전송이 멈췄어요(인터넷이 느리거나 끊김, 또는 앱이 잠시 화면 뒤로 감). 여러 번 다시 올려 봤지만 되지 않았어요.',
-      parts_missing: nm + '일부 조각이 서버에 올라갔는지 확인되지 않아 PC에 넘기지 않았어요. 다시 시도해 주세요.',
-      cancelled: '올리기를 취소했어요.',
-      row_net: '문서는 올라갔지만 인터넷이 끊겨 PC에 변환 요청을 넣지 못했어요.',
-      row_server: '문서는 올라갔지만 서버가 잠시 응답하지 않아 PC에 변환 요청을 넣지 못했어요(HTTP ' + (info.status || '?') + ').',
-      row_fail: '문서는 올라갔지만 서버가 변환 요청을 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
-      unknown: nm + '올리지 못했어요' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
+      stalled: nm + '올리는 중에 전송이 멈췄습니다(인터넷이 느리거나 끊김, 또는 앱이 잠시 화면 뒤로 감). 여러 번 다시 올려 봤지만 되지 않았습니다.',
+      parts_missing: nm + '일부 조각이 서버에 올라갔는지 확인되지 않아 PC에 넘기지 않았습니다. 다시 시도해 주세요.',
+      cancelled: '올리기를 취소했습니다.',
+      row_net: '문서는 올라갔지만 인터넷이 끊겨 PC에 변환 요청을 넣지 못했습니다.',
+      row_server: '문서는 올라갔지만 서버가 잠시 응답하지 않아 PC에 변환 요청을 넣지 못했습니다(HTTP ' + (info.status || '?') + ').',
+      row_fail: '문서는 올라갔지만 서버가 변환 요청을 거절했습니다(HTTP ' + (info.status || '?') + '). 저에게 알려 주세요.',
+      unknown: nm + '올리지 못했습니다' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
     };
     var msg = table[reason] || table.unknown;
     var e = new Error(msg);
@@ -260,7 +260,7 @@
       if (r.status === 404) return null;                 // RPC 없음 → 예전 길
       return r.text().then(function (t) {
         if (r.status === 401 || r.status === 403 || /BAD_PASSCODE/.test(t || '')) {
-          throw _passErr('연동 암호가 맞지 않아요 — 연동 암호를 다시 넣어 주세요.', false);
+          throw _passErr('연동 암호가 맞지 않습니다 — 연동 암호를 다시 넣어 주세요.', false);
         }
         var ex = new Error('메모 등록 실패(HTTP ' + r.status + ')');
         if (/BAD_KIND/.test(t || '')) ex.notready = true;   // O-0171: 서버가 아직 이 종류(edit)를 받지 않음(SQL 미적용)
@@ -290,7 +290,7 @@
       if (r.status === 409) return 'exists';
       // v8.2(O-0158): 마지막 단계(공개 키 직접 등록 막힘) 뒤 암호 없는 기기 → 연동 암호 창 안내
       if ((r.status === 401 || r.status === 403) && body && PROTECTED_KINDS[body.kind]) {
-        throw _passErr('보내려면 연동 암호가 필요해요 — 연동 암호를 넣어 주세요.', true);
+        throw _passErr('보내려면 연동 암호가 필요합니다 — 연동 암호를 넣어 주세요.', true);
       }
       throw new Error('메모 등록 실패(HTTP ' + r.status + ')');
     });
@@ -482,7 +482,7 @@
         poll(id, tok).then(function (r) {
           var consumed = (r && r.progress) || 0;
           if (consumed >= need) return resolve();
-          if (Date.now() - start > 30 * 60 * 1000) return reject(new Error('PC가 조각을 받지 못했어요(PC가 꺼져 있나요?).'));
+          if (Date.now() - start > 30 * 60 * 1000) return reject(new Error('PC가 조각을 받지 못했습니다(PC가 꺼져 있습니까?).'));
           setTimeout(loop, 2500);
         }).catch(function () { setTimeout(loop, 3000); });
       })();
@@ -1338,18 +1338,18 @@
     info = info || {};
     var nm = info.name ? '「' + info.name + '」 ' : '';
     var table = {
-      too_big: nm + '파일이 너무 커요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요.',
-      too_big_server: nm + '파일이 서버가 받는 최대 크기를 넘었어요(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있어요. 5GB 이하인데도 이렇게 나오면 소장에게 알려 주세요.',
-      network: '인터넷 연결이 끊겨 ' + nm + '전송하지 못했어요. 연결을 확인하고 다시 보내 주세요.',
-      stalled: '전송이 2분 넘게 멈춰 ' + nm + '중단했어요(인터넷이 느리거나 끊김). 다시 보내 주세요.',
-      unreadable: nm + '파일을 읽지 못했어요. 폴더이거나, 옮겨졌거나 지워진 파일일 수 있어요. 파일을 다시 골라 주세요.',
-      bad_key: nm + '서버가 저장 경로를 거절했어요(파일 이름 문제). 소장에게 알려 주세요.',
-      auth: '서버가 권한 문제로 거절했어요(HTTP ' + (info.status || '?') + '). 소장에게 알려 주세요.',
-      server: '서버가 잠시 응답하지 않아요(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
-      row: '파일은 올라갔지만 공유함 목록에 등록하지 못했어요(HTTP ' + (info.status || '?') + '). 다시 보내 주세요.',
-      unknown: nm + '올리지 못했어요' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
+      too_big: nm + '파일이 너무 큽니다(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있습니다.',
+      too_big_server: nm + '파일이 서버가 받는 최대 크기를 넘었습니다(' + fmtSize(info.size) + '). ' + MAX_UPLOAD_LABEL + '까지 보낼 수 있습니다. 5GB 이하인데도 이렇게 나오면 저에게 알려 주세요.',
+      network: '인터넷 연결이 끊겨 ' + nm + '전송하지 못했습니다. 연결을 확인하고 다시 보내 주세요.',
+      stalled: '전송이 2분 넘게 멈춰 ' + nm + '중단했습니다(인터넷이 느리거나 끊김). 다시 보내 주세요.',
+      unreadable: nm + '파일을 읽지 못했습니다. 폴더이거나, 옮겨졌거나 지워진 파일일 수 있습니다. 파일을 다시 골라 주세요.',
+      bad_key: nm + '서버가 저장 경로를 거절했습니다(파일 이름 문제). 저에게 알려 주세요.',
+      auth: '서버가 권한 문제로 거절했습니다(HTTP ' + (info.status || '?') + '). 저에게 알려 주세요.',
+      server: '서버가 잠시 응답하지 않습니다(HTTP ' + (info.status || '?') + '). 잠시 뒤 다시 보내 주세요.',
+      row: '파일은 올라갔지만 공유함 목록에 등록하지 못했습니다(HTTP ' + (info.status || '?') + '). 다시 보내 주세요.',
+      unknown: nm + '올리지 못했습니다' + (info.status ? '(HTTP ' + info.status + ')' : '') + '. 다시 보내 주세요.'
     };
-    var msg = table[reason] || '올리지 못했어요. 다시 보내 주세요.';
+    var msg = table[reason] || '올리지 못했습니다. 다시 보내 주세요.';
     var e = new Error(msg);
     e.reason = reason; e.friendly = msg; e.status = info.status || 0; e.serverCode = info.code || '';
     return e;
@@ -1569,7 +1569,7 @@
     if (src.pcPath) { base.source = { type: 'pc_path', path: src.pcPath, name: src.name || '', ext: src.ext || '' }; return _insertEditRow(memo, base); }
     if (src.url) { base.source = { type: 'url', url: src.url, name: src.name || '', ext: src.ext || '' }; return _insertEditRow(memo, base); }
     var file = src.file;
-    if (!file) return Promise.reject(new Error('보낼 원본 파일이 없어요.'));
+    if (!file) return Promise.reject(new Error('보낼 원본 파일이 없습니다.'));
     if ((file.size || 0) > MAX_UPLOAD_BYTES) return Promise.reject(tooBigErr(file));
     var ext = (src.ext || extForFile(file, 'file')).toLowerCase();
     var size = file.size || 0, chunked = size > CHUNK_SIZE, total = chunked ? Math.max(1, Math.ceil(size / CHUNK_SIZE)) : 1;

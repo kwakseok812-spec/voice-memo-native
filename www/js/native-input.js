@@ -184,7 +184,7 @@
     NI.pickFiles({ accept: accept || '*/*', multiple: true }).then(function (res) {
       var list = (res && res.files) || [];
       var requested = (res && res.requested) || 0;
-      if (!list.length) { if (requested > 0) say('고른 파일을 읽지 못했어요. 다시 시도해 주세요.'); return; }
+      if (!list.length) { if (requested > 0) say('고른 파일을 읽지 못했습니다. 다시 시도해 주세요.'); return; }
       var big = list.filter(function (f) { return (f.size || 0) > NATIVE_PICK_MAX; });
       var ok = list.filter(function (f) { return (f.size || 0) <= NATIVE_PICK_MAX; });
       return Promise.all(ok.map(toFile)).then(function (files) {
@@ -194,11 +194,11 @@
         if (big.length) {
           say('300MB가 넘는 파일(' + big.length + '개)은 입력창을 닫고 아래 ＋ 버튼으로 붙여 주세요.', 4000);
         } else if (failed > 0) {
-          say('파일 ' + failed + '개를 읽지 못했어요. 다시 골라 주세요.', 3000);
+          say('파일 ' + failed + '개를 읽지 못했습니다. 다시 골라 주세요.', 3000);
         }
       });
     }).catch(function () {
-      say('파일 선택 창을 열지 못했어요. 입력창을 닫고 아래 ＋ 버튼을 눌러 주세요.', 3500);
+      say('파일 선택 창을 열지 못했습니다. 입력창을 닫고 아래 ＋ 버튼을 눌러 주세요.', 3500);
     });
   }
 

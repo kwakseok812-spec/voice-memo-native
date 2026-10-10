@@ -43,7 +43,7 @@
     var self = this;
     (async function () {
       try {
-        if (!NR) { self.onError('녹음 플러그인을 찾지 못했어요.'); self.onStatus('error'); return; }
+        if (!NR) { self.onError('녹음 플러그인을 찾지 못했습니다.'); self.onStatus('error'); return; }
         await NR.start();               // 권한 요청 + 포그라운드 서비스 시작 + 네이티브 녹음 시작
         self._active = true;
         self.onStatus('recording');
@@ -63,7 +63,7 @@
         var res = await NR.stop();      // { uri, durationMs }
         self.onStatus('stopped');
         self.lastDurationMs = (res && res.durationMs) || 0;
-        if (!res || !res.uri) { self.onError('녹음 파일을 만들지 못했어요.'); return; }
+        if (!res || !res.uri) { self.onError('녹음 파일을 만들지 못했습니다.'); return; }
         var url = Cap.convertFileSrc(res.uri);
         var blob = await fetch(url).then(function (r) { return r.blob(); });
         // m4a/aac(MPEG-4) 형식. 서버(ffmpeg+faster-whisper)가 처리함.

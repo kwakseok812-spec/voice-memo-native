@@ -110,7 +110,7 @@ public class NativeInputPlugin extends Plugin {
                             colors, hasAttach, hasCamera, hasOpus, opusInit);
                     call.resolve();
                 } catch (Exception e) {
-                    call.reject("입력창을 여는 데 실패했어요: " + e.getMessage());
+                    call.reject("입력창을 여는 데 실패했습니다: " + e.getMessage());
                 }
             }
         });
@@ -151,7 +151,7 @@ public class NativeInputPlugin extends Plugin {
             i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple);
             startActivityForResult(call, i, "onFilesPicked");
         } catch (Exception e) {
-            call.reject("파일 선택 창을 열지 못했어요: " + e.getMessage());
+            call.reject("파일 선택 창을 열지 못했습니다: " + e.getMessage());
         }
     }
 
@@ -238,7 +238,7 @@ public class NativeInputPlugin extends Plugin {
                     o.put("requested", uris.size());
                     call.resolve(o);
                 } catch (Exception e) {
-                    call.reject("고른 파일을 읽지 못했어요: " + e.getMessage());
+                    call.reject("고른 파일을 읽지 못했습니다: " + e.getMessage());
                 }
             }
         }).start();

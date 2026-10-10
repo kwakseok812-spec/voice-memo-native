@@ -153,8 +153,8 @@ public class RecordingService extends Service {
         if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pi = PendingIntent.getActivity(this, 0, open, flags);
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("음성 메모 녹음 중")
-                .setContentText("화면을 꺼도 녹음이 계속돼요. 앱에서 정지를 누르세요.")
+                .setContentTitle("케이가 녹음하고 있습니다")
+                .setContentText("화면을 꺼도 녹음이 계속됩니다. 앱에서 정지를 누르세요.")
                 .setSmallIcon(R.drawable.ic_stat_mic)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

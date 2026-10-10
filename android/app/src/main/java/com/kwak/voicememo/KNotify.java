@@ -46,7 +46,7 @@ final class KNotify {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null || nm.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "케이 답장", NotificationManager.IMPORTANCE_HIGH);
-        ch.setDescription("케이(소장)가 보낸 답장 — 알림에서 바로 답장할 수 있어요");
+        ch.setDescription("케이(소장)가 보낸 답장 — 알림에서 바로 답장할 수 있습니다");
         ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PRIVATE);
         nm.createNotificationChannel(ch);
     }
@@ -88,7 +88,7 @@ final class KNotify {
 
     /** 케이 답장(또는 알림)이 왔을 때. replyable=false 면 [답장] 버튼 없이. */
     static void showIncoming(Context c, String title, String body, String thread, String screen, boolean replyable, long sts) {
-        if (body == null || body.length() == 0) body = "답장이 도착했어요.";
+        if (body == null || body.length() == 0) body = "답장이 도착했습니다.";
         addHist(c, "k", body, sts);
         sp(c).edit()
             .putString("n_title", title == null ? "" : title)
@@ -101,16 +101,16 @@ final class KNotify {
 
     static void markSent(Context c, String myText) {
         addHist(c, "me", myText);
-        post(c, "보냈어요 ✓ 케이가 확인하고 있어요", true);
+        post(c, "보냈습니다 ✓ 케이가 확인하고 있습니다", true);
     }
 
     static void markFailed(Context c, String myText, String why) {
         addHist(c, "me", myText + "  (못 보냄)");
         String msg;
         if (KChatSender.ERR_NOPASS.equals(why) || KChatSender.ERR_BADPASS.equals(why)) {
-            msg = "못 보냈어요 — 앱을 열어 연동 암호를 확인해 주세요";   // O-0158: 알림 답장도 연동 암호가 있어야 보냄
+            msg = "보내지 못했습니다 — 앱을 열어 연동 암호를 확인해 주세요";   // O-0158: 알림 답장도 연동 암호가 있어야 보냄
         } else {
-            msg = "못 보냈어요 — 인터넷을 확인하고 다시 [답장]을 눌러 주세요";
+            msg = "보내지 못했습니다 — 인터넷을 확인하고 다시 [답장]을 눌러 주세요";
         }
         post(c, msg, true);
     }
@@ -206,7 +206,7 @@ final class KNotify {
         NotificationCompat.Builder pub = new NotificationCompat.Builder(c, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_k)
                 .setContentTitle("케이")
-                .setContentText("케이 답장이 왔어요");
+                .setContentText("케이 답장이 왔습니다");
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_k)

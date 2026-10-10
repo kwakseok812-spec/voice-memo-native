@@ -50,19 +50,19 @@
         ['asin', 'acos', 'atan', 'sqrt', 'sin', 'cos', 'tan', 'log', 'abs', 'ln'].some(function (f) { if (name.indexOf(f) === 0) { hit = f; return true; } return false; });
         if (hit) { out.push({ t: 'fn', v: hit }); i += hit.length; continue; }
         if (c === 'e') { out.push({ t: 'const', v: Math.E }); i += 1; continue; }
-        throw new CalcError('알 수 없는 글자가 있어요: ' + name, 'syntax');
+        throw new CalcError('알 수 없는 글자가 있습니다: ' + name, 'syntax');
       }
       if (c === 'π') { out.push({ t: 'const', v: Math.PI }); i += 1; continue; }
       if (c === 'E') throw new CalcError('EXP 앞에 숫자를 넣어 주세요.', 'syntax');
       if ('+-*/^()!%RQ'.indexOf(c) !== -1) { out.push({ t: c }); i += 1; continue; }
-      throw new CalcError('알 수 없는 글자가 있어요: ' + c, 'syntax');
+      throw new CalcError('알 수 없는 글자가 있습니다: ' + c, 'syntax');
     }
     return out;
   }
 
   function fin(x) {
-    if (typeof x !== 'number' || isNaN(x)) throw new CalcError('계산할 수 없는 값이에요.', 'domain');
-    if (!isFinite(x)) throw new CalcError('수가 너무 커요.', 'overflow');
+    if (typeof x !== 'number' || isNaN(x)) throw new CalcError('계산할 수 없는 값입니다.', 'domain');
+    if (!isFinite(x)) throw new CalcError('수가 너무 큽니다.', 'overflow');
     return x;
   }
   function tidy(x) { return Math.abs(x) < 1e-15 ? 0 : x; }          // sin(π) 같은 찌꺼기
@@ -71,25 +71,25 @@
     return (mag && Math.abs(r) < mag * 1e-13) ? 0 : r;
   }
   function factorial(n) {
-    if (n < 0 || Math.round(n) !== n) throw new CalcError('팩토리얼(!)은 0 이상의 정수만 계산할 수 있어요.', 'domain');
-    if (n > 170) throw new CalcError('수가 너무 커요(170! 까지 계산할 수 있어요).', 'overflow');
+    if (n < 0 || Math.round(n) !== n) throw new CalcError('팩토리얼(!)은 0 이상의 정수만 계산할 수 있습니다.', 'domain');
+    if (n > 170) throw new CalcError('수가 너무 큽니다(170! 까지 계산할 수 있습니다).', 'overflow');
     var r = 1; for (var k = 2; k <= n; k++) r *= k; return r;
   }
   function power(a, b) {
-    if (a === 0 && b < 0) throw new CalcError('0은 음수 제곱을 할 수 없어요(0으로 나누기).', 'divzero');
+    if (a === 0 && b < 0) throw new CalcError('0은 음수 제곱을 할 수 없습니다(0으로 나누기).', 'divzero');
     if (a < 0 && Math.round(b) !== b) {
       // 음수의 홀수 제곱근(예: (−8)^(1/3))은 실수 답이 있다
       var inv = 1 / b;
       if (Math.abs(inv - Math.round(inv)) < 1e-12 && Math.abs(Math.round(inv)) % 2 === 1) return -Math.pow(-a, b);
-      throw new CalcError('음수는 정수가 아닌 제곱을 할 수 없어요.', 'domain');
+      throw new CalcError('음수는 정수가 아닌 제곱을 할 수 없습니다.', 'domain');
     }
     return fin(Math.pow(a, b));
   }
   function nthRoot(n, x) {
-    if (n === 0) throw new CalcError('0제곱근은 없어요.', 'domain');
+    if (n === 0) throw new CalcError('0제곱근은 없습니다.', 'domain');
     if (x < 0) {
       if (Math.round(n) === n && Math.abs(n) % 2 === 1) return -Math.pow(-x, 1 / n);
-      throw new CalcError('음수의 짝수 제곱근은 계산할 수 없어요.', 'domain');
+      throw new CalcError('음수의 짝수 제곱근은 계산할 수 없습니다.', 'domain');
     }
     return fin(Math.pow(x, 1 / n));
   }
@@ -100,24 +100,24 @@
       case 'sin': return tidy(Math.sin(x * k));
       case 'cos': return tidy(Math.cos(x * k));
       case 'tan':
-        if (Math.abs(Math.cos(x * k)) < 1e-15) throw new CalcError('tan 값이 정의되지 않는 각도예요(90° 등).', 'domain');
+        if (Math.abs(Math.cos(x * k)) < 1e-15) throw new CalcError('tan 값이 정의되지 않는 각도입니다(90° 등).', 'domain');
         return tidy(Math.tan(x * k));
       case 'asin': case 'acos':
-        if (x < -1 || x > 1) throw new CalcError((name === 'asin' ? 'sin⁻¹' : 'cos⁻¹') + ' 은 −1부터 1 사이 값만 넣을 수 있어요.', 'domain');
+        if (x < -1 || x > 1) throw new CalcError((name === 'asin' ? 'sin⁻¹' : 'cos⁻¹') + ' 은 −1부터 1 사이 값만 넣을 수 있습니다.', 'domain');
         return tidy((name === 'asin' ? Math.asin(x) : Math.acos(x)) / k);
       case 'atan': return tidy(Math.atan(x) / k);
       case 'log':
-        if (x <= 0) throw new CalcError('log 는 0보다 큰 수만 넣을 수 있어요.', 'domain');
+        if (x <= 0) throw new CalcError('log 는 0보다 큰 수만 넣을 수 있습니다.', 'domain');
         return tidy(Math.log(x) / Math.LN10);
       case 'ln':
-        if (x <= 0) throw new CalcError('ln 은 0보다 큰 수만 넣을 수 있어요.', 'domain');
+        if (x <= 0) throw new CalcError('ln 은 0보다 큰 수만 넣을 수 있습니다.', 'domain');
         return tidy(Math.log(x));
       case 'sqrt':
-        if (x < 0) throw new CalcError('음수의 제곱근(√)은 계산할 수 없어요.', 'domain');
+        if (x < 0) throw new CalcError('음수의 제곱근(√)은 계산할 수 없습니다.', 'domain');
         return Math.sqrt(x);
       case 'abs': return Math.abs(x);
     }
-    throw new CalcError('알 수 없는 함수예요: ' + name, 'syntax');
+    throw new CalcError('알 수 없는 함수입니다: ' + name, 'syntax');
   }
 
   /* opts: { deg: true(기본)|false, ans: 직전 결과(없으면 0) } → 숫자. 실패하면 CalcError 를 던진다. */
@@ -129,7 +129,7 @@
     function peek() { return tk[p]; }
     function is(t) { return tk[p] && tk[p].t === t; }
     function startsValue() { var x = tk[p]; return !!x && (x.t === 'num' || x.t === 'const' || x.t === 'ans' || x.t === 'fn' || x.t === '(' || x.t === 'Q'); }
-    function endErr() { return new CalcError('식이 아직 끝나지 않았어요.', 'incomplete'); }
+    function endErr() { return new CalcError('식이 아직 끝나지 않았습니다.', 'incomplete'); }
 
     function primary() {
       var x = tk[p];
@@ -141,7 +141,7 @@
         if (!is('(')) throw new CalcError(x.v + ' 뒤에 괄호 ( 를 넣어 주세요.', 'syntax');
         p++;
         var a = expr();
-        if (is(')')) p++; else if (p < tk.length) throw new CalcError('괄호가 맞지 않아요.', 'syntax');
+        if (is(')')) p++; else if (p < tk.length) throw new CalcError('괄호가 맞지 않습니다.', 'syntax');
         return fin(callFn(x.v, a, deg));
       }
       if (x.t === 'Q') {                                             // √9 · √(1+3) · 2√9(=2×3) · √−4(→ 음수 안내)
@@ -153,13 +153,13 @@
       }
       if (x.t === '(') {
         p++;
-        if (is(')')) throw new CalcError('괄호 안이 비어 있어요.', 'syntax');
+        if (is(')')) throw new CalcError('괄호 안이 비어 있습니다.', 'syntax');
         var v = expr();
-        if (is(')')) p++; else if (p < tk.length) throw new CalcError('괄호가 맞지 않아요.', 'syntax');
+        if (is(')')) p++; else if (p < tk.length) throw new CalcError('괄호가 맞지 않습니다.', 'syntax');
         return v;
       }
-      if (x.t === ')') throw new CalcError('여는 괄호 ( 가 없어요.', 'syntax');
-      throw new CalcError('연산자 자리가 맞지 않아요.', 'syntax');
+      if (x.t === ')') throw new CalcError('여는 괄호 ( 가 없습니다.', 'syntax');
+      throw new CalcError('연산자 자리가 맞지 않습니다.', 'syntax');
     }
     function postfix() {
       var v = primary(), pct = false;
@@ -188,7 +188,7 @@
         if (is('*')) { p++; v = fin(v * unary()); only = false; }
         else if (is('/')) {
           p++; var d = unary();
-          if (d === 0) throw new CalcError('0으로 나눌 수 없어요.', 'divzero');
+          if (d === 0) throw new CalcError('0으로 나눌 수 없습니다.', 'divzero');
           v = fin(v / d); only = false;
         }
         else if (startsValue()) { v = fin(v * pow()); only = false; }   // 붙여 쓴 곱하기
@@ -212,8 +212,8 @@
 
     var out = expr();
     if (p < tk.length) {
-      if (tk[p].t === ')') throw new CalcError('여는 괄호 ( 가 없어요.', 'syntax');
-      throw new CalcError('연산자 자리가 맞지 않아요.', 'syntax');
+      if (tk[p].t === ')') throw new CalcError('여는 괄호 ( 가 없습니다.', 'syntax');
+      throw new CalcError('연산자 자리가 맞지 않습니다.', 'syntax');
     }
     return roundSig(fin(out));
   }
@@ -245,7 +245,7 @@
   /* 미리보기용: 오류를 던지지 않고 { ok, value, text, error, code } */
   function tryEval(src, opts) {
     try { var v = evaluate(src, opts); return { ok: true, value: v, text: format(v, true) }; }
-    catch (e) { return { ok: false, error: (e && e.message) || '계산할 수 없어요.', code: (e && e.code) || 'error' }; }
+    catch (e) { return { ok: false, error: (e && e.message) || '계산할 수 없습니다.', code: (e && e.code) || 'error' }; }
   }
 
   var api = { evaluate: evaluate, tryEval: tryEval, format: format, tokenize: tokenize, CalcError: CalcError };

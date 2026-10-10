@@ -84,8 +84,8 @@
     var w = null;
     try { w = global.open(url, '_blank'); } catch (e) {}
     var S = H();
-    if (!w) { if (S.toast) S.toast('지도를 열지 못했어요 — 다시 눌러 주세요.', 3000); return; }
-    if (why === 'noapp' && S.toast) S.toast('네이버 지도 앱이 없어 웹 지도로 열었어요.', 3500);
+    if (!w) { if (S.toast) S.toast('지도를 열지 못했습니다 — 다시 눌러 주세요.', 3000); return; }
+    if (why === 'noapp' && S.toast) S.toast('네이버 지도 앱이 없어 웹 지도로 열었습니다.', 3500);
   }
   function openNaverMap(q) {
     if (!q) return;
@@ -214,10 +214,14 @@
   function paintSay(o) {
     if (o !== undefined) paintSay.last = o || NO_SAY;
     var p = $('homeSay'); if (!p) { sayNow = NO_SAY; return; }
-    sayNow = (bubbleOn() || !paintSay.last.text) ? NO_SAY : paintSay.last;
+    // v9.6 (O-0356 ②): PC가 응답하지 않거나 지금 돌아가는 일이 있으면 그 사실을 먼저 말한다(app.js SmartHomeSay — 값이 없으면 오늘 보고 한 줄 그대로)
+    var hs = null; try { hs = (!bubbleOn() && window.SmartHomeSay) ? window.SmartHomeSay() : null; } catch (e) { hs = null; }
+    if (hs && hs.text) sayNow = { text: hs.text, cal: false, mail: false, task: false, kind: hs.kind || '' };
+    else sayNow = (bubbleOn() || !paintSay.last.text) ? NO_SAY : paintSay.last;
     var txt = sayNow.text || '무엇을 도와드릴까요?';
     if (p.textContent !== txt) p.textContent = txt;
     p.classList.toggle('ksay-on', !!sayNow.text);
+    p.classList.toggle('ksay-down', sayNow.kind === 'down');
   }
   paintSay.last = NO_SAY;
 
@@ -231,10 +235,10 @@
       //   (요약이 오래됐을 때의 「HH:MM 기준」은 머리줄에 접힘·펼침 공통으로 이미 나온다.)
       var calBad = dg.cal_ok === false, mailBad = dg.mail_ok === false;
       // v9.4: 케이가 방금 위에서 말한 수(일정·메일·챙길 일)는 접힌 줄에서 뺀다 — 같은 수를 두 번 말하지 않게. 「못 불러왔어요」는 케이가 말하지 않으므로 그대로 둔다.
-      if (calBad && mailBad) parts.push('<b>일정·메일 못 불러왔어요</b>');
+      if (calBad && mailBad) parts.push('<b>일정·메일을 불러오지 못했습니다</b>');
       else {
-        if (calBad) parts.push('<b>일정 못 불러왔어요</b>'); else if (!sayNow.cal) parts.push('일정 ' + evs.length);   // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
-        if (mailBad) parts.push('<b>메일 못 불러왔어요</b>'); else if (!sayNow.mail) parts.push('메일 ' + mails.length);
+        if (calBad) parts.push('<b>일정을 불러오지 못했습니다</b>'); else if (!sayNow.cal) parts.push('일정 ' + evs.length);   // 펼친 카드의 「오늘 일정 N」과 같은 수(오늘 전체)
+        if (mailBad) parts.push('<b>메일을 불러오지 못했습니다</b>'); else if (!sayNow.mail) parts.push('메일 ' + mails.length);
       }
     }
     if (st.orders && !sayNow.task) parts.push('챙길 일 ' + tasks.length);
@@ -265,9 +269,9 @@
         '<small>' + (list.length > 1 ? '외 ' + (list.length - 1) + '건 · ' : '') + '누르면 목록·취소</small></span>' +
         '<svg class="td-chev"><use href="#i-chev-r"/></svg></button>';
     } else if (!list && n > 0) {
-      body = '<button type="button" class="td-more" data-td="rems">' + n + '건 예약돼 있어요 · 목록·취소 보기</button>';
+      body = '<button type="button" class="td-more" data-td="rems">' + n + '건 예약돼 있습니다 · 목록·취소 보기</button>';
     } else {
-      body = '<button type="button" class="td-more" data-td="rems">예약한 알림이 없어요 · 지난 알림 보기</button>';
+      body = '<button type="button" class="td-more" data-td="rems">예약한 알림이 없습니다 · 지난 알림 보기</button>';
     }
     return sec('i-alarm', '예약한 알림', n || null, body);
   }
@@ -397,9 +401,9 @@
     var pick = wxPick(w.slots);
     var yes = pick.filter(function (x) { return x.umbrella === 'yes'; })[0], maybe = pick.filter(function (x) { return x.umbrella === 'maybe'; })[0];
     var snow = pick.some(function (x) { return x.snow; });
-    var cls = 'ok', ic = '☀️', tip = '우산 필요 없어요';
+    var cls = 'ok', ic = '☀️', tip = '우산 필요 없습니다';
     if (yes) { cls = 'rain'; ic = snow ? '❄️' : '☂️'; tip = (snow ? '눈 소식 — ' : '') + '우산 챙기세요' + (pick.length > 1 ? ' (' + yes.label + ')' : ''); }
-    else if (maybe) { cls = 'maybe'; ic = '🌂'; tip = '작은 우산 있으면 좋아요' + (pick.length > 1 ? ' (' + maybe.label + ')' : ''); }
+    else if (maybe) { cls = 'maybe'; ic = '🌂'; tip = '작은 우산 있으면 좋습니다' + (pick.length > 1 ? ' (' + maybe.label + ')' : ''); }
     var n = wxNow(w), sep = '<span class="wx-sep"> · </span>';
     if (!n) {                                                      // 옛 요약(시간값 없음) → v8.4 모양 그대로
       if (!pick.length) return '';
@@ -434,8 +438,8 @@
   }
   function wxSheetBody() {
     var dg = st.digest && st.digest.date === todayKey() ? st.digest : null, w = wxData(dg);
-    if (!w) return '<div class="wx-empty">날씨를 아직 못 받았어요. 잠시 뒤 다시 열어 주세요.</div>';
-    var k = kst(), n = wxNow(w), um = { yes: '☂️ 우산 챙기세요', maybe: '🌂 작은 우산 있으면 좋아요', no: '우산 필요 없어요' };
+    if (!w) return '<div class="wx-empty">날씨를 아직 받지 못했습니다. 잠시 뒤 다시 열어 주세요.</div>';
+    var k = kst(), n = wxNow(w), um = { yes: '☂️ 우산 챙기세요', maybe: '🌂 작은 우산 있으면 좋습니다', no: '우산 필요 없습니다' };
     var hl = (w.today_hourly || []).filter(function (x) { return x && x.hour != null && x.temp != null; }), h = '';
     if (n) {
       var cd = wxCond(n.code, n.night), sub = [];
@@ -538,11 +542,11 @@
     var nothing = !evs.length && !mails.length && !tasks.length;
     if (nothing && (dg || !showDigest) && st.orders) {
       h += '<div class="td-empty"><span class="td-empty-ic"><svg><use href="#i-check"/></svg></span>' +
-        '<div><b>오늘은 챙길 게 없어요</b><small>일정·답할 메일·기다리는 일이 모두 비어 있어요.</small></div></div>' +
+        '<div><b>오늘은 챙길 게 없습니다</b><small>일정·답할 메일·기다리는 일이 모두 비어 있습니다.</small></div></div>' +
         '<button type="button" class="td-more" data-td="tasks">작업 현황 보기 (끝난 일 포함)</button>';   // (O-0176) 홈 카드 대신
     } else {
       if (showDigest) {
-        if (dg && dg.cal_ok === false) h += sec('i-flag', '오늘 일정', null, '<div class="td-none warn">일정을 못 불러왔어요 · PC가 다시 시도해요</div>');
+        if (dg && dg.cal_ok === false) h += sec('i-flag', '오늘 일정', null, '<div class="td-none warn">일정을 불러오지 못했습니다 · PC가 다시 시도합니다</div>');
         else if (dg) {
           // 지난 일정은 접고(한 줄), 지금·앞으로 일정만 최대 MAX_EV 건. 종일 일정은 맨 앞.
           var live = [], pastN = 0;
@@ -552,20 +556,20 @@
           if (rest > 0) moreTxt.push('외 ' + rest + '건');
           if (pastN > 0) moreTxt.push('지난 일정 ' + pastN + '건');
           h += sec('i-flag', '오늘 일정', evs.length || null,
-            evs.length ? (ev.length ? ev.map(function (x) { return evRow(x[0], x[1]); }).join('') : '<div class="td-none">남은 일정이 없어요</div>') +
+            evs.length ? (ev.length ? ev.map(function (x) { return evRow(x[0], x[1]); }).join('') : '<div class="td-none">남은 일정이 없습니다</div>') +
                          (moreTxt.length ? '<button type="button" class="td-more" data-td="evmore">' + moreTxt.join(' · ') + ' — 전체 보기</button>' : '')
-                       : '<div class="td-none">오늘 등록된 일정이 없어요</div>');
+                       : '<div class="td-none">오늘 등록된 일정이 없습니다</div>');
         }
-        if (dg && dg.mail_ok === false) h += sec('i-mail', '답할 메일', null, '<div class="td-none warn">메일을 못 불러왔어요 · PC가 다시 시도해요</div>');
+        if (dg && dg.mail_ok === false) h += sec('i-mail', '답할 메일', null, '<div class="td-none warn">메일을 불러오지 못했습니다 · PC가 다시 시도합니다</div>');
         else if (dg) {
           h += sec('i-mail', '답할 메일', mails.length || null,
-            mails.length ? mails.slice(0, MAX_MAIL).map(mailRow).join('') : '<div class="td-none">답이 필요해 보이는 메일이 없어요</div>');
+            mails.length ? mails.slice(0, MAX_MAIL).map(mailRow).join('') : '<div class="td-none">답이 필요해 보이는 메일이 없습니다</div>');
         }
       }
       if (st.orders) {
         var tk = tasks.slice(0, MAX_TASK), trest = tasks.length - tk.length;
         h += sec('i-tasks', '챙길 일', tasks.length || null,
-          (tasks.length ? tk.map(taskRow).join('') : '<div class="td-none">기다리는 일이 없어요</div>') +
+          (tasks.length ? tk.map(taskRow).join('') : '<div class="td-none">기다리는 일이 없습니다</div>') +
           '<button type="button" class="td-more" data-td="tasks">' + (trest > 0 ? '외 ' + trest + '건 · ' : '') + '작업 현황 보기</button>');   // (O-0176) 늘 보임
       }
     }

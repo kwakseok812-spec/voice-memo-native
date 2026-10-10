@@ -76,7 +76,7 @@
   function init() {
     if (!isNative()) { logi('네이티브 아님 — 푸시 비활성'); return; }
     var PN = Cap.Plugins && Cap.Plugins.PushNotifications;
-    if (!PN) { logw('PushNotifications 플러그인을 찾지 못했어요'); return; }
+    if (!PN) { logw('PushNotifications 플러그인을 찾지 못했습니다'); return; }
 
     // 리스너부터 등록(등록 이벤트를 놓치지 않도록)
     PN.addListener('registration', function (t) {

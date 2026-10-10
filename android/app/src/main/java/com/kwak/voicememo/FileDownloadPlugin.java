@@ -75,11 +75,11 @@ public class FileDownloadPlugin extends Plugin {
         final boolean open = call.getBoolean("open", Boolean.TRUE);
         final boolean ask = call.getBoolean("askPermission", Boolean.TRUE);
         if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) {
-            call.reject("파일 주소가 올바르지 않아요.", "BAD_URL");
+            call.reject("파일 주소가 올바르지 않습니다.", "BAD_URL");
             return;
         }
         final DownloadManager dm = dm();
-        if (dm == null) { call.reject("이 폰에서 다운로드 기능을 쓸 수 없어요.", "NO_DM"); return; }
+        if (dm == null) { call.reject("이 폰에서 다운로드 기능을 쓸 수 없습니다.", "NO_DM"); return; }
         final long id;
         try {
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
@@ -96,7 +96,7 @@ public class FileDownloadPlugin extends Plugin {
             }
             id = dm.enqueue(req);
         } catch (Exception e) {
-            call.reject("다운로드를 시작하지 못했어요: " + e.getMessage(), "ENQUEUE_FAIL");
+            call.reject("다운로드를 시작하지 못했습니다: " + e.getMessage(), "ENQUEUE_FAIL");
             return;
         }
 
@@ -111,7 +111,7 @@ public class FileDownloadPlugin extends Plugin {
                     try {
                         c = dm.query(new DownloadManager.Query().setFilterById(id));
                         if (c == null || !c.moveToFirst()) {
-                            call.reject("다운로드가 취소됐어요.", "CANCELLED");   // 알림창에서 취소한 경우 등
+                            call.reject("다운로드가 취소됐습니다.", "CANCELLED");   // 알림창에서 취소한 경우 등
                             return;
                         }
                         status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
@@ -120,7 +120,7 @@ public class FileDownloadPlugin extends Plugin {
                         reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
                         localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
                     } catch (Exception e) {
-                        call.reject("다운로드 상태를 확인하지 못했어요: " + e.getMessage(), "QUERY_FAIL");
+                        call.reject("다운로드 상태를 확인하지 못했습니다: " + e.getMessage(), "QUERY_FAIL");
                         return;
                     } finally {
                         if (c != null) c.close();
@@ -129,7 +129,7 @@ public class FileDownloadPlugin extends Plugin {
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         // 성공은 "실제로 바이트가 있고, 전체 크기를 알면 그만큼 다 받았을 때"만 인정한다
                         if (got <= 0 || (total > 0 && got != total)) {
-                            call.reject("파일이 다 받아지지 않았어요(" + got + "/" + total + ").", "INCOMPLETE");
+                            call.reject("파일이 다 받아지지 않았습니다(" + got + "/" + total + ").", "INCOMPLETE");
                             return;
                         }
                         String saved = name;
@@ -149,7 +149,7 @@ public class FileDownloadPlugin extends Plugin {
                         return;
                     }
                     if (status == DownloadManager.STATUS_FAILED) {
-                        call.reject("다운로드에 실패했어요(사유 " + reason + ").", "FAILED_" + reason);
+                        call.reject("다운로드에 실패했습니다(사유 " + reason + ").", "FAILED_" + reason);
                         return;
                     }
                     // 진행 중 / 대기(인터넷 기다림 등)
@@ -160,12 +160,12 @@ public class FileDownloadPlugin extends Plugin {
                             // 시작도 못 함: 일시정지면 사유(1 다시 시도 대기·2 인터넷 기다림·3 와이파이 대기·4 알 수 없음), 그냥 대기열이면 0
                             int why = (status == DownloadManager.STATUS_PAUSED) ? reason : 0;
                             try { dm.remove(id); } catch (Exception ignore) { }
-                            call.reject("다운로드가 시작되지 않아 중단했어요(대기 사유 " + why + ").", "WAITING_" + why);
+                            call.reject("다운로드가 시작되지 않아 중단했습니다(대기 사유 " + why + ").", "WAITING_" + why);
                             return;
                         }
                         if (idle > STALL_MS) {
                             try { dm.remove(id); } catch (Exception ignore) { }   // 우리가 시작한 '받다 만' 조각만 정리
-                            call.reject("다운로드가 오래 멈춰 있어 중단했어요.", "STALLED");
+                            call.reject("다운로드가 오래 멈춰 있어 중단했습니다.", "STALLED");
                             return;
                         }
                     }
@@ -193,11 +193,11 @@ public class FileDownloadPlugin extends Plugin {
             if (v instanceof Number) id = ((Number) v).longValue();
             else if (v != null) id = Long.parseLong(String.valueOf(v));
         } catch (Exception ignore) { id = -1; }
-        if (id < 0) { call.reject("id 가 없어요.", "BAD_ID"); return; }
+        if (id < 0) { call.reject("id 가 없습니다.", "BAD_ID"); return; }
         String mime = call.getString("mime");
         if (mime == null || mime.isEmpty()) mime = "application/octet-stream";
         DownloadManager dm = dm();
-        if (dm == null) { call.reject("이 폰에서 다운로드 기능을 쓸 수 없어요.", "NO_DM"); return; }
+        if (dm == null) { call.reject("이 폰에서 다운로드 기능을 쓸 수 없습니다.", "NO_DM"); return; }
         JSObject ret = new JSObject();
         ret.put("open", openDownloaded(dm, id, mime, call.getBoolean("askPermission", Boolean.FALSE)));
         call.resolve(ret);

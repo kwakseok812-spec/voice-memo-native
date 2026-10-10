@@ -282,7 +282,7 @@
     }).then(function (r) {
       noteServerClock(r, t0);
       if (r.status === 400 || r.status === 401 || r.status === 403) {
-        if (!quiet) needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했어요. 다시 입력해 주세요.');
+        if (!quiet) needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했습니다. 다시 입력해 주세요.');
         var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;
       }
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -339,7 +339,7 @@
   function tellLost(lost, dateStr) {
     if (!lost || !lost.length) return;
     var s = lost.map(function (x) { return SHORT[x.k] + ' ' + fmtVal(x.k, x.theirs); }).join(' · ');
-    _toast('다른 기기에서 더 나중에 고친 값으로 맞췄어요 (' + (dateStr === todayStr() ? '' : fmtMD(dateStr) + ' ') + s + ')');
+    _toast('다른 기기에서 더 나중에 고친 값으로 맞췄습니다 (' + (dateStr === todayStr() ? '' : fmtMD(dateStr) + ' ') + s + ')');
   }
 
   /* ---------- 올리기(읽고 → 합치고 → 통째로 올림). 한 번에 한 날짜씩 차례로 ---------- */
@@ -487,7 +487,7 @@
     el.id = 'kscHCheer'; el.className = 'ksc hcheer'; el.setAttribute('role', 'status');
     el.innerHTML = '<div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div><span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>';
     view.appendChild(el);
-    try { global.KScene.set(el, 'idle', '오늘 기록 다 적으셨어요.'); }
+    try { global.KScene.set(el, 'idle', '오늘 기록 다 적으셨습니다.'); }
     catch (e) { if (el.parentNode) el.parentNode.removeChild(el); return; }
     try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}  // 장면을 실제로 띄운 뒤에 적는다(하루 한 번)
     setTimeout(function () { el.classList.add('on'); }, 30);
@@ -696,7 +696,7 @@
       if (!healthShown() || host.style.display === 'none') return true;       // 보이지 않는 옛 화면의 조작 — 아무 데도 적지 않는다
       if (!(mode === 'today' && rec && rec.log_date === todayStr())) {
         open(); wake();
-        _toast('날짜가 바뀌어 오늘(' + fmtMD(todayStr()) + ') 기록으로 새로 열었어요.');
+        _toast('날짜가 바뀌어 오늘(' + fmtMD(todayStr()) + ') 기록으로 새로 열었습니다.');
       }
       try { if (replay) replay($('hToday')); } catch (e) {}
       return true;
@@ -917,7 +917,7 @@
       html += chartCard('공복혈당', 'mg/dL', gluc, '#22D3EE', [70, 140]);
       html += chartCard('체중', 'kg', wt, '#8B5CF6', null, 4);   // 최소 y축 폭 4kg: 미세 변동이 절벽처럼 과장되지 않게
     }
-    html += '<div class="hsec">날짜별 기록 <small>날짜를 누르면 그날 기록을 고칠 수 있어요</small></div><div class="list hlist">';
+    html += '<div class="hsec">날짜별 기록 <small>날짜를 누르면 그날 기록을 고칠 수 있습니다</small></div><div class="list hlist">';
     // 최근 GAP_DAYS 일 안에서 통째로 빠진 날도 줄로 보여 준다(눌러서 적기) — 오늘은 「오늘 기록」 탭이 있으니 제외
     var have = {}, list = rows.slice(), t = todayStr();
     rows.forEach(function (r) { have[r.log_date] = 1; });
@@ -962,7 +962,7 @@
   // 순수 SVG 라인 차트(외부 라이브러리 없음). pts: [{d,v}], fixRange: [min,max] 또는 null(자동).
   function chartCard(title, unit, pts, color, fixRange, minSpan) {
     var head = '<div class="hchart-h"><span>' + title + ' <small>' + unit + '</small></span>';
-    if (!pts.length) return '<div class="card hchart">' + head + '</div><div class="hchart-empty">아직 ' + title + ' 기록이 없어요.</div></div>';
+    if (!pts.length) return '<div class="card hchart">' + head + '</div><div class="hchart-empty">아직 ' + title + ' 기록이 없습니다.</div></div>';
     var last = pts[pts.length - 1];
     head += '<b class="hchart-last">' + last.v + '<small> ' + unit + '</small></b></div>';
     var W = 320, H = 120, PADL = 34, PADR = 8, PADT = 12, PADB = 20;
@@ -1092,8 +1092,8 @@
     var t = todayStr();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(ds || '')) return;
     if (ds === t) { open(); return; }
-    if (ds > t) { _toast('아직 오지 않은 날짜는 적을 수 없어요.'); return; }
-    if (ds < daysAgoStr(HIST_DAYS - 1)) { _toast('최근 30일 안의 날짜만 고칠 수 있어요.'); return; }
+    if (ds > t) { _toast('아직 오지 않은 날짜는 적을 수 없습니다.'); return; }
+    if (ds < daysAgoStr(HIST_DAYS - 1)) { _toast('최근 30일 안의 날짜만 고칠 수 있습니다.'); return; }
     flushSaveTimer();
     var r = loadLocal(ds, false) || blankRecord(ds);
     var row = findRow(ds);

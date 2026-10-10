@@ -25,23 +25,27 @@
   'use strict';
 
   /* ---------------- 인사 멘트 목록(여기만 고치면 됨) ----------------
-   * when: 'any' = 언제나 / 'morning' = 아침 04~11시 / 'day' = 낮 11~17시 / 'evening' = 저녁·밤 17~04시
+   * when: 'any' = 언제나 / 'morning' = 아침 04~11시 / 'day' = 낮 11~17시 / 'evening' = 저녁 17~22시 / 'night' = 밤 22~04시(v9.6)
+   *       밤에는 조용한 인사만: 'night' 인사와, 'any' 중 nonight 표시가 없는 것. (안부·수면·식사를 묻는 말은 넣지 않는다 — 답을 받을 길이 없다)
    * dow : 요일 멘트(1 = 월요일 … 5 = 금요일). 그 요일에만 후보에 들어간다(시간대 무관).
    * id  : 겹치지 않게만(직전 멘트 제외에 쓴다). */
   var GREETINGS = [
     { id: 'g01', when: 'any',     text: '반갑습니다, 대표님.' },
     { id: 'g02', when: 'any',     text: '안녕하세요, 대표님. 케이입니다.' },
     { id: 'g03', when: 'any',     text: '어서 오세요, 대표님.' },
-    { id: 'g04', when: 'any',     text: '오늘도 화이팅입니다, 대표님!' },
-    { id: 'g05', when: 'any',     text: '대표님, 기다리고 있었어요.' },
+    { id: 'g04', when: 'any',     text: '오늘도 화이팅입니다, 대표님!', nonight: true },
+    { id: 'g05', when: 'any',     text: '대표님, 기다리고 있었습니다.' },
     { id: 'g06', when: 'morning', text: '좋은 아침입니다, 대표님.' },
     { id: 'g07', when: 'morning', text: '대표님, 오늘 하루도 힘차게 시작하세요!' },
-    { id: 'g08', when: 'day',     text: '점심은 잘 드셨어요, 대표님?' },
+    { id: 'g08', when: 'day',     text: '오후 일도 제가 챙기겠습니다, 대표님.' },
     { id: 'g09', when: 'day',     text: '오후도 힘내세요, 대표님!' },
-    { id: 'g10', when: 'evening', text: '오늘도 수고 많으셨어요, 대표님.' },
+    { id: 'g10', when: 'evening', text: '오늘도 수고 많으셨습니다, 대표님.' },
     { id: 'g11', when: 'evening', text: '편안한 저녁 되세요, 대표님.' },
-    { id: 'g12', dow: 1,          text: '한 주 힘차게 시작해요, 대표님!' },
-    { id: 'g13', dow: 5,          text: '한 주 정말 수고 많으셨어요, 대표님.' }
+    { id: 'g12', dow: 1,          text: '한 주도 힘차게 시작하시길 바랍니다, 대표님!' },
+    { id: 'g13', dow: 5,          text: '한 주 정말 수고 많으셨습니다, 대표님.' },
+    { id: 'g14', when: 'night',   text: '늦은 시간입니다, 대표님.' },
+    { id: 'g15', when: 'night',   text: '대표님, 필요하신 것만 말씀하세요.' },
+    { id: 'g16', when: 'night',   text: '늦은 시간에도 곁에 있겠습니다, 대표님.' }
   ];
 
   var PREF_KEY = 'smart_k_intro';
@@ -56,6 +60,7 @@
   // 아래 값은 그 한 줄이 아직 없을 때(설치 뒤 첫 실행)와 그 옷의 사진조차 없을 때만 쓰는 기본 옷 인사다.
   var DEFAULT_BOW = { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.04 };
   var PLAN_KEY = 'smart_k_intro_plan';
+  var BOW_I_KEY = 'smart_k_intro_bow_i';    // v9.6: 지난번에 나온 인사 영상의 차례(여러 개인 옷에서 번갈아 나오게)
   var DEFAULT_OUTFIT = 'burgundy_suit';
   var CUE_AT = 1.0;           // cue 가 없는 영상의 기본값
   var STILL_CUE = 500;        // (v9.4) 인사 영상이 없는 옷: 전신 사진을 띄우고 이만큼 뒤에 자막
@@ -76,10 +81,11 @@
   function setPref(p) { lsSet(PREF_KEY, (p === 'always' || p === 'off') ? p : null); }
 
   /* ---- 멘트 고르기 ---- */
-  function bandOf(h) { return (h >= 4 && h < 11) ? 'morning' : (h >= 11 && h < 17) ? 'day' : 'evening'; }
+  function bandOf(h) { return (h >= 4 && h < 11) ? 'morning' : (h >= 11 && h < 17) ? 'day' : (h >= 17 && h < 22) ? 'evening' : 'night'; }
   function candidates(now) {
     var d = kst(now), band = bandOf(d.getUTCHours()), dow = d.getUTCDay();
     return GREETINGS.filter(function (g) {
+      if (band === 'night') return g.when === 'night' || (g.when === 'any' && !g.nonight);   // 밤에는 요일 인사(느낌표)도 쉰다
       if (g.dow != null) return g.dow === dow;
       return g.when === 'any' || g.when === band;
     });
@@ -120,14 +126,27 @@
       if (o === DEFAULT_OUTFIT) return Promise.resolve(DEFAULT_BOW);
       return Promise.resolve({ still: true, poster: 'assets/k/' + o + '/fullbody.jpg' });   // 앱 안에 사진이 있는 옷이면 그 전신 사진, 없으면(빠진 옷 등) onerror 로 기본 옷 인사
     }
-    return Promise.all([refUrl(plan.video), refUrl(plan.poster), refUrl(plan.still)]).then(function (u) {
-      if (u[0] && u[1]) return { video: u[0], poster: u[1], cue: (typeof plan.cue === 'number') ? plan.cue : CUE_AT };
+    // v9.6: 인사 영상이 여러 개인 옷(plan.alts) — 지난번에 나온 것은 빼고 고른다(하나뿐이면 예전과 똑같다)
+    var cands = [];
+    if (plan.video && plan.poster) cands.push({ video: plan.video, poster: plan.poster, cue: plan.cue });
+    (Array.isArray(plan.alts) ? plan.alts : []).forEach(function (a) { if (a && a.video && a.poster) cands.push(a); });
+    var pick = cands[0] || null;
+    if (cands.length > 1) {
+      var lastI = parseInt(lsGet(BOW_I_KEY) || '-1', 10), pool = [];
+      cands.forEach(function (c, i) { if (i !== lastI) pool.push(i); });
+      var pi = pool[Math.floor(Math.random() * pool.length)];
+      pick = cands[pi]; lsSet(BOW_I_KEY, String(pi));
+    }
+    return Promise.all([refUrl(pick && pick.video), refUrl(pick && pick.poster), refUrl(plan.still), refUrl(plan.video), refUrl(plan.poster)]).then(function (u) {
+      if (u[0] && u[1]) return { video: u[0], poster: u[1], cue: (pick && typeof pick.cue === 'number') ? pick.cue : CUE_AT };
+      if (u[3] && u[4]) return { video: u[3], poster: u[4], cue: (typeof plan.cue === 'number') ? plan.cue : CUE_AT };   // 고른 것을 못 읽으면 첫 영상으로
       if (u[2]) return { still: true, poster: u[2] };
       return DEFAULT_BOW;
     }, function () { return DEFAULT_BOW; });
   }
 
   var root = null, vid = null, cap = null, timers = [], active = false, forced = false, cued = false, raf = 0, line = null, cueAt = CUE_AT;
+  var sessionLineId = '';     // v9.6: 이번 실행에서 저절로 나온 시작 인사의 멘트 id(없으면 '')
   function clearTimers() { timers.forEach(function (t) { clearTimeout(t); }); timers = []; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
 
   function build() {
@@ -137,7 +156,7 @@
     root.setAttribute('role', 'presentation');
     root.innerHTML = '<div class="kintro-stage"><img class="kintro-bg" alt="" draggable="false"><img class="kintro-poster" alt="" draggable="false">' +
       '<video class="kintro-vid" muted playsinline webkit-playsinline disablepictureinpicture preload="auto"></video></div>' +
-      '<div class="kintro-hint">화면을 누르면 바로 시작해요</div>' +
+      '<div class="kintro-hint">화면을 누르면 바로 시작합니다</div>' +
       '<div class="kintro-cap" aria-live="polite"></div>';
     vid = root.querySelector('video');
     cap = root.querySelector('.kintro-cap');
@@ -177,6 +196,10 @@
     active = true; cued = false;
     line = pickGreeting(null, lsGet(LINE_KEY));
     lsSet(LINE_KEY, line.id);                          // 다음엔 이 멘트를 빼고 고른다(「지금 보기」도 포함)
+    if (!forced) {                                     // v9.6: 이번 실행의 시작 인사 — 홈 카드가 다른 인사를 또 하지 않고 이 말을 이어 보여 준다
+      sessionLineId = line.id;
+      try { document.dispatchEvent(new CustomEvent('kintro:line', { detail: { id: line.id } })); } catch (e) {}
+    }
     cap.textContent = line.text;
     root.__line = line.id;
     root.className = 'kintro show';
@@ -282,6 +305,7 @@
     greetings: function () { return GREETINGS.slice(); },
     candidates: candidates, pickGreeting: pickGreeting,   // 시험·점검용(시각을 넣으면 그 시각의 후보)
     lastShown: function () { return lsGet(LAST_KEY) || ''; },
+    sessionLine: function () { return sessionLineId; },   // v9.6
     play: function () { return play(true); },          // 「지금 보기」(설정 화면) — 오늘 인사 기록은 안 바꾼다
     skip: function () { finish('api'); },
     active: function () { return active; }
