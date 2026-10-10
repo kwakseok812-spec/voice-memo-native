@@ -2,7 +2,9 @@
  * k-character.js — 소장 「케이」 캐릭터(얼굴·표정·움직임·옷장·목소리) v6.0 1차
  * ----------------------------------------------------------------------------
  * 데이터 기반: 옷 목록은 assets/k/wardrobe.json 한 파일만 읽는다.
- *   (v9.4) 옷 20벌. 새 옷 10벌은 idle/talk 영상이 없어 정지 사진으로 보인다(말하는 중엔 사진이 끄덕이는 효과).
+ *   (v9.5) 옷 13벌. 기본 옷(버건디)만 영상·자세 그림까지 앱 안에 있고, 나머지 옷의 영상·자세 그림과 앞으로의 새 옷은
+ *          서버에서 받아 기기에 저장해 쓴다(아래 「v9.5 서버 자산」 · js/k-store.js). 연동 암호가 있는 기기만 받는다.
+ *   (v9.4) 새 옷은 idle/talk 영상이 없어 정지 사진으로 보인다(말하는 중엔 사진이 끄덕이는 효과).
  *          expr_hd = 큰 자리용 선명한 사진, poses = 일하는 자세 그림(배경 없는 WebP — 지금은 기본 옷만), bow = 전신 인사 영상(6벌 — 버건디·네이비·니트·한복·청바지 셔츠·맨투맨. bow_cue = 자막 시점, bow_len = 길이: 영상을 재서 넣은 값).
  *   옷을 늘리려면 에셋 폴더(assets/k/<옷id>/)와 wardrobe.json 만 바꾸면 되고 코드는 그대로다.
  *   (에셋 생성 도구: Claude Code\apps\k-character\tools\build_app_assets.py)
@@ -147,6 +149,9 @@
     // v9.4: 큰 자리용 선명한 사진(expr_hd — 지금은 웃는 상반신 1080 한 장) · 일하는 자세 그림(poses — 배경 없는 그림, 있는 옷만)
     n.exprHd = (o.expr_hd && typeof o.expr_hd === 'object') ? o.expr_hd : {};
     n.poses = (o.poses && typeof o.poses === 'object') ? o.poses : {};
+    // v9.5: 인사 영상의 자막 시점·길이(영상을 재서 넣은 값) · 자세 영상 자리(앞으로 — 있으면 재생, 없으면 그림)
+    n.bowCue = (typeof o.bow_cue === 'number') ? o.bow_cue : null; n.bowLen = (typeof o.bow_len === 'number') ? o.bow_len : null;
+    n.poseVideos = (o.pose_videos && typeof o.pose_videos === 'object') ? o.pose_videos : {};
     return n;
   }
   function setData(d) {
@@ -155,12 +160,13 @@
     if (!outs.length) return;
     bundled = outs;
     data = { default: (d && d.default) || outs[0].id, outfits: outs.slice() };
-    resolveCur();
+    compose();
   }
   // 저장된 옷이 (아직) 목록에 없으면 기본 옷을 입히되 저장값은 지우지 않는다 — 서버 옷은 카탈로그를 읽은 뒤 찾아진다
   function resolveCur() {
-    var saved = lsGet(OUTFIT_KEY);
-    curId = findOutfit(saved) ? saved : (findOutfit(data.default) ? data.default : data.outfits[0].id);
+    var saved = lsGet(OUTFIT_KEY), so = findOutfit(saved);
+    // (v9.5) 서버에서 받는 옷은 사진을 다 받은 뒤에만 입힌다(pending). 빠진 옷(옛 버전에 있던 옷)·아직 못 받은 옷이면 기본 옷.
+    curId = (so && !so.pending) ? saved : (findOutfit(data.default) ? data.default : data.outfits[0].id);
   }
   function findOutfit(id) {
     for (var i = 0; i < data.outfits.length; i++) if (data.outfits[i].id === id && !broken['o|' + id]) return data.outfits[i];
@@ -168,7 +174,13 @@
   }
   function outfit() { return findOutfit(curId) || findOutfit(data.default) || data.outfits[0]; }
   function isAbs(f) { return /^(https?:|data:|blob:)/i.test(f); }
-  function url(o, file) { return file ? (isAbs(file) ? file : o.base + file) : ''; }
+  // (v9.5) 'ks:<이름>' = 서버에서 받아 기기에 저장해 둔 파일(KStore). 아직 못 받았으면 '' → 부르는 쪽이 대체 규칙을 쓴다.
+  function isKs(f) { return typeof f === 'string' && f.slice(0, 3) === 'ks:'; }
+  function url(o, file) {
+    if (!file) return '';
+    if (isKs(file)) return window.KStore ? KStore.url(file.slice(3)) : '';
+    return isAbs(file) ? file : o.base + file;
+  }
   function comboFor(hairId, outfitId) {
     if (!hairId || hairId === DEFAULT_HAIR) return null;
     var k = hairId + '|' + outfitId, c = combos[k];
@@ -184,7 +196,7 @@
     if (cb) return cb.img;
     if (!raw) e = restExpr(e);
     o = o || outfit();
-    if (hd && o.exprHd && o.exprHd[e]) return url(o, o.exprHd[e]);
+    if (hd && o.exprHd && o.exprHd[e]) { var hu = url(o, o.exprHd[e]); if (hu) return hu; }
     return url(o, o.expr[e] || o.expr.neutral);
   }
   // v9.4 일하는 자세 그림(배경 없는 그림): 기본 머리 + 그 자세 그림이 있는 옷일 때만 주소, 아니면 ''(→ 부르는 쪽이 표정 사진으로 대신)
@@ -302,8 +314,8 @@
       nCombos[k] = e;
     });
     hairsList = nHairs; combos = nCombos; urlIndex = nIndex;
-    data = { default: data.default, outfits: bundled.concat(remote) };
-    resolveCur();
+    catRemote = remote;
+    compose();
     return true;
   }
   function loadCatalog() {
@@ -348,17 +360,220 @@
     refreshAll(true); notify();
   }, true);
 
+  /* ====================== v9.5 서버 자산(옷별 묶음을 서버에서 받아 기기에 저장) ======================
+   * 기본 옷(버건디)은 전부 앱 안에 있다. 그 밖의 옷은 사진까지만 앱에 있고, 영상(평소·말하기·전신 인사)과 일하는 자세 그림은
+   * 서버 목록(get_k_assets — 연동 암호 필요)에 적힌 파일을 받아 KStore(IndexedDB)에 넣어 두고 쓴다. 앞으로 추가되는 새 옷은 사진까지 전부 서버.
+   *   · 합치는 규칙: 앱 안에 있는 파일이 우선. 목록은 앱에 없는 것만 보탠다.
+   *   · 받는 순서: 지금 입은 옷의 사진(서버 옷일 때) → 그 옷의 자세 그림 → 그 옷의 영상(입혔을 때만 · 데이터 절약 모드면 전신을 직접 누를 때만).
+   *                옷장 사진(서버 옷)은 꾸미기 화면을 열 때.
+   *   · 바뀐 것만: 파일 이름이 곧 내용이라, 이름이 없는 것만 받는다. 옷별로 새 파일을 다 받은 뒤에 새 묶음으로 바꾸고 옛 파일을 지운다.
+   *   · 암호가 없거나 · 서버에 함수가 아직 없거나 · 인터넷이 없으면: 앱 안 자산 + 이미 받아 둔 것만으로 동작한다(대체 규칙 그대로).
+   *   · 시작 인사(k-intro.js)는 여기서 적어 두는 한 줄(smart_k_intro_plan)을 보고 그 옷의 영상/사진을 고른다. */
+  var KA_KEY = 'smart_k_assets', KA_PLAN_KEY = 'smart_k_intro_plan';
+  var catRemote = [];
+  var ka = { m: null, eff: {}, state: 'none', want: '', busy: {}, lastFetch: 0, fetching: null };
+  function kaSave() { try { lsSet(KA_KEY, JSON.stringify({ m: ka.m, eff: ka.eff })); } catch (e) {} }
+  function kaNames(e, kind) {              // 묶음 e 의 파일 이름들. kind: 'core'(옷장·표정·전신·1080) | 'thumb' | 'pose' | 'video' | 'bow' | 없음=전부
+    var f = (e && e.files) || {}, out = [];
+    function add(v) { if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (k) { if (v[k]) out.push(v[k]); }); }
+    if (!kind || kind === 'core') { add(f.expr); add(f.avatar); add(f.thumb); add(f.fullbody); add(f.expr_hd); }
+    if (kind === 'thumb') add(f.thumb);
+    if (!kind || kind === 'pose') add(f.poses);
+    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); }
+    if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); }
+    return out;
+  }
+  function kaHas(names) { var S = window.KStore; return !!S && names.every(function (n) { return S.has(n); }); }
+  function kaReady(names) { var S = window.KStore; return !!S && names.every(function (n) { return !!S.url(n); }); }
+  function ks(n) { return n ? 'ks:' + n : ''; }
+  function ksMap(m) { var o = {}; Object.keys(m || {}).forEach(function (k) { if (m[k]) o[k] = ks(m[k]); }); return o; }
+  function saveData() { try { return !!(navigator.connection && navigator.connection.saveData); } catch (e) { return false; } }
+  // 앱 안 옷 + 서버 카탈로그 옷 + 서버 자산을 합쳐 지금의 옷 목록을 만든다
+  function compose() {
+    var have = {};
+    var outs = bundled.map(function (o) {
+      have[o.id] = 1;
+      var e = ka.eff[o.id]; if (!e || !e.files) return o;
+      var f = e.files, n = {}; Object.keys(o).forEach(function (k) { n[k] = o[k]; });
+      if (!n.idle && f.idle) n.idle = ks(f.idle);
+      if (!n.talk && f.talk) n.talk = ks(f.talk);
+      if (!n.bow && f.bow) { n.bow = ks(f.bow); n.bowPoster = ks(f.bow_poster); n.bowCue = e.bow_cue; n.bowLen = e.bow_len; }
+      if (!Object.keys(n.poses || {}).length && f.poses) n.poses = ksMap(f.poses);
+      if (!Object.keys(n.poseVideos || {}).length && f.pose_videos) n.poseVideos = ksMap(f.pose_videos);
+      if (!Object.keys(n.exprHd || {}).length && f.expr_hd) n.exprHd = ksMap(f.expr_hd);
+      n.srv = true;
+      return n;
+    });
+    catRemote.forEach(function (o) { if (!have[o.id]) { have[o.id] = 1; outs.push(o); } });
+    Object.keys(ka.eff).forEach(function (id) {       // 앱에 없는 서버 옷: 옷장 사진을 받은 것만 목록에(사진을 다 받기 전에는 pending)
+      var e = ka.eff[id], f = e && e.files;
+      if (have[id] || !f || !f.expr || !f.thumb || !kaReady([f.thumb])) return;
+      var n = { id: id, name: e.name || id, desc: e.desc || '', category: e.category || '새 옷', crop: e.crop || null, base: '', remote: true, srv: true, server: true,
+        expr: ksMap(f.expr), avatar: ksMap(f.avatar), thumb: ks(f.thumb), fullbody: ks(f.fullbody), exprHd: ksMap(f.expr_hd),
+        idle: ks(f.idle), talk: ks(f.talk), bow: ks(f.bow), bowPoster: ks(f.bow_poster), bowCue: e.bow_cue, bowLen: e.bow_len,
+        poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos) };
+      n.pending = !kaReady(kaNames(e, 'core'));
+      outs.push(n);
+    });
+    data = { default: data.default, outfits: outs };
+    resolveCur();
+  }
+  // 받아 둔 파일을 화면에 걸 수 있게 읽어 둔다(지금 쓰는 묶음들 전부 — 주소만 만든다)
+  function kaLoadStored() {
+    var S = window.KStore; if (!S) return Promise.resolve();
+    var names = [];
+    Object.keys(ka.eff).forEach(function (id) { kaNames(ka.eff[id]).forEach(function (n) { if (S.has(n)) names.push(n); }); });
+    return S.load(names);
+  }
+  function kaRepaint() { compose(); refreshAll(true); notify(); writePlan(); }
+  function kaFetchFile(name) {
+    var S = window.KStore; if (!S || !ka.m || !ka.m.base) return Promise.resolve(false);
+    if (S.has(name)) return S.load([name]).then(function (r) { return r.length > 0; });
+    if (ka.busy[name]) return ka.busy[name];
+    var p = fetch(ka.m.base + name).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function (b) { return S.put(name, b); }).then(function () { delete ka.busy[name]; return true; },
+        function () { delete ka.busy[name]; return false; });
+    ka.busy[name] = p;
+    return p;
+  }
+  function kaFetchAll(names) {             // 차례로 받는다(한 번에 하나 — 느린 연결에서 화면이 먼저다). 전부 됐으면 true
+    var ok = true;
+    return names.reduce(function (pr, n) { return pr.then(function () { return kaFetchFile(n); }).then(function (r) { if (!r) ok = false; }); }, Promise.resolve()).then(function () { return ok; });
+  }
+  /* 그 옷의 자산을 받는다. opt.bow = 인사 영상을 꼭 받는다(전신을 직접 누름 — 데이터 절약 모드여도).
+   *   새 목록의 묶음(next)이 지금 쓰는 묶음(eff)과 다르면 새 파일을 다 받은 뒤에 바꾼다. */
+  function ensureOutfit(id, opt) {
+    opt = opt || {};
+    if (!ka.m || !window.KStore) return Promise.resolve(false);
+    var next = null; (ka.m.outfits || []).forEach(function (e) { if (e && e.id === id) next = e; });
+    if (!next) return Promise.resolve(false);
+    var cur = ka.eff[id] || next;
+    var lite = saveData();                                // 데이터 절약 모드: 영상은 받지 않는다(전신을 직접 누른 경우의 인사 영상만 예외)
+    function vidsOf(e) { return lite ? (opt.bow ? kaNames(e, 'bow') : []) : kaNames(e, 'video'); }
+    function wanted(e) {
+      return kaNames(e, 'core').concat(kaNames(e, 'pose')).concat(vidsOf(e)).filter(function (n, i, a) { return a.indexOf(n) === i; });
+    }
+    var step = 0;
+    function paintSome() { step++; kaRepaint(); }
+    // 먼저 지금 쓰는 묶음에서 빠진 것(사진 → 자세 그림 → 영상 순)
+    var order = kaNames(cur, 'core').concat(kaNames(cur, 'pose'));
+    var vids = vidsOf(cur);
+    return kaFetchAll(order.filter(function (n) { return !KStore.has(n) || !KStore.url(n); })).then(function () { paintSome(); return kaFetchAll(vids.filter(function (n) { return !KStore.has(n) || !KStore.url(n); })); })
+      .then(function () {
+        if (cur === next || JSON.stringify(cur) === JSON.stringify(next)) { paintSome(); return true; }
+        return kaFetchAll(wanted(next).filter(function (n) { return !KStore.has(n) || !KStore.url(n); })).then(function (ok) {
+          if (ok) { ka.eff[id] = next; kaSave(); kaGc(); }
+          paintSome();
+          return ok;
+        });
+      });
+  }
+  // 어느 묶음에서도 쓰지 않는 저장 파일을 지운다(새 목록을 받은 뒤에만 부른다)
+  function kaGc() {
+    var S = window.KStore; if (!S || !ka.m) return;
+    var keep = {};
+    Object.keys(ka.eff).forEach(function (id) { kaNames(ka.eff[id]).forEach(function (n) { keep[n] = 1; }); });
+    (ka.m.outfits || []).forEach(function (e) { kaNames(e).forEach(function (n) { keep[n] = 1; }); });
+    var drop = S.names().filter(function (n) { return !keep[n]; });
+    if (drop.length) S.del(drop);
+  }
+  // 새 목록을 받아들인다: 처음 보는 옷은 바로 새 묶음, 이미 쓰던 옷은 그대로 두고(입었을 때 새 파일을 다 받으면 바뀐다) 없어진 옷은 뺀다
+  function kaAdopt(m) {
+    if (!m || typeof m !== 'object' || !Array.isArray(m.outfits)) return false;
+    ka.m = m;
+    var seen = {};
+    m.outfits.forEach(function (e) {
+      if (!e || !e.id || !/^[a-z0-9_]+$/i.test(e.id)) return;
+      seen[e.id] = 1;
+      if (!ka.eff[e.id]) ka.eff[e.id] = e;
+      else if (JSON.stringify(ka.eff[e.id]) !== JSON.stringify(e)) {
+        // 파일은 그대로이고 설명 값만 바뀐 경우(이름·자막 시점 등)는 바로 새 것으로
+        if (kaNames(e).every(function (n) { return kaNames(ka.eff[e.id]).indexOf(n) >= 0; })) ka.eff[e.id] = e;
+      }
+    });
+    Object.keys(ka.eff).forEach(function (id) { if (!seen[id]) delete ka.eff[id]; });
+    kaSave();
+    return true;
+  }
+  function kaFetchManifest(force) {
+    var C = window.OfficeBridge && OfficeBridge.CONFIG, pass = lsGet('smart_sync_pass') || '';
+    if (!C || !pass) { ka.state = pass ? 'none' : 'nopass'; return Promise.resolve(false); }
+    if (ka.fetching) return ka.fetching;
+    if (!force && Date.now() - ka.lastFetch < 60000) return Promise.resolve(false);
+    ka.lastFetch = Date.now();
+    ka.fetching = fetch(C.url + '/rest/v1/rpc/get_k_assets', { method: 'POST',
+      headers: { 'apikey': C.key, 'Authorization': 'Bearer ' + C.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_pass: pass }) })
+      .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.status = r.status; throw e; } return r.json(); })
+      .then(function (m) {
+        ka.fetching = null;
+        if (!m) { ka.state = 'empty'; return false; }            // 서버에 아직 목록이 없다
+        if (!kaAdopt(m)) { ka.state = 'bad'; return false; }
+        ka.state = 'ok';
+        return kaLoadStored().then(function () { kaRepaint(); kaGc(); return ensureOutfit(outfit().id); }).then(function () { return true; });
+      }, function (e) { ka.fetching = null; ka.state = (e && e.status === 404) ? 'noserver' : (e && (e.status === 403 || e.status === 401 || e.status === 400)) ? 'badpass' : 'offline'; return false; });
+    return ka.fetching;
+  }
+  function assetsInit() {
+    try { var sv = JSON.parse(lsGet(KA_KEY) || 'null'); if (sv && sv.eff) { ka.m = sv.m || null; ka.eff = sv.eff || {}; } } catch (e) {}
+    var S = window.KStore;
+    var first = S ? S.ready.then(kaLoadStored).then(function () { kaRepaint(); }) : Promise.resolve();
+    first = first.then(function () {
+      // 저장된 옷이 어디에도 없으면(이번 버전에서 뺀 옷 등 — 앱 안에도, 받아 둔 서버 목록에도, 서버 카탈로그에도 없음) 기본 옷으로 되돌려 적는다
+      var saved = lsGet(OUTFIT_KEY);
+      if (saved && !findOutfit(saved) && !ka.eff[saved]) { lsSet(OUTFIT_KEY, null); kaRepaint(); }
+    });
+    return first.then(function () { return kaFetchManifest(true); }).then(function () { writePlan(); });
+  }
+  // 꾸미기 화면을 열 때: 서버 옷의 옷장 사진을 받는다(목록도 한 번 새로 본다)
+  function ensureThumbs() {
+    return kaFetchManifest(false).then(function () {
+      if (!ka.m) return false;
+      var need = [];
+      Object.keys(ka.eff).forEach(function (id) { var f = ka.eff[id].files || {}; if (f.expr && f.thumb && !KStore.url(f.thumb)) need.push(f.thumb); });
+      var again = ensureOutfit(outfit().id);                    // 지난번에 못 받은 것이 있으면 이때 다시 받는다
+      if (!need.length) return again;
+      return kaFetchAll(need).then(function () { kaRepaint(); return true; });
+    });
+  }
+  // 인사 영상 상태: 'ready' 틀 수 있음 · 'pending' 목록에는 있는데 아직 못 받음 · 'none' 그 옷에는 인사 영상이 없음
+  function bowState(o) {
+    o = o || outfit();
+    if (isCur(o) && activeCombo()) return 'none';
+    if (!o.bow) return 'none';
+    return url(o, o.bow) ? 'ready' : 'pending';
+  }
+  // 시작 인사가 볼 한 줄: 지금 옷의 인사 영상(다 받아 둔 것만) 또는 전신 사진
+  function writePlan() {
+    try {
+      var o = outfit(), plan = { v: 1, outfit: o.id };
+      function ref(f) { if (!f) return null; if (isKs(f)) { var n = f.slice(3); return (window.KStore && KStore.has(n)) ? { s: n } : null; } return { b: isAbs(f) ? f : o.base + f }; }
+      var vid = ref(o.bow), pos = ref(o.bowPoster);
+      if (vid && pos) { plan.video = vid; plan.poster = pos; if (typeof o.bowCue === 'number') plan.cue = o.bowCue; }
+      var fb = ref(o.fullbody); if (fb) plan.still = fb;
+      lsSet(KA_PLAN_KEY, JSON.stringify(plan));
+    } catch (e) {}
+  }
+
   var ready = fetch(BASE + 'wardrobe.json', { cache: 'no-store' })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (d) { setData(d); })
     .catch(function (e) { console.warn('[케이] wardrobe.json 읽기 실패 — 기본 옷으로:', e); setData(FALLBACK); })
     .then(function () { refreshAll(); notify(); });
   var catalogReady = ready.then(loadCatalog);
+  var assetsReady = ready.then(assetsInit);
 
   function setOutfit(id) {
-    if (!findOutfit(id) || id === outfit().id) return false;
+    var so = findOutfit(id);
+    if (!so || id === outfit().id) return false;
+    if (so.pending) {                                   // (v9.5) 서버 옷: 사진을 다 받은 뒤에 입힌다. 'pending' 을 돌려준다(앱이 「받고 있습니다」 안내)
+      ka.want = id;
+      ensureOutfit(id).then(function () { var o2 = findOutfit(id); if (ka.want === id && o2 && !o2.pending) { ka.want = ''; setOutfit(id); } });
+      return 'pending';
+    }
+    ka.want = '';
     curId = id; lsSet(OUTFIT_KEY, id);
-    refreshAll(true); notify();
+    refreshAll(true); notify(); writePlan();
+    ensureOutfit(id);                                   // (v9.5) 입혔을 때 그 옷의 자세 그림·영상을 받는다
     return true;
   }
   function onChange(fn) { listeners.push(fn); }
@@ -424,7 +639,8 @@
     var file = still ? '' : o[kind];                                  // 기본머리 외 조합 = 영상 없음(정지 사진)
     // (O-0042) 조합에 idle 영상이 있으면 평소엔 그것을 반복 재생. 말하는 중엔 기존대로 정지 사진 + 끄덕임 CSS
     if (still && !talking && cb.idle) file = cb.idle;
-    if (talking && !file && !still) { kind = 'idle'; file = o.idle; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
+    if (file && !still && !url(o, file)) file = '';                   // (v9.5) 서버에서 받을 영상을 아직 못 받음 → 정지 사진
+    if (talking && !file && !still) { kind = 'idle'; file = (o.idle && url(o, o.idle)) ? o.idle : ''; } // talk 영상 없는 옷 → idle + CSS 입 모양 효과
     var fkey = kind + '|' + curId + (still ? '|' + curHair : '');
     var failed = !!(el._kFail && el._kFail[fkey]);
     return { o: o, cb: cb, still: still, kind: kind, file: file,
@@ -626,6 +842,11 @@
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
+    // v9.5 서버 자산
+    assetsReady: assetsReady, bowState: bowState,
+    assets: { state: function () { return ka.state; }, refresh: function () { return kaFetchManifest(true); }, ensureOutfit: ensureOutfit, ensureThumbs: ensureThumbs,
+              wanting: function () { return ka.want; }, saveData: saveData,
+              info: function () { return { state: ka.state, outfits: Object.keys(ka.eff), stored: window.KStore ? KStore.names().length : 0, updated: ka.m && ka.m.updated }; } },
     mount: function () { faces().forEach(paint); },
     restartFace: restartFace, hold: hold, faceFlash: faceFlash,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },

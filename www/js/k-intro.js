@@ -18,7 +18,7 @@
  *   'daily'  = 하루 첫 실행만(기본값 · 소장 추천)   'always' = 켤 때마다   'off' = 끄기
  *   ※ 「실행」은 앱을 완전히 새로 켤 때만이다. 다른 앱 갔다 돌아오는 것(백그라운드 복귀)은 인사하지 않는다.
  *
- * 인사 영상이 있는 옷: 아래 BOWS 표(v9.4: 버건디 정장 · 네이비 정장 · 니트 · 한복 · 청바지 셔츠 · 맨투맨 6벌). 없는 옷을 입고 있으면 그 옷의 전신 사진 + 자막으로 인사한다(영상 없음).
+ * 인사 영상: 기본 옷(버건디 정장)은 앱 안에, 다른 옷은 서버에서 받아 기기에 저장해 둔 것(v9.5). 영상이 (아직) 없는 옷을 입고 있으면 그 옷의 전신 사진 + 자막으로 인사한다.
  *   옷을 늘릴 땐 assets/k/<옷id>/bow.mp4 · bow_poster.jpg 를 넣고 이 표에 한 줄 추가.
  * ==========================================================================*/
 (function () {
@@ -48,18 +48,14 @@
   var LAST_KEY = 'smart_k_intro_last';
   var LINE_KEY = 'smart_k_intro_line';      // 직전에 나온 멘트 id
   var DEFAULT_PREF = 'daily';
-  // (v9.4) 인사 영상이 있는 옷 6벌. 옷마다 영상 길이(3.25~4.58초)와 숙이는 박자가 다르다.
-  //   cue = 그 영상에서 허리를 숙이는 것이 눈에 띄기 시작하는 때(초 — 자막이 나타나는 때). 영상마다 재서 넣은 값이다(고정값 아님).
-  //         이 표는 손으로 고치지 않는다 — 영상을 넣는 스크립트(integrate_bows.py)가 재서 wardrobe.json(bow_cue)과 함께 맞춘다.
+  // (v9.5) 인사 영상 표를 없앴다. 앱 안에 있는 인사 영상은 기본 옷 하나뿐이고, 다른 옷의 영상은 서버에서 받아 기기에 저장해 둔다.
+  //   어느 옷이 어떤 영상·사진으로 인사하는지는 KChar(k-character.js writePlan)가 옷이 정해질 때마다 한 줄로 적어 둔다:
+  //     localStorage 'smart_k_intro_plan' = { outfit, video:{b|s}, poster:{b|s}, cue, still:{b|s} }
+  //       b = 앱 안 경로 · s = 기기 저장소(KStore)의 파일 이름(다 받아 둔 것만 적힌다) · cue = 자막 시점(영상을 재서 넣은 값)
   //   길이는 적지 않는다 — 재생이 끝나는 것(ended)으로 닫고, 안전 장치(아래 capFor)도 영상의 실제 길이에서 구한다.
-  var BOWS = {
-    burgundy_suit:  { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.04 },
-    navy_suit:      { video: 'assets/k/navy_suit/bow.mp4', poster: 'assets/k/navy_suit/bow_poster.jpg', cue: 0.88 },
-    knit:           { video: 'assets/k/knit/bow.mp4', poster: 'assets/k/knit/bow_poster.jpg', cue: 1.08 },
-    hanbok:         { video: 'assets/k/hanbok/bow.mp4', poster: 'assets/k/hanbok/bow_poster.jpg', cue: 0.88 },
-    jeans_shirt:    { video: 'assets/k/jeans_shirt/bow.mp4', poster: 'assets/k/jeans_shirt/bow_poster.jpg', cue: 1.04 },
-    sweatshirt:     { video: 'assets/k/sweatshirt/bow.mp4', poster: 'assets/k/sweatshirt/bow_poster.jpg', cue: 1.08 }
-  };
+  // 아래 값은 그 한 줄이 아직 없을 때(설치 뒤 첫 실행)와 그 옷의 사진조차 없을 때만 쓰는 기본 옷 인사다.
+  var DEFAULT_BOW = { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.04 };
+  var PLAN_KEY = 'smart_k_intro_plan';
   var DEFAULT_OUTFIT = 'burgundy_suit';
   var CUE_AT = 1.0;           // cue 가 없는 영상의 기본값
   var STILL_CUE = 500;        // (v9.4) 인사 영상이 없는 옷: 전신 사진을 띄우고 이만큼 뒤에 자막
@@ -105,11 +101,30 @@
   }
   // (v9.4) 입은 옷의 인사 영상이 있으면 그것. 없으면 그 옷의 전신 사진 + 자막(still) — 예전엔 버건디 영상이 대신 나와 「옷은 네이비인데 인사는 버건디」였다.
   //   옷 이름은 영문·숫자·밑줄만 받는다(저장값이 이상하면 기본 옷).
-  function bowFor() {
+  function wornOutfit() {
     var o = lsGet('smart_k_outfit') || DEFAULT_OUTFIT;
-    if (!/^[a-z0-9_]+$/i.test(o)) o = DEFAULT_OUTFIT;
-    if (BOWS[o]) return BOWS[o];
-    return { still: true, poster: 'assets/k/' + o + '/fullbody.jpg' };
+    return /^[a-z0-9_]+$/i.test(o) ? o : DEFAULT_OUTFIT;
+  }
+  // 계획에 적힌 파일 하나를 화면에 걸 주소로: 앱 안 경로는 그대로, 기기 저장소 것은 읽어서(없으면 '')
+  function refUrl(r) {
+    if (!r) return Promise.resolve('');
+    if (r.b) return Promise.resolve(String(r.b));
+    if (r.s && window.KStore) return KStore.load([r.s]).then(function () { return KStore.url(r.s); }, function () { return ''; });
+    return Promise.resolve('');
+  }
+  // 무엇으로 인사할지: {video, poster, cue} 영상 인사 · {still:true, poster} 사진 인사. 사진을 못 읽으면 기본 옷 영상으로(fallback).
+  function sourceFor() {
+    var o = wornOutfit(), plan = null;
+    try { plan = JSON.parse(lsGet(PLAN_KEY) || 'null'); } catch (e) { plan = null; }
+    if (!plan || plan.outfit !== o) {
+      if (o === DEFAULT_OUTFIT) return Promise.resolve(DEFAULT_BOW);
+      return Promise.resolve({ still: true, poster: 'assets/k/' + o + '/fullbody.jpg' });   // 앱 안에 사진이 있는 옷이면 그 전신 사진, 없으면(빠진 옷 등) onerror 로 기본 옷 인사
+    }
+    return Promise.all([refUrl(plan.video), refUrl(plan.poster), refUrl(plan.still)]).then(function (u) {
+      if (u[0] && u[1]) return { video: u[0], poster: u[1], cue: (typeof plan.cue === 'number') ? plan.cue : CUE_AT };
+      if (u[2]) return { still: true, poster: u[2] };
+      return DEFAULT_BOW;
+    }, function () { return DEFAULT_BOW; });
   }
 
   var root = null, vid = null, cap = null, timers = [], active = false, forced = false, cued = false, raf = 0, line = null, cueAt = CUE_AT;
@@ -158,8 +173,6 @@
   function play(force) {
     if (active) return false;
     forced = !!force;
-    var b = bowFor();
-    if (!b) return false;
     build();
     active = true; cued = false;
     line = pickGreeting(null, lsGet(LINE_KEY));
@@ -168,6 +181,14 @@
     root.__line = line.id;
     root.className = 'kintro show';
     document.documentElement.classList.add('kintro-on');
+    root.__mode = '';
+    var token = (root.__tok = (root.__tok || 0) + 1);
+    timers.push(setTimeout(function () { if (active && !root.__mode) finish('nosource'); }, START_TIMEOUT));   // 무엇으로 인사할지 못 정하면 조용히 건너뜀
+    sourceFor().then(function (b) { if (active && root.__tok === token) begin(b, true); });
+    return true;
+  }
+  // b 로 인사를 시작한다. retry=true 면 사진을 못 읽었을 때 기본 옷 영상으로 한 번 더 해 본다.
+  function begin(b, retry) {
     var posterEl = root.querySelector('.kintro-poster');
     posterEl.setAttribute('src', b.poster);
     root.querySelector('.kintro-bg').setAttribute('src', b.poster);
@@ -176,12 +197,18 @@
     requestAnimationFrame(function () { requestAnimationFrame(function () { if (active) root.classList.add('in'); }); });
     timers.push(setTimeout(function () { if (active) root.classList.add('hint-on'); }, 900));
     if (b.still) {
-      // 인사 영상이 없는 옷: 그 옷 전신 사진 + 자막. 사진을 못 읽으면(서버에서 온 옷 등) 조용히 건너뛴다.
+      // 인사 영상이 없는 옷: 그 옷 전신 사진 + 자막. 사진을 못 읽으면(이번 버전에서 빠진 옷이 저장돼 있는 경우 등) 기본 옷 영상으로 인사한다.
       try { vid.removeAttribute('src'); vid.removeAttribute('poster'); } catch (e) {}
-      posterEl.onerror = function () { posterEl.onerror = null; finish('nophoto'); };
+      var stillTimers = [];
+      posterEl.onerror = function () {
+        posterEl.onerror = null;
+        stillTimers.forEach(clearTimeout);
+        if (retry && active) { root.classList.remove('cap-on'); cued = false; begin(DEFAULT_BOW, false); } else finish('nophoto');
+      };
       if (!forced) lsSet(LAST_KEY, today());
-      timers.push(setTimeout(function () { if (active) { cued = true; root.classList.add('cap-on'); } }, STILL_CUE));
-      timers.push(setTimeout(function () { finish('still'); }, STILL_HOLD));
+      stillTimers.push(setTimeout(function () { if (active && root.__mode === 'still') { cued = true; root.classList.add('cap-on'); } }, STILL_CUE));
+      stillTimers.push(setTimeout(function () { if (root.__mode === 'still') finish('still'); }, STILL_HOLD));
+      stillTimers.forEach(function (t) { timers.push(t); });
       return true;
     }
     posterEl.onerror = null;
@@ -255,7 +282,7 @@
     greetings: function () { return GREETINGS.slice(); },
     candidates: candidates, pickGreeting: pickGreeting,   // 시험·점검용(시각을 넣으면 그 시각의 후보)
     lastShown: function () { return lsGet(LAST_KEY) || ''; },
-    bows: function () { var o = {}; Object.keys(BOWS).forEach(function (k) { o[k] = { video: BOWS[k].video, poster: BOWS[k].poster, cue: BOWS[k].cue }; }); return o; },   // 시험·점검용(wardrobe.json 과 같은지 본다)
+    source: sourceFor, defaultBow: function () { return { video: DEFAULT_BOW.video, poster: DEFAULT_BOW.poster, cue: DEFAULT_BOW.cue }; },   // 시험·점검용
     play: function () { return play(true); },          // 「지금 보기」(설정 화면) — 오늘 인사 기록은 안 바꾼다
     skip: function () { finish('api'); },
     active: function () { return active; }

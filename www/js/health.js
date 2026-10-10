@@ -459,7 +459,7 @@
   function paintSay(user) {
     var sc = $('kscHealth'); if (!sc || !rec) return;
     var n = recordedCount(), t = sayText();
-    if (global.KScene) global.KScene.set(sc, 'clip', t);
+    if (global.KScene) global.KScene.set(sc, 'clip', t, { quiet: true });      // 빨리 쓰는 화면 — 등장·글자 찍힘 없이 바로
     else { var pp = $('hSay'); if (pp) pp.textContent = t; }
     sc.setAttribute('data-n', String(n));
     if (user && mode === 'today' && rec.log_date === todayStr() && n === REQUIRED.length && lastCount >= 0 && lastCount < REQUIRED.length) cheer(rec.log_date);

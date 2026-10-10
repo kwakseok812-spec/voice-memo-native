@@ -35,6 +35,7 @@
 </head>
 <body>
 <!-- O-0116: 앱 시작 인사(케이 전신 인사 영상). 다른 화면보다 먼저 덮개를 띄우려고 body 맨 앞에서 읽는다 -->
+<script src="js/k-store.js"></script><!-- v9.5 케이 자산 기기 저장소(시작 인사가 먼저 쓴다) -->
 <script src="js/k-intro.js"></script>
 
 <!-- ===== 아이콘 스프라이트 ===== -->
@@ -472,6 +473,8 @@
       <div id="kwOutfitPane">
         <div class="kw-sec"><b>옷장 · <span id="kwCount">0</span>벌</b><small>누르면 바로 갈아입어요</small></div>
         <div id="kwGrid" class="kw-grid"></div>
+        <!-- v9.5: 연동 암호가 없는 기기에만 보이는 한 줄(서버에서 받는 옷 움직임·자세 그림·새 옷은 암호가 있어야 받는다) -->
+        <div id="kwAssetNote" class="kw-note" style="display:none"></div>
       </div>
       <div id="kwHairPane" style="display:none;">
         <div class="kw-sec"><b>머리 · <span id="kwHairCount">1</span>가지</b><small>누르면 바로 바꿔요</small></div>
