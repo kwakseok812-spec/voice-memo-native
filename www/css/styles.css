@@ -548,6 +548,9 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hchips{margin-top:10px}
 .chip.hchip{height:40px;padding:0 15px;font-size:15px;cursor:pointer;font-family:inherit}
 .chip.hchip:active{transform:scale(.96)}
+/* v9.5.1(O-0386) 끼니 「안 먹음」 — 음식 칩 줄 맨 앞. 점선 테두리(음식이 아니라는 표시), 켜지면 회색 바탕(음식 칩의 파랑·보라와 구분 · 흰 글씨 대비 6:1). 누르는 자리는 다른 식단 칩과 같이 44px */
+.chip.hchip.hskip{border-style:dashed;border-color:var(--glass-b2);color:var(--text)}
+.chip.hchip.hskip.on{background:#52607A;color:#fff;border-style:solid;border-color:transparent;box-shadow:none}
 .hcustom{margin-top:10px;min-height:50px}
 .hcustom .hcustomin{flex:1;border:0;outline:0;background:transparent;color:var(--text);font-family:inherit;font-size:16px;font-weight:600;width:100%}
 .hcustom .hcustomin::placeholder{color:var(--dim);font-weight:500}

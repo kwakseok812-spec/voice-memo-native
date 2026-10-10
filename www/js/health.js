@@ -22,6 +22,12 @@
  *      같은 칸을 두 기기가 다르게 고쳤으면 더 나중에 고친 쪽이 남는다(내 칸의 고친 시각 vs 서버 행의 updated_at).
  *   ⑤ 진행 표시는 간식을 뺀 9칸 기준(건강 알림 health_reminder.py · 케이의 「안 적은 칸」과 같은 9칸). 간식은 「선택」.
  *
+ * v9.5.1(O-0386) 끼니 「안 먹음」
+ *   아침·점심·저녁 칸의 칩 줄 맨 앞에 「안 먹음」이 있다. 누르면 그 끼니 글 칸에 「안 먹음」 글자가 그대로 저장된다(서버 표는 그대로 — 새 칸 없음).
+ *   「안 먹음」은 「적은 칸」이다: 9칸 세기 · 적은 끼니 접기 · 9칸 완성 반응 · 건강 알림(PC) 모두 적은 것으로 본다. 다시 누르면 풀린다(누르기 전 모습으로 — 비어 있던 끼니는 빈 칸, 같은 화면에서 식단을 「안 먹음」으로 바꿨던 끼니는 그 식단).
+ *   음식을 고르거나 적으면 「안 먹음」은 저절로 풀린다(한 칸에 둘이 같이 남지 않는다). 간식은 예전 그대로(「없음」 칩).
+ *   판정(isSkip): 칸 전체가(띄어쓰기 무시) SKIP_WORDS 중 하나일 때만 — PC 쪽 health_read.py 의 SKIP_WORDS 와 같은 목록(한쪽만 고치지 말 것).
+ *
  * app.js 연결: window 이벤트/버튼으로 화면을 열면 HealthTab.open() 이 렌더한다.
  *   HealthTab.init({toast}) 로 토스트만 주입받는다(결합 최소화). HealthTab.flush() = 밀린 칸 다시 올리기.
  * ==========================================================================*/
@@ -68,11 +74,18 @@
   var REQUIRED = FIELDS.filter(function (k) { return k !== 'snack'; });
   var SHORT = { fasting_glucose: '혈당', weight: '체중', sleep_hours: '수면', breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식',
                 med_morning: '아침약', med_evening: '저녁약', supplement: '영양제' };
+  // v9.5.1(O-0386) 끼니 「안 먹음」: 끼니 글 칸에 이 글자를 그대로 넣는다. 손으로 「안먹음」·「결식」처럼 적으신 것도 같은 뜻으로 읽는다.
+  var SKIP = '안 먹음';
+  var SKIP_WORDS = { '안먹음': 1, '안먹었음': 1, '안드심': 1, '결식': 1, '굶음': 1, '거름': 1 };
+  var SKIP_MEALS = { breakfast: 1, lunch: 1, dinner: 1 };       // 간식은 해당 없음(선택 칸 — 「없음」 칩이 따로 있다)
+  function isSkip(v) { return typeof v === 'string' && SKIP_WORDS[v.replace(/\s+/g, '')] === 1; }
+  function skipOn(k, v) { return SKIP_MEALS[k] === 1 && isSkip(v); }
   var HIST_DAYS = 30;         // 「기록 보기」가 불러오는 범위 = 고칠 수 있는 범위(오늘 포함 30일)
   var GAP_DAYS = 7;           // 기록 보기에서 「통째로 빠진 날」도 줄로 보여 주는 범위(최근 7일). 0 이면 끔.
   var rec = null;             // 지금 입력 화면에 떠 있는 날짜의 기록(오늘 또는 고치는 중인 지난 날짜)
   var mode = 'today';         // 'today' | 'past'
   var openMeals = {};         // 이번에 연 화면에서 펼쳐 둔 끼니(다시 그려도 접히지 않게)
+  var skipPrev = {};          // v9.5.1: 이번에 연 화면에서 「안 먹음」을 누르기 직전의 식단 글(잘못 눌렀을 때 다시 누르면 그대로 돌아오게)
   var rangeRows = [];         // 서버에서 받은 최근 30일 행(최신순) — 기록 보기 · ＋/− 시작값 · 지난 날짜 열기에 함께 쓴다
   var saveTimer = null, saveTimerDate = null;
   var inited = false;
@@ -149,7 +162,7 @@
   function presetFoods() {
     var counts = foodsGet(), order = {};
     BASE_FOODS.forEach(function (f, i) { order[f] = i; if (!(f in counts)) counts[f] = 0; });
-    var arr = Object.keys(counts);
+    var arr = Object.keys(counts).filter(function (f) { return !isSkip(f); });   // 「안 먹음」은 음식이 아니다(옛 버전에서 직접 입력으로 배웠어도 칩으로 내놓지 않는다)
     arr.sort(function (a, b) {
       if ((counts[b] || 0) !== (counts[a] || 0)) return (counts[b] || 0) - (counts[a] || 0);
       var oa = (a in order) ? order[a] : 999, ob = (b in order) ? order[b] : 999;
@@ -557,21 +570,27 @@
       '</div></div>';
   }
   // 끼니: 이미 적은 끼니는 한 줄(누르면 펼침). 아직 안 적은 끼니·이번에 펼친 끼니는 칩이 보인다.
+  //   v9.5.1: 아침·점심·저녁은 칩 줄 맨 앞에 「안 먹음」(점선 칩). 누르면 그 끼니는 「안 먹음」으로 적히고 한 줄로 접힌다.
   function mealBlock(k, label, withNone) {
     var lab = label + (k === 'snack' ? ' <small>선택</small>' : '') + pendTag();
+    var skip = skipOn(k, rec[k]);
     if (isSet(rec[k]) && !openMeals[k]) {
-      return '<div class="hitem hmeal fold" data-k="' + k + '">' +
+      return '<div class="hitem hmeal fold' + (skip ? ' skip' : '') + '" data-k="' + k + '">' +
         '<button type="button" class="hmeal-sum" aria-expanded="false" aria-label="' + label + ' 고치기">' +
         '<span class="hlab">' + lab + '</span><span class="hmeal-val">' + esc(rec[k]) + '</span>' + chk(k) +
         '<svg class="hmeal-chev"><use href="#i-chev-r"/></svg></button></div>';
     }
-    var sel = mealTokens(rec[k]);
+    var sel = skip ? [] : mealTokens(rec[k]);      // 「안 먹음」은 음식 낱말이 아니다(직접 입력 칸에도 내놓지 않는다)
     var selSet = {}; sel.forEach(function (t) { selSet[t] = 1; });
     var presets = presetFoods();
     if (withNone) presets = ['없음'].concat(presets.filter(function (f) { return f !== '없음'; }));
     var chips = presets.map(function (f) {
       return '<button type="button" class="chip hchip' + (selSet[f] ? ' on' : '') + '" data-food="' + esc(f) + '">' + esc(f) + '</button>';
     }).join('');
+    if (SKIP_MEALS[k]) {
+      chips = '<button type="button" class="chip hchip hskip' + (skip ? ' on' : '') + '" data-food="' + esc(SKIP) + '" aria-pressed="' + (skip ? 'true' : 'false') +
+        '" aria-label="' + label + ' ' + esc(SKIP) + '">' + esc(SKIP) + '</button>' + chips;
+    }
     // 직접입력: 프리셋에 없는 선택 토큰만 표시
     var presetSet = {}; presets.forEach(function (f) { presetSet[f] = 1; });
     var custom = sel.filter(function (t) { return !presetSet[t]; }).join(', ');
@@ -768,6 +787,9 @@
             var nb = newBlock(h);
             Array.prototype.forEach.call(nb ? nb.querySelectorAll('.hchip') : [], function (c) { if (c.getAttribute('data-food') === food) c.click(); });
           })) return;
+          if (chip.classList.contains('hskip')) { toggleSkip(k, T()); return; }     // v9.5.1 「안 먹음」: 켜면 그 끼니를 「안 먹음」으로 적고 접는다 · 다시 누르면 푼다
+          var skipChip = block.querySelector('.hskip');                             // 음식을 고르면 「안 먹음」은 풀린다
+          if (skipChip) { skipChip.classList.remove('on'); skipChip.setAttribute('aria-pressed', 'false'); }
           if (k === 'snack' && food === '없음') {
             // '없음'은 배타 선택
             var turningOn = !chip.classList.contains('on');
@@ -789,7 +811,7 @@
             var nb = newBlock(h), ni = nb && nb.querySelector('.hcustomin');
             if (ni && ci.value !== ci.defaultValue) { ni.value = ci.value; fire(ni, 'change'); }   // 이 화면에서 새로 친 글만 옮긴다
           })) return;
-          if (learn) mealTokens(ci.value).forEach(function (x) { foodBump(x); });
+          if (learn) mealTokens(ci.value).forEach(function (x) { if (!isSkip(x)) foodBump(x); });
           recombineMeal(block, k, T());
         };
         ci.addEventListener('change', function () { commitCustom(true); });
@@ -812,14 +834,36 @@
     });
   }
   function recombineMeal(block, k, t) {
-    var chips = block.querySelectorAll('.hchip.on');
+    var chips = block.querySelectorAll('.hchip.on:not(.hskip)');
     var sel = [];
     Array.prototype.forEach.call(chips, function (c) { sel.push(c.getAttribute('data-food')); });
     var ci = block.querySelector('.hcustomin');
     if (ci) mealTokens(ci.value).forEach(function (x) { if (sel.indexOf(x) < 0) sel.push(x); });
+    // v9.5.1: 「안 먹음」이 켜진 끼니 — 음식을 고르거나 적었으면 「안 먹음」을 풀고, 아무것도 없으면 「안 먹음」을 그대로 둔다(빈 입력 칸에서 손을 뗀 것만으로 지워지지 않게).
+    var sk = block.querySelector('.hskip');
+    if (sk && sk.classList.contains('on')) {
+      if (sel.length) { sk.classList.remove('on'); sk.setAttribute('aria-pressed', 'false'); }
+      else sel = [(t && skipOn(k, t[k])) ? t[k] : SKIP];
+    }
     if (t === rec) openMeals[k] = 1;                // 고르는 중인 끼니는 다시 그려도 접지 않는다
     var ch = setField(t, k, sel.join(', ') || null);
     if (t === rec) refreshChk(k);
+    if (ch) scheduleSave(t);
+  }
+  // v9.5.1(O-0386) 「안 먹음」 켜고 끄기. 켜면: 그 끼니 칸 = 「안 먹음」(적혀 있던 식단은 「안 먹음」으로 바뀐다) → 적은 칸으로 세고 한 줄로 접는다.
+  //   끄면: 누르기 전 모습으로 돌아간다 — 비어 있던 끼니는 빈 칸, 식단이 적혀 있던 끼니는 그 식단(같은 화면에서 잘못 눌렀을 때 한 번 더 누르면 되돌아오게).
+  //         칩이 펼쳐진 채 남아 바로 식단을 고를 수 있다. 9칸이 이 누름으로 막 찼으면 평소처럼 케이가 한마디 한다.
+  function toggleSkip(k, t) {
+    var on = !skipOn(k, t[k]), pk = t.log_date + '|' + k, nv = null;
+    var before = (t === rec) ? recordedCount() : -1;
+    if (on) { if (isSet(t[k])) skipPrev[pk] = t[k]; else delete skipPrev[pk]; nv = SKIP; }
+    else { nv = isSet(skipPrev[pk]) ? skipPrev[pk] : null; delete skipPrev[pk]; }
+    var ch = setField(t, k, nv);
+    if (t === rec) {
+      if (on) delete openMeals[k]; else openMeals[k] = 1;
+      renderToday();
+      lastCount = before; paintSay(true);
+    }
     if (ch) scheduleSave(t);
   }
 
@@ -897,7 +941,12 @@
     if (r.med_morning === true) med.push('아침'); if (r.med_evening === true) med.push('저녁');
     if (med.length) bits.push('<span class="hb ok">약 ' + med.join('·') + '</span>');
     if (r.supplement === true) bits.push('<span class="hb ok">영양제</span>');
-    var meals = [r.breakfast, r.lunch, r.dinner, r.snack].filter(function (m) { return isSet(m); });
+    // v9.5.1: 「안 먹음」 끼니는 어느 끼니인지 붙여 적는다(「아침 안 먹음」) — 음식 이름 사이에서 뜻이 헷갈리지 않게
+    var meals = [];
+    ['breakfast', 'lunch', 'dinner', 'snack'].forEach(function (mk) {
+      var m = r[mk]; if (!isSet(m)) return;
+      meals.push(skipOn(mk, m) ? SHORT[mk] + ' ' + String(m).replace(/^\s+|\s+$/g, '') : m);
+    });
     var mealLine = meals.length ? '<div class="hday-meal">' + esc(meals.join(' / ')) + '</div>' : '';
     return '<button type="button" class="card hday" data-date="' + esc(r.log_date) + '" aria-label="' + esc(fmtDayShort(r.log_date)) + ' 기록 ' + (isToday ? '열기' : '고치기') + '">' +
       '<div class="hday-top"><b>' + esc(fmtDayLabel(r.log_date)) + '</b>' +
@@ -1033,7 +1082,7 @@
     flushSaveTimer();
     var ds = todayStr();
     rec = loadLocal(ds, true) || blankRecord(ds);
-    mode = 'today'; openMeals = {};
+    mode = 'today'; openMeals = {}; skipPrev = {};
     switchTab('today');
     renderToday();
     refreshFromServer();
@@ -1049,7 +1098,7 @@
     var r = loadLocal(ds, false) || blankRecord(ds);
     var row = findRow(ds);
     if (row) applyServer(r, row);                   // 방금 본 목록의 값으로 먼저 그리고
-    rec = r; mode = 'past'; openMeals = {};
+    rec = r; mode = 'past'; openMeals = {}; skipPrev = {};
     switchTab('past');
     renderToday();
     try { global.scrollTo(0, 0); } catch (e) {}
