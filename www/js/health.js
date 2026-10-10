@@ -468,14 +468,15 @@
   function cheer(ds) {
     var done = ''; try { done = localStorage.getItem(CHEER_KEY) || ''; } catch (e) {}
     if (done === ds) return;                                   // 오늘 이미 한 번 했다
-    try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}
-    var view = $('healthView'); if (!view || !global.KScene) return;
+    var view = $('healthView'); if (!view || !global.KScene) return;   // 띄울 수 없으면 「했다」고 적지 않는다(다음 기회에 뜨게)
     var old = $('kscHCheer'); if (old && old.parentNode) old.parentNode.removeChild(old);
     var el = document.createElement('div');
     el.id = 'kscHCheer'; el.className = 'ksc hcheer'; el.setAttribute('role', 'status');
     el.innerHTML = '<div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div><span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>';
     view.appendChild(el);
-    global.KScene.set(el, 'idle', '오늘 기록 다 적으셨어요.');
+    try { global.KScene.set(el, 'idle', '오늘 기록 다 적으셨어요.'); }
+    catch (e) { if (el.parentNode) el.parentNode.removeChild(el); return; }
+    try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}  // 장면을 실제로 띄운 뒤에 적는다(하루 한 번)
     setTimeout(function () { el.classList.add('on'); }, 30);
     clearTimeout(cheerT);
     cheerT = setTimeout(function () {

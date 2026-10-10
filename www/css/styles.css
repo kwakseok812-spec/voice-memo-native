@@ -1602,6 +1602,11 @@ html[data-style="light"] #appVer{opacity:1;font-size:12.5px}
    ③ 채팅: 머리줄·말풍선 얼굴 48px · 프로필 카드 폭 가득 · 빈 대화의 큰 케이
    새 backdrop-filter 없음. 장면·말풍선은 누르는 곳이 아니다(새 버튼 없음).
    ============================================================================ */
+/* 「오늘 한눈에」 머리줄: 자리가 모자라면(글자 크게 · 좁은 화면 · 기본 글꼴) 날짜가 오른쪽 「HH:MM 기준」 위로 삐져나와 겹쳤다
+   → 제목과 오른쪽 묶음은 줄어들지 않게 두고, 날짜만 자리에 맞춰 말줄임(겹치지 않는다). 자리가 넉넉하면 예전과 똑같이 보인다. */
+.today .td-ttl b{flex:none}
+.today .td-ttl span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.today .td-meta{flex:none}
 /* ---------- ① 홈 ---------- */
 .kh-hero{position:relative;margin-top:8px;border-radius:26px;overflow:hidden;height:min(330px,86vw);border:1px solid var(--glass-b);box-shadow:var(--card-sh);background:#dfe3ea}
 .kh-hero .orbwrap{position:absolute;inset:0;margin:0;max-width:none;display:block}

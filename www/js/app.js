@@ -92,13 +92,18 @@
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function setStatus(t, k) { if (statusText) statusText.textContent = t; if (statusDot) statusDot.className = 'dot ' + (k || 'idle'); }
   function setExportMsg(m, k) { if (exportMsg) { exportMsg.textContent = m || ''; exportMsg.className = 'exportmsg ' + (k || ''); } }
-  /* v9.4 일하는 케이(보내는 중 화면): stage = 'send' 올리는 중 · 'got' PC 가 실제로 받은 뒤 · 'retry' 정리하다 문제가 생겨 다시 하는 중.
-   *   「잘 받았습니다」는 올리기가 끝난 뒤(got)에만 말한다. what = 'memo'(녹음 → 회의록) | 'media'(사진·영상). */
+  /* v9.4 일하는 케이(보내는 중 화면): stage = 'send' 올리는 중 · 'got' 서버에 저장된 뒤 · 'retry' 정리하다 문제가 생겨 다시 하는 중.
+   *   「잘 받았습니다」는 올리기가 끝나 서버에 저장된 뒤(got)에만 말한다. what = 'memo'(녹음 → 회의록) | 'media'(사진·영상 — 결과가 회의록에 올라가지 않는다).
+   *   what 은 그 메모의 종류로 정한다(procWhat) — 올릴 때뿐 아니라 5초마다 상태를 다시 볼 때 · 기록에서 다시 열 때도 같은 문구가 유지되게. */
   var PROC_SAY = {
     send:  { pose: 'idle',  memo: 'PC로 보내고 있습니다.', media: 'PC로 올리고 있습니다.' },
     got:   { pose: 'idle',  memo: '잘 받았습니다. 정리해서 회의록에 올려 두겠습니다. 다른 일 보셔도 됩니다.', media: '잘 받았습니다. 살펴보고 있습니다. 다른 일 보셔도 됩니다.' },
     retry: { pose: 'sorry', memo: '죄송합니다, 정리하다 문제가 있었습니다. 잠시 뒤 다시 해 보겠습니다.', media: '죄송합니다, 살펴보다 문제가 있었습니다. 잠시 뒤 다시 해 보겠습니다.' }
   };
+  function procWhat(id) {
+    var e = null; try { e = HistoryModule.get(id); } catch (x) {}
+    return (e && (e.kind === 'photo' || e.kind === 'video')) ? 'media' : 'memo';
+  }
   function setProcessing(t, stage, what) {
     if (processingText) processingText.textContent = t;
     var d = PROC_SAY[stage]; if (!d || !window.KScene) return;
@@ -160,26 +165,34 @@
   var homeFooter = $('homeFooter');
   // v9.4: 홈이 보일 때만 html.home-on — 폴드 펼침(넓은 화면)에서 홈만 2단으로 넓힌다(다른 화면 폭은 그대로).
   function syncHomeOn() { try { document.documentElement.classList.toggle('home-on', isOpen(homeView)); } catch (e) {} }
-  /* v9.4 홈 큰 카드의 인사 한 줄 — 앱을 켠 뒤 한 번 정한다(때에 맞는 인사: k-intro.js 의 GREETINGS 목록을 그대로 쓴다 · 시작 인사에 방금 나온 말은 뺀다).
-   *   아침(04~11시)에는 홈 카드의 얼굴만 8초 동안 밝게 웃는다(KChar.faceFlash — 채팅·머리줄 얼굴의 표정은 바꾸지 않는다). */
-  var homeGreetDone = false;
+  /* v9.4 홈 큰 카드의 인사 한 줄 — 때에 맞는 인사(k-intro.js 의 GREETINGS 목록을 그대로 쓴다).
+   *   앱을 켠 뒤 한 번 정하고(시작 인사에 방금 나온 말은 뺀다), 그 뒤로는 시간대(아침 04~11 · 낮 11~17 · 저녁 17~04)가 바뀐 채
+   *   홈이 다시 보일 때(다른 화면에서 돌아옴 · 앱으로 돌아옴)에만 그 시간대의 인사로 바꾼다. 같은 시간대 안에서는 바꾸지 않는다.
+   *   아침에는 홈 카드의 얼굴만 8초 동안 밝게 웃는다(KChar.faceFlash — 채팅·머리줄 얼굴의 표정은 바꾸지 않는다). */
+  var homeGreetBand = '';
+  function greetBandNow() { var hr = new Date(Date.now() + 9 * 3600000).getUTCHours(); return (hr >= 4 && hr < 11) ? 'morning' : (hr >= 11 && hr < 17) ? 'day' : 'evening'; }
   function paintHomeGreet() {
-    if (homeGreetDone) return;
     var h1 = $('homeGreet'); if (!h1 || !window.KIntro || !KIntro.pickGreeting) return;
-    homeGreetDone = true;
+    var band = greetBandNow();
+    if (band === homeGreetBand) return;                 // 같은 시간대 — 그대로 둔다
+    var first = !homeGreetBand;
+    homeGreetBand = band;
     try {
-      var last = null; try { last = localStorage.getItem('smart_k_intro_line'); } catch (e) {}
+      var last = null;
+      if (first) { try { last = localStorage.getItem('smart_k_intro_line'); } catch (e) {} }
+      else last = h1.getAttribute('data-kg') || null;   // 방금까지 보이던 인사는 빼고 고른다
       var g = KIntro.pickGreeting(null, last);
       if (g && g.text) { h1.setAttribute('data-kg', g.id || ''); h1.innerHTML = esc(g.text).replace('대표님', '<em>대표님</em>'); }
-      var hr = new Date(Date.now() + 9 * 3600000).getUTCHours(), band = (hr >= 4 && hr < 11) ? 'morning' : (hr >= 11 && hr < 17) ? 'day' : 'evening';
       h1.setAttribute('data-kband', band);
       var face = document.querySelector('#kHero .kface');
       if (band === 'morning' && face && window.KChar && KChar.faceFlash) KChar.ready.then(function () { KChar.faceFlash(face, 'cheer', 8000); });
     } catch (e) {}
   }
+  document.addEventListener('visibilitychange', function () { try { if (!document.hidden && isOpen(homeView)) paintHomeGreet(); } catch (e) {} });
   function showHome() {
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
+    try { paintHomeGreet(); } catch (e) {}                // v9.4: 시간대가 바뀌었으면 인사만 갱신
     if (homeFooter) homeFooter.style.display = '';       // 하단 안내문은 홈에서만
     updateRecIndicator();
     try { renderKBubble(); } catch (e) {}                 // (O-0117) 홈에 돌아오면 케이 말풍선 꼬리 위치·문구 다시 맞춤
@@ -214,7 +227,7 @@
   function recScene(sec) {
     if (!window.KScene) return;
     var min = Math.floor((sec || 0) / 60);
-    KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째예요.' : '받아 적고 있습니다. 편하게 말씀하세요.');
+    KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째입니다.' : '받아 적고 있습니다. 편하게 말씀하세요.');
   }
   function startRecTimer() {
     recStart = Date.now();
@@ -698,9 +711,9 @@
           else toast('✅ 정리 완료 — 「회의록」에서 볼 수 있어요.');  // 홈 등에 있으면 방해 없이 알림만
           return;
         } else if (res.status === 'processing') {
-          setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got');
+          setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got', procWhat(id));
         } else if (res.error) {
-          setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…', 'retry');
+          setProcessing('처리 중 문제가 있었어요. 잠시 후 다시 시도돼요…', 'retry', procWhat(id));
         }
         // 포그라운드 대기화면 안내(1회) — 폴링은 멈추지 않는다(done/자동복구를 계속 감지해야 하므로).
         if (!bannerShown && isOpen(processing) && Date.now() - started > 5 * 60 * 1000) {
@@ -866,9 +879,10 @@
   function cutText(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; }
   function meetingsScene() {
     if (!window.KScene) return;
-    var working = HistoryModule.list().filter(function (e) { return e.status === 'pending' || e.status === 'processing'; }).length;
+    var wl = HistoryModule.list().filter(function (e) { return e.status === 'pending' || e.status === 'processing'; });
+    var working = wl.length, allAudio = wl.every(function (e) { return e.kind !== 'photo' && e.kind !== 'video'; });
     var pose = '', text = '';
-    if (working) { pose = 'desk'; text = '녹음 ' + working + '건을 정리하고 있습니다. 끝나면 여기에 올려 두겠습니다.'; }
+    if (working) { pose = 'desk'; text = (allAudio ? '녹음 ' : '') + working + '건을 정리하고 있습니다. 끝나면 여기에 올려 두겠습니다.'; }
     else if (mtgState === 'loading') { pose = 'idle'; text = '회의록을 가져오고 있습니다.'; }
     else if (mtgState === 'nopass') { pose = 'guide'; text = '연동 암호를 넣어 주시면 정리된 회의록을 보여 드리겠습니다.'; }
     else if (mtgState === 'fail') { pose = 'sorry'; text = '죄송합니다, 회의록을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'; }
@@ -1115,7 +1129,7 @@
     } else if (e.status === 'processing') {
       openProcessingModal(e);      // v5.1: 정리중 — 상태 안내 + [계속 기다리기]/[삭제](굳었을 때 직접 지울 수 있게)
     } else {
-      openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got'); startPolling(id, e.token);
+      openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got', procWhat(id)); startPolling(id, e.token);
     }
   }
   /* ---------- 정리중(processing) 항목: 상태 안내 + 계속 기다리기 + 삭제 (v5.1) ----------
@@ -1137,7 +1151,7 @@
       '</div>';
     modalBody.innerHTML = html;
     $('mProcWait').addEventListener('click', function () {
-      closeModal(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got'); startPolling(e.id, e.token);
+      closeModal(); openScreen(processing); setProcessing('🖨️ PC에서 정리 중… 잠시만요', 'got', procWhat(e.id)); startPolling(e.id, e.token);
     });
     $('mProcDel').addEventListener('click', function () {
       if (videoPollers[e.id]) { clearInterval(videoPollers[e.id]); delete videoPollers[e.id]; }

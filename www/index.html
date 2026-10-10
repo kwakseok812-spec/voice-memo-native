@@ -224,7 +224,7 @@
 
     <!-- ===================== 녹음 중 ===================== -->
     <section id="recView" style="display:none;">
-      <!-- v9.4 일하는 케이: 타이머 옆에서 받아 적는 케이. 한마디는 app.js 의 녹음 타이머가 맞춘다(「받아 적고 있습니다. N분째예요.」) -->
+      <!-- v9.4 일하는 케이: 타이머 옆에서 받아 적는 케이. 한마디는 app.js 의 녹음 타이머가 맞춘다(「받아 적고 있습니다. N분째입니다.」) -->
       <div class="ksc rec" id="kscRec" data-pose="note" role="status">
         <div class="ksc-l"><div class="timer" id="recTimer">00:00</div><div class="ksp"><b>케이</b><p>받아 적고 있습니다. 편하게 말씀하세요.</p></div></div>
         <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
@@ -676,7 +676,7 @@
     <!-- ===================== 처리 중 ===================== -->
     <section id="processing" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>홈으로</button><span class="title">보내는 중</span><span class="spacer"></span></div>
-      <!-- v9.4 일하는 케이: 올리는 동안 「PC로 보내고 있습니다.」 → PC가 실제로 받은 뒤에만 「잘 받았습니다 …」(app.js setProcessing 의 stage). 예전 안내글 자리 -->
+      <!-- v9.4 일하는 케이: 올리는 동안 「PC로 보내고 있습니다.」 → 서버에 저장된 뒤에만 「잘 받았습니다 …」(사진·영상은 「살펴보고 있습니다」)(app.js setProcessing 의 stage). 예전 안내글 자리 -->
       <div class="ksc proc" id="kscProc" style="display:none" role="status">
         <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
         <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
