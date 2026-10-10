@@ -80,6 +80,29 @@ public class KBridgePlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * v9.6 음성 대화 전체 화면: 대화하는 동안 화면이 꺼지지 않게 한다(on=true 켜 두기 · false 해제).
+     *  웹의 navigator.wakeLock 이 WebView 에서 거절되는 기기에서도 확실히 되도록 창(Window)에 FLAG_KEEP_SCREEN_ON 을 건다.
+     *  권한이 필요 없고, 앱이 화면에 보일 때만 효력이 있다(앱을 내리면 평소처럼 꺼진다).
+     */
+    @PluginMethod
+    public void keepScreenOn(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        final android.app.Activity act = getActivity();
+        if (act != null) {
+            act.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (on) act.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        else act.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+        call.resolve();
+    }
+
     @PluginMethod
     public void updateWidget(PluginCall call) {
         // 숫자는 JS 쪽에서 문자열로 넘긴다(JSON 숫자는 크기에 따라 Integer/Long/Double 로 갈려 읽기가 불안정).

@@ -152,6 +152,8 @@
     // v9.5: 인사 영상의 자막 시점·길이(영상을 재서 넣은 값) · 자세 영상 자리(앞으로 — 있으면 재생, 없으면 그림)
     n.bowCue = (typeof o.bow_cue === 'number') ? o.bow_cue : null; n.bowLen = (typeof o.bow_len === 'number') ? o.bow_len : null;
     n.poseVideos = (o.pose_videos && typeof o.pose_videos === 'object') ? o.pose_videos : {};
+    // v9.6: 음성 대화 전체 화면용 세로 영상(720×1280 · 소리 없음) — call: { listen, think, talk:[…], poster }. 없으면 빈 것(→ k-call.js 가 대체 그림)
+    n.call = (o.call && typeof o.call === 'object') ? o.call : {};
     return n;
   }
   function setData(d) {
@@ -379,7 +381,7 @@
     if (!kind || kind === 'core') { add(f.expr); add(f.avatar); add(f.thumb); add(f.fullbody); add(f.expr_hd); }
     if (kind === 'thumb') add(f.thumb);
     if (!kind || kind === 'pose') add(f.poses);
-    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); }
+    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_listen); add(f.call_think); add(f.call_talk); add(f.call_poster); }
     if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); }
     return out;
   }
@@ -387,6 +389,14 @@
   function kaReady(names) { var S = window.KStore; return !!S && names.every(function (n) { return !!S.url(n); }); }
   function ks(n) { return n ? 'ks:' + n : ''; }
   function ksMap(m) { var o = {}; Object.keys(m || {}).forEach(function (k) { if (m[k]) o[k] = ks(m[k]); }); return o; }
+  function ksCall(f) {                    // 서버 묶음의 세로 영상 자리 → 옷의 call
+    var c = {};
+    if (f.call_listen) c.listen = ks(f.call_listen);
+    if (f.call_think) c.think = ks(f.call_think);
+    if (f.call_talk) c.talk = (Array.isArray(f.call_talk) ? f.call_talk : [f.call_talk]).filter(Boolean).map(ks);
+    if (f.call_poster) c.poster = ks(f.call_poster);
+    return c;
+  }
   function saveData() { try { return !!(navigator.connection && navigator.connection.saveData); } catch (e) { return false; } }
   // 앱 안 옷 + 서버 카탈로그 옷 + 서버 자산을 합쳐 지금의 옷 목록을 만든다
   function compose() {
@@ -401,6 +411,7 @@
       if (!Object.keys(n.poses || {}).length && f.poses) n.poses = ksMap(f.poses);
       if (!Object.keys(n.poseVideos || {}).length && f.pose_videos) n.poseVideos = ksMap(f.pose_videos);
       if (!Object.keys(n.exprHd || {}).length && f.expr_hd) n.exprHd = ksMap(f.expr_hd);
+      if (!Object.keys(n.call || {}).length) n.call = ksCall(f);
       n.srv = true;
       return n;
     });
@@ -415,7 +426,7 @@
       var n = { id: id, name: e.name || id, desc: e.desc || '', category: e.category || '새 옷', crop: e.crop || null, base: '', remote: true, srv: true, server: true,
         expr: ksMap(f.expr), avatar: ksMap(f.avatar), thumb: ks(f.thumb), fullbody: ks(f.fullbody), exprHd: ksMap(f.expr_hd),
         idle: ks(f.idle), talk: ks(f.talk), bow: ks(f.bow), bowPoster: ks(f.bow_poster), bowCue: e.bow_cue, bowLen: e.bow_len,
-        poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos) };
+        poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos), call: ksCall(f) };
       n.pending = !kaReady(kaNames(e, 'core'));
       outs.push(n);
     });
@@ -586,6 +597,15 @@
       if (!need.length) return again;
       return kaFetchAll(need).then(function () { kaRepaint(); return true; });
     });
+  }
+  // (v9.6) 지금 모습의 세로 영상 묶음: 실제로 틀 수 있는 것만 { listen, think, talk:[…], poster }. 다른 머리 조합이 보이는 중이면 없음(기본 머리 영상이라).
+  function callSet(o) {
+    if (isCur(o) && activeCombo()) return null;
+    o = o || outfit();
+    var c = o.call || {}, out = { talk: [] }, any = false;
+    ['listen', 'think', 'poster'].forEach(function (k) { var u = url(o, c[k]); if (u) { out[k] = u; any = true; } });
+    (Array.isArray(c.talk) ? c.talk : (c.talk ? [c.talk] : [])).forEach(function (f) { var u = url(o, f); if (u) { out.talk.push(u); any = true; } });
+    return any ? out : null;
   }
   // 인사 영상 상태: 'ready' 틀 수 있음 · 'pending' 목록에는 있는데 아직 못 받음 · 'none' 그 옷에는 인사 영상이 없음
   function bowState(o) {
@@ -895,7 +915,7 @@
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl,        // (O-0116)
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
     // v9.5 서버 자산
-    assetsReady: assetsReady, bowState: bowState,
+    assetsReady: assetsReady, bowState: bowState, callSet: callSet,
     assets: { state: function () { return ka.state; }, refresh: function () { return kaFetchManifest(true); }, ensureOutfit: ensureOutfit, ensureThumbs: ensureThumbs,
               wanting: function () { return ka.want; }, saveData: saveData },
     mount: function () { faces().forEach(paint); },

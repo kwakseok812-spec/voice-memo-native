@@ -1767,3 +1767,106 @@ html[data-style="light"] .ksc.hcheer.cut .kfig{filter:drop-shadow(0 10px 18px rg
 @media (prefers-reduced-motion:reduce){
   .ksc.ksc-in .kfig,.kempty.ksc-in .kfig,.ksc.ksc-in .ksp,.kempty.ksc-in .ksp,.kfig.kfig-swap,.kh-side .greet.kg-in h1,.kh-side .greet.kg-in p{animation:none}
 }
+
+/* ============================================================================
+   v9.6 음성 대화 전체 화면 (대표님: 「전체화면으로」 「상반신이 보이게」)
+   #chatView.convo-on.convo-full           = 음성 대화 중 기본 모습: 케이가 화면 전체(허리 위 상반신 — js/k-call.js), 아래에 자막·상태·기존 단추만
+   #chatView.convo-on.convo-full.convo-log = 자막을 눌러(또는 위로 쓸어 올려) 지난 대화를 펼친 모습 = 예전 음성 대화 화면 그대로(무대 40% + 대화 + 입력줄)
+   넓은 화면(폴드 펼침 700px 이상 · 폰을 눕힘): 왼쪽 케이 전체 높이 | 오른쪽 대화(예전 화면) 2단 — 이때는 자막 여닫이를 쓰지 않는다.
+   구역(390×844 기준): 위 0~8% 뒤로·상태 / 8~66% 케이(가리지 않음) / 66~100% 자막 · [다 말했어요] · 맨 아래 단추(어둡게 덮음)
+   새 단추·새 설정 없음. 음성 대화를 끄면 .convo-on 이 빠져 지금의 채팅 화면 그대로.
+   ============================================================================ */
+.kcall{display:none}
+.kcall-cap{display:none}
+#chatView.convo-full .kcall{display:block;position:absolute;inset:0;overflow:hidden;background:#CBCBD7}
+.kcall-still,.kcall-v{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+.kcall-v{object-fit:cover;object-position:50% 0;opacity:0;transition:opacity .28s linear}
+.kcall-v.on{opacity:1}
+.kcall-still{object-fit:cover;object-position:50% 0}
+.kcall-still.swap{animation:kfigSwap .28s ease backwards}
+/* 영상이 없어 정지 그림이 보이는 동안의 가벼운 움직임(세로 영상이 오면 영상이 대신한다): 말하는 중 = 가볍게 끄덕임 · 그 밖 = 느린 숨.
+   자리 잡기에 transform 을 쓰므로 움직임은 translate·scale 낱개 속성으로 준다(모르는 화면에서는 그냥 멈춰 보일 뿐 깨지지 않는다). 움직임 끔(.calm)이면 쉰다. */
+@keyframes kcallTalk{0%,100%{translate:0 0;scale:1}50%{translate:0 -.7%;scale:1.008}}
+@keyframes kcallBreath{0%,100%{scale:1}50%{scale:1.007}}
+.kcall:not(.vid):not(.calm) .kcall-still{transform-origin:50% 100%;animation:kcallBreath 4.8s ease-in-out infinite}
+.kcall:not(.vid):not(.calm)[data-state="talk"] .kcall-still{animation:kcallTalk 2.2s ease-in-out infinite}
+.kcall:not(.vid):not(.calm) .kcall-still.swap{animation:kfigSwap .28s ease backwards,kcallBreath 4.8s ease-in-out infinite}
+.kcall:not(.vid):not(.calm)[data-state="talk"] .kcall-still.swap{animation:kfigSwap .28s ease backwards,kcallTalk 2.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.kcall .kcall-still{animation:none !important}}
+/* ② 허리 위 자세 그림(배경 없는 그림): 무대 배경 위에 세운다 — 머리 꼭대기 11% · 손이 자막 위(약 60%)에 오게 */
+.kcall[data-kind="pose"] .kcall-still{inset:auto;left:50%;top:10.5%;width:auto;height:61%;transform:translateX(-50%);object-fit:contain;
+  -webkit-mask-image:linear-gradient(180deg,#000 86%,transparent 100%);mask-image:linear-gradient(180deg,#000 86%,transparent 100%)}   /* 허리에서 잘린 선이 보이지 않게 아래 끝을 흐린다 */
+.kcall[data-kind="pose"][data-pose="guide"] .kcall-still{left:56%}      /* 안내 손짓은 손이 왼쪽으로 뻗어 있어 몸을 조금 오른쪽에 둔다 */
+/* ③ 전신 사진의 위쪽 절반 */
+.kcall[data-kind="full"] .kcall-still{height:190%;object-position:50% 0;top:-2%}
+.kcall[data-kind="full"]{background:#D2C7C3}
+/* ④ 얼굴 사진(마지막 대체) */
+.kcall[data-kind="face"] .kcall-still{object-position:50% 12%}
+
+/* ---- 전체 화면(대화를 펼치지 않았을 때 · 좁은 화면) ---- */
+@media not all and (min-width:700px){ @media not all and (orientation:landscape) and (min-width:560px){
+  #chatView.convo-full:not(.convo-log) .kstage{position:fixed;left:0;right:0;top:0;bottom:0;z-index:15;margin:0;border:0;border-radius:0;box-shadow:none;background:#CBCBD7;display:block}
+  #chatView.convo-full:not(.convo-log) .kstage-photo{position:absolute;inset:0;height:auto;background:transparent}
+  #chatView.convo-full:not(.convo-log) .kstage-photo .kface{display:none}
+  #chatView.convo-full:not(.convo-log) .kstage::after{content:"";position:absolute;left:0;right:0;bottom:0;height:46%;pointer-events:none;
+    background:linear-gradient(180deg,rgba(6,9,22,0) 0,rgba(6,9,22,.55) 30%,rgba(6,9,22,.9) 62%,rgba(6,9,22,.96) 100%)}
+  #chatView.convo-full:not(.convo-log) .kstage::before{content:"";position:absolute;left:0;right:0;top:0;height:112px;pointer-events:none;z-index:1;
+    background:linear-gradient(180deg,rgba(6,9,22,.5),rgba(6,9,22,0))}
+  /* 상태(듣는 중 · 답하는 중 · 말하는 중): 맨 윗줄 오른쪽 알약([뒤로]와 같은 줄) — 늘 보인다. 케이 머리 위를 덮지 않게 가운데에 두지 않는다 */
+  #chatView.convo-full:not(.convo-log) .kstage-status{position:absolute;z-index:3;right:14px;top:calc(var(--sat) + 9px);min-height:44px;padding:6px 15px;border-radius:999px;gap:9px;
+    background:rgba(8,12,28,.78);border:1.5px solid rgba(255,255,255,.22);color:#fff;white-space:nowrap;max-width:calc(100% - 130px)}
+  #chatView.convo-full:not(.convo-log) .kstage-status .kst-tx b{color:#fff;font-size:15.5px}
+  #chatView.convo-full:not(.convo-log) .kstage-status .kst-tx small{display:none}
+  #chatView.convo-full:not(.convo-log) .kstage[data-state="listen"] .kstage-status{border-color:var(--cyan)}
+  #chatView.convo-full:not(.convo-log) .kstage[data-state="talk"] .kstage-status{border-color:#EC4899}
+  /* 자막 */
+  #chatView.convo-full:not(.convo-log) .kcall-cap{display:block;position:absolute;z-index:3;left:14px;right:14px;bottom:calc(132px + env(safe-area-inset-bottom));padding:8px 12px 6px;border-radius:18px;cursor:pointer;-webkit-tap-highlight-color:transparent}   /* 상태가 바뀌어도 자막 자리는 그대로(오르내리지 않게) */
+  .kc-k{color:#fff;font-size:18px;font-weight:700;line-height:1.45;word-break:keep-all;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+  .kc-me{margin-top:4px;color:#C9D3F2;font-size:14px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kc-me:empty,.kc-k:empty{display:none}
+  .kc-more{display:block;margin-top:5px;color:#C2CBE6;font-size:12.5px;font-weight:700;text-align:center}
+  .kc-more::before{content:"";display:block;width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.5);margin:0 auto 4px}
+  html[data-fs] .kc-k{font-size:calc(18px * var(--fsx))}
+  /* 듣는 동안의 [다 말했어요]·기다림 · 방금 받아쓴 글 */
+  #chatView.convo-full:not(.convo-log) .kstage-act{position:absolute;z-index:3;left:14px;right:14px;bottom:calc(76px + env(safe-area-inset-bottom));padding:0}
+  #chatView.convo-full:not(.convo-log) .kstage-live{display:none}
+  /* 「누르면 말을 끊을 수 있어요」 안내: 듣는 중의 [다 말했어요] 자리(자막과 아래 단추 사이)에 — 케이 얼굴·머리를 덮지 않는다 */
+  #chatView.convo-full:not(.convo-log) .kstage-tap{top:auto;bottom:calc(84px + env(safe-area-inset-bottom));z-index:3}
+  /* 맨 아래 기존 단추 두 개만 */
+  #chatView.convo-full:not(.convo-log) .voicerow{position:fixed;z-index:16;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));margin:0}
+  /* 글 입력·사진 첨부·오퍼스 지정은 대화를 펼치면(자막을 누르면) 예전 그대로 쓸 수 있다 — 전체 화면에는 음성 단추 두 개만 */
+  #chatView.convo-full:not(.convo-log) .chatlog,
+  #chatView.convo-full:not(.convo-log) .opusrow,
+  #chatView.convo-full:not(.convo-log) .chatbar,
+  #chatView.convo-full:not(.convo-log) .pendstrip{display:none !important}
+  /* 머리줄: [뒤로]만 남긴다(케이 이름·검색 등은 대화를 펼치면 다시 보인다) */
+  #chatView.convo-full:not(.convo-log) .subbar{z-index:17}
+  #chatView.convo-full:not(.convo-log) .subbar .back{background:rgba(8,12,28,.78);color:#fff;border-color:rgba(255,255,255,.22);box-shadow:none}   /* 밝은 화면에서도 케이 위에서는 상태 알약과 같은 어두운 알약으로 */
+  #chatView.convo-full:not(.convo-log) .subbar .khead,
+  #chatView.convo-full:not(.convo-log) .subbar .spacer.end{visibility:hidden}
+}}
+/* 대화를 펼친 상태: 예전 음성 대화 화면 + 맨 위에 「전체 화면으로」 줄(자막 여닫이) */
+#chatView.convo-full.convo-log .kcall{display:none}
+#chatView.convo-full.convo-log .kcall-cap{display:block;order:-1;padding:8px 12px;margin:0 0 6px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-b);cursor:pointer;text-align:center}
+#chatView.convo-full.convo-log .kcall-cap .kc-k,#chatView.convo-full.convo-log .kcall-cap .kc-me{display:none}
+#chatView.convo-full.convo-log .kc-more{display:block;color:var(--muted);font-size:13.5px;font-weight:800;margin:0}
+#chatView.convo-full.convo-log .kc-more::before{display:none}
+/* ---- 넓은 화면(폴드 펼침 · 폰을 눕힘): 왼쪽 케이 전체 높이 | 오른쪽 대화 ---- */
+@media (min-width:700px), (orientation:landscape) and (min-width:560px){
+  html.convo-mode .app{max-width:none}
+  #chatView.convo-full{padding-left:calc(46vw + 8px)}
+  #chatView.convo-full .kcall{position:fixed;left:0;top:0;bottom:0;right:auto;width:46vw;z-index:15}
+  #chatView.convo-full .kcall[data-kind="pose"] .kcall-still{top:7%;height:88%}
+  #chatView.convo-full .kcall[data-kind="pose"][data-pose="guide"] .kcall-still{left:50%}
+  /* 예전 무대의 얼굴 칸은 접고(왼쪽에 케이가 크게 있으므로), 「누르면 말을 끊을 수 있어요」 안내만 왼쪽 케이 아래로 옮긴다 */
+  #chatView.convo-full .kstage-photo{height:0;min-height:0;overflow:visible;background:transparent}
+  #chatView.convo-full .kstage-photo .kface{display:none}
+  #chatView.convo-full .kstage:active .kstage-photo{filter:none}
+  #chatView.convo-full .kstage-tap{position:fixed;left:23vw;bottom:calc(20px + env(safe-area-inset-bottom));z-index:16;max-width:calc(46vw - 24px)}
+  #chatView.convo-full .subbar .khead-tx small .kst-w{display:none}     /* 오른쪽 칸이 폰 폭이라 머리줄 글자가 꺾이지 않게(좁은 폰과 같은 규칙) */
+  #chatView.convo-full .kcall-cap{display:none !important}
+}
+/* 폴드 펼침처럼 세로로 긴 넓은 화면: 왼쪽 칸이 좁고 길어 안내 손짓 그림(가로로 넓음)이 다 들어가지 않는다 → 얼굴이 칸 가운데에 오게 맞춘다(뻗은 팔은 칸 밖으로) */
+@media (min-width:700px) and (max-aspect-ratio:1/1){
+  #chatView.convo-full .kcall[data-kind="pose"][data-pose="guide"] .kcall-still{transform:translateX(-65%)}
+}
