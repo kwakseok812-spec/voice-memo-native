@@ -2961,8 +2961,8 @@
     // (3) 남은 순수 텍스트(첨부가 하나도 없을 때) — 기존 경로(음성 답은 음성 대화 모드일 때만)
     if (!textUsed && text) sendPlainChat(text, opus);
   }
-  // v9.6: 실패 말풍선 끝에 붙이는 원인 한 줄(원인을 찾을 때 쓰는 원문 — 케이의 말과 섞지 않고 아래 줄에 따로)
-  function errTail(e) { var t = String((e && e.message) || e || '').replace(/\s+/g, ' ').trim(); return t ? '\n(원인: ' + t.slice(0, 120) + ')' : ''; }
+  // v9.6: 전송 실패의 오류 원문(영어일 때가 많다)은 화면에 붙이지 않는다 — 대표님께는 뜻 없는 글자다. 원인을 찾을 때 볼 수 있게 콘솔에만 남긴다.
+  function errLog(where, e) { try { console.warn('[전송 실패] ' + where + ': ' + String((e && e.message) || e || '').replace(/\s+/g, ' ').trim().slice(0, 300)); } catch (x) {} }
   // 순수 텍스트 1건을 케이 채팅으로 보낸다(sendChatMsg 의 (3)과 같은 경로 — O-0040 「추가 요청」도 이걸 재사용)
   function sendPlainChat(text, opus) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
@@ -2972,7 +2972,8 @@
       kickOrderPoll();                          // v5.8: 작업 카드가 곧 붙도록
       startChatReconcile();
       return true;
-    }).catch(function () {
+    }).catch(function (e) {
+      errLog('글', e);
       var m = findMsg(id); if (m) m.answered = true;
       chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); renderChat(); updateSendEnabled();
@@ -3009,7 +3010,8 @@
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       meMsg.answered = true; meMsg.uploading = false;
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.' + errTail(e), ts: Date.now() });
+      errLog('말·사진 한 턴', e);
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
@@ -5217,7 +5219,8 @@
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       msg.answered = true; msg.uploading = false;
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.' + errTail(e), ts: Date.now() });
+      errLog('파일', e);
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
