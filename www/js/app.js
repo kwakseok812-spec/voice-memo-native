@@ -5104,9 +5104,11 @@
     var it = t.closest('[data-outfit]');
     if (it) {
       var id = it.getAttribute('data-outfit');
+      var kmGhost = (window.KMotion && id !== KChar.outfit().id) ? KMotion.snap($('kwHero')) : null;   // v9.6(O-0387): 바꾸기 직전 모습을 한 장 떠 둔다(효과용 — 옷은 아래에서 즉시 바뀐다)
       var sr = KChar.setOutfit(id);
       if (sr === 'pending') { toast('옷을 받고 있습니다. 잠시만요.'); return; }        // v9.5: 서버 옷 — 사진을 다 받으면 바로 갈아입는다
-      if (sr) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast(KChar.outfit().name + josaRo(KChar.outfit().name) + ' 갈아입었습니다.'); }
+      if (sr) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast(KChar.outfit().name + josaRo(KChar.outfit().name) + ' 갈아입었습니다.');
+        if (window.KMotion) KMotion.outfitSwap($('kwHero'), kmGhost); }                                 // 옷은 이미 바뀌었고, 그 위에 반짝임만 얹는다(0.6초 안)
       return;
     }
     var tr = t.closest('[data-try]');
