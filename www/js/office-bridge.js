@@ -614,7 +614,7 @@
 
   /* ---------- 온디맨드 TTS 요청(답변별 [듣기]) ----------
    * 특정 답의 텍스트만 케이 목소리 mp3 로 만들어 달라는 요청. chat_responder 가 meta.tts_only 를 보면
-   * 케이(LLM)를 호출하지 않고 곧장 edge-tts 로만 생성 → summary_json.voice_url 회신(빠름·낭비 없음).
+   * 케이(LLM)를 호출하지 않고 곧장 목소리만 생성 → summary_json.voice_url 회신(빠름·낭비 없음). 목소리는 PC 가 정한다(v9.7: 고르신 케이 목소리, 안 되면 세라피나).
    * ⚠️ meta.thread 를 넣지 않는다 → 대화 기억(load_history)에 이 행이 섞이지 않게(맥락 오염 방지). */
   function requestTts(id, token, text) {
     return _insertRow({
@@ -623,13 +623,28 @@
       meta: { app: 'voice-memo-test', tts_only: true }
     });
   }
+  /* ---------- v9.7(O-0401) 케이 목소리 바꾸기 요청 ----------
+   * 꾸미기 「설정」에서 고른 목소리 열쇠(예: 'warm')를 PC 에 알린다. 새 요청 종류를 만들지 않고 [듣기] 요청(tts_only)에
+   * 칸 하나(meta.voice_set)를 얹는다 → 채팅 목록·읽음 기준·위젯·지시 대장에 섞이지 않고, PC 는 케이(LLM)를 부르지 않는다.
+   * PC(chat_responder + k_voice.py)는 연동 암호로 확인된 요청만, 미리 정한 목록에 있는 열쇠만 받아
+   * 결과를 이 행의 summary_json.voice_set = { ok, why, chosen, voice } 로 돌려준다(poll 로 읽는다).
+   * 옛 PC(이 칸을 모르는 응답기)는 평범한 [듣기] 요청으로 끝낸다 — 결과에 voice_set 이 없어 앱은 「바꾸지 못했습니다」로 안다.
+   * 연동 암호가 없으면 보내지 않는다(확인 표시 없는 요청은 PC 가 받지 않는다). */
+  function requestVoiceSet(id, token, key) {
+    if (!_syncPass()) { var ne = new Error('NO_PASS'); ne.badpass = true; ne.friendly = '연동 암호가 없어 바꾸지 못했습니다.'; return Promise.reject(ne); }
+    return _insertRow({
+      id: id, title: '목소리', status: 'pending', kind: 'chat',
+      note: '목소리 바꾸기', client_token: token,
+      meta: { app: 'voice-memo-test', tts_only: true, voice_set: String(key || '').slice(0, 24) }
+    });
+  }
 
   /* ---------- 음성/사진 대화 한 턴(통합) ----------
    * (선택) 음성 오디오 + (선택) 사진 여러 장 + 텍스트를 **한 chat 행**으로 보낸다.
    * chat_responder.py 가:
    *   - meta.voice 면 오디오를 whisper 로 전사해 질문으로 삼고(transcript 회신),
    *   - meta.files(사진)면 로컬로 내려받아 케이가 이미지를 직접 보고 답하며(기존 채팅 첨부 통로 재사용),
-   *   - meta.speak 면 답을 1번 목소리(ko-KR-SunHiNeural) mp3 로 만들어 summary_json.voice_url 에 첨부.
+   *   - meta.speak 면 답을 케이 목소리(음성 대화는 세라피나) mp3 로 만들어 summary_json.voice_url 에 첨부.
    * ▶ 규약(상향):
    *   - 음성: voice-audio 버킷 `{id}/voice.{ext}`, meta.audio={key,ext}, meta.voice=true.
    *   - 사진: voice-audio 버킷 `{id}/img_{i}.{ext}`, meta.files=[{key,ext,name,size,mime,kind:'image'}].
@@ -1604,7 +1619,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
-    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, poll: poll, flush: flush, pendingCount: pendingCount,
+    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, requestVoiceSet: requestVoiceSet, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendChatDocAsk: sendChatDocAsk,     // v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기]
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,

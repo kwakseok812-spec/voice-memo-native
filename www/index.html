@@ -473,7 +473,9 @@
       </div>
       <!-- 설정 탭: 목소리 → 움직임 → 음성 대화 효과음 → (폰만) 바탕화면 위젯 → 글자 크기 → 시작 인사 -->
       <div id="kwSetPane" role="tabpanel" style="display:none">
-      <div class="kw-sec"><b>목소리</b><small>무료 음성만 씁니다</small></div>
+      <!-- v9.7(O-0401): PC 가 목소리 목록을 내려 주면 「케이 목소리」 세 줄(고르기·미리 듣기) + 아래 「이 폰이 직접 읽기」(기기 음성이 있을 때만).
+           목록이 없으면(PC 스위치 꺼짐·옛 PC·연동 암호 없음) 머리말과 줄은 지금 그대로다 — 글자는 app.js renderKVoices 가 넣는다. -->
+      <div class="kw-sec"><b id="kwVoiceHd">목소리</b><small id="kwVoiceSub">무료 음성만 씁니다</small></div>
       <div id="kwVoices" class="kw-voices"></div>
       <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
       <label class="card toggle kw-motion"><span><b>케이 얼굴 움직이기</b><small>끄면 정지 사진만 보입니다(배터리 절약)</small></span><input type="checkbox" id="kwMotion" hidden><span class="switch"></span></label>

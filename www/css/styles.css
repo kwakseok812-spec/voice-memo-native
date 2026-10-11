@@ -1079,6 +1079,33 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 .kw-voice .tx small{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4}
 .kw-voice .try{flex:none;height:34px;padding:0 12px;border-radius:11px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--p1);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
 .kw-voices .kw-vnote{font-size:12.5px;color:var(--dim);line-height:1.5;padding:2px 4px}
+/* v9.7(O-0401) 케이 목소리 고르기 — PC 가 목록을 내려 줄 때만 쓰이는 모양(.kw-voices.kv). 목록이 없으면 위 규칙만 = 예전 화면 그대로 */
+.kw-voices.kv .kw-voice{min-height:64px}
+.kw-voices.kv .kw-voice .tx b,.kw-voices.kv .kw-voice .tx small{overflow-wrap:anywhere;word-break:keep-all}
+.kw-voices.kv .kw-vnote{word-break:keep-all;overflow-wrap:anywhere}
+.kw-voices.kv .kw-vnote span{display:block}
+.kw-voice.dim{opacity:.6}                                     /* 지금 못 쓰는 줄 · PC 가 꺼졌을 때의 모든 줄(고르신 줄이 못 쓰는 줄이면 흐리게 하지 않고 사유를 적는다 — app.js) */
+.kw-voice .tx small.warn{color:var(--warn-t)}
+.kw-voices .kw-vnote.warn{color:var(--warn-t)}
+.kw-voice .try.playing{background:var(--p1);border-color:var(--p1);color:#fff}
+.kw-voice.pend .rd{border-color:var(--p1);border-top-color:transparent;animation:kvSpin .8s linear infinite}   /* 바꾸는 중: 동그라미가 돈다(확정 전에는 점을 옮기지 않는다) */
+.kw-voice.pend .rd::after{display:none}
+.kw-voice.pend .tx small{color:var(--p1)}
+.kw-voice.just .rd::after{animation:kvPop .32s cubic-bezier(.3,1.6,.5,1)}                                      /* 확정된 순간: 점이 톡 들어온다(한 번) */
+.kw-voice.kv-row{transition:border-color .18s ease, opacity .18s ease}
+.kw-voice.kv-row.on{border-color:var(--p1)}
+.kw-voice.kv-row:active{transform:scale(.985)}
+@keyframes kvSpin{to{transform:rotate(360deg)}}
+@keyframes kvPop{from{transform:scale(0)}to{transform:scale(1)}}
+.kw-voices .kw-vsub{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:12px 2px 0}
+.kw-vsub b{font-size:14.5px;font-weight:800;color:var(--text);flex:none}
+.kw-vsub small{font-size:12px;color:var(--dim);text-align:right}
+/* 움직임 줄이기: 폰 설정(prefers-reduced-motion) 또는 앱의 「케이 얼굴 움직이기」 끔(.calm) → 돌지 않는 점선 동그라미로만 알린다 */
+.kw-voices.calm .kw-voice.pend .rd{animation:none;border-top-color:var(--p1);border-style:dashed}
+.kw-voices.calm .kw-voice.just .rd::after{animation:none}
+.kw-voices.calm .kw-voice.kv-row{transition:none}
+.kw-voices.calm .kw-voice.kv-row:active{transform:none}
+@media (prefers-reduced-motion:reduce){.kw-voice.pend .rd{animation:none;border-top-color:var(--p1);border-style:dashed}.kw-voice.just .rd::after{animation:none}.kw-voice.kv-row{transition:none}.kw-voice.kv-row:active{transform:none}}
 .kw-motion{margin-bottom:24px}
 #kwMotion:checked ~ .switch{background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
 #kwMotion:checked ~ .switch::after{left:25px}

@@ -100,7 +100,7 @@
   var BASE = 'assets/k/';
   var OUTFIT_KEY = 'smart_k_outfit';
   var MOTION_KEY = 'smart_k_motion';     // '0' = 움직임 끔(정지 사진만)
-  var VOICE_KEY = 'smart_k_voice';       // '' = 케이 기본 목소리(PC 생성 · 선희) / 그 외 = 기기 음성 이름
+  var VOICE_KEY = 'smart_k_voice';       // '' = 케이 목소리(PC 가 만든 소리) / 그 외 = 이 기기 음성 이름(글 채팅 [듣기]에서만 쓰인다)
   // wardrobe.json 을 못 읽어도(오프라인·오류) 앱이 깨지지 않게 최소 기본값
   var FALLBACK = { version: 1, default: 'burgundy_suit', outfits: [{ id: 'burgundy_suit', name: '버건디 정장',
     expr: { neutral: 'expr_neutral.jpg' }, avatar: { neutral: 'av_neutral.jpg' }, thumb: 'thumb.jpg', idle: 'idle.mp4', talk: 'talk.mp4' }] };
@@ -847,7 +847,7 @@
   }
 
   /* ---------------- 목소리(무료) ----------------
-   * 기본 = 「케이 기본 목소리」: PC(chat_responder)가 무료 edge-tts 한국어 여성 뉴럴(ko-KR-SunHiNeural)로 mp3 생성.
+   * 기본 = 「케이 목소리」: PC(chat_responder)가 mp3 생성 — 세라피나(무료 음성). v9.7(O-0401)부터 브리핑·[듣기]는 고르신 목소리(PC 가 목록을 내려 준다 — app.js renderKVoices).
    * 선택 = 이 기기에 깔린 한국어 음성(브라우저/OS 내장 · 무료). 한국어 여성 음성을 목록 맨 위에 올린다.
    *   ⚠️ 안드로이드 앱(WebView)은 기기 음성(speechSynthesis)을 지원하지 않는 경우가 많다 → 그때는 기본만 보인다. */
   var synth = null; try { synth = window.speechSynthesis || null; } catch (e) { synth = null; }
