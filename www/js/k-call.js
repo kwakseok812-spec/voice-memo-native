@@ -28,7 +28,8 @@
   var CUT = 120;                     // v9.6.1: 상태가 바뀌어 도는 영상의 중간에서 넘길 때(ms). ★ 0.28초로 되돌리려면 이 값을 FADE 와 같게(280) 두면 예전처럼 겹쳐 넘긴다
   var POSE = { listen: 'note', think: 'clip', talk: 'guide', idle: 'guide' };   // ② 상태별 허리 위 자세 그림
   var host = null, vids = [], cur = -1, state = 'idle', on = false, lastTalk = '', loopT = null, token = 0, shownKind = '';
-  var held = null, heldT = null;     // 짧게 넘기는 동안 밑에 깔아 둔(멈춘) 나가는 영상
+  var HOLD_MAX = 1000;               // 밑에 깔아 둔 영상을 치우는 안전망(ms) — 평소에는 새 영상이 다 올라온 때(transitionend)에 치운다
+  var held = null, heldT = null, heldOff = null;     // 짧게 넘기는 동안 밑에 깔아 둔(멈춘) 나가는 영상 · 안전망 타이머 · 걸어 둔 「다 올라옴」 듣기를 떼는 함수
   function $(id) { return document.getElementById(id); }
   function calm() { try { return !window.KChar || !KChar.motionOn() || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; } }
   function build() {
@@ -73,13 +74,15 @@
   // 밑에 깔아 둔 나가는 영상을 치운다(흐려지는 시간 없이 바로 — 이미 새 영상이 다 덮었다)
   function dropHeld() {
     if (heldT) { clearTimeout(heldT); heldT = null; }
+    if (heldOff) { try { heldOff(); } catch (e) {} heldOff = null; }
     if (!held) return;
     var h = held; held = null;
     h.style.transitionDuration = '0ms'; h.classList.remove('on');
     try { h.pause(); } catch (e) {}
   }
   // 영상 하나를 겹쳐 넘기며 튼다. 끝나기 0.28초 전에 다음 것(같은 상태의 반복 또는 다른 말하는 클립)을 미리 걸어 이음매를 가린다.
-  // quick = 상태가 바뀌어 넘기는 것(도는 영상의 중간에서) → 짧게. 반복·말하는 클립 사이는 예전처럼 0.28초.
+  // quick = 듣기 ↔ 말하기 상태가 바뀌어 넘기는 것(sync 가 부른 것만 — 도는 영상의 중간에서) → 짧게.
+  //         반복 · 말하는 클립 사이 · 새 자산으로 다시 걸기(refresh) · 화면 복귀는 예전처럼 0.28초.
   function playClip(url, my, quick) {
     dropHeld();                                            // 앞 전환에서 깔아 둔 것이 아직 있으면 먼저 치운다(그 요소를 지금 다시 쓴다)
     var next = (cur + 1) % vids.length, v = vids[next], old = cur >= 0 ? vids[cur] : null;
@@ -96,7 +99,13 @@
         old.style.zIndex = '1';
         if (cut) {                                         // 나가는 영상: 그 장면에 멈춰 불투명한 채로 두었다가, 새 영상이 다 올라오면 치운다
           try { old.pause(); } catch (e) {}
-          held = old; heldT = setTimeout(dropHeld, CUT + 40);
+          held = old;
+          // 새 영상이 「다 올라온 때」에 치운다(고정 시간에 치우면, 느린 기기에서 전환의 첫 화면이 밀렸을 때 새 영상이 덜 올라온 채로 밑그림이 비칠 수 있다).
+          // 그 신호가 오지 않는 경우(화면이 가려져 전환이 취소됨 등)에만 안전망 타이머가 치운다 — 그때도 새 영상이 위를 덮고 있어 보이는 것은 같다.
+          var onEnd = function (ev) { if (ev.target === v && ev.propertyName === 'opacity' && held === old) dropHeld(); };
+          v.addEventListener('transitionend', onEnd);
+          heldOff = function () { v.removeEventListener('transitionend', onEnd); };
+          heldT = setTimeout(dropHeld, HOLD_MAX);
         } else {
           old.style.transitionDuration = FADE + 'ms';
           old.classList.remove('on'); setTimeout(function () { if (my === token || !old.classList.contains('on')) { try { old.pause(); } catch (e) {} } }, FADE + 60);
@@ -117,7 +126,7 @@
     if (host) host.classList.remove('vid');
     cur = -1;
   }
-  function startState(st, isLoop) {
+  function startState(st, isLoop, quick) {
     if (!build()) return;
     var K = window.KChar, set = (K && K.callSet) ? K.callSet() : null;
     paintStill(st, set);                                   // 영상 밑에는 늘 정지 그림(영상을 못 틀면 그대로 보인다)
@@ -127,7 +136,7 @@
     host.classList.toggle('calm', calm());                 // 움직임 끔 · 절전 · 「움직임 줄이기」: 숨쉬기·끄덕임(styles.css kcallBreath·kcallTalk)도 쉰다
     if (!url) { stopVideos(); return; }
     // 같은 상태의 같은 영상을 다시 거는 것(반복)도 다른 요소로 겹쳐 넘긴다
-    playClip(url, my, !isLoop);
+    playClip(url, my, !!quick && !isLoop);
   }
   // app.js 가 부른다: 상태가 바뀔 때마다(듣는 중 listen · 답하는 중 think · 말하는 중 talk · 그 밖 idle)
   function sync(st) {
@@ -140,7 +149,7 @@
       var K = window.KChar, set = (K && K.callSet) ? K.callSet() : null;
       if (set && !set.think && set.listen && vids[cur].getAttribute('src') === set.listen && !calm()) { host.setAttribute('data-state', st); return; }
     }
-    startState(st, false);
+    startState(st, false, true);                           // 짧게 넘기는 것은 여기(상태가 바뀔 때)뿐
   }
   function start(st) {
     on = true; state = st || state || 'idle'; if (host) host._fail = 0; startState(state, false);
