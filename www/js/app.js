@@ -3527,7 +3527,7 @@
     }).catch(function () { resetListenBtn(btn, lbl); toast('음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주세요.'); });
   }
   function pollTts(id, tok, tries, m, lbl) {
-    if (tries > 40) { var b0 = chatLog.querySelector('[data-lid="' + m.lid + '"]'); resetListenBtn(b0, lbl); toast('음성 준비가 지연됩니다. 잠시 후 다시 눌러 주세요.'); return; }
+    if (tries > kvListenTries()) { var b0 = chatLog.querySelector('[data-lid="' + m.lid + '"]'); resetListenBtn(b0, lbl); toast('음성 준비가 지연됩니다. 잠시 후 다시 눌러 주세요.'); return; }
     OfficeBridge.poll(id, tok).then(function (res) {
       var b = chatLog.querySelector('[data-lid="' + m.lid + '"]');
       if (res && res.status === 'done') {
@@ -3819,6 +3819,7 @@
     OfficeBridge.getKStatus(pass).then(function (d) {
       kStatBusy = false;
       var prev = kStatState;
+      if (kvHold && d && d.voice && d.voice.chosen === kvHold.key) kvHold = null;   // v9.7: PC 상태가 방금 바꾼 값을 따라왔다 → 이제부터는 PC 값을 그대로 따른다
       kStatData = d; kStatState = kStatCalc(d);
       renderKStat();
       if (prev !== kStatState) homeSayRepaint();          // v9.6: 홈 카드 한 줄도 그 상태로
@@ -5126,7 +5127,7 @@
   }
   /* ==================== v9.7 (O-0401) 케이 목소리 고르기 ====================
    * PC(k_voice.py)가 상태 알림(get_k_status)의 voice 칸으로 목록을 내려 준다:
-   *   { v:1, chosen:'warm', list:[{k,name,desc,ok,why}], scope:'…', limit:'…', fb:N }
+   *   { v:1, chosen:'warm', list:[{k,name,desc,ok,why}], scope:'…', limit:'…', note:'…'(선택), fb:N, wait:초(선택 — [듣기]에도 켰을 때 기다릴 최대 초) }
    *   chosen = 대표님이 고르신 목소리(값은 PC 한 곳에만 있다 → 폰·PC판이 같은 값을 본다) · ok=false 면 지금은 못 쓰는 줄(why=사유)
    *   scope·limit = 어디서 나오는지·하루 횟수 안내(PC 가 실제 설정대로 적어 보낸다) · fb = 오늘 세라피나로 대신 읽은 횟수
    * voice 칸이 없으면(PC 스위치 꺼짐·옛 PC·연동 암호 없음·서버 함수 없음) 새 줄을 그리지 않는다 = 예전 화면 그대로.
@@ -5140,6 +5141,14 @@
   var kvPending = null;                               // { key, id, tok, t0, note, timer }
   var kvJust = '';                                    // 방금 확정된 줄(동그라미가 톡 들어오는 움직임 한 번)
   var kvPvAudio = null, kvPvKey = '';
+  /* 방금 바꾼 값 믿기: 확정(요청 행의 결과) 뒤 75초(PC 상태 주기 60초 + 여유) 동안은, 상태 알림이 아직 옛 값을 주더라도 결과로 받은 값을 보인다.
+   *   PC 는 요청 행을 「완료」로 바꾼 뒤에 상태를 따로 올리므로 그 사이에 읽으면 옛 값이 온다 → 「바꿨습니다」 직후 동그라미가 되돌아가 보이던 문제(1차 검토 중간 1).
+   *   상태가 새 값을 따라오면 곧바로 풀고(그 뒤의 진짜 변경은 그대로 따른다), 75초가 지나도 옛 값이면 PC 의 값을 따른다. */
+  var kvHold = null;                                  // { key, until }
+  var KV_HOLD_MS = 75000;
+  /* [듣기]를 기다리는 횟수: 예전 40번(약 40초) 그대로. PC 가 [듣기]에도 새 목소리를 쓰게 켜 두었을 때만 PC 가 알려 준 초(voice.wait)만큼 더 기다린다
+   *   — 새 목소리는 글 길이만큼 걸려서, 나중에 PC 에서 켜도 앱을 다시 깔지 않게 값만 받아 둔다(PC 가 안 주면 40번). */
+  function kvListenTries() { try { var c = kvCurrent(), w = c && c.blk.wait; return w ? Math.max(40, Math.round(w / 0.9)) : 40; } catch (e) { return 40; } }
   function kvText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   function kvBlockOf(d) {                             // 받은 값을 그대로 믿지 않는다: 모양을 확인하고 길이를 묶는다(이름 12 · 설명 30 · 사유 40 · 안내 60자)
     var v = d && d.voice;
@@ -5152,7 +5161,8 @@
     });
     if (!list.length) return null;
     var chosen = (typeof v.chosen === 'string' && seen[v.chosen]) ? v.chosen : list[0].k;
-    return { chosen: chosen, list: list, scope: kvText(v.scope, 60), limit: kvText(v.limit, 60), fb: Math.max(0, Math.min(999, parseInt(v.fb, 10) || 0)) };
+    return { chosen: chosen, list: list, scope: kvText(v.scope, 60), limit: kvText(v.limit, 60), note: kvText(v.note, 60),
+      fb: Math.max(0, Math.min(999, parseInt(v.fb, 10) || 0)), wait: Math.max(0, Math.min(180, parseInt(v.wait, 10) || 0)) };
   }
   function kvCacheGet() { try { return kvBlockOf({ voice: JSON.parse(localStorage.getItem(KV_CACHE_KEY) || 'null') }); } catch (e) { return null; } }
   function kvCacheSet(raw) { try { if (raw) localStorage.setItem(KV_CACHE_KEY, JSON.stringify(raw)); else localStorage.removeItem(KV_CACHE_KEY); } catch (e) {} }
@@ -5161,6 +5171,10 @@
     if (!getSyncPass() || kStatMissing) return null;
     if (kStatData) {
       var b = kvBlockOf(kStatData);
+      if (b && kvHold) {                              // 방금 바꾼 값 믿기(위 설명)
+        if (Date.now() >= kvHold.until || !kvRow(b, kvHold.key)) kvHold = null;   // 시간이 지났다(상태가 따라온 것은 refreshKStat 이 받은 값으로 가린다)
+        else if (b.chosen !== kvHold.key) { b.chosen = kvHold.key; kStatData.voice.chosen = kvHold.key; }
+      }
       kvCacheSet(b ? kStatData.voice : null);         // 칸이 사라졌으면(기능 꺼짐·옛 PC) 받아 둔 것도 지운다
       return b ? { blk: b, down: kStatState === 'down' } : null;
     }
@@ -5201,6 +5215,7 @@
         if (nb) kStatData.voice = res.voice;
         else if (kStatData.voice) kStatData.voice.chosen = p.key;
       } else if (nb) kvCacheSet(res.voice);
+      kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS };   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
       kvJust = p.key; setTimeout(function () { if (kvJust === p.key) kvJust = ''; }, 600);
       toast('「' + nm + '」' + josaRo(nm) + ' 바꿨습니다. 다음에 읽을 때부터 이 목소리입니다.', 2600);
     } else if (ok === false) {
@@ -5262,7 +5277,9 @@
           '</div>');
       });
       if (cur.down) out.push('<div class="kw-vnote warn">PC가 꺼져 있어 지금은 바꿀 수 없습니다. PC가 켜지면 바꿀 수 있습니다.</div>');
-      if (blk.scope || blk.limit) out.push('<div class="kw-vnote">' + (blk.scope ? '<span>' + esc(blk.scope) + '</span>' : '') + (blk.limit ? '<span>' + esc(blk.limit) + '</span>' : '') + '</div>');
+      if (blk.scope || blk.limit || blk.note) out.push('<div class="kw-vnote">' + (blk.scope ? '<span>' + esc(blk.scope) + '</span>' : '') + (blk.limit ? '<span>' + esc(blk.limit) + '</span>' : '') + (blk.note ? '<span>' + esc(blk.note) + '</span>' : '') + '</div>');
+      // 기기 음성을 켜 둔 기기에서는 위 안내가 반만 맞다: [듣기]를 누르면 브리핑까지 그 음성으로 바로 읽는다(onListenBtn 의 기존 동작) → 사실 한 줄
+      if (act) out.push('<div class="kw-vnote">' + (phone ? '「이 폰이 직접 읽기」를 켜 두셔서 이 폰의 [듣기]는 브리핑도 그 음성으로 읽습니다.' : '「이 기기가 직접 읽기」를 켜 두셔서 이 기기의 [듣기]는 브리핑도 그 음성으로 읽습니다.') + '</div>');
       if (blk.fb > 0) out.push('<div class="kw-vnote">오늘 세라피나로 대신 읽은 것 ' + blk.fb + '번</div>');
       if (vs.length) {                                 // 기기 음성이 있을 때만 보이는 따로 묶음(예전 저장값·동작 그대로)
         out.push('<div class="kw-vsub"><b>' + (phone ? '이 폰이 직접 읽기' : '이 기기가 직접 읽기') + '</b><small>글 채팅 [듣기]에서만 · 다시 누르면 꺼집니다</small></div>');
