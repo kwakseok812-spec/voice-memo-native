@@ -4180,10 +4180,10 @@
     }
     listenSet(lid, 'load', false);
     if (ttsJobs[lid]) return;                          // 앞서 청해 둔 소리가 아직 만들어지는 중 — 다시 청하지 않고 그것을 기다린다
-    var job = ttsJobs[lid] = { id: OfficeBridge.uuid(), tok: OfficeBridge.token() };
+    var job = ttsJobs[lid] = { id: OfficeBridge.uuid(), tok: OfficeBridge.token(), t0: Date.now(), told: false, away: false };
     OfficeBridge.requestTts(job.id, job.tok, m.text || '').then(function () {
       pollTts(job, m, 0);
-    }).catch(function () { ttsEnd(job, m, '음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주세요.'); });
+    }).catch(function () { ttsEnd(job, m, '음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주십시오.'); });
   }
   function ttsWaiting(m) { return !!(listenSt && listenSt.ph === 'load' && listenSt.lid === m.lid); }   // 화면에서 이 소리를 기다리는 중인가
   function ttsEnd(job, m, msg) {                       // 못 만든 채로 끝남 — 기다리던 중이면 단추를 되돌리고 알린다(그만둔 뒤면 조용히)
@@ -4191,10 +4191,21 @@
     if (!ttsWaiting(m)) return;
     listenClear(); toast(msg);
   }
+  /* 기다리는 방식(O-0468 이어서): 느린 목소리로 긴 글이면 몇 분이 걸린다.
+   *   · 0.7초마다 확인, 1분이 넘으면 2초마다. PC 가 알려 준 시간(kvListenWaitS)을 넘기면 그만둔다(안 알려 주면 예전처럼 40번).
+   *     그만두기 전에 한 번은 꼭 확인한다 — 앱이 뒤에 가 있던 동안 이미 다 만들어졌을 수 있다.
+   *   · 10초가 넘으면 한 번만 「만드는 중」 안내. 단추는 그동안 「준비 중…」(다시 누르면 그만둔다).
+   *   · 다 됐을 때 채팅 화면이 아니거나 앱이 뒤에 있었으면 틀지 않는다 → 단추 「다시 듣기」 + 안내(갑자기 소리가 나지 않게). */
+  var TTS_READY_NOTE = '목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.';
+  var ttsReadyHeld = false;                            // 앱이 뒤에 있을 때 준비가 끝남 → 돌아오면 한 번 알린다
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { for (var k in ttsJobs) ttsJobs[k].away = true; return; }
+    if (ttsReadyHeld) { ttsReadyHeld = false; toast(TTS_READY_NOTE, 3500); }
+  });
   function pollTts(job, m, tries) {
     if (ttsJobs[m.lid] !== job) return;
-    if (tries > kvListenTries()) { ttsEnd(job, m, '음성 준비가 지연됩니다. 잠시 후 다시 눌러 주세요.'); return; }
     OfficeBridge.poll(job.id, job.tok).then(function (res) {
+      if (ttsJobs[m.lid] !== job) return;
       if (res && res.status === 'done') {
         var url = res.summary_json && res.summary_json.voice_url;
         if (!url) { ttsEnd(job, m, '음성을 만들지 못했습니다.'); return; }
@@ -4203,12 +4214,21 @@
         m.vurl = url; saveChatMsgs();
         if (!waiting) { listenPaint(m.lid); return; }  // 기다림을 그만두셨다 — 받아만 두고 틀지 않는다(단추 글만 「다시 듣기」로)
         // v9.8: 준비를 청한 뒤에 회의 녹음이 시작됐다면 저절로 틀지 않는다(회의 자리에 소리가 난다)
-        if (REC_ROAM_V2 && isRecording && !m._recAsk) { listenClear(); toast('목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.', 3500); }
+        var away = job.away || document.hidden || !isOpen(chatView);
+        if ((REC_ROAM_V2 && isRecording && !m._recAsk) || away) {
+          listenClear();
+          if (document.hidden) ttsReadyHeld = true; else toast(TTS_READY_NOTE, 3500);
+        }
         else playKaiVoice(url, m.lid);
-      } else {
-        setTimeout(function () { pollTts(job, m, tries + 1); }, 700);
-      }
-    }).catch(function () { setTimeout(function () { pollTts(job, m, tries + 1); }, 900); });
+      } else ttsAgain(job, m, tries, 700);
+    }).catch(function () { ttsAgain(job, m, tries, 900); });
+  }
+  function ttsAgain(job, m, tries, gap) {
+    if (ttsJobs[m.lid] !== job) return;
+    var el = Date.now() - job.t0, w = kvListenWaitS();
+    if (w ? el > w * 1000 : tries >= 40) { ttsEnd(job, m, '음성 준비가 지연됩니다. 잠시 후 다시 눌러 주십시오.'); return; }
+    if (!job.told && el > 10000 && ttsWaiting(m) && isOpen(chatView) && !document.hidden) { job.told = true; toast('목소리를 만드는 중입니다. 다시 누르면 그만둡니다.', 3200); }
+    setTimeout(function () { pollTts(job, m, tries + 1); }, el > 60000 ? Math.max(gap, 2000) : gap);
   }
 
   /* ---- 카메라/갤러리: 케이에게 보여줄 사진 붙이기(전송 전 대기) ---- */
@@ -5862,9 +5882,10 @@
    *   상태가 새 값을 따라오면 곧바로 풀고(그 뒤의 진짜 변경은 그대로 따른다), 75초가 지나도 옛 값이면 PC 의 값을 따른다. */
   var kvHold = null;                                  // { key, until }
   var KV_HOLD_MS = 75000;
-  /* [듣기]를 기다리는 횟수: 예전 40번(약 40초) 그대로. PC 가 [듣기]에도 새 목소리를 쓰게 켜 두었을 때만 PC 가 알려 준 초(voice.wait)만큼 더 기다린다
-   *   — 새 목소리는 글 길이만큼 걸려서, 나중에 PC 에서 켜도 앱을 다시 깔지 않게 값만 받아 둔다(PC 가 안 주면 40번). */
-  function kvListenTries() { try { var c = kvCurrent(), w = c && c.blk.wait; return w ? Math.max(40, Math.round(w / 0.9)) : 40; } catch (e) { return 40; } }
+  /* [듣기]를 기다리는 시간: PC 가 알려 준 초(voice.wait)만큼 — 청한 때부터 잰다. 느린 목소리로 긴 글이면 몇 분이 걸려서 상한을 30분으로 둔다(예전 180초).
+   *   PC 가 안 주면 0 = 예전 그대로 40번(약 30초). 값만 받아 두므로 PC 에서 바꿔도 앱을 다시 깔지 않는다. */
+  var KV_WAIT_MAX_S = 1800;
+  function kvListenWaitS() { try { var c = kvCurrent(), w = c && c.blk.wait; return w ? Math.max(30, w) : 0; } catch (e) { return 0; } }
   function kvText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   /* 견본 주소: 이 앱의 서버 저장소 주소일 때만 받는다(다른 곳의 주소를 틀지 않는다). 받은 주소는 통째로 그대로 쓴다 — 서명 주소(?token=…&v=…)라 한 글자도 바꾸지 않는다. */
   function kvSampleUrl(u) {
@@ -5884,7 +5905,7 @@
     if (!list.length) return null;
     var chosen = (typeof v.chosen === 'string' && seen[v.chosen]) ? v.chosen : list[0].k;
     return { chosen: chosen, list: list, scope: kvText(v.scope, 60), limit: kvText(v.limit, 60), note: kvText(v.note, 60),
-      fb: Math.max(0, Math.min(999, parseInt(v.fb, 10) || 0)), wait: Math.max(0, Math.min(180, parseInt(v.wait, 10) || 0)) };
+      fb: Math.max(0, Math.min(999, parseInt(v.fb, 10) || 0)), wait: Math.max(0, Math.min(KV_WAIT_MAX_S, parseInt(v.wait, 10) || 0)) };
   }
   function kvCacheGet() { try { return kvBlockOf({ voice: JSON.parse(localStorage.getItem(KV_CACHE_KEY) || 'null') }); } catch (e) { return null; } }
   function kvCacheSet(raw) { try { if (raw) localStorage.setItem(KV_CACHE_KEY, JSON.stringify(raw)); else localStorage.removeItem(KV_CACHE_KEY); } catch (e) {} }
