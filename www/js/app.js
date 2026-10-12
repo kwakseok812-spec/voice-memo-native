@@ -599,7 +599,7 @@
   // 「진행 중」 목록의 항목을 눌렀다 — 임시저장 · 실패 항목과 같은 창에서 고른다. [목록에서 빼기]는 여기에만 둔다.
   function recFindItemOpen(gid) {
     var it = recFindGet(gid);
-    if (!it) { recFindScan(0, false, false); toast('이미 처리된 녹음입니다.'); return; }
+    if (!it) { recFindScan(0, false, false); toast('이미 처리했습니다.'); return; }
     var dur = recDurText(it.durMs), go = recFindCanGo(it), body;
     if (!it.readable) body = '이 녹음 파일은 열리지 않습니다.<br>지우지 않고 폰에 그대로 두었습니다.';
     else if (it.type === 'unsent') body = recWhen(it.startedAt) + '에 녹음한 <b>' + esc(dur) + '</b> 분량이 아직 폰에만 있습니다.';
@@ -628,8 +628,8 @@
   function recFindContinue(it) {
     if (!recFindApi() || !it) return;
     if (isRecording) { openScreen(recView); return; }
-    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
-    if (chatRecording || ideaRecording) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주십시오.', 3000); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('먼저 보내 주십시오.', 3000); return; }
+    if (chatRecording || ideaRecording) { toast('음성 입력 중입니다.', 3000); return; }
     recGroupNext = it.gid;
     pendingMaterials = []; renderMatList();
     if (btnStartRec) btnStartRec.click();
@@ -648,16 +648,16 @@
   // [여기까지 저장] · [열기] — 남아 있는 녹음을 「녹음 완료」 화면에 올린다(제목 · 회의자료 · 보내기 · 임시 저장은 평소와 같다).
   function recFindSave(it) {
     var api = recFindApi(); if (!api || !it) return;
-    if (isRecording) { toast('녹음을 마친 뒤 눌러 주십시오.', 3000); return; }
-    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
-    toast('녹음을 불러오고 있습니다…', 2500);
+    if (isRecording) { toast('녹음 중입니다.', 3000); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('먼저 보내 주십시오.', 3000); return; }
+    toast('녹음을 불러옵니다…', 2500);
     api.open(it.gid).then(function (r) {
       if (!r || !r.ok || !r.blob) {
         if (r && r.code === 'unreadable') {
           it.readable = false; recFindSync();
           openSheet('이 녹음은 열리지 않습니다', recWhen(it.startedAt) + '에 시작한 녹음 파일이\n열리지 않습니다.\n지우지 않고 폰에 그대로 두었습니다.', '확인', null, null, null,
             { positive: true, recmsg: true, cancelLabel: '닫기', main: 'confirm' });
-        } else toast('녹음을 열지 못했습니다.', 3000);
+        } else toast('열지 못했습니다.', 3000);
         return;
       }
       if (isRecording || (pendingBlob && !recPanelShared)) return;            // 불러오는 사이 다른 녹음이 시작됐다
@@ -670,7 +670,7 @@
       recPanelText(it.type === 'unsent' ? '보내지 않은 녹음' : '끊긴 녹음', '<svg><use href="#i-x"/></svg>닫기 (나중에)');
       var lines = [];
       if (it.type === 'unsent') lines.push('✅ 녹음됐습니다 · ' + fmtRec(recCur.durMs / 1000), '(' + recWhen(recCur.startedAt) + '에 녹음 · 아직 보내지 않음)');
-      else lines.push('끊기기 전 ' + fmtRecKo(recCur.durMs / 1000) + '가 남아 있었습니다', '(' + recWhen(recCur.endedAt) + '에 끊김)');
+      else lines.push('끊기기 전 ' + recDurText(recCur.durMs) + ' 분량이 남아 있었습니다', '(' + recWhen(recCur.endedAt) + '에 끊김)');
       var gl = recGapLine(recCur.gaps); if (gl) lines.push(gl);
       if (recCur.skipped) lines.push('열리지 않는 부분 ' + recCur.skipped + '개는 뺐습니다');
       if (recDoneBadge) recDoneBadge.textContent = lines.join('\n');
@@ -679,7 +679,7 @@
       recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid && x.gid !== recCur.gid; });
       recFindSync();
       recFindDiag(recCur.gid);
-    }).catch(function () { toast('녹음을 열지 못했습니다.', 3000); });
+    }).catch(function () { toast('열지 못했습니다.', 3000); });
   }
   function recFindDiag(sid) {
     var api = recFindApi(); if (!api) return;
