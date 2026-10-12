@@ -5637,7 +5637,9 @@
     if (kwFrom === 'chat') { openChat(); return; }
     var kmFrom = null, changed = false;               // v9.9(O-0451): 홈으로 돌아간다 — 큰 사진이 홈 카드 자리로 내려앉고, 옷이 바뀌었으면 홈 카드가 한 번 반짝인다
     try { if (window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab($('kwHero')); } catch (e) {}
-    if (REC_ROAM_V2 && isRecording) kmFrom = null;    // v9.10: 녹음 띠가 떠 있는 동안에는 내려앉는 사진을 띄우지 않는다(띠를 스쳐 지나갔다) — 옅게 나타나기만
+    // v9.10: 녹음 띠가 떠 있고 큰 사진이 띠 뒤로 올라가 있을 때(「설정」 탭처럼 화면을 내린 상태)는 내려앉는 사진을 띄우지 않는다 — 띠를 스쳐 지나갔다.
+    //   그때는 옅게 나타나기만 한다. 큰 사진이 띠 아래에 다 보이는 때(「옷」 탭)는 v9.9 의 움직임 그대로.
+    try { if (REC_ROAM_V2 && isRecording && kmFrom && recIndicator && recIndicator.style.display !== 'none' && kmFrom.t < recIndicator.getBoundingClientRect().bottom) kmFrom = null; } catch (e) {}
     try { changed = !!(window.KChar && kwOutfitAtOpen && KChar.outfit().id !== kwOutfitAtOpen); } catch (e) {}
     showHome(); setStatus('대기 중', 'idle');
     try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, $('kHero'), changed); } catch (e) {}
