@@ -129,26 +129,30 @@ public class NativeRecorderPlugin extends Plugin {
             ret.put("uri", path != null ? ("file://" + path) : null);
             ret.put("durationMs", durationMs);
             if (journal && path != null) {
-                final Context app = getContext().getApplicationContext();
-                final boolean drop = Boolean.TRUE.equals(call.getBoolean("drop", false));
-                long bytes = 0;
-                try { bytes = new java.io.File(path).length(); } catch (Throwable ignored) {}
-                try { RecNotice.clear(app); } catch (Throwable ignored) {}
-                RecJournal.stopped(app, startedAt, fileName, kind, group, durationMs, bytes, drop);   // 녹음기가 정지한 뒤 · 실패해도 삼킨다
-                ret.put("sid", RecJournal.sidOf(startedAt));
-                ret.put("gid", group.length() > 0 ? group : RecJournal.sidOf(startedAt));
-                ret.put("startedAt", startedAt);
-                if (group.length() > 0 && !drop) {
-                    // 이어 녹음이었다 → 앞부분과 한 파일로(시간이 걸릴 수 있어 다른 스레드에서). 실패하면 뒷부분만 — uri 는 위 그대로.
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            try { fillAssembled(ret, RecJournal.assemble(app, group, null)); } catch (Throwable ignored) {}
-                            call.resolve(ret);
-                        }
-                    }).start();
-                    return;
-                }
+                boolean later = false;          // 응답을 이어 담는 스레드가 맡았는가
+                try {                            // 일지 쪽의 어떤 예외도 정지 응답을 막지 않는다(아래 call.resolve 로 떨어진다)
+                    final Context app = getContext().getApplicationContext();
+                    final boolean drop = Boolean.TRUE.equals(call.getBoolean("drop", false));
+                    long bytes = 0;
+                    try { bytes = new java.io.File(path).length(); } catch (Throwable ignored) {}
+                    try { RecNotice.clear(app); } catch (Throwable ignored) {}
+                    RecJournal.stopped(app, startedAt, fileName, kind, group, durationMs, bytes, drop);   // 녹음기가 정지한 뒤 · 실패해도 삼킨다
+                    ret.put("sid", RecJournal.sidOf(startedAt));
+                    ret.put("gid", group.length() > 0 ? group : RecJournal.sidOf(startedAt));
+                    ret.put("startedAt", startedAt);
+                    if (group.length() > 0 && !drop) {
+                        // 이어 녹음이었다 → 앞부분과 한 파일로(시간이 걸릴 수 있어 다른 스레드에서). 실패하면 뒷부분만 — uri 는 위 그대로.
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try { fillAssembled(ret, RecJournal.assemble(app, group, null)); } catch (Throwable ignored) {}
+                                call.resolve(ret);
+                            }
+                        }).start();
+                        later = true;
+                    }
+                } catch (Throwable ignored) {}
+                if (later) return;
             }
         } else {
             ret.put("uri", (String) null);

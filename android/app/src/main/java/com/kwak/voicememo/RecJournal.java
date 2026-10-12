@@ -274,6 +274,28 @@ final class RecJournal {
             l.add(o);
         }
         for (String gid : liveGroups) g.remove(gid);      // 지금 이어 녹음하고 있는 묶음은 「끊긴 녹음」이 아니다
+        // 이어 담은 파일을 가진 부분이 「이 앞부분들을 담았다」(absorbed)고 적어 둔 것은 뺀다.
+        // (이어 담은 직후, 앞부분의 표시를 다 적기 전에 앱이 꺼진 경우 — 같은 소리가 두 번 잡히지 않게. 이어 담은 파일이 없으면 빼지 않는다.)
+        for (List<JSONObject> l : g.values()) {
+            Set<String> gone = null;
+            for (JSONObject o : l) {
+                JSONArray ab = o.optJSONArray("absorbed");
+                String j = o.optString("joined", "");
+                if (ab == null || ab.length() == 0 || j.length() == 0) continue;
+                File jf = new File(dir(c), j);
+                if (!(jf.exists() && jf.length() > 0)) continue;
+                if (gone == null) gone = new HashSet<String>();
+                for (int i = 0; i < ab.length(); i++) {
+                    String s = ab.optString(i, "");
+                    if (s.length() > 0) gone.add(s);
+                }
+            }
+            if (gone == null) continue;
+            List<JSONObject> keep = new ArrayList<JSONObject>();
+            for (JSONObject o : l) if (!gone.contains(o.optString("sid", ""))) keep.add(o);
+            l.clear();
+            l.addAll(keep);
+        }
         return g;
     }
 
@@ -432,30 +454,40 @@ final class RecJournal {
             JSONArray gaps = new JSONArray();
             synchronized (LOCK) {
                 if (joined || good.size() == 1) {
-                    for (int i = 0; i < good.size(); i++) {
-                        JSONObject o = good.get(i);
-                        File f = files.get(i);
-                        long end = endOf(o, f);
-                        if (i < lastIdx) {
-                            long nextStart = good.get(i + 1).optLong("startedAt", 0);
-                            if (nextStart > end) { JSONObject g = new JSONObject(); g.put("a", end); g.put("b", nextStart); gaps.put(g); }
-                            o.put("state", ST_JOINED);
-                            o.put("markedAt", now);
-                        } else {
-                            if (ST_REC.equals(o.optString("state", ""))) { o.put("stoppedAt", end); o.put("durMs", durs.get(i)); }
-                            o.put("state", ST_STOPPED);
-                            if (joined) {
-                                o.put("joined", outFile.getName());
-                                o.put("firstAt", good.get(0).optLong("firstAt", good.get(0).optLong("startedAt", 0)));
-                                o.put("gaps", gaps);          // 빠진 구간(다시 열 때도 같은 글을 보여 주게)
-                                o.put("nparts", used);
-                            } else if (o.optJSONArray("gaps") != null) {
-                                gaps = o.optJSONArray("gaps"); // 앞서 이어 담아 둔 녹음을 다시 여는 경우
-                                used = o.optInt("nparts", 1);
-                                joined = true;
-                            }
+                    // 어느 순간에 앱이 꺼져도 목록에서 사라지는 녹음이 없게, 적는 순서를 지킨다.
+                    //  ① 마지막 부분 한 건을 먼저 적는다(임시 파일 → 이름 바꾸기 한 번). 여기에 이어 담은 파일 이름과 「담은 앞부분」(absorbed)이 함께 들어간다.
+                    //  ② 그것이 적힌 뒤에만 앞부분을 joined 로 표시한다.
+                    //  ① 전에 꺼지면: 모든 부분이 그대로 남아 다음에 다시 이어 담는다. ①과 ② 사이에 꺼지면: openGroups 가 absorbed 를 보고 앞부분을 뺀다.
+                    JSONArray absorbed = new JSONArray();
+                    for (int i = 0; i < lastIdx; i++) {
+                        long endI = endOf(good.get(i), files.get(i));
+                        long nextStart = good.get(i + 1).optLong("startedAt", 0);
+                        if (nextStart > endI) { JSONObject g = new JSONObject(); g.put("a", endI); g.put("b", nextStart); gaps.put(g); }
+                        absorbed.put(good.get(i).optString("sid", ""));
+                    }
+                    JSONObject o = good.get(lastIdx);
+                    long end = endOf(o, files.get(lastIdx));
+                    if (ST_REC.equals(o.optString("state", ""))) { o.put("stoppedAt", end); o.put("durMs", durs.get(lastIdx)); }
+                    o.put("state", ST_STOPPED);
+                    if (joined) {
+                        o.put("joined", outFile.getName());
+                        o.put("firstAt", good.get(0).optLong("firstAt", good.get(0).optLong("startedAt", 0)));
+                        o.put("gaps", gaps);          // 빠진 구간(다시 열 때도 같은 글을 보여 주게)
+                        o.put("nparts", used);
+                        o.put("absorbed", absorbed);
+                    } else if (o.optJSONArray("gaps") != null) {
+                        gaps = o.optJSONArray("gaps"); // 앞서 이어 담아 둔 녹음을 다시 여는 경우
+                        used = o.optInt("nparts", 1);
+                        joined = true;
+                    }
+                    boolean lastOk = write(c, o);                         // ①
+                    if (lastOk) {
+                        for (int i = 0; i < lastIdx; i++) {               // ②
+                            JSONObject p = good.get(i);
+                            p.put("state", ST_JOINED);
+                            p.put("markedAt", now);
+                            write(c, p);
                         }
-                        write(c, o);
                     }
                 } else {
                     JSONObject o = good.get(lastIdx);
