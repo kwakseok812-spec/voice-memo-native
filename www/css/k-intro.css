@@ -47,7 +47,7 @@ html.kintro-on,html.kintro-on body{overflow:hidden}
   background:linear-gradient(180deg,#cabdb6,#f1eaea);-webkit-tap-highlight-color:transparent}
 .kw-fb img,.kw-fb video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .kw-fb video{opacity:0;transition:opacity .15s linear}
-.kw-fb.bowing video{opacity:1}
+.kw-fb.bowing video,.kw-fb.held video{opacity:1}   /* (O-0464) held = 인사가 끝난 뒤 끝 장면에 머묾 */
 .kw-fb-tag{position:absolute;left:8px;top:8px;padding:3px 8px;border-radius:999px;background:rgba(5,8,20,.55);color:#fff;
   font-size:11.5px;font-weight:700;line-height:1.3}
 .kw-fb-tag small{font-weight:600;opacity:.8;margin-left:3px}

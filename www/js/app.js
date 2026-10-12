@@ -5769,10 +5769,35 @@
     if ($('kwMotionWhy')) $('kwMotionWhy').textContent = (KChar.motionPref() && KChar.motionBlockReason()) ? ('지금은 정지 사진: ' + KChar.motionBlockReason()) : '';
   }
   // (O-0116) 꾸미기 상단: 상반신 옆에 전신. 전신 사진이 없는 옷은 예전처럼 상반신 한 장.
+  /* (O-0464) 전신을 눌러 인사를 볼 때 머리가 바뀌어 보이던 것 — 서 있는 그림(전신 사진)과 인사 영상의 머리가 달라,
+   *   누르는 순간(사진 → 영상)과 끝나는 순간(영상 → 사진)에 0.15초 겹쳐 넘어가며 머리가 바뀌었다.
+   *   시작 인사(k-intro.js)는 그 영상의 첫 장면 그림(bow_poster)을 깔아 두고 틀어서 티가 없다 → 전신 칸도 같은 짝을 쓴다.
+   *   KW_FB_STILL  'poster' = 인사 영상을 틀 수 있는 옷은 그 영상의 첫 장면을 서 있는 그림으로 · 'photo' = v9.9 그대로(전신 사진)
+   *   KW_BOW_END   'hold'   = 인사가 끝나면 끝 장면에 머문다(다시 누르면 처음부터) · 'back' = v9.9 그대로(끝나면 서 있는 그림으로)
+   *   둘 다 예전 값이면 v9.9 와 똑같이 움직인다. 인사 영상이 없는 옷 · 움직임을 끈 기기 · 다른 머리 조합은 전신 사진 그대로다. */
+  var KW_FB_STILL = 'poster', KW_BOW_END = 'hold';
+  var kwFullKey = null;
+  function kwFullStill() {                                 // 전신 칸에 깔 그림: 다음에 틀 인사 영상의 첫 장면(없으면 전신 사진)
+    var u = KChar.fullbodyUrl(), nx = null;
+    try { if (u && KW_FB_STILL === 'poster' && KChar.bowPeek && KChar.motionOn()) nx = KChar.bowPeek(); } catch (e) { nx = null; }
+    return (nx && nx.posterUrl) ? nx.posterUrl : u;
+  }
+  function kwBowPoster(video) {                            // 그 인사 영상의 첫 장면 그림(없으면 '')
+    var l = [], i; try { l = KChar.bowList ? KChar.bowList() : []; } catch (e) { l = []; }
+    for (i = 0; i < l.length; i++) if (l[i].video === video) return l[i].posterUrl || '';
+    return '';
+  }
+  function paintKFullStill(src) {
+    var img = $('kwFullImg'); if (!img || !window.KChar) return;
+    src = src || kwFullStill();
+    if (src && img.getAttribute('src') !== src) img.setAttribute('src', src);
+  }
   function stopKFullBow() {
     var fb = $('kwFull'), v = $('kwFullVid'); if (!fb || !v) return;
-    fb.classList.remove('bowing');
+    var was = fb.classList.contains('bowing') || fb.classList.contains('held');
+    fb.classList.remove('bowing'); fb.classList.remove('held');
     try { v.pause(); } catch (e) {}
+    if (was) paintKFullStill();                            // 인사가 여러 개인 옷: 다음에 틀 인사의 첫 장면으로(하나뿐이면 같은 그림)
   }
   // 「○○으로/로」: 받침이 없거나 ㄹ 받침이면 「로」, 그 밖의 받침이면 「으로」. 한글로 끝나지 않으면 「(으)로」.
   function josaRo(w) {
@@ -5784,15 +5809,18 @@
     var hero = $('kwHero'), img = $('kwFullImg'); if (!hero || !img || !window.KChar || !KChar.fullbodyUrl) return;
     var u = KChar.fullbodyUrl();
     hero.classList.toggle('has-fb', !!u);
-    stopKFullBow();
-    if (u && img.getAttribute('src') !== u) img.setAttribute('src', u);
-    var bow = KChar.bowUrl ? KChar.bowUrl() : '';
-    if ($('kwFullTip')) $('kwFullTip').style.display = (bow && KChar.motionOn()) ? '' : 'none';
+    var bow = KChar.bowUrl ? KChar.bowUrl() : '', canBow = !!(bow && KChar.motionOn());
+    // (O-0464) 같은 모습을 다시 그리는 것(파일 받기가 끝났다는 알림 등)이면 재생 중인 인사 · 머문 끝 장면을 건드리지 않는다. 옷 · 사진 · 인사 영상이 바뀌었을 때만 멈추고 새로 깐다.
+    var key = '';
+    try { key = [KChar.outfit().id, u, canBow ? KChar.bowList().map(function (b) { return b.video + '>' + (b.posterUrl || ''); }).join(',') : ''].join('|'); } catch (e) { key = ''; }
+    var asBefore = (KW_FB_STILL !== 'poster' && KW_BOW_END !== 'hold');
+    if (asBefore || !key || key !== kwFullKey) { kwFullKey = key; stopKFullBow(); paintKFullStill(); }
+    if ($('kwFullTip')) $('kwFullTip').style.display = canBow ? '' : 'none';
   }
   if ($('kwFull')) $('kwFull').addEventListener('click', function () {
     if (!window.KChar) return;
     var v = $('kwFullVid'), fb = this, bow = KChar.bowUrl ? KChar.bowUrl() : '';
-    if (bow && KChar.bowPick && KChar.motionOn() && v && !fb.classList.contains('bowing')) bow = KChar.bowPick() || bow;   // v9.6: 인사 영상이 여러 개인 옷은 누를 때마다 번갈아
+    if (bow && KChar.bowPick && KChar.motionOn() && v && !fb.classList.contains('bowing')) bow = KChar.bowPick() || bow;   // v9.6: 인사 영상이 여러 개인 옷은 누를 때마다 번갈아(끝 장면에 머문 뒤 다시 누를 때도)
     if (!bow) {                                            // v9.4: 인사 영상이 없는 옷 — 눌러도 아무 일 없던 것을 한 줄 안내로
       toast('인사 영상은 준비 중입니다');
       // v9.5: 서버 목록에는 있는데 아직 못 받은 영상이면 지금 받는다(데이터 절약 모드여도 — 직접 누르셨으므로). 받으면 「눌러 보세요」가 뜬다.
@@ -5801,10 +5829,18 @@
     }
     if (!KChar.motionOn() || !v) return;                  // 움직임 꺼짐 → 사진 그대로
     if (fb.classList.contains('bowing')) { stopKFullBow(); return; }
-    if (v.getAttribute('src') !== bow) { v.setAttribute('src', bow); try { v.load(); } catch (e) {} }
+    if (v.getAttribute('src') !== bow) {
+      // (O-0464) 다른 영상으로 바꿀 때: 영상 자리가 잠깐 비므로 그 영상의 첫 장면을 먼저 깔아 둔다(끝 장면에 머물던 것은 내린다)
+      fb.classList.remove('held');
+      if (KW_FB_STILL === 'poster') paintKFullStill(kwBowPoster(bow));
+      v.setAttribute('src', bow); try { v.load(); } catch (e) {}
+    }
     try { v.currentTime = 0; } catch (e) {}
-    v.onplaying = function () { fb.classList.add('bowing'); };
-    v.onended = function () { stopKFullBow(); };
+    v.onplaying = function () { fb.classList.remove('held'); fb.classList.add('bowing'); };
+    v.onended = function () {
+      if (KW_BOW_END === 'hold') { fb.classList.remove('bowing'); fb.classList.add('held'); }   // 끝 장면에 머문다(다시 누르면 처음부터)
+      else stopKFullBow();
+    };
     v.onerror = function () { stopKFullBow(); };
     try { var p = v.play(); if (p && p.catch) p.catch(function () { stopKFullBow(); }); } catch (e) { stopKFullBow(); }
   });

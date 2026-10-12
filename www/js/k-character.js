@@ -257,15 +257,20 @@
     if (isCur(o) && activeCombo()) return [];
     o = o || outfit();
     var all = (o.bow ? [{ video: o.bow, poster: o.bowPoster, cue: o.bowCue }] : []).concat(o.bowAlt || []), out = [];
-    all.forEach(function (b) { var u = url(o, b.video); if (u) out.push({ video: u, f: b.video, poster: b.poster, cue: b.cue }); });
+    all.forEach(function (b) { var u = url(o, b.video); if (u) out.push({ video: u, f: b.video, poster: b.poster, posterUrl: url(o, b.poster), cue: b.cue }); });   // (O-0464) posterUrl = 그 영상의 첫 장면 그림(화면에 걸 주소 · 아직 못 읽었으면 '')
     return out;
   }
   function bowUrl(o) { var l = bowList(o); return l.length ? l[0].video : ''; }     // 인사 영상이 있나(첫째 것) — 예전과 같은 뜻
   var bowTurn = {};
+  function bowNextI(o, l) { return (bowTurn[o.id] == null ? 0 : (bowTurn[o.id] + 1)) % l.length; }
   function bowPick(o) {                     // 누를 때마다 번갈아(하나뿐이면 늘 그것)
     o = o || outfit(); var l = bowList(o); if (!l.length) return '';
-    var i = (bowTurn[o.id] == null ? 0 : (bowTurn[o.id] + 1)) % l.length; bowTurn[o.id] = i;
+    var i = bowNextI(o, l); bowTurn[o.id] = i;
     return l[i].video;
+  }
+  function bowPeek(o) {                     // (O-0464) 다음에 bowPick 이 고를 것 — 차례는 넘기지 않는다. { video, posterUrl, … } 또는 null
+    o = o || outfit(); var l = bowList(o); if (!l.length) return null;
+    return l[bowNextI(o, l)];
   }
 
   /* ---- 머리 ---- */
@@ -943,7 +948,7 @@
     // 지금 「보이는」 모습 이름(조합 사진이 없어 기본머리로 보일 땐 옷 이름만)
     lookName: function () { return outfit().name + (activeCombo() ? ' · ' + hair().name : ''); },
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
-    fullbodyUrl: fullbodyUrl, bowUrl: bowUrl, bowPick: bowPick, bowList: bowList,        // (O-0116) · v9.6 인사 영상 여러 개
+    fullbodyUrl: fullbodyUrl, bowUrl: bowUrl, bowPick: bowPick, bowList: bowList, bowPeek: bowPeek,        // (O-0116) · v9.6 인사 영상 여러 개 · (O-0464) 다음 인사 미리 보기
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState, callSet: callSet,
