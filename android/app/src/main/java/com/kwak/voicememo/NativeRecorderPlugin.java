@@ -284,6 +284,7 @@ public class NativeRecorderPlugin extends Plugin {
     public void recDiag(final PluginCall call) {
         final Context app = getContext().getApplicationContext();
         final String sid = call.getString("sid", "");
+        final String live = liveFile();
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -295,6 +296,7 @@ public class NativeRecorderPlugin extends Plugin {
                     o.put("exits", RecJournal.exits(app));
                     o.put("j", RecJournal.counts(app));
                     o.put("old", RecJournal.legacyStats(app));
+                    o.put("lost", RecJournal.lost(app, live));      // 지금 폰에 남아 있는 끊긴 녹음 · 보내지 않은 녹음(읽히는지 · 길이 · 크기 — 제목 · 내용 없음)
                     if (sid != null && sid.length() > 0) {
                         JSONObject e = RecJournal.get(app, sid);
                         if (e != null) {
