@@ -1,7 +1,7 @@
 /* k-wardrobe-follow.js — (O-0471) 케이 꾸미기: 옷 목록을 아래로 내려도 「지금 모습」(상반신 + 전신)이 따라온다.
  *
  * 왜: 옷이 20벌로 늘어 목록이 길다. 입힐 때마다 맨 위로 올려 확인하지 않아도, 누른 자리에서 바뀐 모습이 보이게 한다.
- * 어떻게(대표님이 시안 세 가지 가운데 고르신 「가안」):
+ * 어떻게(시안 세 가지 가운데 확정한 「가안」):
  *   「옷」 탭에서 화면을 내리면 위 사진(#kwHero)이 줄어들며 [뒤로] 줄 밑에 붙는다. 맨 위로 올리면 원래 크기로 돌아온다.
  *   새 사진 칸을 만들지 않고 그 사진 그 자체를 붙인다 → 갈아입는 효과(KMotion.outfitSwap) · 전신 인사(O-0464)가 붙은 자리에서 그대로 돈다.
  *   넓은 화면(폭 700 이상 = 홈이 2단이 되는 폭과 같다)은 왼쪽에 사진을 붙여 두고 오른쪽에서 고른다(opt.wide — 따로 끌 수 있다).
@@ -16,6 +16,8 @@
  *     실제 높이를 한 번 재서(자리가 바뀔 때마다 한 번 — 스크롤마다 재지 않는다) 기대한 높이가 아니면 그 자리에서 스크립트 방식으로 넘어간다.
  *
  * app.js 가 부르는 곳은 init 한 번뿐이다 — 화면이 열리고 닫히는 것 · 탭 · 옷 바뀜 · 녹음 띠 · 글자 크기는 여기서 지켜본다(MutationObserver).
+ *   다만 지켜보는 것은 한 박자 늦다(그 일을 한 스크립트가 끝난 뒤에 알려 온다). 꾸미기를 여닫을 때의 「옮겨 가는 한 장」(KMotion.wardrobeOpen · wardrobeClose)은
+ *   그 전에 도착 자리를 재므로, 그 두 함수가 불릴 때만은 먼저 배치를 맞춰 놓는다(넓은 화면에서 한 장이 옛 한 단 자리로 내려앉았다가 옮겨 가지 않게).
  * 스위치(app.js): KW_FOLLOW 'off' 면 init 이 아무것도 만들지 않는다 = 이 파일이 없는 것과 같다.
  */
 (function () {
@@ -64,6 +66,13 @@
       try { before = window.KChar ? KChar.outfit().id : ''; } catch (e) {}
       setTimeout(function () { try { markWait(id, before); } catch (e) {} }, 0);
     });
+    // 여닫는 효과가 도착 자리를 재기 전에 배치를 먼저 맞춘다(위 설명). 효과 자체는 건드리지 않는다 — 부르기 직전에 sync 한 번만 끼운다
+    try {
+      ['wardrobeOpen', 'wardrobeClose'].forEach(function (k) {
+        var fn = window.KMotion && KMotion[k]; if (typeof fn !== 'function') return;
+        KMotion[k] = function () { try { sync(); } catch (e) {} return fn.apply(this, arguments); };
+      });
+    } catch (e) {}
     built = true;
     return true;
   }

@@ -117,11 +117,11 @@ html.kwf-docked .app::before{height:calc(var(--sat) + var(--rec-h, 0px) + 76px);
 /* 서버에서 받는 옷을 눌러 두었을 때: 다 받을 때까지 그 칸에 「받는 중」(입고 있는 옷 · 붙은 사진은 그대로다) */
 .kw-item.kwf-wait .kw-th{border-color:var(--p1);border-style:dashed}
 .kw-item.kwf-wait .kw-th::after{content:"받는 중";position:absolute;left:6px;top:6px;padding:2px 8px;border-radius:999px;background:rgba(5,8,20,.72);color:#fff;
-  font-size:calc(11px * var(--fsx, 1));font-weight:800;line-height:1.5}
+  font-size:11px;font-weight:800;line-height:1.5}                                 /* 「입는 중」 꼬리표와 같은 크기로 고정(글자 크기 설정을 따라 커지면 칸 속 얼굴을 가린다) */
 
 /* ── 넓은 화면(폴드 펼침): 왼쪽에 사진을 붙여 두고 오른쪽에서 고른다(「옷」 · 「설정」 탭 모두). 폭은 홈 2단과 같은 760 ── */
 html.kwf-wide .app{max-width:760px}
-html.kwf-wide #kWardrobeView{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);grid-template-rows:auto auto 1fr;column-gap:22px;align-items:start}
+html.kwf-wide #kWardrobeView{display:grid;grid-template-columns:minmax(0,1fr) minmax(346px,1.03fr);grid-template-rows:auto auto 1fr;column-gap:22px;align-items:start}   /* 오른쪽 = 폰(390)의 목록 폭 346 이상 → 옷 칸이 폰보다 작아지지 않는다(「입는 중」 꼬리표가 눈 윗선을 넘지 않게 — v9.6.1 기준) */
 html.kwf-wide #kWardrobeView > .subbar{grid-column:1 / -1}
 html.kwf-wide #kwHero{grid-column:1;grid-row:2 / span 2;position:sticky;top:calc(var(--sat) + var(--rec-h, 0px) + 62px);width:100%;max-width:none;margin:4px 0 0}
 html.kwf-wide #kWardrobeView .kw-seg{grid-column:2;grid-row:2;width:100%;max-width:none;margin:4px 0 0}
