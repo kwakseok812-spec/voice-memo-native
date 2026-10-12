@@ -32,11 +32,20 @@ import java.io.File;
  *  - 시스템이 서비스를 되살릴 때(프로세스가 죽은 뒤) 녹음을 새 파일로 몰래 다시 시작하지 않는다.
  *    되살아난 녹음은 앞부분이 없는 다른 녹음인데, 화면이 그것을 「계속되던 녹음」으로 잘못 알 수 있다.
  *  - 회의 녹음 알림: 지난 시간을 보여 주고, 누르면 녹음 화면으로 간다(k_rec).
+ *
+ * v9.10(O-0449) — 끊긴 녹음 찾기. 녹음기 설정과 시작 · 정지 코드는 한 줄도 바꾸지 않았다.
+ *  - 화면이 「찾기」를 켜고 시작한 회의 녹음이면, 녹음기가 시작된 뒤에 일지 한 건을 다른 스레드에서 적는다(RecJournal).
+ *    일지를 쓰지 못해도 녹음은 그대로 간다. 녹음하는 동안에는 새로 도는 것이 없다.
+ *  - 묶음(group): 끊긴 녹음에 이어 녹음하는 경우 — 앞 녹음과 같은 회의라는 표시만 일지에 남긴다. 녹음 방식은 평소와 같다.
+ *  - 녹음기가 오류를 알리면 「녹음이 끊겼습니다」 알림을 한 번 띄운다(RecNotice — 진동은 알림 통로의 것, 새 권한 없음).
+ *  - 스스로 다시 시작하지 않는다 · 시스템이 되살려도 녹음하지 않는다(v9.8 그대로).
  */
 public class RecordingService extends Service {
 
     public static final String ACTION_START = "com.kwak.voicememo.START";
     public static final String EXTRA_KIND = "kind";
+    public static final String EXTRA_FIND = "find";     // v9.10: 화면이 「끊긴 녹음 찾기」를 켠 채 시작했다(일지를 적는다)
+    public static final String EXTRA_GROUP = "group";   // v9.10: 이어 녹음 — 앞 녹음의 묶음 번호
     public static final String KIND_MEETING = "meeting";
     private static final String CHANNEL_ID = "voice_memo_recording";
     private static final int NOTIF_ID = 4321;
@@ -52,6 +61,8 @@ public class RecordingService extends Service {
     private volatile String kind = "";         // 지금(또는 방금 멈춘) 녹음의 종류
     private volatile boolean failed = false;   // 녹음기가 오류를 알렸다(정지를 누르기 전까지 유지)
     private volatile int failWhat = 0;
+    private volatile boolean find = false;     // v9.10: 일지를 적는 녹음인가
+    private volatile String group = "";        // v9.10: 이어 녹음이면 앞 녹음의 묶음 번호
 
     @Override
     public void onCreate() {
@@ -70,6 +81,9 @@ public class RecordingService extends Service {
             String k = intent.getStringExtra(EXTRA_KIND);
             kind = (k == null) ? "" : k;
             failed = false; failWhat = 0;
+            find = intent.getBooleanExtra(EXTRA_FIND, false);
+            String g = intent.getStringExtra(EXTRA_GROUP);
+            group = (g == null) ? "" : g;
         }
         createChannel();
         Notification n = buildNotification();
@@ -87,7 +101,24 @@ public class RecordingService extends Service {
         boolean was = recording;
         startRecordingInternal();
         if (!was && recording) refreshNotification();   // 시작 시각이 정해진 뒤 지난 시간이 보이게 한 번 더 그린다
+        if (!was && recording) journalStart();          // v9.10: 녹음기가 시작된 뒤에 일지 한 건(다른 스레드 — 녹음을 기다리게 하지 않는다)
         return START_NOT_STICKY;
+    }
+
+    /** v9.10: 회의 녹음이 시작됐다는 것을 일지에 적는다. 실패해도 녹음과는 무관하다. */
+    private void journalStart() {
+        try {
+            if (!find || !KIND_MEETING.equals(kind) || outputPath == null) return;
+            final Context app = getApplicationContext();
+            final long at = startedAtMs;
+            final String fn = new File(outputPath).getName();
+            final String k = kind, g = group;
+            RecNotice.clear(app);                        // 지난 녹음의 끊김 알림이 떠 있으면 거둔다
+            new Thread(new Runnable() {
+                @Override
+                public void run() { RecJournal.started(app, at, fn, k, g); }
+            }).start();
+        } catch (Throwable ignored) {}
     }
 
     private void startRecordingInternal() {
@@ -123,6 +154,8 @@ public class RecordingService extends Service {
         failed = true;
         failWhat = what;
         refreshNotification();
+        // v9.10: 「녹음이 끊겼습니다」 알림 한 번(같은 녹음에 되풀이 없음 · 폰이 무음이면 폰 설정을 따른다). 녹음기는 여전히 건드리지 않는다.
+        try { if (find && KIND_MEETING.equals(kind)) RecNotice.post(getApplicationContext(), startedAtMs); } catch (Throwable ignored) {}
     }
 
     /** 플러그인이 호출: 녹음 정지 + 파일 경로 반환 + 서비스 종료. */
@@ -165,6 +198,12 @@ public class RecordingService extends Service {
     public int getFailWhat() { return failWhat; }
     public String getKind() { return kind == null ? "" : kind; }
     public long getStartedAtMs() { return startedAtMs; }
+    public boolean isFind() { return find; }
+    public String getGroup() { return group == null ? "" : group; }
+    /** 지금(또는 방금 멈춘) 녹음 파일의 이름 — 일지용. */
+    public String getFileName() {
+        try { return outputPath != null ? new File(outputPath).getName() : ""; } catch (Exception e) { return ""; }
+    }
     public long getElapsedMs() { return startedAtMs > 0 ? System.currentTimeMillis() - startedAtMs : 0; }
     /** 지금까지 파일에 적힌 크기(바이트) — 진단용. */
     public long getBytes() {
