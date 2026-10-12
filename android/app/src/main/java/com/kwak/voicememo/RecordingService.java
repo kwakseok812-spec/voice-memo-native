@@ -12,8 +12,6 @@ import android.media.MediaMetadataRetriever;
 import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 
 import androidx.core.app.NotificationCompat;
 
@@ -28,7 +26,7 @@ import java.io.File;
  * v9.8(O-0442) — 녹음 방식(마이크·형식·파일 하나·정지 때 마무리)은 그대로 두고 둘레만 덧붙였다.
  *  - 종류(kind): 회의(meeting)·음성 대화 한 마디(chat)·아이디어(idea)가 이 서비스 하나를 같이 쓴다.
  *    지금 도는 녹음이 어느 것인지 기억해, 다른 종류가 끼어들어 가져가지 못하게 한다(플러그인이 거절).
- *  - 녹음기 오류 감시: 녹음기가 오류를 알리면 failed 로 표시하고 알림 글을 바꾸고 한 번 진동한다.
+ *  - 녹음기 오류 감시: 녹음기가 오류를 알리면 failed 로 표시하고 알림 글을 바꾼다(진동은 넣지 않는다 — 새 권한 없음).
  *    녹음기는 건드리지 않는다(스스로 끊지 않는다) — 실제로는 계속 적히고 있을 수도 있으므로, 확인하고 정지하는 것은 사람이 한다.
  *    예전에는 오류가 나도 아무 표시 없이 「녹음 중」으로 남았다.
  *  - 시스템이 서비스를 되살릴 때(프로세스가 죽은 뒤) 녹음을 새 파일로 몰래 다시 시작하지 않는다.
@@ -125,7 +123,6 @@ public class RecordingService extends Service {
         failed = true;
         failWhat = what;
         refreshNotification();
-        vibrateOnce();
     }
 
     /** 플러그인이 호출: 녹음 정지 + 파일 경로 반환 + 서비스 종료. */
@@ -236,16 +233,6 @@ public class RecordingService extends Service {
              .setContentText("화면을 꺼도 녹음이 계속됩니다. 앱에서 정지를 누르세요.");
         }
         return b.build();
-    }
-
-    private void vibrateOnce() {
-        try {
-            Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            if (v == null || !v.hasVibrator()) return;
-            long[] pattern = new long[]{ 0, 300, 150, 300 };
-            if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createWaveform(pattern, -1));
-            else v.vibrate(pattern, -1);
-        } catch (Exception ignored) {}
     }
 
     @Override

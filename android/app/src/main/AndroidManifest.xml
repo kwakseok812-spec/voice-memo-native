@@ -189,8 +189,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- v9.8(O-0442): 녹음기가 오류를 알렸을 때 한 번 진동(설치할 때 주어지는 일반 권한 — 허용 창 없음) -->
-    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Android 13+ 알림 표시(녹음 중 알림) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- v6.7: [다운로드]로 받은 APK(스마트비서 새 버전)를 바로 설치 화면으로 넘기기 위한 권한.

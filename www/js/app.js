@@ -334,7 +334,7 @@
   /* v9.8(O-0442) 녹음기가 실제로 돌고 있는지 지켜보기.
    *   화면의 시간은 화면 시계로만 흐른다 → 녹음기가 멈춰도 띠의 시간은 계속 올라간다. 그래서 녹음 중에는 8초마다
    *   녹음기에게 직접 묻는다(폰: 네이티브 서비스 · PC판: 브라우저 녹음기와 마이크 선).
-   *   「돌고 있지 않다」가 두 번 이어지거나 녹음기가 오류를 알렸으면: 노란 띠 + 한 번 진동 + 녹음 화면의 케이 한마디.
+   *   「돌고 있지 않다」가 두 번 이어지거나 녹음기가 오류를 알렸으면: 노란 띠 + 녹음 화면의 케이 한마디(진동은 넣지 않는다).
    *   녹음을 스스로 끊거나 다시 시작하지는 않는다 — 확인하고 정지하는 것은 사람이 한다.
    *   물어보지 못한 경우(옛 앱 · 통신 오류)는 「모름」으로 두고 아무것도 바꾸지 않는다. */
   var REC_WATCH_MS = 8000;
@@ -349,8 +349,6 @@
       recWatchMiss = st.failed ? 2 : recWatchMiss + 1;
       if (recWatchMiss >= 2 && !recLost) {
         recLost = true;
-        // 네이티브가 오류를 알린 경우는 네이티브가 이미 진동했다 — 화면은 서비스가 사라진 경우에만 진동한다
-        if (!st.failed) { try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) {} }
         updateRecIndicator();
         recScene((Date.now() - recStart) / 1000);
         if (isOpen(recView)) toast('녹음이 멈춘 것 같습니다. 정지를 눌러 확인해 주십시오.', 4000);
@@ -405,7 +403,7 @@
         recSessionSet(st.startedAt || recStart);
         setStatus('녹음 중', 'rec'); updateRecIndicator();
         recSay(function () {
-          if (same) toast('녹음이 계속되고 있었습니다. 위쪽 띠를 누르면 녹음 화면으로 갑니다.', 4000);
+          if (same) toast('녹음이 계속되고 있었습니다.', 4000);   // 짧게(폰 폭에서 2줄) — 돌아가는 길은 띠가 보여 준다
           else showBanner('⚠️ 녹음이 돌고 있습니다. 다만 앱 화면이 닫혔다 열린 사이에 <b>한 번 끊겼을 수 있습니다</b> — 정지한 뒤 담긴 길이를 확인해 주십시오.');
         });
         return true;
@@ -5984,7 +5982,8 @@
   // v9.8: 녹음 화면에서 나가기 — 묻지 않는다. 녹음은 계속되고, 위쪽 띠·홈의 녹음 단추로 돌아온다.
   function leaveRecScreen() {
     showHome(); setStatus('녹음 중(백그라운드)', 'rec');
-    toast('녹음은 계속됩니다. 위쪽 띠로 돌아옵니다.', 3500);   // 폰 폭(390px)에서 2줄 이내가 되게 짧게
+    // 폰 폭(390px)에서 2줄 이내가 되게 짧게. 「위」와 「쪽」 사이에서 줄이 갈리지 않게 붙임표(U+2060)를 넣었다 → 「녹음은 계속됩니다. / 위쪽 띠로 돌아옵니다.」
+    toast('녹음은 계속됩니다. 위\u2060쪽 띠로 돌아옵니다.', 3500);
   }
   function goBack() {
     if (fsSheet) { closeFontSheet(); return true; }                        // v8.4: 글자 크기 창
