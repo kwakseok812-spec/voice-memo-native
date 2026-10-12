@@ -52,6 +52,7 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-hanger" viewBox="0 0 24 24"><path d="M12 8.6V7.3a2.3 2.3 0 1 0-2.3-2.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 8.6 3.6 15.3a1.3 1.3 0 0 0 .8 2.3h15.2a1.3 1.3 0 0 0 .8-2.3L12 8.6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol><!-- v9.9 옷걸이(홈 「옷·설정」) -->
   <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.5 3h3l1.5 4-2 1.5a11 11 0 0 0 6.5 6.5L17 13l4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 8l8 5 8-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="M4 18l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -137,7 +138,16 @@
               </div>
             </div>
           </div>
+          <!-- v9.9(O-0451) 케이 꾸미기(옷 / 설정)로 가는 길을 채팅에서 홈으로. 자리는 app.js 의 KW_HOME 하나로 고른다(styles.css 끝 v9.9 묶음).
+               가안(corner) = 카드 오른쪽 위 이 단추. 카드 전체 단추(#btnVoiceChat) 「안」이 아니라 옆에 겹쳐 놓은 별개 단추다 — 눌러도 채팅이 열리지 않는다. -->
+          <button type="button" class="kh-dress" id="kHeroDress" aria-label="케이 옷·설정 열기"><svg aria-hidden="true"><use href="#i-hanger"/></svg><span>옷·설정</span></button>
         </div>
+        <!-- 나안(row) = 카드 바로 아래 한 줄(지금 옷 이름은 app.js 가 넣는다). 가안일 때는 보이지 않는다. -->
+        <button type="button" class="kh-dressrow" id="kHeroDressRow" aria-label="케이 옷·설정 열기">
+          <span class="ic"><svg aria-hidden="true"><use href="#i-hanger"/></svg></span>
+          <span class="tx"><small>지금 옷</small><b id="kHeroDressNow"></b></span>
+          <span class="go">옷·설정<svg aria-hidden="true"><use href="#i-chev-r"/></svg></span>
+        </button>
         <!-- 녹음 = 카드 아래 큰 단추(기존 #btnRecord). #orbLabel·#orbHint 는 app.js 가 잡고 있어 숨긴 채 둔다 -->
         <div class="orbrow">
           <div class="orbwrap">
@@ -722,6 +732,8 @@
       <div class="kprof-intro">저는 대표님의 일을 챙기고 정리해서 보고드리는 AI 사무소 소장 케이입니다.</div>
       <!-- v8.4(O-0162) PC 케이 상태(머리줄 점의 뜻). 상태를 모르면 숨김 -->
       <div class="kprof-stat" id="kProfStat" style="display:none;"></div>
+      <!-- v9.9(O-0451): 꾸미기로 가는 길을 홈으로 옮겼다 → 여기 [케이 꾸미기] 단추는 숨기고(styles.css) 어디로 갔는지 한 줄만 남긴다(글이지 길이 아니다) -->
+      <div class="kprof-hint" id="kProfHint">옷·설정은 홈 화면 케이 카드의 [옷·설정] 단추에서 바꿀 수 있습니다.</div>
       <div class="kprof-btns">
         <button type="button" class="kprof-btn" id="kProfClose">닫기</button>
         <button type="button" class="kprof-btn primary" id="kProfWardrobe">케이 꾸미기</button>

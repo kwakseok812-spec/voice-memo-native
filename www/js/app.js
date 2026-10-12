@@ -5217,7 +5217,29 @@
   if ($('kHeadBtn')) $('kHeadBtn').addEventListener('click', openKProfile);
   if ($('kProfClose')) $('kProfClose').addEventListener('click', closeKProfile);
   if (kProfile) kProfile.addEventListener('click', function (ev) { if (ev.target === kProfile) closeKProfile(); });
-  if ($('kProfWardrobe')) $('kProfWardrobe').addEventListener('click', function () { closeKProfile(); openKWardrobe(); });
+  if ($('kProfWardrobe')) $('kProfWardrobe').addEventListener('click', function () { closeKProfile(); openKWardrobe(); });   // v9.9: 홈에 길이 있으면(KW_HOME) 이 단추는 숨는다 — KW_HOME='off' 일 때만 보인다
+  /* ---- v9.9 (O-0451) 케이 꾸미기(옷 / 설정)로 가는 길: 채팅 프로필 카드 → 홈 케이 카드 ----
+   * 자리는 이 상수 하나로 고른다(이 값만 바꿔 다시 묶으면 된다 — index.html · styles.css 에는 세 모습이 모두 들어 있다):
+   *   'corner' = 가안: 홈 케이 카드 오른쪽 위 「옷·설정」 단추(「소장 K」 이름표는 왼쪽 위로)
+   *   'row'    = 나안: 케이 카드 바로 아래 한 줄(「지금 옷 · ○○ … 옷·설정 ›」)
+   *   'off'    = v9.7 그대로: 홈에는 없고, 채팅에서 케이 얼굴 → 프로필 카드의 [케이 꾸미기]
+   * 꾸미기 화면 자체는 그대로다. 홈에서 열면 닫을 때 홈으로 돌아온다(kwFrom — 예전부터 있던 갈래). */
+  var KW_HOME = 'corner';
+  var kwHomeOn = (KW_HOME === 'corner' || KW_HOME === 'row');
+  try { document.documentElement.setAttribute('data-kwhome', kwHomeOn ? KW_HOME : 'off'); } catch (e) {}
+  if (kwHomeOn) {
+    ['kHeroDress', 'kHeroDressRow'].forEach(function (id) { if ($(id)) $(id).addEventListener('click', function () { openKWardrobe(); }); });   // 보이는 것은 둘 중 하나뿐이다(styles.css)
+    if (KW_HOME === 'row' && window.KChar) {             // 나안: 한 줄에 지금 옷 이름(옷이 바뀌면 따라 바뀐다)
+      var paintKwHomeRow = function () {
+        try {
+          var nm = KChar.lookName ? KChar.lookName() : KChar.outfit().name;
+          if ($('kHeroDressNow')) $('kHeroDressNow').textContent = nm;
+          if ($('kHeroDressRow')) $('kHeroDressRow').setAttribute('aria-label', '케이 옷·설정 열기 — 지금 옷 ' + nm);
+        } catch (e) {}
+      };
+      KChar.ready.then(paintKwHomeRow); KChar.onChange(paintKwHomeRow);
+    }
+  }
   // v9.6: 꾸미기 화면의 「옷 / 설정」 탭. 옷 탭 = 옷장만 · 설정 탭 = 설정만(목소리 → 움직임 → 음성 대화 효과음 → (폰만) 바탕화면 위젯 → 글자 크기 → 시작 인사).
   //   고른 탭은 저장하지 않는다 — 꾸미기를 열 때마다 「옷」에서 시작한다(예전 「옷 / 머리」 탭도 저장하지 않았다 → 남아 있는 옛 선택값이 없다).
   //   모르는 값(옛 'hair' 등)이 와도 「옷」으로 본다.
@@ -5233,19 +5255,29 @@
   }
   if ($('kwTabOutfit')) $('kwTabOutfit').addEventListener('click', function () { setKwTab('outfit', true); });
   if ($('kwTabSet')) $('kwTabSet').addEventListener('click', function () { setKwTab('set', true); });
+  var kwOutfitAtOpen = '';                            // v9.9: 꾸미기를 열 때 입고 있던 옷(홈으로 돌아왔을 때 「바뀌었나」를 본다)
   function openKWardrobe() {
     kwFrom = isOpen(chatView) ? 'chat' : 'home';
+    var kmFrom = null;                                // v9.9(O-0451): 홈에서 열 때 — 바꾸기 직전의 홈 카드 자리·모습을 떠 둔다(효과용 · 화면은 아래에서 바로 바뀐다)
+    try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab($('kHero')); } catch (e) {}
+    try { kwOutfitAtOpen = window.KChar ? KChar.outfit().id : ''; } catch (e) { kwOutfitAtOpen = ''; }
     setKwTab('outfit');
     openScreen($('kWardrobeView'));
     renderKWardrobe();
     if (window.KChar) KChar.mount();
     try { if (window.KChar && KChar.assets) KChar.assets.ensureThumbs(); } catch (e) {}   // v9.5: 서버에서 받는 새 옷의 옷장 사진(받으면 목록에 나타난다)
+    try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeOpen) KMotion.wardrobeOpen(kmFrom, $('kWardrobeView')); } catch (e) {}
   }
   function closeKWardrobe() {
     if (window.KChar) KChar.voice.stop();
     kvPvStop();                                       // v9.7: 케이 목소리 미리 듣기도 멈춘다
     stopKFullBow();
-    if (kwFrom === 'chat') openChat(); else { showHome(); setStatus('대기 중', 'idle'); }
+    if (kwFrom === 'chat') { openChat(); return; }
+    var kmFrom = null, changed = false;               // v9.9(O-0451): 홈으로 돌아간다 — 큰 사진이 홈 카드 자리로 내려앉고, 옷이 바뀌었으면 홈 카드가 한 번 반짝인다
+    try { if (window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab($('kwHero')); } catch (e) {}
+    try { changed = !!(window.KChar && kwOutfitAtOpen && KChar.outfit().id !== kwOutfitAtOpen); } catch (e) {}
+    showHome(); setStatus('대기 중', 'idle');
+    try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, $('kHero'), changed); } catch (e) {}
   }
   function renderKWardrobe() {
     if (!window.KChar) return;
@@ -5364,7 +5396,7 @@
       closeModal();
       unlockKaiAudio();
       sendPlainChat(kDecorRequestText(kind, t), false).then(function (ok) {
-        if (ok) toast('요청을 보냈습니다. 만들면 알려 드리겠습니다.');
+        if (ok) { if (kwFrom === 'home') toast('케이에게 채팅으로 보냈습니다. 만들면 알려 드리겠습니다.', 2600); else toast('요청을 보냈습니다. 만들면 알려 드리겠습니다.'); }   // v9.9: 홈에서 연 꾸미기에서는 채팅 화면이 안 보인다 → 어디로 보냈는지 한마디 더(옷을 고르던 화면은 그대로 둔다)
         else toast('요청을 보내지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       });
     }

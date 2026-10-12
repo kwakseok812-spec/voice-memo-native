@@ -3,7 +3,8 @@
  * ----------------------------------------------------------------------------
  * 대표님이 시안(「누른 뒤 움직임 효과」 10가지)에서 고르신 효과를 여기에 하나씩 얹는다.
  *   지금 든 것: 1번 단추 누름 반응 · 2번 채팅 보내기 · 3번 건강 기록 저장 · 6번 옷 갈아입기(가 · 반짝임) · 7번 음성 대화 시작/끝
- *   넣지 않은 것: 4번(화면 미끄러짐) · 5번 · 8번 · 9번 · 10번
+ *   넣지 않은 것: 4번(화면 미끄러짐) · 5번 · 8번 · 9번 · 10번(시안의 번호)
+ *   v9.9(O-0451)에 더한 것: 「옷장 열기 · 닫기」(홈 케이 카드 ↔ 케이 꾸미기) — 시안 10가지에는 없던 것이라 번호 없이 맨 아래에 둔다
  *
  * 공통 규칙(효과를 더할 때도 이 파일의 값만 쓴다):
  *   · 동작은 누르는 즉시 바뀌고, 효과는 그 위에 얹힌다(효과가 끝나기를 기다리는 동작은 없다 — 이 파일은 화면만 움직이고 앱의 일은 건드리지 않는다).
@@ -78,8 +79,8 @@
    *   빼는 것: 문서 뷰어 단추 · 건강 ＋/−(연달아 누름) · 녹음/케이 큰 동그라미(자기 효과가 있다) · 꺼진 단추.
    * 잘못 터지지 않게: 손가락은 0.06초 뒤에 반응을 시작하고, 그 사이 10px 넘게 움직이거나(화면 밀기) 브라우저가 취소하면 아무것도 하지 않는다.
    *   짧게 톡 누른 것은 손을 뗄 때 한 번에(눌림 → 튐) 보여 준다. 마우스·키보드는 바로. 길게 누르고 있으면 눌린 채로 있다가 뗄 때 돌아온다. */
-  var RIPPLE = '.btn.primary, .chatsend, .tool, .hseg-btn, .htogbtn';
-  var PRESS = '.btn, .iconbtn, .back, .vpill, .hchip, .kw-item, .kstage-send, .sheet-btn, .td-row, .td-more';
+  var RIPPLE = '.btn.primary, .chatsend, .tool, .hseg-btn, .htogbtn, .kh-dress';                 // v9.9: 홈 케이 카드의 「옷·설정」(가안 — 색이 찬 알약)
+  var PRESS = '.btn, .iconbtn, .back, .vpill, .hchip, .kw-item, .kstage-send, .sheet-btn, .td-row, .td-more, .kh-dressrow';   // v9.9: 나안의 한 줄(유리 카드)
   var SKIP_IN = '#docRoot, .hstepbtn, .orbbtn, [disabled], [aria-disabled="true"]';
   var TOUCH_WAIT = 60, MOVE_MAX = 10;
   var pr = null;                                                 // 지금 누르고 있는 단추 하나
@@ -367,6 +368,96 @@
     } catch (e) { drop(wash); wash = null; }
   }
 
+  /* ---------------- 옷장 열기 · 닫기 (v9.9 · O-0451) ----------------
+   * 홈 케이 카드의 「옷·설정」으로 케이 꾸미기를 열고, 닫아 홈으로 돌아올 때. app.js 가 화면을 「이미 바꾼 뒤」에 부른다(여기에는 기다림이 없다).
+   *   var s = KMotion.wardrobeGrab(box)        = 바꾸기 직전: 그 상자(홈 카드 / 꾸미기 큰 사진)의 자리와 모습을 한 장 떠 둔다
+   *   KMotion.wardrobeOpen(s, view)            = 떠 둔 홈 카드 한 장이 꾸미기 큰 사진 자리로 옮겨 가며 걷히고, 머리줄 · 탭 줄 · 옷장이 차례로 들어온다(0.3초)
+   *   KMotion.wardrobeClose(s, hero, changed)  = 떠 둔 큰 사진 한 장이 홈 카드 자리로 내려앉으며 걷힌다(0.28초). 옷이 바뀌었으면 홈 카드가 한 번 반짝인다(6번과 같은 빛줄기 · 작은 별)
+   *   옮겨 가는 한 장(.kmo-fly)은 누름을 받지 않는다 — 열자마자 옷을 눌러도, 바로 뒤로를 눌러도 된다(연달아 부르면 앞의 조각을 걷어 내고 시작한다).
+   *   상자 모양이 달라도(홈 카드는 가로로 넓고 꾸미기 사진은 세로로 길다) 사진이 찌그러지지 않게: 상자는 크기를 바꾸고 안의 사진은 그만큼 되돌려 「같은 얼굴이 같은 비율로」 옮겨 간다.
+   *   움직임을 쉬는 때: 옮겨 가는 한 장 · 반짝임 없이 0.12초 서서히 나타남만. */
+  var OPEN_MS = 268, CLOSE_MS = 250;                             // × 길이 배수(과감 1.12) = 0.3초 · 0.28초
+  var flyLive = [];
+  function clearFly() { flyLive.forEach(function (x) { try { if (x.cancel) x.cancel(); else drop(x); } catch (e) {} }); flyLive = []; }
+  function objPos(el) {                                          // 사진을 상자에 맞춰 자를 때의 기준점(0~1)
+    try { var op = (getComputedStyle(el).objectPosition || '50% 50%').split(' '), x = parseFloat(op[0]) / 100, y = parseFloat(op[1]) / 100; return [isNaN(x) ? .5 : x, isNaN(y) ? .5 : y]; } catch (e) { return [.5, .5]; }
+  }
+  function coverRect(w, h, nw, nh, px, py) { var k = Math.max(w / nw, h / nh), iw = nw * k, ih = nh * k; return { l: (w - iw) * px, t: (h - ih) * py, w: iw, h: ih }; }   // 상자(w×h)를 가득 채우게 놓인 사진의 자리
+  function wardrobeGrab(box) {
+    try {
+      var host = box && (box.querySelector('.kw-hero-main') || box); if (!host || !vis(host)) return null;
+      var r = host.getBoundingClientRect(); if (!r.width || !r.height) return null;
+      var o = { l: r.left, t: r.top, w: r.width, h: r.height, rad: parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0, g: null, nw: r.width, nh: r.height, px: .5, py: .5 };
+      if (calm()) return o;
+      var g = snap(box); if (!g) return o;
+      var img = host.querySelector('.kface .kf-img');
+      if (g.tagName === 'IMG' && img && img.naturalWidth) { o.nw = img.naturalWidth; o.nh = img.naturalHeight; var p = objPos(img); o.px = p[0]; o.py = p[1]; }   // 사진: 원래 크기와 자르는 기준점을 적어 둔다(영상 장면은 이미 그 상자 모양으로 떠 둔 그림이다)
+      g.className = ''; o.g = g;
+      return o;
+    } catch (e) { return null; }
+  }
+  function fly(o, to, tp, ms, tail) {
+    var f = document.createElement('div'); f.className = 'kmo-fly';
+    f.style.cssText = 'width:' + o.w + 'px;height:' + o.h + 'px;border-radius:' + o.rad + 'px';
+    var a0 = coverRect(o.w, o.h, o.nw, o.nh, o.px, o.py), a1 = coverRect(to.w, to.h, o.nw, o.nh, tp[0], tp[1]), sx = to.w / o.w, sy = to.h / o.h, g = o.g;
+    g.style.cssText = 'width:' + a0.w + 'px;height:' + a0.h + 'px';
+    f.appendChild(g); document.body.appendChild(f); flyLive.push(f);
+    var F0 = 'translate(' + o.l + 'px,' + o.t + 'px) scale(1,1)', F1 = 'translate(' + to.l + 'px,' + to.t + 'px) scale(' + sx + ',' + sy + ')';
+    var G0 = 'translate(' + a0.l + 'px,' + a0.t + 'px) scale(1,1)', G1 = 'translate(' + (a1.l / sx) + 'px,' + (a1.t / sy) + 'px) scale(' + (a1.w / sx / a0.w) + ',' + (a1.h / sy / a0.h) + ')';
+    var opt = { duration: ms, easing: 'linear', fill: 'both' };  // 0 ~ tail = 옮겨 가기(끝에서 느려진다) · tail ~ 1 = 자리에 닿은 뒤 서서히 걷힌다(그때 밑의 진짜 화면이 나타나 있다 — reveal)
+    an(g, [{ transform: G0, offset: 0, easing: EOUT }, { transform: G1, offset: tail }, { transform: G1, offset: 1 }], opt);
+    var a = an(f, [{ transform: F0, opacity: 1, offset: 0, easing: EOUT }, { transform: F1, opacity: 1, offset: tail }, { transform: F1, opacity: 0, offset: 1 }], opt);
+    after(a, function () { drop(f); });
+    setTimeout(function () { drop(f); }, MAX_MS + 100);          // 혹시 끝남 신호를 못 받아도 남지 않게
+  }
+  // 닿을 자리를 잰다. 화면이 막 바뀐 참이라 그 화면(section)은 기존 전환 효과(6px 아래에서 올라오는 중)로 살짝 떠 있다 → 「다 올라온 뒤의 자리」를 재야 한 장이 어긋나지 않게 닿는다.
+  function restRect(el) {
+    var held = [], r;
+    try {
+      var sec = el.closest('section');
+      (sec && sec.getAnimations ? sec.getAnimations() : []).forEach(function (a) {
+        try { var t = a.effect.getComputedTiming(), was = a.currentTime; a.currentTime = (t.delay || 0) + (t.duration || 0); held.push([a, was]); } catch (e) {}
+      });
+    } catch (e) {}
+    r = el.getBoundingClientRect();
+    held.forEach(function (x) { try { x[0].currentTime = x[1]; } catch (e) {} });       // 재고 나서 바로 제자리로(그 사이 화면은 그려지지 않는다)
+    return r;
+  }
+  function reveal(el, ms, tail) {                                // 옮겨 가는 한 장이 닿는 순간(tail)에 그 밑의 진짜 상자를 보이게 한다(그 전에는 두 겹으로 보이지 않게 숨긴다)
+    var h = an(el, [{ opacity: 0, offset: 0 }, { opacity: 0, offset: tail - .02 }, { opacity: 1, offset: tail }, { opacity: 1, offset: 1 }], { duration: ms, easing: 'linear' });
+    if (h) flyLive.push(h);
+  }
+  function wardrobeOpen(o, view) {
+    try {
+      clearFly();
+      if (!view || !vis(view)) return;
+      var hero = view.querySelector('.kw-hero'), main = hero && (hero.querySelector('.kw-hero-main') || hero);
+      if (calm() || !o || !o.g || !main || !vis(main)) { an(view, [{ opacity: 0 }, { opacity: 1 }], { duration: T(CALM_MS), easing: 'linear' }); return; }
+      var r = restRect(main), ms = T(OPEN_MS), a = amp(), timg = main.querySelector('.kface .kf-img');
+      fly(o, { l: r.left, t: r.top, w: r.width, h: r.height }, timg ? objPos(timg) : [.5, .5], ms, .62);
+      reveal(hero, ms, .62);
+      [view.querySelector('.subbar'), view.querySelector('.kw-seg'), view.querySelector('#kwOutfitPane')].forEach(function (el, i) {
+        if (!el) return;
+        var x = an(el, [{ transform: 'translateY(' + ((i ? 12 : -6) * a) + 'px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: T(180), delay: i * 40, easing: EOUT, fill: 'backwards' });
+        if (x) flyLive.push(x);
+      });
+    } catch (e) { clearFly(); }
+  }
+  function wardrobeClose(o, hero, changed) {
+    try {
+      clearFly();
+      if (!hero || !vis(hero)) return;
+      if (calm() || !o || !o.g) { an(hero.closest('section') || hero, [{ opacity: 0 }, { opacity: 1 }], { duration: T(CALM_MS), easing: 'linear' }); return; }
+      var r = restRect(hero), ms = T(CLOSE_MS), timg = hero.querySelector('.kface .kf-img');
+      fly(o, { l: r.left, t: r.top, w: r.width, h: r.height }, timg ? objPos(timg) : [.5, .5], ms, .7);
+      reveal(hero, ms, .7);
+      if (changed) {                                             // 새 옷으로 돌아왔다 → 내려앉을 즈음 한 번 반짝
+        var t = setTimeout(function () { try { if (vis(hero)) { shine(hero, hero.querySelector('.kh-side')); sparkle(hero, cnt(10)); } } catch (e) {} }, Math.round(ms * .85));
+        flyLive.push({ cancel: function () { clearTimeout(t); } });
+      }
+    } catch (e) { clearFly(); }
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPress); else initPress();
 
   window.KMotion = { level: LEVEL, maxMs: MAX_MS, calm: calm, amp: amp, cnt: cnt, T: T, an: an, after: after,
@@ -374,5 +465,6 @@
                      chat: chat,                                                         // 2번
                      checkDraw: checkDraw, rollNumber: rollNumber, saved: saved, cheer: cheer,   // 3번
                      snap: snap, outfitSwap: outfitSwap,                                 // 6번
-                     callStart: callStart, callEnd: callEnd, fullStage: fullStage };     // 7번
+                     callStart: callStart, callEnd: callEnd, fullStage: fullStage,       // 7번
+                     wardrobeGrab: wardrobeGrab, wardrobeOpen: wardrobeOpen, wardrobeClose: wardrobeClose };   // v9.9 옷장 열기 · 닫기
 })();
