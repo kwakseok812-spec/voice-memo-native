@@ -61,3 +61,67 @@ html.kintro-on,html.kintro-on body{overflow:hidden}
 .kw-intro-row{display:flex;flex-direction:column;align-items:stretch;gap:8px}
 .kw-intro-row .btn{width:100%;white-space:nowrap}
 .kw-intro-row small{color:var(--muted);font-size:12.5px;line-height:1.5}
+
+/* ============================================================================
+   (O-0471) 케이 꾸미기 — 옷 목록을 내려도 「지금 모습」(상반신 + 전신)이 따라온다.  js/k-wardrobe-follow.js 가 <html> 에 붙인다:
+     html.kwf-on     = 꾸미기가 열려 있고 스위치(app.js KW_FOLLOW)가 켜져 있다
+     html.kwfm-dock  = 「옷」 탭 · 좁은 화면: 내리면 사진이 줄어들며 [뒤로] 줄 밑에 붙는다     html.kwf-docked = 지금 붙어 있다(줄어들기 시작했다)
+     html.kwf-css    = 줄어듦 · 옅어짐을 CSS 가 스크롤에 붙여 돌린다(없으면 스크립트가 --kwf-s · --kwf-p · --kwf-l 을 적는다 — 옛 웹뷰 · 폰 「움직임 줄이기」)
+     html.kwf-wide   = 넓은 화면(폭 700 이상 — 홈이 2단이 되는 폭과 같다): 왼쪽에 사진을 붙여 두고 오른쪽에서 고른다
+   스위치가 'off' 면 위 표시가 하나도 붙지 않아 아래 규칙이 먹지 않는다(= 고치기 전 화면).
+   v6.8 방침(뒤 흐림 없음 · 머리줄에 판을 깔지 않음)을 따른다: 판은 붙은 사진 밑에만, 불투명한 카드 한 장이다.
+   ========================================================================== */
+:root{--kwf-card:#18213A}
+html[data-style="light"]{--kwf-card:#FFFFFF}
+.kwf-dock{display:none}
+#kWardrobeView{--kwf-top:calc(var(--sat) + var(--rec-h, 0px) + 60px)}        /* 붙는 자리 = 상태바 + 녹음 띠 + [뒤로] 줄(56) + 4 */
+
+/* ── 줄어들며 붙는다 ── */
+html.kwfm-dock #kwHero{position:sticky;top:var(--kwf-top);z-index:19;transform-origin:0 0;will-change:transform}
+html.kwfm-dock .kwf-dock{display:block;position:sticky;top:var(--kwf-top);height:0;z-index:19;pointer-events:none}
+.kwf-card{position:absolute;left:-7px;right:-7px;top:-7px;height:calc(var(--kwf-h, 160px) + 14px);border-radius:22px;
+  background:var(--kwf-card);box-shadow:var(--float-sh);border:1px solid var(--glass-b);opacity:0}
+.kwf-card::after{content:"";position:absolute;left:8px;right:8px;top:100%;height:18px;pointer-events:none;                 /* 판 밑으로 들어가는 글자 · 사진이 뚝 잘리지 않고 옅어지며 들어간다 */
+  background:linear-gradient(180deg,var(--page-bg),transparent);opacity:.82}
+.kwf-lab{position:absolute;left:calc(var(--kwf-w, 220px) + 18px);right:9px;top:7px;bottom:7px;display:flex;flex-direction:column;justify-content:center;gap:2px;
+  opacity:0;min-width:0;overflow:hidden}
+.kwf-lab small{font-size:calc(12px * var(--fsx, 1));font-weight:700;line-height:1.35;color:var(--dim);word-break:keep-all}                    /* 판의 글자는 앱의 글자 크기 설정(--fsx)을 따른다 */
+.kwf-lab b{font-size:calc(15.5px * var(--fsx, 1));font-weight:800;line-height:1.3;letter-spacing:-.3px;color:var(--text);word-break:keep-all;overflow-wrap:anywhere}
+.kwf-lab .kwf-tip{margin-top:5px;font-size:calc(12.5px * var(--fsx, 1));line-height:1.4;color:var(--muted);word-break:keep-all}
+.kwf-lab .kwf-tip:empty{display:none}
+.kwf-lab.wait .kwf-tip{color:var(--p1);font-weight:700}
+.kwf-lab.t1 small{display:none}                                                 /* 글자가 넘칠 때: 「지금 모습」 → 안내 순으로 접는다(옷 이름은 남긴다) */
+.kwf-lab.t2 .kwf-tip{display:none}
+/* (가) 스크립트가 값을 적는 방식 — 옛 웹뷰 · 폰 「움직임 줄이기」 */
+html.kwfm-dock:not(.kwf-css) #kwHero{transform:scale(var(--kwf-s, 1))}
+html.kwfm-dock:not(.kwf-css) #kwHero .kw-hero-cap,
+html.kwfm-dock:not(.kwf-css) #kwHero .kw-fb-tag{opacity:calc(1 - var(--kwf-p, 0) * 2.2)}
+html.kwfm-dock:not(.kwf-css) .kwf-card{opacity:var(--kwf-p, 0)}
+html.kwfm-dock:not(.kwf-css) .kwf-lab{opacity:var(--kwf-l, 0)}
+/* (나) CSS 가 스크롤에 붙여 돌리는 방식 — 스크롤과 같은 곳에서 돌아, 빠르게 튕겨 내려도 사진이 한 박자 늦지 않는다. 범위(--kwf-a ~ --kwf-b)는 스크립트가 자리를 재서 적어 둔다 */
+@supports (animation-timeline: scroll()){
+  html.kwf-css.kwfm-dock #kwHero{animation:kwfShrink linear both;animation-timeline:scroll(root block);animation-range:var(--kwf-a, 66px) var(--kwf-b, 151px)}
+  html.kwf-css.kwfm-dock #kwHero .kw-hero-cap,
+  html.kwf-css.kwfm-dock #kwHero .kw-fb-tag{animation:kwfOut linear both;animation-timeline:scroll(root block);animation-range:var(--kwf-a, 66px) var(--kwf-b, 151px)}
+  html.kwf-css.kwfm-dock .kwf-card{animation:kwfIn linear both;animation-timeline:scroll(root block);animation-range:var(--kwf-a, 66px) var(--kwf-b, 151px)}
+  html.kwf-css.kwfm-dock .kwf-lab{animation:kwfLab linear both;animation-timeline:scroll(root block);animation-range:var(--kwf-a, 66px) var(--kwf-b, 151px)}
+}
+@keyframes kwfShrink{from{transform:scale(1)}to{transform:scale(var(--kwf-smin, .665))}}
+@keyframes kwfOut{0%{opacity:1}45%,100%{opacity:0}}                              /* 사진 안의 작은 글자(「지금 모습」 · 「전신」)는 줄어들면 읽히지 않는다 → 옅어지고 판의 제 크기 글자가 대신한다 */
+@keyframes kwfIn{from{opacity:0}to{opacity:1}}
+@keyframes kwfLab{0%,78%{opacity:0}100%{opacity:1}}
+/* 붙어 있는 동안: [뒤로] 줄 뒤로 지나가는 옷 사진 · 글자를 가린다(상태바 덮개 .app::before 를 판 윗단까지 늘린 것 — 판이 그 위에 놓여 경계가 보이지 않는다) */
+html.kwf-docked .app::before{height:calc(var(--sat) + var(--rec-h, 0px) + 76px);opacity:1;
+  background:linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg) 78%, transparent 100%)}
+/* 서버에서 받는 옷을 눌러 두었을 때: 다 받을 때까지 그 칸에 「받는 중」(입고 있는 옷 · 붙은 사진은 그대로다) */
+.kw-item.kwf-wait .kw-th{border-color:var(--p1);border-style:dashed}
+.kw-item.kwf-wait .kw-th::after{content:"받는 중";position:absolute;left:6px;top:6px;padding:2px 8px;border-radius:999px;background:rgba(5,8,20,.72);color:#fff;
+  font-size:calc(11px * var(--fsx, 1));font-weight:800;line-height:1.5}
+
+/* ── 넓은 화면(폴드 펼침): 왼쪽에 사진을 붙여 두고 오른쪽에서 고른다(「옷」 · 「설정」 탭 모두). 폭은 홈 2단과 같은 760 ── */
+html.kwf-wide .app{max-width:760px}
+html.kwf-wide #kWardrobeView{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);grid-template-rows:auto auto 1fr;column-gap:22px;align-items:start}
+html.kwf-wide #kWardrobeView > .subbar{grid-column:1 / -1}
+html.kwf-wide #kwHero{grid-column:1;grid-row:2 / span 2;position:sticky;top:calc(var(--sat) + var(--rec-h, 0px) + 62px);width:100%;max-width:none;margin:4px 0 0}
+html.kwf-wide #kWardrobeView .kw-seg{grid-column:2;grid-row:2;width:100%;max-width:none;margin:4px 0 0}
+html.kwf-wide #kwOutfitPane,html.kwf-wide #kwSetPane{grid-column:2;grid-row:3;min-width:0}

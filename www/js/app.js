@@ -5681,6 +5681,14 @@
       KChar.ready.then(paintKwHomeRow); KChar.onChange(paintKwHomeRow);
     }
   }
+  /* (O-0471) 옷 목록을 내려도 「지금 모습」(상반신 + 전신)이 따라온다 — js/k-wardrobe-follow.js. 여기서는 켜기만 한다(화면이 열리고 닫히는 것 · 탭 · 옷 바뀜은 그 파일이 스스로 지켜본다).
+   *   KW_FOLLOW       'dock' = 내리면 위 사진이 줄어들며 [뒤로] 줄 밑에 붙는다 · 'off' = 예전 그대로(아래 세 값도 함께 꺼진다)
+   *   KW_FOLLOW_SIZE  붙은 사진의 높이 = 화면 높이 × 이 값(0.20 → 0.25 로 올리면 사진이 커지고 목록 자리가 그만큼 준다)
+   *   KW_FOLLOW_WIDE  넓은 화면(폴드 펼침 · 폭 700 이상)에서 왼쪽에 사진을 붙여 두고 오른쪽에서 고른다 · false = 넓은 화면도 좁은 화면처럼
+   *   KW_SET_FADE     「설정」 탭을 올렸을 때 사진이 [뒤로] 줄 뒤로 비치지 않게 서서히 사라진다 · false = 예전처럼 비친다
+   *   KW_FOLLOW_CSS   줄어드는 움직임을 CSS 가 스크롤에 붙여 돌린다(폰에서 떨리지 않게) · false = 스크립트가 스크롤마다 값을 적는 방식(실기기에서 CSS 방식이 이상할 때의 비상용) */
+  var KW_FOLLOW = 'dock', KW_FOLLOW_SIZE = 0.20, KW_FOLLOW_WIDE = true, KW_SET_FADE = true, KW_FOLLOW_CSS = true;
+  try { if (window.KWFollow) KWFollow.init(KW_FOLLOW, { size: KW_FOLLOW_SIZE, wide: KW_FOLLOW_WIDE, setFade: KW_SET_FADE, css: KW_FOLLOW_CSS }); } catch (e) {}
   // v9.6: 꾸미기 화면의 「옷 / 설정」 탭. 옷 탭 = 옷장만 · 설정 탭 = 설정만(목소리 → 움직임 → 음성 대화 효과음 → (폰만) 바탕화면 위젯 → 글자 크기 → 시작 인사).
   //   고른 탭은 저장하지 않는다 — 꾸미기를 열 때마다 「옷」에서 시작한다(예전 「옷 / 머리」 탭도 저장하지 않았다 → 남아 있는 옛 선택값이 없다).
   //   모르는 값(옛 'hair' 등)이 와도 「옷」으로 본다.
