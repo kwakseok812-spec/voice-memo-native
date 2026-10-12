@@ -58,7 +58,7 @@
   //       b = 앱 안 경로 · s = 기기 저장소(KStore)의 파일 이름(다 받아 둔 것만 적힌다) · cue = 자막 시점(영상을 재서 넣은 값)
   //   길이는 적지 않는다 — 재생이 끝나는 것(ended)으로 닫고, 안전 장치(아래 capFor)도 영상의 실제 길이에서 구한다.
   // 아래 값은 그 한 줄이 아직 없을 때(설치 뒤 첫 실행)와 그 옷의 사진조차 없을 때만 쓰는 기본 옷 인사다.
-  var DEFAULT_BOW = { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.08 };
+  var DEFAULT_BOW = { video: 'assets/k/burgundy_suit/bow.mp4', poster: 'assets/k/burgundy_suit/bow_poster.jpg', cue: 1.04 };
   var PLAN_KEY = 'smart_k_intro_plan';
   var BOW_I_KEY = 'smart_k_intro_bow_i';    // v9.6: 지난번에 나온 인사 영상의 차례(여러 개인 옷에서 번갈아 나오게)
   var DEFAULT_OUTFIT = 'burgundy_suit';
