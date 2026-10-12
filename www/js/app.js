@@ -6138,8 +6138,10 @@
       box.innerHTML = out.join('');
       return;
     }
+    // O-0469: 목록이 없을 때도 사실대로 — 연동 암호가 없으면 아래 한 줄이 말하고, 있으면 이 줄의 설명 자리에 적는다(줄을 더하지 않는다 → 「설정」 세 묶음이 한 화면에 들어오던 높이 그대로)
+    var noList = !getSyncPass() ? 'PC에서 만들어 보냅니다' : ((kStatData || kStatMissing) ? '목소리 목록을 불러오지 못했습니다' : '목소리 목록을 불러오는 중입니다');
     var rows = ['<button type="button" class="kw-voice' + (!act ? ' on' : '') + '" data-voice="">' +
-      '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>PC에서 만들어 보냅니다</small></span></button>'];
+      '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>' + noList + '</small></span></button>'];
     vs.forEach(function (v) {
       var on = act && act.name === v.name;
       rows.push('<div class="kw-voice' + (on ? ' on' : '') + '" role="button" tabindex="0" data-voice="' + esc(v.name) + '">' +
@@ -6150,7 +6152,6 @@
     else if (!vs.length) rows.push('<div class="kw-vnote">이 기기에 한국어 내장 음성이 없어 케이 기본 목소리만 쓸 수 있습니다.</div>');
     else if (pref && !act) rows.push('<div class="kw-vnote">골라 두신 기기 음성(' + esc(pref) + ')을 찾지 못해 기본 목소리로 읽습니다.</div>');
     if (!getSyncPass()) rows.push('<div class="kw-vnote">연동 암호가 없어 케이 목소리 설정을 PC에서 받아 오지 못했습니다.</div>');   // v9.7: 사실만(넣으면 받아 온다 · PC 에서 꺼 두었으면 그대로)
-    else rows.push('<div class="kw-vnote">' + ((kStatData || kStatMissing) ? '목소리 목록을 불러오지 못했습니다. 지금은 케이 목소리 하나로 읽습니다.' : '목소리 목록을 불러오는 중입니다.') + '</div>');   // O-0469: 목록이 없을 때도 사실대로
     box.innerHTML = rows.join('');
   }
   if (window.KChar) {
