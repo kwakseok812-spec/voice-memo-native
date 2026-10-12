@@ -266,7 +266,7 @@
     if (on && !wasOn && !calm) { recIndicator.classList.remove('rec-in'); void recIndicator.offsetWidth; recIndicator.classList.add('rec-in'); }
     else if (!on || calm) recIndicator.classList.remove('rec-in');
     recIndicator.classList.toggle('warn', !!(isRecording && recLost));
-    if (recIndTx) recIndTx.textContent = (isRecording && recLost) ? '녹음이 멈춘 것 같습니다. 눌러 확인하세요' : '녹음 중';
+    if (recIndTx) recIndTx.textContent = (isRecording && recLost) ? '녹음이 멈춘 것 같습니다. 눌러서 확인해 주십시오' : '녹음 중';
     if (recIndGo) recIndGo.textContent = '녹음 화면으로 ›';
     recIndicator.setAttribute('aria-label', (isRecording && recLost) ? '녹음이 멈춘 것 같습니다. 누르면 녹음 화면으로 갑니다' : '녹음 중. 누르면 녹음 화면으로 돌아갑니다');
     paintRecHome();
@@ -416,7 +416,7 @@
         recSessionClear();
         var d = new Date(sess.at);
         recSay(function () {
-          showBanner('⚠️ 앱이 닫히면서 지난 녹음(' + d.getHours() + '시 ' + pad2(d.getMinutes()) + '분 시작)이 끊겼습니다. 그 녹음은 되살리지 못했습니다.');
+          showBanner('⚠️ 앱이 닫히면서 지난 녹음(' + d.getHours() + '시 ' + pad2(d.getMinutes()) + '분 시작)이 끊겼습니다. 이번 판에서는 그 녹음을 다시 열 수 없습니다.');
         });
       }
       return false;
@@ -535,8 +535,10 @@
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
     if (isRecording) return;
     if (!RecordingModule.isSupported()) { showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다.'); return; }
+    // v9.8: 아직 보내지 않은 녹음이 있으면 어느 길로 왔든(바로가기 포함) 새 녹음이 덮어쓰지 않게 그 녹음으로 데려간다
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
     // v9.8: 음성 대화·아이디어 녹음이 같은 녹음기를 쓰고 있으면 먼저 마치게 한다(겹치면 한쪽이 다른 쪽을 끊는다)
-    if (REC_ROAM_V2 && (chatRecording || ideaRecording)) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주세요.', 3000); return; }
+    if (REC_ROAM_V2 && (chatRecording || ideaRecording)) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주십시오.', 3000); return; }
     if (REC_ROAM_V2 && convoOn) { try { stopConvo(true); } catch (e) {} }
     hideBanner();
     // v9.8: 앱이 내고 있던 소리(답 듣기·미리 듣기)는 녹음을 시작하면서 멈춘다
@@ -587,7 +589,7 @@
   function audioToMeeting(f) {
     if (!f) return;
     if (isRecording) { toast('지금 녹음 중입니다. 녹음을 마친 뒤 다시 공유해 주세요.', 3500); return; }
-    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다. 먼저 보내거나 임시저장해 주세요.', 3500); return; }
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다. 먼저 보내거나 임시저장해 주십시오.', 3500); return; }
     hideBanner();
     pendingBlob = f; pendingMaterials = []; renderMatList();
     if (memoTitle) memoTitle.value = titleFromAudioName(f.name) || defaultTitle();
@@ -3677,7 +3679,7 @@
       if (convoOn && isOpen(chatView) && !awaitingLive() && !kaiPlaying() && !vqHasMore()) startListen(true);
     }, delay || 400);
   }
-  var REC_BUSY_VOICE = '회의 녹음 중에는 음성 대화를 쓸 수 없습니다. 글로 보내 주세요.';
+  var REC_BUSY_VOICE = '회의 녹음 중에는 음성 대화를 쓸 수 없습니다. 글로 보내 주십시오.';
   function startConvo() {
     if (convoOn) return;
     if (REC_ROAM_V2 && isRecording) { toast(REC_BUSY_VOICE, 3200); return; }   // v9.8: 켜졌다 꺼지지 않게 누르는 순간 막는다
@@ -6281,7 +6283,7 @@
   }
   function startIdeaRec() {
     if (ideaRecording) return;
-    if (isRecording) { toast(REC_ROAM_V2 ? '회의 녹음 중에는 말로 남길 수 없습니다. 글로 적어 주세요.' : '회의 녹음이 진행 중입니다. 먼저 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? '회의 녹음 중에는 말로 남길 수 없습니다. 글로 적어 주십시오.' : '회의 녹음이 진행 중입니다. 먼저 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
     if (chatRecording) { toast('케이와 음성 대화 중입니다. 먼저 마쳐 주세요.'); return; }
     if (!RecordingModule.isSupported()) { toast('이 기기에서는 녹음을 쓸 수 없습니다. 글로 적어 주세요.'); return; }
     var r = ensureIdeaRecorder();
@@ -7006,7 +7008,8 @@
       if (isRecording) { openScreen(recView); return; }
       showHome();
       if (btnRecord) btnRecord.click();
-      setTimeout(function () { if (btnStartRec && !isRecording) btnStartRec.click(); }, 250);
+      // v9.8: 준비 화면이 실제로 열렸을 때만 이어서 시작한다 — 보내지 않은 녹음이 있어 그 화면으로 간 경우에는 새 녹음을 시작하지 않는다
+      setTimeout(function () { if (btnStartRec && !isRecording && (!REC_ROAM_V2 || isOpen(recPrep))) btnStartRec.click(); }, 250);
     } else if (name === 'photo') {                 // 케이에게 사진 보내기 — 채팅 열고 사진 고르기 창
       openChat();
       setTimeout(function () {

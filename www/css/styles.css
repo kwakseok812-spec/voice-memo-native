@@ -1867,7 +1867,7 @@ html.rec-v2 .rec-indicator:active{transform:none;filter:brightness(.86)}
 html.rec-v2 .rec-indicator .rec-ind-go{font-size:13.5px;padding-left:11px;margin-left:3px;border-left:1px solid rgba(255,255,255,.4);opacity:.96}
 @keyframes recband-in{from{transform:translateY(-100%)}to{transform:none}}
 /* 녹음기가 멈춘 것 같을 때: 노란 띠(점은 깜빡이지 않는다) */
-html.rec-v2 .rec-indicator.warn{background:#FACC15;color:#1F2937;box-shadow:0 2px 10px rgba(0,0,0,.32)}
+html.rec-v2 .rec-indicator.warn{background:#FACC15;color:#1F2937;box-shadow:0 2px 10px rgba(0,0,0,.32);font-size:14px;letter-spacing:-.3px}   /* 글이 길어 한 치수 작게 — 좁은 폰(360px)에서도 한 줄 */
 html.rec-v2 .rec-indicator.warn .rec-dot{background:#1F2937;animation:none}
 html.rec-v2 .rec-indicator.warn .rec-ind-time,
 html.rec-v2 .rec-indicator.warn .rec-ind-go{display:none}
