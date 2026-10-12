@@ -236,6 +236,7 @@
   document.addEventListener('kintro:line', function () { try { homeGreetBand = ''; paintHomeGreet(); } catch (e) {} });   // v9.6: 시작 인사가 고른 말로 홈 인사를 맞춘다
   function showHome() {
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
+    try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
     try { if (window.KScene && KScene.reset) KScene.reset(); } catch (e) {}   // v9.5: 화면을 새로 열면 장면이 스르륵 다시 등장
     try { paintHomeGreet(); } catch (e) {}                // v9.4: 시간대가 바뀌었으면 인사만 갱신
@@ -249,6 +250,8 @@
     try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {}   // (O-0129) 홈 「오늘 한눈에」 카드
   }
   function openScreen(el) {
+    // v9.10: 케이 꾸미기에서 녹음 띠 · 바로가기 · 알림으로 다른 화면에 갈 때 — 틀어 둔 미리 듣기 · 인사를 먼저 멈춘다(예전에는 몇 초 남았다)
+    try { if (el !== $('kWardrobeView') && isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
     if (window.SmartDocs && SmartDocs.leave && el !== $('docsView')) { try { SmartDocs.leave(); } catch (e) {} }
     hide(homeView);
@@ -5616,6 +5619,12 @@
     try { if (window.KChar && KChar.assets) KChar.assets.ensureThumbs(); } catch (e) {}   // v9.5: 서버에서 받는 새 옷의 옷장 사진(받으면 목록에 나타난다)
     try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeOpen) KMotion.wardrobeOpen(kmFrom, $('kWardrobeView')); } catch (e) {}
   }
+  // v9.10: 케이 꾸미기에서 틀어 둔 소리(목소리 미리 듣기 · 직접 읽기 · 전신 인사)를 멈춘다 — 닫기 단추와, 다른 길로 화면을 떠날 때가 함께 쓴다
+  function kwHush() {
+    try { if (window.KChar) KChar.voice.stop(); } catch (e) {}
+    try { kvPvStop(); } catch (e) {}
+    try { stopKFullBow(); } catch (e) {}
+  }
   function closeKWardrobe() {
     if (window.KChar) KChar.voice.stop();
     kvPvStop();                                       // v9.7: 케이 목소리 미리 듣기도 멈춘다
@@ -5623,6 +5632,7 @@
     if (kwFrom === 'chat') { openChat(); return; }
     var kmFrom = null, changed = false;               // v9.9(O-0451): 홈으로 돌아간다 — 큰 사진이 홈 카드 자리로 내려앉고, 옷이 바뀌었으면 홈 카드가 한 번 반짝인다
     try { if (window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab($('kwHero')); } catch (e) {}
+    if (REC_ROAM_V2 && isRecording) kmFrom = null;    // v9.10: 녹음 띠가 떠 있는 동안에는 내려앉는 사진을 띄우지 않는다(띠를 스쳐 지나갔다) — 옅게 나타나기만
     try { changed = !!(window.KChar && kwOutfitAtOpen && KChar.outfit().id !== kwOutfitAtOpen); } catch (e) {}
     showHome(); setStatus('대기 중', 'idle');
     try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, $('kHero'), changed); } catch (e) {}
