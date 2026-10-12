@@ -221,6 +221,8 @@
 
     <!-- ===================== 녹음 중 ===================== -->
     <section id="recView" style="display:none;">
+      <!-- v9.8(O-0442) 다른 화면과 같은 [뒤로] — 누르면 묻지 않고 나가고 녹음은 계속된다(스위치 REC_ROAM_V2 가 꺼져 있으면 CSS 가 숨긴다) -->
+      <div class="subbar rec-sub"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 중</span><span class="spacer"></span></div>
       <!-- v9.4 일하는 케이: 타이머 옆에서 받아 적는 케이. 한마디는 app.js 의 녹음 타이머가 맞춘다(「받아 적고 있습니다. N분째입니다.」) -->
       <div class="ksc rec" id="kscRec" data-pose="note" role="status">
         <div class="ksc-l"><div class="timer" id="recTimer">00:00</div><div class="ksp"><b>케이</b><p>받아 적고 있습니다. 편하게 말씀하세요.</p></div></div>
@@ -698,12 +700,14 @@
   </main>
 </div>
 
-<!-- 녹음 중 미니 배너(녹음을 백그라운드로 유지한 채 다른 화면에 있을 때 표시 · 탭하면 녹음 화면으로) -->
+<!-- 녹음 중 표시(녹음을 켜 둔 채 다른 화면에 있을 때 · 누르면 녹음 화면으로).
+     v9.8(O-0442): 아래 알약 → 위쪽 띠(화면을 44px 밀어 내려 아무것도 가리지 않는다). 모양은 styles.css 의 html.rec-v2 규칙, 글은 app.js 가 맞춘다.
+     정지 단추는 일부러 두지 않는다(정지·저장은 녹음 화면에서만). -->
 <button id="recIndicator" class="rec-indicator" type="button" style="display:none;" aria-label="녹음 화면으로 돌아가기">
   <span class="rec-dot"></span>
-  <span class="rec-ind-tx">녹음 중</span>
+  <span class="rec-ind-tx" id="recIndTx">녹음 중</span>
   <span id="recIndTime" class="rec-ind-time">00:00</span>
-  <span class="rec-ind-go">녹음 화면 →</span>
+  <span class="rec-ind-go" id="recIndGo">녹음 화면 →</span>
 </button>
 
 <!-- 토스트 -->

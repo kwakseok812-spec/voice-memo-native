@@ -82,7 +82,14 @@
   }
   var recTimerEl = $('recTimer'), recStart = 0, recInterval = null;
   var isRecording = false, recCancelled = false;
+  /* v9.8(O-0442) 녹음하면서 다른 화면 보기 — 스위치.
+   *   true  : 녹음 화면 [뒤로](묻지 않고 나감) · 위쪽 띠(화면을 밀어 내림) · 홈 단추가 돌아가는 길 · 녹음 상태 되찾기 · 확인 창들.
+   *   false : 2026-09-21 방식 그대로(「뒤로」 창 + 아래 알약). 화면 규칙(styles.css)은 html.rec-v2 일 때만 먹는다.
+   *   네이티브(자바) 쪽은 덧붙이기만 해서 어느 쪽이든 맞물린다. */
+  var REC_ROAM_V2 = true;
+  try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
   var recIndicator = $('recIndicator'), recIndTime = $('recIndTime');   // 녹음 중 미니 배너(백그라운드 녹음 표시 · 2026-09-21)
+  var recIndTx = $('recIndTx'), recIndGo = $('recIndGo');
 
   /* ---------- 유틸 ---------- */
   function show(el) { if (el) el.style.display = ''; }
@@ -116,6 +123,12 @@
   function hideBanner() { if (banner && RecordingModule.isSupported()) banner.style.display = 'none'; }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function fmtSec(s) { s = Math.max(0, Math.floor(s)); return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60); }
+  // v9.8: 녹음 시간 글자 — 1시간 전까지는 12:34, 넘으면 1:15:10(예전에는 75:10). 녹음 화면·띠·홈 단추·완료 화면이 모두 이 함수 하나를 쓴다.
+  function fmtRec(s) {
+    s = Math.max(0, Math.floor(s));
+    if (!REC_ROAM_V2 || s < 3600) return fmtSec(s);
+    return Math.floor(s / 3600) + ':' + pad2(Math.floor((s % 3600) / 60)) + ':' + pad2(s % 60);
+  }
   function defaultTitle() { var d = new Date(); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
   /* v6.5 (O-0085): 서버 시각(created_at 등, UTC) → 한국 시간 {date:'YYYY-MM-DD', time:'HH:MM'}.
@@ -230,17 +243,62 @@
    * 탭하면 녹음 화면으로 돌아가 [정지]/[취소] 할 수 있다. */
   function updateRecIndicator() {
     if (!recIndicator) return;
-    if (isRecording && !isOpen(recView)) recIndicator.style.display = 'flex';
-    else recIndicator.style.display = 'none';
+    var on = isRecording && !isOpen(recView);
+    var wasOn = recIndicator.style.display !== 'none';
+    recIndicator.style.display = on ? 'flex' : 'none';
+    if (!REC_ROAM_V2) return;
+    // v9.8: 띠가 보이는 동안 화면 전체를 띠 높이만큼 민다(html.rec-band → --rec-h). 글·모양도 여기서 맞춘다.
+    var de = document.documentElement, calm = false;
+    de.classList.toggle('rec-on', !!isRecording);
+    de.classList.toggle('rec-band', on);
+    try { calm = !!(window.KScene && KScene.calm && KScene.calm()); de.classList.toggle('rec-calm', calm); } catch (e) {}
+    // 내려오는 움직임은 띠가 새로 나타날 때 한 번만(움직임을 쉬는 때에는 없음)
+    if (on && !wasOn && !calm) { recIndicator.classList.remove('rec-in'); void recIndicator.offsetWidth; recIndicator.classList.add('rec-in'); }
+    else if (!on || calm) recIndicator.classList.remove('rec-in');
+    if (recIndTx) recIndTx.textContent = '녹음 중';
+    if (recIndGo) recIndGo.textContent = '녹음 화면으로 ›';
+    recIndicator.setAttribute('aria-label', '녹음 중. 누르면 녹음 화면으로 돌아갑니다');
+    paintRecHome();
   }
   if (recIndicator) recIndicator.addEventListener('click', function () { openScreen(recView); });
+  // v9.8: 홈의 「회의 녹음」 단추 — 녹음 중에는 돌아가는 길(예전에는 눌러도 반응이 없었다). 띠와 같은 말 「녹음 화면으로」.
+  function paintRecHome() {
+    if (!REC_ROAM_V2 || !btnRecord) return;
+    var lab = btnRecord.querySelector('.kh-reclab'); if (!lab) return;
+    var tx = isRecording ? ('녹음 중 ' + (recIndTime ? recIndTime.textContent : '') + ' · 녹음 화면으로') : '회의 녹음';
+    if (lab.textContent !== tx) lab.textContent = tx;
+    btnRecord.setAttribute('aria-label', isRecording ? '녹음 중. 누르면 녹음 화면으로 돌아갑니다' : '회의 녹음 시작');
+  }
+  // v9.8: 화면을 다 쓰는 곳(문서 전체화면 · 슬라이드쇼)에서는 띠를 접어 작은 알약으로(html.rec-chip)
+  function syncRecChip() {
+    try {
+      var ss = $('slideshow'), ssOn = !!(ss && ss.classList.contains('on'));
+      var full = document.body.classList.contains('doc-fs') || ssOn;
+      document.documentElement.classList.toggle('rec-chip', full);
+      // 브라우저 전체화면(Fullscreen API)은 그 요소 안의 것만 그린다 → 전체화면 동안에는 표시를 그 안으로 옮겨 두고, 나오면 제자리로
+      if (recIndicator) {
+        if (ssOn && recIndicator.parentNode !== ss) ss.appendChild(recIndicator);
+        else if (!ssOn && recIndicator.parentNode !== document.body) document.body.appendChild(recIndicator);
+      }
+    } catch (e) {}
+  }
+  if (REC_ROAM_V2 && window.MutationObserver) {
+    try {
+      var _recMo = new MutationObserver(syncRecChip);
+      _recMo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      if ($('slideshow')) _recMo.observe($('slideshow'), { attributes: true, attributeFilter: ['class'] });
+      syncRecChip();
+    } catch (e) {}
+  }
 
   /* ---------- 녹음 ---------- */
   // v9.4 일하는 케이: 녹음 중 = 받아 적는 모습 + 한마디(값 = 녹음 시작 뒤 지난 분 — 타이머와 같은 시계)
   function recScene(sec) {
     if (!window.KScene) return;
     var min = Math.floor((sec || 0) / 60);
-    KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째입니다.' : '받아 적고 있습니다. 편하게 말씀하세요.');
+    // v9.8: 첫 1분의 한마디로 「나가도 녹음은 계속된다」를 알린다(따로 안내 줄을 만들지 않는다)
+    var first = REC_ROAM_V2 ? '받아 적고 있습니다. 다른 화면을 보셔도 계속 적겠습니다.' : '받아 적고 있습니다. 편하게 말씀하세요.';
+    KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째입니다.' : first);
   }
   function startRecTimer() {
     recStart = Date.now();
@@ -250,9 +308,10 @@
     recScene(0);
     recInterval = setInterval(function () {
       var s = (Date.now() - recStart) / 1000;
-      if (recTimerEl) recTimerEl.textContent = fmtSec(s);
-      if (recIndTime) recIndTime.textContent = fmtSec(s);   // 미니 배너 시간도 함께 갱신
+      if (recTimerEl) recTimerEl.textContent = fmtRec(s);
+      if (recIndTime) recIndTime.textContent = fmtRec(s);   // 미니 배너 시간도 함께 갱신
       recScene(s);
+      paintRecHome();
     }, 500);
   }
   function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
@@ -339,6 +398,7 @@
 
   // 홈에서 녹음 오브 → 바로 녹음하지 않고 「준비 화면」으로(자료 첨부 + [녹음 시작])
   if (btnRecord) btnRecord.addEventListener('click', function () {
+    if (REC_ROAM_V2 && isRecording) { openScreen(recView); return; }      // v9.8: 녹음 중에는 돌아가는 길
     if (btnRecord.disabled || isRecording) return;
     hideBanner();
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
@@ -357,6 +417,7 @@
   if (btnStop) btnStop.addEventListener('click', function () {
     if (!isRecording) return;
     isRecording = false; stopRecTimer();
+    if (REC_ROAM_V2) updateRecIndicator();
     recorder.stop();   // → onAudio → onRecorded
   });
   if (btnCancelRec) btnCancelRec.addEventListener('click', function () {
@@ -400,7 +461,7 @@
     if (memoTitle) memoTitle.value = defaultTitle();
     var durMs = (recorder && recorder.lastDurationMs) || 0;
     if (recDoneBadge) recDoneBadge.textContent = durMs > 0
-      ? '✅ 녹음됐습니다 · ' + fmtSec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)'
+      ? '✅ 녹음됐습니다 · ' + fmtRec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)'
       : '✅ 녹음됐습니다';
     openScreen(recordedPanel);
     setStatus('녹음 완료 — 제목 정하고 보내기', 'idle');
@@ -1622,6 +1683,7 @@
   var starIds = (function () { try { return JSON.parse(localStorage.getItem(STAR_IDS_KEY) || '{}') || {}; } catch (e) { return {}; } })();
   var chatJumpUid = '', chatJumpUntil = 0;
   var APP_VERSION = 'v9.7';     // M1: 화면에 표시해 대표님이 최신본인지 알게 한다 (v9.7(O-0401): 케이 꾸미기 「설정」에서 케이 목소리 고르기 — PC 가 목록을 내려 줄 때만 「따뜻한 목소리 · 매끄러운 목소리 · 세라피나」 세 줄과 미리 듣기가 보이고, 고르면 PC 에 알려 브리핑과 글 채팅 [듣기]에 쓴다(음성 대화는 세라피나 그대로). 기기 음성은 아래 「직접 읽기」 묶음으로. PC 가 꺼 두었으면 예전 화면 그대로 · versionCode 51) (v9.6.1: 옷장 목록 그림을 「허리 위 · 회색 배경」판으로 — 그림 교체 · versionCode 50) (v9.5.1(O-0386): 건강 탭 끼니 칸(아침·점심·저녁)에 「안 먹음」 — 누르면 그 끼니는 적은 것으로 세고 한 줄로 접힘, 다시 누르면 풀림 · versionCode 48) (v9.4(O-0344·O-0353): 건강 탭 — ＋/− 가 지난 기록값에서 시작 · 지난 날짜 고치기 · 약·영양제를 위로, 적은 끼니는 한 줄로 · 안 올라간 칸 표시+자동 재전송(다른 기기 값 안 덮음) · 9칸 기준 / 누르는 자리 넓힘 · 밝은 화면 흐린 글씨 진하게 · 옛 문구 정리 / 케이가 보낸 알림·보고 목록을 연동 암호로 잠금 · versionCode 46) (v9.3(O-0247): 도구 「미러링」 — 폰 화면을 로키드 안경에 비추기, 별도 앱이던 것을 스마트비서 안으로(홈 「도구」 맨 아래 「안경 연결」 한 줄 → 네이티브 미러링 화면, 기능·안경 앱과의 통신은 별도 앱 v0.4 그대로, 폰 앱·안드로이드 10 이상에서만 보임, 허용 창은 그 화면에서 「시작」을 누를 때만). v9.2(O-0233): 음성 대화 효과음 줄이기가 폴드8에서 안 먹히던 문제 — 받아쓰기 신호음이 알림 소리 통로로 나서 그 통로를 줄이도록 바꿈, 벨소리·미디어는 건드리지 않음, 진단 값 추가. v9.1(O-0209): PC판에서 채팅을 읽으면 폰 앱을 열지 않아도 폰의 알림 서랍·앱 아이콘 숫자·바탕화면 위젯 수가 내려감 — PC 워커가 서버 읽음 기준(k_read_state)이 앞으로 간 것을 보고 「조용한 푸시」(data.k_clear, 화면에 아무것도 안 뜸)를 보내고, 폰(KClear)이 「읽은 시각까지」의 케이 답장 알림·채팅 화면 알림(꼬리표 kc|chat|시각)만 내림. 건강·아이디어 알림과 그 뒤에 온 알림은 그대로. 새 화면·버튼 없음. 옛 APK(v9.0 이하)에는 조용한 푸시를 보내지 않음(기기 표시 rclr). v9.1 에 함께 넣은 것 — (O-0210) 음성 대화 측정·알림: 폰 쪽 시각(말 끝 판정 뒤 기다린 시간·조각/답 받은 때·목소리 시작)을 다음 음성 턴에 실어 PC 로그로 보냄(meta.vprev), 목소리를 못 만든 턴은 안내 글. 화면·버튼·말 끝 기다림 값은 그대로. (O-0223) 음성 대화 효과음: 폰 받아쓰기가 내는 삑·띠링을 「케이 꾸미기」 화면 한 줄에서 켬/작게(기본)/끔으로 — 작게=듣기 시작 삑만 30%로 남기고 뒤는 끔, 끝나면 원래 음량으로 되돌림. (O-0226) 케이 표정: 감사·드릴게요·알겠습니다 같은 일상 답과 「네,」「대표님,」으로 시작하는 답도 미소, 웃는 얼굴은 15초(예전 7초), 정지 사진으로 보이는 자리(말풍선 옆 동그란 얼굴·프로필 첫 사진·움직임 끔)의 기본 얼굴을 미소로. 움직이는 영상(평소·말하는 중)은 그대로, 걱정 낱말(죄송·보류·지연)이 있으면 웃지 않음. 새 버튼·화면 없음. (O-0217) 말로 길 안내: 「○○까지 길 안내해 줘」에 케이 답 아래 [길찾기] 칩 → 네이버 지도(홈 「길찾기」·일정 [길찾기]와 같은 통로). PC 스위치(o0217_switch.json)가 켜져야 칩이 붙음. v9.0(O-0201): 읽음 기준 기기 간 공유 — 폰·PC판 어느 쪽에서든 채팅을 읽으면 다른 기기의 「새 메시지 N건」도 내려감(서버 한 줄 k_read_state · 연동 암호 RPC get_chat_read/mark_chat_read, 올리는 값은 서버가 메시지에 매긴 시각, 채팅을 실제로 보고 있을 때만 · PC판은 창 선택+최근 5분 내 조작, 서버 SQL 이 없거나 옛 APK 면 예전처럼 기기별 기준). 작업 카드·작업 현황의 결정 대기 항목에 [승인]·[수정 요청](채팅에 「#번호 승인」/「#번호 수정 요청: …」을 대신 보냄 — 새 서버 경로 없음, 승인은 확인 시트 한 번). 홈 「오늘 한눈에」 접힌 한 줄 — PC가 일정·메일을 못 불러온 날 「일정 0 · 메일 0」 대신 「못 불러왔어요」. v8.9(O-0189 긴급): 음성 대화가 말하는 중에 끊고 보내던 문제 — 폰 받아쓰기를 「이어 듣기」로(인식기가 스스로 끝내도 보내지 않고 다시 들으며 글을 이어 붙임), 보내는 때는 새 글자·큰 소리 없이 「말 끝 기다림」이 지났을 때·[다 말했어요]를 눌렀을 때·60초를 채웠을 때뿐. 말 끝 기다림 0.9초 → 기본 2초(무대 「기다림」 칩으로 짧게 1.2초/보통 2초/길게 3초, 이 기기에 저장), 녹음 경로도 같은 값(소음 적응 유지). 무대에 [다 말했어요 · 지금 보내기] 버튼. 끝난 이유·말한 길이를 PC 로그로(글 내용 아님). v8.8(O-0175·O-0176·O-0177·O-0178): 홈 정리 — 오늘 한눈에 아래를 「도구」 4칸×2줄(회의록·문서 뷰어·건강·계산기 / 공유함·아이디어·명함 검색·길찾기) + 「PC 연결」 두 줄(「Claude Code 연결」=PC 케이 대화방, 「PC 원격 제어」=크롬 원격 데스크톱, 문서 뷰어 편집 시트도 [PC 원격 제어 열기])로. 홈에서 작업 현황·예약한 알림·저장한 답 카드를 빼고 오늘 한눈에(「작업 현황 보기」 늘 보임·「예약한 알림」 한 줄·[말로 맡기기 (일정·알림)]·머리줄 눌러 접기 한 줄 요약)와 채팅 📋·☆ 로. 「지난 메모」+「회의 요약」 → 「회의록」(맨 위 「진행 중」 칸, 홈엔 진행 중인 것만·접기). 홈 사진·영상 보내기 칸 → 채팅 ＋ 고르기 창(케이에게 / 명함 등록·사진 PC 정리 / 영상 정리). 앱 서랍 「케이 음성」 아이콘 제거(바로가기 「음성 대화」는 그대로), 바로가기 「사진 보내기」→「케이에게 사진」. 계산기(O-0178) — 기본+공학용(삼각·역삼각·log·ln·거듭제곱·루트·n!·EXP·DEG/RAD·메모리·Ans), 직접 만든 계산 엔진(eval 없음), 계산 기록, [케이에게 묻기], 넓은 화면은 공학 자판 함께, 키보드 입력. 음성 대화 속도(O-0177) — 폰에서 바로 받아쓰기(KSpeech)·실시간 글자, 말 끝 판정 약 0.9초+소음 적응(vad.js), 조각 목소리 차례 재생(PC 스위치가 켜졌을 때), 케이 얼굴을 눌러 말 끊기. v8.7 까지: v8.7(O-0173·O-0174): 홈 「PC 화면」 카드 — 누르면 크롬 원격 데스크톱 앱이 바로 열림(없으면 플레이 스토어 안내, PC판은 원격 데스크톱 웹 새 탭, 문서 뷰어 [원격 화면 열기]와 같은 동작). 문서 뷰어 [✏️ 편집하기]를 워드·엑셀·PPT(doc·docx·xls·xlsx·ppt·pptx)에도 켬 — PC 편집 워커가 COM 으로 정확한 경로의 문서 창만 찾아 앞으로(다른 폴더 같은 이름 문서와 헷갈리지 않음, 엑셀·PPT 는 같은 이름이 열려 있으면 「(2)」 사본으로 엶). v8.6(O-0171·O-0172): 문서 뷰어 [✏️ 편집하기] — 한글(hwp·hwpx) 문서를 24시간 PC의 진짜 한글 프로그램으로 열어(창 최대화·맨 앞) 크롬 원격 데스크톱(삼성 DeX)으로 고치고 [저장] → [다 됐어요]로 고친 문서를 PDF·원본 파일로 돌려받음(채팅에도 첨부·푸시 없음). 원본은 PC 경로·사무소 서버 주소·폰 파일 순으로(최근 연 문서는 원본 다시 고르기). 연동 암호 확인 RPC로만 요청. [원격 화면 열기]=크롬 원격 데스크톱 앱(없으면 스토어), PC판은 원격 데스크톱 웹. 넓은 화면(900px↑)은 가운데 대화상자. 워드·엑셀·PPT 편집은 EDIT_ON_EXTS 한 줄로 켤 수 있음(PC 변환기가 켜 둔 Office 창을 닫던 문제는 O-0172로 고침). v8.5(O-0169): 홈 「오늘 한눈에」 날씨 줄 맨 앞에 「지금 21° 흐림」(앱이 Open-Meteo 를 직접 읽음 — 서울 시청 좌표만·키 없음, 홈이 보이는 동안 10분마다·열 때 3분보다 묵었으면 다시, 실패하면 PC 요약의 이번 시각 예보 「16시 21°」), 누르면 「오늘 날씨」 창 — 지금(크게)·남은 하루 우산·오늘 1시간 단위 가로 줄(지금 시각이 맨 왼쪽, 지난 시간은 흐리게, 저녁엔 내일 0~9시까지)·출퇴근 칸, 뒤로가기로 닫힘. v8.4(O-0162): 채팅 답을 기다리는 동안 점 세 개 옆에 「캘린더 확인 중…」처럼 케이가 지금 하는 일(PC 진행 표시) / 채팅 머리줄 케이 얼굴 옆 PC 상태 점(초록 정상·주황 바쁨·빨강 PC 응답 없음, 펼친 화면은 글자까지, 응답 없으면 맨 아래 안내) / 홈 「오늘 한눈에」 출퇴근 날씨·우산 한 줄(서울, 누르면 자세히) / 다른 앱에서 녹음 파일(통화 녹음 등)을 [공유]하면 [회의록으로 정리]·[케이에게 보내기] 고르기 — 회의록은 앱 녹음과 같은 화면·같은 정리 / 글자 크기 4단계(맨 위 「가가」·케이 꾸미기, 말풍선·입력창·홈 카드·문서 뷰어 글·엑셀 표). v8.3(O-0161): 말로 알림 예약 — 케이가 되읽어 확인 뒤 등록, 정한 시각에 앱 알림(PC 발송기·토큰 0), 홈 「예약한 알림」 목록·취소 / 앱 서랍 「케이 음성」 — 측면 버튼 두 번 누르기 → 바로 음성 대화 / 케이 답 [⋯] → ⭐ 저장, 홈·채팅 ☆ 「저장한 답」(검색·그 대화로·해제, 서버 저장) / 사무소 방송에 미리 붙인 케이 목소리 [▶ 듣기](아침 브리핑). v8.2: 어디서든 [공유] → 케이(O-0157) — 카톡 글·링크·사진 여러 장·파일을 공유하면 채팅에 첨부·본문이 채워져 열리고 빠른 칩 「요약해 줘」「답장 써 줘」「일정 잡아 줘」, 공유 문서 1개는 [문서 뷰어로 열기]/[케이에게 보내기] 고르기(「열기」는 예전처럼 곧장 뷰어). 케이 답장 알림에서 바로 [답장](앱을 안 열어도 됨, 잠금 해제 후에만, 자동 알림엔 버튼 없음). 아이콘 길게 눌러 음성 대화·녹음(바로 시작)·사진 보내기·오늘 한눈에. 바탕화면 케이 위젯 3종(한 줄·얼굴·카드, 스스로 깨어나지 않음, 「위젯에 내용 숨기기」). + 보안(O-0158): 채팅·사진·영상·명함검색·아이디어는 연동 암호 확인 RPC(submit_memo)로만 보냄 — 서버가 「확인됨」 표시를 남기고 PC는 그 표시를 확인. v8.1: 문서 뷰어 [케이에게 묻기·맡기기](O-0154) — 보던 문서를 쪽 번호·시트와 함께 케이 채팅으로(묻기 칩 3·맡기기 칩 2·직접 적기, 탭 2개 이상이면 열린 문서 함께 보내기), 엑셀은 원본·그 밖은 변환 PDF, PC 변환본이 서버에 있으면 다시 올리지 않음, 묻고 나와도 「이어서 보기」로 남음. v8.0: 문서 뷰어 여러 문서 탭(O-0153) — 보던 화면에서 [＋ 파일 더 열기]로 문서를 더 열면 탭(1·2·3…)으로 붙고, 탭을 누르면 보던 쪽·확대·회전·시트 그대로 왔다갔다. 최대 5개·같은 문서는 그 탭으로·여는 데 실패하면 보던 탭으로·탭 2개 이상 두고 나가면 고르기 화면 「열어 둔 문서 · 이어서 보기」. v7.9: 삭제 전 확인 — 임시저장·실패 항목을 지우기 전에 한 번 물어봄. 임시저장 창에 붙인 자료 이름 목록과 하나씩 빼기(✕). 재전송 시 자료 뒤바뀜 방지(자료마다 고정 저장 번호). 긴 녹음(조각 전송)을 다시 보낼 때 고친 제목·자료 반영(서버 update_pending_memo, PC가 조각을 다 받기 전까지 · 늦었으면 안내). 채팅·공유함 파일 이름 칩 — 폰에서 APK·압축·한글·오피스 파일은 크롬 대신 앱이 직접 저장(사진·영상·PDF는 그대로 열기). 다운로드 실패 사유 표시. 다운로드 멈춤 감지 10분 → 시작 대기 45초/진행 멈춤 2분. v7.8: 홈 「길찾기」 카드 — 누르면 네이버 지도 앱이 바로 열림(nmap://map, 앱 없거나 PC판이면 웹 지도). 임시저장을 다시 열어 제목 고치기 — 치는 동안엔 목록만, 녹음이 든 임시저장 쓰기는 입력을 마쳤을 때·보내기·창 닫힐 때 한 번, 비우면 기본 이름. 회의자료 중복 붙이기 방지·요약 상한 안내. 실패 항목을 삭제한 뒤에도 자동 전송되던 문제(삭제 시 dropPending). 「작업 현황」 화살표 위치. v7.7: 안읽음 실시간 갱신(O-0134) — 앱을 껐다 켜야만 새 메시지·홈 케이 말풍선이 보이던 문제. 화면이 보이는 동안 30초마다 케이 방송·다른 기기 대화를 조용히 받고, 앱 복귀·홈 복귀 즉시 한 번 받음, 화면 꺼짐·백그라운드면 멈춤. 방송·대화 조회 15초 타임아웃 + 굳은 '조회 중' 45초 뒤 풀기. 안읽음 계산·알림 제외·OS 알림/아이콘 배지는 그대로. v7.6: 홈 「오늘 한눈에」 일정 [길찾기](O-0133) — 장소가 기관·주소인 일정 옆 버튼 → 네이버 지도 앱 검색(nmap://search, 좌표·키 없음, [도착] 한 번 더 = 현재 위치 출발 대중교통), 앱 없으면 웹 지도, 방 이름만·온라인 회의는 버튼 숨김, PC판은 웹 지도. v7.5: 홈 「오늘 한눈에」(O-0129) — 녹음·케이 버튼 아래 카드 한 장: 오늘 일정(지금·다음 강조, 지난 일정은 접음)·답할 메일(제목·보낸 사람)·챙길 일(작업 현황 미완료, 확인 필요 먼저)+[말로 일정 잡기](채팅 열고 음성 대화). 일정·메일은 PC가 07~21시 매시 읽기 전용으로 만든 서버 요약(get_home_digest, 연동 암호), 할 일은 작업 현황 결과 재사용. 누르면 상세 시트→채팅 초안만(보내지 않음). + 건강기록 잠그기(O-0130) — 건강 탭 조회·저장과 푸시 토큰 등록을 연동 암호 게이트 RPC(health_list·health_upsert·push_token_register)로 옮김: 공개 키만으로는 건강기록·토큰을 읽거나 고칠 수 없게. 암호가 없으면 연동 암호 창, 폰에만 남은 값은 암호가 들어오면 올림. v7.4: 음성 대화 케이 무대(O-0124) — 「음성 대화」를 켜면 채팅 화면 위쪽 40%에 케이가 크게(말할 땐 talk 영상·들을 땐 idle, 기본머리 외·영상 실패는 정지 사진+끄덕임), 상태 줄 「듣는 중/답하는 중/말하는 중」, 대화 글은 무대 아래 상자에서 스크롤(위 가장자리 흐림), 음성 대화 중엔 맨 위 「스마트비서」 줄 접기, 키보드가 올라오면 무대 축소, 무대가 안 보이면 영상 정지·헤더 작은 얼굴 영상은 멈춤. 끄면 예전 화면 그대로. v7.3: 홈 「PC 케이에게 직접」 고침(O-0120) — 바로 claude.ai/code를 열어 새 클라우드 작업 시트가 뜨던 것을, 먼저 3줄 안내 시트(✕로 닫기 → Code 목록에서 PC 세션 고르기) + [Claude 앱 열기]로. 세션 제목·주소는 PC_K_* 상수 한 곳. v7.2: 통합 배포(O-0118) — 홈 케이 말풍선(O-0117, 숫자 배지 대신 「대표님, ○○」)·「문제」 표정 판정 좁히기 + 케이 전신 시작 인사(O-0116, 자막 멘트 13개·목소리 없음·설정 하루 첫 실행만(기본)/켤 때마다/끄기·[지금 보기]) + 꾸미기 전신 10벌(누르면 인사는 버건디만) + 네이티브 시작화면 다크(#070B1D) 통일 + 홈 「PC 케이에게 직접」(claude.ai/code 바깥으로 열기). v7.1: 글을 먼저 쓰면 첨부가 안 되던 문제 수정(O-0108) — 폰 입력 바의 ＋/카메라가 네이티브 파일 선택(NativeInput.pickFiles)으로 직접 골라 첨부 대기줄(window.SmartAttach)에 붙임·첨부만 보내기 가능·옛 APK는 예전 방식 + 채팅 긴 메시지 접기(O-0111) — 20줄 넘는 본문은 15줄까지만+아래 흐림+[전체 보기 ▼]/[접기 ▲], 펼친 상태는 다시 그려도 유지. v7.0: 채팅 개수 상한 없애기(O-0102) — 열 때 최신 150건(대화+방송 합쳐)만 빠르게 받고, 맨 위 [이전 대화 더 보기]로 첫 대화까지 끝없이 이어 보기(서버 list_chat_page 쪽 조회·연동 암호 잠금), 검색은 [옛 대화까지 모두 찾기]로 전체에서, 한 기기서 지운 방송은 다른 기기에서도 안 보이게(서버 숨김 제외). 서버 SQL 미적용이면 예전 방식으로 자동. v6.9: 문서 뷰어 — 큰 문서 올리기가 끊기지 않게(O-0097: 조각마다 진행률·멈춤 감시·자동 재시도, 조각이 다 올라간 뒤에만 PC에 요청, [다시 시도]는 이어서 올리거나 이미 변환된 결과를 바로 엶), 기다림은 PC가 변환을 시작한 뒤부터(작은 문서 5분·큰 문서 10분, 단계·경과 표시) + 「최근 연 문서」(O-0098: 이 기기에 변환본 보관 → 다시 열 때 변환 없이 바로, 지난번 본 쪽부터, 즐겨찾기·지우기·모두 비우기, 최대 1GB·40개 넘치면 오래 안 연 것부터 자동 정리). v6.8: 상단 고정 머리줄의 판 제거(O-0089) — 폰에서 v6.6 헤더가 앱 배경 위에 단색 네모 판으로 떠 보이고 상태바 덮개가 위 앱 제목을 가리던 문제. 머리줄은 투명, [뒤로]·오른쪽 버튼만 알약으로 떠 있고, 스크롤하면 제목·케이 이름표도 알약 배경. 상태바 덮개 삭제·blur 없음. v6.7: 폰 [⬇ 다운로드] 실제 저장(O-0088) — 안드로이드 WebView 는 blob <a download> 를 저장하지 못해 「저장했어요」만 뜨고 파일이 없던 문제. 폰은 네이티브 FileDownload(DownloadManager)로 「다운로드」 폴더에 실제 저장·저장 확인 뒤에만 성공 안내·APK 는 설치 화면으로(처음 한 번 「이 출처 허용」)·실패 시 웹페이지로 받기 자동 전환. 채팅·공유함 공통, PC판은 그대로. v6.6: 파일 크기 상한 5GB 통일(O-0086) — 회의자료 40MB·사진 45MB·채팅 사진 45MB(말없이 뺌)를 5GB로, 상한 없던 영상·채팅 파일·문서 뷰어·공유함도 같은 5GB(OfficeBridge.MAX_UPLOAD_BYTES 하나), 넘으면 「5GB까지 보낼 수 있어요」 안내, 사진 미리보기는 통째 읽기(readAsDataURL) 대신 주소(createObjectURL)로. 「공유/열기」로 넘어온 문서는 네이티브 60MB 유지+앱 안에서 고르는 길 안내. + 모든 서브 화면 상단(뒤로 버튼·제목) 고정(O-0087, 채팅과 같은 방식). v6.5: 회의 요약 시각 한국시간화(O-0085) — 서버 created_at(UTC)을 잘라 쓰던 탓에 11:45 가 02:45 로, 한국 00~09시 녹음은 날짜가 하루 전으로 보이던 문제 수정(kstParts, +9 고정). 목록 카드는 시각 대신 녹음 길이('녹음 · 1시간 40분', 모르면 '녹음')를 표시, 상세는 한국 일시+길이 칩. v6.4: 녹음 재전송 수정(O-0085) — 서버가 '이미 있음'을 400+statusCode 409 로 줘서 재전송이 회의자료 mat_0 에서 죽던 문제 해결(중복=성공), 녹음 조각은 먼저 읽고 올림·재전송은 PC가 받은 조각부터 이어서, 못 붙인 자료(너무 큼·읽기 실패)는 빼고 녹음은 보냄+안내, 실패 이유를 쉬운 말로 표시, 회의자료 저장 확장자 추정(pdf·hwp 등, 모르면 bin). v6.3: 공유함 큰 파일·파일명·실패안내 — 한 번에 올리는 한도를 서버 전역 한도(계획 5GB)로, 진행률 %, 실패 시 이유(용량/인터넷/파일 읽기/서버/권한)를 쉬운 말로 말풍선에 표시하고 파일은 보낼 칸에 되돌려 둠, 폴더 드래그는 걸러 안내, 저장 키 확장자 영문·숫자만(한글 확장자 InvalidKey 방지 — 채팅·문서·회의자료 업로드 공통), 다운로드는 원래 이름 그대로. v6.2: 긴생머리(h02) × 옷 10벌 조합 idle 반복영상(서버 catalog 의 combos[].idle, 없으면 정지 사진). v6.1: 케이 머리 스타일 10종 — 「케이 꾸미기」 옷/머리 탭, 지금 옷 × 머리 조합 사진(서버 공개 버킷 kchar/catalog.json, 실패·오프라인이면 번들 옷장+기본머리로 폴백), [＋ 추가 요청]. v6.0: 소장 「케이」 캐릭터 1차 — 채팅 케이 말풍선 원형 아바타(연속은 첫 칸만)+이름, 헤더 작은 얼굴+「케이 · 소장」→프로필 카드, 홈 「소장 K」 버튼 안 얼굴, idle/talk 반복영상(저전력·실패 시 정지사진), 답장 키워드별 표정, 옷장 「케이 꾸미기」(wardrobe.json 데이터 기반·로컬 저장), 목소리 선택(기본=PC 무료 선희 / 기기 내장 한국어 음성), 「듣기」는 말풍선 아래 줄. v5.9: 채팅 열림 위치 — 열 때·알림 탭·앱 복귀 시 첫 안읽음 메시지의 '시작'에서 열기(없으면 맨 아래), 「여기부터 새 메시지」 구분선, 보는 중 새 메시지는 맨 아래 근처일 때만 그 시작으로 부드럽게·위로 읽는 중이면 위치 유지, 내가 보낸 직후는 맨 아래. + 「작업 현황」 끝난 일 지우기 — 완료·취소·실패·보류 카드마다 [지우기], 「최근 끝난 일」 [모두 지우기](완료·취소만), 맨 아래 [지운 항목 다시 보기]. 지우기=서버 숨김 표시(hidden_at)만, 기록 원본·PC 지시 대장은 그대로. 확인은 앱 시트. v5.8: 채팅 「오퍼스 5.5」 1회 지정(켜고 보낸 그 1건만 meta.model_pref='opus' → PC 케이가 오퍼스 5.5로 처리, 보내면 자동으로 꺼짐 · 웹·네이티브 입력 둘 다) + 「작업 카드」(내 메시지 아래 대장 번호·상태·결과·처리 모델, 자동 갱신) + 「작업 현황」 화면(미완료·최근 완료, 창구 표시) — PC 지시 대장의 서버 사본 office_orders 를 연동암호 게이트 RPC로 조회. v5.7: 「회의 요약」 한눈 요약 — summary_json.brief(요약 v3)면 한 줄 결론을 크게+핵심/교수피드백/결정/할 일(담당·기한 칩)/미결 섹션 구분+상세 접힘, 숫자·날짜 굵게, 잡음 '자주 나온 단어' 숨김. brief 없는 옛 요약은 기존 표시 그대로. v5.6: 💡 아이디어 알림 즉시화 — 밤/낮 분기 제거, 항상 '보냈습니다 — 몇 분 안에 제안서를 보내드릴게요'(워커가 조용시간 없이 즉시 발송하도록 바뀐 데 맞춤). v5.5: 💡 아이디어 수첩 → 활용 제안(큰 버튼 즉시 녹음·글 입력·제안서 목록·갈래 태그 필터·[진행해줘]/[보류]). v5.4: 채팅 말풍선의 「🔔 알림」 딱지·호박색 테두리 표시 제거 — 알림 메시지도 일반 대화처럼 보임(메시지 자체·안읽음 카운트 제외는 그대로). v5.3=회의 요약 이름변경·삭제, v5.2=배지 클리어+회의 요약 탭, v5.1=안전 업로드.)
+  APP_VERSION = 'v9.8';         // v9.8(O-0442): 녹음하면서 다른 화면 보기 — 위쪽 띠·녹음 화면 [뒤로]·녹음 상태 되찾기 (윗줄은 지난 판들의 기록 — 새 판부터는 여기에 한 줄씩 적는다 · versionCode 52)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3176,7 +3238,7 @@
     if (!isOpen(chatView)) return;
     if (awaitingLive()) return;                   // 답 기다리는 중엔 안 들음
     if (kaiPlaying() || vqHasMore()) return;      // ⚠️ 케이 목소리 재생 중엔 녹음 안 함(자기 목소리 오인 방지) — O-0177 결정: 이 게이트 유지
-    if (isRecording) { toast('먼저 홈의 녹음을 마쳐 주세요.'); if (convoOn) stopConvo(true); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); if (convoOn) stopConvo(true); return; }
     // O-0177 ②: 음성 대화 중이고 폰 받아쓰기가 되면 그걸로(실패하면 이 턴부터 아래 녹음 경로)
     if (auto && convoOn && sttUsable()) { unlockKaiAudio(); sttListen(); return; }
     startRecListen(auto);
@@ -3447,8 +3509,10 @@
       if (convoOn && isOpen(chatView) && !awaitingLive() && !kaiPlaying() && !vqHasMore()) startListen(true);
     }, delay || 400);
   }
+  var REC_BUSY_VOICE = '회의 녹음 중에는 음성 대화를 쓸 수 없습니다. 글로 보내 주세요.';
   function startConvo() {
     if (convoOn) return;
+    if (REC_ROAM_V2 && isRecording) { toast(REC_BUSY_VOICE, 3200); return; }   // v9.8: 켜졌다 꺼지지 않게 누르는 순간 막는다
     convoOn = true; convoMiss = 0; updateConvoToggle();
     restartChatReconcile();                       // O-0177: 음성 대화 중엔 답 확인을 빠르게
     toast('음성 대화를 시작합니다. 말씀하시면 자동으로 오갑니다. 끝내려면 다시 누르세요.');
@@ -3484,7 +3548,7 @@
   function toggleChatMic() {
     if (convoOn) { toast('음성 대화 중입니다.'); return; }
     if (anyAwaiting()) { toast('앞 답을 받은 뒤에 말할 수 있습니다.'); return; }
-    if (isRecording) { toast('먼저 홈의 녹음을 마쳐 주세요.'); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
     if (!chatRecording) startListen(false);
     else endListen('manualsend');
   }
@@ -5722,6 +5786,11 @@
         } }
     );
   }
+  // v9.8: 녹음 화면에서 나가기 — 묻지 않는다. 녹음은 계속되고, 위쪽 띠·홈의 녹음 단추로 돌아온다.
+  function leaveRecScreen() {
+    showHome(); setStatus('녹음 중(백그라운드)', 'rec');
+    toast('녹음은 계속됩니다. 위쪽 띠로 돌아옵니다.', 3500);   // 폰 폭(390px)에서 2줄 이내가 되게 짧게
+  }
   function goBack() {
     if (fsSheet) { closeFontSheet(); return true; }                        // v8.4: 글자 크기 창
     if (window.TodayCard && TodayCard.closeWeather && TodayCard.closeWeather()) return true;   // v8.5(O-0169): 오늘 날씨 창
@@ -5733,7 +5802,8 @@
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
-    if (isRecording && isOpen(recView)) { openRecLeaveSheet(); return true; }
+    if (isRecording && isOpen(recView)) { if (REC_ROAM_V2) leaveRecScreen(); else openRecLeaveSheet(); return true; }
+    if (REC_ROAM_V2 && isOpen(recView)) { showHome(); setStatus('대기 중', 'idle'); return true; }      // 녹음이 시작되지 못한 채 남은 녹음 화면
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
@@ -5777,7 +5847,11 @@
       if (window.KIntro && KIntro.active()) { KIntro.skip(); return; }   // (O-0116) 시작 인사 중 뒤로 = 건너뛰기(앱 종료 아님)
       if (goBack()) return;
       // 녹음이 백그라운드로 살아있는데 홈에서 뒤로 = 앱 종료 대신 녹음 화면으로(실수로 녹음 유실 방지)
-      if (isRecording) { openScreen(recView); toast('녹음 중입니다 — 정지 후 나가 주세요.'); return; }
+      if (isRecording) {
+        // v9.8: 홈에 그대로 둔다(예전에는 녹음 화면으로 보내, 「뒤로」를 누를 때마다 홈↔녹음 화면을 오갔다)
+        if (REC_ROAM_V2) { toast('녹음은 계속됩니다. 앱에서 나가시려면 홈 버튼을 눌러 주십시오.', 3500); return; }
+        openScreen(recView); toast('녹음 중입니다 — 정지 후 나가 주세요.'); return;
+      }
       if (backExitArmed) { try { Capacitor.Plugins.App.exitApp(); } catch (e) {} }
       else {
         backExitArmed = true; toast('한 번 더 누르면 나갑니다');
@@ -6009,7 +6083,7 @@
   }
   function startIdeaRec() {
     if (ideaRecording) return;
-    if (isRecording) { toast('회의 녹음이 진행 중입니다. 먼저 마쳐 주세요.'); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? '회의 녹음 중에는 말로 남길 수 없습니다. 글로 적어 주세요.' : '회의 녹음이 진행 중입니다. 먼저 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
     if (chatRecording) { toast('케이와 음성 대화 중입니다. 먼저 마쳐 주세요.'); return; }
     if (!RecordingModule.isSupported()) { toast('이 기기에서는 녹음을 쓸 수 없습니다. 글로 적어 주세요.'); return; }
     var r = ensureIdeaRecorder();

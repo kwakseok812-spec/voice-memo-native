@@ -1843,3 +1843,52 @@ html[data-style="light"] .tool .kmo-rp,html[data-style="light"] .hseg-btn:not(.o
 .kmo-wash{position:fixed;border-radius:50%;pointer-events:none;transform:scale(0)}
 .kmo-wash.in{z-index:14;background:linear-gradient(135deg,#F43F5E,#A855F7)}      /* 통화 화면(z 15) 바로 아래 · 채팅 화면 위 */
 .kmo-wash.out{z-index:18;background:radial-gradient(circle at 50% 40%,#D6D6E0,#B9B9C9)}   /* 돌아온 채팅 화면 위를 덮었다가 단추로 오므라든다 */
+
+/* ===================== v9.8(O-0442) 녹음하면서 다른 화면 보기 =====================
+   스위치: app.js 의 REC_ROAM_V2 가 켜져 있을 때만 html.rec-v2 가 붙는다 → 아래 규칙은 그때만 먹는다(끄면 위의 9/21 알약 그대로).
+   · html.rec-on   = 회의 녹음 중(어느 화면이든)
+   · html.rec-band = 띠가 보이는 중(녹음 중 + 녹음 화면이 아님) → --rec-h 44px 만큼 화면 전체를 아래로 민다(덮지 않는다).
+   · html.rec-chip = 화면을 다 쓰는 곳(문서 전체화면·슬라이드쇼) → 밀지 않고 작은 알약 「● 12:34」로 접는다.
+   띠의 겹침 순서 900: 문서 뷰어(.app 안 120~210)보다 위, 창(모달 1000·시트 1100·연동 암호 1200)보다 아래. */
+:root{--rec-h:0px}
+.rec-sub{display:none}
+html.rec-v2 .rec-sub{display:flex}
+html.rec-v2.rec-band{--rec-h:44px}
+html.rec-v2.rec-band.rec-chip{--rec-h:0px}
+html.rec-v2 .app{padding-top:calc(env(safe-area-inset-top) + var(--rec-h))}
+html.rec-v2 .app section > .subbar{top:calc(var(--sat) + var(--rec-h))}
+html.rec-v2 #chatView.convo-on{height:calc(100vh - var(--sat) - var(--rec-h));height:calc(100dvh - var(--sat) - var(--rec-h))}
+html.rec-v2 .rec-indicator{left:0;right:0;top:0;bottom:auto;transform:none;width:100%;height:calc(var(--sat) + 44px);
+  padding:var(--sat) 14px 0;border:0;border-radius:0;justify-content:center;gap:9px;white-space:nowrap;
+  background:#E11D48;color:#fff;font-size:15px;font-weight:800;letter-spacing:-.2px;
+  box-shadow:0 2px 10px rgba(0,0,0,.28);z-index:900}
+html.rec-v2 .rec-indicator.rec-in{animation:recband-in .18s ease-out}   /* 띠가 새로 나타날 때 한 번만(app.js 가 붙인다) */
+html.rec-v2 .rec-indicator:active{transform:none;filter:brightness(.86)}
+html.rec-v2 .rec-indicator .rec-ind-go{font-size:13.5px;padding-left:11px;margin-left:3px;border-left:1px solid rgba(255,255,255,.4);opacity:.96}
+@keyframes recband-in{from{transform:translateY(-100%)}to{transform:none}}
+/* 녹음기가 멈춘 것 같을 때: 노란 띠(점은 깜빡이지 않는다) */
+html.rec-v2 .rec-indicator.warn{background:#FACC15;color:#1F2937;box-shadow:0 2px 10px rgba(0,0,0,.32)}
+html.rec-v2 .rec-indicator.warn .rec-dot{background:#1F2937;animation:none}
+html.rec-v2 .rec-indicator.warn .rec-ind-time,
+html.rec-v2 .rec-indicator.warn .rec-ind-go{display:none}
+/* 화면을 다 쓰는 곳(문서 전체화면·슬라이드쇼): 작은 알약 「● 12:34」. 그 화면 위쪽 조작줄(쪽수·회전·닫기) 바로 아래 가운데.
+   보이는 높이 32px + 위아래 투명 테두리 6px = 누르는 영역 44px. 브라우저 전체화면에서는 그 화면 안에 들어 있어야 보이므로 app.js 가 #slideshow 안으로 옮겨 둔다. */
+html.rec-v2.rec-chip .rec-indicator{left:50%;right:auto;width:auto;top:calc(var(--sat) + 74px);height:44px;padding:0 13px;border-radius:999px;
+  border:6px solid transparent;border-left-width:8px;border-right-width:8px;background-color:rgba(225,29,72,.94);background-clip:padding-box;box-shadow:none;
+  transform:translateX(-50%);font-size:13.5px;animation:none !important}
+html.rec-v2.rec-chip .rec-indicator:active{transform:translateX(-50%);filter:brightness(.86)}
+html.rec-v2.rec-chip .rec-indicator .rec-ind-go{display:none}
+html.rec-v2.rec-chip .rec-indicator:not(.warn) .rec-ind-tx{display:none}
+html.rec-v2.rec-chip .rec-indicator.warn{background-color:#FACC15}
+/* 문서 뷰어 본문(화면 전체 고정)은 띠 아래에서 시작한다 */
+html.rec-v2 #docRoot.on{top:var(--rec-h)}
+/* 녹음 중에는 쓸 수 없는 단추(음성 대화·눌러서 말하기)를 흐리게 — 눌러도 되지만 안내 글만 나온다 */
+html.rec-v2.rec-on #chatConvoToggle,
+html.rec-v2.rec-on #chatMic{opacity:.45}
+/* 움직임을 쉬는 때(케이 움직임 끔 · 폰 「움직임 줄이기」) */
+html.rec-calm .rec-indicator{animation:none !important}
+html.rec-calm .rec-indicator .rec-dot{animation:none}
+@media (prefers-reduced-motion: reduce){
+  html.rec-v2 .rec-indicator{animation:none !important}
+  .rec-indicator .rec-dot{animation:none}
+}
