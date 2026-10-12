@@ -180,6 +180,13 @@ public class KSpeechPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
+        // v9.8(O-0442): 회의 녹음이 돌고 있으면 받아쓰기를 열지 않는다 — 받아쓰기가 마이크를 가져가면 회의 녹음에 빈 구간이 생길 수 있다.
+        //   화면이 먼저 막지만, 화면이 「녹음 중」을 잊은 순간(앱 화면이 다시 만들어진 직후)에 대비한 안전장치.
+        RecordingService rs = RecordingService.instance;
+        if (rs != null && rs.isRecording() && RecordingService.KIND_MEETING.equals(rs.getKind())) {
+            call.reject("회의 녹음 중에는 받아쓰기를 쓸 수 없습니다.", "recording");
+            return;
+        }
         if (getPermissionState("microphone") != PermissionState.GRANTED) {
             requestPermissionForAlias("microphone", call, "afterPerm");
             return;

@@ -19,6 +19,13 @@ import com.getcapacitor.annotation.PermissionCallback;
  *  - 녹음은 RecordingService(포그라운드 서비스, type=microphone) 안의 MediaRecorder 가 한다.
  *  - JS(WebView)는 시작/정지만 호출하고, 정지 시 네이티브가 만든 오디오 파일 경로를 돌려받는다.
  *  - WebView 가 화면 꺼짐으로 얼어붙어도, 녹음은 서비스에서 계속된다.
+ *
+ * v9.8(O-0442)
+ *  - start({kind}) : 녹음의 종류(meeting 회의 · chat 음성 대화 한 마디 · idea 아이디어). 서비스는 하나뿐이라,
+ *    다른 종류의 녹음이 이미 돌고 있으면 시작을 거절한다(code "busy"). 예전에는 조용히 그 녹음을 넘겨받아,
+ *    회의 녹음이 음성 대화 한 마디로 끝나 버릴 수 있었다. 같은 종류(또는 종류를 안 준 옛 호출)는 예전 그대로.
+ *  - isRecording() : value 에 더해 elapsedMs · startedAt · kind · failed · failWhat · bytes 를 돌려준다.
+ *    화면이 다시 만들어졌을 때 「녹음 중」을 되찾고, 녹음기가 오류를 알렸는지 화면이 알 수 있게.
  */
 @CapacitorPlugin(
         name = "NativeRecorder",
@@ -31,6 +38,13 @@ public class NativeRecorderPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
+        String kind = call.getString("kind", "");
+        if (kind == null) kind = "";
+        RecordingService cur = RecordingService.instance;
+        if (cur != null && cur.isRecording() && !kind.equals(cur.getKind())) {
+            call.reject("다른 녹음이 진행 중입니다. 그 녹음을 먼저 마쳐 주십시오.", "busy");
+            return;
+        }
         if (getPermissionState("microphone") != PermissionState.GRANTED) {
             requestPermissionForAliases(new String[]{ "microphone", "notifications" }, call, "afterPerm");
             return;
@@ -51,6 +65,8 @@ public class NativeRecorderPlugin extends Plugin {
         try {
             Intent i = new Intent(getContext(), RecordingService.class);
             i.setAction(RecordingService.ACTION_START);
+            String kind = call.getString("kind", "");
+            i.putExtra(RecordingService.EXTRA_KIND, kind == null ? "" : kind);
             ContextCompat.startForegroundService(getContext(), i);
         } catch (Exception e) {
             call.reject("녹음 시작 실패: " + e.getMessage());
@@ -104,7 +120,14 @@ public class NativeRecorderPlugin extends Plugin {
     public void isRecording(PluginCall call) {
         JSObject o = new JSObject();
         RecordingService svc = RecordingService.instance;
-        o.put("value", svc != null && svc.isRecording());
+        boolean on = svc != null && svc.isRecording();
+        o.put("value", on);
+        o.put("elapsedMs", on ? svc.getElapsedMs() : 0);
+        o.put("startedAt", on ? svc.getStartedAtMs() : 0);
+        o.put("kind", svc != null ? svc.getKind() : "");
+        o.put("failed", svc != null && svc.isFailed());
+        o.put("failWhat", svc != null ? svc.getFailWhat() : 0);
+        o.put("bytes", on ? svc.getBytes() : 0);
         call.resolve(o);
     }
 

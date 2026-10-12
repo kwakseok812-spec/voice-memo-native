@@ -85,9 +85,16 @@ public class MainActivity extends BridgeActivity {
     //   · VIEW(「열기 → 스마트비서」)              → 예전 그대로 문서 뷰어(handleIncomingDoc, 60MB)
     //   · SEND / SEND_MULTIPLE(「공유 → 스마트비서」) → 새 공유 받기(handleShare): 글·링크·사진·파일 → 웹에서 채팅 또는 뷰어 고르기
     //   · k_shortcut(아이콘 길게 누르기) / k_open(위젯·내 알림) → 웹에 'launch'
+    //   · k_rec(v9.8 · 회의 녹음 알림을 누름) → 웹에 'launch'(kind=rec) — 녹음 화면으로. 케이 답장 알림은 건드리지 않는다.
     private void handleIncoming(Intent intent) {
         if (intent == null) return;
         try {
+            String rec = intent.getStringExtra("k_rec");
+            if (rec != null && rec.length() > 0) {
+                JSObject o = new JSObject(); o.put("kind", "rec");
+                KBridgePlugin.emit("launch", o);
+                return;
+            }
             String sc = intent.getStringExtra("k_shortcut");
             if (sc != null && sc.length() > 0) {
                 JSObject o = new JSObject(); o.put("kind", "shortcut"); o.put("name", sc);
