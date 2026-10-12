@@ -936,7 +936,11 @@
   function onRecorded(blob) {
     var wasLost = recLost;
     stopRecTimer(); isRecording = false; recLost = false; recSessionClear();
-    if (recCancelled) { recCancelled = false; pendingBlob = null; showHome(); return; }
+    if (recCancelled) {
+      recCancelled = false; pendingBlob = null; showHome();
+      try { recFindScan(0, false, false); } catch (e) {}   // v9.10: 이어 녹음을 취소했으면 앞 녹음이 목록에 다시 나타나게(취소한 부분만 「버림」)
+      return;
+    }
     recPanelMode(false);                       // v8.4: 공유 파일 화면이었다면 원래 글로
     pendingBlob = blob;
     renderMatList();     // 준비 화면에서 붙인 회의자료를 그대로 이어받고, 완료 화면에서 더 붙일 수 있게(2026-09-21)
