@@ -6107,7 +6107,7 @@
           var sub = pend ? ((kvPending && kvPending.key === r.k) ? kvPending.note : '바꾸는 중…')
             : (r.ok ? r.desc : (on ? '지금은 쓸 수 없습니다 — ' + (r.why || '잠시 쉬는 중입니다') : (r.why || '지금은 쓸 수 없습니다')));
           // 견본 상태 한 줄: 없으면 「견본 준비 중」, 받아 오지 못했으면 사실대로(조용히 아무 소리도 안 나는 줄이 없게)
-          var stl = kvPvBad === r.k ? '<small class="kv-st warn">견본 소리를 받아 오지 못했습니다. 잠시 뒤 다시 눌러 주세요.</small>'
+          var stl = kvPvBad === r.k ? '<small class="kv-st warn">견본 소리를 받아 오지 못했습니다. 잠시 뒤 다시 눌러 주십시오.</small>'
             : (!r.sample ? '<small class="kv-st">견본 준비 중</small>' : '');
           out.push('<div class="kw-voice kv-row' + (on ? ' on' : '') + (pend ? ' pend' : '') + (pv ? ' pv' : '') + (!pend && (cur.down || (!r.ok && !on)) ? ' dim' : '') + (kvJust === r.k ? ' just' : '') +   // 고르신 줄은 못 쓸 때도 흐리게 하지 않는다(사유 글이 읽혀야 한다) — PC 가 꺼졌을 때만 모두 흐리게
             '" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" data-kvoice="' + esc(r.k) + '"' +
