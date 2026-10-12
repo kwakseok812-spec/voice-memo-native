@@ -599,7 +599,7 @@
   // 「진행 중」 목록의 항목을 눌렀다 — 임시저장 · 실패 항목과 같은 창에서 고른다. [목록에서 빼기]는 여기에만 둔다.
   function recFindItemOpen(gid) {
     var it = recFindGet(gid);
-    if (!it) { recFindScan(0, false, false); toast('이미 처리했습니다.'); return; }
+    if (!it) { recFindScan(0, false, false); toast(tw('이미 처리된 녹음입니다.')); return; }
     var dur = recDurText(it.durMs), go = recFindCanGo(it), body;
     if (!it.readable) body = '이 녹음 파일은 열리지 않습니다.<br>지우지 않고 폰에 그대로 두었습니다.';
     else if (it.type === 'unsent') body = recWhen(it.startedAt) + '에 녹음한 <b>' + esc(dur) + '</b> 분량이 아직 폰에만 있습니다.';
@@ -619,7 +619,7 @@
       openSheet('목록에서 뺄까요?', '녹음 파일은 지우지 않고 폰에 그대로 둡니다.', '목록에서 빼기', function () {
         var api = recFindApi(); if (api) api.mark(it.gid, 'dropped', 'list');
         recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid; });
-        closeModal(); recFindSync(); toast('목록에서 뺐습니다.');
+        closeModal(); recFindSync(); toast(tw('목록에서 뺐습니다.'));
       });
     });
     modal.style.display = 'flex';
@@ -628,14 +628,14 @@
   function recFindContinue(it) {
     if (!recFindApi() || !it) return;
     if (isRecording) { openScreen(recView); return; }
-    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('먼저 보내 주십시오.', 3000); return; }
-    if (chatRecording || ideaRecording) { toast('음성 입력 중입니다.', 3000); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
+    if (chatRecording || ideaRecording) { toast(tw('말로 입력을 마친 뒤 눌러\u00a0주십시오.'), 3000); return; }
     recGroupNext = it.gid;
     pendingMaterials = []; renderMatList();
     if (btnStartRec) btnStartRec.click();
     setTimeout(function () {
       if (!(isRecording && recGroup)) { recGroupNext = ''; return; }
-      toast('이어서 녹음합니다.', 2500);
+      toast(tw('이어서 녹음합니다.'), 2500);
       recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid; });   // 이어 녹음하는 동안 그 묶음은 「끊긴 녹음」이 아니다
       recFindSync();
     }, 700);
@@ -648,16 +648,16 @@
   // [여기까지 저장] · [열기] — 남아 있는 녹음을 「녹음 완료」 화면에 올린다(제목 · 회의자료 · 보내기 · 임시 저장은 평소와 같다).
   function recFindSave(it) {
     var api = recFindApi(); if (!api || !it) return;
-    if (isRecording) { toast('녹음 중입니다.', 3000); return; }
-    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('먼저 보내 주십시오.', 3000); return; }
-    toast('녹음을 불러옵니다…', 2500);
+    if (isRecording) { toast(tw('녹음을 마친 뒤 눌러\u00a0주십시오.'), 3000); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
+    toast(tw('녹음을 불러옵니다…'), 2500);
     api.open(it.gid).then(function (r) {
       if (!r || !r.ok || !r.blob) {
         if (r && r.code === 'unreadable') {
           it.readable = false; recFindSync();
           openSheet('이 녹음은 열리지 않습니다', recWhen(it.startedAt) + '에 시작한 녹음 파일이\n열리지 않습니다.\n지우지 않고 폰에 그대로 두었습니다.', '확인', null, null, null,
             { positive: true, recmsg: true, cancelLabel: '닫기', main: 'confirm' });
-        } else toast('열지 못했습니다.', 3000);
+        } else toast(tw('녹음을 열지 못했습니다.'), 3000);
         return;
       }
       if (isRecording || (pendingBlob && !recPanelShared)) return;            // 불러오는 사이 다른 녹음이 시작됐다
@@ -679,7 +679,7 @@
       recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid && x.gid !== recCur.gid; });
       recFindSync();
       recFindDiag(recCur.gid);
-    }).catch(function () { toast('열지 못했습니다.', 3000); });
+    }).catch(function () { toast(tw('녹음을 열지 못했습니다.'), 3000); });
   }
   function recFindDiag(sid) {
     var api = recFindApi(); if (!api) return;
@@ -853,7 +853,7 @@
     if (REC_ROAM_V2 && isRecording) { openScreen(recView); return; }      // v9.8: 녹음 중에는 돌아가는 길
     if (btnRecord.disabled || isRecording) return;
     // v9.8: 아직 보내지 않은 녹음이 남아 있으면(완료 화면을 다른 길로 떠난 경우) 새로 시작하기 전에 그 화면으로 — 새 녹음이 덮어쓰지 않게
-    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
     hideBanner();
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
@@ -865,9 +865,9 @@
     if (isRecording) return;
     if (!RecordingModule.isSupported()) { showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다.'); return; }
     // v9.8: 아직 보내지 않은 녹음이 있으면 어느 길로 왔든(바로가기 포함) 새 녹음이 덮어쓰지 않게 그 녹음으로 데려간다
-    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
     // v9.8: 음성 대화·아이디어 녹음이 같은 녹음기를 쓰고 있으면 먼저 마치게 한다(겹치면 한쪽이 다른 쪽을 끊는다)
-    if (REC_ROAM_V2 && (chatRecording || ideaRecording)) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주십시오.', 3000); return; }
+    if (REC_ROAM_V2 && (chatRecording || ideaRecording)) { toast(tw('말로 입력을 마친 뒤 눌러\u00a0주십시오.'), 3000); return; }
     if (REC_ROAM_V2 && convoOn) { try { stopConvo(true); } catch (e) {} }
     hideBanner();
     // v9.8: 앱이 내고 있던 소리(답 듣기·미리 듣기)는 녹음을 시작하면서 멈춘다
@@ -921,7 +921,7 @@
   function audioToMeeting(f) {
     if (!f) return;
     if (isRecording) { toast('지금 녹음 중입니다. 녹음을 마친 뒤 다시 공유해 주세요.', 3500); return; }
-    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다. 먼저 보내거나 임시저장해 주십시오.', 3500); return; }
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
     hideBanner();
     pendingBlob = f; pendingMaterials = []; renderMatList();
     recCur = null;                                        // v9.10: 다른 앱에서 받은 파일 — 일지와 무관하다
@@ -4183,24 +4183,24 @@
     var job = ttsJobs[lid] = { id: OfficeBridge.uuid(), tok: OfficeBridge.token(), t0: Date.now(), told: false, away: false };
     OfficeBridge.requestTts(job.id, job.tok, m.text || '').then(function () {
       pollTts(job, m, 0);
-    }).catch(function () { ttsEnd(job, m, '음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주십시오.'); });
+    }).catch(function () { ttsEnd(job, m, '준비하지 못했습니다. 다시 눌러\u00a0주십시오.'); });
   }
   function ttsWaiting(m) { return !!(listenSt && listenSt.ph === 'load' && listenSt.lid === m.lid); }   // 화면에서 이 소리를 기다리는 중인가
   function ttsEnd(job, m, msg) {                       // 못 만든 채로 끝남 — 기다리던 중이면 단추를 되돌리고 알린다(그만둔 뒤면 조용히)
     if (ttsJobs[m.lid] === job) delete ttsJobs[m.lid];
     if (!ttsWaiting(m)) return;
-    listenClear(); toast(msg);
+    listenClear(); toast(tw(msg));
   }
   /* 기다리는 방식(O-0468 이어서): 느린 목소리로 긴 글이면 몇 분이 걸린다.
    *   · 0.7초마다 확인, 1분이 넘으면 2초마다. PC 가 알려 준 시간(kvListenWaitS)을 넘기면 그만둔다(안 알려 주면 예전처럼 40번).
    *     그만두기 전에 한 번은 꼭 확인한다 — 앱이 뒤에 가 있던 동안 이미 다 만들어졌을 수 있다.
    *   · 10초가 넘으면 한 번만 「만드는 중」 안내. 단추는 그동안 「준비 중…」(다시 누르면 그만둔다).
    *   · 다 됐을 때 채팅 화면이 아니거나 앱이 뒤에 있었으면 틀지 않는다 → 단추 「다시 듣기」 + 안내(갑자기 소리가 나지 않게). */
-  var TTS_READY_NOTE = '목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.';
+  var TTS_READY_NOTE = '「다시\u00a0듣기」를 누르면 들립니다.';
   var ttsReadyHeld = false;                            // 앱이 뒤에 있을 때 준비가 끝남 → 돌아오면 한 번 알린다
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) { for (var k in ttsJobs) ttsJobs[k].away = true; return; }
-    if (ttsReadyHeld) { ttsReadyHeld = false; toast(TTS_READY_NOTE, 3500); }
+    if (ttsReadyHeld) { ttsReadyHeld = false; toast(tw(TTS_READY_NOTE), 3500); }
   });
   function pollTts(job, m, tries) {
     if (ttsJobs[m.lid] !== job) return;
@@ -4217,7 +4217,7 @@
         var away = job.away || document.hidden || !isOpen(chatView);
         if ((REC_ROAM_V2 && isRecording && !m._recAsk) || away) {
           listenClear();
-          if (document.hidden) ttsReadyHeld = true; else toast(TTS_READY_NOTE, 3500);
+          if (document.hidden) ttsReadyHeld = true; else toast(tw(TTS_READY_NOTE), 3500);
         }
         else playKaiVoice(url, m.lid);
       } else ttsAgain(job, m, tries, 700);
@@ -4226,8 +4226,8 @@
   function ttsAgain(job, m, tries, gap) {
     if (ttsJobs[m.lid] !== job) return;
     var el = Date.now() - job.t0, w = kvListenWaitS();
-    if (w ? el > w * 1000 : tries >= 40) { ttsEnd(job, m, '음성 준비가 지연됩니다. 잠시 후 다시 눌러 주십시오.'); return; }
-    if (!job.told && el > 10000 && ttsWaiting(m) && isOpen(chatView) && !document.hidden) { job.told = true; toast('목소리를 만드는 중입니다. 다시 누르면 그만둡니다.', 3200); }
+    if (w ? el > w * 1000 : tries >= 40) { ttsEnd(job, m, '준비가 지연됩니다. 다시 눌러\u00a0주십시오.'); return; }
+    if (!job.told && el > 10000 && ttsWaiting(m) && isOpen(chatView) && !document.hidden) { job.told = true; toast(tw('목소리 준비 중입니다. 누르면 그만둡니다.'), 3200); }
     setTimeout(function () { pollTts(job, m, tries + 1); }, el > 60000 ? Math.max(gap, 2000) : gap);
   }
 
@@ -5993,7 +5993,7 @@
     var st = kvPick(key);                              // 고르기는 예전 그대로(이미 고른 줄이면 아무 일도 없다)
     if (!row.sample) {                                 // 견본이 아직 없다 — 줄에 「견본 준비 중」이 적혀 있다. 아무 반응이 없어 보이지 않게, 고르기도 일어나지 않은 누름에는 한마디
       if (kvPvStop()) renderKVoices();
-      if (st === 'same') toast('이 목소리의 견본은 준비 중입니다.', 2200);
+      if (st === 'same') toast(tw('이 목소리의 견본은 준비 중입니다.'), 2200);
       return;
     }
     recSoundGuard(function () { kvPvPlay(key, row.sample); });   // v9.8: 회의 녹음 중에는 한 번 확인(고르기는 소리가 없어 그대로 된다)
@@ -6007,7 +6007,7 @@
     function end(fail) {
       if (my !== kvPvSeq) return;                      // 멈췄거나 다른 줄로 넘어간 뒤에 온 알림
       kvPvSeq++; kvPvKey = '';
-      if (fail) { kvPvBad = key; toast('견본 소리를 받아 오지 못했습니다. 목소리 고르기는 그대로 됩니다.', 3000); }
+      if (fail) { kvPvBad = key; toast(tw('견본만 못\u00a0받았습니다. 고르기는 됩니다.'), 3000); }
       if (isOpen($('kWardrobeView'))) renderKVoices();
     }
     try {
@@ -6035,7 +6035,7 @@
       kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS };   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
       kvJust = p.key; setTimeout(function () { if (kvJust === p.key) kvJust = ''; }, 600);
       // O-0469: 「여자1(으)로」가 되지 않게 조사를 피한다. 「다음에 읽을 때부터 이 목소리」는 브리핑 전용 줄에서는 사실이 아니라 뺐다(어디서 나오는지는 그 줄 설명과 바로 아래 안내가 말한다)
-      if (!kvNext || kvNext === p.key) toast('「' + nm + '」 목소리로 바꿨습니다.', 2600);
+      if (!kvNext || kvNext === p.key) toast(tw('「' + nm + '」 목소리로 바꿨습니다.'), 2600);
     } else if (ok === false) {
       toast('바꾸지 못했습니다. ' + (why ? kvText(why, 40) : '잠시 뒤 다시 눌러 주세요.'), 2800);
     } else {
@@ -6554,6 +6554,9 @@
 
   /* ===================== 뒤로가기 ===================== */
   var toastEl = $('toast'), toastTimer = null;
+  /* v9.10: 안내 글이 좁은 폭(폰 390px — 안내 상자 195px)에서 낱말 중간에 꺾이지 않게 한다. 낱말 안 글자 사이에 이음 문자(U+2060)를 넣어 띄어쓰기에서만 줄이 나뉜다.
+   *   한 줄에 붙여 둘 두 낱말은 글에 \u00a0(줄이 나뉘지 않는 띄어쓰기)로 적는다. .toast 스타일은 그대로다 — 이번 판에서 새로 넣거나 고친 글에만 쓴다(v9.8 의 「위\u2060쪽」과 같은 방법). */
+  function tw(s) { return String(s).replace(/([^ ])(?=[^ ])/g, '$1\u2060'); }
   function toast(msg, ms) {        // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로
     if (!toastEl) return;
     toastEl.textContent = msg; toastEl.style.display = 'block';
