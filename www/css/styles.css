@@ -992,6 +992,9 @@ html[data-style="light"] .ordcard{background:rgba(255,255,255,.9)}
 .kface.vid-on .kf-vid{opacity:1}
 .kface .kf-img{transition:opacity .35s}
 .kface.vid-on .kf-img{opacity:0}
+.kface .kf-hold{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:1;pointer-events:none}   /* v9.11(O-0472): 평소 ↔ 말하기 영상을 바꾸는 동안 얹어 두는 「재생 중이던 장면」(k-character.js xfHold). 자리 · 확대는 그때의 영상 값을 스크립트가 옮겨 준다 */
+.kface .kf-hold.out{opacity:0;transition:opacity .35s}
+.kface.kf-xf .kf-vid,.kface.kf-xf .kf-img{transition:none}   /* 얹어 둔 장면 밑에서는 영상 · 사진을 바로 바꾼다(겹쳐 넘기는 것은 위의 장면 하나) */
 .kface.kf-crop .kf-img{transform:scale(var(--kscale,1.35));transform-origin:var(--kox,50%) var(--koy,49%)}
 .kface.wide{border-radius:0}
 .kface.wide .kf-vid,.kface.wide.kf-crop .kf-img{transform:none}

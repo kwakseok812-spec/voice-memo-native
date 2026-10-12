@@ -710,6 +710,48 @@
   }
 
   /* ---------------- 얼굴 자리표시 채우기 ---------------- */
+  /* v9.11(O-0472) 평소 ↔ 말하기 영상을 바꿀 때 겹쳐 넘기기
+   *   영상 파일을 바꾸면 영상 요소가 비워져 「재생 중이던 장면 → 평소 사진」이 한 장면에 바뀐다. 몸이 멈춰 있는 앞 판 영상(2.6초)은 그 장면이
+   *   사진과 같아 티가 없지만, 몸까지 움직이는 새 영상(4초 이상)은 머리 · 어깨가 한 장면에 사진 자리로 돌아가 보인다.
+   *   → 바꾸는 순간 재생 중이던 장면을 그림판(canvas.kf-hold)에 옮겨 그 자리에 얹어 두고, 새 영상이 돌기 시작하면 그것을 0.35초 동안 걷어 낸다.
+   *   스위치 KF_XFADE: 'new' = 재생 중이던 영상이 KF_XFADE_MIN_S 초 이상일 때만(= 새 영상) · 'all' = 길이를 따지지 않고 · 'off' = v9.10 과 같게(그림판을 만들지 않는다)
+   *   얹지 않는 때(= 예전 그대로 사진으로 끊고 새 영상을 겹쳐 넘김): 옷이 바뀜 · 영상이 보이지 않던 자리 · 장면을 못 옮김(영상 미준비 · 빈 장면 · 읽기가 막힘).
+   *   새 영상이 KF_XFADE_WAIT_MS 안에 돌지 않으면 얹어 둔 장면을 걷어 밑의 사진을 보인다(멈춘 장면이 남지 않게). */
+  var KF_XFADE = 'new', KF_XFADE_MIN_S = 3.2, KF_XFADE_WAIT_MS = 1200, KF_XFADE_MS = 350;
+  function xfKey() { return outfit().id + (activeCombo() ? '|' + curHair : ''); }   // 지금 「보이는」 옷(머리) — 저장 값(curId)은 옷 목록을 읽기 전에는 비어 있다
+  function xfDrop(el, fade) {                   // 얹어 둔 장면을 걷는다. fade = 0.35초 동안(아니면 바로)
+    var x = el._kXf; if (!x) return;
+    el._kXf = null; clearTimeout(x.t);
+    var cv = x.cv;
+    function gone() { if (cv.parentNode) cv.parentNode.removeChild(cv); if (!el._kXf) el.classList.remove('kf-xf'); }
+    if (!fade) { gone(); return; }
+    cv.classList.add('out');
+    setTimeout(gone, KF_XFADE_MS + 80);
+  }
+  function xfHold(el, vid) {                    // 재생 중이던 장면을 얹어 둔다. 못 했으면 false(예전 방식 그대로 간다)
+    if (KF_XFADE !== 'new' && KF_XFADE !== 'all') return false;
+    try {
+      if (!el.classList.contains('vid-on') || vid.readyState < 2 || !vid.videoWidth || !vid.videoHeight) return false;
+      if (KF_XFADE === 'new' && !(vid.duration >= KF_XFADE_MIN_S)) return false;
+      var cv = document.createElement('canvas'); cv.width = vid.videoWidth; cv.height = vid.videoHeight;
+      var cx = cv.getContext('2d'); cx.drawImage(vid, 0, 0, cv.width, cv.height);
+      // 빈 장면(투명 · 새까만 장면)을 얹지 않게 다섯 군데를 찍어 본다. 읽기가 막히면(보안 오류) catch 로 가서 예전 방식.
+      var pts = [[.5, .5], [.3, .3], [.7, .3], [.3, .7], [.7, .7]], seen = false;
+      for (var i = 0; i < pts.length && !seen; i++) {
+        var d = cx.getImageData(Math.floor(cv.width * pts[i][0]), Math.floor(cv.height * pts[i][1]), 1, 1).data;
+        if (d[3] > 8 && d[0] + d[1] + d[2] > 24) seen = true;
+      }
+      if (!seen) return false;
+      var cs = getComputedStyle(vid);            // 영상과 같은 자리 · 같은 확대로(작은 동그라미 = 확대, 넓은 자리 = 그대로, 무대 = 위쪽 맞춤)
+      cv.className = 'kf-hold'; cv.setAttribute('aria-hidden', 'true');
+      cv.style.objectPosition = cs.objectPosition; cv.style.transform = cs.transform; cv.style.transformOrigin = cs.transformOrigin;
+      xfDrop(el, false);
+      Array.prototype.forEach.call(el.querySelectorAll('.kf-hold'), function (old) { el.removeChild(old); });   // 걷히는 중이던 앞의 장면도 치운다(한 번에 하나만)
+      el.appendChild(cv);
+      el._kXf = { cv: cv, t: setTimeout(function () { xfDrop(el, true); }, KF_XFADE_WAIT_MS) };
+      return true;
+    } catch (e) { return false; }
+  }
   var io = null;
   try {
     io = new IntersectionObserver(function (ents) {
@@ -726,7 +768,12 @@
     vid.className = 'kf-vid'; vid.muted = true; vid.defaultMuted = true; vid.loop = true;
     vid.setAttribute('muted', ''); vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', '');
     vid.setAttribute('disablepictureinpicture', ''); vid.preload = 'auto';
-    vid.addEventListener('playing', function () { el._kBlocked = false; el.classList.add('vid-on'); });
+    vid.addEventListener('playing', function () {
+      el._kBlocked = false;
+      if (el._kXf) el.classList.add('kf-xf');   // v9.11: 얹어 둔 장면 밑에서는 영상 · 사진을 겹쳐 넘기지 않고 바로 바꾼다(겹쳐 넘기는 것은 위의 장면 하나)
+      el.classList.add('vid-on');
+      xfDrop(el, true);
+    });
     vid.addEventListener('error', function () { markFail(el, vid.getAttribute('data-kind')); });
     el.appendChild(img); el.appendChild(vid);
     el._kVisible = true;
@@ -735,6 +782,7 @@
   function markFail(el, kind) {
     el._kFail = el._kFail || {};
     if (kind) el._kFail[kind + '|' + curId + (activeCombo() ? '|' + curHair : '')] = true;
+    xfDrop(el, true);
     el.classList.remove('vid-on');
     paint(el);                                   // (O-0226) 영상을 못 쓰게 됐으니 밑 사진도 다시 고른다(정지 사진 자리 = 미소)
   }
@@ -795,15 +843,20 @@
     el.classList.toggle('kf-talkstill', talking && (still || !o.talk || talkFailed));
     var want = pl.can && el._kVisible !== false && !document.hidden;
     if (!want) {
+      xfDrop(el, vid._kXfKey === xfKey());       // v9.11: 얹어 둔 장면이 있으면 걷는다(같은 옷이면 0.35초 동안, 옷이 바뀌었으면 바로)
+      el.classList.remove('kf-xf');              //        밑의 영상 → 사진은 예전처럼 0.35초 겹쳐 넘긴다
       el.classList.remove('vid-on');
       if (!vid.paused) try { vid.pause(); } catch (e) {}
       return;
     }
     var src = still ? file : url(o, file);
     if (vid.getAttribute('src') !== src) {
+      // v9.11: 같은 옷의 영상끼리 바꿀 때(평소 ↔ 말하기)만 재생 중이던 장면을 얹어 둔다. 옷이 바뀌었으면 앞 옷의 장면을 붙들지 않는다.
+      if (vid._kXfKey !== xfKey()) xfDrop(el, false); else xfHold(el, vid);
       el.classList.remove('vid-on');
       vid.setAttribute('data-kind', kind);
       vid.setAttribute('src', src);
+      vid._kXfKey = xfKey();
       try { vid.load(); } catch (e) {}
     }
     if (vid.paused) {
@@ -811,6 +864,7 @@
       if (p && p.catch) p.catch(function (err) {
         // 자동재생 거부(제스처 필요 등)면 정지 사진 유지. 네트워크 오류는 error 이벤트에서 처리.
         if (err && err.name === 'NotAllowedError') {
+          xfDrop(el, true);
           el.classList.remove('vid-on');
           if (!el._kBlocked) { el._kBlocked = true; paintStill(el); }   // (O-0226) 영상이 안 도는 자리 → 정지 사진(미소 기본). 재생은 계속 다시 시도한다
         }
