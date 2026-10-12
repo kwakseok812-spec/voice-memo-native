@@ -2208,7 +2208,8 @@
   var chatPendingImages = [];               // 케이에게 보여줄 사진(전송 전 대기)
   var chatPendingFiles = [];                // 첨부 파일(문서 등, 전송 전 대기) — 일반 메신저처럼 붙여두고 계속 입력
   var chatRecording = false, chatRecorder = null;
-  var kaiAudio = null, kaiAudioUnlocked = false, playingBubbleEl = null, silentWavCache = null;
+  var kaiAudio = null, kaiAudioUnlocked = false, silentWavCache = null;
+  var kaiPlaySeq = 0, kaiStopSeq = 0;       // O-0468: 재생마다 번호 — [멈춤]으로 끊은 재생은 「막힘」 안내·이어가기를 하지 않는다
   // 핸즈프리: 무음 자동 감지 → 자동 전송 → (음성)답 → 재생 끝나면 자동 다시 듣기
   var convoOn = false, convoMiss = 0, ampTimer = null, ampBusy = false, nextListenArmed = false;
   var lsnSpoke = false, lsnSpeechMs = 0, lsnStartTs = 0, lsnLastSound = 0, lsnPendingSend = false, lsnReason = '';
@@ -2342,8 +2343,10 @@
           if (vlat && !vlat.play && kaiAudio.src && kaiAudio.src.indexOf('data:') !== 0 && (kaiQ.rid === vlat.id || vlat.done)) vlat.play = Date.now();
         });
         ['ended', 'pause', 'error', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (window.KChar) KChar.setTalking(false); }); });
+        // O-0468: 소리가 멈추면(끝남 · 다른 소리가 대신 들어옴 · 녹음 시작 · 대화 끝내기 등 어느 길이든) 그 말풍선 단추를 [듣기]로 되돌린다
+        ['pause', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (kaiAudio.paused) listenAudioEnd(); }); });
         kaiAudio.addEventListener('ended', function () {
-          if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
+          listenAudioEnd();
           if (vqHasMore()) { vqPump(); return; }  // O-0177 ①: 다음 목소리 조각이 이미 와 있으면 곧장 이어서
           if (convoOn && vqWaiting()) { setConvoStatus('케이가 답하는 중…'); return; }   // 다음 조각을 아직 만드는 중
           // v9.6: 목소리가 끝난 그 순간 통화 화면의 케이는 바로 「듣는 모습」으로(입이 소리보다 오래 움직이지 않게). 그림만 먼저 바꾼다 — 다음 듣기를 여는 시점·값(아래 350)은 그대로.
@@ -2362,6 +2365,7 @@
   }
   function unlockKaiAudio() {
     var a = ensureKaiAudio(); if (!a || kaiAudioUnlocked) return;
+    if (!a.paused && !a.ended && a.src && a.src.indexOf('data:') !== 0) return;   // O-0468: 케이 목소리가 나는 중이면 건드리지 않는다(무음을 끼워 넣으면 듣던 소리가 끊긴다 — 미리 붙은 소리를 듣다가 [보내기]·마이크를 누를 때)
     try {
       a.src = silentWav();
       var p = a.play();
@@ -2369,19 +2373,23 @@
       else kaiAudioUnlocked = true;
     } catch (e) {}
   }
+  /* bubbleEl = 그 소리의 말풍선 [듣기] 단추(또는 그 말풍선의 lid 글자). 주면 그 단추가 「멈춤」으로 바뀐다(O-0468 — 상태는 lid 로 잡아 다시 그려도 유지). */
   function playKaiVoice(url, bubbleEl) {
     var a = ensureKaiAudio(); if (!a || !url) return;
     try {
-      if (playingBubbleEl && playingBubbleEl !== bubbleEl) playingBubbleEl.classList.remove('playing');
+      var lid = typeof bubbleEl === 'string' ? bubbleEl : ((bubbleEl && bubbleEl.getAttribute && bubbleEl.getAttribute('data-lid')) || '');
+      var my = ++kaiPlaySeq, st = null;
+      if (lid) st = listenSet(lid, 'play', false);
+      else listenAudioEnd();                    // 말풍선 없는 소리(음성 대화 조각)가 대신 들어온다 → 앞 말풍선 단추는 되돌린다
       a.src = url; a.currentTime = 0;
-      if (bubbleEl) { playingBubbleEl = bubbleEl; bubbleEl.classList.add('playing'); }
       var p = a.play();
       if (p && p.then) p.catch(function () {
-        if (bubbleEl) bubbleEl.classList.remove('playing'); playingBubbleEl = null;
+        if (st && listenSt === st) listenClear();
+        if (my === kaiStopSeq) return;          // O-0468: [멈춤]으로 끊은 것 — 막힌 것이 아니다
         if (vqHasMore()) { setTimeout(vqPump, 150); return; }   // O-0177: 조각 하나가 막혀도 다음 조각으로
         if (convoOn && vqWaiting()) return;
         if (convoOn) scheduleNextListen(900);   // 자동재생 막혀도 대화 루프는 이어감
-        else toast('🔊 소리를 들으려면 "듣기"를 눌러 주세요.');
+        else if (my === kaiPlaySeq) toast('🔊 소리를 들으려면 "듣기"를 눌러 주세요.');   // 다른 소리가 대신 들어온 것이면 안내하지 않는다
       });
     } catch (e) {}
   }
@@ -2436,7 +2444,7 @@
     vqReset(null);
     try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
     try { if (window.KChar && KChar.voice && KChar.voice.speaking && KChar.voice.speaking()) KChar.voice.stop(); } catch (e) {}
-    if (playingBubbleEl) { playingBubbleEl.classList.remove('playing'); playingBubbleEl = null; }
+    if (listenSt && listenSt.ph === 'play') listenClear();
   }
 
   function getChatThread() {
@@ -3345,8 +3353,7 @@
       if (m.role === 'k' && (m.text || m.vurl)) {           // 모든 케이 답에 [듣기](없으면 온디맨드 생성)
         if (!m.lid) m.lid = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         // v8.3(O-0161): 사무소가 미리 목소리를 붙여 보낸 방송(아침 브리핑 --tts)은 「▶ 듣기」(아직 안 들은 것). 그 밖은 예전 그대로.
-        var vlbl = m.vurl ? ((m.bid && m.vtts && !m.vplayed) ? '▶ 듣기' : '다시 듣기') : '듣기';
-        inner += '<button type="button" class="voiceplay" data-lid="' + m.lid + '"><svg><use href="#i-sound"/></svg>' + vlbl + '</button>';
+        inner += listenBtnHtml(m);                          // O-0468: 글·모양은 지금 상태(듣기 / 준비 중 / 멈춤)대로 — 아래 「답변별 [듣기]」
       }
       if (m.role === 'k' && starIds[rowIdOf(m) || '']) inner += '<span class="bstar" aria-label="저장한 답">⭐</span>';   // v8.3 ⭐ 저장 표시
       if (!inner) return '';
@@ -4080,7 +4087,59 @@
   /* ---- 답변별 [듣기]: 평소엔 그 답의 mp3 가 없으니 "온디맨드"로 그때 생성해 재생 ----
    * (안 들을 답은 생성 안 함 = 가장 효율적) 이미 vurl 이 있으면(연속 대화 등) 바로 재생. */
   function findKByLid(lid) { for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].role === 'k' && chatMsgs[i].lid === lid) return chatMsgs[i]; } return null; }
-  function resetListenBtn(btn, lbl) { if (!btn) return; btn._loading = false; btn.classList.remove('loading'); btn.removeAttribute('disabled'); btn.innerHTML = lbl; }
+  /* ---- O-0468 [듣기]의 상태 = 한 번에 한 말풍선(「다시 누르면 멈추게」) ----
+   *   listenSt = { lid, ph:'load'(목소리 준비 중)|'play'(읽는 중), dev(이 기기 음성으로 읽는 중) } · 없으면 모두 [듣기]
+   *   예전에는 단추(DOM)에 표시를 붙여 두어서, 새 메시지가 와 채팅을 다시 그리면 표시가 사라지고 「다시 누름」은 처음부터 다시 틀었다(멈출 길이 없었다).
+   *   · 읽는 중인 단추를 다시 누름 → 바로 멈춤 · 다른 말풍선을 누름 → 앞 소리는 멈추고 새것(겹치지 않는다)
+   *   · 준비 중에 다시 누름 → 기다림을 그만둔다(준비가 끝나도 틀지 않는다). PC 에 이미 청한 소리는 받아만 둔다 → 다음에 누르면 바로 나온다(같은 글을 두 번 청하지 않는다)
+   *   · 단추 글·모양은 listenFace 한 곳에서 정한다(채팅을 다시 그려도 같다).  LISTEN_STOP=false 면 예전 동작(다시 누르면 처음부터 · 준비 중엔 못 누름). */
+  var LISTEN_STOP = true;
+  var listenSt = null, listenTapT = 0;
+  var ttsJobs = {};                                  // lid → { id, tok } : PC 에 청해 둔 목소리(아직 만드는 중)
+  function listenBtnOf(lid) { return (chatLog && lid) ? chatLog.querySelector('.voiceplay[data-lid="' + lid + '"]') : null; }
+  function listenFace(m) {                           // [붙일 class, 속 글, 화면 읽기용 이름]
+    var st = (listenSt && listenSt.lid === m.lid) ? listenSt : null;
+    if (st && st.ph === 'load') return ['loading', '<svg><use href="#i-sound"/></svg>준비 중…', LISTEN_STOP ? '목소리 준비 중 · 누르면 그만둡니다' : '목소리 준비 중'];
+    if (st && LISTEN_STOP) return ['playing', '<svg><use href="#i-stop"/></svg>멈춤', '읽는 중 · 누르면 멈춥니다'];
+    // v8.3(O-0161): 사무소가 미리 목소리를 붙여 보낸 방송(아침 브리핑 --tts)은 「▶ 듣기」(아직 안 들은 것). 그 밖은 예전 그대로.
+    return [st ? 'playing' : '', '<svg><use href="#i-sound"/></svg>' + (m.vurl ? ((m.bid && m.vtts && !m.vplayed) ? '▶ 듣기' : '다시 듣기') : '듣기'), ''];
+  }
+  function listenBtnHtml(m) {
+    var f = listenFace(m);
+    return '<button type="button" class="voiceplay' + (f[0] ? ' ' + f[0] : '') + '" data-lid="' + m.lid + '"' + (f[2] ? ' aria-label="' + f[2] + '"' : '') +
+      (f[0] === 'playing' && LISTEN_STOP ? ' aria-pressed="true"' : '') + (f[0] === 'loading' && !LISTEN_STOP ? ' disabled' : '') + '>' + f[1] + '</button>';
+  }
+  function listenPaint(lid) {                        // 그 말풍선 단추만 지금 상태로 고쳐 그린다(채팅 전체를 다시 그리지 않는다)
+    var b = listenBtnOf(lid), m = b ? findKByLid(lid) : null; if (!m) return;
+    var f = listenFace(m);
+    b.classList.toggle('playing', f[0] === 'playing'); b.classList.toggle('loading', f[0] === 'loading');
+    if (f[2]) b.setAttribute('aria-label', f[2]); else b.removeAttribute('aria-label');
+    if (f[0] === 'playing' && LISTEN_STOP) b.setAttribute('aria-pressed', 'true'); else b.removeAttribute('aria-pressed');
+    if (f[0] === 'loading' && !LISTEN_STOP) b.setAttribute('disabled', ''); else b.removeAttribute('disabled');
+    b.innerHTML = f[1];
+  }
+  function listenSet(lid, ph, dev) {
+    var old = listenSt;
+    listenSt = { lid: lid, ph: ph, dev: !!dev };
+    if (old && old.lid !== lid) listenPaint(old.lid);
+    listenPaint(lid);
+    return listenSt;
+  }
+  function listenClear() { var st = listenSt; if (!st) return; listenSt = null; listenPaint(st.lid); }
+  function listenAudioEnd() { if (listenSt && listenSt.ph === 'play' && !listenSt.dev) listenClear(); }   // 케이 목소리(mp3)가 멈췄다
+  /* 지금 [듣기]로 나는 소리·기다림을 끝낸다. [멈춤]을 누른 때(user=true)와, 다른 말풍선의 [듣기]를 누른 때(user=false) 쓴다. */
+  function listenStop(user) {
+    var st = listenSt; if (!st) return false;
+    listenSt = null;
+    if (st.ph === 'play') {
+      if (st.dev) { try { if (window.KChar) KChar.voice.stop(); } catch (e) {} }
+      else { kaiStopSeq = kaiPlaySeq; try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {} }
+    }
+    listenPaint(st.lid);
+    // 음성 대화 중에 자동으로 나오던 답을 [멈춤]으로 끊었으면 — 목소리가 끝났을 때와 같이 다음 말을 듣는다(대화가 멈춰 서지 않게)
+    if (user && st.ph === 'play' && !st.dev && convoOn) scheduleNextListen(350);
+    return true;
+  }
   /* v9.8(O-0442) 회의 녹음 중에 소리를 내려 할 때 — 한 번 확인한 뒤 재생한다(스피커 소리가 회의 자리에 나고 녹음에도 들어간다).
    *   이미 나고 있는 소리를 멈추는 누름은 묻지 않는다. */
   function recSoundGuard(go) {
@@ -4089,61 +4148,67 @@
       { cancelLabel: '닫기', positive: true, icon: 'i-sound' });
   }
   function onListenBtn(lid, btn) {
-    if (btn && (btn.classList.contains('playing') || btn._loading)) { onListenBtnGo(lid, btn); return; }
-    recSoundGuard(function () { onListenBtnGo(lid, (chatLog && chatLog.querySelector('[data-lid="' + lid + '"]')) || btn); });
+    if (listenSt && listenSt.lid === lid) {            // 지금 읽는 중·준비 중인 그 단추를 다시 눌렀다 — 묻지 않는다
+      if (Date.now() - listenTapT < 350) return;       //   연달아 두 번 눌린 것(더블 탭)은 한 번으로 본다 — 켜자마자 꺼지지 않게
+      if (LISTEN_STOP || listenSt.dev) { listenStop(true); return; }
+      if (listenSt.ph === 'load') return;
+      onListenBtnGo(lid); return;                      // (LISTEN_STOP=false) 예전처럼 처음부터 다시
+    }
+    listenTapT = Date.now();
+    recSoundGuard(function () { onListenBtnGo(lid); });
   }
-  function onListenBtnGo(lid, btn) {
+  function onListenBtnGo(lid) {
     var m = findKByLid(lid); if (!m) return;
+    listenStop(false);                                 // 앞의 소리·기다림은 여기서 끝낸다(둘이 겹쳐 나지 않게)
     m._recAsk = !!isRecording;                         // 녹음 중에 「그래도 듣기」로 청한 것 — 준비되면 바로 틀어도 된다
     // v6.0: 「목소리」에서 이 기기 음성을 골랐으면 PC 요청 없이 바로 기기에서 읽는다(무료·즉시).
     var dv = window.KChar && KChar.voice.active();
     if (dv && m.text) {
-      if (btn.classList.contains('playing')) { KChar.voice.stop(); btn.classList.remove('playing'); return; }
       try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
-      if (playingBubbleEl && playingBubbleEl !== btn) playingBubbleEl.classList.remove('playing');
-      playingBubbleEl = btn; btn.classList.add('playing');
-      var ok = KChar.voice.speak(m.text, dv, {
-        onend: function () { btn.classList.remove('playing'); if (playingBubbleEl === btn) playingBubbleEl = null; },
-        onerror: function () { btn.classList.remove('playing'); if (playingBubbleEl === btn) playingBubbleEl = null; }
-      });
-      if (ok) return;
-      btn.classList.remove('playing');                 // 기기 음성 실패 → 아래 케이 기본 목소리로
+      var st = listenSet(lid, 'play', true);
+      var fin = function () { if (listenSt === st) listenClear(); };
+      if (KChar.voice.speak(m.text, dv, { onend: fin, onerror: fin })) return;
+      fin();                                           // 기기 음성 실패 → 아래 케이 기본 목소리로
     }
     if (window.KChar && KChar.voice.speaking()) KChar.voice.stop();
     unlockKaiAudio();
     // v8.3: 사무소가 미리 붙인 목소리(서명 주소 7일)는 6일 반이 지나면 만료로 보고 그때 새로 만든다(예전 [듣기]와 같은 길)
     if (m.vurl && m.vtts && m.ts && (Date.now() - m.ts) > 6.5 * 86400000) { m.vurl = null; m.vtts = false; }
     if (m.vurl) {
-      if (m.vtts && !m.vplayed) { m.vplayed = true; saveChatMsgs(); var _lb = btn.lastChild; if (_lb && _lb.nodeType === 3) _lb.nodeValue = '다시 듣기'; }
-      playKaiVoice(m.vurl, btn); return;
+      if (m.vtts && !m.vplayed) { m.vplayed = true; saveChatMsgs(); }
+      playKaiVoice(m.vurl, lid); return;
     }
-    if (btn._loading) return;
-    var lbl = btn.innerHTML;
-    btn._loading = true; btn.classList.add('loading'); btn.setAttribute('disabled', '');
-    btn.innerHTML = '<svg><use href="#i-sound"/></svg>준비 중…';
-    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
-    OfficeBridge.requestTts(id, tok, m.text || '').then(function () {
-      pollTts(id, tok, 0, m, lbl);
-    }).catch(function () { resetListenBtn(btn, lbl); toast('음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주세요.'); });
+    listenSet(lid, 'load', false);
+    if (ttsJobs[lid]) return;                          // 앞서 청해 둔 소리가 아직 만들어지는 중 — 다시 청하지 않고 그것을 기다린다
+    var job = ttsJobs[lid] = { id: OfficeBridge.uuid(), tok: OfficeBridge.token() };
+    OfficeBridge.requestTts(job.id, job.tok, m.text || '').then(function () {
+      pollTts(job, m, 0);
+    }).catch(function () { ttsEnd(job, m, '음성을 준비하지 못했습니다. 잠시 후 다시 눌러 주세요.'); });
   }
-  function pollTts(id, tok, tries, m, lbl) {
-    if (tries > kvListenTries()) { var b0 = chatLog.querySelector('[data-lid="' + m.lid + '"]'); resetListenBtn(b0, lbl); toast('음성 준비가 지연됩니다. 잠시 후 다시 눌러 주세요.'); return; }
-    OfficeBridge.poll(id, tok).then(function (res) {
-      var b = chatLog.querySelector('[data-lid="' + m.lid + '"]');
+  function ttsWaiting(m) { return !!(listenSt && listenSt.ph === 'load' && listenSt.lid === m.lid); }   // 화면에서 이 소리를 기다리는 중인가
+  function ttsEnd(job, m, msg) {                       // 못 만든 채로 끝남 — 기다리던 중이면 단추를 되돌리고 알린다(그만둔 뒤면 조용히)
+    if (ttsJobs[m.lid] === job) delete ttsJobs[m.lid];
+    if (!ttsWaiting(m)) return;
+    listenClear(); toast(msg);
+  }
+  function pollTts(job, m, tries) {
+    if (ttsJobs[m.lid] !== job) return;
+    if (tries > kvListenTries()) { ttsEnd(job, m, '음성 준비가 지연됩니다. 잠시 후 다시 눌러 주세요.'); return; }
+    OfficeBridge.poll(job.id, job.tok).then(function (res) {
       if (res && res.status === 'done') {
         var url = res.summary_json && res.summary_json.voice_url;
-        if (url) {
-          m.vurl = url; saveChatMsgs();
-          if (isOpen(chatView)) renderChat();
-          var fresh = chatLog.querySelector('[data-lid="' + m.lid + '"]');
-          // v9.8: 준비를 청한 뒤에 회의 녹음이 시작됐다면 저절로 틀지 않는다(회의 자리에 소리가 난다)
-          if (REC_ROAM_V2 && isRecording && !m._recAsk) { resetListenBtn(fresh || b, '<svg><use href="#i-sound"/></svg>다시 듣기'); toast('목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.', 3500); }
-          else playKaiVoice(url, fresh || b);
-        } else { resetListenBtn(b, lbl); toast('음성을 만들지 못했습니다.'); }
+        if (!url) { ttsEnd(job, m, '음성을 만들지 못했습니다.'); return; }
+        var waiting = ttsWaiting(m);
+        delete ttsJobs[m.lid];
+        m.vurl = url; saveChatMsgs();
+        if (!waiting) { listenPaint(m.lid); return; }  // 기다림을 그만두셨다 — 받아만 두고 틀지 않는다(단추 글만 「다시 듣기」로)
+        // v9.8: 준비를 청한 뒤에 회의 녹음이 시작됐다면 저절로 틀지 않는다(회의 자리에 소리가 난다)
+        if (REC_ROAM_V2 && isRecording && !m._recAsk) { listenClear(); toast('목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.', 3500); }
+        else playKaiVoice(url, m.lid);
       } else {
-        setTimeout(function () { pollTts(id, tok, tries + 1, m, lbl); }, 700);
+        setTimeout(function () { pollTts(job, m, tries + 1); }, 700);
       }
-    }).catch(function () { setTimeout(function () { pollTts(id, tok, tries + 1, m, lbl); }, 900); });
+    }).catch(function () { setTimeout(function () { pollTts(job, m, tries + 1); }, 900); });
   }
 
   /* ---- 카메라/갤러리: 케이에게 보여줄 사진 붙이기(전송 전 대기) ---- */
