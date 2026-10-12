@@ -36,7 +36,25 @@
     this._levelRAF = null;
     this._mime = '';
     this._lastLevel = 0;   // 무음 자동 감지용(0~1) — 레벨미터 tick 이 갱신
+    this.kind = options.kind || '';   // v9.8: 네이티브 녹음기와 같은 인터페이스(웹에서는 쓰지 않는다)
+    this._failed = false;             // v9.8: 녹음기가 오류를 알렸다
   }
+
+  /* v9.8(O-0442) 네이티브 녹음기와 같은 인터페이스.
+   *   status(): 웹에서는 페이지를 새로 열면 녹음도 사라지므로 되찾을 것이 없다 → known:false.
+   *   alive() : 이 녹음기가 지금 실제로 적고 있는가(녹음기 상태 + 마이크 선이 살아 있는가). */
+  RecordingModule.status = function () { return Promise.resolve({ known: false, on: false }); };
+  RecordingModule.stopOrphan = function () { return Promise.resolve(); };
+  RecordingModule.prototype.alive = function () {
+    if (!this._rec) return Promise.resolve({ known: false, on: false });   // 아직 녹음기를 만들기 전(마이크 허용을 기다리는 중)
+    var on = false;
+    try {
+      on = !!(this._active && this._rec && this._rec.state === 'recording' && this._stream &&
+              this._stream.getAudioTracks().some(function (t) { return t.readyState === 'live'; }));
+    } catch (e) { on = false; }
+    return Promise.resolve({ known: true, on: on, failed: !!this._failed, elapsedMs: 0, startedAt: 0, kind: this.kind });
+  };
+  RecordingModule.prototype.adopt = function () {};
 
   // 최근 마이크 세기(0~1). 네이티브 recorder-native 와 인터페이스 일치.
   RecordingModule.prototype.getAmplitude = function () { return Promise.resolve(this._lastLevel || 0); };
@@ -51,6 +69,7 @@
   RecordingModule.prototype.start = function () {
     var self = this;
     if (this._active) return;
+    this._rec = null;                 // v9.8: 새로 시작하는 동안에는 지난 녹음기를 가리키지 않는다(alive 가 「모름」을 돌려주게)
 
     if (!RecordingModule.isSupported()) {
       this.onError('이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 Chrome에서 열어 주세요.');
@@ -77,6 +96,8 @@
         self._rec.ondataavailable = function (e) {
           if (e.data && e.data.size > 0) self._chunks.push(e.data);
         };
+        self._failed = false;
+        self._rec.onerror = function () { self._failed = true; };   // v9.8: 표시만 한다(녹음기는 건드리지 않는다)
         self._rec.onstop = function () {
           var type = self._mime || (self._chunks[0] && self._chunks[0].type) || 'audio/webm';
           var blob = new Blob(self._chunks, { type: type });

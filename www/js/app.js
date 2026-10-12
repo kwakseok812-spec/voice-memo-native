@@ -88,6 +88,10 @@
    *   네이티브(자바) 쪽은 덧붙이기만 해서 어느 쪽이든 맞물린다. */
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
+  var REC_SESSION_KEY = 'smart_rec_session';   // 지금 도는 회의 녹음의 표식 {at: 시작 시각(ms)} — 앱 화면이 다시 만들어졌을 때 「계속되던 그 녹음인가」를 가린다
+  var recLost = false;                         // 녹음기가 멈춘 것 같다(노란 띠)
+  var recLive = false;                         // 녹음기가 「시작됐다」고 알린 뒤인가(마이크 허용 창을 기다리는 동안은 아직 아니다)
+  var recPanelShared = false;                  // 「녹음 완료」 화면이 다른 앱에서 공유받은 파일을 보여 주는 중인가
   var recIndicator = $('recIndicator'), recIndTime = $('recIndTime');   // 녹음 중 미니 배너(백그라운드 녹음 표시 · 2026-09-21)
   var recIndTx = $('recIndTx'), recIndGo = $('recIndGo');
 
@@ -128,6 +132,12 @@
     s = Math.max(0, Math.floor(s));
     if (!REC_ROAM_V2 || s < 3600) return fmtSec(s);
     return Math.floor(s / 3600) + ':' + pad2(Math.floor((s % 3600) / 60)) + ':' + pad2(s % 60);
+  }
+  // 「12분 34초」처럼 읽는 글(확인 창용)
+  function fmtRecKo(s) {
+    s = Math.max(0, Math.floor(s));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    return (h ? h + '시간 ' : '') + ((h || m) ? m + '분 ' : '') + x + '초';
   }
   function defaultTitle() { var d = new Date(); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
   function now() { var d = new Date(); var p = pad2; return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) }; }
@@ -255,9 +265,10 @@
     // 내려오는 움직임은 띠가 새로 나타날 때 한 번만(움직임을 쉬는 때에는 없음)
     if (on && !wasOn && !calm) { recIndicator.classList.remove('rec-in'); void recIndicator.offsetWidth; recIndicator.classList.add('rec-in'); }
     else if (!on || calm) recIndicator.classList.remove('rec-in');
-    if (recIndTx) recIndTx.textContent = '녹음 중';
+    recIndicator.classList.toggle('warn', !!(isRecording && recLost));
+    if (recIndTx) recIndTx.textContent = (isRecording && recLost) ? '녹음이 멈춘 것 같습니다. 눌러 확인하세요' : '녹음 중';
     if (recIndGo) recIndGo.textContent = '녹음 화면으로 ›';
-    recIndicator.setAttribute('aria-label', '녹음 중. 누르면 녹음 화면으로 돌아갑니다');
+    recIndicator.setAttribute('aria-label', (isRecording && recLost) ? '녹음이 멈춘 것 같습니다. 누르면 녹음 화면으로 갑니다' : '녹음 중. 누르면 녹음 화면으로 돌아갑니다');
     paintRecHome();
   }
   if (recIndicator) recIndicator.addEventListener('click', function () { openScreen(recView); });
@@ -296,16 +307,19 @@
   function recScene(sec) {
     if (!window.KScene) return;
     var min = Math.floor((sec || 0) / 60);
+    if (REC_ROAM_V2 && recLost) { KScene.set('kscRec', 'sorry', '녹음이 멈춘 것 같습니다. 정지를 눌러 지금까지의 녹음을 확인해 주십시오.'); return; }
     // v9.8: 첫 1분의 한마디로 「나가도 녹음은 계속된다」를 알린다(따로 안내 줄을 만들지 않는다)
     var first = REC_ROAM_V2 ? '받아 적고 있습니다. 다른 화면을 보셔도 계속 적겠습니다.' : '받아 적고 있습니다. 편하게 말씀하세요.';
     KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째입니다.' : first);
   }
-  function startRecTimer() {
-    recStart = Date.now();
-    if (recTimerEl) recTimerEl.textContent = '00:00';
-    if (recIndTime) recIndTime.textContent = '00:00';
+  // elapsedMs: (v9.8) 이미 돌고 있던 녹음을 되찾을 때 — 그만큼 지난 것으로 시작한다. 평소에는 0.
+  function startRecTimer(elapsedMs) {
+    recStart = Date.now() - (elapsedMs > 0 ? elapsedMs : 0);
+    var s0 = (Date.now() - recStart) / 1000;
+    if (recTimerEl) recTimerEl.textContent = fmtRec(s0);
+    if (recIndTime) recIndTime.textContent = fmtRec(s0);
     if (recInterval) clearInterval(recInterval);
-    recScene(0);
+    recScene(s0);
     recInterval = setInterval(function () {
       var s = (Date.now() - recStart) / 1000;
       if (recTimerEl) recTimerEl.textContent = fmtRec(s);
@@ -313,8 +327,115 @@
       recScene(s);
       paintRecHome();
     }, 500);
+    startRecWatch();
   }
-  function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
+  function stopRecTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } stopRecWatch(); }
+
+  /* v9.8(O-0442) 녹음기가 실제로 돌고 있는지 지켜보기.
+   *   화면의 시간은 화면 시계로만 흐른다 → 녹음기가 멈춰도 띠의 시간은 계속 올라간다. 그래서 녹음 중에는 8초마다
+   *   녹음기에게 직접 묻는다(폰: 네이티브 서비스 · PC판: 브라우저 녹음기와 마이크 선).
+   *   「돌고 있지 않다」가 두 번 이어지거나 녹음기가 오류를 알렸으면: 노란 띠 + 한 번 진동 + 녹음 화면의 케이 한마디.
+   *   녹음을 스스로 끊거나 다시 시작하지는 않는다 — 확인하고 정지하는 것은 사람이 한다.
+   *   물어보지 못한 경우(옛 앱 · 통신 오류)는 「모름」으로 두고 아무것도 바꾸지 않는다. */
+  var REC_WATCH_MS = 8000;
+  var recWatchTimer = null, recWatchMiss = 0, recWatchBusy = false;
+  function recWatchTick() {
+    if (!isRecording || !recLive || recWatchBusy || !recorder || !recorder.alive) return;   // 시작이 확인되기 전(마이크 허용 창 등)에는 묻지 않는다
+    recWatchBusy = true;
+    recorder.alive().then(function (st) {
+      recWatchBusy = false;
+      if (!isRecording || !st || !st.known) return;
+      if (st.on && !st.failed) { recWatchMiss = 0; return; }
+      recWatchMiss = st.failed ? 2 : recWatchMiss + 1;
+      if (recWatchMiss >= 2 && !recLost) {
+        recLost = true;
+        // 네이티브가 오류를 알린 경우는 네이티브가 이미 진동했다 — 화면은 서비스가 사라진 경우에만 진동한다
+        if (!st.failed) { try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) {} }
+        updateRecIndicator();
+        recScene((Date.now() - recStart) / 1000);
+        if (isOpen(recView)) toast('녹음이 멈춘 것 같습니다. 정지를 눌러 확인해 주십시오.', 4000);
+      }
+    }).catch(function () { recWatchBusy = false; });
+  }
+  function startRecWatch() {
+    stopRecWatch();
+    if (!REC_ROAM_V2) return;
+    recWatchMiss = 0;
+    recWatchTimer = setInterval(recWatchTick, REC_WATCH_MS);
+  }
+  function stopRecWatch() { if (recWatchTimer) { clearInterval(recWatchTimer); recWatchTimer = null; } recWatchBusy = false; }
+  // 화면이 다시 보이면(다른 앱·화면 꺼짐에서 돌아옴) 기다리지 않고 바로 한 번 묻는다
+  document.addEventListener('visibilitychange', function () { try { if (!document.hidden && REC_ROAM_V2 && isRecording) recWatchTick(); } catch (e) {} });
+
+  // 지금 도는 회의 녹음의 표식(시작 시각). 정지·취소·시작 실패 때 지운다.
+  function recSessionSet(at) { try { localStorage.setItem(REC_SESSION_KEY, JSON.stringify({ at: at || Date.now() })); } catch (e) {} }
+  function recSessionGet() { try { var o = JSON.parse(localStorage.getItem(REC_SESSION_KEY) || 'null'); return (o && o.at) ? o : null; } catch (e) { return null; } }
+  function recSessionClear() { try { localStorage.removeItem(REC_SESSION_KEY); } catch (e) {} }
+
+  /* v9.8(O-0442) 앱 화면이 다시 만들어졌을 때(최근 앱에서 밀어 닫았다 열기 · 폰이 화면을 정리함) — 녹음 상태 되찾기.
+   *   녹음은 네이티브 서비스에서 계속 돌 수 있는데 새로 뜬 화면은 그것을 모른다 → 켜질 때 서비스에 묻는다.
+   *   ① 회의 녹음이 돌고 있다 → 띠·타이머를 그 녹음의 지난 시간으로 세운다.
+   *        저장해 둔 시작 시각과 같으면 「계속되고 있었습니다」, 다르거나 알 수 없으면 「한 번 끊겼을 수 있습니다」(사실대로).
+   *   ② 주인을 잃은 음성 입력(대화 한 마디·아이디어)이 돌고 있다 → 받을 화면이 없으니 끝낸다(안 그러면 다음 회의 녹음 시작이 막힌다).
+   *   ③ 녹음이 돌고 있지 않은데 표식이 남아 있다 → 그 녹음은 앱이 닫히며 끊긴 것. 숨기지 않고 알린다.
+   *   PC판은 페이지를 새로 열면 녹음도 사라지므로 ③만 해당한다. */
+  var recRecoverBusy = null;
+  function recSay(fn) {                                  // 시작 인사가 화면을 덮고 있는 동안에는 기다렸다가 말한다
+    (function wait(n) {
+      try { if (window.KIntro && KIntro.active && KIntro.active() && n < 24) { setTimeout(function () { wait(n + 1); }, 500); return; } } catch (e) {}
+      try { fn(); } catch (e) {}
+    })(0);
+  }
+  function recRecover() {
+    if (!REC_ROAM_V2) return Promise.resolve(false);
+    if (isRecording) return Promise.resolve(true);
+    if (recRecoverBusy) return recRecoverBusy;
+    var q = RecordingModule.status ? RecordingModule.status() : Promise.resolve({ known: false, on: false });
+    recRecoverBusy = q.then(function (st) {
+      recRecoverBusy = null;
+      st = st || {};
+      var sess = recSessionGet();
+      if (isRecording) return true;                       // 그 사이 새로 시작했다
+      if (chatRecording || ideaRecording) return false;   // 이 화면이 방금 시작한 음성 입력 — 건드리지 않는다
+      if (st.known && st.on && (st.kind === 'meeting' || (!st.rich && sess))) {
+        var same = !!(sess && st.startedAt && Math.abs(sess.at - st.startedAt) < 15000);
+        isRecording = true; recCancelled = false; recLost = !!st.failed; recLive = true;
+        try { recorder.adopt(); } catch (e) {}
+        startRecTimer(st.elapsedMs || (sess ? Date.now() - sess.at : 0));
+        recSessionSet(st.startedAt || recStart);
+        setStatus('녹음 중', 'rec'); updateRecIndicator();
+        recSay(function () {
+          if (same) toast('녹음이 계속되고 있었습니다. 위쪽 띠를 누르면 녹음 화면으로 갑니다.', 4000);
+          else showBanner('⚠️ 녹음이 돌고 있습니다. 다만 앱 화면이 닫혔다 열린 사이에 <b>한 번 끊겼을 수 있습니다</b> — 정지한 뒤 담긴 길이를 확인해 주십시오.');
+        });
+        return true;
+      }
+      if (st.known && st.on && st.rich && (st.kind === 'chat' || st.kind === 'idea')) {
+        try { if (RecordingModule.stopOrphan) RecordingModule.stopOrphan(); } catch (e) {}
+        return false;
+      }
+      if (sess && ((st.known && !st.on) || !readNative())) {
+        recSessionClear();
+        var d = new Date(sess.at);
+        recSay(function () {
+          showBanner('⚠️ 앱이 닫히면서 지난 녹음(' + d.getHours() + '시 ' + pad2(d.getMinutes()) + '분 시작)이 끊겼습니다. 그 녹음은 되살리지 못했습니다.');
+        });
+      }
+      return false;
+    }).catch(function () { recRecoverBusy = null; return false; });
+    return recRecoverBusy;
+  }
+  // 회의 녹음 알림을 눌러 들어왔다 → 녹음 화면으로(화면이 새로 뜬 참이면 되찾은 뒤에)
+  function recOpenFromNotif() {
+    if (isRecording) { openScreen(recView); return; }
+    recRecover().then(function (ok) { if (ok && isRecording) openScreen(recView); });
+  }
+  // PC판: 녹음 중이거나 아직 보내지 않은 녹음이 있을 때 탭을 닫거나 새로 고치려 하면 브라우저가 한 번 묻는다(문구는 브라우저가 정한다)
+  if (REC_ROAM_V2 && !readNative()) {
+    window.addEventListener('beforeunload', function (e) {
+      if (isRecording || (pendingBlob && !recPanelShared)) { e.preventDefault(); e.returnValue = ''; return ''; }
+    });
+  }
 
   if (!RecordingModule.isSupported()) {
     showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 <b>Chrome</b>에서 열어 주세요.');
@@ -322,19 +443,24 @@
   }
 
   var recorder = new RecordingModule({
+    kind: 'meeting',                     // v9.8: 회의 녹음(다른 종류의 녹음이 끼어들지 못하게 네이티브가 구분한다)
     onStatus: function (s) {
-      if (s === 'recording') setStatus('녹음 중', 'rec');
+      if (s === 'recording') { setStatus('녹음 중', 'rec'); if (REC_ROAM_V2 && isRecording) { recLive = true; recSessionSet(recStart); } }
       else if (s === 'stopped') setStatus('녹음 완료', 'idle');
       else if (s === 'error') {
         setStatus('오류', 'err');
         // 녹음 시작 실패(네이티브 reject 등) 정리: 타이머 계속 돌아 혼란주지 않게 상태를 되돌리고
         //   녹음/준비 화면이면 홈으로 복귀(실패 안내 배너는 onError 가 이미 표시). — 2026-09-21
-        if (isRecording) { isRecording = false; stopRecTimer(); updateRecIndicator(); }
+        if (isRecording) { isRecording = false; recLost = false; recSessionClear(); stopRecTimer(); updateRecIndicator(); }
         if (isOpen(recView) || isOpen(recPrep)) showHome();
       }
     },
     onLevel: function (v) { if (levelBar) levelBar.style.width = Math.round(v * 100) + '%'; },
-    onError: function (m) { showBanner('⚠️ ' + m); },
+    onError: function (m) {
+      showBanner('⚠️ ' + m);
+      // v9.8: 정지했는데 녹음 파일을 받지 못한 경우 — 안내(홈 화면의 배너)가 보이게 녹음 화면에 남겨 두지 않는다
+      if (REC_ROAM_V2 && !isRecording) { recLost = false; if (isOpen(recView)) showHome(); }
+    },
     onAudio: function (blob) { onRecorded(blob); }
   });
 
@@ -400,6 +526,8 @@
   if (btnRecord) btnRecord.addEventListener('click', function () {
     if (REC_ROAM_V2 && isRecording) { openScreen(recView); return; }      // v9.8: 녹음 중에는 돌아가는 길
     if (btnRecord.disabled || isRecording) return;
+    // v9.8: 아직 보내지 않은 녹음이 남아 있으면(완료 화면을 다른 길로 떠난 경우) 새로 시작하기 전에 그 화면으로 — 새 녹음이 덮어쓰지 않게
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
     hideBanner();
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
@@ -409,28 +537,47 @@
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
     if (isRecording) return;
     if (!RecordingModule.isSupported()) { showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다.'); return; }
+    // v9.8: 음성 대화·아이디어 녹음이 같은 녹음기를 쓰고 있으면 먼저 마치게 한다(겹치면 한쪽이 다른 쪽을 끊는다)
+    if (REC_ROAM_V2 && (chatRecording || ideaRecording)) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주세요.', 3000); return; }
+    if (REC_ROAM_V2 && convoOn) { try { stopConvo(true); } catch (e) {} }
     hideBanner();
-    recCancelled = false; isRecording = true;
+    // v9.8: 앱이 내고 있던 소리(답 듣기·미리 듣기)는 녹음을 시작하면서 멈춘다
+    if (REC_ROAM_V2) {
+      try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
+      try { if (window.KChar && KChar.voice.speaking()) KChar.voice.stop(); } catch (e) {}
+      try { kvPvStop(); } catch (e) {}
+    }
+    recCancelled = false; isRecording = true; recLost = false; recLive = false;
     openScreen(recView); startRecTimer();
     recorder.start();
   });
   if (btnStop) btnStop.addEventListener('click', function () {
     if (!isRecording) return;
-    isRecording = false; stopRecTimer();
+    isRecording = false; stopRecTimer(); recSessionClear();
     if (REC_ROAM_V2) updateRecIndicator();
     recorder.stop();   // → onAudio → onRecorded
   });
-  if (btnCancelRec) btnCancelRec.addEventListener('click', function () {
+  function cancelRecNow() {
     if (!isRecording) { showHome(); return; }
-    recCancelled = true; isRecording = false; stopRecTimer();
+    recCancelled = true; isRecording = false; recLost = false; stopRecTimer(); recSessionClear();
     try { recorder.stop(); } catch (e) {}
     pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
+  }
+  if (btnCancelRec) btnCancelRec.addEventListener('click', function () {
+    // v9.8: 10초 넘게 녹음했으면 한 번 확인한다(예전에는 한 번 누르면 바로 버려졌다)
+    var sec = isRecording ? (Date.now() - recStart) / 1000 : 0;
+    if (REC_ROAM_V2 && isRecording && sec >= 10) {
+      openSheet('녹음을 버릴까요?', '지금까지 녹음한 ' + fmtRecKo(sec) + '가 지워집니다. 되살릴 수 없습니다.', '버리기', cancelRecNow, null, null, { cancelLabel: '계속 녹음' });
+      return;
+    }
+    cancelRecNow();
   });
 
   /* v8.4(O-0162) 다른 앱에서 공유받은 녹음 파일(통화 녹음·음성 녹음기 m4a·mp3·wav 등) → 회의록.
    *   앱 녹음이 끝났을 때와 같은 「녹음 완료」 화면(pendingBlob)에 올려 둔다 → 보내는 길(OfficeBridge.send / sendAudioChunked),
    *   PC 처리(collect.py·video_worker 전사·요약·회의자료 반영)는 앱 녹음과 완전히 같다. 화면 머리글·[다시 녹음] 글만 잠깐 바꾼다. */
   function recPanelMode(shared) {
+    recPanelShared = !!shared;
     var ttl = recordedPanel ? recordedPanel.querySelector('.subbar .title') : null;
     if (ttl) ttl.textContent = shared ? '녹음 파일 정리' : '녹음 완료';
     if (btnRetake) btnRetake.innerHTML = shared ? '<svg><use href="#i-x"/></svg>취소' : '<svg><use href="#i-mic"/></svg>다시 녹음';
@@ -442,6 +589,7 @@
   function audioToMeeting(f) {
     if (!f) return;
     if (isRecording) { toast('지금 녹음 중입니다. 녹음을 마친 뒤 다시 공유해 주세요.', 3500); return; }
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다. 먼저 보내거나 임시저장해 주세요.', 3500); return; }
     hideBanner();
     pendingBlob = f; pendingMaterials = []; renderMatList();
     if (memoTitle) memoTitle.value = titleFromAudioName(f.name) || defaultTitle();
@@ -453,7 +601,8 @@
     toast('제목을 확인하고, 필요하면 회의자료를 붙인 뒤 [PC로 보내 정리하기]를 누르세요.', 4000);
   }
   function onRecorded(blob) {
-    stopRecTimer(); isRecording = false;
+    var wasLost = recLost;
+    stopRecTimer(); isRecording = false; recLost = false; recSessionClear();
     if (recCancelled) { recCancelled = false; pendingBlob = null; showHome(); return; }
     recPanelMode(false);                       // v8.4: 공유 파일 화면이었다면 원래 글로
     pendingBlob = blob;
@@ -463,11 +612,26 @@
     if (recDoneBadge) recDoneBadge.textContent = durMs > 0
       ? '✅ 녹음됐습니다 · ' + fmtRec(durMs / 1000) + ' (' + Math.round(durMs / 1000) + '초)'
       : '✅ 녹음됐습니다';
+    // v9.8: 녹음기가 멈춘 것 같다는 표시가 떠 있던 녹음 — 담긴 길이를 사실대로 알린다
+    if (REC_ROAM_V2 && wasLost && recDoneBadge) recDoneBadge.textContent = durMs > 0
+      ? '⚠️ 녹음이 도중에 멈춘 것 같습니다 · 담긴 길이 ' + fmtRec(durMs / 1000) + ' — 보내기 전에 길이를 확인해 주십시오.'
+      : '⚠️ 녹음이 도중에 멈춘 것 같습니다 — 담긴 길이를 확인하지 못했습니다.';
     openScreen(recordedPanel);
     setStatus('녹음 완료 — 제목 정하고 보내기', 'idle');
   }
+  function discardRecorded() { pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); }
+  /* v9.8(O-0442) 「녹음 완료」 화면을 떠나려 할 때 — 아직 보내지 않은 내 녹음이면 한 번 묻는다.
+   *   [임시저장](기존 기능 그대로 — 폰에 보관, 회의록 「진행 중」에서 다시 연다) · [버리기] · [계속 보기].
+   *   다른 앱에서 공유받은 파일은 원본이 그 앱에 남아 있어 묻지 않는다. 돌려주는 값: true = 창을 띄웠다. */
+  function guardRecorded() {
+    if (!REC_ROAM_V2 || !pendingBlob || recPanelShared) return false;
+    openSheet('아직 보내지 않은 녹음입니다', '이대로 나가면 이 녹음은 사라집니다.', '버리기', discardRecorded, null,
+      { label: '임시저장', action: function () { if (btnDraft) btnDraft.click(); } }, { cancelLabel: '계속 보기' });
+    return true;
+  }
   if (btnRetake) btnRetake.addEventListener('click', function () {
-    pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
+    if (guardRecorded()) return;
+    discardRecorded();
   });
 
   if (btnSend) btnSend.addEventListener('click', function () {
@@ -3088,6 +3252,7 @@
   function ensureChatRecorder() {
     if (chatRecorder) return chatRecorder;
     chatRecorder = new RecordingModule({
+      kind: 'chat',                      // v9.8: 음성 대화 한 마디(회의 녹음과 섞이지 않게)
       onError: function (m) {
         toast('🎤 ' + m); stopAmpPoll(); chatRecording = false; setChatMic(false);
         if (convoOn) stopConvo(true);   // 마이크 시작 실패 → 무한 재시도 말고 대화 멈춤(대표님이 다시 시작)
@@ -3417,6 +3582,11 @@
       if (has) { stt.why = 'rec-' + why; stt.finishing = true; sttDone(); } else { sttCleanup(); listenMiss('nospeech'); }
       return;
     }
+    if (why === 'recording') {        // v9.8: 네이티브가 「회의 녹음 중」이라 받아쓰기를 열지 않았다 — 녹음 경로로 넘기지 않고 멈춘다
+      sttCleanup(); try { KS.cancel(); } catch (x) {}
+      toast(REC_BUSY_VOICE, 3200); if (convoOn) stopConvo(true);
+      return;
+    }
     ks.fails++;
     if (why === 'permission' || why === 'unavailable' || ks.fails >= 2) ks.off = true;
     if (has) { stt.why = 'err-' + (why || 'x'); stt.finishing = true; sttDone(); return; }   // 이미 들은 말은 버리지 않고 보냄
@@ -3557,8 +3727,20 @@
    * (안 들을 답은 생성 안 함 = 가장 효율적) 이미 vurl 이 있으면(연속 대화 등) 바로 재생. */
   function findKByLid(lid) { for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].role === 'k' && chatMsgs[i].lid === lid) return chatMsgs[i]; } return null; }
   function resetListenBtn(btn, lbl) { if (!btn) return; btn._loading = false; btn.classList.remove('loading'); btn.removeAttribute('disabled'); btn.innerHTML = lbl; }
+  /* v9.8(O-0442) 회의 녹음 중에 소리를 내려 할 때 — 한 번 확인한 뒤 재생한다(스피커 소리가 회의 자리에 나고 녹음에도 들어간다).
+   *   이미 나고 있는 소리를 멈추는 누름은 묻지 않는다. */
+  function recSoundGuard(go) {
+    if (!REC_ROAM_V2 || !isRecording) { go(); return; }
+    openSheet('회의 녹음 중입니다', '지금 들으시면 폰에서 소리가 나고 녹음에도 들어갑니다.', '그래도 듣기', go, null, null,
+      { cancelLabel: '닫기', positive: true, icon: 'i-sound' });
+  }
   function onListenBtn(lid, btn) {
+    if (btn && (btn.classList.contains('playing') || btn._loading)) { onListenBtnGo(lid, btn); return; }
+    recSoundGuard(function () { onListenBtnGo(lid, (chatLog && chatLog.querySelector('[data-lid="' + lid + '"]')) || btn); });
+  }
+  function onListenBtnGo(lid, btn) {
     var m = findKByLid(lid); if (!m) return;
+    m._recAsk = !!isRecording;                         // 녹음 중에 「그래도 듣기」로 청한 것 — 준비되면 바로 틀어도 된다
     // v6.0: 「목소리」에서 이 기기 음성을 골랐으면 PC 요청 없이 바로 기기에서 읽는다(무료·즉시).
     var dv = window.KChar && KChar.voice.active();
     if (dv && m.text) {
@@ -3600,7 +3782,9 @@
           m.vurl = url; saveChatMsgs();
           if (isOpen(chatView)) renderChat();
           var fresh = chatLog.querySelector('[data-lid="' + m.lid + '"]');
-          playKaiVoice(url, fresh || b);
+          // v9.8: 준비를 청한 뒤에 회의 녹음이 시작됐다면 저절로 틀지 않는다(회의 자리에 소리가 난다)
+          if (REC_ROAM_V2 && isRecording && !m._recAsk) { resetListenBtn(fresh || b, '<svg><use href="#i-sound"/></svg>다시 듣기'); toast('목소리가 준비됐습니다. 「다시 듣기」를 누르면 들으실 수 있습니다.', 3500); }
+          else playKaiVoice(url, fresh || b);
         } else { resetListenBtn(b, lbl); toast('음성을 만들지 못했습니다.'); }
       } else {
         setTimeout(function () { pollTts(id, tok, tries + 1, m, lbl); }, 700);
@@ -5252,6 +5436,10 @@
     return !!was;
   }
   function kvPreview(key) {
+    if (kvPvKey === key) { kvPreviewGo(key); return; }                 // 틀고 있는 줄을 다시 누르면 멈춤 — 묻지 않는다
+    recSoundGuard(function () { kvPreviewGo(key); });                  // v9.8: 회의 녹음 중에는 한 번 확인
+  }
+  function kvPreviewGo(key) {
     if (window.KChar && KChar.voice.speaking()) KChar.voice.stop();
     if (kvPvKey === key) { kvPvStop(); renderKVoices(); return; }      // 틀고 있는 줄을 다시 누르면 멈춤
     kvPvStop();
@@ -5395,6 +5583,10 @@
     if (tr) {
       var v = null, nm = tr.getAttribute('data-try');
       KChar.voice.list().forEach(function (x) { if (x.name === nm) v = x; });
+      if (v && REC_ROAM_V2 && isRecording && !tr._recOk) {              // v9.8: 회의 녹음 중에는 한 번 확인(「그래도 듣기」면 같은 누름을 다시 보낸다)
+        recSoundGuard(function () { tr._recOk = true; try { tr.click(); } finally { tr._recOk = false; } });
+        return;
+      }
       if (v) { if (kvPvStop()) renderKVoices(); KChar.voice.speak('대표님, 안녕하세요. 케이입니다. 이 목소리로 읽어 드리겠습니다.', v); }
       return;
     }
@@ -5578,8 +5770,10 @@
   var sheetExtraAction = null;          // 보조 버튼(예: PC 연동) 실행 함수
 
   // extra: { label, action } — 있으면 보조 버튼 하나 더 표시(선택)
-  function openSheet(title, msg, confirmLabel, action, copyText, extra) {
+  // opts(v9.8, 선택): { cancelLabel: 맨 아래 닫기 단추의 글(기본 '취소'), positive: 확인 단추를 빨간 휴지통 대신 평소 모양으로, icon: 그때의 그림 }
+  function openSheet(title, msg, confirmLabel, action, copyText, extra, opts) {
     if (!sheetEl) return;
+    if (sheetCancel) sheetCancel.textContent = (opts && opts.cancelLabel) || '취소';
     // v5.5: 확인 버튼 모양을 매번 기본(빨간 휴지통)으로 되돌린다 — 아이디어 [진행해줘] 시트가 잠시 긍정형(✓)으로 바꿔 쓰기 때문.
     if (sheetConfirm) { sheetConfirm.classList.add('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-trash'); }
     sheetTitle.textContent = title;
@@ -5595,6 +5789,7 @@
       if (extra && extra.label) { if (sheetExtraLabel) sheetExtraLabel.textContent = extra.label; sheetExtraBtn.style.display = 'flex'; sheetExtraAction = extra.action || null; }
       else { sheetExtraBtn.style.display = 'none'; sheetExtraAction = null; }
     }
+    if (opts && opts.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _pu = sheetConfirm.querySelector('use'); if (_pu) _pu.setAttribute('href', '#' + (opts.icon || 'i-check')); }
     sheetEl.style.display = 'flex';
   }
   function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; sheetExtraAction = null; }
@@ -5804,6 +5999,7 @@
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
     if (isRecording && isOpen(recView)) { if (REC_ROAM_V2) leaveRecScreen(); else openRecLeaveSheet(); return true; }
     if (REC_ROAM_V2 && isOpen(recView)) { showHome(); setStatus('대기 중', 'idle'); return true; }      // 녹음이 시작되지 못한 채 남은 녹음 화면
+    if (isOpen(recordedPanel) && guardRecorded()) return true;                                          // v9.8: 아직 보내지 않은 녹음 — 한 번 묻는다
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
@@ -5830,7 +6026,9 @@
     if (isOpen($('healthView')) && window.HealthTab && HealthTab.back && HealthTab.back()) return true;   // v9.4(O-0344): 지난 날짜 고치는 중 → 기록 보기 목록으로
     if (isOpen(filePanel) && filePanelFromChat) { filePanelFromChat = false; pendingFiles = []; pendingKind = null; openChat(); return true; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
     if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
-      pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
+      // v9.8: 녹음 중(또는 보내지 않은 녹음이 남아 있는 동안)에는 붙여 둔 회의자료를 지우지 않는다 — 다른 화면을 보고 돌아와도 완료 화면까지 이어진다
+      if (!(REC_ROAM_V2 && (isRecording || pendingBlob))) pendingMaterials = [];
+      showHome(); setStatus('대기 중', 'idle'); stopLockerSync(); return true;
     }
     return false;
   }
@@ -6063,6 +6261,7 @@
   function ensureIdeaRecorder() {
     if (ideaRecorder) return ideaRecorder;
     ideaRecorder = new RecordingModule({
+      kind: 'idea',                      // v9.8
       onStatus: function (s) { if (s === 'error') resetIdeaRecUI(); },
       onError: function (m) { toast('🎤 ' + m); resetIdeaRecUI(); },
       onAudio: function (blob) { onIdeaAudio(blob); }
@@ -6796,6 +6995,8 @@
       }
     }).catch(function () {});
   }
+  // v9.8(O-0442): 켜질 때 한 번 — 네이티브에서 계속 돌던 회의 녹음이 있으면 되찾는다
+  setTimeout(function () { try { recRecover(); } catch (e) {} }, 400);
   function kbSkipIntro() { try { if (window.KIntro && KIntro.active && KIntro.active()) KIntro.skip(); } catch (e) {} }
   function runShortcut(name) {
     kbSkipIntro();
@@ -6826,6 +7027,7 @@
   function onKLaunch(ev) {
     if (!ev) return;
     if (ev.kind === 'shortcut') { runShortcut(ev.name); return; }
+    if (ev.kind === 'rec') { kbSkipIntro(); recOpenFromNotif(); return; }   // v9.8: 회의 녹음 알림을 누름 → 녹음 화면(케이 답장 알림·대화는 건드리지 않는다)
     if (ev.kind === 'open') {                      // 위젯·[답장] 알림 탭
       kbSkipIntro();
       importNotifReplies();
