@@ -12,6 +12,8 @@
  *   그래서 줄어듦 · 옅어짐은 CSS 「스크롤에 붙여 도는 움직임」(animation-timeline: scroll())에 맡긴다 — 스크롤과 같은 곳에서 돌아 늦지 않는다.
  *   스크립트는 「어디서부터 어디까지 줄어드는지」(--kwf-a · --kwf-b)와 크기 값만 적어 두고, 스크롤 중에는 문턱을 넘을 때 표시(html.kwf-docked) 하나만 붙였다 뗀다.
  *   그 CSS 가 없는 옛 웹뷰 · 폰 「움직임 줄이기」(앱이 CSS 움직임을 모두 끈다)에서만 예전처럼 스크립트가 스크롤마다 한 번(requestAnimationFrame) 값을 적는다.
+ *   안전망: CSS 가 「된다」고 했는데 실제로는 돌지 않는 웹뷰가 있을 수 있다(그러면 사진이 큰 채로 붙어 목록을 덮는다). 그래서 사진이 줄어들기 시작한 뒤
+ *     실제 높이를 한 번 재서(자리가 바뀔 때마다 한 번 — 스크롤마다 재지 않는다) 기대한 높이가 아니면 그 자리에서 스크립트 방식으로 넘어간다.
  *
  * app.js 가 부르는 곳은 init 한 번뿐이다 — 화면이 열리고 닫히는 것 · 탭 · 옷 바뀜 · 녹음 띠 · 글자 크기는 여기서 지켜본다(MutationObserver).
  * 스위치(app.js): KW_FOLLOW 'off' 면 init 이 아무것도 만들지 않는다 = 이 파일이 없는 것과 같다.
@@ -22,6 +24,7 @@
   var mode = 'off', opt = {}, state = '', built = false, queued = false, wideMQ = null, calmMQ = null, cssOk = false;
   var view, hero, seg, paneOutfit, grid, dock, card, lab, labName, labTip;
   var geoKey = '', aPx = 0, bPx = 1, lastP = -1, lastFade = -1, labKey = '', waitId = '', waitTimer = null;
+  var cssSeen = '', cssMiss = 0;                        // CSS 방식이 실제로 도는지 본 자리(geoKey) · 잇달아 어긋난 횟수
   var TIP = '전신 · 눌러 보세요';
 
   function $(id) { return document.getElementById(id); }
@@ -169,7 +172,13 @@
       if (Math.abs(p - lastP) < .002 && lastP >= 0) return;
       var was = lastP; lastP = p;
       if ((p > .02) !== (was > .02) || was < 0) de.classList.toggle('kwf-docked', p > .02);     // [뒤로] 줄 뒤 덮개(문턱에서 한 번)
-      if (de.classList.contains('kwf-css')) return;       // 줄어듦 · 옅어짐은 CSS 가 스크롤에 붙여 돌린다
+      if (de.classList.contains('kwf-css')) {             // 줄어듦 · 옅어짐은 CSS 가 스크롤에 붙여 돌린다
+        if (cssSeen === geoKey || p < .15) return;        //   이 자리에서는 이미 확인했다 · 아직 거의 안 줄었다(잴 것이 없다)
+        var want = H * (1 - p * (1 - hmin / H)), got = hero.getBoundingClientRect().height;
+        if (Math.abs(got - want) <= Math.max(6, H * .03)) { cssSeen = geoKey; cssMiss = 0; return; }   // 기대한 만큼 줄어 있다 → CSS 가 돈다
+        if (++cssMiss < 2) { lastP = -1; setTimeout(req, 120); return; }   //   한 번 어긋난 것으로는 넘기지 않는다(곧 한 번 더 본다)
+        cssOk = false; cssMiss = 0; de.classList.remove('kwf-css');   // 두 장면 잇달아 어긋났다 → CSS 가 실제로는 돌지 않는다. 이 실행 동안은 스크립트 방식(아래에서 바로 값을 적는다)
+      }
       view.style.setProperty('--kwf-s', (1 - p * (1 - hmin / H)).toFixed(4));
       view.style.setProperty('--kwf-p', p.toFixed(3));
       view.style.setProperty('--kwf-l', clamp((p - .78) / .22, 0, 1).toFixed(3));

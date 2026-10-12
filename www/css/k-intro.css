@@ -81,8 +81,9 @@ html.kwfm-dock #kwHero{position:sticky;top:var(--kwf-top);z-index:19;transform-o
 html.kwfm-dock .kwf-dock{display:block;position:sticky;top:var(--kwf-top);height:0;z-index:19;pointer-events:none}
 .kwf-card{position:absolute;left:-7px;right:-7px;top:-7px;height:calc(var(--kwf-h, 160px) + 14px);border-radius:22px;
   background:var(--kwf-card);box-shadow:var(--float-sh);border:1px solid var(--glass-b);opacity:0}
-.kwf-card::after{content:"";position:absolute;left:8px;right:8px;top:100%;height:18px;pointer-events:none;                 /* 판 밑으로 들어가는 글자 · 사진이 뚝 잘리지 않고 옅어지며 들어간다 */
-  background:linear-gradient(180deg,var(--page-bg),transparent);opacity:.82}
+.kwf-card::after{content:"";position:absolute;left:0;right:0;top:100%;height:18px;pointer-events:none;                 /* 판 밑으로 들어가는 글자 · 사진이 뚝 잘리지 않고 옅어지며 들어간다 */
+  background:linear-gradient(180deg,var(--page-bg),transparent);opacity:.7;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}   /* 양 끝은 옅어져 사라진다(각진 띠로 보이지 않게) */
 .kwf-lab{position:absolute;left:calc(var(--kwf-w, 220px) + 18px);right:9px;top:7px;bottom:7px;display:flex;flex-direction:column;justify-content:center;gap:2px;
   opacity:0;min-width:0;overflow:hidden}
 .kwf-lab small{font-size:calc(12px * var(--fsx, 1));font-weight:700;line-height:1.35;color:var(--dim);word-break:keep-all}                    /* 판의 글자는 앱의 글자 크기 설정(--fsx)을 따른다 */
@@ -112,7 +113,7 @@ html.kwfm-dock:not(.kwf-css) .kwf-lab{opacity:var(--kwf-l, 0)}
 @keyframes kwfLab{0%,78%{opacity:0}100%{opacity:1}}
 /* 붙어 있는 동안: [뒤로] 줄 뒤로 지나가는 옷 사진 · 글자를 가린다(상태바 덮개 .app::before 를 판 윗단까지 늘린 것 — 판이 그 위에 놓여 경계가 보이지 않는다) */
 html.kwf-docked .app::before{height:calc(var(--sat) + var(--rec-h, 0px) + 76px);opacity:1;
-  background:linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg) 78%, transparent 100%)}
+  background:linear-gradient(180deg, var(--page-bg) 0, var(--page-bg) calc(100% - 18px), transparent 100%)}   /* 판 윗단(…+53px)보다 아래까지 꽉 찬 색 — 녹음 띠가 있어도 같다 */
 /* 서버에서 받는 옷을 눌러 두었을 때: 다 받을 때까지 그 칸에 「받는 중」(입고 있는 옷 · 붙은 사진은 그대로다) */
 .kw-item.kwf-wait .kw-th{border-color:var(--p1);border-style:dashed}
 .kw-item.kwf-wait .kw-th::after{content:"받는 중";position:absolute;left:6px;top:6px;padding:2px 8px;border-radius:999px;background:rgba(5,8,20,.72);color:#fff;
