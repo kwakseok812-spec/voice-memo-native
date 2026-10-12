@@ -4413,6 +4413,7 @@
   }
 
   var kStatState = null, kStatData = null, kStatBusy = false, kStatMissing = false, kStatLast = 0;
+  var kStatErr = false;                               // v9.10: 가장 최근에 PC 상태를 읽으려다 실패했다(통신 · 암호) — 「목록을 불러오지 못했습니다」를 사실일 때만 적으려고
   var KSTAT_DOWN_S = 180;                        // PC 하트비트 60초 × 3 — 이보다 오래 소식이 없으면 「PC 응답 없음」
   function kStatCalc(d) {
     if (!d || !d.updated_at) return null;
@@ -4506,7 +4507,7 @@
     if (!force && Date.now() - kStatLast < 25000) return;
     kStatBusy = true; kStatLast = Date.now();
     OfficeBridge.getKStatus(pass).then(function (d) {
-      kStatBusy = false;
+      kStatBusy = false; kStatErr = false;
       var prev = kStatState;
       if (kvHold && d && d.voice && d.voice.chosen === kvHold.key) kvHold = null;   // v9.7: PC 상태가 방금 바꾼 값을 따라왔다 → 이제부터는 PC 값을 그대로 따른다
       kStatData = d; kStatState = kStatCalc(d);
@@ -4516,6 +4517,8 @@
       if (prev !== kStatState && isOpen(chatView) && (prev === 'down' || prev === 'login' || kAway())) renderChat();   // 「PC 응답 없음」 안내 줄을 붙이거나 뗀다
     }).catch(function (e) {
       kStatBusy = false;
+      var hadErr = kStatErr; kStatErr = !(e && e.notready);   // 서버 함수가 없는 것은 「못 받아 온 것」이 아니다
+      if (!hadErr && kStatErr && !kStatData && isOpen($('kWardrobeView'))) { try { renderKVoices(); } catch (e2) {} }   // 받아 둔 것도 없으면 그 줄의 글을 「불러오는 중」에서 사실대로 바꾼다
       if (e && (e.notready || e.badpass)) {          // 서버 함수 없음 → 이번 실행 동안 다시 묻지 않음 / 암호 틀림 → 숨김
         if (e.notready) kStatMissing = true;
         kStatState = null; renderKStat();
@@ -5993,7 +5996,7 @@
     var st = kvPick(key);                              // 고르기는 예전 그대로(이미 고른 줄이면 아무 일도 없다)
     if (!row.sample) {                                 // 견본이 아직 없다 — 줄에 「견본 준비 중」이 적혀 있다. 아무 반응이 없어 보이지 않게, 고르기도 일어나지 않은 누름에는 한마디
       if (kvPvStop()) renderKVoices();
-      if (st === 'same') toast(tw('이 목소리의 견본은 준비 중입니다.'), 2200);
+      if (st === 'same') toast(tw('이 목소리의 예시는 준비 중입니다.'), 2200);
       return;
     }
     recSoundGuard(function () { kvPvPlay(key, row.sample); });   // v9.8: 회의 녹음 중에는 한 번 확인(고르기는 소리가 없어 그대로 된다)
@@ -6007,7 +6010,7 @@
     function end(fail) {
       if (my !== kvPvSeq) return;                      // 멈췄거나 다른 줄로 넘어간 뒤에 온 알림
       kvPvSeq++; kvPvKey = '';
-      if (fail) { kvPvBad = key; toast(tw('견본만 못\u00a0받았습니다. 고르기는 됩니다.'), 3000); }
+      if (fail) { kvPvBad = key; toast(tw('예시만 못\u00a0받았습니다. 고르기는 됩니다.'), 3000); }
       if (isOpen($('kWardrobeView'))) renderKVoices();
     }
     try {
@@ -6037,7 +6040,8 @@
       // O-0469: 「여자1(으)로」가 되지 않게 조사를 피한다. 「다음에 읽을 때부터 이 목소리」는 브리핑 전용 줄에서는 사실이 아니라 뺐다(어디서 나오는지는 그 줄 설명과 바로 아래 안내가 말한다)
       if (!kvNext || kvNext === p.key) toast(tw('「' + nm + '」 목소리로 바꿨습니다.'), 2600);
     } else if (ok === false) {
-      toast('바꾸지 못했습니다. ' + (why ? kvText(why, 40) : '잠시 뒤 다시 눌러 주세요.'), 2800);
+      var whyTx = why ? kvText(why, 40) : '다시 눌러\u00a0주십시오.';      // PC 가 사유를 주면 그 글(40자까지)
+      toast(tw('바꾸지 못했습니다. ' + whyTx), 2800);
     } else {
       toast('아직 바뀌지 않았습니다. 잠시 뒤 설정을 다시 열어 확인해 주세요.', 3200);
     }
@@ -6073,7 +6077,7 @@
       renderKVoices(); return 'next';
     }
     if (key === cur.blk.chosen) return 'same';        // 이미 이 목소리
-    if (cur.down) { toast('PC가 꺼져 있어 지금은 바꿀 수 없습니다. PC가 켜지면 다시 눌러 주세요.', 2800); return 'down'; }
+    if (cur.down) { toast(tw('PC가 꺼져 있습니다. 켜지면 눌러\u00a0주십시오.'), 2800); return 'down'; }
     if (!window.OfficeBridge || !OfficeBridge.requestVoiceSet) return '';
     var p = kvPending = { key: key, id: OfficeBridge.uuid(), tok: OfficeBridge.token(), t0: Date.now(), note: '바꾸는 중…', timer: null, slow: false };
     renderKVoices();
@@ -6115,11 +6119,11 @@
           var sub = pend ? ((kvPending && kvPending.key === r.k) ? kvPending.note : '바꾸는 중…')
             : (r.ok ? r.desc : (on ? '지금은 쓸 수 없습니다 — ' + (r.why || '잠시 쉬는 중입니다') : (r.why || '지금은 쓸 수 없습니다')));
           // 견본 상태 한 줄: 없으면 「견본 준비 중」, 받아 오지 못했으면 사실대로(조용히 아무 소리도 안 나는 줄이 없게)
-          var stl = kvPvBad === r.k ? '<small class="kv-st warn">견본 소리를 받아 오지 못했습니다. 잠시 뒤 다시 눌러 주십시오.</small>'
-            : (!r.sample ? '<small class="kv-st">견본 준비 중</small>' : '');
+          var stl = kvPvBad === r.k ? '<small class="kv-st warn">예시 소리를 받아 오지 못했습니다. 잠시 뒤 다시 눌러 주십시오.</small>'
+            : (!r.sample ? '<small class="kv-st">예시 준비 중</small>' : '');
           out.push('<div class="kw-voice kv-row' + (on ? ' on' : '') + (pend ? ' pend' : '') + (pv ? ' pv' : '') + (!pend && (cur.down || (!r.ok && !on)) ? ' dim' : '') + (kvJust === r.k ? ' just' : '') +   // 고르신 줄은 못 쓸 때도 흐리게 하지 않는다(사유 글이 읽혀야 한다) — PC 가 꺼졌을 때만 모두 흐리게
             '" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" data-kvoice="' + esc(r.k) + '"' +
-            (pv ? ' aria-label="' + esc(r.name) + ' · 견본을 들려 드리는 중 · 누르면 멈춥니다"' : '') + '>' +
+            (pv ? ' aria-label="' + esc(r.name) + ' · 예시를 들려 드리는 중 · 누르면 멈춥니다"' : '') + '>' +
             '<span class="rd"></span><span class="tx"><b>' + esc(r.name) + '</b><small' + ((!r.ok && on && !pend) ? ' class="warn"' : '') + '>' + esc(sub) + '</small>' + stl + '</span>' +
             (r.sample ? '<span class="kv-ic" aria-hidden="true"><svg><use href="#' + (pv ? 'i-stop' : 'i-sound') + '"/></svg></span>' : '') +
             '</div>');
@@ -6147,7 +6151,10 @@
       return;
     }
     // O-0469: 목록이 없을 때도 사실대로 — 연동 암호가 없으면 아래 한 줄이 말하고, 있으면 이 줄의 설명 자리에 적는다(줄을 더하지 않는다 → 「설정」 세 묶음이 한 화면에 들어오던 높이 그대로)
-    var noList = !getSyncPass() ? 'PC에서 만들어 보냅니다' : ((kStatData || kStatMissing) ? '목소리 목록을 불러오지 못했습니다' : '목소리 목록을 불러오는 중입니다');
+    // v9.10: 「불러오지 못했습니다」는 실제로 못 받아 왔을 때만. PC 가 목록 칸을 주지 않는 경우(스위치 꺼짐 · 옛 PC · 서버 함수 없음)는 고장이 아니므로 예전 글 그대로.
+    //   가르는 법: 상태는 받았는데 voice 칸이 아예 없다 = PC 가 주지 않음 / voice 칸은 왔는데 쓸 수 없는 모양이다 · 읽기에 실패했다 = 못 받아 옴 / 아직 한 번도 못 읽었다 = 불러오는 중
+    var kvNone = !getSyncPass() || kStatMissing || (!!kStatData && (kStatData.voice === undefined || kStatData.voice === null));
+    var noList = kvNone ? 'PC에서 만들어 보냅니다' : ((kStatData || kStatErr) ? '목소리 목록을 불러오지 못했습니다' : '목소리 목록을 불러오는 중입니다');
     var rows = ['<button type="button" class="kw-voice' + (!act ? ' on' : '') + '" data-voice="">' +
       '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>' + noList + '</small></span></button>'];
     vs.forEach(function (v) {
