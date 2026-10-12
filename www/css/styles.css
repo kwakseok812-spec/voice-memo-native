@@ -1089,6 +1089,18 @@ html[data-style="light"] .kprof-box{background:var(--bg0)}
 .kw-voice .tx small.warn{color:var(--warn-t)}
 .kw-voices .kw-vnote.warn{color:var(--warn-t)}
 .kw-voice .try.playing{background:var(--p1);border-color:var(--p1);color:#fff}
+/* O-0469 줄을 누르면 그 목소리 견본 — 오른쪽 작은 소리 표시(누르는 자리는 줄 전체) · 읽는 중이면 채워진 네모(다시 누르면 멈춤) */
+.kw-voice .kv-ic{flex:none;width:36px;height:36px;border-radius:12px;display:grid;place-items:center;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--p1);transition:background .15s ease,color .15s ease}
+.kw-voice .kv-ic svg{width:18px;height:18px}
+.kw-voice.pv .kv-ic{background:var(--p1);border-color:var(--p1);color:#fff;animation:kvPvBeat 1s ease-in-out infinite}
+@keyframes kvPvBeat{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.kw-voice .tx small.kv-st{color:var(--dim)}
+.kw-voice .tx small.kv-st.warn{color:var(--warn-t)}
+.kw-voices .kw-vgrp{font-size:13px;font-weight:800;color:var(--muted);margin:8px 4px -2px}
+.kw-voices .kw-vgrp:first-child,.kw-voices .kv-how + .kw-vgrp{margin-top:0}
+.kw-voices.kv .kw-vnote.kv-here{padding:0 4px 2px 46px;color:var(--muted)}   /* 고르신 줄 바로 아래: 그 목소리가 어디서 나오는지 */
+.kw-voices.calm .kw-voice.pv .kv-ic{animation:none}
+@media (prefers-reduced-motion:reduce){.kw-voice.pv .kv-ic{animation:none}.kw-voice .kv-ic{transition:none}}
 .kw-voice.pend .rd{border-color:var(--p1);border-top-color:transparent;animation:kvSpin .8s linear infinite}   /* 바꾸는 중: 동그라미가 돈다(확정 전에는 점을 옮기지 않는다) */
 .kw-voice.pend .rd::after{display:none}
 .kw-voice.pend .tx small{color:var(--p1)}

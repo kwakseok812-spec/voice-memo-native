@@ -5839,18 +5839,24 @@
    * PC(k_voice.py)가 상태 알림(get_k_status)의 voice 칸으로 목록을 내려 준다:
    *   { v:1, chosen:'warm', list:[{k,name,desc,ok,why}], scope:'…', limit:'…', note:'…'(선택), fb:N, wait:초(선택 — [듣기]에도 켰을 때 기다릴 최대 초) }
    *   chosen = 대표님이 고르신 목소리(값은 PC 한 곳에만 있다 → 폰·PC판이 같은 값을 본다) · ok=false 면 지금은 못 쓰는 줄(why=사유)
-   *   scope·limit = 어디서 나오는지·하루 횟수 안내(PC 가 실제 설정대로 적어 보낸다) · fb = 오늘 세라피나로 대신 읽은 횟수
+   *   scope·limit = 어디서 나오는지·하루 횟수 안내(PC 가 실제 설정대로 적어 보낸다) · fb = 오늘 다른 목소리로 대신 읽은 횟수
    * voice 칸이 없으면(PC 스위치 꺼짐·옛 PC·연동 암호 없음·서버 함수 없음) 새 줄을 그리지 않는다 = 예전 화면 그대로.
    * 고르면: 그 줄에 「바꾸는 중…」 → [듣기] 요청에 칸 하나(voice_set)를 얹어 보내고 → 그 요청 행의 결과로 확정한다(상태 알림을 기다리지 않는다).
    *   확정 전에는 동그라미를 옮기지 않는다(바뀌었다 되돌아오는 일이 없게). PC 가 꺼져 있으면 보내지 않는다.
-   * 미리 듣기 = 앱에 들어 있는 소리(assets/voice/pv_<열쇠>.mp3 · 지어낸 한 문장 · 세 목소리 같은 문장) → PC 가 꺼져 있어도 들린다.
+   * (O-0469) 견본 = 줄마다 PC 가 주소를 준다: list[].sample(그 목소리로 「안녕하세요, 케이입니다.」를 읽은 mp3 · 서버 저장소의 주소 · 없으면 "") · 묶음의 sample_text(읽는 문장).
+   *   줄을 누르면 → 그 목소리로 고르기(아래) + 견본을 한 번 들려 준다. 읽는 중인 줄을 다시 누르면 멈춘다. 견본이 없는 줄은 「견본 준비 중」이라고 적는다(고르기는 된다).
+   *   주소는 받은 그대로 쓴다(자르거나 조립하지 않는다). 목소리가 늘어도 PC 가 목록과 함께 주므로 앱을 다시 깔지 않는다.
+   *   v9.7 의 [미리 듣기] 단추와 앱에 넣어 둔 소리 3개(assets/voice/pv_*.mp3)는 이제 쓰지 않는다(그 세 줄이 목록에서 빠졌다 · 파일은 남겨 둠).
    * 「이 폰이 직접 읽기」(기기 음성)는 글 채팅 [듣기]에서만 쓰이는 따로 묶음이다(예전 저장값·동작 그대로 · 다시 누르면 꺼짐). */
   var KV_CACHE_KEY = 'smart_k_voice_srv';
-  var KV_PV = { warm: 'assets/voice/pv_warm.mp3', smooth: 'assets/voice/pv_smooth.mp3', seraphina: 'assets/voice/pv_seraphina.mp3' };
-  var KV_SERA = 'seraphina';
+  var KV_MAX_ROWS = 40;                               // O-0469: 목록 줄 수(예전 6 — 「남자1…」이 더해지면 넘는다). 받은 값을 무한정 그리지 않게 넉넉한 상한만 둔다
+  var KV_PICK_FOLLOW = true;                          // O-0469: 바꾸는 중에 다른 줄을 누르면 「마지막에 누른 줄」로 따라간다(false = 예전처럼 「앞의 바꾸기가 끝난 뒤에」 안내)
   var kvPending = null;                               // { key, id, tok, t0, note, timer }
+  var kvNext = '';                                    // 바꾸는 중에 누른 다음 줄(앞의 바꾸기가 끝나면 이어서 청한다)
   var kvJust = '';                                    // 방금 확정된 줄(동그라미가 톡 들어오는 움직임 한 번)
-  var kvPvAudio = null, kvPvKey = '';
+  var kvPvAudio = null, kvPvKey = '', kvPvSeq = 0;    // 견본 소리: 지금 읽는 줄 · 재생 번호(늦게 온 「끝남·실패」가 새 재생을 건드리지 않게)
+  var kvPvBad = '';                                   // 견본을 받아 오지 못한 줄(그 줄에 사실대로 적는다 · 다시 누르면 지운다)
+  var kvPvBlob = {};                                  // 견본 주소 → 미리 받아 둔 소리(blob 주소) · 'x' 받는 중 · 'f' 못 받음. 누르자마자 나게 하려는 것(못 받았으면 주소로 바로 튼다)
   /* 방금 바꾼 값 믿기: 확정(요청 행의 결과) 뒤 75초(PC 상태 주기 60초 + 여유) 동안은, 상태 알림이 아직 옛 값을 주더라도 결과로 받은 값을 보인다.
    *   PC 는 요청 행을 「완료」로 바꾼 뒤에 상태를 따로 올리므로 그 사이에 읽으면 옛 값이 온다 → 「바꿨습니다」 직후 동그라미가 되돌아가 보이던 문제(1차 검토 중간 1).
    *   상태가 새 값을 따라오면 곧바로 풀고(그 뒤의 진짜 변경은 그대로 따른다), 75초가 지나도 옛 값이면 PC 의 값을 따른다. */
@@ -5860,14 +5866,20 @@
    *   — 새 목소리는 글 길이만큼 걸려서, 나중에 PC 에서 켜도 앱을 다시 깔지 않게 값만 받아 둔다(PC 가 안 주면 40번). */
   function kvListenTries() { try { var c = kvCurrent(), w = c && c.blk.wait; return w ? Math.max(40, Math.round(w / 0.9)) : 40; } catch (e) { return 40; } }
   function kvText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-  function kvBlockOf(d) {                             // 받은 값을 그대로 믿지 않는다: 모양을 확인하고 길이를 묶는다(이름 12 · 설명 30 · 사유 40 · 안내 60자)
+  /* 견본 주소: 이 앱의 서버 저장소 주소일 때만 받는다(다른 곳의 주소를 틀지 않는다). 받은 주소는 통째로 그대로 쓴다 — 서명 주소(?token=…&v=…)라 한 글자도 바꾸지 않는다. */
+  function kvSampleUrl(u) {
+    if (typeof u !== 'string' || !u || u.length > 2000) return '';
+    var base = (window.OfficeBridge && OfficeBridge.CONFIG && OfficeBridge.CONFIG.url) || '';
+    return (base && u.indexOf(base + '/storage/v1/object/') === 0) ? u : '';
+  }
+  function kvBlockOf(d) {                             // 받은 값을 그대로 믿지 않는다: 모양을 확인하고 길이를 묶는다(이름 12 · 설명 60 · 사유 40 · 안내 60자)
     var v = d && d.voice;
     if (!v || typeof v !== 'object' || v.v !== 1 || !Array.isArray(v.list)) return null;
     var list = [], seen = {};
-    v.list.slice(0, 6).forEach(function (r) {
+    v.list.slice(0, KV_MAX_ROWS).forEach(function (r) {
       if (!r || typeof r.k !== 'string' || !/^[a-z0-9_]{1,24}$/.test(r.k) || seen[r.k]) return;
       seen[r.k] = 1;
-      list.push({ k: r.k, name: kvText(r.name || r.k, 12), desc: kvText(r.desc, 30), ok: r.ok !== false, why: kvText(r.why, 40) });
+      list.push({ k: r.k, name: kvText(r.name || r.k, 12), desc: kvText(r.desc, 60), ok: r.ok !== false, why: kvText(r.why, 40), sample: kvSampleUrl(r.sample) });   // O-0469: 설명은 PC 가 준 대로(PC 상한 30자 — 앱에서 또 자르지 않게 넉넉히) · 견본 주소
     });
     if (!list.length) return null;
     var chosen = (typeof v.chosen === 'string' && seen[v.chosen]) ? v.chosen : list[0].k;
@@ -5893,26 +5905,52 @@
   }
   function kvRow(blk, k) { for (var i = 0; i < blk.list.length; i++) if (blk.list[i].k === k) return blk.list[i]; return null; }
   function kvPvStop() {
+    kvPvSeq++;
     try { if (kvPvAudio) { kvPvAudio.pause(); kvPvAudio.removeAttribute('src'); } } catch (e) {}
     var was = kvPvKey; kvPvKey = '';
     return !!was;
   }
-  function kvPreview(key) {
-    if (kvPvKey === key) { kvPreviewGo(key); return; }                 // 틀고 있는 줄을 다시 누르면 멈춤 — 묻지 않는다
-    recSoundGuard(function () { kvPreviewGo(key); });                  // v9.8: 회의 녹음 중에는 한 번 확인
+  /* 설정 화면이 열려 있을 때 견본을 미리 받아 둔다(줄마다 수십 KB · 한 번만) → 누르는 순간 바로 난다. 못 받아도 누를 때 주소로 다시 시도한다. */
+  function kvPvWarm(blk) {
+    if (!window.fetch || !window.URL || !URL.createObjectURL) return;
+    blk.list.forEach(function (r) {
+      var u = r.sample; if (!u || kvPvBlob[u]) return;
+      kvPvBlob[u] = 'x';
+      fetch(u).then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.blob(); })
+        .then(function (b) { kvPvBlob[u] = (b && b.size > 300 && /^audio\//.test(b.type || '')) ? URL.createObjectURL(b) : 'f'; })
+        .catch(function () { kvPvBlob[u] = 'f'; });
+    });
   }
-  function kvPreviewGo(key) {
+  /* 줄을 눌렀다: 고르기 + 견본. 읽는 중인 줄을 다시 누르면 멈춘다(고른 값은 그대로 · 묻지 않는다). */
+  function kvTap(key) {
+    var cur = kvCurrent(), row = cur ? kvRow(cur.blk, key) : null; if (!row) return;
+    if (kvPvKey === key) { kvPvStop(); renderKVoices(); return; }
+    var st = kvPick(key);                              // 고르기는 예전 그대로(이미 고른 줄이면 아무 일도 없다)
+    if (!row.sample) {                                 // 견본이 아직 없다 — 줄에 「견본 준비 중」이 적혀 있다. 아무 반응이 없어 보이지 않게, 고르기도 일어나지 않은 누름에는 한마디
+      if (kvPvStop()) renderKVoices();
+      if (st === 'same') toast('이 목소리의 견본은 준비 중입니다.', 2200);
+      return;
+    }
+    recSoundGuard(function () { kvPvPlay(key, row.sample); });   // v9.8: 회의 녹음 중에는 한 번 확인(고르기는 소리가 없어 그대로 된다)
+  }
+  function kvPvPlay(key, url) {
     if (window.KChar && KChar.voice.speaking()) KChar.voice.stop();
-    if (kvPvKey === key) { kvPvStop(); renderKVoices(); return; }      // 틀고 있는 줄을 다시 누르면 멈춤
-    kvPvStop();
-    var url = KV_PV[key]; if (!url) return;
+    kvPvStop();                                        // 앞 줄의 견본은 멈춘다(겹치지 않게)
     try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
-    function end(fail) { if (kvPvKey !== key) return; kvPvKey = ''; if (isOpen($('kWardrobeView'))) renderKVoices(); if (fail) toast('미리 듣기 소리를 틀지 못했습니다.'); }
+    if (kvPvBad === key) kvPvBad = '';
+    var my = ++kvPvSeq;
+    function end(fail) {
+      if (my !== kvPvSeq) return;                      // 멈췄거나 다른 줄로 넘어간 뒤에 온 알림
+      kvPvSeq++; kvPvKey = '';
+      if (fail) { kvPvBad = key; toast('견본 소리를 받아 오지 못했습니다. 목소리 고르기는 그대로 됩니다.', 3000); }
+      if (isOpen($('kWardrobeView'))) renderKVoices();
+    }
     try {
       if (!kvPvAudio) { kvPvAudio = new Audio(); kvPvAudio.preload = 'auto'; }
       kvPvAudio.onended = function () { end(false); };
       kvPvAudio.onerror = function () { end(true); };
-      kvPvAudio.src = url; kvPvKey = key;
+      var got = kvPvBlob[url];
+      kvPvAudio.src = (typeof got === 'string' && got.indexOf('blob:') === 0) ? got : url; kvPvKey = key;
       var p = kvPvAudio.play();
       if (p && p.then) p.catch(function () { end(true); });
     } catch (e) { kvPvKey = key; end(true); return; }
@@ -5931,14 +5969,17 @@
       } else if (nb) kvCacheSet(res.voice);
       kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS };   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
       kvJust = p.key; setTimeout(function () { if (kvJust === p.key) kvJust = ''; }, 600);
-      toast('「' + nm + '」' + josaRo(nm) + ' 바꿨습니다. 다음에 읽을 때부터 이 목소리입니다.', 2600);
+      // O-0469: 「여자1(으)로」가 되지 않게 조사를 피한다. 「다음에 읽을 때부터 이 목소리」는 브리핑 전용 줄에서는 사실이 아니라 뺐다(어디서 나오는지는 그 줄 설명과 바로 아래 안내가 말한다)
+      if (!kvNext || kvNext === p.key) toast('「' + nm + '」 목소리로 바꿨습니다.', 2600);
     } else if (ok === false) {
       toast('바꾸지 못했습니다. ' + (why ? kvText(why, 40) : '잠시 뒤 다시 눌러 주세요.'), 2800);
     } else {
       toast('아직 바뀌지 않았습니다. 잠시 뒤 설정을 다시 열어 확인해 주세요.', 3200);
     }
+    var nx = kvNext; kvNext = '';                     // O-0469: 바꾸는 중에 누른 줄이 있으면 이어서 그 줄로
+    if (nx && ok !== null) { var c2 = kvCurrent(); if (c2 && kvRow(c2.blk, nx) && nx !== c2.blk.chosen) kvPick(nx); }
     if (isOpen($('kWardrobeView'))) renderKVoices();
-    refreshKStat(true);                               // 화면을 PC 의 실제 값과 다시 맞춘다
+    if (!kvPending) refreshKStat(true);               // 화면을 PC 의 실제 값과 다시 맞춘다
   }
   function kvPoll() {
     var p = kvPending; if (!p) return;
@@ -5957,17 +5998,36 @@
       } else p.timer = setTimeout(kvPoll, 700);
     }).catch(function () { if (kvPending === p) p.timer = setTimeout(kvPoll, 1200); });
   }
+  /* 돌려주는 값(O-0469 · kvTap 이 쓴다): 'sent' 청함 · 'next' 앞의 바꾸기 뒤에 이어서 · 'same' 이미 이 목소리 · 'busy'·'down'·'' 못 함 */
   function kvPick(key) {
-    var cur = kvCurrent(); if (!cur) return;
-    var row = kvRow(cur.blk, key); if (!row) return;
-    if (kvPending) { toast('앞의 바꾸기가 끝난 뒤에 눌러 주세요.'); return; }
-    if (key === cur.blk.chosen) return;               // 이미 이 목소리
-    if (cur.down) { toast('PC가 꺼져 있어 지금은 바꿀 수 없습니다. PC가 켜지면 다시 눌러 주세요.', 2800); return; }
-    if (!window.OfficeBridge || !OfficeBridge.requestVoiceSet) return;
+    var cur = kvCurrent(); if (!cur) return '';
+    var row = kvRow(cur.blk, key); if (!row) return '';
+    if (kvPending) {
+      if (!KV_PICK_FOLLOW) { toast('앞의 바꾸기가 끝난 뒤에 눌러 주세요.'); return 'busy'; }
+      kvNext = (key === kvPending.key) ? '' : key;    // 마지막에 누른 줄로 따라간다(바꾸는 중인 그 줄을 다시 누르면 이어서 바꿀 것을 지운다)
+      renderKVoices(); return 'next';
+    }
+    if (key === cur.blk.chosen) return 'same';        // 이미 이 목소리
+    if (cur.down) { toast('PC가 꺼져 있어 지금은 바꿀 수 없습니다. PC가 켜지면 다시 눌러 주세요.', 2800); return 'down'; }
+    if (!window.OfficeBridge || !OfficeBridge.requestVoiceSet) return '';
     var p = kvPending = { key: key, id: OfficeBridge.uuid(), tok: OfficeBridge.token(), t0: Date.now(), note: '바꾸는 중…', timer: null, slow: false };
     renderKVoices();
     OfficeBridge.requestVoiceSet(p.id, p.tok, key).then(function () { if (kvPending === p) kvPoll(); })
       .catch(function (e) { if (kvPending === p) kvDone(false, e && e.friendly ? e.friendly : ''); });
+    return 'sent';
+  }
+  /* O-0469: 줄이 많아지면 이름 앞 낱말(「여자」「남자」…)로 묶어 작은 머리글을 단다 — PC 가 묶음 칸을 주지 않아도 된다.
+   *   모든 줄이 「낱말+번호」 모양이고 낱말이 두 가지 이상일 때만(그 밖에는 머리글 없이 받은 순서 그대로). */
+  function kvGroups(list) {
+    var order = [], by = {}, ok = true;
+    list.forEach(function (r) {
+      var m = /^(.*?)[\s]*\d+$/.exec(r.name), g = m ? m[1].trim() : '';
+      if (!g) ok = false;
+      if (!by[g]) { by[g] = []; order.push(g); }
+      by[g].push(r);
+    });
+    if (!ok || order.length < 2) return [{ name: '', rows: list }];
+    return order.map(function (g) { return { name: g, rows: by[g] }; });
   }
   function renderKVoices() {
     var box = $('kwVoices'); if (!box || !window.KChar) return;
@@ -5980,21 +6040,34 @@
     box.classList.toggle('calm', !!(KChar.motionOn && !KChar.motionOn()));   // 「케이 얼굴 움직이기」를 끄셨으면 돌거나 튀지 않게(CSS .calm)
     if (cur) {
       var blk = cur.blk, out = [], phone = isNativeApp();   // 폰 앱이면 「이 폰」, PC판·브라우저면 「이 기기」
-      blk.list.forEach(function (r) {
-        var on = r.k === blk.chosen, pend = !!(kvPending && kvPending.key === r.k);
-        var sub = pend ? kvPending.note
-          : (r.ok ? r.desc : (on ? '지금은 쓸 수 없어 세라피나로 읽습니다 — ' + (r.why || '잠시 쉬는 중입니다') : (r.why || '지금은 쓸 수 없습니다')));
-        out.push('<div class="kw-voice kv-row' + (on ? ' on' : '') + (pend ? ' pend' : '') + (!pend && (cur.down || (!r.ok && !on)) ? ' dim' : '') + (kvJust === r.k ? ' just' : '') +   // 고르신 줄은 못 쓸 때도 흐리게 하지 않는다(사유 글이 읽혀야 한다) — PC 가 꺼졌을 때만 모두 흐리게
-          '" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" data-kvoice="' + esc(r.k) + '">' +
-          '<span class="rd"></span><span class="tx"><b>' + esc(r.name) + '</b><small' + ((!r.ok && on && !pend) ? ' class="warn"' : '') + '>' + esc(sub) + '</small></span>' +
-          (KV_PV[r.k] ? '<button type="button" class="try' + (kvPvKey === r.k ? ' playing' : '') + '" data-kvpv="' + esc(r.k) + '">' + (kvPvKey === r.k ? '멈춤' : '미리 듣기') + '</button>' : '') +
-          '</div>');
+      var anySample = blk.list.some(function (r) { return !!r.sample; });
+      var pendKey = kvNext || (kvPending ? kvPending.key : '');   // 동그라미가 도는 줄 = 마지막에 누른 줄
+      if (anySample) out.push('<div class="kw-vnote kv-how">목소리를 누르면 그 목소리로 인사말을 들려 드리고, 그 목소리로 바꿉니다.</div>');
+      kvGroups(blk.list).forEach(function (grp) {
+        if (grp.name) out.push('<div class="kw-vgrp">' + esc(grp.name) + '</div>');
+        grp.rows.forEach(function (r) {
+          var on = r.k === blk.chosen, pend = pendKey === r.k, pv = kvPvKey === r.k;
+          var sub = pend ? ((kvPending && kvPending.key === r.k) ? kvPending.note : '바꾸는 중…')
+            : (r.ok ? r.desc : (on ? '지금은 쓸 수 없습니다 — ' + (r.why || '잠시 쉬는 중입니다') : (r.why || '지금은 쓸 수 없습니다')));
+          // 견본 상태 한 줄: 없으면 「견본 준비 중」, 받아 오지 못했으면 사실대로(조용히 아무 소리도 안 나는 줄이 없게)
+          var stl = kvPvBad === r.k ? '<small class="kv-st warn">견본 소리를 받아 오지 못했습니다. 잠시 뒤 다시 눌러 주세요.</small>'
+            : (!r.sample ? '<small class="kv-st">견본 준비 중</small>' : '');
+          out.push('<div class="kw-voice kv-row' + (on ? ' on' : '') + (pend ? ' pend' : '') + (pv ? ' pv' : '') + (!pend && (cur.down || (!r.ok && !on)) ? ' dim' : '') + (kvJust === r.k ? ' just' : '') +   // 고르신 줄은 못 쓸 때도 흐리게 하지 않는다(사유 글이 읽혀야 한다) — PC 가 꺼졌을 때만 모두 흐리게
+            '" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" data-kvoice="' + esc(r.k) + '"' +
+            (pv ? ' aria-label="' + esc(r.name) + ' · 견본을 들려 드리는 중 · 누르면 멈춥니다"' : '') + '>' +
+            '<span class="rd"></span><span class="tx"><b>' + esc(r.name) + '</b><small' + ((!r.ok && on && !pend) ? ' class="warn"' : '') + '>' + esc(sub) + '</small>' + stl + '</span>' +
+            (r.sample ? '<span class="kv-ic" aria-hidden="true"><svg><use href="#' + (pv ? 'i-stop' : 'i-sound') + '"/></svg></span>' : '') +
+            '</div>');
+          // 고르신 줄 바로 아래: 그 목소리가 어디서 나오는지(PC 가 실제 설정대로 적어 보낸 한 줄) — 브리핑 전용 줄을 골랐을 때 [듣기]·대화는 다른 목소리라는 것이 그 자리에서 읽히게
+          if (on && blk.scope) out.push('<div class="kw-vnote kv-here">' + esc(blk.scope) + '</div>');
+        });
       });
+      kvPvWarm(blk);
       if (cur.down) out.push('<div class="kw-vnote warn">PC가 꺼져 있어 지금은 바꿀 수 없습니다. PC가 켜지면 바꿀 수 있습니다.</div>');
-      if (blk.scope || blk.limit || blk.note) out.push('<div class="kw-vnote">' + (blk.scope ? '<span>' + esc(blk.scope) + '</span>' : '') + (blk.limit ? '<span>' + esc(blk.limit) + '</span>' : '') + (blk.note ? '<span>' + esc(blk.note) + '</span>' : '') + '</div>');
+      if (blk.limit || blk.note) out.push('<div class="kw-vnote">' + (blk.limit ? '<span>' + esc(blk.limit) + '</span>' : '') + (blk.note ? '<span>' + esc(blk.note) + '</span>' : '') + '</div>');
       // 기기 음성을 켜 둔 기기에서는 위 안내가 반만 맞다: [듣기]를 누르면 브리핑까지 그 음성으로 바로 읽는다(onListenBtn 의 기존 동작) → 사실 한 줄
       if (act) out.push('<div class="kw-vnote">' + (phone ? '「이 폰이 직접 읽기」를 켜 두셔서 이 폰의 [듣기]는 브리핑도 그 음성으로 읽습니다.' : '「이 기기가 직접 읽기」를 켜 두셔서 이 기기의 [듣기]는 브리핑도 그 음성으로 읽습니다.') + '</div>');
-      if (blk.fb > 0) out.push('<div class="kw-vnote">오늘 세라피나로 대신 읽은 것 ' + blk.fb + '번</div>');
+      if (blk.fb > 0) out.push('<div class="kw-vnote">오늘 다른 목소리로 대신 읽은 것 ' + blk.fb + '번</div>');
       if (vs.length) {                                 // 기기 음성이 있을 때만 보이는 따로 묶음(예전 저장값·동작 그대로)
         out.push('<div class="kw-vsub"><b>' + (phone ? '이 폰이 직접 읽기' : '이 기기가 직접 읽기') + '</b><small>글 채팅 [듣기]에서만 · 다시 누르면 꺼집니다</small></div>');
         vs.forEach(function (v) {
@@ -6009,7 +6082,7 @@
       return;
     }
     var rows = ['<button type="button" class="kw-voice' + (!act ? ' on' : '') + '" data-voice="">' +
-      '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>여성 · 세라피나(무료 뉴럴 음성) · PC에서 만들어 보냅니다</small></span></button>'];
+      '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>PC에서 만들어 보냅니다</small></span></button>'];
     vs.forEach(function (v) {
       var on = act && act.name === v.name;
       rows.push('<div class="kw-voice' + (on ? ' on' : '') + '" role="button" tabindex="0" data-voice="' + esc(v.name) + '">' +
@@ -6020,6 +6093,7 @@
     else if (!vs.length) rows.push('<div class="kw-vnote">이 기기에 한국어 내장 음성이 없어 케이 기본 목소리만 쓸 수 있습니다.</div>');
     else if (pref && !act) rows.push('<div class="kw-vnote">골라 두신 기기 음성(' + esc(pref) + ')을 찾지 못해 기본 목소리로 읽습니다.</div>');
     if (!getSyncPass()) rows.push('<div class="kw-vnote">연동 암호가 없어 케이 목소리 설정을 PC에서 받아 오지 못했습니다.</div>');   // v9.7: 사실만(넣으면 받아 온다 · PC 에서 꺼 두었으면 그대로)
+    else rows.push('<div class="kw-vnote">' + ((kStatData || kStatMissing) ? '목소리 목록을 불러오지 못했습니다. 지금은 케이 목소리 하나로 읽습니다.' : '목소리 목록을 불러오는 중입니다.') + '</div>');   // O-0469: 목록이 없을 때도 사실대로
     box.innerHTML = rows.join('');
   }
   if (window.KChar) {
@@ -6052,10 +6126,8 @@
       if (v) { if (kvPvStop()) renderKVoices(); KChar.voice.speak('대표님, 안녕하세요. 케이입니다. 이 목소리로 읽어 드리겠습니다.', v); }
       return;
     }
-    var pv = t.closest('[data-kvpv]');                 // v9.7: 케이 목소리 미리 듣기(앱에 든 소리)
-    if (pv) { kvPreview(pv.getAttribute('data-kvpv')); return; }
-    var kv = t.closest('[data-kvoice]');               // v9.7: 케이 목소리 고르기(PC 에 요청 → 결과로 확정)
-    if (kv) { kvPick(kv.getAttribute('data-kvoice')); return; }
+    var kv = t.closest('[data-kvoice]');               // v9.7: 케이 목소리 고르기(PC 에 요청 → 결과로 확정) · O-0469: 같은 누름에 그 목소리 견본
+    if (kv) { kvTap(kv.getAttribute('data-kvoice')); return; }
     var vo = t.closest('[data-voice]');
     if (vo) {
       var vn = vo.getAttribute('data-voice');
