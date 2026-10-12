@@ -299,6 +299,7 @@
     var meta = { app: 'voice-memo-test', ext: memo.ext };
     if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
     if (memo.materialsSkipped && memo.materialsSkipped.length) meta.materials_skipped = memo.materialsSkipped;   // v6.4: 못 붙인 자료(이름·이유)
+    if (memo.recMeta) meta.rec = memo.recMeta;   // v9.10(O-0449): 녹음 진단 값(길이 · 폰 상태 · 끊긴 사유 등 — 소리 내용 · 제목 없음). PC 는 읽지 않고 지나친다
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending',
       kind: memo.kind || 'audio', note: memo.note || null,
@@ -378,7 +379,9 @@
     //      녹음이 유실될 수 있었다(2026-09-22 CCUBIO 사고). 그 결합을 끊는다.
     var rec = { id: memo.id, title: memo.title, token: memo.token, ext: memo.ext, blob: blob,
                 materials: memo.materials || [], matSlots: memo.matSlots, date: memo.date, time: memo.time, kind: memo.kind || 'audio', sent: false };
+    if (memo.recSid) { rec.recSid = memo.recSid; rec.recMeta = memo.recMeta; }   // v9.10: 다시 보낼 때도 같은 진단 값이 가게
     return idbPut(rec)                                            // (1) 전송 전 원본 영속 — 인메모리만 믿지 않음
+      .then(function () { try { if (memo.onStored) memo.onStored(); } catch (e) {} })   // v9.10: 원본이 폰 저장소에 들어간 뒤에 알린다(끊긴 녹음 찾기의 「넘김」 표시)
       .then(function () { return uploadMaterials(memo.id, memo.materials || [], null, memo.matSlots); })
       .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return uploadAudio(memo.id, memo.ext, blob); })
       .then(function (path) { return createMemo(memo, path); })
@@ -524,6 +527,7 @@
     var meta = { app: 'voice-memo-test', chunked: true, ext: ext, total: total };
     if (memo.materialsMeta && memo.materialsMeta.length) meta.materials = memo.materialsMeta;   // 회의자료(2026-09-21)
     if (memo.materialsSkipped && memo.materialsSkipped.length) meta.materials_skipped = memo.materialsSkipped;   // v6.4
+    if (memo.recMeta) meta.rec = memo.recMeta;   // v9.10(O-0449): 녹음 진단 값
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending', kind: 'audio', note: memo.note || null,
       client_token: memo.token,
@@ -560,7 +564,9 @@
     //   지우지 않는다(sent:true 표시만). 실제 삭제는 PC 정리(done) 확인 뒤에만(app.js dropPending).
     var rec = { id: memo.id, title: memo.title, token: memo.token, ext: ext, blob: blob,
                 materials: memo.materials || [], matSlots: memo.matSlots, date: memo.date, time: memo.time, kind: 'audio', sent: false };
+    if (memo.recSid) { rec.recSid = memo.recSid; rec.recMeta = memo.recMeta; }   // v9.10
     return idbPut(rec)                                       // (1) 전송 전 원본 영속
+      .then(function () { try { if (memo.onStored) memo.onStored(); } catch (e) {} })   // v9.10: 원본이 폰 저장소에 들어간 뒤에 알린다
       .then(function () { return uploadMaterials(memo.id, memo.materials || [], null, memo.matSlots); })   // 회의자료 먼저(있으면) — 2026-09-21
       .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return _insertChunkedAudioRow(memo, total, ext); })
       // v7.9: 행이 이미 있으면(재전송) 지금 제목·실제로 올라간 자료 목록으로 고친다. 결과는 memo.resendEdit 에 남겨

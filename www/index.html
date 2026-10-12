@@ -219,6 +219,8 @@
         <div class="orblabel">녹음 시작</div>
         <div class="orbhint">누르면 그때부터 녹음됩니다</div>
       </div>
+      <!-- v9.10(O-0449) 저장 공간이 모자라 보일 때만 한 줄(app.js recSpaceHint — 읽기만 하고, 녹음 시작을 막지 않는다) -->
+      <div class="rec-space" id="recSpaceHint" style="display:none" aria-live="polite"></div>
       <!-- 회의자료 첨부(선택): 지금 붙여도 되고, 녹음 끝난 뒤에도 붙일 수 있어요 -->
       <div class="label" style="margin-top:20px">회의자료 첨부 <span class="hint">(선택 · 지금 붙여도, 녹음 끝난 뒤 붙여도 됩니다)</span></div>
       <button id="matAttachPrep" class="card action wide" type="button">

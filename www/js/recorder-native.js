@@ -48,6 +48,33 @@
   // 화면이 다시 만들어진 뒤, 네이티브에서 계속 돌고 있던 녹음을 이 녹음기의 것으로 삼는다(정지는 평소와 같은 길).
   NativeRecorder.prototype.adopt = function () { this._active = true; };
 
+  /* v9.10(O-0449) 끊긴 녹음 찾기 — 네이티브의 일지(RecJournal)를 읽고 쓰는 부름들.
+   *   네이티브가 옛 판이면(부름이 없거나 실패하면) null · false 를 돌려, 화면이 v9.9 방식으로 물러나게 한다.
+   *   어느 부름도 녹음 파일을 지우지 않는다. */
+  function has(n) { return !!(NR && typeof NR[n] === 'function'); }
+  function call(n, arg) {
+    try { return has(n) ? NR[n](arg || {}).catch(function () { return null; }) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); }
+  }
+  NativeRecorder.find = {
+    ok: function () { return has('recLost') && has('recOpen') && has('recMark'); },
+    // 끊긴 녹음 · 보내지 않은 녹음(묶음 단위). 못 읽으면 null.
+    lost: function (sessAt) { return call('recLost', { sessAt: Number(sessAt) || 0 }).then(function (r) { return (r && Array.isArray(r.items)) ? r.items : null; }); },
+    // 묶음의 녹음을 연다 → { ok, blob, durationMs, startedAt, endedAt, joined, parts, gaps, skipped, gid, code }
+    open: function (gid) {
+      return call('recOpen', { gid: gid }).then(function (r) {
+        if (!r || !r.ok || !r.uri) return { ok: false, code: (r && r.code) || 'error' };
+        return fetch(Cap.convertFileSrc(r.uri)).then(function (x) { return x.blob(); }).then(function (blob) {
+          if (!blob.type) { try { blob = new Blob([blob], { type: 'audio/mp4' }); } catch (e) {} }
+          r.blob = blob; return r;
+        }).catch(function () { return { ok: false, code: 'read' }; });
+      });
+    },
+    mark: function (gid, state, how) { return call('recMark', { gid: gid, state: state, how: how || '' }); },
+    space: function () { return call('recSpace').then(function (r) { return (r && typeof r.freeMb === 'number') ? r.freeMb : -1; }); },
+    diag: function (sid) { return call('recDiag', { sid: sid || '' }); },
+    notice: function (startedAt) { return call('recNotice', { startedAt: Number(startedAt) || 0 }).then(function (r) { return !!(r && r.posted); }); }
+  };
+
   // 현재 녹음의 최대 진폭을 0~1 로 정규화해 반환(무음 자동 감지용). 실패/미지원 시 0.
   NativeRecorder.prototype.getAmplitude = function () {
     if (!NR || !NR.getAmplitude) return Promise.resolve(0);
@@ -62,7 +89,10 @@
     (async function () {
       try {
         if (!NR) { self.onError('녹음 플러그인을 찾지 못했습니다.'); self.onStatus('error'); return; }
-        await NR.start({ kind: self.kind });   // 권한 요청 + 포그라운드 서비스 시작 + 네이티브 녹음 시작(v9.8: 종류를 함께 넘긴다)
+        // v9.10: 끊긴 녹음 찾기가 켜진 회의 녹음이면 「일지를 적는다」 · 이어 녹음의 묶음 번호를 함께 넘긴다. 아니면 v9.8 과 글자까지 같은 부름.
+        var so = { kind: self.kind };
+        if (self.find) { so.find = true; so.group = self.group || ''; }
+        await NR.start(so);   // 권한 요청 + 포그라운드 서비스 시작 + 네이티브 녹음 시작(v9.8: 종류를 함께 넘긴다)
         self._active = true;
         self.onStatus('recording');
       } catch (e) {
@@ -78,9 +108,13 @@
     self.onLevel(0);
     (async function () {
       try {
-        var res = await NR.stop();      // { uri, durationMs }
+        var drop = !!self.dropNext; self.dropNext = false;
+        var res = await (drop ? NR.stop({ drop: true }) : NR.stop());      // { uri, durationMs } · v9.10: + sid · gid · joined · gaps(이어 녹음이었으면)
         self.onStatus('stopped');
         self.lastDurationMs = (res && res.durationMs) || 0;
+        // v9.10: 방금 정지한 녹음의 일지 번호 등(없으면 null — 옛 네이티브 · 찾기 꺼짐)
+        self.last = (res && res.sid) ? { sid: res.sid, gid: res.gid || res.sid, startedAt: Number(res.startedAt) || 0, joined: !!res.joined,
+                                         parts: Number(res.parts) || 1, gaps: res.gaps || [], skipped: Number(res.skipped) || 0, code: res.code || '' } : null;
         if (!res || !res.uri) { self.onError('녹음 파일을 만들지 못했습니다.'); return; }
         var url = Cap.convertFileSrc(res.uri);
         var blob = await fetch(url).then(function (r) { return r.blob(); });

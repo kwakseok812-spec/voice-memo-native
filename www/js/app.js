@@ -88,6 +88,18 @@
    *   네이티브(자바) 쪽은 덧붙이기만 해서 어느 쪽이든 맞물린다. */
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
+  /* v9.10(O-0449) 끊긴 녹음 찾기 — 스위치.
+   *   true  : 회의 녹음을 시작 · 정지할 때 폰 안쪽에 일지 한 건을 남기고(네이티브 RecJournal), 앱을 다시 열면 끊긴 녹음 · 보내지 않은 녹음을
+   *           찾아 알린다([이어서 녹음] · [여기까지 저장] · [나중에]). 녹음 준비 화면의 저장 공간 한 줄, 「녹음이 끊겼습니다」 알림, 진단 값(meta.rec).
+   *   false : v9.9 와 같은 화면(끊기면 글만). 네이티브에는 일지를 적으라는 표시를 넘기지 않는다 → 녹음 서비스도 v9.9 와 같게 돈다.
+   *   녹음하는 방식(녹음기 설정 · 시작 · 정지)은 어느 쪽이든 그대로다. REC_ROAM_V2 가 꺼져 있으면 이것도 쉰다. */
+  var REC_FIND = true;
+  var recFindItems = [];            // 폰에 남아 있는 끊긴 녹음 · 보내지 않은 녹음(묶음 단위 — 네이티브가 준 그대로)
+  var recFindAsked = {};            // 이번 실행에서 이미 창으로 여쭌 묶음
+  var recGroup = '', recGroupNext = '';   // 지금 이어 녹음 중인 묶음 · [이어서 녹음]을 눌러 다음 시작에 쓸 묶음
+  var recCur = null;                // 「녹음 완료」 화면에 올라와 있는 녹음의 일지 정보 {gid, recovered, ...}
+  var recDiagLast = null;           // 가장 최근에 받은 진단 값(녹음을 보낼 때 메모 행 meta.rec 에 싣는다)
+  var REC_HANDED_KEY = 'smart_rec_handed';   // 임시저장 · 보내기로 넘긴 묶음 번호들(넘김 표시를 쓰기 직전에 앱이 꺼졌을 때 두 번 묻지 않게)
   var REC_SESSION_KEY = 'smart_rec_session';   // 지금 도는 회의 녹음의 표식 {at: 시작 시각(ms)} — 앱 화면이 다시 만들어졌을 때 「계속되던 그 녹음인가」를 가린다
   var recLost = false;                         // 녹음기가 멈춘 것 같다(노란 띠)
   var recLive = false;                         // 녹음기가 「시작됐다」고 알린 뒤인가(마이크 허용 창을 기다리는 동안은 아직 아니다)
@@ -349,6 +361,8 @@
       recWatchMiss = st.failed ? 2 : recWatchMiss + 1;
       if (recWatchMiss >= 2 && !recLost) {
         recLost = true;
+        // v9.10: 「녹음이 끊겼습니다」 알림 한 번(진동은 폰 설정을 따른다). 녹음기가 오류를 알린 경우는 네이티브가 이미 띄웠다.
+        try { if (!st.failed) recFindNotice(); } catch (e) {}
         updateRecIndicator();
         recScene((Date.now() - recStart) / 1000);
         if (isOpen(recView)) toast('녹음이 멈춘 것 같습니다. 정지를 눌러 확인해 주십시오.', 4000);
@@ -406,19 +420,25 @@
           if (same) toast('녹음이 계속되고 있었습니다.', 4000);   // 짧게(폰 폭에서 2줄) — 돌아가는 길은 띠가 보여 준다
           else showBanner('⚠️ 녹음이 돌고 있습니다. 다만 앱 화면이 닫혔다 열린 사이에 <b>한 번 끊겼을 수 있습니다</b> — 정지한 뒤 담긴 길이를 확인해 주십시오.');
         });
+        recFindScan(0, false, false);                     // v9.10: 지금 녹음과 별개로 남아 있는 것이 있으면 목록만 맞춘다(묻지는 않는다)
         return true;
       }
       if (st.known && st.on && st.rich && (st.kind === 'chat' || st.kind === 'idea')) {
         try { if (RecordingModule.stopOrphan) RecordingModule.stopOrphan(); } catch (e) {}
+        recFindScan(0, true, false);
         return false;
       }
       if (sess && ((st.known && !st.on) || !readNative())) {
         recSessionClear();
+        // v9.10: 끊긴 녹음을 폰에서 찾는다. 찾으면 창으로 알리고, 파일을 정말 찾지 못했을 때만 사실대로 글을 띄운다.
+        if (recFindApi()) { recFindScan(sess.at, true, true); return false; }
         var d = new Date(sess.at);
         recSay(function () {
           showBanner('⚠️ 앱이 닫히면서 지난 녹음(' + d.getHours() + '시 ' + pad2(d.getMinutes()) + '분 시작)이 끊겼습니다. 이번 판에서는 그 녹음을 다시 열 수 없습니다.');
         });
+        return false;
       }
+      recFindScan(0, true, false);                        // v9.10: 표식이 없어도 일지에 남은 것(정지 뒤 보내지 않은 녹음 등)을 찾는다
       return false;
     }).catch(function () { recRecoverBusy = null; return false; });
     return recRecoverBusy;
@@ -428,6 +448,308 @@
     if (isRecording) { openScreen(recView); return; }
     recRecover().then(function (ok) { if (ok && isRecording) openScreen(recView); });
   }
+  /* ===================== v9.10(O-0449) 끊긴 녹음 찾기 =====================
+   * 폰 안쪽의 일지(네이티브 RecJournal)가 「끊긴 녹음」(녹음 중이라고 적힌 채 남은 것)과 「보내지 않은 녹음」(정지했는데 임시저장 · 보내기로
+   * 넘기지 않은 것)을 묶음 단위로 알려 준다. 화면은 그것을 ① 창으로 한 번 여쭙고 ② 홈 · 회의록의 「진행 중」 목록에 항목으로 두고
+   * ③ 홈 케이 카드의 한 줄로 말한다. 새 화면은 없다 — 선택 창 · 「진행 중」 목록 · 「녹음 완료」 화면을 그대로 쓴다.
+   *   [이어서 녹음]  = 새 녹음을 평소 방식 그대로 시작하되 「같은 회의」라고 표시 → 정지하면 앞 녹음과 한 파일로 이어 준다(끊긴 지 60분까지).
+   *   [여기까지 저장] = 남아 있는 녹음을 「녹음 완료」 화면에 올린다(제목 · 회의자료 · 보내기 · 임시 저장은 평소와 같다).
+   *   [나중에]        = 「진행 중」 목록에 「끊긴 녹음」 항목으로 남는다.   [목록에서 빼기] = 목록에서만 뺀다.
+   * 이 판은 어떤 녹음 파일도 지우지 않는다. 폰이 스스로 다시 녹음을 시작하지도 않는다(누르실 때만).
+   * 네이티브가 옛 판이거나 PC판이면 recFindApi() 가 null → 모두 건너뛰고 v9.9 와 같게 돈다. */
+  function recFindApi() {
+    try { var f = (REC_FIND && REC_ROAM_V2) ? RecordingModule.find : null; return (f && f.ok && f.ok()) ? f : null; } catch (e) { return null; }
+  }
+  // 시각 글: 「오후 2시 5분」(ap=true) · 「2시 52분」. 빠진 구간은 「2시 52분~54분」처럼 시각으로 적는다(녹음 길이 1:18:40 과 헷갈리지 않게).
+  function recHM(ms, ap) {
+    var d = new Date(ms), h = d.getHours(), m = d.getMinutes();
+    return (ap ? (h < 12 ? '오전 ' : '오후 ') : '') + (h % 12 || 12) + '시 ' + m + '분';
+  }
+  function recSpan(a, b) {
+    var x = new Date(a), y = new Date(b);
+    if (x.getHours() === y.getHours() && x.getDate() === y.getDate()) return x.getMinutes() === y.getMinutes() ? recHM(a) : recHM(a) + '~' + y.getMinutes() + '분';
+    return recHM(a) + '~' + recHM(b);
+  }
+  function recWhen(ms) {            // 오늘이 아니면 날짜를 앞에 붙인다
+    var d = new Date(ms), n = new Date();
+    var same = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+    return (same ? '' : (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ') + recHM(ms, true);
+  }
+  function recTitleAt(ms) { var d = new Date(ms || Date.now()); return '메모 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + '시'; }
+  function recDurText(ms) { return fmtDurKo(Math.floor((ms || 0) / 1000)) || '몇 초'; }
+  function recGapLine(gaps) {
+    try {
+      if (!gaps || !gaps.length) return '';
+      var tot = 0; gaps.forEach(function (g) { tot += Math.max(0, (g.b || 0) - (g.a || 0)); });
+      var t = fmtDurKo(Math.max(1, Math.round(tot / 1000))) || '잠깐';
+      return '약 ' + t + (/초$/.test(t) ? '가' : '이') + ' 빠졌습니다 (' + recSpan(gaps[0].a, gaps[0].b) + (gaps.length > 1 ? ' 등 ' + gaps.length + '곳' : '') + ')';
+    } catch (e) { return ''; }
+  }
+  function recHandedMap() { try { return JSON.parse(localStorage.getItem(REC_HANDED_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function recHandedSet(gid, memoId) {
+    try {
+      var m = recHandedMap(); m[gid] = { id: memoId || '', t: Date.now() };
+      var ks = Object.keys(m); if (ks.length > 60) { ks.sort(function (a, b) { return (m[a].t || 0) - (m[b].t || 0); }); ks.slice(0, ks.length - 60).forEach(function (k) { delete m[k]; }); }
+      localStorage.setItem(REC_HANDED_KEY, JSON.stringify(m));
+    } catch (e) {}
+  }
+  // 폰에 남은 것을 다시 읽어 목록 · 홈 한 줄을 맞춘다. ask=true 면 아직 여쭙지 않은 것을 창으로 여쭙는다.
+  //   sessAt = 예전 화면이 남긴 「녹음 시작 시각」 표식(v9.8 · v9.9 에서 끊긴 녹음도 그 시각으로 찾는다). fromSess = 그 표식에서 온 부름.
+  var recFindBusy = null;
+  function recFindScan(sessAt, ask, fromSess) {
+    var api = recFindApi(); if (!api) return Promise.resolve(null);
+    if (recFindBusy) return recFindBusy;
+    recFindBusy = api.lost(sessAt || 0).then(function (items) {
+      recFindBusy = null;
+      if (!items) { if (fromSess) recFindNoFile(sessAt); return null; }
+      var handed = recHandedMap(), keep = [];
+      items.forEach(function (it) {
+        if (!it || !it.gid) return;
+        if (handed[it.gid]) { api.mark(it.gid, 'handed', 'late'); return; }            // 넘김 표시를 쓰기 직전에 앱이 꺼진 경우 — 다시 묻지 않는다
+        if (recCur && recCur.gid === it.gid && pendingBlob) return;                    // 지금 「녹음 완료」 화면에 올라와 있는 그 녹음
+        keep.push(it);
+      });
+      keep.sort(function (a, b) { return (b.endedAt || 0) - (a.endedAt || 0); });
+      recFindItems = keep;
+      recFindSync();
+      if (fromSess && !keep.some(function (it) { return it.type === 'cut'; })) recFindNoFile(sessAt);
+      if (ask && !isRecording) recFindAsk();
+      return keep;
+    }).catch(function () { recFindBusy = null; return null; });
+    return recFindBusy;
+  }
+  function recFindNoFile(sessAt) {
+    if (!sessAt) return;
+    var d = new Date(sessAt);
+    recSay(function () { showBanner('⚠️ 앱이 닫히면서 지난 녹음(' + d.getHours() + '시 ' + pad2(d.getMinutes()) + '분 시작)이 끊겼습니다. 그 녹음 파일을 폰에서 찾지 못했습니다.'); });
+  }
+  function recFindSubText(it) {
+    if (!it.readable) return '열리지 않는 파일';
+    return recDurText(it.durMs) + (it.type === 'unsent' ? ' · 눌러서 열기' : ' · 눌러서 저장');
+  }
+  // 「진행 중」 목록(지난 메모 기록)과 맞춘다 — 항목 id 는 'rf-' + 묶음 번호. 홈 케이 한 줄도 다시 그린다.
+  function recFindSync() {
+    try {
+      var want = {};
+      recFindItems.forEach(function (it) { want['rf-' + it.gid] = it; });
+      HistoryModule.list().forEach(function (e) { if (e.status === 'lost' && !want[e.id]) HistoryModule.remove(e.id); });
+      recFindItems.forEach(function (it) {
+        var id = 'rf-' + it.gid, d = new Date(it.startedAt || Date.now());
+        var f = { title: recTitleAt(it.startedAt), date: d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()), time: pad2(d.getHours()) + ':' + pad2(d.getMinutes()),
+                  status: 'lost', kind: 'audio', recGid: it.gid, recType: it.type, recSub: recFindSubText(it) };
+        if (HistoryModule.get(id)) HistoryModule.update(id, f); else { f.id = id; f.token = ''; HistoryModule.add(f); }
+      });
+      renderHistory();
+    } catch (e) {}
+    try { homeSayRepaint(); } catch (e) {}
+  }
+  function recFindGet(gid) { for (var i = 0; i < recFindItems.length; i++) if (recFindItems[i].gid === gid) return recFindItems[i]; return null; }
+  // 홈 케이 카드의 한 줄(SmartHomeSay 가 부른다). 열리는 것이 없으면 말하지 않는다.
+  function recHomeLine() {
+    if (!recFindApi() || isRecording) return '';
+    var ok = recFindItems.filter(function (it) { return it.readable; });
+    if (!ok.length) return '';
+    if (ok.length > 1) return (ok.every(function (it) { return it.type === 'unsent'; }) ? '보내지 않은 녹음 ' : '끊긴 녹음 ') + ok.length + '건이 폰에 남아 있습니다.';
+    return (ok[0].type === 'unsent' ? '보내지 않은 녹음 ' : '끊긴 녹음 ') + recDurText(ok[0].durMs) + ' 분량이 폰에 남아 있습니다.';
+  }
+  function recFindAsk() {
+    var fresh = recFindItems.filter(function (it) { return !it.asked && !recFindAsked[it.gid]; });
+    if (!fresh.length) return;
+    recSay(function () {
+      if (isRecording || (pendingBlob && isOpen(recordedPanel))) return;       // 그 사이 다른 일을 시작했다 — 목록과 홈 한 줄이 남아 있다
+      if (sheetEl && isOpen(sheetEl)) return;                                  // 다른 창이 떠 있다 — 덮지 않는다
+      var api = recFindApi();
+      fresh.forEach(function (it) { recFindAsked[it.gid] = 1; it.asked = true; if (api) api.mark(it.gid, 'asked', ''); });
+      if (fresh.length === 1) recFindSheetOne(fresh[0]); else recFindSheetMany(fresh);
+    });
+  }
+  function recFindCanGo(it) { return !!(it && it.readable && it.type === 'cut' && (Date.now() - (it.endedAt || 0)) <= 60 * 60000); }
+  function recFindSheetOne(it) {
+    var O = { positive: true, recmsg: true, cancelLabel: '나중에', main: 'confirm' };
+    if (!it.readable) {
+      openSheet('이 녹음은 열리지 않습니다', recWhen(it.startedAt) + '에 시작한 녹음 파일이\n열리지 않습니다.\n지우지 않고 폰에 그대로 두었습니다.', '확인', null, null, null,
+        { positive: true, recmsg: true, cancelLabel: '닫기', main: 'confirm' });
+      return;
+    }
+    if (it.type === 'unsent') {
+      O.icon = 'i-note';
+      openSheet('보내지 않은 녹음이 있습니다', recWhen(it.startedAt) + '에 녹음한 ' + recDurText(it.durMs) + ' 분량이\n아직 폰에만 있습니다.', '열기', function () { recFindSave(it); }, null, null, O);
+      return;
+    }
+    var mins = (Date.now() - (it.endedAt || 0)) / 60000, go = recFindCanGo(it);
+    if (go && mins <= 10) O.main = 'extra';            // 끊긴 지 10분 안이면 기본은 [이어서 녹음], 넘었으면 [여기까지 저장]
+    openSheet('끊긴 녹음이 있습니다',
+      recWhen(it.startedAt) + '에 시작한 회의 녹음이\n' + recHM(it.endedAt) + '에 끊겼습니다.\n끊기기 전 ' + recDurText(it.durMs) + ' 분량은 폰에 있습니다.',
+      '여기까지 저장', function () { recFindSave(it); }, null,
+      go ? { label: '이어서 녹음', action: function () { recFindContinue(it); } } : null, O);
+  }
+  function recFindSheetMany(list) {
+    var lines = list.slice(0, 4).map(function (it) {
+      var d = new Date(it.startedAt);
+      return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + recHM(it.startedAt, true) + ' · ' + (it.readable ? recDurText(it.durMs) : '열리지 않음');
+    });
+    if (list.length > 4) lines.push('외 ' + (list.length - 4) + '건');
+    var allCut = list.every(function (it) { return it.type === 'cut'; });
+    openSheet((allCut ? '끊긴 녹음이 ' : '보내지 않은 녹음이 ') + list.length + '건 있습니다', lines.join('\n') + '\n\n폰에 그대로 남아 있습니다.', '하나씩 보기', function () { openMeetings(); }, null, null,
+      { positive: true, icon: 'i-note', recmsg: true, cancelLabel: '나중에', main: 'confirm' });
+  }
+  // 「진행 중」 목록의 항목을 눌렀다 — 임시저장 · 실패 항목과 같은 창에서 고른다. [목록에서 빼기]는 여기에만 둔다.
+  function recFindItemOpen(gid) {
+    var it = recFindGet(gid);
+    if (!it) { recFindScan(0, false, false); toast('이미 처리된 녹음입니다.'); return; }
+    var dur = recDurText(it.durMs), go = recFindCanGo(it), body;
+    if (!it.readable) body = '이 녹음 파일은 열리지 않습니다.<br>지우지 않고 폰에 그대로 두었습니다.';
+    else if (it.type === 'unsent') body = recWhen(it.startedAt) + '에 녹음한 <b>' + esc(dur) + '</b> 분량이 아직 폰에만 있습니다.';
+    else body = recWhen(it.startedAt) + '에 시작한 회의 녹음이 ' + recHM(it.endedAt) + '에 끊겼습니다.<br>끊기기 전 <b>' + esc(dur) + '</b> 분량은 폰에 있습니다.';
+    modalTitle.textContent = recTitleAt(it.startedAt);
+    modalBody.innerHTML = '<div class="card rcard"><div class="h"><svg><use href="#i-mic"/></svg>' + (it.type === 'unsent' ? '보내지 않은 녹음' : '끊긴 녹음') + '</div>' +
+      '<div style="padding:2px 2px 0;line-height:1.6;word-break:keep-all">' + body + '</div></div>' +
+      '<div class="btnrow">' +
+      (it.readable ? '<button id="mRfSave" class="btn primary"><svg><use href="#i-check"/></svg>' + (it.type === 'unsent' ? '열기' : '여기까지 저장') + '</button>' : '') +
+      (go ? '<button id="mRfGo" class="btn ghost"><svg><use href="#i-mic"/></svg>이어서 녹음</button>' : '') +
+      '</div>' +
+      '<div class="btnrow"><button id="mRfDrop" class="btn ghost sm"><svg><use href="#i-x"/></svg>목록에서 빼기</button></div>' +
+      '<div class="draft-hint">목록에서 빼도 녹음 파일은 지우지 않고 폰에 그대로 둡니다.</div>';
+    if ($('mRfSave')) $('mRfSave').addEventListener('click', function () { closeModal(); recFindSave(it); });
+    if ($('mRfGo')) $('mRfGo').addEventListener('click', function () { closeModal(); recFindContinue(it); });
+    $('mRfDrop').addEventListener('click', function () {
+      openSheet('목록에서 뺄까요?', '녹음 파일은 지우지 않고 폰에 그대로 둡니다.', '목록에서 빼기', function () {
+        var api = recFindApi(); if (api) api.mark(it.gid, 'dropped', 'list');
+        recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid; });
+        closeModal(); recFindSync(); toast('목록에서 뺐습니다.');
+      });
+    });
+    modal.style.display = 'flex';
+  }
+  // [이어서 녹음] — 평소의 [녹음 시작]과 같은 길로 시작하고, 「앞 녹음과 같은 묶음」이라는 표시만 함께 넘긴다.
+  function recFindContinue(it) {
+    if (!recFindApi() || !it) return;
+    if (isRecording) { openScreen(recView); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
+    if (chatRecording || ideaRecording) { toast('말로 입력하는 중입니다. 마친 뒤 다시 눌러 주십시오.', 3000); return; }
+    recGroupNext = it.gid;
+    pendingMaterials = []; renderMatList();
+    if (btnStartRec) btnStartRec.click();
+    setTimeout(function () {
+      if (!(isRecording && recGroup)) { recGroupNext = ''; return; }
+      toast('이어서 녹음합니다.', 2500);
+      recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid; });   // 이어 녹음하는 동안 그 묶음은 「끊긴 녹음」이 아니다
+      recFindSync();
+    }, 700);
+  }
+  function recPanelText(title, retakeHtml) {
+    var ttl = recordedPanel ? recordedPanel.querySelector('.subbar .title') : null;
+    if (ttl) ttl.textContent = title;
+    if (btnRetake) btnRetake.innerHTML = retakeHtml;
+  }
+  // [여기까지 저장] · [열기] — 남아 있는 녹음을 「녹음 완료」 화면에 올린다(제목 · 회의자료 · 보내기 · 임시 저장은 평소와 같다).
+  function recFindSave(it) {
+    var api = recFindApi(); if (!api || !it) return;
+    if (isRecording) { toast('녹음을 마친 뒤 눌러 주십시오.', 3000); return; }
+    if (pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다.', 3000); return; }
+    toast('녹음을 불러오고 있습니다…', 2500);
+    api.open(it.gid).then(function (r) {
+      if (!r || !r.ok || !r.blob) {
+        if (r && r.code === 'unreadable') {
+          it.readable = false; recFindSync();
+          openSheet('이 녹음은 열리지 않습니다', recWhen(it.startedAt) + '에 시작한 녹음 파일이\n열리지 않습니다.\n지우지 않고 폰에 그대로 두었습니다.', '확인', null, null, null,
+            { positive: true, recmsg: true, cancelLabel: '닫기', main: 'confirm' });
+        } else toast('녹음을 열지 못했습니다.', 3000);
+        return;
+      }
+      if (isRecording || (pendingBlob && !recPanelShared)) return;            // 불러오는 사이 다른 녹음이 시작됐다
+      hideBanner();
+      recPanelMode(false);
+      pendingBlob = r.blob; pendingMaterials = []; renderMatList();
+      recCur = { gid: r.gid || it.gid, recovered: true, type: it.type, startedAt: r.startedAt || it.startedAt, endedAt: r.endedAt || it.endedAt,
+                 durMs: r.durationMs || 0, joined: !!r.joined, parts: r.parts || 1, gaps: r.gaps || [], skipped: r.skipped || 0, code: r.code || '' };
+      if (memoTitle) memoTitle.value = recTitleAt(recCur.startedAt);
+      recPanelText(it.type === 'unsent' ? '보내지 않은 녹음' : '끊긴 녹음', '<svg><use href="#i-x"/></svg>닫기 (나중에)');
+      var lines = [];
+      if (it.type === 'unsent') lines.push('✅ 녹음됐습니다 · ' + fmtRec(recCur.durMs / 1000), '(' + recWhen(recCur.startedAt) + '에 녹음 · 아직 보내지 않음)');
+      else lines.push('끊기기 전 ' + fmtRecKo(recCur.durMs / 1000) + '가 남아 있었습니다', '(' + recWhen(recCur.endedAt) + '에 끊김)');
+      var gl = recGapLine(recCur.gaps); if (gl) lines.push(gl);
+      if (recCur.skipped) lines.push('열리지 않는 부분 ' + recCur.skipped + '개는 뺐습니다');
+      if (recDoneBadge) recDoneBadge.textContent = lines.join('\n');
+      openScreen(recordedPanel);
+      setStatus('녹음 — 제목 정하고 보내기', 'idle');
+      recFindItems = recFindItems.filter(function (x) { return x.gid !== it.gid && x.gid !== recCur.gid; });
+      recFindSync();
+      recFindDiag(recCur.gid);
+    }).catch(function () { toast('녹음을 열지 못했습니다.', 3000); });
+  }
+  function recFindDiag(sid) {
+    var api = recFindApi(); if (!api) return;
+    try { api.diag(sid || '').then(function (d) { if (d) recDiagLast = d; }); } catch (e) {}
+  }
+  // 정지해서 「녹음 완료」 화면이 떴다(onRecorded) — 일지 번호를 붙들고, 이어 녹음이었다면 빠진 구간을 딱지에 적는다.
+  function recFindOnRecorded(durMs) {
+    var grp = recGroup; recGroup = ''; recCur = null;
+    var last = (recorder && recorder.last) || null;
+    if (!recFindApi() || !last || !last.sid) return;
+    recCur = { gid: last.gid || last.sid, sid: last.sid, recovered: false, type: 'new', startedAt: last.startedAt || 0, durMs: durMs || 0,
+               joined: !!last.joined, parts: last.parts || 1, gaps: last.gaps || [], skipped: last.skipped || 0, code: last.code || '', cont: !!grp };
+    var more = [];
+    if (recCur.joined) { var gl = recGapLine(recCur.gaps); if (gl) more.push(gl); }
+    else if (grp) more.push('앞 녹음과 잇지 못했습니다.', '앞 녹음은 「진행 중인 메모」에 있습니다.');
+    if (recCur.skipped) more.push('열리지 않는 부분 ' + recCur.skipped + '개는 뺐습니다');
+    if (more.length && recDoneBadge) recDoneBadge.textContent = recDoneBadge.textContent + '\n' + more.join('\n');
+    recFindDiag(last.sid);
+    recFindScan(0, false, false);       // 이어 담긴 앞부분은 목록에서 빠지고, 잇지 못한 앞부분은 남는다
+  }
+  // 「녹음 완료」 화면의 녹음을 보내지 않고 내려놓았다(discardRecorded).
+  function recFindDiscard() {
+    var c = recCur; recCur = null;
+    var api = recFindApi(); if (!c || !api) return;
+    if (c.recovered) { recFindScan(0, false, false); return; }      // [닫기 (나중에)] — 버린 것이 아니다. 목록에 다시 나타난다.
+    api.mark(c.gid, 'dropped', 'discard');                          // [버리기] · [다시 녹음] — 목록에 올리지 않는다(파일은 지우지 않는다)
+  }
+  // 임시저장 · 보내기로 넘겼다 — 폰 저장소에 원본이 들어간 것을 확인한 뒤에만 부른다.
+  function recFindHanded(gid, memoId, how) {
+    if (!gid) return;
+    recHandedSet(gid, memoId);
+    var api = recFindApi(); if (api) api.mark(gid, 'handed', how || '');
+    recFindItems = recFindItems.filter(function (x) { return x.gid !== gid; });
+    recFindSync();
+  }
+  function recMetaOf(c) {
+    var m = { v: 1, gid: c.gid, how: c.recovered ? (c.type === 'unsent' ? 'unsent' : 'cut') : (c.cont ? 'cont' : 'new'), ms: c.durMs || 0, at: c.startedAt || 0 };
+    if (c.endedAt) m.end = c.endedAt;
+    if (c.parts > 1 || c.joined) { m.parts = c.parts; m.joined = c.joined ? 1 : 0; }
+    if (c.gaps && c.gaps.length) m.gaps = c.gaps.map(function (g) { return [g.a, g.b]; });
+    if (c.skipped) m.skip = c.skipped;
+    if (c.code) m.code = c.code;
+    if (recDiagLast) m.d = recDiagLast;
+    return m;
+  }
+  // [PC로 보내 정리하기]를 눌렀다 — 메모에 일지 번호 · 진단 값을 싣고, 「넘김」 표시는 원본이 폰 저장소에 들어간 뒤에 남긴다(memo.onStored).
+  function recFindAttach(memo) {
+    var c = recCur; recCur = null;
+    if (!c || !recFindApi()) return;
+    memo.recSid = c.gid;
+    memo.recMeta = recMetaOf(c);
+    memo.onStored = function () { recFindHanded(c.gid, memo.id, 'send'); };
+  }
+  // 앱이 살아 있는 채로 녹음기가 멈춘 것을 화면이 알아챘다 — 「녹음이 끊겼습니다」 알림 한 번(같은 녹음에 되풀이 없음)
+  function recFindNotice() { var api = recFindApi(); if (api) { try { api.notice(recStart); } catch (e) {} } }
+  // 녹음 준비 화면의 저장 공간 한 줄 — 모자라 보일 때만. 녹음 파일 + 정지 때 화면이 읽은 사본 + 보관 사본, 세 벌로 어림한다(1분에 약 1MB).
+  function recSpaceHint() {
+    var el = $('recSpaceHint'); if (!el) return;
+    el.style.display = 'none';
+    var api = recFindApi(); if (!api) return;
+    api.space().then(function (mb) {
+      if (!(mb > 0) || !isOpen(recPrep)) return;
+      var min = Math.floor(mb / 3);
+      if (min >= 180) return;
+      el.textContent = '남은 저장 공간으로는 약 ' + (min >= 60 ? fmtDurKo(min * 60) : Math.max(1, min) + '분') + '쯤 녹음할 수 있습니다.';
+      el.style.display = '';
+    }).catch(function () {});
+  }
+  // 스위치가 꺼져 있거나 네이티브가 옛 판이면 「진행 중」 목록에 남은 「끊긴 녹음」 항목을 걷는다(누를 수 없는 항목이 남지 않게)
+  setTimeout(function () {
+    try { if (!recFindApi()) { var ch = false; HistoryModule.list().forEach(function (e) { if (e.status === 'lost') { HistoryModule.remove(e.id); ch = true; } }); if (ch) renderHistory(); } } catch (e) {}
+  }, 0);
+
   // PC판: 녹음 중이거나 아직 보내지 않은 녹음이 있을 때 탭을 닫거나 새로 고치려 하면 브라우저가 한 번 묻는다(문구는 브라우저가 정한다)
   if (REC_ROAM_V2 && !readNative()) {
     window.addEventListener('beforeunload', function (e) {
@@ -450,6 +772,7 @@
         // 녹음 시작 실패(네이티브 reject 등) 정리: 타이머 계속 돌아 혼란주지 않게 상태를 되돌리고
         //   녹음/준비 화면이면 홈으로 복귀(실패 안내 배너는 onError 가 이미 표시). — 2026-09-21
         if (isRecording) { isRecording = false; recLost = false; recSessionClear(); stopRecTimer(); updateRecIndicator(); }
+        if (recGroup) { recGroup = ''; try { recFindScan(0, false, false); } catch (e) {} }   // v9.10: 시작하지 못했다 — 이어 녹음 표시를 거두고 목록을 다시 맞춘다(끊긴 녹음은 그대로 있다)
         if (isOpen(recView) || isOpen(recPrep)) showHome();
       }
     },
@@ -458,6 +781,8 @@
       showBanner('⚠️ ' + m);
       // v9.8: 정지했는데 녹음 파일을 받지 못한 경우 — 안내(홈 화면의 배너)가 보이게 녹음 화면에 남겨 두지 않는다
       if (REC_ROAM_V2 && !isRecording) { recLost = false; if (isOpen(recView)) showHome(); }
+      // v9.10: 정지했는데 파일을 받지 못했다(녹음 서비스가 먼저 사라진 경우 등) — 폰에 남은 것이 있는지 바로 찾아 알린다
+      try { if (!isRecording) recFindScan(0, true, false); } catch (e) {}
     },
     onAudio: function (blob) { onRecorded(blob); }
   });
@@ -530,6 +855,7 @@
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
     setStatus('녹음 준비 — 시작을 눌러 주세요', 'idle');
+    try { recSpaceHint(); } catch (e) {}      // v9.10: 저장 공간이 모자라 보이면 한 줄(읽기만 — 시작을 막지 않는다)
   });
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
@@ -548,6 +874,8 @@
       try { kvPvStop(); } catch (e) {}
     }
     recCancelled = false; isRecording = true; recLost = false; recLive = false;
+    // v9.10: 일지를 적는 녹음인지 · 이어 녹음이면 어느 묶음인지를 녹음기에 알려 둔다(녹음 방식에는 닿지 않는다)
+    try { recGroup = recFindApi() ? (recGroupNext || '') : ''; recGroupNext = ''; recorder.find = !!recFindApi(); recorder.group = recGroup; recorder.dropNext = false; recorder.last = null; } catch (e) {}
     openScreen(recView); startRecTimer();
     recorder.start();
   });
@@ -560,6 +888,7 @@
   function cancelRecNow() {
     if (!isRecording) { showHome(); return; }
     recCancelled = true; isRecording = false; recLost = false; stopRecTimer(); recSessionClear();
+    try { recorder.dropNext = true; recGroup = ''; } catch (e) {}   // v9.10: 버린 녹음은 일지에 「버림」으로 — 끊긴 녹음 목록에 오르지 않게
     try { recorder.stop(); } catch (e) {}
     pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');
   }
@@ -592,6 +921,7 @@
     if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast('아직 보내지 않은 녹음이 있습니다. 먼저 보내거나 임시저장해 주십시오.', 3500); return; }
     hideBanner();
     pendingBlob = f; pendingMaterials = []; renderMatList();
+    recCur = null;                                        // v9.10: 다른 앱에서 받은 파일 — 일지와 무관하다
     if (memoTitle) memoTitle.value = titleFromAudioName(f.name) || defaultTitle();
     var mb = (f.size || 0) / 1024 / 1024;
     if (recDoneBadge) recDoneBadge.textContent = '📎 공유받은 녹음 파일 · ' + (f.name || '녹음') + (mb ? ' · ' + (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + 'MB' : '');
@@ -616,15 +946,21 @@
     if (REC_ROAM_V2 && wasLost && recDoneBadge) recDoneBadge.textContent = durMs > 0
       ? '⚠️ 녹음이 도중에 멈춘 것 같습니다 · 담긴 길이 ' + fmtRec(durMs / 1000) + ' — 보내기 전에 길이를 확인해 주십시오.'
       : '⚠️ 녹음이 도중에 멈춘 것 같습니다 — 담긴 길이를 확인하지 못했습니다.';
+    try { recFindOnRecorded(durMs); } catch (e) {}        // v9.10: 일지 번호를 붙들고, 이어 녹음이었으면 빠진 구간을 딱지에 적는다
     openScreen(recordedPanel);
     setStatus('녹음 완료 — 제목 정하고 보내기', 'idle');
   }
-  function discardRecorded() { pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle'); }
+  function discardRecorded() {
+    pendingBlob = null; pendingMaterials = [];
+    try { recFindDiscard(); } catch (e) {}                // v9.10: 일지에 「버림」(끊긴 녹음을 열었다 닫은 경우는 목록에 다시 올린다)
+    showHome(); setStatus('대기 중', 'idle');
+  }
   /* v9.8(O-0442) 「녹음 완료」 화면을 떠나려 할 때 — 아직 보내지 않은 내 녹음이면 한 번 묻는다.
    *   [임시저장](기존 기능 그대로 — 폰에 보관, 회의록 「진행 중」에서 다시 연다) · [버리기] · [계속 보기].
    *   다른 앱에서 공유받은 파일은 원본이 그 앱에 남아 있어 묻지 않는다. 돌려주는 값: true = 창을 띄웠다. */
   function guardRecorded() {
     if (!REC_ROAM_V2 || !pendingBlob || recPanelShared) return false;
+    if (recCur && recCur.recovered && recFindApi()) return false;   // v9.10: 폰에 남아 있던 녹음을 연 것 — 닫아도 사라지지 않으므로 묻지 않는다
     openSheet('아직 보내지 않은 녹음입니다', '이대로 나가면 이 녹음은 사라집니다.', '버리기', discardRecorded, null,
       { label: '임시저장', action: function () { if (btnDraft) btnDraft.click(); } }, { cancelLabel: '계속 보기' });
     return true;
@@ -643,6 +979,7 @@
       ext: OfficeBridge.extFromBlob(pendingBlob), date: t.date, time: t.time,
       materials: (pendingMaterials && pendingMaterials.length) ? pendingMaterials.slice() : []
     };
+    try { recFindAttach(memo); } catch (e) {}                            // v9.10: 일지 번호 · 진단 값(meta.rec) · 넘김 표시
     var blob = pendingBlob; pendingBlob = null; pendingMaterials = [];   // 자료는 memo 에 실었으니 초기화
     // 녹음이 길어 단일 업로드 한도(40MB)를 넘으면 → 조각 전송(백그라운드, 긴 영상과 동일 UX)
     if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
@@ -678,9 +1015,12 @@
       materials: (pendingMaterials && pendingMaterials.length) ? pendingMaterials.slice() : [],
       date: t.date, time: t.time
     };
+    var rc = (recCur && recFindApi()) ? recCur : null;    // v9.10: 일지 번호 · 진단 값을 임시저장에도 실어 둔다(나중에 보낼 때 meta.rec 로)
+    if (rc) { rec.recSid = rc.gid; try { rec.recMeta = recMetaOf(rc); } catch (e) {} }
     OfficeBridge.saveDraft(rec).then(function (ok) {
       if (!ok) { showBanner('임시 저장에 실패했습니다(저장 공간을 확인해 주세요). 녹음은 아직 화면에 있습니다.'); return; }
       HistoryModule.add({ id: id, token: tok, title: title, date: t.date, time: t.time, status: 'draft', kind: 'audio' });
+      if (rc) { recCur = null; try { recFindHanded(rc.gid, id, 'draft'); } catch (e) {} }   // 임시저장에 들어간 것을 확인한 뒤에 「넘김」
       pendingBlob = null; pendingMaterials = [];          // 저장 성공 후에만 비운다(실패 시 녹음 보존)
       renderHistory(); showHome(); setStatus('임시 저장됨', 'idle');
       toast('임시 저장했습니다. 회의록 「진행 중」에서 자료를 붙여 보낼 수 있습니다.');
@@ -884,6 +1224,7 @@
       var title = (he && he.title) || rec.title || draftDefaultTitle(he || rec);
       var memo = { id: rec.id, token: rec.token, title: title, ext: rec.ext, date: rec.date, time: rec.time,
                    materials: rec.materials || [], matSlots: rec.matSlots };   // v7.9: 자료 저장 번호(없으면 순서대로)
+      if (rec.recMeta) { memo.recSid = rec.recSid; memo.recMeta = rec.recMeta; }   // v9.10: 임시저장에 실어 둔 진단 값
       var blob = rec.blob;
       if ((blob.size || 0) > OfficeBridge.CHUNK_SIZE) {
         HistoryModule.update(id, { status: 'pending', kind: 'audio' });
@@ -1308,9 +1649,11 @@
     if (e.status === 'done') { badge = '완료'; cls = 'b-ok'; }
     else if (e.status === 'draft') { badge = '임시저장'; cls = 'b-draft'; }   // v3.8: 아직 안 보낸 녹음
     else if (e.status === 'failed') { badge = '재시도'; cls = 'b-wait'; }
+    else if (e.status === 'lost') { badge = e.recType === 'unsent' ? '안 보낸 녹음' : '끊긴 녹음'; cls = 'b-wait'; }   // v9.10: 폰에 남아 있는 녹음
     else { badge = '정리중'; cls = 'b-proc'; }
     var vp = (videoProg && videoProg[e.id]) || '';
     var sub = (vp && e.status !== 'done') ? vp : (e.date || '');
+    if (e.status === 'lost' && e.recSub) sub = e.recSub;
     return '<button class="card item" data-id="' + e.id + '">' +
       '<span class="ic"><svg><use href="#' + iconFor(e.kind) + '"/></svg></span>' +
       '<span class="tx"><b>' + esc(e.title) + '</b><small>' + esc(sub) + '</small></span>' +
@@ -1360,6 +1703,8 @@
     if (e.status === 'done') {
       if (e.kind === 'photo' || e.kind === 'video') showResult(id);
       else openModal(e);
+    } else if (e.status === 'lost') {
+      recFindItemOpen(e.recGid);   // v9.10 끊긴 녹음 · 보내지 않은 녹음 — [여기까지 저장] · [이어서 녹음] · [목록에서 빼기]
     } else if (e.status === 'draft') {
       openDraftModal(e);           // v3.8 임시저장 — 자료 붙이기 + [PC 보내기] + 삭제
     } else if (e.status === 'failed') {
@@ -4019,6 +4364,8 @@
    *   없으면 null → 오늘 보고 한 줄(today-card.js) 그대로. 알림은 보내지 않는다(화면의 말만 바뀐다). */
   window.SmartHomeSay = function () {
     try {
+      // v9.10(O-0449): 폰에 끊긴 녹음 · 보내지 않은 녹음이 남아 있으면 그것부터 말한다(말풍선이 떠 있어도 내리지 않는다 — over)
+      var rl = recHomeLine(); if (rl) return { kind: 'rec', over: true, text: rl };
       if (kStatState === 'down') {
         var d = kStatData || {}, mins = 0;
         try { mins = Math.round((Date.parse(d.server_now) - Date.parse(d.updated_at)) / 60000); } catch (e) {}
@@ -5823,6 +6170,10 @@
       else { sheetExtraBtn.style.display = 'none'; sheetExtraAction = null; }
     }
     if (opts && opts.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _pu = sheetConfirm.querySelector('use'); if (_pu) _pu.setAttribute('href', '#' + (opts.icon || 'i-check')); }
+    // v9.10: 여러 줄 글(낱말 단위 줄바꿈 · 가운데) · 기본 단추 돋보이기 — 끊긴 녹음 창에서만 쓴다(안 주면 예전 모양 그대로)
+    sheetMsg.classList.toggle('recmsg', !!(opts && opts.recmsg));
+    if (sheetConfirm) sheetConfirm.classList.toggle('main', !!(opts && opts.main === 'confirm'));
+    if (sheetExtraBtn) sheetExtraBtn.classList.toggle('main', !!(opts && opts.main === 'extra'));
     sheetEl.style.display = 'flex';
   }
   function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; sheetExtraAction = null; }
@@ -6033,6 +6384,7 @@
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
     if (isRecording && isOpen(recView)) { if (REC_ROAM_V2) leaveRecScreen(); else openRecLeaveSheet(); return true; }
     if (REC_ROAM_V2 && isOpen(recView)) { showHome(); setStatus('대기 중', 'idle'); return true; }      // 녹음이 시작되지 못한 채 남은 녹음 화면
+    if (isOpen(recordedPanel) && pendingBlob && recCur && recCur.recovered && recFindApi()) { discardRecorded(); return true; }   // v9.10: 폰에 남아 있던 녹음을 연 화면 — 닫으면 목록으로 돌아간다
     if (isOpen(recordedPanel) && guardRecorded()) return true;                                          // v9.8: 아직 보내지 않은 녹음 — 한 번 묻는다
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)

@@ -203,13 +203,15 @@
     if (o !== undefined) paintSay.last = o || NO_SAY;
     var p = $('homeSay'); if (!p) { sayNow = NO_SAY; return; }
     // v9.6 (O-0356 ②): PC가 응답하지 않거나 지금 돌아가는 일이 있으면 그 사실을 먼저 말한다(app.js SmartHomeSay — 값이 없으면 오늘 보고 한 줄 그대로)
-    var hs = null; try { hs = (!bubbleOn() && window.SmartHomeSay) ? window.SmartHomeSay() : null; } catch (e) { hs = null; }
-    if (hs && hs.text) sayNow = { text: hs.text, cal: false, mail: false, task: false, kind: hs.kind || '' };
+    // v9.10(O-0449): 「폰에 끊긴 녹음이 남아 있다」는 말(over)은 말풍선이 떠 있어도 내리지 않는다 — 그 밖의 한 줄은 예전처럼 말풍선이 먼저
+    var hs = null; try { hs = window.SmartHomeSay ? window.SmartHomeSay() : null; if (hs && bubbleOn() && !hs.over) hs = null; } catch (e) { hs = null; }
+    if (hs && hs.text) sayNow = { text: hs.text, cal: false, mail: false, task: false, kind: hs.kind || '', over: !!hs.over };
     else sayNow = (bubbleOn() || !paintSay.last.text) ? NO_SAY : paintSay.last;
     var txt = sayNow.text || '무엇을 도와드릴까요?';
     if (p.textContent !== txt) p.textContent = txt;
     p.classList.toggle('ksay-on', !!sayNow.text);
     p.classList.toggle('ksay-down', sayNow.kind === 'down');
+    p.classList.toggle('ksay-over', !!(sayNow.text && sayNow.over));
   }
   paintSay.last = NO_SAY;
 
