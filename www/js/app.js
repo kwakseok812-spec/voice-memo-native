@@ -5936,8 +5936,11 @@
   var kvPvBlob = {};                                  // 견본 주소 → 미리 받아 둔 소리(blob 주소) · 'x' 받는 중 · 'f' 못 받음. 누르자마자 나게 하려는 것(못 받았으면 주소로 바로 튼다)
   /* 방금 바꾼 값 믿기: 확정(요청 행의 결과) 뒤 75초(PC 상태 주기 60초 + 여유) 동안은, 상태 알림이 아직 옛 값을 주더라도 결과로 받은 값을 보인다.
    *   PC 는 요청 행을 「완료」로 바꾼 뒤에 상태를 따로 올리므로 그 사이에 읽으면 옛 값이 온다 → 「바꿨습니다」 직후 동그라미가 되돌아가 보이던 문제(1차 검토 중간 1).
-   *   상태가 새 값을 따라오면 곧바로 풀고(그 뒤의 진짜 변경은 그대로 따른다), 75초가 지나도 옛 값이면 PC 의 값을 따른다. */
-  var kvHold = null;                                  // { key, until }
+   *   상태가 새 값을 따라오면 곧바로 풀고(그 뒤의 진짜 변경은 그대로 따른다), 75초가 지나도 옛 값이면 PC 의 값을 따른다.
+   *   (O-0490) 고른 목소리에 딸린 값도 함께 지킨다 — 옛 상태에는 고른 번호만이 아니라 안내 한 줄(scope)·[듣기] 기다림(wait)도 옛 목소리 것이 실려 온다.
+   *     번호만 지키면 카드는 「남자11 · 느림」인데 안내 줄은 빠른 목소리용 글로 되돌아가 보였다(1차 검토). PC 는 바꾸기 결과에 새 목록(scope·wait 포함)을 실어 준다 → 그 값을 든다.
+   *     결과에 scope 가 없으면(옛 PC) 믿는 동안 안내 줄을 비운다(옛 목소리 글을 보이느니 안 보이는 편) · wait 는 결과에 있을 때만 지킨다. */
+  var kvHold = null;                                  // { key, until, scope, wait(없으면 null) }
   var KV_HOLD_MS = 75000;
   /* [듣기]를 기다리는 시간: PC 가 알려 준 초(voice.wait)만큼 — 청한 때부터 잰다. 느린 목소리로 긴 글이면 몇 분이 걸려서 상한을 30분으로 둔다(예전 180초).
    *   PC 가 안 주면 0 = 예전 그대로 40번(약 30초). 값만 받아 두므로 PC 에서 바꿔도 앱을 다시 깔지 않는다. */
@@ -5976,7 +5979,11 @@
       var b = kvBlockOf(kStatData);
       if (b && kvHold) {                              // 방금 바꾼 값 믿기(위 설명)
         if (Date.now() >= kvHold.until || !kvRow(b, kvHold.key)) kvHold = null;   // 시간이 지났다(상태가 따라온 것은 refreshKStat 이 받은 값으로 가린다)
-        else if (b.chosen !== kvHold.key) { b.chosen = kvHold.key; kStatData.voice.chosen = kvHold.key; }
+        else {
+          if (b.chosen !== kvHold.key) { b.chosen = kvHold.key; kStatData.voice.chosen = kvHold.key; }
+          if (b.scope !== kvHold.scope) { b.scope = kvHold.scope; kStatData.voice.scope = kvHold.scope; }   // O-0490: 안내 한 줄도 고른 목소리의 것으로(위 설명)
+          if (kvHold.wait != null && b.wait !== kvHold.wait) { b.wait = kvHold.wait; kStatData.voice.wait = kvHold.wait; }
+        }
       }
       kvCacheSet(b ? kStatData.voice : null);         // 칸이 사라졌으면(기능 꺼짐·옛 PC) 받아 둔 것도 지운다
       return b ? { blk: b, down: kStatState === 'down' } : null;
@@ -6049,7 +6056,9 @@
         if (nb) kStatData.voice = res.voice;
         else if (kStatData.voice) kStatData.voice.chosen = p.key;
       } else if (nb) kvCacheSet(res.voice);
-      kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS };   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
+      var nbOk = !!nb && nb.chosen === p.key;          // 결과에 실린 목록이 방금 고른 목소리의 것일 때만 그 scope·wait 를 믿는다
+      kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS,   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
+        scope: (nbOk && typeof res.voice.scope === 'string') ? nb.scope : '', wait: (nbOk && res.voice.wait != null) ? nb.wait : null };
       kvJust = p.key; setTimeout(function () { if (kvJust === p.key) kvJust = ''; }, 600);
       // O-0469: 「여자1(으)로」가 되지 않게 조사를 피한다. 「다음에 읽을 때부터 이 목소리」는 브리핑 전용 줄에서는 사실이 아니라 뺐다(어디서 나오는지는 그 줄 설명과 바로 아래 안내가 말한다)
       if ((!kvNext || kvNext === p.key) && !kvStageOn()) toast(tw('「' + nm + '」 목소리로 바꿨습니다.'), 2600);   // O-0490: 무대 화면에서는 「지금 목소리」 자리에 「바꿨습니다 ✓」
