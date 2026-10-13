@@ -284,8 +284,6 @@ button.toggle{text-align:left;width:100%}
 /* 토스트 */
 .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(12px);max-width:86%;padding:14px 20px;font-size:14.5px;line-height:1.5;text-align:center;font-weight:600;color:#fff;background:rgba(10,14,30,.94);border:1px solid var(--glass-b);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:9999;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-/* (O-0487) 옷 이름이 든 긴 한 줄 안내 — 기본 알림 줄은 화면 절반 너비까지만 넓어져 세 줄이 된다. 이 줄만 화면 너비의 86%까지 써서 두 줄 안에 들게(다른 안내는 그대로) */
-.toast.wide{width:max-content;max-width:86vw}
 html[data-style="light"] .toast{background:rgba(15,23,42,.94)}
 
 /* 모달 */

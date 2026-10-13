@@ -6789,7 +6789,7 @@
   function tw(s) { return String(s).replace(/([^ ])(?=[^ ])/g, '$1\u2060'); }
   function toast(msg, ms, wide) {  // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
     if (!toastEl) return;
-    toastEl.classList.toggle('wide', !!wide);
+    toastEl.style.width = wide ? 'max-content' : ''; toastEl.style.maxWidth = wide ? '86vw' : '';   // 넓은 한 줄은 이 요소에만 값을 준다(styles.css 의 .toast 는 그대로 둔다)
     toastEl.textContent = msg; toastEl.style.display = 'block';
     requestAnimationFrame(function () { toastEl.classList.add('show'); });
     if (toastTimer) clearTimeout(toastTimer);
