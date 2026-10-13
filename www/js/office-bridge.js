@@ -1226,6 +1226,35 @@
   }
   function getChatRead(pass) { return _readRpc('get_chat_read', { p_pass: pass || '' }); }
   function markChatRead(upto, pass, via) { return _readRpc('mark_chat_read', { p_upto: upto || null, p_pass: pass || '', p_via: via || '' }); }
+  /* (O-0487) 케이 옷 기기 간 맞추기 — 「지금 입은 옷」을 서버 한 줄(k_outfit_state)에 두고 폰·PC판이 함께 쓴다.
+   *   getKOutfit(pass)                → {outfit: {id, changed_at, via} | null, server_now}   (아직 아무도 안 올렸으면 outfit = null)
+   *   setKOutfit(id, pass, via, ageMs) → {outfit, accepted, reason, server_now}. ageMs = 고른 뒤 지난 시간(정수 ms).
+   *     서버가 「서버 지금 − ageMs」를 고른 때로 삼아, 지금 값보다 늦을 때만 바꾼다 → 나중 것이 이기고, 기기 시계와 무관.
+   *   🔒 연동 암호 게이트. 답을 번역하는 법(읽음 기준 쪽과 달리 오류 본문을 본다 — 400 을 「암호 틀림」으로 뭉뚱그리지 않는다):
+   *     · 404 또는 PGRST202(그 함수가 서버에 없음 = SQL 미적용 · 되돌림) → err.notready → 앱은 예전처럼 기기 저장만
+   *     · 28000 / BAD_PASSCODE → err.badpass      · 그 밖(400 · 5xx · 끊김) → 그냥 실패(다음에 다시)
+   *   8초 시간 제한(fetchT). */
+  function _outfitRpc(name, body) {
+    return fetchT(CONFIG.url + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }, 8000).then(function (r) {
+      if (r.ok) return r.json();
+      return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+        var code = (j && j.code) ? String(j.code) : '', msg = (j && j.message) ? String(j.message) : '', e;
+        if (code === '28000' || /BAD_PASSCODE/.test(msg)) { e = new Error('BAD_PASSCODE'); e.badpass = true; }
+        else if (r.status === 404 || code === 'PGRST202') { e = new Error('NOT_READY'); e.notready = true; }
+        else e = new Error('옷 맞추기 실패(HTTP ' + r.status + ')');
+        throw e;
+      });
+    }).then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
+  }
+  function getKOutfit(pass) { return _outfitRpc('get_k_outfit', { p_pass: pass || '' }); }
+  function setKOutfit(id, pass, via, ageMs) {
+    var age = Math.round(Number(ageMs) || 0); if (!(age > 0)) age = 0;
+    return _outfitRpc('set_k_outfit', { p_outfit: String(id || ''), p_pass: pass || '', p_via: via || '', p_age_ms: age });
+  }
   function listOfficeOrders(limit, pass) {
     return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
   }
@@ -1639,6 +1668,7 @@
     getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
     getKStatus: getKStatus,         // v8.4(O-0162) 채팅 머리줄 PC 케이 상태 점
     getChatRead: getChatRead, markChatRead: markChatRead,   // (O-0201) 읽음 기준 기기 간 공유
+    getKOutfit: getKOutfit, setKOutfit: setKOutfit,         // (O-0487) 케이 옷 기기 간 맞추기
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
     listReminders: listReminders, cancelReminder: cancelReminder,                             // v8.3: ⏰ 예약한 알림

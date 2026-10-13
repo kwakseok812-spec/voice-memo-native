@@ -671,19 +671,32 @@
   var catalogReady = ready.then(loadCatalog);
   var assetsReady = ready.then(assetsInit);
 
-  function setOutfit(id) {
+  /* (O-0487) src = 누가 바꿨나: 'user' 이 기기에서 직접 고름(기본) · 'remote' 다른 기기에서 고른 것을 받아 입힘.
+   *   at = 고른 때(이 기기 시계 · ms). 서버 옷을 받는 동안에도 둘이 그대로 이어져, 다 받은 뒤 스스로 다시 부를 때 「직접 고른 것」으로 바뀌지 않는다.
+   *   실제로 갈아입었을 때만 onWear 로 알린다(받는 중 · 같은 옷 · 없는 옷은 알리지 않는다). */
+  function setOutfit(id, src, at) {
     var so = findOutfit(id);
     if (!so || id === outfit().id) return false;
+    src = src === 'remote' ? 'remote' : 'user';
     if (so.pending) {                                   // (v9.5) 서버 옷: 사진을 다 받은 뒤에 입힌다. 'pending' 을 돌려준다(앱이 「받고 있습니다」 안내)
-      ka.want = id;
-      ensureOutfit(id).then(function () { var o2 = findOutfit(id); if (ka.want === id && o2 && !o2.pending) { ka.want = ''; setOutfit(id); } });
+      ka.want = id; ka.wantSrc = src; ka.wantAt = at || Date.now();
+      ensureOutfit(id).then(function () { var o2 = findOutfit(id); if (ka.want === id && o2 && !o2.pending) { var s2 = ka.wantSrc, a2 = ka.wantAt; ka.want = ''; setOutfit(id, s2, a2); } });
       return 'pending';
     }
     ka.want = '';
     curId = id; lsSet(OUTFIT_KEY, id);
     refreshAll(true); notify(); writePlan();
     ensureOutfit(id);                                   // (v9.5) 입혔을 때 그 옷의 자세 그림·영상을 받는다
+    var wAt = at || Date.now();
+    wearCbs.forEach(function (fn) { try { fn(id, src, wAt); } catch (e) {} });
     return true;
+  }
+  var wearCbs = [];
+  function onWear(fn) { if (typeof fn === 'function') wearCbs.push(fn); }
+  // (O-0487) 그 옷 열쇠를 이 기기가 아는가 — 옷장 목록에 보이거나, 서버 목록에 있는데 아직 옷장 사진을 못 받았거나
+  function knowsOutfit(id) {
+    if (findOutfit(id) || ka.eff[id]) return true;
+    return !!(ka.m && Array.isArray(ka.m.outfits) && ka.m.outfits.some(function (e) { return e && e.id === id; }));
   }
   function onChange(fn) { listeners.push(fn); }
   function notify() { listeners.forEach(function (fn) { try { fn(outfit()); } catch (e) {} }); }
@@ -995,7 +1008,7 @@
     ready: ready,
     exprFor: exprFor, rules: EXPR_RULES, moodFor: moodFor,
     restExpr: REST_EXPR, flashMs: function (e) { return FLASH_MS[e] || FLASH_MS_BASE; },   // (O-0226) 시험·확인용
-    outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange,
+    outfit: outfit, outfits: function () { return data.outfits.slice(); }, setOutfit: setOutfit, onChange: onChange, onWear: onWear,
     // (O-0040) 머리 스타일 · 서버 카탈로그
     catalogReady: catalogReady, reloadCatalog: loadCatalog, catalogState: function () { return { source: catState.source, url: catState.url, error: catState.error, at: catState.at }; },
     defaultHair: DEFAULT_HAIR, fixedHair: FIXED_HAIR, hair: hair, stillMode: stillMode,   // v9.6: 머리 고르기(setHair·hairs·hairThumbUrl·hasLook)는 없앴다
@@ -1007,7 +1020,11 @@
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState, callSet: callSet,
     assets: { state: function () { return ka.state; }, refresh: function () { return kaFetchManifest(true); }, ensureOutfit: ensureOutfit, ensureThumbs: ensureThumbs,
-              wanting: function () { return ka.want; }, saveData: saveData },
+              wanting: function () { return ka.want; }, saveData: saveData,
+              // (O-0487) 받는 중인 옷이 누구의 것인지 · 그 기다림 접기 · 아는 옷인지
+              wantInfo: function () { return ka.want ? { id: ka.want, src: ka.wantSrc || 'user', at: ka.wantAt || 0 } : null; },
+              dropWant: function (src) { if (ka.want && (!src || (ka.wantSrc || 'user') === src)) ka.want = ''; },
+              knows: knowsOutfit },
     mount: function () { faces().forEach(paint); },
     restartFace: restartFace, hold: hold, faceFlash: faceFlash,
     setExpr: setExpr, lastExpr: function () { return lastExpr; },

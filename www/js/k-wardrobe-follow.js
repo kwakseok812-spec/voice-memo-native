@@ -209,6 +209,8 @@
     },
     mode: function () { return mode; },
     state: function () { return state; },
-    sync: sync
+    sync: sync,
+    // (O-0487) 다른 기기에서 고른 서버 옷을 받는 동안에도 같은 「받는 중」 표시를 쓴다(누름이 없으므로 밖에서 켠다)
+    wait: function (id) { try { if (built) markWait(id, window.KChar ? KChar.outfit().id : ''); } catch (e) {} }
   };
 })();

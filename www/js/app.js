@@ -5719,6 +5719,7 @@
     renderKWardrobe();
     if (window.KChar) KChar.mount();
     try { if (window.KChar && KChar.assets) KChar.assets.ensureThumbs(); } catch (e) {}   // v9.5: 서버에서 받는 새 옷의 옷장 사진(받으면 목록에 나타난다)
+    try { ofWardrobeOpened(); } catch (e) {}          // (O-0487) 다른 기기에서 바꾼 옷이 있으면 열자마자 맞춘다
     try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeOpen) KMotion.wardrobeOpen(kmFrom, $('kWardrobeView')); } catch (e) {}
   }
   // v9.10: 케이 꾸미기에서 틀어 둔 소리(목소리 미리 듣기 · 직접 읽기 · 전신 인사)를 멈춘다 — 닫기 단추와, 다른 길로 화면을 떠날 때가 함께 쓴다
@@ -5773,6 +5774,7 @@
       an.textContent = nop ? '연동 암호를 넣으면 다른 옷의 움직임·자세 그림과 새 옷을 받아 옵니다.' : '';
       an.style.display = nop ? 'block' : 'none';
     }
+    try { paintKwSyncNote(); } catch (e) {}           // (O-0487) 옷 맞추기가 실제로 켜져 있을 때만 「모든 기기에 함께 적용됩니다」
     renderKVoices();
     renderKFull();
     renderKIntro();
@@ -6174,6 +6176,226 @@
     KChar.voice.onVoices(function () { if (isOpen($('kWardrobeView'))) renderKVoices(); });
     KChar.onChange(function () { if (isOpen($('kWardrobeView'))) renderKWardrobe(); });
   }
+  /* ---- (O-0487) 케이 옷 기기 간 맞추기 — 폰에서 갈아입히면 PC판(같은 코드)과 다른 기기의 케이도 같은 옷, 반대 방향도 같게 ----
+   * 서버 한 줄(k_outfit_state)에 「지금 입은 옷」을 두고 폰·PC판이 함께 쓴다. PC 워커는 거치지 않는다(PC 가 꺼져도 맞춰진다).
+   *  · 올리기: 이 기기에서 **직접** 갈아입힌 때만(KChar.onWear 의 src='user'). 다른 기기 것을 받아 입은 것(src='remote')은 올리지 않는다
+   *      → 받은 옷이 「내가 고른 것」으로 되올라가 두 기기가 서로 뒤집는 일이 없다. 연달아 누르면 0.8초 모아 마지막 것만.
+   *      올릴 것은 기기에 적어 둔다(OF_UP_KEY = {id, at 고른 때}) → 실패·오프라인이면 다음 조회 때 다시.
+   *      보낼 때는 「고른 뒤 지난 시간」만 보낸다(시계의 차이라 기기 시계가 틀려도 맞다). 서버가 「서버 지금 − 지난 시간」으로 고른 때를 정한다.
+   *  · 받기: 앱 시작 · 화면이 보이는 동안 30초마다 · 앱/창 복귀 즉시(v7.7 조회 옆에서 get_k_outfit 한 번) · 꾸미기를 열 때 · 통화·인사가 끝난 때.
+   *  · 반영: 서버 값의 고른 때(changed_at)가 이 기기가 마지막으로 반영한 것보다 **늦을 때만**(늦게 온 옛 답이 방금 고른 옷을 되돌리지 못한다).
+   *      이 기기에 아직 못 올린 것이 있으면 받지 않고 먼저 올린다 → 서버가 가려서(accepted · reason) 돌려준 옷으로 맞춘다.
+   *      갈아입히는 길은 KChar.setOutfit(id, 'remote') 하나 — 서버 옷을 아직 못 받았으면 기존 받기 흐름(받는 중 표시 → 다 받으면 입힘)을 그대로 탄다.
+   *  · 받지 못하면 지금 옷 그대로. 다시 해 보는 것은 서버 값이 바뀌지 않는 한 3회까지(1분 간격) — 앱을 다시 켜면 처음부터.
+   *  · 이 앱 판·서버 목록 어디에도 없는 옷이면 지금 옷 그대로 두고 넘어간다(이 기기 옷을 되올리지 않는다).
+   *  · 음성 통화 · 시작 인사 · 전신 인사가 도는 중에는 미뤘다가 끝난 때 바로 한 번 조회해 맞춘다.
+   *  · 처음(서버 값이 비어 있음): OUTFIT_SYNC_SEED 에 따라 — 'phone' 이면 폰 앱만 지금 옷을 올린다(PC판은 기다린다).
+   *      서버에 값이 이미 있으면 폰도 서버 값을 따른다(어느 기기에서든 직접 고른 것이므로).
+   *  · 서버에 함수가 없으면(SQL 미적용 · 되돌림 = 404) 10분 쉬었다 다시 물어본다. 그동안은 예전처럼 기기 저장만 — 올릴 것도 비운다(묵혀 두지 않는다).
+   *  · 옛 앱(v9.10 이하)은 올리지도 받지도 않는다 → 그 기기만 예전처럼.
+   * 스위치: OUTFIT_SYNC 'on' | 'off'(끄면 v9.10 과 같다 — 서버를 부르지 않고 안내 글도 예전 그대로)
+   *         OUTFIT_SYNC_SEED 'phone' | 'any' | 'none'(처음 값을 누가 올리나)    OUTFIT_SYNC_NOTE 'line' | 'quiet'(들어올 때 한 줄 안내) */
+  var OUTFIT_SYNC = 'on';
+  var OUTFIT_SYNC_SEED = 'phone';
+  var OUTFIT_SYNC_NOTE = 'line';
+  var OF_UP_KEY = 'smart_k_outfit_up';        // 아직 서버에 못 올린 것 {id, at}
+  var OF_SEEN_KEY = 'smart_k_outfit_srv';     // 마지막으로 반영한(또는 넘어간) 서버 값 {at: 서버가 준 changed_at 그대로, id}
+  var OF_RETRY_MS = 10 * 60 * 1000;           // 서버에 함수가 없을 때 쉬는 시간(읽음 기준의 READ_RETRY_MS 와 같은 뜻)
+  var OF_TRY_GAP_MS = 60000, OF_TRY_MAX = 3;  // 받지 못한 옷: 1분 간격으로 3회까지
+  var OF_NOTE_GAP_MS = 60000;                 // 들어올 때 한 줄 안내는 60초에 한 번만
+  var OF_UP_MAX_MS = 30 * 24 * 3600 * 1000;   // 30일 넘게 못 올린 것은 버린다(서버도 30일까지만 본다)
+  var ofLive = false, ofReady = false, ofSrvNull = false, ofSeeded = false;
+  var ofMissAt = 0, ofFailAt = 0, ofPulling = false, ofPullAt = 0, ofPushing = false, ofPushT = 0;
+  var ofWant = null, ofGhost = null, ofNoteAt = 0, ofWatchT = 0, ofWatchN = 0;
+  function ofLs(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function ofLsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function ofUp() { var u = ofLs(OF_UP_KEY); return (u && typeof u.id === 'string' && typeof u.at === 'number') ? u : null; }
+  function ofSeen() { var x = ofLs(OF_SEEN_KEY); return (x && typeof x.at === 'string') ? x : null; }
+  function ofCan() { return OUTFIT_SYNC === 'on' && !!(window.KChar && KChar.onWear && window.OfficeBridge && OfficeBridge.getKOutfit && OfficeBridge.setKOutfit); }
+  function ofOn() { return ofCan() && !!getSyncPass() && !readWithin(ofMissAt, OF_RETRY_MS); }
+  function ofSyncLive() { return ofCan() && ofLive && !!getSyncPass(); }      // 지금 실제로 맞춰지고 있는가(안내 글이 이것을 본다)
+  // 서버 시각 문자열을 깎지 않고 견준다: 초 아래 여섯 자리(마이크로초)까지. Date 는 밀리초까지만 알아서 나머지는 글자에서 읽는다.
+  function ofTs(str) {
+    var ms = (typeof str === 'string') ? Date.parse(str) : NaN; if (isNaN(ms)) return { ok: false, sec: 0, us: 0 };
+    var m = /\.(\d+)/.exec(str), f = ((m ? m[1] : '') + '000000').slice(0, 6);
+    return { ok: true, sec: Math.floor(ms / 1000), us: parseInt(f, 10) || 0 };
+  }
+  function ofCmp(a, b) { var x = ofTs(a), y = ofTs(b); return x.sec !== y.sec ? (x.sec > y.sec ? 1 : -1) : (x.us === y.us ? 0 : (x.us > y.us ? 1 : -1)); }
+  function ofSetLive(v) { v = !!v; if (ofLive === v) return; ofLive = v; try { paintKwSyncNote(); } catch (e) {} }
+  // 꾸미기 「옷」 탭 아래 안내 글 — 실제로 맞춰지고 있을 때만 한 마디를 붙인다(목소리 줄의 「모든 기기에 함께 적용」과 같은 말). 아니면 v9.10 글 그대로.
+  function paintKwSyncNote() {
+    var n = $('kwSyncNote'); if (!n) return;
+    var t = ofSyncLive() ? tw('바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀝니다. 모든 기기에 함께 적용됩니다.') : '바꾸면 채팅·홈·프로필의 케이 사진도 함께 바뀝니다.';
+    if (n.textContent !== t) n.textContent = t;
+  }
+  function ofStopWatch() { if (ofWatchT) { clearInterval(ofWatchT); ofWatchT = 0; } }
+  function ofResolve(w) { ofLsSet(OF_SEEN_KEY, { at: w.at, id: w.id }); if (ofWant === w) ofWant = null; if (!ofWant) ofStopWatch(); }
+  function ofMissed() {                               // 서버에 함수가 없다 → 예전 방식. 올릴 것 · 기다리던 것을 비운다
+    ofMissAt = Date.now(); ofLsSet(OF_UP_KEY, null); ofWant = null; ofGhost = null; ofStopWatch();
+    try { if (KChar.assets && KChar.assets.dropWant) KChar.assets.dropWant('remote'); } catch (e) {}
+    ofSetLive(false);
+  }
+  function ofBusy() {                                 // 케이가 바뀌면 끊기는 때: 음성 통화 · 시작 인사 · 꾸미기 전신 인사
+    try { if (convoOn) return true; } catch (e) {}
+    try { if (window.KCall && KCall.active && KCall.active()) return true; } catch (e) {}
+    try { if (window.KIntro && KIntro.active && KIntro.active()) return true; } catch (e) {}
+    try { var fb = $('kwFull'); if (fb && fb.classList.contains('bowing') && isOpen($('kWardrobeView'))) return true; } catch (e) {}
+    return false;
+  }
+  function ofWatch() {                                // 끝나기를 1초마다 본다(최대 30분) → 끝난 때 바로 한 번 조회
+    if (ofWatchT) return;
+    ofWatchN = 0;
+    ofWatchT = setInterval(function () {
+      if (!ofWant || ++ofWatchN > 1800) { ofStopWatch(); return; }
+      if (ofBusy()) return;
+      ofStopWatch();
+      ofPullAt = 0;
+      if (!ofPull()) ofTry();                         // 조회를 못 하는 때(쉬는 중 등)는 알고 있는 값으로
+    }, 1000);
+  }
+  function ofPull() {
+    if (!ofOn()) return false;
+    if (ofPulling && readWithin(ofPullAt, 20000)) return true;
+    if (!ofPulling && readWithin(ofPullAt, 2000)) return true;     // 복귀 · 화면 열기가 겹쳐도 한 번만
+    ofPulling = true; ofPullAt = Date.now();
+    OfficeBridge.getKOutfit(getSyncPass()).then(function (d) {
+      ofPulling = false;
+      if (!d || !('outfit' in d)) { ofTry(); return; }             // 답의 모양이 다르다(칸이 없다) → 이번에는 넘어간다. null(아직 아무도 안 올림)과는 다르다
+      ofSetLive(true);
+      ofTake(d.outfit);
+      if (ofUp()) ofPushSoon(0);                                   // 올리지 못하고 남은 것이 있으면 이어서
+    }).catch(function (e) {
+      ofPulling = false;
+      if (e && e.notready) ofMissed(); else ofTry();               // 끊김 · 서버 오류 · 암호 문제 → 알고 있는 값으로 이어 간다(다음 조회 때 다시 묻는다)
+    });
+    return true;
+  }
+  function ofTake(o) {                                // 서버가 알려 준 「지금 입은 옷」(아직 없으면 null)
+    ofSrvNull = (o === null || o === undefined);
+    if (ofSrvNull) { ofSeed(); return; }
+    if (typeof o !== 'object' || typeof o.id !== 'string' || !/^[a-z0-9_]{1,48}$/i.test(o.id) || !ofTs(o.changed_at).ok) return;
+    if (ofUp()) return;                               // 아직 못 올린 것이 있다 → 먼저 올리고, 서버가 가려 준 것을 받는다
+    var seen = ofSeen();
+    if (seen && ofCmp(o.changed_at, seen.at) <= 0) return;         // 이미 반영한 값이거나, 늦게 도착한 옛 답
+    if (!ofWant || ofWant.at !== o.changed_at || ofWant.id !== o.id) ofWant = { id: o.id, at: o.changed_at, tries: 0, last: 0, told: false };
+    ofTry();
+  }
+  function ofHas(id) { var o = null; try { KChar.outfits().forEach(function (x) { if (x.id === id) o = x; }); } catch (e) {} return o; }
+  function ofTry() {
+    var w = ofWant; if (!w || !ofReady || !ofCan() || ofUp()) return;
+    var K = window.KChar, A = K.assets || {};
+    if (K.outfit().id === w.id) { try { if (A.dropWant) A.dropWant('remote'); } catch (e) {} ofResolve(w); return; }   // 이미 그 옷
+    var uw = A.wantInfo ? A.wantInfo() : null;
+    if (uw && uw.src === 'user' && readWithin(uw.at, 60000)) return;   // 방금 이 기기에서 누른 서버 옷을 받는 중 → 그것이 입혀져 올라가면 서버가 가려 준다
+    if (ofBusy()) { ofWatch(); return; }
+    var o = ofHas(w.id);
+    if (o && !o.pending) {                            // 이 기기에 있는 옷 → 바로
+      try { ofGhost = (isOpen($('kWardrobeView')) && window.KMotion && KMotion.snap) ? KMotion.snap($('kwHero')) : null; } catch (e) { ofGhost = null; }
+      if (K.setOutfit(w.id, 'remote') !== true) ofGhost = null;    // 갈아입으면 ofWear('remote') 가 마무리한다
+      return;
+    }
+    if (w.tries >= OF_TRY_MAX || readWithin(w.last, OF_TRY_GAP_MS)) return;
+    w.tries++; w.last = Date.now();
+    if (o) {                                          // 서버 옷 · 아직 못 받음 → 기존 받기 흐름(다 받으면 KChar 가 스스로 입힌다)
+      if (K.setOutfit(w.id, 'remote') === 'pending') ofWaitMark(w, true);
+      return;
+    }
+    // 옷장 목록에 안 보이는 옷 → 서버 목록을 새로 보고 옷장 사진을 받는다(꾸미기를 열 때와 같은 길)
+    var p = null; try { p = A.refresh ? A.refresh() : null; } catch (e) {}
+    Promise.resolve(p).then(function () { return A.ensureThumbs ? A.ensureThumbs() : false; }).then(function () {
+      if (ofWant !== w) return;
+      if (ofHas(w.id)) { w.tries--; w.last = 0; ofTry(); return; }
+      // 방금 새로 본 서버 목록에도, 이 앱에도 없는 옷(옛 판 · 빠진 옷) → 지금 옷 그대로 넘어간다
+      if (A.state && A.state() === 'ok' && A.knows && !A.knows(w.id)) ofResolve(w);
+    }, function () {});
+  }
+  function ofWaitMark(w, say) {                       // 받는 중 표시(꾸미기를 열어 두신 때만 — v9.10 붙은 판의 「받는 중…」과 같은 것)
+    try {
+      if (!isOpen($('kWardrobeView'))) return;
+      if (window.KWFollow && KWFollow.wait) KWFollow.wait(w.id);
+      if (say && !w.told) { w.told = true; toast(tw('다른 기기에서 고르신 옷을 받고 있습니다.'), 2600); }
+    } catch (e) {}
+  }
+  function ofWardrobeOpened() {
+    if (!ofCan()) return;
+    ofPull();
+    var uw = (ofWant && KChar.assets && KChar.assets.wantInfo) ? KChar.assets.wantInfo() : null;
+    if (uw && uw.src === 'remote' && uw.id === ofWant.id) ofWaitMark(ofWant, false);
+  }
+  function ofArrive() {                               // 다른 기기에서 고른 옷으로 갈아입었다 → 보고 계신 화면이 홈 · 꾸미기일 때만 반짝임 + 한 줄
+    var g = ofGhost; ofGhost = null;
+    var inW = isOpen($('kWardrobeView')), inH = isOpen(homeView);
+    if (document.hidden || !(inW || inH)) return;     // 채팅 · 건강 · 녹음 등 다른 화면에서는 조용히 바뀐다
+    try { if (inW && window.KMotion && KMotion.outfitSwap) KMotion.outfitSwap($('kwHero'), g); } catch (e) {}
+    try {                                             // 홈: 꾸미기에서 새 옷으로 돌아왔을 때와 같은 반짝임 한 번(움직임을 쉬는 때는 없음)
+      var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm())) ? $('kHero') : null;
+      if (hh) { KMotion.shine(hh, hh.querySelector('.kh-side')); KMotion.sparkle(hh, KMotion.cnt ? KMotion.cnt(10) : 10); }
+    } catch (e) {}
+    if (OUTFIT_SYNC_NOTE !== 'line' || readWithin(ofNoteAt, OF_NOTE_GAP_MS)) return;
+    ofNoteAt = Date.now();
+    var nm = KChar.outfit().name;
+    toast(tw('다른 기기에서 고르신 ' + nm + josaRo(nm) + ' 갈아입었습니다.'), 3200, true);
+  }
+  function ofWear(id, src, at) {                      // KChar 가 실제로 갈아입혔을 때
+    if (!ofCan()) return;
+    if (src === 'remote') {
+      var w = ofWant; if (w && w.id === id) ofResolve(w);
+      ofArrive();
+      return;
+    }
+    ofWant = null; ofGhost = null; ofStopWatch();     // 이 기기에서 직접 고름 = 가장 나중 → 기다리던 것은 접는다
+    if (!getSyncPass() || readWithin(ofMissAt, OF_RETRY_MS)) return;
+    ofLsSet(OF_UP_KEY, { id: id, at: (typeof at === 'number' && at > 0) ? at : Date.now() });
+    ofPushSoon(800, true);
+  }
+  function ofPushSoon(ms, reset) {
+    if (reset && ofPushT) { clearTimeout(ofPushT); ofPushT = 0; }
+    if (ofPushT || !ofUp() || !ofOn()) return;
+    ofPushT = setTimeout(function () { ofPushT = 0; ofPush(); }, ms || 0);
+  }
+  function ofPush() {
+    var up = ofUp(); if (!up || ofPushing || !ofOn()) return;
+    if (!ofLive) { ofPull(); return; }                // 서버가 받아 주는지 아직 모른다 → 먼저 물어본다(답이 오면 이어서 올린다)
+    if (readWithin(ofFailAt, 20000)) return;          // 방금 실패했으면 20초 쉼(다음 조회 때 다시)
+    var age = Date.now() - up.at; if (!(age >= 0)) age = 0;        // 기기 시계가 뒤로 맞춰졌으면 「방금」으로
+    if (age > OF_UP_MAX_MS) { ofLsSet(OF_UP_KEY, null); return; }
+    ofPushing = true;
+    OfficeBridge.setKOutfit(up.id, getSyncPass(), readNative() ? 'phone' : 'pc', Math.round(age)).then(function (d) {
+      ofPushing = false;
+      var now = ofUp(), same = !!(now && now.id === up.id && now.at === up.at);
+      if (same) ofLsSet(OF_UP_KEY, null);
+      if (!same) { ofPushSoon(0); return; }           // 그사이 또 바꾸셨다 → 그것을 이어서 올린다
+      if (!d || !('outfit' in d)) return;
+      var o = d.outfit, okO = !!(o && typeof o === 'object' && typeof o.id === 'string' && ofTs(o.changed_at).ok);
+      if (d.accepted === true) { if (okO) ofLsSet(OF_SEEN_KEY, { at: o.changed_at, id: o.id }); return; }
+      if (d.reason === 'bad_key') {                   // 서버가 이 옷 열쇠를 받지 않는다 → 이 기기 옷은 그대로 둔다(서버 옷으로 되돌리지 않는다)
+        if (okO) ofLsSet(OF_SEEN_KEY, { at: o.changed_at, id: o.id });
+        return;
+      }
+      ofTake(o);                                      // 'older' = 다른 기기가 더 나중에 고름 → 그 옷으로
+    }).catch(function (e) {
+      ofPushing = false;
+      if (e && e.notready) ofMissed(); else ofFailAt = Date.now();   // 끊김 · 암호 문제 등 → 올릴 것은 그대로 두고 나중에 다시
+    });
+  }
+  function ofSeed() {                                 // 서버에 아직 값이 없다 → 정해 둔 기기만 지금 옷을 올린다
+    if (ofSeeded || !ofReady || ofUp()) return;
+    if (OUTFIT_SYNC_SEED !== 'any' && !(OUTFIT_SYNC_SEED === 'phone' && readNative())) return;
+    var id = ''; try { id = KChar.outfit().id; } catch (e) {}
+    try {                                             // 골라 둔 옷이 서버 옷이라 아직 못 받아 기본 옷으로 보이는 중이면, 골라 둔 쪽을 올린다
+      var sv = localStorage.getItem('smart_k_outfit') || '';
+      if (sv && /^[a-z0-9_]{1,48}$/i.test(sv) && KChar.assets && KChar.assets.knows && KChar.assets.knows(sv)) id = sv;
+    } catch (e) {}
+    if (!id) return;
+    ofSeeded = true;
+    ofLsSet(OF_UP_KEY, { id: id, at: Date.now() });
+    ofPushSoon(0);
+  }
+  function ofGo() { ofReady = true; if (ofSrvNull) ofSeed(); ofTry(); }   // 옷장(받아 둔 서버 옷 포함)을 다 읽은 뒤부터 반영한다
+  if (ofCan()) {
+    KChar.onWear(ofWear);
+    try { (KChar.assetsReady || KChar.ready).then(ofGo, ofGo); } catch (e) { ofGo(); }
+  }
   if ($('kWardrobeView')) $('kWardrobeView').addEventListener('click', function (ev) {
     var t = ev.target;
     if (!t.closest || !window.KChar) return;
@@ -6565,8 +6787,9 @@
   /* v9.10: 안내 글이 좁은 폭(폰 390px — 안내 상자 195px)에서 낱말 중간에 꺾이지 않게 한다. 낱말 안 글자 사이에 이음 문자(U+2060)를 넣어 띄어쓰기에서만 줄이 나뉜다.
    *   한 줄에 붙여 둘 두 낱말은 글에 \u00a0(줄이 나뉘지 않는 띄어쓰기)로 적는다. .toast 스타일은 그대로다 — 이번 판에서 새로 넣거나 고친 글에만 쓴다(v9.8 의 「위\u2060쪽」과 같은 방법). */
   function tw(s) { return String(s).replace(/([^ ])(?=[^ ])/g, '$1\u2060'); }
-  function toast(msg, ms) {        // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로
+  function toast(msg, ms, wide) {  // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
     if (!toastEl) return;
+    toastEl.classList.toggle('wide', !!wide);
     toastEl.textContent = msg; toastEl.style.display = 'block';
     requestAnimationFrame(function () { toastEl.classList.add('show'); });
     if (toastTimer) clearTimeout(toastTimer);
@@ -7073,6 +7296,7 @@
     loadOfficePushes();   // 시작 시 그동안 조용히 쌓인 케이 방송을 확인(무푸시 방송은 이때 배지로 알림)
     loadChatSync();       // 시작 시, 다른 기기에서 온 대화도 한 번 확인(암호 설정돼 있을 때만)
   });
+  try { ofPull(); } catch (e) {}   // (O-0487) 케이 옷: 다른 기기에서 바꾼 것이 있으면 맞춘다(시작을 기다리게 하지 않는다 — 따로 묻는다)
   // v5.5: 보내 둔 아이디어가 있으면 조용히 한 번 확인 → PC 정리(done)된 것의 폰 원본 정리·로컬 표시 갱신
   if (loadIdeaLocal().length && getSyncPass()) refreshIdeas(true);
 
@@ -7273,6 +7497,7 @@
       loadChatSync();                              // 다른 기기(PC 등)에서 나눈 대화(암호 있을 때만)
     });
     if (anyAwaiting()) startChatReconcile();       // 보낸 질문의 답 기다리는 중이면 확인 재개
+    try { ofPull(); } catch (e) {}                 // (O-0487) 케이 옷 기기 간 맞추기(작은 조회 한 건)
   }
   function startLive() { if (liveTimer || !liveVisible()) return; liveTimer = setInterval(liveRefresh, LIVE_INTERVAL); }
   function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
