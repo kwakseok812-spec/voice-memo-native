@@ -4163,7 +4163,7 @@
     listenStop(false);                                 // 앞의 소리·기다림은 여기서 끝낸다(둘이 겹쳐 나지 않게)
     m._recAsk = !!isRecording;                         // 녹음 중에 「그래도 듣기」로 청한 것 — 준비되면 바로 틀어도 된다
     // v6.0: 「목소리」에서 이 기기 음성을 골랐으면 PC 요청 없이 바로 기기에서 읽는다(무료·즉시).
-    var dv = window.KChar && KChar.voice.active();
+    var dv = KV_DEVICE && window.KChar && KChar.voice.active();   // O-0490: 기기 음성을 뺐다(KV_DEVICE=false) — 골라 두신 저장값이 있어도 PC 가 만든 케이 목소리로 간다
     if (dv && m.text) {
       try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {}
       var st = listenSet(lid, 'play', true);
@@ -5921,6 +5921,13 @@
   var KV_CACHE_KEY = 'smart_k_voice_srv';
   var KV_MAX_ROWS = 40;                               // O-0469: 목록 줄 수(예전 6 — 「남자1…」이 더해지면 넘는다). 받은 값을 무한정 그리지 않게 넉넉한 상한만 둔다
   var KV_PICK_FOLLOW = true;                          // O-0469: 바꾸는 중에 다른 줄을 누르면 「마지막에 누른 줄」로 따라간다(false = 예전처럼 「앞의 바꾸기가 끝난 뒤에」 안내)
+  /* O-0490 (2026-10-13) 케이 목소리 고르는 자리를 「케이 무대」 화면으로 — 아래 「O-0490」 블록(kvStage…) · js/k-voice-stage.js · css/k-voice-stage.css
+   *   KV_UI      'stage' = 꾸미기 「설정」에는 한 줄(지금 목소리)만 두고, 누르면 무대 화면이 열린다 · 'list' = v9.10 의 줄 목록 그대로
+   *   KV_WARM    예시 소리 미리 받기 — 'open' = 목소리를 고르는 자리가 실제로 보일 때만(무대 화면을 열었을 때 · 목록 방식이면 「설정」 탭) 두 개씩 차례로
+   *              'all' = v9.10 그대로(꾸미기를 열면 곧바로 전부 한꺼번에) · 'tap' = 미리 받지 않는다(누를 때 그 주소로 바로 튼다)
+   *   KV_DEVICE  기기 음성(「이 폰이 · 이 기기가 직접 읽기」) — false = 그 줄을 그리지 않고 [듣기]도 기기 음성으로 가지 않는다(2026-10-13 확정 「기기 음성은 빼」).
+   *              골라 두신 저장값(smart_k_voice)은 지우지 않고 무시한다 → true 로 되돌리면 예전에 고른 음성이 그대로 살아난다. k-character.js 의 기기 음성 코드는 그대로 둔다. */
+  var KV_UI = 'stage', KV_WARM = 'open', KV_DEVICE = false;
   var kvPending = null;                               // { key, id, tok, t0, note, timer }
   var kvNext = '';                                    // 바꾸는 중에 누른 다음 줄(앞의 바꾸기가 끝나면 이어서 청한다)
   var kvJust = '';                                    // 방금 확정된 줄(동그라미가 톡 들어오는 움직임 한 번)
@@ -5950,11 +5957,14 @@
     v.list.slice(0, KV_MAX_ROWS).forEach(function (r) {
       if (!r || typeof r.k !== 'string' || !/^[a-z0-9_]{1,24}$/.test(r.k) || seen[r.k]) return;
       seen[r.k] = 1;
-      list.push({ k: r.k, name: kvText(r.name || r.k, 12), desc: kvText(r.desc, 60), ok: r.ok !== false, why: kvText(r.why, 40), sample: kvSampleUrl(r.sample) });   // O-0469: 설명은 PC 가 준 대로(PC 상한 30자 — 앱에서 또 자르지 않게 넉넉히) · 견본 주소
+      list.push({ k: r.k, name: kvText(r.name || r.k, 12), desc: kvText(r.desc, 60), ok: r.ok !== false, why: kvText(r.why, 40), sample: kvSampleUrl(r.sample),
+        kind: (r.kind === 'fast' || r.kind === 'slow') ? r.kind : '', self: r.tag === 'self' });   // O-0490: kind = 빠름/느림(없으면 '' → 중립 모양) · tag 'self' = 본인 목소리(무대 화면이 쓴다)
+        // O-0469: 설명은 PC 가 준 대로(PC 상한 30자 — 앱에서 또 자르지 않게 넉넉히) · 견본 주소
     });
     if (!list.length) return null;
     var chosen = (typeof v.chosen === 'string' && seen[v.chosen]) ? v.chosen : list[0].k;
     return { chosen: chosen, list: list, scope: kvText(v.scope, 60), limit: kvText(v.limit, 60), note: kvText(v.note, 60),
+      say: kvText(v.sample_text, 40), ai: kvText(v.ai, 30),   // O-0490: 예시가 읽는 문장 · (PC 가 줄 때만) 「AI 음성」 표시 글
       fb: Math.max(0, Math.min(999, parseInt(v.fb, 10) || 0)), wait: Math.max(0, Math.min(KV_WAIT_MAX_S, parseInt(v.wait, 10) || 0)) };
   }
   function kvCacheGet() { try { return kvBlockOf({ voice: JSON.parse(localStorage.getItem(KV_CACHE_KEY) || 'null') }); } catch (e) { return null; } }
@@ -5983,6 +5993,7 @@
   }
   /* 설정 화면이 열려 있을 때 견본을 미리 받아 둔다(줄마다 수십 KB · 한 번만) → 누르는 순간 바로 난다. 못 받아도 누를 때 주소로 다시 시도한다. */
   function kvPvWarm(blk) {
+    if (KV_WARM !== 'all') { kvWarmGo(blk); return; }      // O-0490: 보일 때만 · 두 개씩(아래 「O-0490」 블록). 'all' 이면 아래 v9.10 그대로
     if (!window.fetch || !window.URL || !URL.createObjectURL) return;
     blk.list.forEach(function (r) {
       var u = r.sample; if (!u || kvPvBlob[u]) return;
@@ -5999,7 +6010,7 @@
     var st = kvPick(key);                              // 고르기는 예전 그대로(이미 고른 줄이면 아무 일도 없다)
     if (!row.sample) {                                 // 견본이 아직 없다 — 줄에 「견본 준비 중」이 적혀 있다. 아무 반응이 없어 보이지 않게, 고르기도 일어나지 않은 누름에는 한마디
       if (kvPvStop()) renderKVoices();
-      if (st === 'same') toast(tw('이 목소리의 예시는 준비 중입니다.'), 2200);
+      if (st === 'same' && !kvStageOn()) toast(tw('이 목소리의 예시는 준비 중입니다.'), 2200);   // O-0490: 무대 화면에서는 케이 카드가 알린다
       return;
     }
     recSoundGuard(function () { kvPvPlay(key, row.sample); });   // v9.8: 회의 녹음 중에는 한 번 확인(고르기는 소리가 없어 그대로 된다)
@@ -6013,7 +6024,7 @@
     function end(fail) {
       if (my !== kvPvSeq) return;                      // 멈췄거나 다른 줄로 넘어간 뒤에 온 알림
       kvPvSeq++; kvPvKey = '';
-      if (fail) { kvPvBad = key; toast(tw('예시만 못\u00a0받았습니다. 고르기는 됩니다.'), 3000); }
+      if (fail) { kvPvBad = key; if (!kvStageOn()) toast(tw('예시만 못\u00a0받았습니다. 고르기는 됩니다.'), 3000); }   // O-0490: 무대 화면에서는 안내 한 줄 자리에 적는다
       if (isOpen($('kWardrobeView'))) renderKVoices();
     }
     try {
@@ -6041,7 +6052,7 @@
       kvHold = { key: p.key, until: Date.now() + KV_HOLD_MS };   // 곧 읽을 상태 알림이 옛 값을 주더라도 이 값을 보인다
       kvJust = p.key; setTimeout(function () { if (kvJust === p.key) kvJust = ''; }, 600);
       // O-0469: 「여자1(으)로」가 되지 않게 조사를 피한다. 「다음에 읽을 때부터 이 목소리」는 브리핑 전용 줄에서는 사실이 아니라 뺐다(어디서 나오는지는 그 줄 설명과 바로 아래 안내가 말한다)
-      if (!kvNext || kvNext === p.key) toast(tw('「' + nm + '」 목소리로 바꿨습니다.'), 2600);
+      if ((!kvNext || kvNext === p.key) && !kvStageOn()) toast(tw('「' + nm + '」 목소리로 바꿨습니다.'), 2600);   // O-0490: 무대 화면에서는 「지금 목소리」 자리에 「바꿨습니다 ✓」
     } else if (ok === false) {
       var whyTx = why ? kvText(why, 40) : '다시 눌러\u00a0주십시오.';      // PC 가 사유를 주면 그 글(40자까지)
       toast(tw('바꾸지 못했습니다. ' + whyTx), 2800);
@@ -6103,11 +6114,12 @@
   }
   function renderKVoices() {
     var box = $('kwVoices'); if (!box || !window.KChar) return;
-    var V = KChar.voice, pref = V.pref(), vs = V.list();
-    var act = V.active();                             // 고른 기기 음성이 지금 없으면 기본으로 표시
+    if (KV_UI === 'stage') { kvStageRow(box); return; }   // O-0490: 「설정」에는 한 줄만 — 줄 목록(아래)은 KV_UI='list' 일 때 쓴다
+    var V = KChar.voice, pref = KV_DEVICE ? V.pref() : '', vs = KV_DEVICE ? V.list() : [];   // O-0490: 기기 음성을 뺐으면 그 줄들을 그리지 않는다
+    var act = KV_DEVICE ? V.active() : null;          // 고른 기기 음성이 지금 없으면 기본으로 표시
     var cur = kvCurrent(), hd = $('kwVoiceHd'), hs = $('kwVoiceSub');
     if (hd) hd.textContent = cur ? '케이 목소리' : '목소리';
-    if (hs) hs.textContent = cur ? '모든 기기에 함께 적용' : '무료 음성만 씁니다';
+    if (hs) hs.textContent = cur ? '모든 기기에 함께 적용' : (KV_DEVICE ? '무료 음성만 씁니다' : '');
     box.classList.toggle('kv', !!cur);
     box.classList.toggle('calm', !!(KChar.motionOn && !KChar.motionOn()));   // 「케이 얼굴 움직이기」를 끄셨으면 돌거나 튀지 않게(CSS .calm)
     if (cur) {
@@ -6156,8 +6168,7 @@
     // O-0469: 목록이 없을 때도 사실대로 — 연동 암호가 없으면 아래 한 줄이 말하고, 있으면 이 줄의 설명 자리에 적는다(줄을 더하지 않는다 → 「설정」 세 묶음이 한 화면에 들어오던 높이 그대로)
     // v9.10: 「불러오지 못했습니다」는 실제로 못 받아 왔을 때만. PC 가 목록 칸을 주지 않는 경우(스위치 꺼짐 · 옛 PC · 서버 함수 없음)는 고장이 아니므로 예전 글 그대로.
     //   가르는 법: 상태는 받았는데 voice 칸이 아예 없다 = PC 가 주지 않음 / voice 칸은 왔는데 쓸 수 없는 모양이다 · 읽기에 실패했다 = 못 받아 옴 / 아직 한 번도 못 읽었다 = 불러오는 중
-    var kvNone = !getSyncPass() || kStatMissing || (!!kStatData && (kStatData.voice === undefined || kStatData.voice === null));
-    var noList = kvNone ? 'PC에서 만들어 보냅니다' : ((kStatData || kStatErr) ? '목소리 목록을 불러오지 못했습니다' : '목소리 목록을 불러오는 중입니다');
+    var noList = kvNoListText();                        // O-0490: 무대 방식의 한 줄도 같은 글을 쓴다(아래 「O-0490」 블록으로 옮김 — 글·가르는 법은 그대로)
     var rows = ['<button type="button" class="kw-voice' + (!act ? ' on' : '') + '" data-voice="">' +
       '<span class="rd"></span><span class="tx"><b>케이 기본 목소리</b><small>' + noList + '</small></span></button>'];
     vs.forEach(function (v) {
@@ -6166,12 +6177,101 @@
         '<span class="rd"></span><span class="tx"><b>' + esc(v.name) + '</b><small>이 기기 음성' + (V.isFemaleGuess(v) ? ' · 여성' : '') + ' · 바로 읽습니다</small></span>' +
         '<button type="button" class="try" data-try="' + esc(v.name) + '">미리 듣기</button></div>');
     });
-    if (!V.supported()) rows.push('<div class="kw-vnote">이 기기(앱)는 내장 음성을 지원하지 않아 케이 기본 목소리만 쓸 수 있습니다.</div>');
+    if (!KV_DEVICE) { /* O-0490: 기기 음성을 뺐다 — 「내장 음성」 안내도 하지 않는다 */ }
+    else if (!V.supported()) rows.push('<div class="kw-vnote">이 기기(앱)는 내장 음성을 지원하지 않아 케이 기본 목소리만 쓸 수 있습니다.</div>');
     else if (!vs.length) rows.push('<div class="kw-vnote">이 기기에 한국어 내장 음성이 없어 케이 기본 목소리만 쓸 수 있습니다.</div>');
     else if (pref && !act) rows.push('<div class="kw-vnote">골라 두신 기기 음성(' + esc(pref) + ')을 찾지 못해 기본 목소리로 읽습니다.</div>');
     if (!getSyncPass()) rows.push('<div class="kw-vnote">연동 암호가 없어 케이 목소리 설정을 PC에서 받아 오지 못했습니다.</div>');   // v9.7: 사실만(넣으면 받아 온다 · PC 에서 꺼 두었으면 그대로)
     box.innerHTML = rows.join('');
   }
+  /* ==================== O-0490 케이 목소리 「케이 무대」 ====================
+   * 꾸미기 「설정」의 케이 목소리 자리에는 한 줄(지금 목소리 ›)만 그리고, 누르면 무대 화면(js/k-voice-stage.js)이 열린다. 같은 일을 하는 길은 이 한 줄뿐이다.
+   * 고르기 · 예시 소리 · 녹음 중 확인 · 연달아 누르기는 위의 예전 함수(kvTap · kvPick · kvPvPlay · recSoundGuard)를 그대로 쓴다 — 무대 화면은 그리기만 한다.
+   * 무대 화면이 열려 있는 동안에도 꾸미기 화면은 그 밑에 열려 있다 → 「꾸미기가 열려 있으면 renderKVoices」로 걸어 둔 예전 갱신 길(PC 상태 30초 조회 · 바꾸기 결과 · 예시 끝남)이
+   *   그대로 이 화면까지 온다(renderKVoices → kvStageRow → KVStage.paint). 다른 기기에서 목소리를 바꾸면 그 조회로 이 화면에도 반영된다. */
+  function kvStageOn() { return KV_UI === 'stage' && !!window.KVStage && KVStage.isOpen(); }
+  /* 목록이 없을 때 그 자리에 적는 글(v9.10 그대로): 「불러오지 못했습니다」는 실제로 못 받아 왔을 때만.
+   *   상태는 받았는데 voice 칸이 아예 없다 = PC 가 주지 않음(스위치 꺼짐 · 옛 PC · 서버 함수 없음 · 연동 암호 없음) / 칸은 왔는데 쓸 수 없는 모양 · 읽기 실패 = 못 받아 옴 / 아직 한 번도 못 읽음 = 불러오는 중 */
+  function kvNoListText() {
+    var kvNone = !getSyncPass() || kStatMissing || (!!kStatData && (kStatData.voice === undefined || kStatData.voice === null));
+    return kvNone ? 'PC에서 만들어 보냅니다' : ((kStatData || kStatErr) ? '목소리 목록을 불러오지 못했습니다' : '목소리 목록을 불러오는 중입니다');
+  }
+  /* 예시 소리 미리 받기(KV_WARM='open'): 목소리를 고르는 자리가 실제로 보일 때만, 두 개씩 차례로.
+   *   v9.10 은 꾸미기를 여는 순간(옷만 갈아입으러 와도) 목록의 예시를 전부 한꺼번에 받았다(24개면 약 290KB · 24개 동시).
+   *   받는 순서 = 지금 고른 목소리 → 같은 묶음(여자/남자) → 다른 묶음. 자리를 떠나면 새로 받기를 멈춘다(받던 것은 마저 받는다 · 다시 열면 남은 것부터).
+   *   받아 둔 것은 kvPvBlob 에 남는다(앱을 켠 동안 주소마다 한 번). 아직 못 받은 번호를 누르면 예전처럼 그 주소로 바로 튼다. */
+  var kvWarmQ = [], kvWarmBusy = 0, KV_WARM_AT_ONCE = 2;
+  function kvGroupOf(name) { var m = /^(.*?)\s*\d+$/.exec(name || ''); return m ? m[1].trim() : ''; }
+  function kvWarmWant() {
+    if (KV_WARM !== 'open') return false;
+    if (KV_UI === 'stage') return kvStageOn();
+    return kwSetOpen();                                 // 목록 방식: 「설정」 탭이 보일 때
+  }
+  function kvWarmGo(blk) {
+    if (!kvWarmWant() || !window.fetch || !window.URL || !URL.createObjectURL) return;
+    var ch = kvRow(blk, blk.chosen), g = ch ? kvGroupOf(ch.name) : '', a = [], b = [], c = [];
+    blk.list.forEach(function (r) {
+      if (!r.sample || kvPvBlob[r.sample]) return;
+      (r.k === blk.chosen ? a : (kvGroupOf(r.name) === g ? b : c)).push(r.sample);
+    });
+    kvWarmQ = a.concat(b, c);
+    kvWarmPump();
+  }
+  function kvWarmPump() {
+    while (kvWarmBusy < KV_WARM_AT_ONCE && kvWarmQ.length) {
+      if (!kvWarmWant()) { kvWarmQ = []; return; }
+      var u = kvWarmQ.shift();
+      if (!kvPvBlob[u]) kvWarmOne(u);
+    }
+  }
+  function kvWarmOne(u) {
+    kvPvBlob[u] = 'x'; kvWarmBusy++;
+    var done = function () { kvWarmBusy--; kvWarmPump(); };
+    fetch(u).then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.blob(); })
+      .then(function (b) { kvPvBlob[u] = (b && b.size > 300 && /^audio\//.test(b.type || '')) ? URL.createObjectURL(b) : 'f'; })
+      .catch(function () { kvPvBlob[u] = 'f'; }).then(done, done);
+  }
+  /* 「설정」의 한 줄: 「여자1 [빠름] ›」 — 누르면 무대 화면. 목록이 없으면(연동 암호 없음 · PC 가 주지 않음 · 못 받아 옴 · 불러오는 중) 그 사실을 적고, 눌러도 열리지 않는다. */
+  var kvRowHtml = null;
+  function kvStageRow(box) {
+    var cur = kvCurrent(), hd = $('kwVoiceHd'), hs = $('kwVoiceSub'), html;
+    if (hd) hd.textContent = '케이 목소리';
+    if (hs) hs.textContent = cur ? '모든 기기에 함께 적용' : '';
+    box.classList.remove('kv');
+    box.classList.toggle('calm', !!(KChar.motionOn && !KChar.motionOn()));
+    if (cur) {
+      var blk = cur.blk, row = kvRow(blk, blk.chosen) || blk.list[0];
+      var pendKey = kvNext || (kvPending ? kvPending.key : ''), pendRow = pendKey ? kvRow(blk, pendKey) : null;   // 확정 전에는 이름을 옮기지 않는다(바뀌었다 되돌아오는 일이 없게)
+      var bad = !row.ok && !pendRow;
+      var sub = pendRow ? (pendRow.name + ' 목소리로 바꾸는 중…') : (bad ? '지금은 쓸 수 없습니다 — ' + (row.why || '잠시 쉬는 중입니다') : '누르면 ' + blk.list.length + '개 목소리에서 고릅니다');
+      html = '<button type="button" class="card toggle kw-motion kv-open' + (pendRow ? ' pend' : '') + '" data-kvopen aria-label="케이 목소리 고르기 — 지금 ' + esc(row.name) + '">' +
+        '<span><b><span class="kv-open-nm">' + esc(row.name) + '</span>' + KVStage.spdHtml(row.kind) + (row.self ? '<span class="kv-spd own">대표님 목소리</span>' : '') + '</b>' +
+        '<small' + (bad ? ' class="warn"' : '') + '>' + esc(sub) + '</small></span><svg class="chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>';
+      kvPvWarm(blk);
+    } else {
+      html = '<div class="card toggle kw-motion kv-open none"><span><b>케이 기본 목소리</b><small>' + kvNoListText() + '</small></span></div>' +
+        (!getSyncPass() ? '<div class="kw-vnote">연동 암호가 없어 케이 목소리 설정을 PC에서 받아 오지 못했습니다.</div>' : '');
+    }
+    if (html !== kvRowHtml || !box.firstChild) { box.innerHTML = html; kvRowHtml = html; }   // 같은 모습이면 다시 그리지 않는다(누르는 중인 단추가 바뀌지 않게)
+    try { KVStage.paint(); } catch (e) {}
+  }
+  function kvStageState() {                              // 무대 화면이 그릴 때 읽는 값(그 화면은 이 값만 보고 그린다)
+    var pendKey = kvNext || (kvPending ? kvPending.key : '');
+    return { cur: kvCurrent(), pendKey: pendKey, pendNote: (kvPending && kvPending.key === pendKey) ? kvPending.note : '', pvKey: kvPvKey, pvBad: kvPvBad, just: kvJust };
+  }
+  if (KV_UI === 'stage' && window.KVStage) {
+    KVStage.init({
+      state: kvStageState,
+      tap: function (k) { kvTap(k); },                   // 고르기 + 예시(녹음 중이면 한 번 확인 — recSoundGuard · 고르기는 소리가 없어 그대로 된다)
+      stop: function () { kvPvStop(); },                 // 화면을 떠날 때 예시 소리 멈춤
+      opened: function () { try { refreshKStat(false); } catch (e) {} var c = kvCurrent(); if (c) kvPvWarm(c.blk); },
+      closed: function () { kvWarmQ = []; try { renderKVoices(); } catch (e) {} }
+    });
+    if ($('kwVoices')) $('kwVoices').addEventListener('click', function (ev) {
+      var o = (ev.target && ev.target.closest) ? ev.target.closest('[data-kvopen]') : null;
+      if (o) KVStage.open();
+    });
+  } else if (KV_UI === 'stage') KV_UI = 'list';           // 무대 파일이 없으면(읽기 실패) 줄 목록으로 — 목소리를 고를 길이 사라지지 않게
   if (window.KChar) {
     KChar.voice.onVoices(function () { if (isOpen($('kWardrobeView'))) renderKVoices(); });
     KChar.onChange(function () { if (isOpen($('kWardrobeView'))) renderKWardrobe(); });
@@ -6833,6 +6933,7 @@
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
     if (isOpen(modal)) { closeModal(); return true; }
+    if (window.KVStage && KVStage.isOpen()) { KVStage.close(); return true; }   // O-0490: 케이 목소리 무대 화면 → 꾸미기 「설정」으로(예시 소리도 멈춘다)
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
