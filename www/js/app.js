@@ -6244,12 +6244,12 @@
       var pendKey = kvNext || (kvPending ? kvPending.key : ''), pendRow = pendKey ? kvRow(blk, pendKey) : null;   // 확정 전에는 이름을 옮기지 않는다(바뀌었다 되돌아오는 일이 없게)
       var bad = !row.ok && !pendRow;
       var sub = pendRow ? (pendRow.name + ' 목소리로 바꾸는 중…') : (bad ? '지금은 쓸 수 없습니다 — ' + (row.why || '잠시 쉬는 중입니다') : '누르면 ' + blk.list.length + '개 목소리에서 고릅니다');
-      html = '<button type="button" class="card toggle kw-motion kv-open' + (pendRow ? ' pend' : '') + '" data-kvopen aria-label="케이 목소리 고르기 — 지금 ' + esc(row.name) + '">' +
-        '<span><b><span class="kv-open-nm">' + esc(row.name) + '</span>' + KVStage.spdHtml(row.kind) + (row.self ? '<span class="kv-spd own">대표님 목소리</span>' : '') + '</b>' +
+      html = '<button type="button" class="card toggle kv-open' + (pendRow ? ' pend' : '') + '" data-kvopen aria-label="케이 목소리 고르기 — 지금 ' + esc(row.name) + '">' +
+        '<span><b><span class="kv-open-nm">' + esc(row.name) + '</span>' + KVStage.spdHtml(row.kind) + (row.self ? KVStage.ownHtml(true) : '') + '</b>' +
         '<small' + (bad ? ' class="warn"' : '') + '>' + esc(sub) + '</small></span><svg class="chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>';
       kvPvWarm(blk);
     } else {
-      html = '<div class="card toggle kw-motion kv-open none"><span><b>케이 기본 목소리</b><small>' + kvNoListText() + '</small></span></div>' +
+      html = '<div class="card toggle kv-open none"><span><b>케이 기본 목소리</b><small>' + kvNoListText() + '</small></span></div>' +
         (!getSyncPass() ? '<div class="kw-vnote">연동 암호가 없어 케이 목소리 설정을 PC에서 받아 오지 못했습니다.</div>' : '');
     }
     if (html !== kvRowHtml || !box.firstChild) { box.innerHTML = html; kvRowHtml = html; }   // 같은 모습이면 다시 그리지 않는다(누르는 중인 단추가 바뀌지 않게)

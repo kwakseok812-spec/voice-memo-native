@@ -21,6 +21,7 @@
   var HOW = '번호를 누르면 예시를 들려 드리고 그 목소리로 바꿉니다. 다시 누르면 멈춥니다.';
   var AI = '모두 자비스 AI 음성입니다';
   var SAY = '안녕하세요, 케이입니다.';
+  var OWN = '대표님';                        // 본인 목소리(tag self) 꼬리표에 적는 화면 글 — 이 한 곳에서만 정한다(번호판 · 카드 · 설정의 한 줄이 함께 쓴다)
   var PADS = ['여자', '남자'], SLOTS = 12, MAX_N = 36;   // 늘 그리는 두 판 · 판마다 자리 수(더 큰 번호가 오면 그만큼 늘어난다 · 36번까지 — 그 위는 「그 밖」 판)
   var OK_MS = 1500, HINT_MS = 2200, WHY_MS = 3200;
 
@@ -41,6 +42,8 @@
     if (kind !== 'fast' && kind !== 'slow') return '';
     return '<span class="kv-spd ' + kind + '">' + glyph(kind === 'fast' ? 'bolt' : 'clock') + (kind === 'fast' ? '빠름' : '느림') + '</span>';
   }
+
+  function ownHtml(long) { return '<span class="kv-spd own">' + OWN + (long ? ' 목소리' : '') + '</span>'; }   // 본인 목소리 꼬리표(설정의 한 줄은 「… 목소리」까지)
 
   /* ---- 목록 → 판 ---- */
   function parse(name) { var m = /^(.*?)\s*(\d{1,2})$/.exec(String(name || '')); return (m && m[1].trim() && +m[2] >= 1) ? { g: m[1].trim(), n: +m[2] } : null; }
@@ -63,7 +66,7 @@
       (kind ? glyph(kind === 'fast' ? 'bolt' : 'clock', 'kvc-g') : '') + glyph('stop', 'kvc-sp') +
       (r.sample ? '' : glyph('mute', 'kvc-x')) +
       '<span class="kvc-eq" aria-hidden="true"><i></i><i></i><i></i></span>' +
-      (r.self ? '<span class="kvc-own">대표님</span>' : '') + '</button>';
+      (r.self ? '<span class="kvc-own">' + OWN + '</span>' : '') + '</button>';
   }
   function padsHtml(pads) {
     return pads.map(function (p) {
@@ -117,7 +120,7 @@
     if (view && window.MutationObserver) {
       try { new MutationObserver(function () { if (shown && view.style.display === 'none') close(true); }).observe(view, { attributes: true, attributeFilter: ['style'] }); } catch (e) {}
     }
-    document.addEventListener('visibilitychange', function () { if (document.hidden && shown && api) { try { api.stop(); } catch (e) {} } });   // 앱이 뒤로 가면 예시 소리를 멈춘다
+    document.addEventListener('visibilitychange', function () { if (document.hidden && shown && api) { try { api.stop(); } catch (e) {} paint(); } });   // 앱이 뒤로 가면 예시 소리를 멈춘다
     return true;
   }
   function paintFig() {
@@ -148,7 +151,7 @@
       b.classList.toggle('just', k === st.just && !calm());
       b.classList.toggle('bad', !r.ok && !on && !pend);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      b.setAttribute('aria-label', r.name + (r.self ? ' · 대표님 목소리' : '') + (r.kind === 'fast' ? ' · 빠름' : (r.kind === 'slow' ? ' · 느림' : '')) +
+      b.setAttribute('aria-label', r.name + (r.self ? ' · ' + OWN + ' 목소리' : '') + (r.kind === 'fast' ? ' · 빠름' : (r.kind === 'slow' ? ' · 느림' : '')) +
         (r.ok ? '' : ' · 지금은 쓸 수 없습니다') + (r.sample ? '' : ' · 예시 준비 중') + (pend ? ' · 바꾸는 중' : '') + (pv ? ' · 예시를 들려 드리는 중 · 누르면 멈춥니다' : ''));
     });
     // 방금 확정됐다 → 「지금 목소리」 자리에 1.5초 동안 「바꿨습니다 ✓」(아래쪽 알림 글은 번호판을 가려서 쓰지 않는다)
@@ -163,7 +166,7 @@
     el.lb.textContent = st.pendKey ? (st.pendNote || '바꾸는 중…') : (okOn ? '바꿨습니다 ✓' : '지금 목소리');
     el.lb.classList.toggle('pend', !!st.pendKey); el.lb.classList.toggle('ok', !st.pendKey && okOn);
     if (el.nm.textContent !== sv.name) el.nm.textContent = sv.name;
-    el.tags.innerHTML = spdHtml(sv.kind) + (sv.self ? '<span class="kv-spd own">대표님</span>' : '');   // 번호판의 꼬리표와 같은 낱말(카드 폭에 한 줄로 들어가게)
+    el.tags.innerHTML = spdHtml(sv.kind) + (sv.self ? ownHtml(false) : '');   // 번호판의 꼬리표와 같은 낱말(카드 폭에 한 줄로 들어가게)
     if (changed) { retrig(el.card, 'swap'); retrig(el.nm, 'swap'); }
     var pvRow = st.pvKey ? rowOf(blk, st.pvKey) : null, say = blk.say || SAY, sayHtml;
     if (hint && hint.ghost) sayHtml = esc(hint.ghost) + ' 자리는<small>아직 준비 중입니다</small>';
@@ -262,7 +265,7 @@
 
   window.KVStage = {
     init: function (a) { api = a || null; },
-    open: open, close: close, paint: paint, spdHtml: spdHtml,
+    open: open, close: close, paint: paint, spdHtml: spdHtml, ownHtml: ownHtml,
     isOpen: function () { return shown; }
   };
 })();

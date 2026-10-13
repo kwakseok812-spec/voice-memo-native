@@ -5,7 +5,7 @@
  * 짝: js/k-voice-stage.js(화면) · js/app.js 의 「O-0490」 블록(자료 · 고르기 · 예시 소리 · 스위치 KV_UI)
  * 모양 약속(설계안 2차 판 B안):
  *   빠름 = 동그란 모양 + 청록 + 번개 / 느림 = 모서리 둥근 네모 + 주황 + 시계 / 빠르기를 모르는 줄 = 회색 둥근 네모
- *   고른 목소리 = 보랏빛으로 채움 / 대표님 본인 목소리 = 금색 테두리 + 「대표님」 꼬리표(11px — 이 화면에서 12px 보다 작은 글자는 이것 하나)
+ *   고른 목소리 = 보랏빛으로 채움 / 본인 목소리(tag self) = 금색 테두리 + 꼬리표(11px — 이 화면에서 12px 보다 작은 글자는 이것 하나)
  *   아직 목소리가 없는 번호 자리 = 점선 · 흐린 번호(누를 수 없는 자리)
  * 지키는 선: 흐림 효과(backdrop-filter)를 쓰지 않는다 · 누르는 자리는 44px 이상 · 움직임은 0.3초 안,
  *   「케이 얼굴 움직이기」 끔(.kvs.calm) · 폰 「움직임 줄이기」(styles.css 가 모든 움직임을 끈다)에서는 움직이지 않는다.
@@ -146,7 +146,7 @@ html[data-style="light"]{
 .kvc.pv .kvc-eq{display:flex}
 .kvc.pv .kvc-n{transform:translateY(-5px)}
 .kvc.pv:not(.on){border-color:var(--p1);color:var(--p1)}
-/* 대표님 본인 목소리 */
+/* 본인 목소리(tag self) */
 .kvc.own{border-color:var(--kv-own);border-width:2px}
 .kvc.own.on{box-shadow:0 0 0 2px var(--kv-own),var(--glow-s)}
 .kvc.own .kvc-eq{bottom:9px}
