@@ -98,7 +98,7 @@
 <div class="app">
   <!-- 상단바 -->
   <header class="topbar">
-    <div class="brand"><span class="mark"><svg><use href="#i-spark"/></svg></span>스마트비서</div>
+    <div class="brand"><span class="mark"><svg><use href="#i-spark"/></svg></span>스마트비서<span class="ver-tag" id="appVerTop" title="지금 설치된 앱 버전"></span></div>   <!-- v9.14: 버전 알약(app.js VER_SPOT · 글자 모양 styles.css .ver-tag) -->
     <div class="top-right">
       <!-- 상단 "대기 중" 상태 표시는 2026-09-20 대표님 지시로 제거(무슨 뜻인지 알기 어렵고 화면만 복잡) -->
       <!-- v8.4(O-0162) 글자 크기 4단계(작게·보통·크게·아주 크게) — 누르면 고르기 창 -->
@@ -779,6 +779,7 @@
 </div>
 
 <!-- v9.4(O-0344): 홈 바닥 안내문 2줄(「폰은 녹음만 …」 — 음성메모 앱 시절 문구)은 지금 앱과 맞지 않아 뺐다. 버전 한 줄만 남김(글자 모양은 styles.css #appVer) -->
+<!-- v9.14: 버전은 맨 위 「스마트비서」 옆 알약으로 옮겼다. 이 줄은 app.js VER_SPOT 이 'top' 이면 앱이 켜질 때 떼어 낸다('bottom' 이면 예전처럼 여기에만 나온다) -->
 <footer id="homeFooter">
   <span id="appVer"></span>
 </footer>

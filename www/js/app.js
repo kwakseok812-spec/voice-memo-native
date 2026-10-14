@@ -7627,7 +7627,14 @@
   startLive();
   if (window.SmartPush && SmartPush.init) { try { SmartPush.init(); } catch (e) {} }
   // M1: 버전 표시 — 대표님이 지금 보는 화면이 최신본인지 알 수 있게(특히 PC판 캐시 확인용)
-  try { var _av = $('appVer'); if (_av) _av.textContent = '스마트비서 ' + APP_VERSION; } catch (e) {}
+  // v9.14: 버전은 맨 위 「스마트비서」 옆 작은 알약 하나로(예: v9.14) — 홈 맨 아래 흐린 한 줄은 찾기 어려웠다. 같은 일을 하는 자리는 하나만 둔다.
+  //   VER_SPOT: 'top' = 맨 위 알약만(홈 맨 아래 줄은 떼어 냄) · 'bottom' = v9.13 처럼 홈 맨 아래 한 줄만
+  var VER_SPOT = 'top';
+  try {
+    var _av = $('appVer'), _vt = $('appVerTop');
+    if (VER_SPOT === 'bottom' || !_vt) { if (_av) _av.textContent = '스마트비서 ' + APP_VERSION; }
+    else { _vt.textContent = APP_VERSION; if (homeFooter && homeFooter.parentNode) homeFooter.parentNode.removeChild(homeFooter); }
+  } catch (e) {}
   setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 1500);   // v5.8: 시작 시 홈 「작업 현황」 숫자
 
   /* (O-0129) 홈 「오늘 한눈에」 카드(today-card.js)가 쓰는 창구 — 화면 이동·시트·초안만 넘긴다(데이터 쓰기 없음). */

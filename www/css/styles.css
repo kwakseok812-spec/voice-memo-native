@@ -70,6 +70,10 @@ section{animation:fade .28s ease}
 .brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;letter-spacing:-.2px}
 .brand .mark{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));display:grid;place-items:center;box-shadow:var(--glow-s)}
 .brand .mark svg{width:20px;height:20px;color:#fff}
+/* v9.14 맨 위 「스마트비서」 옆 버전 알약 — 제목보다 작고 옅게, 밝은·어두운 화면 모두 4.5:1 이상(글자 크기 설정과 무관하게 같은 크기 · 줄바꿈 없음) */
+.brand{white-space:nowrap;min-width:0}
+.brand .ver-tag{margin-left:-2px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.2;letter-spacing:0;color:var(--muted);background:var(--ic-bg);border:1px solid var(--glass-b);font-variant-numeric:tabular-nums;flex:none}
+.brand .ver-tag:empty{display:none}
 .top-right{display:flex;align-items:center;gap:8px}
 .pill{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-b);font-size:13px;font-weight:700;color:var(--muted);backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
 .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);flex:none}
