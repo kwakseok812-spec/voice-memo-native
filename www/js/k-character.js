@@ -593,10 +593,9 @@
       // 받는 순서: 사진(서버 옷) → 인사 영상 짝(시작 인사 · 전신 칸이 쓰는 것) → 자세 그림 → 나머지 영상. 옛 묶음의 빠진 파일은 받지 않는다.
       var order = kaNames(next, 'core').concat(lite && !opt.bow ? [] : kaNames(next, 'bow')).concat(kaNames(next, 'pose')).concat(vidsOf(next))
         .filter(function (n, i, a) { return a.indexOf(n) === i; });
-      var r0 = kaMergeSlots(id, next, true);
+      var r0 = kaMergeSlots(id, next, true);                // 기기에 없는 옛 자리는 지금 새것으로(다 그랬으면 이미 next 와 같다)
       if (r0.changed) { kaGc(); paintSome(); }
-      if (r0.full) return Promise.resolve(true);
-      return kaFetchAll(order.filter(missing), function () { var r = kaMergeSlots(id, next, false); if (r.changed) paintSome(); })   // 자리 하나가 다 받아질 때마다 그 자리만 새것으로
+      return kaFetchAll(order.filter(missing), function () { kaMergeSlots(id, next, false); paintSome(); })   // 하나 받을 때마다: 다 준비된 자리는 새것으로 + 바로 쓴다
         .then(function () {
           var r = kaMergeSlots(id, next, false);
           kaGc();                                           // 새것으로 바뀐 자리의 옛 파일을 지운다(아직 옛것인 자리의 파일은 남는다 — 다음에 다시 받아 본다)
