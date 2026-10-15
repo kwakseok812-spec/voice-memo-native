@@ -550,8 +550,9 @@
     return JSON.stringify(o);
   }
   // 기억한 묶음에 새 묶음 next 의 자리 중 「준비된 것」을 옮겨 적는다. first = 처음 부를 때(기기에 없는 옛 자리도 옮긴다).
+  //   willGet = 이번에 받을 이름들({이름: 1}) — 이번에 받지 않을 새 파일이 든 자리(데이터 절약 모드의 영상)는 예전(v9.17)처럼 바로 새것으로 적는다(옛 영상을 붙잡지 않는다).
   //   돌려주는 값 { full: next 와 같아졌다, changed: 이번에 바뀐 것이 있다 }
-  function kaMergeSlots(id, next, first) {
+  function kaMergeSlots(id, next, first, willGet) {
     var cur = ka.eff[id] || next;
     if (cur === next || JSON.stringify(cur) === JSON.stringify(next)) return { full: true, changed: false };
     var m = JSON.parse(JSON.stringify(cur)), S = window.KStore, metaKeys = {};
@@ -562,7 +563,8 @@
     kaSlotList(cur, next).forEach(function (g) {
       if (kaSlotVal(m, g) === kaSlotVal(next, g)) return;
       var nn = kaSlotNames(next, g), cn = kaSlotNames(m, g);
-      var take = !nn.length || kaReady(nn) || (first && !(cn.length && cn.every(function (n) { return S.has(n); })));
+      var take = !nn.length || kaReady(nn) || (first && !(cn.length && cn.every(function (n) { return S.has(n); })))
+        || (!!willGet && nn.some(function (n) { return !willGet[n] && !kaReady([n]); }));
       if (!take) return;
       g.f.forEach(function (k) { if (next.files && next.files[k] !== undefined) m.files[k] = JSON.parse(JSON.stringify(next.files[k])); else delete m.files[k]; });
       g.meta.forEach(function (k) { if (next[k] !== undefined) m[k] = next[k]; else delete m[k]; });
@@ -593,11 +595,12 @@
       // 받는 순서: 사진(서버 옷) → 인사 영상 짝(시작 인사 · 전신 칸이 쓰는 것) → 자세 그림 → 나머지 영상. 옛 묶음의 빠진 파일은 받지 않는다.
       var order = kaNames(next, 'core').concat(lite && !opt.bow ? [] : kaNames(next, 'bow')).concat(kaNames(next, 'pose')).concat(vidsOf(next))
         .filter(function (n, i, a) { return a.indexOf(n) === i; });
-      var r0 = kaMergeSlots(id, next, true);                // 기기에 없는 옛 자리는 지금 새것으로(다 그랬으면 이미 next 와 같다)
+      var willGet = {}; order.forEach(function (n) { willGet[n] = 1; });
+      var r0 = kaMergeSlots(id, next, true, willGet);       // 기기에 없는 옛 자리 · 이번에 받지 않을 자리는 지금 새것으로(다 그랬으면 이미 next 와 같다)
       if (r0.changed) { kaGc(); paintSome(); }
-      return kaFetchAll(order.filter(missing), function () { kaMergeSlots(id, next, false); paintSome(); })   // 하나 받을 때마다: 다 준비된 자리는 새것으로 + 바로 쓴다
+      return kaFetchAll(order.filter(missing), function () { kaMergeSlots(id, next, false, willGet); paintSome(); })   // 하나 받을 때마다: 다 준비된 자리는 새것으로 + 바로 쓴다
         .then(function () {
-          var r = kaMergeSlots(id, next, false);
+          var r = kaMergeSlots(id, next, false, willGet);
           kaGc();                                           // 새것으로 바뀐 자리의 옛 파일을 지운다(아직 옛것인 자리의 파일은 남는다 — 다음에 다시 받아 본다)
           paintSome();
           return r.full;
