@@ -1507,7 +1507,7 @@
   function editRender(v) {
     if (!editEl) return;
     var c = editCtx || {}, b = TYPE_BADGE[c.ext] || [String(c.ext || '').toUpperCase().slice(0, 4), 't-etc'];
-    var h = '<div class="dvs-title">✏️ PC에서 편집하기</div>' +
+    var h = '<div class="dvs-title">🖥️ PC에서 직접 고치기</div>' +
       '<div class="dve-file"><span class="dv-tbadge big ' + b[1] + '">' + esc(b[0]) + '</span>' +
       '<span class="dve-fname">' + esc(c.name || '문서') + '</span></div>' + editStepsHtml(v.step || 1);
     h += '<div class="dve-status ' + (v.tone || '') + '">' +
