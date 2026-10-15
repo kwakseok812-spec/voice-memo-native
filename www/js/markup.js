@@ -25,7 +25,7 @@
 
   var host = {};          // app.js: send(payload)→Promise{rid}, cancel(rid)→Promise, status(rids)→Promise{rid:{status,job_status}}, openChat()
   var R = null;           // 화면 요소 묶음
-  var S = { on: false, tool: 'pen', items: [], sent: [], sel: null, pages: [], pdf: null, d: null, memo: null, lp: null };
+  var S = { zoom: 1, on: false, tool: 'pen', items: [], sent: [], sel: null, pages: [], pdf: null, d: null, memo: null, lp: null };
 
   /* ---------------- 보관(IndexedDB) ---------------- */
   var DB = (function () {
@@ -57,7 +57,7 @@
 
   /* ---------------- 화면 만들기 ---------------- */
   var HTML =
-    '<div class="mk-top"><button class="mk-tbtn" data-a="end" aria-label="끝내기">‹</button><div class="mk-fname" id="mkName"></div><div class="mk-pgno" id="mkPg"></div></div>' +
+    '<div class="mk-top"><button class="mk-tbtn" data-a="end" aria-label="끝내기">‹</button><div class="mk-fname" id="mkName"></div><button class="mk-tbtn mk-z" data-a="zout" aria-label="작게 보기">－</button><button class="mk-tbtn mk-z" data-a="zin" aria-label="크게 보기">＋</button><div class="mk-pgno" id="mkPg"></div></div>' +
     '<div class="mk-band"><div class="mk-band-row"><div class="mk-band-title">✏️ 수정 요청</div>' +
     '<button class="mk-help" data-a="help" aria-label="사용법">? 사용법</button>' +
     '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div></div>' +
@@ -114,6 +114,8 @@
     var b = e.target.closest ? e.target.closest('[data-a]') : null; if (!b || !R.root.contains(b)) return;
     var a = b.getAttribute('data-a');
     if (a === 'end') close();
+    else if (a === 'zin') setZoom(S.zoom * 1.4);
+    else if (a === 'zout') setZoom(S.zoom / 1.4);
     else if (a === 'help') help(0);
     else if (a === 'list') { renderAll(); openSheet('mkListSheet'); }
     else if (a === 'send') trySend();
@@ -153,7 +155,7 @@
   function open(opts) {
     if (MARKUP_ON !== 'on' || !opts || !opts.pdfDoc) return false;
     build(); if (!R) return false;
-    S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null;
+    S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null; S.zoom = 1;
     $('mkName').textContent = S.d.name || '문서';
     R.root.classList.add('on');
     setTool('pen', true);
@@ -238,7 +240,7 @@
     if (!S.on || !S.pages.length) return;
     var avail = R.scroll.clientWidth - 16;
     S.pages.forEach(function (P) {
-      var wcss = Math.min(avail, 1100), sc = wcss / P.w;
+      var wcss = Math.min(avail, 1100) * (S.zoom || 1), sc = wcss / P.w;
       P.el.style.width = wcss + 'px'; P.el.style.height = (P.h * sc) + 'px';
       if (Math.abs(sc - P.scale) > 0.01) { P.scale = sc; if (P.rendered) { unrender(P); renderPage(P); } }
     });
@@ -246,12 +248,22 @@
     if (S.sel) drawSel();
     placePop();
   }
+  // 크게 · 작게(1~3배). 화면 가운데 보던 자리를 그대로 두고 다시 그린다. 펜 좌표는 PDF 단위라 그대로 맞는다.
+  function setZoom(z, ax, ay) {          // ax·ay: 고정할 화면 점(핀치 가운데 · 두 번 톡 한 곳). 없으면 화면 가운데
+    z = Math.max(1, Math.min(3, Math.round(z * 100) / 100)); if (Math.abs(z - (S.zoom || 1)) < 0.01 || !S.on) return;
+    var sc = R.scroll, rc = sc.getBoundingClientRect();
+    var ox = (ax == null ? sc.clientWidth / 2 : ax - rc.left), oy = (ay == null ? sc.clientHeight / 2 : ay - rc.top);
+    var ry = (sc.scrollTop + oy) / Math.max(1, sc.scrollHeight), rx = (sc.scrollLeft + ox) / Math.max(1, sc.scrollWidth);
+    S.zoom = z; layout();
+    sc.scrollTop = ry * sc.scrollHeight - oy; sc.scrollLeft = rx * sc.scrollWidth - ox;
+    toast(z <= 1.01 ? '폭에 맞췄어요' : Math.round(z * 100) + '%로 보고 있어요', null, null, 1200);
+  }
   function getPage(P) { if (P.page) return Promise.resolve(P.page); return S.pdf.getPage(P.n).then(function (pg) { P.page = pg; var vp = pg.getViewport({ scale: 1 }); if (Math.abs(vp.width - P.w) > 0.5 || Math.abs(vp.height - P.h) > 0.5) { P.w = vp.width; P.h = vp.height; P.svg.setAttribute('viewBox', '0 0 ' + P.w + ' ' + P.h); layout(); } return pg; }); }
   function renderPage(P) {
     if (P.rendered || P.rendering) return;
     P.rendering = true;
     getPage(P).then(function (pg) {
-      var dpr = Math.min(global.devicePixelRatio || 1, 2.5), vp = pg.getViewport({ scale: P.scale * dpr });
+      var dpr = Math.min(global.devicePixelRatio || 1, 2.5, 4 / (S.zoom || 1)), vp = pg.getViewport({ scale: P.scale * dpr });
       var cv = doc.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
       P.el.insertBefore(cv, P.svg); P.cv = cv;
       return pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function () { P.rendered = true; P.rendering = false; });
@@ -379,7 +391,7 @@
       var n = Object.keys(ptrs).length, P = pageAt(ev.clientX, ev.clientY);
       S.lp = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, P: P, t: setTimeout(onLong, LP_MS) };
       if (S.tool === 'pen') {
-        if (n >= 2) { cancelStroke(); pan = { y: avgY() }; cancelLP(); return; }
+        if (n >= 2) { cancelStroke(); pan = { y: avgY(), x: avgX() }; cancelLP(); return; }
         if (!P) return;
         ev.preventDefault();
         try { sc.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -390,7 +402,7 @@
       if (!ptrs[ev.pointerId]) return;
       ptrs[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
       if (S.lp && S.lp.id === ev.pointerId && Math.hypot(ev.clientX - S.lp.x, ev.clientY - S.lp.y) > TOL) cancelLP();
-      if (pan) { var y = avgY(); sc.scrollTop -= (y - pan.y); pan.y = y; return; }
+      if (pan) { var y = avgY(), x = avgX(); sc.scrollTop -= (y - pan.y); sc.scrollLeft -= (x - pan.x); pan.y = y; pan.x = x; return; }
       if (stroke && stroke.id === ev.pointerId) addPoint(ev.clientX, ev.clientY);
     });
     function end(ev) {
@@ -402,7 +414,40 @@
     }
     sc.addEventListener('pointerup', end); sc.addEventListener('pointercancel', end);
     sc.addEventListener('touchmove', function (e) { if (S.on && S.tool === 'pen' && e.touches.length === 1) e.preventDefault(); }, { passive: false });
+    // 두 손가락 벌리기·오므리기 = 크게·작게(펜·손 둘 다). 움직이는 동안은 그림만 늘였다 줄이고, 손을 떼면 그 배율로 다시 그린다.
+    var pinch = null;
+    function tdist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    sc.addEventListener('touchstart', function (e) {
+      if (!S.on || e.touches.length !== 2) return;
+      var rc = sc.getBoundingClientRect(), cx = (e.touches[0].clientX + e.touches[1].clientX) / 2, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      pinch = { d0: tdist(e.touches), z0: S.zoom || 1, cx: cx, cy: cy, k: 1 };
+      sc.style.transformOrigin = (cx - rc.left) + 'px ' + (cy - rc.top) + 'px';
+    }, { passive: true });
+    sc.addEventListener('touchmove', function (e) {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      var k = tdist(e.touches) / Math.max(1, pinch.d0), z = Math.max(1, Math.min(3, pinch.z0 * k));
+      pinch.k = z / pinch.z0;
+      if (Math.abs(pinch.k - 1) > 0.04) { pan = null; sc.style.transform = 'scale(' + pinch.k.toFixed(3) + ')'; }
+    }, { passive: false });
+    function pinchEnd(e) {
+      if (!pinch || (e.touches && e.touches.length >= 2)) return;
+      var p = pinch; pinch = null; sc.style.transform = ''; sc.style.transformOrigin = '';
+      if (Math.abs(p.k - 1) > 0.04) setZoom(p.z0 * p.k, p.cx, p.cy);
+    }
+    sc.addEventListener('touchend', pinchEnd); sc.addEventListener('touchcancel', pinchEnd);
+    // 손 상태에서 두 번 톡 = 크게(2배) ↔ 폭 맞춤. 펜 상태에서는 꺼 둔다(실수 방지).
+    var lastTap = null;
+    sc.addEventListener('pointerup', function (ev) {
+      if (!S.on || S.tool !== 'hand' || ev.pointerType === 'mouse') return;
+      var now = Date.now();
+      if (lastTap && now - lastTap.t < 320 && Math.hypot(ev.clientX - lastTap.x, ev.clientY - lastTap.y) < 28) {
+        lastTap = null; setZoom((S.zoom || 1) > 1.2 ? 1 : 2, ev.clientX, ev.clientY); return;
+      }
+      lastTap = { t: now, x: ev.clientX, y: ev.clientY };
+    });
   }
+  function avgX() { var k = Object.keys(ptrs), s = 0; k.forEach(function (i) { s += ptrs[i].x; }); return s / Math.max(1, k.length); }
   function avgY() { var k = Object.keys(ptrs), s = 0; k.forEach(function (i) { s += ptrs[i].y; }); return s / Math.max(1, k.length); }
   function cancelLP() { if (S.lp) { clearTimeout(S.lp.t); S.lp = null; } }
   function onLong() {
@@ -809,7 +854,7 @@
       '<rect x="20" y="10" width="140" height="150" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="34" y="28" width="110" height="7" rx="3"/><rect x="34" y="44" width="90" height="7" rx="3"/><rect x="34" y="60" width="100" height="7" rx="3"/></g>' +
       '<rect x="26" y="126" width="72" height="24" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="62" y="142" font-size="11" font-weight="800" text-anchor="middle" fill="var(--ink)">✏️ 고치기</text>' +
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
-    { t: '펜과 손', h: '펜: 한 손가락으로 그려요 · 손: 넘겨 봐요', d: '위 띠의 [펜 | 손]으로 바꿔요. 펜일 때 넘기려면 두 손가락으로 밀어요.', svg:
+    { t: '펜과 손', h: '펜: 한 손가락으로 그려요 · 손: 넘겨 봐요', d: '위 띠의 [펜 | 손]으로 바꿔요. 펜일 때 넘기려면 두 손가락으로 밀어요. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿔요.', svg:
       '<rect x="60" y="40" width="180" height="70" rx="16" fill="var(--card)" stroke="var(--mk-red-line)" stroke-width="3"/><rect x="66" y="46" width="82" height="58" rx="12" fill="var(--mk-red)"/><text x="107" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">펜</text><text x="194" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="var(--sub)">손</text>' +
       '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보여요</text>' },
     { t: '표시하기', h: '동그라미 · 밑줄 · 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나와요.', svg:

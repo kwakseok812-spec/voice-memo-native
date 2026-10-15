@@ -193,3 +193,7 @@
 #mkRoot.help-only #mkHelp{pointer-events:auto}
 /* 뷰어 위 「적어 둔 수정 요청」 띠 */
 #docRoot #dvMkStrip{display:none}
+/* 크게 · 작게 단추(1~3배) */
+.mk-top .mk-tbtn.mk-z{min-width:44px; font-size:22px; padding:0}
+.mk-scroll{touch-action:pan-x pan-y}          /* 손: 한 손가락 넘기기는 브라우저가, 두 손가락 크게·작게는 markup.js 가 */
+.mk-scroll.pen{touch-action:none}
