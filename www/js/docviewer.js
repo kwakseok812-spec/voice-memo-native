@@ -1424,9 +1424,9 @@
     if (global.SmartMarkup && mkStripEl) SmartMarkup.viewerDoc(live && mkAvail() ? mkDocOf(t) : null, mkStripEl, function (then) { startMarkup('sheet', then); });   // O-0544 「적어 둔 수정 요청 N건」 띠
   }
 
-  /* ============ O-0544 ✏️ 고치기 → 두 갈래(표시해서 요청하기 · PC에서 직접 고치기) ============
+  /* ============ O-0544 ✏️ 고치기 → 두 갈래(표시해서 요청하기 · PC 화면으로 직접 고치기) ============
    *   「표시해서 요청하기」 = markup.js(SmartMarkup) — 보던 PDF 위에 동그라미·밑줄 + 메모 → PC가 사본(_rev1)을 고쳐 채팅으로.
-   *   「PC에서 직접 고치기」 = 위 O-0171 그대로(한글·워드·엑셀·PPT만). PDF 는 수정 요청만.
+   *   「PC 화면으로 직접 고치기」 = 위 O-0171 그대로(한글·워드·엑셀·PPT만). PDF 는 수정 요청만.
    *   길게 누르기(0.5초)로도 바로 켜진다(markup.js bindLongPress · 옷·설정 → 설정에서 끄기). */
   var fixEl = null, mkStripEl = null;
   function mkAvail() { return !!(global.SmartMarkup && SmartMarkup.enabled() && (pdfDoc || isExcelDoc)); }
@@ -1446,7 +1446,7 @@
       '<div class="dvs-note">' + esc(t.name) + '</div>' +
       '<button class="dvf-choice main" type="button" data-fact="markup"><span class="ic">📍</span><span><span class="t1">표시해서 요청하기</span>' +
         '<span class="t2" style="display:block">고칠 곳에 동그라미 치고 메모만 남기면, PC가 사본을 고쳐 채팅으로 보내 드려요</span></span></button>' +
-      (pcOk ? '<button class="dvf-choice" type="button" data-fact="pc"><span class="ic">🖥️</span><span><span class="t1">PC에서 직접 고치기</span>' +
+      (pcOk ? '<button class="dvf-choice" type="button" data-fact="pc"><span class="ic">🖥️</span><span><span class="t1">PC 화면으로 직접 고치기</span>' +
         '<span class="t2" style="display:block">PC의 ' + esc(EDITABLE[ext]) + '로 열고 원격 제어로 직접 고쳐요</span></span></button>' : '') +
       '<button class="dvs-close" type="button" data-fact="close">닫기</button>';
     $('dvfPanel').innerHTML = h;
@@ -1507,7 +1507,7 @@
   function editRender(v) {
     if (!editEl) return;
     var c = editCtx || {}, b = TYPE_BADGE[c.ext] || [String(c.ext || '').toUpperCase().slice(0, 4), 't-etc'];
-    var h = '<div class="dvs-title">🖥️ PC에서 직접 고치기</div>' +
+    var h = '<div class="dvs-title">🖥️ PC 화면으로 직접 고치기</div>' +
       '<div class="dve-file"><span class="dv-tbadge big ' + b[1] + '">' + esc(b[0]) + '</span>' +
       '<span class="dve-fname">' + esc(c.name || '문서') + '</span></div>' + editStepsHtml(v.step || 1);
     h += '<div class="dve-status ' + (v.tone || '') + '">' +

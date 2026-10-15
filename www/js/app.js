@@ -2206,7 +2206,7 @@
   APP_VERSION = 'v9.12';        // v9.12(O-0490): 케이 목소리 고르는 자리를 「케이 무대」 화면으로 — 꾸미기 「설정」에는 한 줄(지금 목소리 ›)만 두고, 누르면 케이가 「지금 목소리」 카드를 소개하는 화면이 열린다. 아래 번호판(여자 1–12 · 남자 1–12)의 번호를 누르면 예시를 들려 드리고 그 목소리로 바꾼다(빠름 = 동그란 번호 · 느림 = 둥근 네모 · 본인 목소리에는 꼬리표, 목록에 없는 번호는 점선 자리). 예시 소리는 그 화면을 열었을 때만 두 개씩 미리 받는다(예전에는 꾸미기를 열면 전부 한꺼번에). 기기 음성(「이 폰이 · 이 기기가 직접 읽기」)은 뺐다(골라 두신 저장값은 지우지 않음). 목소리를 고른 직후 PC 상태가 늦게 따라와도 안내 한 줄 · [듣기] 기다림이 고른 목소리의 것으로 유지된다. 스위치 KV_UI(stage · list) · KV_WARM(open · all · tap) · KV_DEVICE(false · true) — list · all · true 면 v9.11 의 줄 목록 화면 · versionCode 56
   APP_VERSION = 'v9.13';        // v9.13: 블랙 슬림 원피스 · 오프숄더 니트의 전신 그림을 다른 옷과 같은 키 · 비율로(꾸미기 전신 칸 · 시작 인사의 서 있는 그림) + 오프숄더의 옷장 목록 그림. 그림 3장만 바뀌고 코드는 그대로다. 두 옷의 새 인사 영상과 오프숄더의 새 통화 영상은 서버 묶음으로 따로 바뀐다(앱 설치 뒤) · 블랙 슬림의 통화 화면 · 옷장 목록 그림은 그대로 · versionCode 57
   APP_VERSION = 'v9.14';        // v9.14: 홈 맨 위 버전 표시 — 「스마트비서」 제목 바로 옆에 작은 알약(v9.14)으로 지금 설치된 버전이 보인다. 홈 맨 아래의 흐린 버전 줄은 뺐다(같은 일을 하는 자리는 하나만 · 스위치 VER_SPOT: top · bottom — bottom 이면 v9.13 처럼 맨 아래 한 줄) · versionCode 58
-  APP_VERSION = 'v9.15';        // v9.15(O-0544): 문서 뷰어 「수정 요청」 — [✏️ 편집하기]를 [✏️ 고치기]로 바꾸고 두 갈래(표시해서 요청하기 · PC에서 직접 고치기). 문서 위에 [펜]으로 동그라미 · 밑줄(표는 칸 · 행 · 열 · 표 전체 칩), 양 끝 손잡이로 범위 조정, 메모(빠른 칩 · 글 · 🎤 받아쓰기), 번호 핀 · 목록(이 기기 7일 보관) · [PC로 보내기] → PC가 원본의 사본(_rev1)을 고쳐 「고친 곳 표시 PDF」와 함께 채팅으로. 보낸 뒤 [요청 취소] · 「이어서 고치기」. 문서를 0.5초 길게 눌러도 켜짐(옷·설정 → 설정에서 끄기), [? 사용법] 7장(처음 한 번 저절로). PDF 는 수정 요청만, 엑셀 · PPT · 스캔은 교정 표시 PDF 로 돌려드림. 진동 권한 추가(길게 누를 때 짧게 한 번) · versionCode 59
+  APP_VERSION = 'v9.15';        // v9.15(O-0544): 문서 뷰어 「수정 요청」 — [✏️ 편집하기]를 [✏️ 고치기]로 바꾸고 두 갈래(표시해서 요청하기 · PC 화면으로 직접 고치기). 문서 위에 [펜]으로 동그라미 · 밑줄(표는 칸 · 행 · 열 · 표 전체 칩), 양 끝 손잡이로 범위 조정, 메모(빠른 칩 · 글 · 🎤 받아쓰기), 번호 핀 · 목록(이 기기 7일 보관) · [PC로 보내기] → PC가 원본의 사본(_rev1)을 고쳐 「고친 곳 표시 PDF」와 함께 채팅으로. 보낸 뒤 [요청 취소] · 「이어서 고치기」. 문서를 0.5초 길게 눌러도 켜짐(옷·설정 → 설정에서 끄기), [? 사용법] 7장(처음 한 번 저절로). PDF 는 수정 요청만, 엑셀 · PPT · 스캔은 교정 표시 PDF 로 돌려드림. 진동 권한 추가(길게 누를 때 짧게 한 번) · versionCode 59
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3822,7 +3822,7 @@
   var ks = { checked: false, ok: false, onDevice: false, fails: 0, off: false, p: null };
   // O-0189: stt.s = 말 끝 판정 상태(vad.js KVad.stt*) — 이어 붙인 글(acc)·지금 토막(cur)·마지막으로 말한 때·큰 소리 난 때
   var stt = { on: false, s: null, timer: null, finishing: false, finWait: null, why: '' };
-  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off && window.KVad && KVad.sttNew); }
+  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off && window.KVad && KVad.sttNew) && !(window.SmartMarkup && SmartMarkup.micOn && SmartMarkup.micOn()); }   // O-0544: 수정 요청 메모 받아쓰기 중이면 채팅 받아쓰기를 켜지 않는다(녹음 경로로)
   function ksInit() {
     if (!VC.DEVICE_STT || !KS) return Promise.resolve(false);
     if (ks.p) return ks.p;
@@ -7506,6 +7506,7 @@
   }
   if (window.SmartMarkup) {
     SmartMarkup.setHost({ send: mkSend, cancel: mkCancel, status: mkStatus, toast: toast,
+      sttBusy: function () { return !!(convoOn || (stt && stt.on)); },   // 음성 대화 · 채팅 받아쓰기 중이면 메모 받아쓰기를 켜지 않는다(설계 8절 잠금)
       openChat: function () { openChat(); },
       reopenFix: function () { if (window.SmartDocs && SmartDocs.openFix) SmartDocs.openFix(); },
       setOrig: function (f) { if (window.SmartDocs && SmartDocs.setOrig) SmartDocs.setOrig(f); } });

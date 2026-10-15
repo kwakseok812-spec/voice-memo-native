@@ -95,7 +95,7 @@
         if (e.target === s || (e.target.hasAttribute && e.target.hasAttribute('data-close'))) {
           if (s.id === 'mkHelp') { closeHelp(); return; }
           s.classList.remove('on');
-          if (s.id === 'mkMemoSheet') { S.memo = null; if (S.sel) showPop(); }
+          if (s.id === 'mkMemoSheet') { stopMic(); S.memo = null; if (S.sel) showPop(); }
         }
       });
     });
@@ -177,7 +177,7 @@
   function close() {
     if (!R || !S.on) return;
     var n = S.items.filter(notSent).length;
-    clearSel(); closeSheets(); kHide();
+    stopMic(); clearSel(); closeSheets(); kHide();
     S.on = false; R.root.classList.remove('on');
     if (statusT) { clearInterval(statusT); statusT = null; }
     if (io) { io.disconnect(); io = null; }
@@ -189,7 +189,7 @@
     if (!R || !S.on) return false;
     if ($('mkHelp').classList.contains('on')) { closeHelp(); return true; }
     if (S.memo && S.memo.side) { closeMemo(); if (S.sel) showPop(); return true; }
-    var o = R.root.querySelector('.mk-sheet.on'); if (o) { o.classList.remove('on'); if (o.id === 'mkMemoSheet') { S.memo = null; if (S.sel) showPop(); } return true; }
+    var o = R.root.querySelector('.mk-sheet.on'); if (o) { o.classList.remove('on'); if (o.id === 'mkMemoSheet') { stopMic(); S.memo = null; if (S.sel) showPop(); } return true; }
     if (S.sel) { clearSel(); return true; }
     close(); return true;
   }
@@ -652,13 +652,14 @@
     if (!wide) setTimeout(function () { try { $('mkMemoTxt').focus({ preventScroll: true }); } catch (e) {} }, 260);
     kSay('어떻게 고칠까요? 글로 적거나 🎤로 말씀해 주세요', 'note');
   }
-  function closeMemo() { closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
+  function closeMemo() { stopMic(); closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
   // 🎤 받아쓰기: 폰 앱(KSpeech 네이티브)만. PC판·옛 APK 는 글로.
   var mic = null;
   function toggleMic() {
     if (mic) { stopMic(); return; }
     var KS = null; try { if (isNative() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) {}
     if (!KS) { toast('이 기기에서는 글로 적어 주세요'); return; }
+    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요'); return; }
     var ta = $('mkMemoTxt'), base = ta.value ? ta.value + ' ' : '', hs = [], quietT = null;
     mic = { KS: KS, hs: hs };
     $('mkMic').classList.add('on'); $('mkMicTxt').textContent = '듣는 중… 다시 누르면 멈춰요';
@@ -751,7 +752,7 @@
   function srcLine() {
     var s = S.d.src || {};
     if (s.pcPath) return '💻 PC에 있는 원본으로 사본을 만들어 고칩니다';
-    if (s.url) return '☁️ 사무소 서버에 있는 파일을 씁니다';
+    if (s.url) return '☁️ 서버에 있는 파일을 씁니다';
     if (s.file) return '📱 폰에 있는 원본을 PC로 보냅니다(' + fmtSize((s.file && s.file.size) || 0) + ')';
     return '';
   }
@@ -848,9 +849,9 @@
     openSheet('mkAskSheet');
   }
 
-  /* ---------------- 사용법(제이 안내서 「수정 요청」 사용 안내 문구에 맞춤) ---------------- */
+  /* ---------------- 사용법(사용 안내서 「수정 요청」 문구에 맞춤) ---------------- */
   var HELP = [
-    { t: '켜기', h: '[✏️ 고치기] → 「표시해서 요청하기」', d: '문서 위를 움직이지 말고 0.5초 꾹 눌러도 바로 켜져요. 켜지면 위에 붉은 띠가 내려와요.', svg:
+    { t: '켜기', h: '[✏️ 고치기] → 「표시해서 요청하기」', d: '두 갈래 중 아래 「PC 화면으로 직접 고치기」는 지금 쓰시는 원격 편집 그대로예요. 문서를 0.5초 꾹 눌러도 바로 켜지고, 켜지면 위에 붉은 띠가 내려와요.', svg:
       '<rect x="20" y="10" width="140" height="150" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="34" y="28" width="110" height="7" rx="3"/><rect x="34" y="44" width="90" height="7" rx="3"/><rect x="34" y="60" width="100" height="7" rx="3"/></g>' +
       '<rect x="26" y="126" width="72" height="24" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="62" y="142" font-size="11" font-weight="800" text-anchor="middle" fill="var(--ink)">✏️ 고치기</text>' +
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
@@ -990,6 +991,7 @@
     setHost: function (h) { host = h || {}; },
     open: open, close: close, back: back, isOpen: function () { return !!S.on; },
     help: help, viewerDoc: viewerDoc, bindLongPress: bindLongPress,
+    micOn: function () { return !!mic; },     // 메모 받아쓰기 중(app.js 가 채팅 받아쓰기를 켜지 않게)
     longPressOn: function () { return lsGet(LP_KEY, '1') === '1'; },
     setLongPress: function (on) { lsSet(LP_KEY, on ? '1' : '0'); },
     _dbg: function () { return S; },   // 점검용(시험에서 내부 상태 확인)
