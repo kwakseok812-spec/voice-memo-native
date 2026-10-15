@@ -7469,7 +7469,7 @@
     });
     if (src.type === 'upload') entries.push({ file: new File([s.file], d.name, { type: s.file.type || 'application/octet-stream' }) });
     var lines = marks.map(function (m) { return m.n + ') ' + m.page + '쪽 「' + String(m.label || m.text || '').slice(0, 30) + '」 → ' + m.note; });
-    var head = '✏️ 「' + d.name + '」 수정 요청 ' + marks.length + '건' + (d.after_rid ? ' (앞 요청에 이어서)' : '');
+    var head = '✏️ 「' + d.name + '」 수정 요청 ' + marks.length + '건을 PC로 보냈습니다' + (d.after_rid ? ' (앞 요청에 이어서)' : '');
     var note = head + '\n' + lines.join('\n');
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var msg = { role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true, uploading: true };
