@@ -520,14 +520,16 @@
    *   ① 옛 묶음에서 빠진 파일을 서버에서 먼저 받아(옛 인사 영상까지) 틀고 ② 새 파일을 「하나도 빠짐없이」 받아야만 새 묶음으로 바꿨다.
    *   그래서 갈아입은 직후 옛 영상이 보였고, 새 파일 하나만 못 받아도 옛 영상이 계속 남았다(10/16 PC판 레드 이브닝 인사).
    *   KA_NEXT_FIRST  'on'  = ⓐ 옛 묶음의 빠진 파일은 받지 않고 새 묶음부터 받는다(인사 영상 짝을 먼저)
-   *                          ⓑ 자리(인사 영상 짝 · 평소 영상 · 말하기 영상 · 통화 묶음 · 자세 그림 …)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꾼다
+   *                          ⓑ 자리(인사 영상 짝 · 평소와 말하기 얼굴 영상 · 통화 묶음 · 자세 그림 · 서버 옷 사진 묶음 …)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꾼다
    *                          ⓒ 기기에 받아 두지 않은 옛 자리는 처음부터 새것으로 적는다(잃을 것이 없다 — 받는 동안은 그 자리가 비어 대체 규칙대로 보인다)
    *                  'off' = v9.17 그대로 */
   var KA_NEXT_FIRST = 'on';
   // 함께 바뀌어야 하는 자리 묶음(files 의 열쇠 · 묶음 바깥 값). 여기에 없는 files 열쇠는 열쇠 하나가 한 자리다.
   var KA_SLOTS = [
     { f: ['bow', 'bow_poster', 'bow_alt', 'bow_alt_poster'], meta: ['bow_cue', 'bow_len', 'bow_alt_cue', 'bow_alt_len'] },   // 인사 영상과 첫 장면 그림은 짝 — 따로 바뀌면 시작 인사가 다른 그림에서 시작한다
-    { f: ['call_poster', 'call_listen', 'call_think', 'call_talk'], meta: [] }
+    { f: ['call_poster', 'call_listen', 'call_think', 'call_talk'], meta: [] },
+    { f: ['idle', 'talk'], meta: [] },                                                  // 평소 · 말하기 얼굴 영상 — 말할 때만 옛 얼굴로 바뀌어 보이지 않게
+    { f: ['expr', 'avatar', 'fullbody', 'expr_hd'], meta: [] }                          // 서버 옷의 표정 · 작은 얼굴 · 전신 · 큰 사진(옷장 사진 thumb 은 꾸미기를 열 때 따로 바뀐다 — ensureThumbs)
   ];
   function kaSlotList(a, b) {
     var keys = {}, out = [];
