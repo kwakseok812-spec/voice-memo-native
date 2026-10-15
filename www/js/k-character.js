@@ -516,8 +516,63 @@
     var ok = true;
     return names.reduce(function (pr, n) { return pr.then(function () { return kaFetchFile(n); }).then(function (r) { if (!r) ok = false; else if (onEach) onEach(n); }); }, Promise.resolve()).then(function () { return ok; });
   }
+  /* (O-0551) 옛 묶음이 남던 것 — 서버 목록의 묶음(next)이 기기가 기억한 묶음(eff)과 다를 때, 예전에는
+   *   ① 옛 묶음에서 빠진 파일을 서버에서 먼저 받아(옛 인사 영상까지) 틀고 ② 새 파일을 「하나도 빠짐없이」 받아야만 새 묶음으로 바꿨다.
+   *   그래서 갈아입은 직후 옛 영상이 보였고, 새 파일 하나만 못 받아도 옛 영상이 계속 남았다(10/16 PC판 레드 이브닝 인사).
+   *   KA_NEXT_FIRST  'on'  = ⓐ 옛 묶음의 빠진 파일은 받지 않고 새 묶음부터 받는다(인사 영상 짝을 먼저)
+   *                          ⓑ 자리(인사 영상 짝 · 평소 영상 · 말하기 영상 · 통화 묶음 · 자세 그림 …)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꾼다
+   *                          ⓒ 기기에 받아 두지 않은 옛 자리는 처음부터 새것으로 적는다(잃을 것이 없다 — 받는 동안은 그 자리가 비어 대체 규칙대로 보인다)
+   *                  'off' = v9.17 그대로 */
+  var KA_NEXT_FIRST = 'on';
+  // 함께 바뀌어야 하는 자리 묶음(files 의 열쇠 · 묶음 바깥 값). 여기에 없는 files 열쇠는 열쇠 하나가 한 자리다.
+  var KA_SLOTS = [
+    { f: ['bow', 'bow_poster', 'bow_alt', 'bow_alt_poster'], meta: ['bow_cue', 'bow_len', 'bow_alt_cue', 'bow_alt_len'] },   // 인사 영상과 첫 장면 그림은 짝 — 따로 바뀌면 시작 인사가 다른 그림에서 시작한다
+    { f: ['call_poster', 'call_listen', 'call_think', 'call_talk'], meta: [] }
+  ];
+  function kaSlotList(a, b) {
+    var keys = {}, out = [];
+    [a, b].forEach(function (e) { Object.keys((e && e.files) || {}).forEach(function (k) { keys[k] = 1; }); });
+    KA_SLOTS.forEach(function (g) { var any = g.f.some(function (k) { return keys[k]; }); g.f.forEach(function (k) { delete keys[k]; }); if (any) out.push(g); });
+    Object.keys(keys).forEach(function (k) { out.push({ f: [k], meta: [] }); });
+    return out;
+  }
+  function kaSlotNames(e, g) {
+    var f = (e && e.files) || {}, out = [];
+    g.f.forEach(function (k) { var v = f[k]; if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (j) { if (v[j]) out.push(v[j]); }); });
+    return out;
+  }
+  function kaSlotVal(e, g) {
+    var f = (e && e.files) || {}, o = {};
+    g.f.forEach(function (k) { o['f.' + k] = f[k] === undefined ? null : f[k]; });
+    g.meta.forEach(function (k) { o[k] = (e && e[k] !== undefined) ? e[k] : null; });
+    return JSON.stringify(o);
+  }
+  // 기억한 묶음에 새 묶음 next 의 자리 중 「준비된 것」을 옮겨 적는다. first = 처음 부를 때(기기에 없는 옛 자리도 옮긴다).
+  //   돌려주는 값 { full: next 와 같아졌다, changed: 이번에 바뀐 것이 있다 }
+  function kaMergeSlots(id, next, first) {
+    var cur = ka.eff[id] || next;
+    if (cur === next || JSON.stringify(cur) === JSON.stringify(next)) return { full: true, changed: false };
+    var m = JSON.parse(JSON.stringify(cur)), S = window.KStore, metaKeys = {};
+    m.files = m.files || {};
+    KA_SLOTS.forEach(function (g) { g.meta.forEach(function (k) { metaKeys[k] = 1; }); });
+    Object.keys(next).forEach(function (k) { if (k !== 'files' && !metaKeys[k]) m[k] = JSON.parse(JSON.stringify(next[k])); });   // 이름 · 설명 같은 값은 바로 새것
+    Object.keys(m).forEach(function (k) { if (k !== 'files' && !metaKeys[k] && !(k in next)) delete m[k]; });
+    kaSlotList(cur, next).forEach(function (g) {
+      if (kaSlotVal(m, g) === kaSlotVal(next, g)) return;
+      var nn = kaSlotNames(next, g), cn = kaSlotNames(m, g);
+      var take = !nn.length || kaReady(nn) || (first && !(cn.length && cn.every(function (n) { return S.has(n); })));
+      if (!take) return;
+      g.f.forEach(function (k) { if (next.files && next.files[k] !== undefined) m.files[k] = JSON.parse(JSON.stringify(next.files[k])); else delete m.files[k]; });
+      g.meta.forEach(function (k) { if (next[k] !== undefined) m[k] = next[k]; else delete m[k]; });
+    });
+    var full = kaSlotList(m, next).every(function (g) { return kaSlotVal(m, g) === kaSlotVal(next, g); });
+    if (full) m = next;                                   // 다 옮겼으면 목록의 것 그대로(다음 목록과 비교가 예전과 같게)
+    var changed = JSON.stringify(m) !== JSON.stringify(cur);
+    if (changed) { ka.eff[id] = m; kaSave(); }
+    return { full: full, changed: changed };
+  }
   /* 그 옷의 자산을 받는다. opt.bow = 인사 영상을 꼭 받는다(전신을 직접 누름 — 데이터 절약 모드여도).
-   *   새 목록의 묶음(next)이 지금 쓰는 묶음(eff)과 다르면 새 파일을 다 받은 뒤에 바꾼다. */
+   *   새 목록의 묶음(next)이 지금 쓰는 묶음(eff)과 다르면: KA_NEXT_FIRST 'on' = 위 (O-0551) · 'off' = 새 파일을 다 받은 뒤에 바꾼다. */
   function ensureOutfit(id, opt) {
     opt = opt || {};
     if (!ka.m || !window.KStore) return Promise.resolve(false);
@@ -531,6 +586,22 @@
     }
     var step = 0;
     function paintSome() { step++; kaRepaint(); }
+    if (KA_NEXT_FIRST === 'on' && cur !== next && JSON.stringify(cur) !== JSON.stringify(next)) {
+      var missing = function (n) { return !KStore.has(n) || !KStore.url(n); };
+      // 받는 순서: 사진(서버 옷) → 인사 영상 짝(시작 인사 · 전신 칸이 쓰는 것) → 자세 그림 → 나머지 영상. 옛 묶음의 빠진 파일은 받지 않는다.
+      var order = kaNames(next, 'core').concat(lite && !opt.bow ? [] : kaNames(next, 'bow')).concat(kaNames(next, 'pose')).concat(vidsOf(next))
+        .filter(function (n, i, a) { return a.indexOf(n) === i; });
+      var r0 = kaMergeSlots(id, next, true);
+      if (r0.changed) { kaGc(); paintSome(); }
+      if (r0.full) return Promise.resolve(true);
+      return kaFetchAll(order.filter(missing), function () { var r = kaMergeSlots(id, next, false); if (r.changed) paintSome(); })   // 자리 하나가 다 받아질 때마다 그 자리만 새것으로
+        .then(function () {
+          var r = kaMergeSlots(id, next, false);
+          kaGc();                                           // 새것으로 바뀐 자리의 옛 파일을 지운다(아직 옛것인 자리의 파일은 남는다 — 다음에 다시 받아 본다)
+          paintSome();
+          return r.full;
+        });
+    }
     // 먼저 지금 쓰는 묶음에서 빠진 것(사진 → 자세 그림 → 영상 순)
     var order = kaNames(cur, 'core').concat(kaNames(cur, 'pose'));
     var vids = vidsOf(cur);
