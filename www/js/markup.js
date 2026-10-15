@@ -692,14 +692,14 @@
     if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
     var ta = $('mkMemoTxt');
     var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
-                    quietT: null, noSpT: null, finT: null, readyT: null, stopping: false };
+                    quietT: null, noSpT: null, finT: null, readyT: null, ready: false, stopping: false };
     $('mkMic').classList.add('on'); micLabel('준비 중… 잠시만요');
     function show() { var t = (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); m.ta.value = m.base + t; if (t) m.heard = true; }
     function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
     function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
     // 「말 없음 8초」는 인식기가 준비된(ready) 뒤부터 센다 — 처음 쓰는 폰에서 권한 창이 떠 있는 동안 먼저 끝나 인식기가 혼자 돌지 않게.
     on('ready', function () {
-      clearTimeout(m.readyT);
+      m.ready = true; clearTimeout(m.readyT);
       if (m.stopping) return;
       micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춰요');
       if (!m.heard) { clearTimeout(m.noSpT); m.noSpT = setTimeout(function () { if (mic === m && !m.heard) stopMic(false, 'nospeech'); }, MIC_NOSPEECH_MS); }
@@ -713,7 +713,7 @@
       var opt = { lang: 'ko-KR', partial: true, continuous: true, muteRestart: false, sfx: (host.sfx && host.sfx()) || 'soft' };
       var pr = KS.start(opt);
       // 시작이 받아들여졌는데(권한 통과) 10초가 지나도 준비(ready)가 안 오면 사유를 보이고 끝낸다(조용히 꺼지지 않게)
-      if (pr && pr.then) pr.then(function () { if (!m.ended) m.readyT = setTimeout(function () { if (mic === m) micEnd(m, 'start', '인식기가 준비되지 않음'); }, MIC_READY_MS); }, function () {});
+      if (pr && pr.then) pr.then(function () { if (!m.ended && !m.ready) m.readyT = setTimeout(function () { if (mic === m && !m.ready) micEnd(m, 'start', '인식기가 준비되지 않음'); }, MIC_READY_MS); }, function () {});   // ready 가 응답보다 먼저 와도 잘못 끝내지 않게
       if (pr && pr.catch) pr.catch(function (err) {
         var code = (err && (err.code || err.errorCode)) || '';
         micEnd(m, code === 'recording' ? 'recording' : (code === 'permission' || /권한|permission/i.test(String(err && err.message)) ? 'permission' : 'start'), err && err.message);

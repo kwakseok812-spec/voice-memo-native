@@ -2024,12 +2024,12 @@
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
-    openRemote: editOpenRemote,
-    openFix: openFix,
-    goChat: goChat,                        // O-0548: 뷰어 → 채팅(자리 적어 둠)
+    openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
+    openFix: openFix,                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
+    setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」
+    goChat: goChat,                        // O-0548: 뷰어 → 채팅(지금 자리를 적어 둠)
     resumeFromChat: resumeFromChat,        // O-0548: 채팅에서 뒤로 → 보던 그대로
-    hasChatReturn: function () { return !!chatRet; },                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
-    setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
+    dropChatReturn: function () { chatRet = null; },   // O-0548: 채팅에서 뒤로 가기가 아닌 길로 떠나면 돌아올 자리를 버림
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },

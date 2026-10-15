@@ -235,8 +235,9 @@
   document.addEventListener('visibilitychange', function () { try { if (!document.hidden && isOpen(homeView)) paintHomeGreet(); } catch (e) {} });
   document.addEventListener('kintro:line', function () { try { homeGreetBand = ''; paintHomeGreet(); } catch (e) {} });   // v9.6: 시작 인사가 고른 말로 홈 인사를 맞춘다
   var chatFromDocs = false;      // O-0548: 문서 뷰어 [💬]로 채팅에 왔으면 뒤로 = 보던 문서로
+  function dropChatReturn() { chatFromDocs = false; try { if (window.SmartDocs && SmartDocs.dropChatReturn) SmartDocs.dropChatReturn(); } catch (e) {} }
   function showHome() {
-    chatFromDocs = false;
+    dropChatReturn();
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
@@ -252,6 +253,9 @@
     try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {}   // (O-0129) 홈 「오늘 한눈에」 카드
   }
   function openScreen(el) {
+    // O-0548: 뷰어 [💬]로 채팅에 간 뒤 뒤로 가기가 아닌 길(작업 현황 · 알림 · 녹음 띠 등)로 다른 화면에 가면 돌아올 자리를 버린다
+    //   (뒤로 가기 길은 goBack 이 chatFromDocs 를 먼저 내리고 문서 화면을 연다 → 여기서 버리지 않는다)
+    if (chatFromDocs && el !== chatView) dropChatReturn();
     // v9.10: 케이 꾸미기에서 녹음 띠 · 바로가기 · 알림으로 다른 화면에 갈 때 — 틀어 둔 미리 듣기 · 인사를 먼저 멈춘다(예전에는 몇 초 남았다)
     try { if (el !== $('kWardrobeView') && isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
@@ -7664,8 +7668,8 @@
   // v6.9: 최근 연 문서 삭제·비우기 확인은 앱 확인 시트로(confirm() 금지)
   if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn, o) { openSheet(t, m, label, fn); if (o && o.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#' + (o.icon || 'i-check')); } },   // v8.7: 「스토어 열기」 같은 여는 동작은 빨간 휴지통 대신 보통 버튼
     ask: askKFromDoc,
-    edit: { download: downloadAttachment },
-    chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0171 · O-0548 뷰어 → 채팅(뒤로 가면 보던 문서로) PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
+    edit: { download: downloadAttachment },                      // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
+    chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0548 뷰어 [💬] → 채팅(뒤로 가면 보던 문서로)
 
   /* ---- O-0544 문서 뷰어 「수정 요청」 — 보내기 · 취소 · 상태(화면은 markup.js) ----
    *   [PC로 보내기] → 채팅 첨부 통로(sendChatDocAsk, 연동 암호 확인 submit_memo)로 한 행:
@@ -7741,7 +7745,7 @@
     SmartMarkup.setHost({ send: mkSend, cancel: mkCancel, status: mkStatus, toast: toast,
       sttBusy: function () { return !!(convoOn || (stt && stt.on)); },   // 음성 대화 · 채팅 받아쓰기 중이면 메모 받아쓰기를 켜지 않는다(설계 8절 잠금)
       sfx: function () { return sfxMode; },
-      goChat: function () { if (window.SmartDocs && SmartDocs.goChat) SmartDocs.goChat(); },   // O-0548: 수정 요청 화면의 [💬] · [채팅 보기] · [작업 현황에서 보기] — 돌아오면 그 화면 그대로                                // O-0547: 메모 받아쓰기도 채팅과 같은 효과음 설정(켬·작게·끔)으로
+      goChat: function () { if (window.SmartDocs && SmartDocs.goChat) SmartDocs.goChat(); },   // O-0548: 수정 요청 화면의 [💬] · [채팅 보기] · [작업 현황에서 보기] → 뷰어와 같은 길(뒤로 가면 그 화면 그대로)
       openChat: function () { openChat(); },
       reopenFix: function () { if (window.SmartDocs && SmartDocs.openFix) SmartDocs.openFix(); },
       setOrig: function (f) { if (window.SmartDocs && SmartDocs.setOrig) SmartDocs.setOrig(f); } });
