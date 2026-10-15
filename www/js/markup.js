@@ -66,7 +66,7 @@
     '<div class="mk-strip mk-done" id="mkDone"><span class="mk-grow" id="mkDoneTxt"></span><button data-a="chat">채팅 보기</button><button data-a="cleardone">목록 비우기</button></div>' +
     '<div class="mk-main"><div class="mk-area" id="mkArea">' +
     '<div class="mk-chips" id="mkChips"><div class="mk-lab" id="mkChipLab"></div><div class="mk-chiprow">' +
-    '<button class="mk-chip on" data-pick="cells">잡힌 칸만</button><button class="mk-chip" data-pick="row">이 행</button><button class="mk-chip" data-pick="col">이 열</button><button class="mk-chip" data-pick="table">표 전체</button></div></div>' +
+    '<button class="mk-chip on" data-pick="cells">잡힌 칸만</button><button class="mk-chip" data-pick="row">이 행 전체</button><button class="mk-chip" data-pick="col">이 열 전체</button><button class="mk-chip" data-pick="table">표 전체</button></div></div>' +
     '<div class="mk-scroll" id="mkScroll"></div><div class="mk-flash" id="mkFlash"></div>' +
     '<div class="mk-k hidden" id="mkK"><img id="mkKImg" alt=""><div class="mk-kbub" id="mkKBub" role="status"></div></div>' +
     '</div><aside class="mk-side" id="mkSide"><div class="mk-sh">수정 요청 <b id="mkSideN">0</b></div><div class="mk-slist" id="mkSideList"></div><div class="mk-smemo" id="mkSideMemo"></div>' +
@@ -819,7 +819,7 @@
       '<path class="mk-draw" style="--len:120" d="M30 98 L140 98" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round" fill="none"/>' +
       '<rect x="28" y="104" width="234" height="16" rx="4" fill="var(--mk-hl)"/><circle class="mk-tap" cx="200" cy="112" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/>' +
       '<text x="214" y="148" font-size="11" font-weight="900" fill="var(--mk-red)">꾹 = 한 줄</text>' },
-    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁혀요', d: '낱말 단위로 늘고 줄어요. 표에서는 화면 위쪽 칩으로 「잡힌 칸만 · 이 행 · 이 열 · 표 전체」를 골라요.', svg:
+    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁혀요', d: '낱말 단위로 늘고 줄어요. 표에서는 화면 위쪽 칩으로 「잡힌 칸만 · 이 행 전체 · 이 열 전체 · 표 전체」를 골라요.', svg:
       '<g font-size="10" font-weight="800"><rect x="30" y="4" width="62" height="20" rx="10" fill="var(--mk-cell)" stroke="var(--mk-cell-line)"/><text x="61" y="18" text-anchor="middle" fill="var(--brand)">잡힌 칸만</text>' +
       '<rect x="98" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="121" y="18" text-anchor="middle" fill="var(--ink)">이 행</text>' +
       '<rect x="150" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="173" y="18" text-anchor="middle" fill="var(--ink)">이 열</text>' +
