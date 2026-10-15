@@ -228,7 +228,7 @@
     snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
     curKey = null; openIntent = null; pendingRestore = null;
     closeAsk(); closeEdit(); closeFix();
-    if (global.SmartMarkup && SmartMarkup.isOpen()) { try { SmartMarkup.close(); } catch (e) {} }   // O-0544
+    if (global.SmartMarkup && SmartMarkup.isOpen()) { try { SmartMarkup.close({ quiet: !!chatRet }); } catch (e) {} }   // O-0544 (O-0548: 채팅으로 갈 때는 「남겨 둘게요」 안내 없이)
     if (tabs.length >= 2 || (parked && tabs.length)) { clearDocView(); liveTabId = null; }   // v8.1: 케이에게 묻고 나가면 1개라도 남긴다
     else { tabs = []; activeIdx = -1; liveTabId = null; parked = false; }
     if (rootEl) rootEl.classList.remove('on');
@@ -1487,6 +1487,36 @@
     if (!userRotation && r.height > 0) { var ph = (r.height / (baseScale * renderedZoom || 1)); ptY = (y - r.top) / r.height * ph; }
     return { pdfDoc: pdfDoc, doc: mkDocOf(t), page: page, ptY: ptY };
   }
+  /* ============ O-0548 뷰어 → 채팅 바로 가기 ============
+   * 머리줄 [💬](수정 요청 화면 머리줄에도 같은 단추) → 지금 자리를 적어 두고 채팅으로. 채팅에서 뒤로 → 같은 문서 · 같은 쪽 · 같은 확대,
+   * 수정 요청 화면이었으면 그 화면(펜/손 · 적던 메모까지). 적어 둔 수정 요청은 원래 이 기기에 보관된다(markup.js IndexedDB).
+   * 「케이에게 묻기」와 같은 「열어 둔 문서」 장치(parked)를 쓴다 — 돌아오는 길은 activateTab(보던 상태 복원) 하나. */
+  var chatOpener = null, chatRet = null;
+  function goChat() {
+    if (!chatOpener) return;
+    var t = activeTab();
+    if (t && liveTabId === t.id) {
+      snapshotActive(true); parked = true;
+      chatRet = { tabId: t.id, mk: (global.SmartMarkup && SmartMarkup.isOpen()) ? SmartMarkup.snap() : null };
+    } else chatRet = null;
+    chatOpener();
+  }
+  function resumeFromChat() {
+    var r = chatRet; chatRet = null;
+    if (!r || !tabs.length) { renderOpenCard(); return false; }
+    var i = -1; tabs.forEach(function (t, k) { if (t.id === r.tabId) i = k; });
+    if (i < 0) i = Math.max(0, Math.min(activeIdx, tabs.length - 1));
+    showViewer(); activateTab(i, { noSnap: true });
+    if (r.mk && global.SmartMarkup) {
+      var t0 = Date.now(), iv = setInterval(function () {
+        var t = activeTab();
+        if (pdfDoc && t && liveTabId === t.id && viewMode !== 'table' && !(overlay && overlay.classList.contains('on'))) {
+          clearInterval(iv); SmartMarkup.open({ pdfDoc: pdfDoc, doc: mkDocOf(t), page: r.mk.page || 1, how: 'resume', restore: r.mk });
+        } else if (Date.now() - t0 > 20000 || !viewerOpen()) clearInterval(iv);
+      }, 150);
+    }
+    return true;
+  }
   function initFix() {
     fixEl = $('dvFix'); mkStripEl = $('dvMkStrip');
     if (fixEl) fixEl.addEventListener('click', function (e) {
@@ -1884,6 +1914,8 @@
     if (typeof opts.ask === 'function') askHandler = opts.ask;      // v8.1(O-0154) 케이에게 묻기 — 보내기는 app.js
     initAsk();
     if (opts.edit) editOpts = opts.edit;                            // O-0171 PC에서 편집하기 — {download(url,name)}
+    if (typeof opts.chat === 'function') chatOpener = opts.chat;    // O-0548 뷰어 → 채팅 바로 가기(채팅 화면을 여는 일은 app.js)
+    if ($('dvChat')) $('dvChat').onclick = function () { goChat(); };
     initEdit();
 
     // 야간 초기화
@@ -1993,7 +2025,10 @@
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
     openRemote: editOpenRemote,
-    openFix: openFix,                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
+    openFix: openFix,
+    goChat: goChat,                        // O-0548: 뷰어 → 채팅(자리 적어 둠)
+    resumeFromChat: resumeFromChat,        // O-0548: 채팅에서 뒤로 → 보던 그대로
+    hasChatReturn: function () { return !!chatRet; },                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
     setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)

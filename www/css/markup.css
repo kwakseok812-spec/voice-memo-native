@@ -197,3 +197,9 @@
 .mk-top .mk-tbtn.mk-z{min-width:44px; font-size:22px; padding:0}
 .mk-scroll{touch-action:pan-x pan-y}          /* 손: 한 손가락 넘기기는 브라우저가, 두 손가락 크게·작게는 markup.js 가 */
 .mk-scroll.pen{touch-action:none}
+
+/* O-0548 뷰어 → 채팅 바로 가기: 좁으면 아이콘만 */
+#docRoot .btn.icon.dv-chatbtn{font-size:21px; gap:4px; display:inline-flex; align-items:center; justify-content:center; min-width:46px; padding:10px 10px}
+#docRoot .dv-chatbtn .lbl{display:none; font-size:15px; font-weight:800}
+@media (min-width:600px){ #docRoot .dv-chatbtn .lbl{display:inline} }
+.mk-top .mk-tbtn.mk-chatbtn{font-size:20px}

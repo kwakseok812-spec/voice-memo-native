@@ -57,7 +57,7 @@
 
   /* ---------------- 화면 만들기 ---------------- */
   var HTML =
-    '<div class="mk-top"><button class="mk-tbtn" data-a="end" aria-label="끝내기">‹</button><div class="mk-fname" id="mkName"></div><button class="mk-tbtn mk-z" data-a="zout" aria-label="작게 보기">－</button><button class="mk-tbtn mk-z" data-a="zin" aria-label="크게 보기">＋</button><div class="mk-pgno" id="mkPg"></div></div>' +
+    '<div class="mk-top"><button class="mk-tbtn" data-a="end" aria-label="끝내기">‹</button><div class="mk-fname" id="mkName"></div><button class="mk-tbtn mk-z" data-a="zout" aria-label="작게 보기">－</button><button class="mk-tbtn mk-z" data-a="zin" aria-label="크게 보기">＋</button><div class="mk-pgno" id="mkPg"></div><button class="mk-tbtn mk-chatbtn" data-a="gochat" aria-label="채팅으로 가기" title="채팅으로">💬</button></div>' +
     '<div class="mk-band"><div class="mk-band-row"><div class="mk-band-title">✏️ 수정 요청</div>' +
     '<button class="mk-help" data-a="help" aria-label="사용법">? 사용법</button>' +
     '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div></div>' +
@@ -120,7 +120,7 @@
     else if (a === 'list') { renderAll(); openSheet('mkListSheet'); }
     else if (a === 'send') trySend();
     else if (a === 'cancelreq') askCancel();
-    else if (a === 'jobs' || a === 'chat') { if (host.openChat) { close(); host.openChat(); } }
+    else if (a === 'jobs' || a === 'chat' || a === 'gochat') goChat();
     else if (a === 'cleardone') { S.items = S.items.filter(function (x) { return x.status !== 'done'; }); S.sent = S.sent.filter(function (s) { return s.state !== 'done'; }); persist(); renderAll(); toast('끝난 요청을 목록에서 뺐어요'); }
   }
 
@@ -155,27 +155,34 @@
   function open(opts) {
     if (MARKUP_ON !== 'on' || !opts || !opts.pdfDoc) return false;
     build(); if (!R) return false;
-    S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null; S.zoom = 1;
+    var rs = opts.restore || null;            // O-0548: 채팅에 다녀왔을 때 — 같은 쪽 · 같은 확대 · 같은 펜/손 · 적던 메모
+    S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null; S.zoom = (rs && rs.zoom) || 1;
     $('mkName').textContent = S.d.name || '문서';
     R.root.classList.add('on');
-    setTool('pen', true);
-    buildPages(opts.page || 1, opts.anchor || null);
+    setTool((rs && rs.tool) || 'pen', true);
+    buildPages(opts.page || 1, opts.anchor || (rs ? { ptTop: rs.off || 0, left: rs.left || 0 } : null));
     return DB.get(S.d.key).then(function (v) {
       S.items = (v && v.items) || []; S.sent = (v && v.sent) || [];
       renderAll(); refreshStatus();
       if (!reduce()) { var f = $('mkFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
       var pend = S.items.filter(notSent).length;
-      kSay(pend ? '이어서 적어 주세요. 적어 둔 ' + pend + '건은 그대로 있어요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+      if (!rs) kSay(pend ? '이어서 적어 주세요. 적어 둔 ' + pend + '건은 그대로 있어요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
       if (opts.how === 'long') { vibrate(); toast('수정 요청을 켰어요', '끄기', close, 3000); }
-      if (lsGet(HELP_KEY, '') !== '1') { lsSet(HELP_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { help(0); }, 250); }
+      if (rs && rs.memo && rs.memo.item) setTimeout(function () {          // 적던 메모 다시 펼치기 — 고치던 것이면 보관된 그 항목에(사본 말고)
+        if (!S.on) return;
+        var real = rs.memo.isNew ? null : S.items.filter(function (x) { return x.n === rs.memo.item.n && !x.status; })[0];
+        openMemo(real || rs.memo.item, { text: rs.memo.text, isNew: !real });
+      }, 300);
+      if (!rs && lsGet(HELP_KEY, '') !== '1') { lsSet(HELP_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { help(0); }, 250); }
       if (statusT) clearInterval(statusT);
       statusT = setInterval(refreshStatus, 20000);
       return true;
     });
   }
   var statusT = null;
-  function close() {
+  function close(o) {
     if (!R || !S.on) return;
+    var quiet = !!(o && o.quiet);
     var n = S.items.filter(notSent).length;
     stopMic(true); clearSel(); closeSheets(); kHide();
     S.on = false; R.root.classList.remove('on');
@@ -183,7 +190,20 @@
     if (io) { io.disconnect(); io = null; }
     R.scroll.innerHTML = ''; S.pages = [];
     renderViewerStrip();
-    if (n && host.toast) host.toast('적어 둔 수정 요청 ' + n + '건은 남겨 둘게요');
+    if (n && host.toast && !quiet) host.toast('적어 둔 수정 요청 ' + n + '건은 남겨 둘게요');
+  }
+  // O-0548 채팅으로 가기 — 뷰어가 지금 자리(쪽 · 확대 · 이 화면이면 펜/손 · 적던 메모)를 적어 두고 채팅을 연다. 돌아오면 그대로.
+  function goChat() { stopMic(true); if (host.goChat) host.goChat(); }
+  function snap() {
+    if (!S.on || !S.pages.length) return null;
+    var sc = R.scroll, top = sc.scrollTop + 1, P = S.pages[0];
+    S.pages.forEach(function (Q) { if (Q.el.offsetTop <= top) P = Q; });
+    var m = null;
+    if (S.memo && S.memo.item && $('mkMemoTxt')) {
+      var it = {}; for (var k in S.memo.item) if (S.memo.item.hasOwnProperty(k)) it[k] = S.memo.item[k];
+      m = { item: it, text: $('mkMemoTxt').value, isNew: !S.memo.edit };
+    }
+    return { page: P.n, off: (sc.scrollTop - P.el.offsetTop) / (P.scale || 1), left: sc.scrollLeft, zoom: S.zoom || 1, tool: S.tool, memo: m };
   }
   function back() {
     if (!R || !S.on) return false;
@@ -227,7 +247,8 @@
       var P0 = S.pages[Math.max(0, Math.min(n, startPage) - 1)];
       if (P0) requestAnimationFrame(function () {
         var y = P0.el.offsetTop - 10;
-        if (anchor && anchor.ptY != null && anchor.clientY != null) {   // 길게 누른 자리가 손가락 밑에 오게
+        if (anchor && anchor.ptTop != null) { y = P0.el.offsetTop + anchor.ptTop * P0.scale; R.scroll.scrollLeft = anchor.left || 0; }   // O-0548 채팅에서 돌아옴
+        else if (anchor && anchor.ptY != null && anchor.clientY != null) {   // 길게 누른 자리가 손가락 밑에 오게
           var r = R.scroll.getBoundingClientRect();
           y = P0.el.offsetTop + anchor.ptY * P0.scale - (anchor.clientY - r.top);
         }
@@ -627,20 +648,21 @@
     } catch (e) { return ''; }
   }
   var CHIPS = ['틀린 글자 고치기', '지우기', '이렇게 바꾸기: ', '문장 다듬기', '숫자 맞는지 확인', '여기에 넣기: '];
-  function openMemo(item) {
+  function openMemo(item, draft) {          // draft: O-0548 채팅에 다녀온 뒤 적던 메모를 다시 펼침 {text, isNew}
     var wide = global.innerWidth >= 720;
     var it = item || selPayload(); if (!item) it.shot = snapshot(S.sel.P, it.box);
-    S.memo = { item: it, edit: !!item };
+    var isNew = !item || !!(draft && draft.isNew);
+    S.memo = { item: it, edit: !isNew };
     var pop = R.root.querySelector('.mk-pop'); if (pop) pop.remove();
-    var n = item ? item.n : nextNum();
+    var n = isNew ? nextNum() : item.n;
     var q = it.kind === 'text' ? '…' + esc(it.before.slice(-14)) + '<mark>' + esc(it.text) + '</mark>' + esc(it.after.slice(0, 14)) + '…' : esc(it.text);
     var h = '<div class="mk-ptitle"><span class="mk-grow">수정 요청 ' + circ(n) + '</span><span class="mk-pnote">' + it.page + '쪽</span></div>' +
       '<div class="mk-quote">' + (it.shot ? '<img alt="짚은 곳" src="' + it.shot + '">' : '') + '<div style="min-width:0"><div class="qm">짚은 글</div><div class="qt">' + q + '</div></div></div>' +
       '<div class="mk-qchips">' + CHIPS.map(function (c) { return '<button data-q="' + esc(c) + '">' + esc(c.replace(/: $/, '…')) + '</button>'; }).join('') + '</div>' +
-      '<div class="mk-memo"><textarea id="mkMemoTxt" placeholder="어떻게 고칠지 적어 주세요">' + esc(item ? item.note : '') + '</textarea></div>' +
+      '<div class="mk-memo"><textarea id="mkMemoTxt" placeholder="어떻게 고칠지 적어 주세요">' + esc(draft ? (draft.text || '') : (item ? item.note : '')) + '</textarea></div>' +
       '<button class="mk-mic" id="mkMic"><span class="dot"></span><span id="mkMicTxt">🎤 말로 적기</span></button>' +
       '<div class="mk-row2"><button class="mk-big gray" id="mkMemoCancel">취소</button><button class="mk-big red" id="mkMemoSave">저장</button></div>' +
-      (item ? '<button class="mk-del" id="mkMemoDel">이 수정 요청 빼기</button>' : '');
+      (!isNew ? '<button class="mk-del" id="mkMemoDel">이 수정 요청 빼기</button>' : '');
     var hostEl;
     if (wide) { hostEl = $('mkSideMemo'); hostEl.innerHTML = '<div class="mk-panel" style="box-shadow:none;padding:4px 2px;max-height:none;animation:none">' + h + '</div>'; $('mkSide').classList.add('memo-open'); S.memo.side = true; }
     else { hostEl = $('mkMemoPanel'); hostEl.innerHTML = h; openSheet('mkMemoSheet'); }
@@ -838,7 +860,7 @@
       list.forEach(function (x) { x.status = 'sent'; x.rid = r.rid; });
       S.sent.push({ rid: r.rid, n: list.map(function (x) { return x.n; }), at: Date.now(), state: 'sent' });
       persist(); renderAll(); hideToast();
-      toast(afterRid ? '앞 요청이 끝나면 이어서 고칠게요' : 'PC로 보냈어요', '작업 현황에서 보기', function () { if (host.openChat) { close(); host.openChat(); } }, 4200);
+      toast(afterRid ? '앞 요청이 끝나면 이어서 고칠게요' : 'PC로 보냈어요', '작업 현황에서 보기', goChat, 4200);
       setTimeout(function () { if (S.on) kSay('다른 곳도 더 적으실 수 있어요', 'note', 'aside'); }, 1600);
     }).catch(function (e) {
       hideToast();
@@ -1028,7 +1050,7 @@
   global.SmartMarkup = {
     enabled: function () { return MARKUP_ON === 'on'; },
     setHost: function (h) { host = h || {}; },
-    open: open, close: close, back: back, isOpen: function () { return !!S.on; },
+    open: open, close: close, back: back, snap: snap, isOpen: function () { return !!S.on; },
     help: help, viewerDoc: viewerDoc, bindLongPress: bindLongPress,
     micOn: function () { return !!mic; },     // 메모 받아쓰기 중(app.js 가 채팅 받아쓰기를 켜지 않게)
     longPressOn: function () { return lsGet(LP_KEY, '1') === '1'; },

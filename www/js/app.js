@@ -234,7 +234,9 @@
   }
   document.addEventListener('visibilitychange', function () { try { if (!document.hidden && isOpen(homeView)) paintHomeGreet(); } catch (e) {} });
   document.addEventListener('kintro:line', function () { try { homeGreetBand = ''; paintHomeGreet(); } catch (e) {} });   // v9.6: 시작 인사가 고른 말로 홈 인사를 맞춘다
+  var chatFromDocs = false;      // O-0548: 문서 뷰어 [💬]로 채팅에 왔으면 뒤로 = 보던 문서로
   function showHome() {
+    chatFromDocs = false;
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
@@ -2208,7 +2210,7 @@
   APP_VERSION = 'v9.14';        // v9.14: 홈 맨 위 버전 표시 — 「스마트비서」 제목 바로 옆에 작은 알약(v9.14)으로 지금 설치된 버전이 보인다. 홈 맨 아래의 흐린 버전 줄은 뺐다(같은 일을 하는 자리는 하나만 · 스위치 VER_SPOT: top · bottom — bottom 이면 v9.13 처럼 맨 아래 한 줄) · versionCode 58
   APP_VERSION = 'v9.15';        // v9.15(O-0544): 문서 뷰어 「수정 요청」 — [✏️ 편집하기]를 [✏️ 고치기]로 바꾸고 두 갈래(표시해서 요청하기 · PC 화면으로 직접 고치기). 문서 위에 [펜]으로 동그라미 · 밑줄(표는 칸 · 행 · 열 · 표 전체 칩), 양 끝 손잡이로 범위 조정, 메모(빠른 칩 · 글 · 🎤 받아쓰기), 번호 핀 · 목록(이 기기 7일 보관) · [PC로 보내기] → PC가 원본의 사본(_rev1)을 고쳐 「고친 곳 표시 PDF」와 함께 채팅으로. 보낸 뒤 [요청 취소] · 「이어서 고치기」. 문서를 0.5초 길게 눌러도 켜짐(옷·설정 → 설정에서 끄기), [? 사용법] 7장(처음 한 번 저절로). PDF 는 수정 요청만, 엑셀 · PPT · 스캔은 교정 표시 PDF 로 돌려드림. 진동 권한 추가(길게 누를 때 짧게 한 번) · versionCode 59
   APP_VERSION = 'v9.16';        // v9.16(O-0545): 채팅 답장 — 말풍선 ⋯ → 「↩ 답장」을 고르면 입력 줄 위에 원래 메시지가 붙고, 보낸 말풍선 맨 위에 인용(누르면 그 메시지로). PC 응답기가 그 메시지를 읽어 이어서 답한다. 폰 입력 바 안에도 인용 줄 · versionCode 60
-  APP_VERSION = 'v9.17';        // v9.17(O-0547): 수정 요청 메모의 「🎤 말로 적기」가 누르자마자 꺼지던 문제 — 2초 멈춤 시계가 말하기 전부터 돌던 것을 말이 시작된 뒤부터로(말이 없으면 8초), 채팅 받아쓰기와 같은 길(이어 듣기 · 효과음 설정)로 켜고, 멈출 때 마지막 말까지 받아 넣음. 「준비 중 → 듣는 중」 표시, 꺼지면 이유(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음)를 짧게 보여 줌. 실제로 받아 적은 글이 있을 때만 「말로 적음」 표시 · versionCode 61
+  APP_VERSION = 'v9.17';        // v9.17(O-0547): 수정 요청 메모의 「🎤 말로 적기」가 누르자마자 꺼지던 문제 — 2초 멈춤 시계가 말하기 전부터 돌던 것을 말이 시작된 뒤부터로(말이 없으면 8초), 채팅 받아쓰기와 같은 길(이어 듣기 · 효과음 설정)로 켜고, 멈출 때 마지막 말까지 받아 넣음. 「준비 중 → 듣는 중」 표시, 꺼지면 이유(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음)를 짧게 보여 줌. 실제로 받아 적은 글이 있을 때만 「말로 적음」 표시. (O-0548) 문서 뷰어 머리줄 [💬]로 채팅 바로 가기(수정 요청 화면에도) — 채팅에서 뒤로 가면 보던 문서의 같은 쪽 · 같은 확대로, 수정 요청 화면이었으면 펜/손 · 적던 메모까지 그대로 · versionCode 61
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -7181,6 +7183,11 @@
     if (isOpen(recordedPanel) && guardRecorded()) return true;                                          // v9.8: 아직 보내지 않은 녹음 — 한 번 묻는다
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
+    if (chatFromDocs && isOpen(chatView)) {     // O-0548: 뷰어 [💬]로 온 채팅 → 보던 문서의 같은 쪽 · 같은 확대(수정 요청 화면이었으면 그 화면)로
+      chatFromDocs = false; openScreen($('docsView'));
+      try { if (window.SmartDocs && SmartDocs.resumeFromChat) SmartDocs.resumeFromChat(); } catch (e) {}
+      return true;
+    }
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
@@ -7657,7 +7664,8 @@
   // v6.9: 최근 연 문서 삭제·비우기 확인은 앱 확인 시트로(confirm() 금지)
   if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn, o) { openSheet(t, m, label, fn); if (o && o.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#' + (o.icon || 'i-check')); } },   // v8.7: 「스토어 열기」 같은 여는 동작은 빨간 휴지통 대신 보통 버튼
     ask: askKFromDoc,
-    edit: { download: downloadAttachment } }); } catch (e) {} }   // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
+    edit: { download: downloadAttachment },
+    chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0171 · O-0548 뷰어 → 채팅(뒤로 가면 보던 문서로) PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
 
   /* ---- O-0544 문서 뷰어 「수정 요청」 — 보내기 · 취소 · 상태(화면은 markup.js) ----
    *   [PC로 보내기] → 채팅 첨부 통로(sendChatDocAsk, 연동 암호 확인 submit_memo)로 한 행:
@@ -7732,7 +7740,8 @@
   if (window.SmartMarkup) {
     SmartMarkup.setHost({ send: mkSend, cancel: mkCancel, status: mkStatus, toast: toast,
       sttBusy: function () { return !!(convoOn || (stt && stt.on)); },   // 음성 대화 · 채팅 받아쓰기 중이면 메모 받아쓰기를 켜지 않는다(설계 8절 잠금)
-      sfx: function () { return sfxMode; },                                // O-0547: 메모 받아쓰기도 채팅과 같은 효과음 설정(켬·작게·끔)으로
+      sfx: function () { return sfxMode; },
+      goChat: function () { if (window.SmartDocs && SmartDocs.goChat) SmartDocs.goChat(); },   // O-0548: 수정 요청 화면의 [💬] · [채팅 보기] · [작업 현황에서 보기] — 돌아오면 그 화면 그대로                                // O-0547: 메모 받아쓰기도 채팅과 같은 효과음 설정(켬·작게·끔)으로
       openChat: function () { openChat(); },
       reopenFix: function () { if (window.SmartDocs && SmartDocs.openFix) SmartDocs.openFix(); },
       setOrig: function (f) { if (window.SmartDocs && SmartDocs.setOrig) SmartDocs.setOrig(f); } });
