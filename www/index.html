@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/docviewer.css">
+  <link rel="stylesheet" href="css/markup.css"><!-- O-0544 문서 뷰어 「수정 요청」 -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
 </head>
@@ -510,6 +511,9 @@
       <!-- v8.4(O-0162): 글자 크기 — 채팅 말풍선·입력창·홈 카드·문서 뷰어 표에 적용 -->
       <div class="kw-sec"><b>글자 크기</b><small>이 폰에만 저장됩니다</small></div>
       <button type="button" class="card toggle kw-motion" id="kwFontRow"><span><b>글자 크기 바꾸기</b><small id="kwFontNow">지금: 보통</small></span><svg class="chev"><use href="#i-chev-r"/></svg></button>
+      <!-- O-0544: 문서 뷰어 「수정 요청」 길게 누르기 — 이 기기에만 저장(app.js · markup.js smart_markup_longpress) -->
+      <div class="kw-sec"><b>문서 뷰어</b><small>이 기기에만 저장됩니다</small></div>
+      <label class="card toggle kw-motion"><span><b>길게 눌러 수정 요청 켜기</b><small>문서를 0.5초 꾹 누르면 바로 수정 요청 화면이 열립니다</small></span><input type="checkbox" id="kwMkLong" hidden><span class="switch"></span></label>
       <!-- O-0116: 시작 인사 설정 -->
       <div class="kw-sec"><b>시작 인사</b><small id="kwIntroWhy"></small></div>
       <div class="card kw-intro">
@@ -591,6 +595,7 @@
           <div class="dv-tablist" id="dvTabList"></div>
           <button class="dv-tabbtn add" id="dvTabAdd" type="button" title="파일 더 열기">＋</button>
         </div>
+        <div id="dvMkStrip" class="mk-strip"></div><!-- O-0544 적어 둔 수정 요청·PC가 고치는 중(markup.js) -->
         <div id="sheetBar"><span class="lbl">시트</span><select id="sheetSel"></select></div>
         <div id="scroller">
           <div id="pages"></div>
@@ -598,8 +603,8 @@
         </div>
         <!-- v8.1(O-0154) 케이에게 묻기·맡기기 — 보던 문서를 케이 채팅으로(쪽 번호와 함께) -->
         <div class="dv-askdock"><!-- O-0171 PC에서 편집하기(docviewer.js EDIT_ON_EXTS 형식일 때만 보임 — v8.7(O-0174)부터 한글·워드·엑셀·PPT) -->
-          <button id="dvEditBtn" class="dv-editfab" type="button" style="display:none;" aria-label="PC에서 편집하기">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>편집하기</button>
+          <button id="dvEditBtn" class="dv-editfab" type="button" style="display:none;" aria-label="고치기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>고치기</button>
           <button id="dvAskBtn" class="dv-askfab" type="button" style="display:none;" aria-label="이 문서로 케이에게 묻기">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm3 6.5a1.5 1.5 0 1 0 0 .01zm5 0a1.5 1.5 0 1 0 0 .01zm5 0a1.5 1.5 0 1 0 0 .01z"/></svg>케이에게 묻기</button></div>
         <div id="bottombar">
@@ -629,6 +634,8 @@
       </div>
       <!-- O-0171 PC에서 편집하기 시트(내용은 docviewer.js editRender 가 그린다) -->
       <div id="dvEdit"><div class="dvs-panel dve-panel" id="dvePanel"></div></div>
+      <!-- O-0544 [✏️ 고치기] 두 갈래 시트(docviewer.js openFix) -->
+      <div id="dvFix"><div class="dvs-panel" id="dvfPanel"></div></div>
       <!-- v8.1(O-0154) 케이에게 묻기·맡기기 시트 -->
       <div id="dvAsk">
         <div class="dvs-panel dva-panel">
@@ -794,6 +801,7 @@
 <script src="js/history.js"></script>
 <script src="js/push.js"></script>
 <script src="js/health.js"></script>
+<script src="js/markup.js"></script><!-- O-0544 문서 뷰어 「수정 요청」(docviewer.js 보다 먼저 — init 때 길게 누르기를 붙인다) -->
 <script src="js/docviewer.js"></script>
 <script src="js/k-voice-stage.js"></script><!-- O-0490 케이 목소리 고르는 화면(케이 무대) — 화면 틀만 미리 정의해 둔다(app.js 가 켠다) -->
 <script src="js/k-character.js"></script>

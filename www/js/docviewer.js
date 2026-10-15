@@ -227,7 +227,8 @@
     if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
     snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
     curKey = null; openIntent = null; pendingRestore = null;
-    closeAsk(); closeEdit();
+    closeAsk(); closeEdit(); closeFix();
+    if (global.SmartMarkup && SmartMarkup.isOpen()) { try { SmartMarkup.close(); } catch (e) {} }   // O-0544
     if (tabs.length >= 2 || (parked && tabs.length)) { clearDocView(); liveTabId = null; }   // v8.1: 케이에게 묻고 나가면 1개라도 남긴다
     else { tabs = []; activeIdx = -1; liveTabId = null; parked = false; }
     if (rootEl) rootEl.classList.remove('on');
@@ -1129,6 +1130,8 @@
   // 뒤로(← · 폰 뒤로가기): 시트 닫기 → 여는 중이면 취소(보던 탭으로) → 뷰어 닫기
   function backAction() {
     if (!viewerOpen()) { leaveViewer(); return; }
+    if (global.SmartMarkup && SmartMarkup.isOpen()) { SmartMarkup.back(); return; }   // O-0544 수정 요청 화면(시트·선택·끝내기 순)
+    if (fixEl && fixEl.classList.contains('on')) { closeFix(); return; }               // O-0544 [✏️ 고치기] 시트
     if (sheetEl && sheetEl.classList.contains('on')) { closeSheet(); return; }
     if (askEl && askEl.classList.contains('on')) { closeAsk(); return; }   // v8.1
     if (editEl && editEl.classList.contains('on')) { closeEdit(); return; }   // O-0171
@@ -1414,9 +1417,84 @@
   function updateEditBtn() {
     if (!editBtn) return;
     var t = activeTab();
-    var ok = !!(editOpts && viewerOpen() && t && liveTabId === t.id && editOn(t.ext || extOf(t.name)));
+    var live = !!(editOpts && viewerOpen() && t && liveTabId === t.id);
+    var ok = live && (editOn(t.ext || extOf(t.name)) || mkAvail());
     editBtn.style.display = ok ? 'inline-flex' : 'none';
     if (ok) { var s = editSessGet(t); editBtn.classList.toggle('live', !!(s && s.phase && s.phase !== 'returned')); }
+    if (global.SmartMarkup && mkStripEl) SmartMarkup.viewerDoc(live && mkAvail() ? mkDocOf(t) : null, mkStripEl, function (then) { startMarkup('sheet', then); });   // O-0544 「적어 둔 수정 요청 N건」 띠
+  }
+
+  /* ============ O-0544 ✏️ 고치기 → 두 갈래(표시해서 요청하기 · PC에서 직접 고치기) ============
+   *   「표시해서 요청하기」 = markup.js(SmartMarkup) — 보던 PDF 위에 동그라미·밑줄 + 메모 → PC가 사본(_rev1)을 고쳐 채팅으로.
+   *   「PC에서 직접 고치기」 = 위 O-0171 그대로(한글·워드·엑셀·PPT만). PDF 는 수정 요청만.
+   *   길게 누르기(0.5초)로도 바로 켜진다(markup.js bindLongPress · 옷·설정 → 설정에서 끄기). */
+  var fixEl = null, mkStripEl = null;
+  function mkAvail() { return !!(global.SmartMarkup && SmartMarkup.enabled() && (pdfDoc || isExcelDoc)); }
+  function mkDocOf(t) {
+    var src = editSrcOf(t) || {};
+    return { name: t.name, ext: t.ext || extOf(t.name), key: editKeyOf(t), pages: pdfDoc ? pdfDoc.numPages : (t.pages || 0),
+             src: { pcPath: src.pcPath || null, url: src.url || null, file: src.file || null } };
+  }
+  function closeFix() { if (fixEl) fixEl.classList.remove('on'); }
+  function openFix() {
+    var t = activeTab();
+    if (!fixEl || !t || liveTabId !== t.id) { toast('문서가 다 열린 뒤에 눌러 주세요.'); return; }
+    var ext = t.ext || extOf(t.name), pcOk = editOn(ext), mk = mkAvail();
+    if (!mk) { openEdit(); return; }                                  // 수정 요청을 못 쓰는 때(문서 미표시 등)는 예전 그대로
+    closeSheet(); closeAsk(); closeEdit();
+    var h = '<div class="dvf-head"><div class="dvs-title">✏️ 고치기</div><button class="mk-help" type="button" data-fact="help">? 사용법</button></div>' +
+      '<div class="dvs-note">' + esc(t.name) + '</div>' +
+      '<button class="dvf-choice main" type="button" data-fact="markup"><span class="ic">📍</span><span><span class="t1">표시해서 요청하기</span>' +
+        '<span class="t2" style="display:block">고칠 곳에 동그라미 치고 메모만 남기면, PC가 사본을 고쳐 채팅으로 보내 드려요</span></span></button>' +
+      (pcOk ? '<button class="dvf-choice" type="button" data-fact="pc"><span class="ic">🖥️</span><span><span class="t1">PC에서 직접 고치기</span>' +
+        '<span class="t2" style="display:block">PC의 ' + esc(EDITABLE[ext]) + '로 열고 원격 제어로 직접 고쳐요</span></span></button>' : '') +
+      '<button class="dvs-close" type="button" data-fact="close">닫기</button>';
+    $('dvfPanel').innerHTML = h;
+    fixEl.classList.add('on');
+  }
+  function onFixAct(a) {
+    if (a === 'close') { closeFix(); return; }
+    if (a === 'help') { closeFix(); if (global.SmartMarkup) SmartMarkup.help(0, 'fix'); return; }
+    if (a === 'pc') { closeFix(); openEdit(); return; }
+    if (a === 'markup') { closeFix(); startMarkup('sheet'); }
+  }
+  // 수정 요청 화면 열기. 엑셀을 표로 보고 있으면 먼저 PDF 로 바꾼 뒤(표시는 PDF 쪽 위에 한다).
+  function startMarkup(how, then) {
+    var t = activeTab(); if (!t || liveTabId !== t.id || !global.SmartMarkup) return;
+    function go() {
+      var r = SmartMarkup.open({ pdfDoc: pdfDoc, doc: mkDocOf(t), page: getCurrentPage() || 1, how: how || 'sheet' });
+      if (then && r && r.then) r.then(function () { then(); });
+    }
+    if (pdfDoc && viewMode !== 'table') { go(); return; }
+    if (isExcelDoc && excelView === 'table') {
+      toast('엑셀은 PDF로 바꿔서 표시해요. 잠시만요…');
+      toggleExcelView();
+      var t0 = Date.now(), iv = setInterval(function () {
+        if (pdfDoc && viewMode !== 'table') { clearInterval(iv); go(); }
+        else if (Date.now() - t0 > 60000 || !viewerOpen()) { clearInterval(iv); }
+      }, 300);
+    }
+  }
+  // 길게 누른 자리 → {pdfDoc, doc, page, ptY}. PDF 로 보이고, 시트·슬라이드쇼가 없을 때만.
+  function mkLongCtx(x, y) {
+    var t = activeTab();
+    if (!mkAvail() || !pdfDoc || viewMode === 'table' || ssOpen || !t || liveTabId !== t.id) return null;
+    if ((sheetEl && sheetEl.classList.contains('on')) || (askEl && askEl.classList.contains('on')) || (editEl && editEl.classList.contains('on')) || (fixEl && fixEl.classList.contains('on'))) return null;
+    var el = document.elementFromPoint(x, y), slot = el && el.closest && el.closest('.page-slot');
+    if (!slot) return null;
+    var page = pdfPaged ? pageModeCur : (+slot.dataset.page || getCurrentPage() || 1), r = slot.getBoundingClientRect();
+    var ptY = null;
+    if (!userRotation && r.height > 0) { var ph = (r.height / (baseScale * renderedZoom || 1)); ptY = (y - r.top) / r.height * ph; }
+    return { pdfDoc: pdfDoc, doc: mkDocOf(t), page: page, ptY: ptY };
+  }
+  function initFix() {
+    fixEl = $('dvFix'); mkStripEl = $('dvMkStrip');
+    if (fixEl) fixEl.addEventListener('click', function (e) {
+      if (e.target === fixEl) { closeFix(); return; }
+      var b = e.target.closest ? e.target.closest('[data-fact]') : null;
+      if (b) onFixAct(b.getAttribute('data-fact'));
+    });
+    if (global.SmartMarkup && scroller) SmartMarkup.bindLongPress(scroller, mkLongCtx);
   }
   // ---- 시트 그리기: 단계 띠 ① PC로 보내기 ② PC에서 열기 ③ 원격으로 고치고 저장 ④ 다 됐어요 ----
   function editStepsHtml(step) {
@@ -1657,7 +1735,7 @@
   }
   function initEdit() {
     editEl = $('dvEdit'); editBtn = $('dvEditBtn');
-    if (editBtn) editBtn.onclick = openEdit;
+    if (editBtn) editBtn.onclick = openFix;                          // O-0544: 두 갈래 시트(수정 요청을 못 쓰면 openFix 가 곧장 openEdit)
     if (!editEl) return;
     editEl.addEventListener('click', function (e) {
       if (e.target === editEl) { closeEdit(); return; }
@@ -1819,6 +1897,7 @@
     renderRecent();
     if (fileInput) fileInput.addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) handleLocalFile(f); });
 
+    initFix();                                                      // O-0544 수정 요청(고치기 두 갈래 · 길게 누르기 · 적어 둔 요청 띠)
     $('dvBack').onclick = backAction;
     $('dvZoomIn').onclick = function () { if (viewMode === 'table') stepTableFont(1.15); else stepZoom(1.25); };
     $('dvZoomOut').onclick = function () { if (viewMode === 'table') stepTableFont(1 / 1.15); else stepZoom(0.8); };
@@ -1913,7 +1992,9 @@
     isFullscreen: function () { return ssOpen; },
     closeFullscreen: closeSlideshow,
     leave: function () { closeSlideshow(); leaveViewer(); },
-    openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
+    openRemote: editOpenRemote,
+    openFix: openFix,                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
+    setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },

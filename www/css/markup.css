@@ -1,0 +1,195 @@
+/* ============================================================================
+ * markup.css — O-0544 문서 뷰어 「수정 요청」(markup.js) · v9.15
+ *   #docRoot 의 변수(--card·--ink·--sub·--line·--brand·--bg·--icon-bg·--icon-ink)를 그대로 쓰고, 어두운 화면은 #docRoot.dark.
+ *   모든 규칙은 #mkRoot / .mk- 아래로만(다른 화면과 겹치지 않게).
+ * ==========================================================================*/
+#docRoot { --mk-red:#dc2626; --mk-red-bg:#fef2f2; --mk-red-line:#fecaca; --mk-hl:rgba(250,204,21,.42); --mk-hl-line:rgba(202,138,4,.55);
+  --mk-cell:rgba(37,99,235,.22); --mk-cell-line:rgba(37,99,235,.75); --mk-kbub:#ffffff; --mk-kbub-b:rgba(99,102,241,.26); }
+#docRoot.dark { --mk-red-bg:#2a1414; --mk-red-line:#7f1d1d; --mk-kbub:#18214A; --mk-kbub-b:rgba(139,160,255,.34); }
+#mkRoot{display:none; position:absolute; inset:0; z-index:40; background:var(--bg); color:var(--ink); flex-direction:column; overflow:hidden;
+  font-family:"Pretendard",-apple-system,"Segoe UI","Malgun Gothic","맑은 고딕",sans-serif;}
+#mkRoot.on{display:flex;}
+#mkRoot *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+#mkRoot button{font-family:inherit;}
+
+.mk-top{flex:none; background:var(--bar); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:6px; padding:8px 10px; padding-top:calc(8px + env(safe-area-inset-top));}
+.mk-top .mk-tbtn{flex:none; min-width:46px; min-height:44px; border:0; border-radius:12px; background:var(--icon-bg); color:var(--icon-ink); font-size:20px; font-weight:800; cursor:pointer;}
+.mk-top .mk-fname{flex:1; min-width:0; font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mk-top .mk-pgno{flex:none; font-size:13px; font-weight:800; color:var(--sub); padding:0 4px;}
+
+.mk-band{flex:none; background:var(--mk-red-bg); border-bottom:1.5px solid var(--mk-red-line); padding:7px 10px 8px; animation:mkBandIn .22s cubic-bezier(.2,.8,.2,1);}
+@keyframes mkBandIn{from{transform:translateY(-100%); opacity:0} to{transform:none; opacity:1}}
+.mk-band-row{display:flex; align-items:center; gap:8px;}
+.mk-band-title{flex:1; min-width:0; font-size:16px; font-weight:900; color:var(--mk-red); white-space:nowrap;}
+.mk-band-hint{font-size:12.5px; font-weight:700; color:var(--sub); margin-top:4px; word-break:keep-all; line-height:1.35}
+.mk-state{font-weight:900; color:var(--mk-red);} .mk-state.hand{color:var(--sub)}
+.mk-help{flex:none; height:38px; display:inline-flex; align-items:center; padding:0 11px; border-radius:999px; border:1.5px solid var(--mk-red-line); background:var(--card); color:var(--mk-red); font-size:14px; font-weight:900; cursor:pointer; white-space:nowrap;}
+.mk-seg{flex:none; display:flex; border-radius:12px; background:var(--card); border:1.5px solid var(--mk-red-line); padding:3px; gap:3px; position:relative;}
+.mk-seg button{position:relative; z-index:1; min-width:52px; height:36px; border:0; border-radius:9px; background:transparent; color:var(--sub); font-size:15px; font-weight:900; cursor:pointer; transition:color .15s;}
+.mk-seg button.on{color:#fff;}
+.mk-seg .mk-knob{position:absolute; z-index:0; top:3px; bottom:3px; width:calc(50% - 4.5px); left:3px; border-radius:9px; background:var(--mk-red); transition:transform .18s cubic-bezier(.2,.8,.2,1);}
+.mk-seg.hand .mk-knob{transform:translateX(calc(100% + 3px)); background:#475569;}
+
+.mk-strip{flex:none; display:none; align-items:center; gap:8px; padding:8px 12px; font-size:14px; font-weight:800; border-bottom:1px solid var(--line);}
+.mk-strip.on{display:flex;}
+.mk-strip .mk-grow{flex:1; min-width:0; word-break:keep-all; line-height:1.35}
+.mk-strip button{flex:none; height:36px; padding:0 12px; border-radius:10px; font-size:14px; font-weight:900; cursor:pointer; white-space:nowrap; background:var(--card);}
+.mk-sent{background:#eff6ff; color:#1e3a8a} .mk-sent button{color:#dc2626; border:1.5px solid #fecaca} .mk-sent .mk-job{color:#1d4ed8; border-color:#bfdbfe}
+.mk-done{background:#ecfdf5; color:#065f46} .mk-done button{color:#065f46; border:1.5px solid #a7f3d0}
+.mk-resume{background:#fffbeb; color:#78350f} .mk-resume button{color:#78350f; border:1.5px solid #fcd34d}
+#docRoot.dark .mk-sent{background:#172554; color:#bfdbfe} #docRoot.dark .mk-sent button{color:#fca5a5; border-color:#7f1d1d} #docRoot.dark .mk-sent .mk-job{color:#93c5fd; border-color:#1e40af}
+#docRoot.dark .mk-done{background:#052e1f; color:#a7f3d0} #docRoot.dark .mk-done button{color:#a7f3d0; border-color:#047857}
+#docRoot.dark .mk-resume{background:#2d2006; color:#fde68a} #docRoot.dark .mk-resume button{color:#fde68a; border-color:#92400e}
+
+.mk-main{flex:1; min-height:0; display:flex;}
+.mk-area{flex:1; min-width:0; position:relative; display:flex; flex-direction:column;}
+.mk-chips{position:absolute; left:0; right:0; top:0; z-index:6; display:none; flex-direction:column; gap:6px; padding:7px 10px 8px; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 4px 12px rgba(0,0,0,.18);}
+.mk-chips.on{display:flex;}
+.mk-chips .mk-lab{font-size:13px; font-weight:900; color:var(--brand); word-break:keep-all}
+.mk-chiprow{display:flex; gap:6px; flex-wrap:wrap}
+.mk-chip{flex:none; height:36px; padding:0 13px; border-radius:999px; border:1.5px solid var(--line); background:var(--bg); color:var(--ink); font-size:14px; font-weight:800; cursor:pointer; white-space:nowrap}
+.mk-chip.on{border-color:var(--mk-cell-line); background:var(--mk-cell); color:var(--brand)}
+.mk-scroll{flex:1; overflow:auto; background:var(--scroll-bg); padding:10px 0 160px; scrollbar-gutter:stable; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;}
+.mk-scroll.pen{touch-action:none;}
+.mk-pg{position:relative; margin:0 auto 10px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.35);}
+.mk-pg canvas{display:block; width:100%; height:100%;}
+.mk-pg svg.mk-ov{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible}
+.mk-scroll.pen .mk-pg svg.mk-ov{pointer-events:auto; cursor:crosshair}
+.mk-ov .mk-hit{pointer-events:auto; cursor:grab}
+.mk-ov .mk-stroke{fill:none; stroke:var(--mk-red); stroke-linecap:round; stroke-linejoin:round; opacity:.9}
+.mk-ov .mk-stroke.fade{transition:opacity .2s; opacity:0}
+.mk-ov .mk-hl{fill:var(--mk-hl); stroke:var(--mk-hl-line); stroke-width:.6; animation:mkFade .2s ease-out}
+.mk-ov .mk-hl.done{fill:rgba(250,204,21,.22); stroke:rgba(220,38,38,.55); stroke-dasharray:2 1.5}
+.mk-ov .mk-cellbox{fill:var(--mk-cell); stroke:var(--mk-cell-line); stroke-width:.9; animation:mkFade .15s}
+.mk-ov .mk-handle{fill:var(--brand); stroke:#fff}
+.mk-ov .mk-stem{stroke:var(--brand)}
+.mk-ov .mk-pin{cursor:pointer; pointer-events:auto}
+.mk-ov .mk-pin circle{fill:var(--mk-red); stroke:#fff}
+.mk-ov .mk-pin.sent circle{fill:#2563eb} .mk-ov .mk-pin.done circle{fill:#16a34a}
+.mk-ov .mk-pin text{fill:#fff; font-weight:900; text-anchor:middle; dominant-baseline:central; pointer-events:none}
+.mk-ov .mk-pin.drop{animation:mkPinDrop .25s cubic-bezier(.3,1.6,.5,1)}
+.mk-ov .mk-pin.blink circle{animation:mkBlink .9s 2}
+@keyframes mkFade{from{opacity:0} to{opacity:1}}
+@keyframes mkPinDrop{from{transform:translateY(-16px); opacity:0} to{transform:none; opacity:1}}
+@keyframes mkBlink{0%,100%{opacity:1} 50%{opacity:.15}}
+.mk-pop{position:absolute; z-index:3; display:flex; gap:6px; align-items:center; transform-origin:top left; animation:mkPop .15s cubic-bezier(.3,1.5,.5,1)}
+@keyframes mkPop{from{transform:scale(.6); opacity:0} to{transform:none; opacity:1}}
+.mk-pop .go{height:46px; padding:0 18px; border:0; border-radius:14px; background:var(--mk-red); color:#fff; font-size:17px; font-weight:900; box-shadow:0 6px 16px rgba(220,38,38,.38); cursor:pointer; white-space:nowrap}
+.mk-pop .again{height:38px; padding:0 11px; border:1.5px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); font-size:13.5px; font-weight:800; cursor:pointer; white-space:nowrap}
+.mk-flash{position:absolute; inset:0; pointer-events:none; border:4px solid var(--mk-red); border-radius:4px; opacity:0; z-index:7}
+.mk-flash.go{animation:mkFlash .3s ease-out}
+@keyframes mkFlash{0%{opacity:0} 30%{opacity:1} 100%{opacity:0}}
+
+.mk-k{position:absolute; left:4px; bottom:70px; z-index:4; pointer-events:none; display:flex; align-items:flex-end; transition:transform .3s cubic-bezier(.2,.8,.2,1), opacity .3s;}
+.mk-k img{height:160px; width:auto; display:block; filter:drop-shadow(0 6px 14px rgba(0,0,0,.35));}
+.mk-k.photo img{height:118px; border-radius:16px; border:2px solid var(--card); object-fit:cover; margin-bottom:6px}
+.mk-k.aside{transform:translateX(-64px); opacity:.6} .mk-k.hidden{transform:translateX(-140%); opacity:0}
+.mk-kbub{max-width:220px; margin:0 0 94px -16px; background:var(--mk-kbub); color:var(--ink); border:1.5px solid var(--mk-kbub-b); border-radius:16px 16px 16px 4px;
+  padding:9px 12px; font-size:14.5px; font-weight:800; line-height:1.4; word-break:keep-all; box-shadow:0 8px 22px rgba(0,0,0,.18); transition:opacity .2s}
+.mk-k.photo .mk-kbub{margin-bottom:70px; margin-left:8px}
+.mk-k.aside .mk-kbub, .mk-k.hidden .mk-kbub{opacity:0}
+.mk-kbub.say{animation:mkSay .25s cubic-bezier(.3,1.4,.5,1)}
+@keyframes mkSay{from{transform:scale(.85) translateY(6px); opacity:0} to{transform:none; opacity:1}}
+
+.mk-dock{flex:none; display:flex; gap:8px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); background:var(--bar); border-top:1px solid var(--line); align-items:center}
+.mk-dbtn{height:52px; min-width:0; border-radius:14px; border:0; font-size:16px; font-weight:900; cursor:pointer; padding:0 12px; white-space:nowrap}
+.mk-dbtn.count{flex:1.2; background:var(--icon-bg); color:var(--ink); display:flex; align-items:center; justify-content:center; gap:6px}
+.mk-dbtn.count b{display:inline-block; min-width:26px; height:26px; line-height:26px; border-radius:13px; background:var(--mk-red); color:#fff; font-size:14px}
+.mk-dbtn.count.bump b{animation:mkBump .3s}
+@keyframes mkBump{50%{transform:scale(1.35)}}
+.mk-dbtn.send{flex:1.3; background:var(--brand); color:#fff}
+.mk-dbtn.end{flex:none; background:var(--icon-bg); color:var(--ink)}
+.mk-dbtn:active,.mk-pop .go:active{transform:scale(.97)}
+
+.mk-side{display:none; width:310px; flex:none; background:var(--card); border-left:1px solid var(--line); flex-direction:column; min-height:0}
+.mk-side .mk-sh{padding:12px 14px 8px; font-size:17px; font-weight:900; display:flex; align-items:center; gap:8px}
+.mk-side .mk-sh b{display:inline-block; min-width:26px; height:26px; line-height:26px; text-align:center; border-radius:13px; background:var(--mk-red); color:#fff; font-size:14px}
+.mk-side .mk-slist{flex:1; overflow:auto; padding:0 10px 10px; display:flex; flex-direction:column; gap:8px}
+.mk-side .mk-smemo{overflow:auto; padding:0 12px 12px}
+.mk-side .mk-sfoot{padding:10px; border-top:1px solid var(--line)}
+.mk-side.memo-open .mk-sh, .mk-side.memo-open .mk-slist, .mk-side.memo-open .mk-sfoot{display:none}
+.mk-side.memo-open .mk-smemo{flex:1; min-height:0; padding-top:10px}
+@media (min-width:720px){ #mkRoot .mk-side{display:flex} #mkRoot .mk-dock .count, #mkRoot .mk-dock .send{display:none} }
+
+.mk-sheet{position:absolute; inset:0; z-index:50; display:none; align-items:flex-end; justify-content:center; background:rgba(20,24,31,.5)}
+.mk-sheet.on{display:flex; animation:mkFade .15s}
+.mk-panel{background:var(--card); color:var(--ink); width:100%; max-width:560px; max-height:88%; overflow:auto; border-radius:20px 20px 0 0;
+  padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; box-shadow:0 -6px 24px rgba(0,0,0,.25); animation:mkUp .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes mkUp{from{transform:translateY(40px); opacity:.4} to{transform:none; opacity:1}}
+@media (min-width:900px){ .mk-sheet{align-items:center} .mk-panel{border-radius:20px} }
+.mk-ptitle{font-size:19px; font-weight:900; display:flex; align-items:center; gap:8px}
+.mk-ptitle .mk-grow{flex:1}
+.mk-pnote{font-size:13.5px; color:var(--sub); font-weight:700; word-break:keep-all; line-height:1.45}
+.mk-big{min-height:56px; border-radius:14px; border:0; background:var(--brand); color:#fff; font-size:17px; font-weight:900; cursor:pointer}
+.mk-big.red{background:var(--mk-red)} .mk-big.gray{background:var(--icon-bg); color:var(--ink)}
+.mk-close{min-height:48px; padding:8px 12px; line-height:1.35; word-break:keep-all; border:0; border-radius:14px; background:var(--icon-bg); color:var(--icon-ink); font-size:16px; font-weight:800; cursor:pointer}
+.mk-close:disabled{opacity:.38; cursor:default}
+.mk-del{align-self:center; min-height:40px; padding:0 14px; border:0; background:transparent; color:var(--mk-red); font-size:14.5px; font-weight:800; text-decoration:underline; cursor:pointer}
+.mk-quote{display:flex; gap:10px; align-items:flex-start; background:var(--bg); border:1px solid var(--line); border-radius:14px; padding:10px}
+.mk-quote img{flex:none; width:86px; height:auto; max-height:70px; object-fit:cover; object-position:left top; border-radius:8px; border:1px solid var(--line); background:#fff}
+.mk-quote .qt{font-size:14.5px; font-weight:700; line-height:1.5; word-break:break-all; min-width:0}
+.mk-quote .qt mark{background:var(--mk-hl); color:inherit; padding:0 2px; border-radius:3px}
+.mk-quote .qm{font-size:12.5px; color:var(--sub); font-weight:800; margin-bottom:3px}
+.mk-qchips{display:flex; flex-wrap:wrap; gap:6px}
+.mk-qchips button{height:38px; padding:0 12px; border-radius:999px; border:1.5px solid var(--line); background:var(--bg); color:var(--ink); font-size:14px; font-weight:800; cursor:pointer}
+.mk-memo textarea{width:100%; min-height:84px; resize:none; border-radius:14px; border:1.5px solid var(--line); background:var(--bg); color:var(--ink); font-family:inherit; font-size:16.5px; line-height:1.45; padding:11px 12px}
+.mk-memo textarea:focus{outline:none; border-color:var(--brand)}
+.mk-mic{display:flex; align-items:center; justify-content:center; gap:8px; min-height:50px; border-radius:14px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); font-size:16px; font-weight:900; cursor:pointer}
+.mk-mic.on{border-color:var(--mk-red); color:var(--mk-red); background:var(--mk-red-bg)}
+.mk-mic .dot{width:10px; height:10px; border-radius:50%; background:var(--mk-red); display:none}
+.mk-mic.on .dot{display:block; animation:mkBlink .8s infinite}
+.mk-row2{display:flex; gap:8px} .mk-row2 > *{flex:1}
+.mk-item{border:1.5px solid var(--line); border-radius:14px; padding:10px 12px; background:var(--bg); display:flex; flex-direction:column; gap:6px; cursor:pointer}
+.mk-item .ih{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:var(--sub)}
+.mk-item .num{display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:12px; background:var(--mk-red); color:#fff; font-size:13px; font-weight:900}
+.mk-item.sent .num{background:#2563eb} .mk-item.done .num{background:#16a34a}
+.mk-item .iq{font-size:14.5px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mk-item .im{font-size:14px; font-weight:700; opacity:.85; word-break:keep-all}
+.mk-item .ib{display:flex; gap:6px}
+.mk-item .ib button{height:36px; padding:0 12px; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); font-size:13.5px; font-weight:800; cursor:pointer}
+.mk-item .st{margin-left:auto; font-size:12px; font-weight:900; padding:2px 7px; border-radius:6px; background:#dbeafe; color:#1e40af}
+.mk-item.done .st{background:#dcfce7; color:#166534}
+.mk-empty{font-size:14.5px; color:var(--sub); font-weight:700; padding:14px 4px; text-align:center; line-height:1.5; word-break:keep-all}
+.mk-toast{position:absolute; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px); z-index:60; background:#111827; color:#fff; border-radius:14px; padding:11px 14px;
+  font-size:14.5px; font-weight:800; display:flex; gap:12px; align-items:center; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; max-width:calc(100% - 32px)}
+.mk-toast.on{opacity:1; transform:translateX(-50%); pointer-events:auto}
+.mk-toast button{border:0; background:transparent; color:#93c5fd; font-size:14.5px; font-weight:900; cursor:pointer; padding:4px}
+/* 사용법 */
+.mk-hstage{position:relative; overflow:hidden; border-radius:16px; background:var(--bg); border:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none}
+.mk-htrack{display:flex; transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.mk-hcard{flex:none; width:100%; padding:14px 14px 16px; display:flex; flex-direction:column; align-items:center; gap:10px; user-select:none; -webkit-user-select:none}
+.mk-hcard svg{width:100%; max-width:300px; height:auto; display:block}
+.mk-hcard .hn{font-size:12.5px; font-weight:900; color:var(--mk-red)}
+.mk-hcard .ht{font-size:17px; font-weight:900; text-align:center; word-break:keep-all; line-height:1.4}
+.mk-hcard .hl1{font-size:14.5px; font-weight:700; color:var(--sub); text-align:center; word-break:keep-all; line-height:1.5}
+.mk-hdots{display:flex; justify-content:center; gap:6px}
+.mk-hdots i{width:8px; height:8px; border-radius:4px; background:var(--line); transition:width .2s, background .2s}
+.mk-hdots i.on{width:22px; background:var(--mk-red)}
+.mk-draw{stroke-dasharray:var(--len,300); stroke-dashoffset:var(--len,300); animation:mkDraw 1.4s .2s ease-out forwards}
+.mk-hcard:not(.cur) .mk-draw{animation:none}
+@keyframes mkDraw{to{stroke-dashoffset:0}}
+.mk-tap{animation:mkTap 1.6s infinite}
+@keyframes mkTap{0%{r:3; opacity:.9} 60%{r:13; opacity:0} 100%{r:13; opacity:0}}
+/* [✏️ 고치기] 두 갈래 시트 (뷰어 쪽) */
+#docRoot #dvFix{display:none; position:absolute; inset:0; z-index:23; background:rgba(20,24,31,.55); align-items:flex-end; justify-content:center;}
+#docRoot #dvFix.on{display:flex;}
+#docRoot .dvf-choice{display:flex; gap:12px; align-items:center; text-align:left; border-radius:16px; padding:14px; cursor:pointer; border:2px solid var(--line); background:var(--bg); color:var(--ink); font-family:inherit}
+#docRoot .dvf-choice.main{border-color:var(--mk-red); background:var(--mk-red-bg)}
+#docRoot .dvf-choice:disabled{opacity:.5; cursor:default}
+#docRoot .dvf-choice .ic{flex:none; width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:24px; background:var(--card)}
+#docRoot .dvf-choice .t1{font-size:17px; font-weight:900}
+#docRoot .dvf-choice .t2{font-size:13.5px; font-weight:700; color:var(--sub); margin-top:3px; word-break:keep-all; line-height:1.4}
+#docRoot .dvf-choice.small{padding:10px 14px} #docRoot .dvf-choice.small .t1{font-size:15px}
+#docRoot .dvf-tag{display:inline-block; font-size:11.5px; font-weight:900; color:#fff; background:var(--mk-red); border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:2px}
+#docRoot .dvf-head{display:flex; align-items:center; gap:8px}
+#docRoot .dvf-head .dvs-title{flex:1}
+@media (prefers-reduced-motion: reduce){
+  #mkRoot *, #mkRoot *::before, #mkRoot *::after{animation-duration:.001s !important; animation-iteration-count:1 !important; transition-duration:.001s !important}
+  #mkRoot .mk-draw{stroke-dashoffset:0 !important}
+}
+/* [✏️ 고치기] 시트에서 연 사용법: 수정 요청 화면은 감추고 사용법 카드만 */
+#mkRoot.help-only{background:transparent; pointer-events:none}
+#mkRoot.help-only > *:not(#mkHelp){display:none !important}
+#mkRoot.help-only #mkHelp{pointer-events:auto}
+/* 뷰어 위 「적어 둔 수정 요청」 띠 */
+#docRoot #dvMkStrip{display:none}

@@ -2206,6 +2206,7 @@
   APP_VERSION = 'v9.12';        // v9.12(O-0490): 케이 목소리 고르는 자리를 「케이 무대」 화면으로 — 꾸미기 「설정」에는 한 줄(지금 목소리 ›)만 두고, 누르면 케이가 「지금 목소리」 카드를 소개하는 화면이 열린다. 아래 번호판(여자 1–12 · 남자 1–12)의 번호를 누르면 예시를 들려 드리고 그 목소리로 바꾼다(빠름 = 동그란 번호 · 느림 = 둥근 네모 · 본인 목소리에는 꼬리표, 목록에 없는 번호는 점선 자리). 예시 소리는 그 화면을 열었을 때만 두 개씩 미리 받는다(예전에는 꾸미기를 열면 전부 한꺼번에). 기기 음성(「이 폰이 · 이 기기가 직접 읽기」)은 뺐다(골라 두신 저장값은 지우지 않음). 목소리를 고른 직후 PC 상태가 늦게 따라와도 안내 한 줄 · [듣기] 기다림이 고른 목소리의 것으로 유지된다. 스위치 KV_UI(stage · list) · KV_WARM(open · all · tap) · KV_DEVICE(false · true) — list · all · true 면 v9.11 의 줄 목록 화면 · versionCode 56
   APP_VERSION = 'v9.13';        // v9.13: 블랙 슬림 원피스 · 오프숄더 니트의 전신 그림을 다른 옷과 같은 키 · 비율로(꾸미기 전신 칸 · 시작 인사의 서 있는 그림) + 오프숄더의 옷장 목록 그림. 그림 3장만 바뀌고 코드는 그대로다. 두 옷의 새 인사 영상과 오프숄더의 새 통화 영상은 서버 묶음으로 따로 바뀐다(앱 설치 뒤) · 블랙 슬림의 통화 화면 · 옷장 목록 그림은 그대로 · versionCode 57
   APP_VERSION = 'v9.14';        // v9.14: 홈 맨 위 버전 표시 — 「스마트비서」 제목 바로 옆에 작은 알약(v9.14)으로 지금 설치된 버전이 보인다. 홈 맨 아래의 흐린 버전 줄은 뺐다(같은 일을 하는 자리는 하나만 · 스위치 VER_SPOT: top · bottom — bottom 이면 v9.13 처럼 맨 아래 한 줄) · versionCode 58
+  APP_VERSION = 'v9.15';        // v9.15(O-0544): 문서 뷰어 「수정 요청」 — [✏️ 편집하기]를 [✏️ 고치기]로 바꾸고 두 갈래(표시해서 요청하기 · PC에서 직접 고치기). 문서 위에 [펜]으로 동그라미 · 밑줄(표는 칸 · 행 · 열 · 표 전체 칩), 양 끝 손잡이로 범위 조정, 메모(빠른 칩 · 글 · 🎤 받아쓰기), 번호 핀 · 목록(이 기기 7일 보관) · [PC로 보내기] → PC가 원본의 사본(_rev1)을 고쳐 「고친 곳 표시 PDF」와 함께 채팅으로. 보낸 뒤 [요청 취소] · 「이어서 고치기」. 문서를 0.5초 길게 눌러도 켜짐(옷·설정 → 설정에서 끄기), [? 사용법] 7장(처음 한 번 저절로). PDF 는 수정 요청만, 엑셀 · PPT · 스캔은 교정 표시 PDF 로 돌려드림. 진동 권한 추가(길게 누를 때 짧게 한 번) · versionCode 59
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -7432,6 +7433,89 @@
   if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn, o) { openSheet(t, m, label, fn); if (o && o.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#' + (o.icon || 'i-check')); } },   // v8.7: 「스토어 열기」 같은 여는 동작은 빨간 휴지통 대신 보통 버튼
     ask: askKFromDoc,
     edit: { download: downloadAttachment } }); } catch (e) {} }   // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
+
+  /* ---- O-0544 문서 뷰어 「수정 요청」 — 보내기 · 취소 · 상태(화면은 markup.js) ----
+   *   [PC로 보내기] → 채팅 첨부 통로(sendChatDocAsk, 연동 암호 확인 submit_memo)로 한 행:
+   *     note = 사람이 읽는 요약(채팅 말풍선은 이 요약 글만) · files = 짚은 곳 그림(mark_N.jpg) + (폰 원본이면) 원본 파일
+   *     meta.markup = {v, doc:{name,ext,key,pages,src:{type:pc_path|url|upload}, after_rid}, marks:[…], opts}
+   *   PC 응답기(markup_intake.py)가 케이 판단 없이 작업실(markup)로 넘기고 「받았어요 …(작업 #N)」으로 답한다.
+   *   [요청 취소] → meta.markup_cancel = {rid} 한 행(PC가 작업을 멈추고 답한다). 상태는 작업 카드와 같은 목록(list_office_orders_by_source). */
+  function mkDataUrlToFile(du, name) {
+    try {
+      var m = /^data:([^;]+);base64,(.*)$/.exec(du || ''); if (!m) return null;
+      var bin = atob(m[2]), u = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      return new File([u], name, { type: m[1] });
+    } catch (e) { return null; }
+  }
+  function mkSend(p) {
+    if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 안 됐어요'));
+    if (!getSyncPass()) {
+      try { window.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: true } })); } catch (x) {}
+      var pe = new Error('연동 암호가 필요해요'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
+    }
+    var d = p.doc || {}, s = d.src || {}, entries = [], src;
+    if (s.pcPath) src = { type: 'pc_path', path: s.pcPath };
+    else if (s.url) src = { type: 'url', url: s.url };
+    else if (s.file) {
+      if ((s.file.size || 0) > CHAT_CHUNK_LIMIT) { var be = new Error('원본이 너무 커요'); be.friendly = '원본이 45MB를 넘어 폰에서 보낼 수 없어요 — PC에 있는 파일로 열어 주세요'; return Promise.reject(be); }
+      src = { type: 'upload', file: { name: d.name, size: s.file.size || 0 } };
+    } else return Promise.reject(new Error('원본 파일이 없어요'));
+    var marks = (p.marks || []).map(function (m) {
+      var shot = '';
+      if (m.shot) { var f = mkDataUrlToFile(m.shot, 'mark_' + m.n + '.jpg'); if (f) { entries.push({ file: f }); shot = f.name; } }
+      var o = {}; for (var k in m) if (m.hasOwnProperty(k)) o[k] = m[k];
+      o.shot = shot; return o;
+    });
+    if (src.type === 'upload') entries.push({ file: new File([s.file], d.name, { type: s.file.type || 'application/octet-stream' }) });
+    var lines = marks.map(function (m) { return m.n + ') ' + m.page + '쪽 「' + String(m.label || m.text || '').slice(0, 30) + '」 → ' + m.note; });
+    var head = '✏️ 「' + d.name + '」 수정 요청 ' + marks.length + '건' + (d.after_rid ? ' (앞 요청에 이어서)' : '');
+    var note = head + '\n' + lines.join('\n');
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var msg = { role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true, uploading: true };
+    chatMsgs.push(msg); saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+    var memo = { id: id, token: tok, thread: chatThread, title: ('수정 요청 · ' + d.name).slice(0, 40), note: note,
+                 extraMeta: { markup: { v: 1, doc: { name: d.name, ext: d.ext, key: d.key, pages: d.pages || 0, src: src, after_rid: d.after_rid || null },
+                                        marks: marks, opts: { marked_pdf: true } } } };
+    return OfficeBridge.sendChatDocAsk(memo, entries).then(function () {
+      msg.uploading = false; saveChatMsgs(); if (isOpen(chatView)) renderChat();
+      startChatReconcile(); kickOrderPoll();
+      return { rid: id };
+    }, function (e) {
+      msg.answered = true; msg.uploading = false;
+      chatMsgs.push({ role: 'k', text: '수정 요청을 PC로 보내지 못했어요(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 문서 화면에서 다시 눌러 주세요. 적어 두신 요청은 그대로 남아 있어요.', ts: Date.now() });
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+      throw e;
+    });
+  }
+  function mkCancel(rid) {
+    if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요해요'));
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '✏️ 보낸 수정 요청을 취소해 주세요';
+    chatMsgs.push({ role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true });
+    saveChatMsgs(); if (isOpen(chatView)) renderChat();
+    return OfficeBridge.sendChatDocAsk({ id: id, token: tok, thread: chatThread, title: '수정 요청 취소', note: note, extraMeta: { markup_cancel: { rid: rid } } }, [])
+      .then(function () { startChatReconcile(); kickOrderPoll(); return true; });
+  }
+  function mkStatus(rids) {
+    var pass = getSyncPass();
+    if (!pass || !(window.OfficeBridge && OfficeBridge.listOfficeOrdersBySource)) return Promise.resolve({});
+    return OfficeBridge.listOfficeOrdersBySource(rids, pass).then(function (rows) {
+      var m = {}; (rows || []).forEach(function (r) { if (r && r.source_id) m[r.source_id] = { status: r.status || '', job_status: r.job_status || '', job_seq: r.job_seq || 0 }; });
+      return m;
+    });
+  }
+  if (window.SmartMarkup) {
+    SmartMarkup.setHost({ send: mkSend, cancel: mkCancel, status: mkStatus, toast: toast,
+      openChat: function () { openChat(); },
+      reopenFix: function () { if (window.SmartDocs && SmartDocs.openFix) SmartDocs.openFix(); },
+      setOrig: function (f) { if (window.SmartDocs && SmartDocs.setOrig) SmartDocs.setOrig(f); } });
+    // 옷·설정 → 설정 「길게 눌러 수정 요청 켜기」(이 기기에만 저장)
+    (function () {
+      var cb = $('kwMkLong'); if (!cb) return;
+      cb.checked = SmartMarkup.longPressOn();
+      cb.addEventListener('change', function () { SmartMarkup.setLongPress(cb.checked); toast(cb.checked ? '문서를 길게 누르면 수정 요청이 켜져요' : '길게 누르기로는 켜지지 않아요. [✏️ 고치기]로 여세요'); });
+    })();
+  }
 
   /* ---- v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기] ----
    * 대표님이 보던 문서(변환된 PDF / 엑셀 원본)를 채팅 첨부 통로로 케이에게 보낸다. 새 서버 테이블 없음.
