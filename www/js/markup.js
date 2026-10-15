@@ -95,7 +95,7 @@
         if (e.target === s || (e.target.hasAttribute && e.target.hasAttribute('data-close'))) {
           if (s.id === 'mkHelp') { closeHelp(); return; }
           s.classList.remove('on');
-          if (s.id === 'mkMemoSheet') { stopMic(); S.memo = null; if (S.sel) showPop(); }
+          if (s.id === 'mkMemoSheet') { stopMic(true); S.memo = null; if (S.sel) showPop(); }
         }
       });
     });
@@ -177,7 +177,7 @@
   function close() {
     if (!R || !S.on) return;
     var n = S.items.filter(notSent).length;
-    stopMic(); clearSel(); closeSheets(); kHide();
+    stopMic(true); clearSel(); closeSheets(); kHide();
     S.on = false; R.root.classList.remove('on');
     if (statusT) { clearInterval(statusT); statusT = null; }
     if (io) { io.disconnect(); io = null; }
@@ -189,7 +189,7 @@
     if (!R || !S.on) return false;
     if ($('mkHelp').classList.contains('on')) { closeHelp(); return true; }
     if (S.memo && S.memo.side) { closeMemo(); if (S.sel) showPop(); return true; }
-    var o = R.root.querySelector('.mk-sheet.on'); if (o) { o.classList.remove('on'); if (o.id === 'mkMemoSheet') { stopMic(); S.memo = null; if (S.sel) showPop(); } return true; }
+    var o = R.root.querySelector('.mk-sheet.on'); if (o) { o.classList.remove('on'); if (o.id === 'mkMemoSheet') { stopMic(true); S.memo = null; if (S.sel) showPop(); } return true; }
     if (S.sel) { clearSel(); return true; }
     close(); return true;
   }
@@ -647,44 +647,76 @@
     Array.prototype.forEach.call(hostEl.querySelectorAll('[data-q]'), function (b) { b.onclick = function () { var ta = $('mkMemoTxt'), v = b.getAttribute('data-q'); ta.value = v + (v.slice(-2) === ': ' ? '' : (ta.value ? ' ' + ta.value : '')); ta.focus(); }; });
     $('mkMic').onclick = toggleMic;
     $('mkMemoSave').onclick = saveMemo;
-    $('mkMemoCancel').onclick = function () { stopMic(); closeMemo(); if (S.sel) showPop(); };
-    if ($('mkMemoDel')) $('mkMemoDel').onclick = function () { var t = S.memo.item; stopMic(); closeMemo(); askRemove(t); };
+    $('mkMemoCancel').onclick = function () { stopMic(true); closeMemo(); if (S.sel) showPop(); };
+    if ($('mkMemoDel')) $('mkMemoDel').onclick = function () { var t = S.memo.item; stopMic(true); closeMemo(); askRemove(t); };
     if (!wide) setTimeout(function () { try { $('mkMemoTxt').focus({ preventScroll: true }); } catch (e) {} }, 260);
     kSay('어떻게 고칠까요? 글로 적거나 🎤로 말씀해 주세요', 'note');
   }
-  function closeMemo() { stopMic(); closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
+  function closeMemo() { stopMic(true); closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
   // 🎤 받아쓰기: 폰 앱(KSpeech 네이티브)만. PC판·옛 APK 는 글로.
-  var mic = null;
+  //   O-0547: 채팅 받아쓰기와 같은 길로 켠다 — 이어 듣기(continuous) · 효과음 설정(sfx) 그대로, 글은 토막(segment)+지금 말(partial)을 이어 붙인다.
+  //   멈춤: 말이 시작된 뒤 2초 조용하면 / 8초 동안 말이 없으면 / 다시 누르면. 멈출 때는 인식기에 「마무리」를 시키고 마지막 글(final)까지 받아 넣는다.
+  //   꺼지면 이유를 화면에 짧게(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음 등) — 조용히 꺼지지 않는다.
+  var mic = null, MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500;
+  var MIC_WHY = { permission: '마이크 권한이 없어요. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
+                  nospeech: '말씀이 들리지 않아 멈췄어요. 다시 누르고 말씀해 주세요', nomatch: '잘 못 알아들었어요. 다시 누르고 또박또박 말씀해 주세요',
+                  busy: '다른 곳에서 마이크를 쓰고 있어요. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄어요',
+                  lang: '이 폰에서 한국어 받아쓰기를 쓸 수 없어요', recording: '회의 녹음 중에는 받아쓰기를 쓸 수 없어요' };
+  function micLabel(t) { if (R && $('mkMicTxt')) $('mkMicTxt').textContent = t; }
   function toggleMic() {
-    if (mic) { stopMic(); return; }
+    if (mic) { stopMic(false, 'tap'); return; }
     var KS = null; try { if (isNative() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) {}
     if (!KS) { toast('이 기기에서는 글로 적어 주세요'); return; }
-    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요'); return; }
-    var ta = $('mkMemoTxt'), base = ta.value ? ta.value + ' ' : '', hs = [], quietT = null;
-    mic = { KS: KS, hs: hs };
-    $('mkMic').classList.add('on'); $('mkMicTxt').textContent = '듣는 중… 다시 누르면 멈춰요';
-    function arm() { clearTimeout(quietT); quietT = setTimeout(stopMic, 2000); }
-    function on(ev, fn) { try { var h = KS.addListener(ev, fn); if (h && h.then) h.then(function (x) { hs.push(x); }); else hs.push(h); } catch (e) {} }
-    on('partial', function (e) { if (!mic) return; ta.value = base + ((e && e.text) || ''); arm(); });
-    on('final', function (e) { if (!mic) return; ta.value = base + ((e && e.text) || ''); stopMic(); });
-    on('error', function () { if (mic) { stopMic(); toast('잘 못 들었어요. 다시 누르거나 글로 적어 주세요'); } });
-    S.memo && (S.memo.via = 'voice');
+    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
+    var ta = $('mkMemoTxt');
+    var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
+                    quietT: null, noSpT: null, finT: null, stopping: false };
+    $('mkMic').classList.add('on'); micLabel('준비 중… 잠시만요');
+    function show() { var t = (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); m.ta.value = m.base + t; if (t) m.heard = true; }
+    function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
+    function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
+    on('ready', function () { if (!m.stopping) micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춰요'); });
+    on('speech', function () { clearTimeout(m.noSpT); });
+    on('partial', function (e) { m.cur = e.text || ''; show(); clearTimeout(m.noSpT); if (!m.stopping) quiet(); });
+    on('segment', function (e) { if (e.text) { m.acc = (m.acc ? m.acc + ' ' : '') + e.text; } m.cur = ''; show(); if (!m.stopping && m.heard) quiet(); });
+    on('final', function (e) { if (e.text) { m.cur = e.text; } show(); m.acc = (m.acc + ' ' + m.cur).trim(); m.cur = ''; micEnd(m, null); });
+    on('error', function (e) { micEnd(m, m.stopping && /nospeech|nomatch|client/.test(e.reason || '') ? null : (e.reason || 'other')); });
+    m.noSpT = setTimeout(function () { if (mic === m && !m.heard) stopMic(false, 'nospeech'); }, MIC_NOSPEECH_MS);
     try {
-      var pr = KS.start({ lang: 'ko-KR', partial: true, continuous: false }); arm();
-      if (pr && pr.catch) pr.catch(function () { if (mic) { stopMic(); toast('받아쓰기를 시작하지 못했어요. 글로 적어 주세요'); } });
-    } catch (e) { stopMic(); toast('받아쓰기를 시작하지 못했어요'); }
+      var opt = { lang: 'ko-KR', partial: true, continuous: true, muteRestart: false, sfx: (host.sfx && host.sfx()) || 'soft' };
+      var pr = KS.start(opt);
+      if (pr && pr.catch) pr.catch(function (err) {
+        var code = (err && (err.code || err.errorCode)) || '';
+        micEnd(m, code === 'recording' ? 'recording' : (code === 'permission' || /권한|permission/i.test(String(err && err.message)) ? 'permission' : 'start'), err && err.message);
+      });
+    } catch (e) { micEnd(m, 'start', e && e.message); }
   }
-  function stopMic() {
-    if (!mic) return; var m = mic; mic = null;
+  // 멈추기. hard=true(저장·닫기·화면 끝내기)면 버리고 바로 끝, 아니면 마무리(final)를 기다린다.
+  function stopMic(hard, why) {
+    var m = mic; if (!m) return;
+    if (hard || m.stopping) { micEnd(m, null, null, true); return; }
+    m.stopping = true; clearTimeout(m.quietT); clearTimeout(m.noSpT);
+    micLabel('정리하는 중…');
     try { m.KS.stop(); } catch (e) {}
-    setTimeout(function () { m.hs.forEach(function (h) { try { h.remove(); } catch (e) {} }); }, 400);
-    if (R && $('mkMic')) { $('mkMic').classList.remove('on'); $('mkMicTxt').textContent = '🎤 말로 적기'; }
+    m.finT = setTimeout(function () { micEnd(m, why === 'nospeech' && !m.heard ? 'nospeech' : null); }, MIC_FINAL_WAIT_MS);
+    if (why === 'nospeech' && !m.heard) { clearTimeout(m.finT); micEnd(m, 'nospeech'); }
+  }
+  function micEnd(m, reason, detail, cancel) {
+    if (m.ended) return; m.ended = true;
+    clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.finT);
+    if (cancel || reason) { try { m.KS.cancel(); } catch (e) {} }
+    setTimeout(function () { m.hs.forEach(function (h) { try { h.remove(); } catch (e) {} }); }, 300);
+    if (mic === m) mic = null;
+    if (m.heard && S.memo) S.memo.via = 'voice';          // 실제로 받아 적은 글이 있을 때만 「말로 적음」
+    if (R && $('mkMic')) { $('mkMic').classList.remove('on'); micLabel('🎤 말로 적기'); }
+    if (reason && !cancel) toast(MIC_WHY[reason] || ('받아쓰기가 멈췄어요' + (detail ? '(' + String(detail).slice(0, 40) + ')' : '') + '. 다시 누르거나 글로 적어 주세요'), null, null, 4000);
+    else if (!cancel && !m.heard) toast('받아 적은 말이 없어요. 다시 누르고 말씀해 주세요', null, null, 3000);
   }
   function nextNum() { var m = 0; S.items.forEach(function (x) { if (x.n > m) m = x.n; }); return m + 1; }
   function saveMemo() {
     var note = $('mkMemoTxt').value.trim();
     if (!note) { $('mkMemoTxt').focus(); toast('어떻게 고칠지 한 줄만 적어 주세요'); return; }
-    stopMic();
+    stopMic(true);
     var it = S.memo.item;
     if (S.memo.edit) { it.note = note; if (S.memo.via) it.via = 'voice'; persist(); renderAll(); closeMemo(); kSay(circ(it.n) + '번 메모를 바꿨어요', 'note'); return; }
     it.n = nextNum(); it.note = note; it.via = S.memo.via || 'typed'; it.ts = Date.now();
