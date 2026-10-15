@@ -655,9 +655,9 @@
   function closeMemo() { stopMic(true); closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
   // 🎤 받아쓰기: 폰 앱(KSpeech 네이티브)만. PC판·옛 APK 는 글로.
   //   O-0547: 채팅 받아쓰기와 같은 길로 켠다 — 이어 듣기(continuous) · 효과음 설정(sfx) 그대로, 글은 토막(segment)+지금 말(partial)을 이어 붙인다.
-  //   멈춤: 말이 시작된 뒤 2초 조용하면 / 8초 동안 말이 없으면 / 다시 누르면. 멈출 때는 인식기에 「마무리」를 시키고 마지막 글(final)까지 받아 넣는다.
+  //   멈춤: 말(소리)이 시작된 뒤 2초 조용하면 / 준비된 뒤 8초 동안 말이 없으면 / 다시 누르면. 멈출 때는 인식기에 「마무리」를 시키고 마지막 글(final)까지 받아 넣는다.
   //   꺼지면 이유를 화면에 짧게(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음 등) — 조용히 꺼지지 않는다.
-  var mic = null, MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500;
+  var mic = null, MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000;
   var MIC_WHY = { permission: '마이크 권한이 없어요. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
                   nospeech: '말씀이 들리지 않아 멈췄어요. 다시 누르고 말씀해 주세요', nomatch: '잘 못 알아들었어요. 다시 누르고 또박또박 말씀해 주세요',
                   busy: '다른 곳에서 마이크를 쓰고 있어요. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄어요',
@@ -670,21 +670,28 @@
     if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
     var ta = $('mkMemoTxt');
     var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
-                    quietT: null, noSpT: null, finT: null, stopping: false };
+                    quietT: null, noSpT: null, finT: null, readyT: null, stopping: false };
     $('mkMic').classList.add('on'); micLabel('준비 중… 잠시만요');
     function show() { var t = (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); m.ta.value = m.base + t; if (t) m.heard = true; }
     function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
     function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
-    on('ready', function () { if (!m.stopping) micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춰요'); });
-    on('speech', function () { clearTimeout(m.noSpT); });
+    // 「말 없음 8초」는 인식기가 준비된(ready) 뒤부터 센다 — 처음 쓰는 폰에서 권한 창이 떠 있는 동안 먼저 끝나 인식기가 혼자 돌지 않게.
+    on('ready', function () {
+      clearTimeout(m.readyT);
+      if (m.stopping) return;
+      micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춰요');
+      if (!m.heard) { clearTimeout(m.noSpT); m.noSpT = setTimeout(function () { if (mic === m && !m.heard) stopMic(false, 'nospeech'); }, MIC_NOSPEECH_MS); }
+    });
+    on('speech', function () { clearTimeout(m.noSpT); if (!m.stopping) quiet(); });   // 소리는 났는데 글이 아직 없어도 2초 멈춤 시계를 켠다
     on('partial', function (e) { m.cur = e.text || ''; show(); clearTimeout(m.noSpT); if (!m.stopping) quiet(); });
     on('segment', function (e) { if (e.text) { m.acc = (m.acc ? m.acc + ' ' : '') + e.text; } m.cur = ''; show(); if (!m.stopping && m.heard) quiet(); });
     on('final', function (e) { if (e.text) { m.cur = e.text; } show(); m.acc = (m.acc + ' ' + m.cur).trim(); m.cur = ''; micEnd(m, null); });
     on('error', function (e) { micEnd(m, m.stopping && /nospeech|nomatch|client/.test(e.reason || '') ? null : (e.reason || 'other')); });
-    m.noSpT = setTimeout(function () { if (mic === m && !m.heard) stopMic(false, 'nospeech'); }, MIC_NOSPEECH_MS);
     try {
       var opt = { lang: 'ko-KR', partial: true, continuous: true, muteRestart: false, sfx: (host.sfx && host.sfx()) || 'soft' };
       var pr = KS.start(opt);
+      // 시작이 받아들여졌는데(권한 통과) 10초가 지나도 준비(ready)가 안 오면 사유를 보이고 끝낸다(조용히 꺼지지 않게)
+      if (pr && pr.then) pr.then(function () { if (!m.ended) m.readyT = setTimeout(function () { if (mic === m) micEnd(m, 'start', '인식기가 준비되지 않음'); }, MIC_READY_MS); }, function () {});
       if (pr && pr.catch) pr.catch(function (err) {
         var code = (err && (err.code || err.errorCode)) || '';
         micEnd(m, code === 'recording' ? 'recording' : (code === 'permission' || /권한|permission/i.test(String(err && err.message)) ? 'permission' : 'start'), err && err.message);
@@ -695,7 +702,7 @@
   function stopMic(hard, why) {
     var m = mic; if (!m) return;
     if (hard || m.stopping) { micEnd(m, null, null, true); return; }
-    m.stopping = true; clearTimeout(m.quietT); clearTimeout(m.noSpT);
+    m.stopping = true; clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.readyT);
     micLabel('정리하는 중…');
     try { m.KS.stop(); } catch (e) {}
     m.finT = setTimeout(function () { micEnd(m, why === 'nospeech' && !m.heard ? 'nospeech' : null); }, MIC_FINAL_WAIT_MS);
@@ -703,7 +710,7 @@
   }
   function micEnd(m, reason, detail, cancel) {
     if (m.ended) return; m.ended = true;
-    clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.finT);
+    clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.finT); clearTimeout(m.readyT);
     if (cancel || reason) { try { m.KS.cancel(); } catch (e) {} }
     setTimeout(function () { m.hs.forEach(function (h) { try { h.remove(); } catch (e) {} }); }, 300);
     if (mic === m) mic = null;
