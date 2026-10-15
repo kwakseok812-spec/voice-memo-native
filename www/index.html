@@ -367,6 +367,12 @@
         <button type="button" id="chatOpusToggle" class="opuschip" aria-pressed="false" title="중요한 작업일 때만 켜세요. 보내면 자동으로 꺼집니다."><svg><use href="#i-spark"/></svg><span id="chatOpusLabel">오퍼스 5.5</span></button>
         <span id="chatOpusHint" class="opushint">중요 작업일 때만 켜고 보내세요</span>
       </div>
+      <!-- (O-0545) 답장 띠: 말풍선 ⋯ → 「↩ 답장」을 고르면 입력 줄 바로 위에 원래 메시지 첫 줄이 붙는다. 누르면 그 메시지로 이동, ✕ 는 답장 취소.
+           폰에서 글을 쓰는 동안은 네이티브 입력 바 안의 인용 줄이 이 띠를 대신한다. 보내면 그 한 건에만 실리고 사라진다. -->
+      <div id="chatReplyBar" class="replybar" role="button" tabindex="0" aria-label="답장할 원래 메시지로 이동" style="display:none;">
+        <div class="rbtx"><b id="chatReplyLabel">케이에게 답장</b><span id="chatReplyText"></span></div>
+        <button type="button" id="chatReplyX" class="rbx" aria-label="답장 취소">✕</button>
+      </div>
       <!-- 입력 한 줄: [+] 첨부 · 입력창 · 📷 카메라 · 전송 -->
       <div class="chatbar">
         <button id="chatAttach" class="iconbtn chatattach" aria-label="파일 첨부" title="파일 보내기"><svg><use href="#i-plus"/></svg></button>
@@ -758,6 +764,8 @@
     <div class="sheet-head" id="chatSheetTitle">삭제</div>
     <div class="sheet-msg" id="chatSheetMsg"></div>
     <div class="sheet-hint" id="chatSheetHint" style="display:none;">💡 글자를 길게 누르면 원하는 부분만 복사할 수 있습니다.</div>
+    <!-- (O-0545) 말풍선 ⋯ 시트 맨 위: 이 메시지에 답장(서버에 있는 말풍선에서만 보인다) -->
+    <button type="button" class="sheet-btn" id="chatSheetReply" style="display:none;"><span aria-hidden="true" class="rpl-ic">↩</span><span>답장</span></button>
     <button type="button" class="sheet-btn" id="chatSheetCopy" style="display:none;"><svg><use href="#i-copy"/></svg><span>복사</span></button>
     <button type="button" class="sheet-btn" id="chatSheetExtra" style="display:none;"><span id="chatSheetExtraLabel">PC 연동</span></button>
     <button type="button" class="sheet-btn danger" id="chatSheetConfirm"><svg><use href="#i-trash"/></svg><span id="chatSheetConfirmLabel">삭제</span></button>

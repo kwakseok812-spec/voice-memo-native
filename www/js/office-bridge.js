@@ -607,10 +607,21 @@
   // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
   //   opts.speak=true 면 케이 답을 목소리(mp3)로도 만들게 요청(meta.speak).
   //   v5.8: opts.modelPref='opus' 면 meta.model_pref='opus' → PC 케이가 이 1건을 오퍼스 5.5로 처리.
+  // (O-0545) 답장: 고른 메시지 { id: 원 행 id, side: 'k'|'me', snip: 앱에 보인 첫 줄 } → meta.reply_to.
+  //   모양이 틀리면 싣지 않는다(PC 도 다시 검사한다). 없으면 예전과 똑같은 행.
+  function _replyMeta(rt) {
+    if (!rt || typeof rt !== 'object') return null;
+    var id = String(rt.id || '').toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return null;
+    var side = rt.side === 'me' ? 'me' : (rt.side === 'k' ? 'k' : '');
+    if (!side) return null;
+    return { id: id, side: side, snip: String(rt.snip || '').replace(/\s+/g, ' ').trim().slice(0, 120) };
+  }
   function sendChat(id, token, thread, text, opts) {
     opts = opts || {};
     var meta = { app: 'voice-memo-test', thread: thread, speak: !!opts.speak };
     if (opts.modelPref) meta.model_pref = opts.modelPref;
+    var rt = _replyMeta(opts.replyTo); if (rt) meta.reply_to = rt;   // (O-0545)
     return _insertRow({
       id: id, title: '채팅', status: 'pending', kind: 'chat',
       note: text, client_token: token,
@@ -671,6 +682,7 @@
     if (opts.vend && typeof opts.vend === 'object') meta.vend = opts.vend;
     // O-0210: 직전 음성 턴의 폰 쪽 시각(등록·첫 조각 받음·소리 남·답 받음, ms) — 글 내용 아님, PC [지연] 로그용
     if (opts.vprev && typeof opts.vprev === 'object') meta.vprev = opts.vprev;
+    var rtT = _replyMeta(opts.replyTo); if (rtT) meta.reply_to = rtT;   // (O-0545) 답장(글·사진·음성 턴)
     var imgMeta = [];
     function uploadImages(i) {
       if (i >= files.length) return Promise.resolve();
@@ -715,6 +727,7 @@
   function _insertChatFileRow(memo, filesMeta, extra) {
     var meta = { app: 'voice-memo-test', thread: memo.thread, from: 'phone', files: filesMeta };
     if (memo.modelPref) meta.model_pref = memo.modelPref;   // v5.8: 오퍼스 5.5 1회 지정
+    var rtF = _replyMeta(memo.replyTo); if (rtF) meta.reply_to = rtF;   // (O-0545) 답장(파일 행)
     if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) meta[k] = extra[k];
     if (memo.extraMeta) for (var k2 in memo.extraMeta) if (memo.extraMeta.hasOwnProperty(k2)) meta[k2] = memo.extraMeta[k2];   // v8.1 doc_ctx·speak
     return _insertRow({

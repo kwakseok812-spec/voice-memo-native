@@ -2476,7 +2476,7 @@
       //   chatUnseen 이 부풀고 안 읽은 게 0인데도 배지가 계속 「9+」로 남았다. rid 는 삭제 tombstone(rowIdOf)용.
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null }
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null, rq: m.rq || null, nosrv: !!m.nosrv, srv: !!m.srv }
           : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null, vtts: !!m.vtts, vplayed: !!m.vplayed }; });   // v8.3: vtts·vplayed
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
@@ -3362,6 +3362,7 @@
       }
       if (m.role === 'k' && starIds[rowIdOf(m) || '']) inner += '<span class="bstar" aria-label="저장한 답">⭐</span>';   // v8.3 ⭐ 저장 표시
       if (!inner) return '';
+      if (m.role === 'me' && m.rq) inner = quoteHtml(m.rq) + inner;   // (O-0545) 답장으로 보낸 말: 맨 위에 원래 메시지 인용(누르면 그리로)
       // v5.4(2026-09-23, 대표님 지시): 「🔔 알림」 딱지·호박색 테두리 등 화면 표시를 제거한다.
       //   메시지 자체는 그대로 오고 일반 말풍선처럼 보인다. ⚠️ 내부 notice 플래그(m.notice)는 그대로 두어
       //   '안읽음 배지 카운트 제외' 로직(아래 !isNotice)은 유지한다 — 알림이 안읽음 숫자를 올리지 않게.
@@ -3381,7 +3382,7 @@
       shown++;
       // ⋯ 메뉴 버튼(복사·삭제). 텍스트 선택/복사를 방해하지 않게 우상단 고정.
       var bubbleHtml = '<div class="bubble ' + (m.role === 'me' ? 'me' : 'k') + '" data-uid="' + uid + '">' + inner +
-        '<button type="button" class="bmenu" aria-label="메시지 메뉴(복사·삭제)">⋯</button></div>';
+        '<button type="button" class="bmenu" aria-label="메시지 메뉴(답장·복사·삭제)">⋯</button></div>';
       if (m.role === 'me') {
         prevKind = 'me';
         return dayDiv + divider + bubbleHtml + (!q ? msgStatHtml(m) + orderCardHtml(m) : '');   // v5.8: 작업 카드(대장에 접수된 메시지만) · v9.6: 보낸 말 아래 「보냄 → 받았습니다」
@@ -3499,6 +3500,8 @@
     else refreshStarIds(false);                   // v8.3: 다른 기기에서 저장·해제한 ⭐ 표시도 맞춘다(1분에 한 번까지)
     try { refreshKStat(true); } catch (e) {}      // v8.4(O-0162) 머리줄 PC 케이 상태 점
     if (anyAwaiting()) startChatReconcile();
+    try { replyTipOnce(); } catch (e) {}           // (O-0545) 처음 한 번 「⋯ → ↩ 답장」 안내
+    try { if (chatReply) showReplyBar(); } catch (e) {}   // (O-0545) 채팅을 나갔다 와도 띠는 그대로
     // 진입 시 입력창 자동 포커스 안 함(대표님 지시) — 직접 탭했을 때만 브라우저 기본동작으로 포커스됨
   }
   // 입력창 높이 자동 조절. 키 입력마다 style.height='auto' 후 scrollHeight 를 읽으면
@@ -3533,40 +3536,48 @@
     unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
     var opus = takeOpus();                        // v5.8: 켜져 있었으면 이번 1건(첨부 포함 한 번의 전송)에만 적용하고 끔
+    var rt = takeReply();                         // (O-0545) 답장: 글이 실리는 한 건(없으면 첫 건)에만 싣고 띠를 내린다
     var textUsed = false;
     // (1) 사진이 붙어 있으면 통합 전송(케이가 사진을 보고 답) — 글은 사진과 함께 감
     if (imgs.length) {
       chatPendingImages = [];
-      sendChatTurnUI({ text: text, files: imgs, audioBlob: null, opus: opus });
-      textUsed = true;
+      sendChatTurnUI({ text: text, files: imgs, audioBlob: null, opus: opus, replyTo: rt });
+      textUsed = true; rt = null;
     }
     // (2) 파일이 붙어 있으면 파일 전송 — 글이 아직 안 쓰였으면 첫 파일 묶음에 함께 붙임
     if (files.length) {
       chatPendingFiles = [];
       var big = files.filter(function (f) { return (f.size || 0) > CHAT_CHUNK_LIMIT; });
       var small = files.filter(function (f) { return (f.size || 0) <= CHAT_CHUNK_LIMIT; });
-      if (small.length) { pushChatFileMsg(small, false, textUsed ? '' : text, opus); textUsed = true; }
-      big.forEach(function (f) { pushChatFileMsg([f], true, textUsed ? '' : text, opus); textUsed = true; });
+      if (small.length) { pushChatFileMsg(small, false, textUsed ? '' : text, opus, rt); textUsed = true; rt = null; }
+      big.forEach(function (f) { pushChatFileMsg([f], true, textUsed ? '' : text, opus, rt); textUsed = true; rt = null; });
       if (big.length) toast('큰 파일은 나눠 올립니다 — 시간이 걸릴 수 있습니다.');
     }
     renderPending();
     // (3) 남은 순수 텍스트(첨부가 하나도 없을 때) — 기존 경로(음성 답은 음성 대화 모드일 때만)
-    if (!textUsed && text) sendPlainChat(text, opus);
+    if (!textUsed && text) sendPlainChat(text, opus, rt);
+    else if (rt) giveBackReply(rt);               // (O-0545) 실을 곳이 없었으면 띠를 그대로 둔다
   }
   // v9.6: 전송 실패의 오류 원문(영어일 때가 많다)은 화면에 붙이지 않는다 — 대표님께는 뜻 없는 글자다. 원인을 찾을 때 볼 수 있게 콘솔에만 남긴다.
   function errLog(where, e) { try { console.warn('[전송 실패] ' + where + ': ' + String((e && e.message) || e || '').replace(/\s+/g, ' ').trim().slice(0, 300)); } catch (x) {} }
   // 순수 텍스트 1건을 케이 채팅으로 보낸다(sendChatMsg 의 (3)과 같은 경로 — O-0040 「추가 요청」도 이걸 재사용)
-  function sendPlainChat(text, opus) {
+  //   (O-0545) rt = 답장(입력 줄에서 보낼 때만 sendChatMsg 가 넘긴다). ⚠️ 이 함수 안에서 답장 띠를 꺼내 쓰지 않는다 —
+  //   작업 카드 [승인]·[수정 요청]·꾸미기 추가 요청도 이 함수를 쓰므로, 그 단추에 엉뚱하게 답장이 붙지 않게.
+  function sendPlainChat(text, opus, rt) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
-    chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus });
+    var pm = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus };
+    if (rt) pm.rq = { id: rt.id, side: rt.side, snip: rt.snip, at: rt.at || 0 };
+    chatMsgs.push(pm);
     saveChatMsgs(); renderChat(); updateSendEnabled();
-    return OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn, modelPref: opus ? 'opus' : null }).then(function () {
+    return OfficeBridge.sendChat(id, tok, chatThread, text, { speak: convoOn, modelPref: opus ? 'opus' : null, replyTo: rt || null }).then(function () {
+      pm.srv = true;                            // (O-0545) 서버에 올라감 → 이 말에도 답장할 수 있다
       kickOrderPoll();                          // v5.8: 작업 카드가 곧 붙도록
       startChatReconcile();
       return true;
     }).catch(function (e) {
       errLog('글', e);
-      var m = findMsg(id); if (m) m.answered = true;
+      var m = findMsg(id); if (m) { m.answered = true; m.nosrv = true; }
+      giveBackReply(rt);                          // (O-0545) 못 보낸 답장은 띠로 되돌려 다시 쓰실 때 그대로 실리게
       chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); renderChat(); updateSendEnabled();
       return false;
@@ -3587,6 +3598,8 @@
     if (vturn) vlatStart(id);
     var meMsg = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false,
                   files: dispFiles.length ? dispFiles : null, up: true, uploading: true, vin: !!blob, opus: !!o.opus };
+    var rt = o.replyTo || null;                   // (O-0545) 답장(글·사진·음성 턴)
+    if (rt) meMsg.rq = { id: rt.id, side: rt.side, snip: rt.snip, at: rt.at || 0 };
     if (dev) meMsg.vdev = true;
     if (vs) meMsg.vs = true;
     chatMsgs.push(meMsg); saveChatMsgs(); renderChat(); updateSendEnabled();
@@ -3595,13 +3608,14 @@
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
     OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
-                                      sttDevice: dev, vstream: vs, vend: o.vend || null, vprev: vprev }).then(function () {
+                                      sttDevice: dev, vstream: vs, vend: o.vend || null, vprev: vprev, replyTo: rt }).then(function () {
       vlatMark(id, 'sub');                        // O-0210
-      meMsg.uploading = false; saveChatMsgs();
+      meMsg.uploading = false; meMsg.srv = true; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
-      meMsg.answered = true; meMsg.uploading = false;
+      meMsg.answered = true; meMsg.uploading = false; meMsg.nosrv = true;
+      giveBackReply(rt);                          // (O-0545)
       errLog('말·사진 한 턴', e);
       chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
@@ -3976,7 +3990,7 @@
                  fin: stt.finAt ? Math.max(0, Date.now() - stt.finAt) : 0,   // O-0210: 말 끝 판정 → 보내기까지(마지막 글자 기다림)
                  sfx: sfxMode };                                               // O-0233: 이 턴에 고른 효과음 값
     var dg = sttDiagTake(); if (dg) vend.dg = dg;                              // O-0233: 소리 통로 진단 값(있을 때만)
-    sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus(), vend: vend });
+    sendChatTurnUI({ text: text, files: imgs, sttDevice: true, opus: takeOpus(), vend: vend, replyTo: takeReplyVoice(text) });   // (O-0545) 답장 띠가 있으면 이 턴에(음성 대화 중엔 3글자 이상일 때만)
   }
   // O-0189 [다 말했어요] — 기다리지 않고 지금 보내기(받아쓰기·녹음 경로 공통)
   function sayDone() {
@@ -4032,7 +4046,7 @@
       var imgs = chatPendingImages.slice(); chatPendingImages = []; renderPending();
       if (convoOn) setConvoStatus('케이가 답하는 중…');
       var vend = convoOn ? { p: 'rec', end: lsnReason, wait: endWaitMs(), total: Date.now() - lsnStartTs } : null;   // O-0189 끝난 이유(로그용)
-      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus(), vend: vend });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회
+      sendChatTurnUI({ text: '', files: imgs, audioBlob: blob, opus: takeOpus(), vend: vend, replyTo: takeReplyVoice(null) });   // 음성(+있으면 사진) 전송 · v5.8 오퍼스 1회 · (O-0545) 답장
     } else {
       listenMiss(lsnReason);                     // 말이 없었음/취소(O-0177: 받아쓰기 경로와 같은 처리로 묶음)
     }
@@ -4635,6 +4649,7 @@
       var q = (row.note || '').trim();
       var a = (row.content_md || (sj && sj.reply) || '').trim();
       var me = { role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true, rid: row.id };
+      var rq0 = rqFromServer(sj && sj.reply_of); if (rq0) me.rq = rq0;   // (O-0545) 다른 기기에서 보낸 답장 — PC 가 남긴 인용
       chatMsgs.push(me); added.push(me);
       if (a || atts.length) {
         var k2 = { role: 'k', text: a, ts: ts, cid: row.id, rid: row.id };
@@ -4783,7 +4798,9 @@
         var atts = OfficeBridge.attachmentsFrom({ summary_json: row.summary_json });
         var ts = row.ts ? Date.parse(row.ts) : Date.now(); if (isNaN(ts)) ts = Date.now();
         // 다른 기기에서 온 질문(내 말풍선). token 이 없으니 reconcile 이 다시 폴링하지 않는다(answered=true).
-        chatMsgs.push({ role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true, rid: row.id });
+        var meR = { role: 'me', text: q || '(음성/파일)', ts: ts - 1, cid: row.id, answered: true, remote: true, rid: row.id };
+        var rq1 = rqFromServer(row.summary_json && row.summary_json.reply_of); if (rq1) meR.rq = rq1;   // (O-0545)
+        chatMsgs.push(meR);
         if (a || atts.length) {                     // 케이 답(있으면)
           var km = { role: 'k', text: a, ts: ts, cid: row.id, rid: row.id };
           if (atts.length) km.files = atts;
@@ -6611,7 +6628,7 @@
 
   /* ---- 채팅 파일 첨부(대표님 → 케이, 상향) ---- */
   var CHAT_CHUNK_LIMIT = 45 * 1024 * 1024;   // 이보다 큰 파일은 청크 업로드(단일 50MB 한도 우회)
-  function pushChatFileMsg(files, chunked, userText, opus) {
+  function pushChatFileMsg(files, chunked, userText, opus, rt) {   // (O-0545) rt = 답장(입력 줄에서 보낼 때 첫 묶음만)
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     userText = (userText || '').trim();
     var upFiles = Array.prototype.map.call(files, function (f) {
@@ -6620,16 +6637,19 @@
     var names = upFiles.map(function (f) { return f.name; });
     var note = (userText ? (userText + '\n\n') : '') + '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨습니다. 확인해 주세요.';
     var msg = { role: 'me', text: userText, ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true, opus: !!opus };
+    if (rt) msg.rq = { id: rt.id, side: rt.side, snip: rt.snip, at: rt.at || 0 };
     chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var memo = { id: id, token: tok, thread: chatThread, title: names[0] || '파일', note: note };
     if (opus) memo.modelPref = 'opus';           // v5.8: 오퍼스 5.5 1회 지정
+    if (rt) memo.replyTo = rt;                   // (O-0545)
     var work = chunked ? OfficeBridge.sendChatChunked(memo, files[0]) : OfficeBridge.sendChatBatch(memo, files);
     work.then(function () {
-      msg.uploading = false; saveChatMsgs();
+      msg.uploading = false; msg.srv = true; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
-      msg.answered = true; msg.uploading = false;
+      msg.answered = true; msg.uploading = false; msg.nosrv = true;
+      giveBackReply(rt);                          // (O-0545)
       errLog('파일', e);
       chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
@@ -6680,6 +6700,8 @@
     if (navChipClick(ev)) return;                      // (O-0217) 케이 답의 [길찾기] 칩 → 네이버 지도
     var oc = ev.target.closest ? ev.target.closest('.ordcard[data-ord]') : null;   // v5.8: 작업 카드 → 작업 현황(그 항목 강조)
     if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
+    var bq = ev.target.closest ? ev.target.closest('.bquote[data-qid]') : null;   // (O-0545) 인용 상자 → 원래 메시지로
+    if (bq) { jumpToReply(bq.getAttribute('data-qid'), bq.getAttribute('data-qside')); return; }
     // ⋯ 메뉴 → 복사·삭제 시트
     var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openMsgActionSheet(bub.getAttribute('data-uid')); return; }
@@ -6711,11 +6733,14 @@
   var sheetCopyVal = null;              // 이 시트의 [복사] 대상 텍스트(null이면 복사 버튼 숨김)
   var sheetExtraBtn = $('chatSheetExtra'), sheetExtraLabel = $('chatSheetExtraLabel');
   var sheetExtraAction = null;          // 보조 버튼(예: PC 연동) 실행 함수
+  var sheetReplyBtn = $('chatSheetReply'), sheetReplyUid = null;   // (O-0545) ⋯ 시트 맨 위 「↩ 답장」
 
   // extra: { label, action } — 있으면 보조 버튼 하나 더 표시(선택)
   // opts(v9.8, 선택): { cancelLabel: 맨 아래 닫기 단추의 글(기본 '취소'), positive: 확인 단추를 빨간 휴지통 대신 평소 모양으로, icon: 그때의 그림 }
   function openSheet(title, msg, confirmLabel, action, copyText, extra, opts) {
     if (!sheetEl) return;
+    if (sheetReplyBtn) sheetReplyBtn.style.display = 'none';   // (O-0545) 답장은 말풍선 ⋯ 시트에서만(openMsgActionSheet 가 다시 켠다)
+    sheetReplyUid = null;
     if (sheetCancel) sheetCancel.textContent = (opts && opts.cancelLabel) || '취소';
     // v5.5: 확인 버튼 모양을 매번 기본(빨간 휴지통)으로 되돌린다 — 아이디어 [진행해줘] 시트가 잠시 긍정형(✓)으로 바꿔 쓰기 때문.
     if (sheetConfirm) { sheetConfirm.classList.add('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-trash'); }
@@ -6739,7 +6764,7 @@
     if (sheetExtraBtn) sheetExtraBtn.classList.toggle('main', !!(opts && opts.main === 'extra'));
     sheetEl.style.display = 'flex';
   }
-  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; sheetExtraAction = null; }
+  function closeSheet() { if (sheetEl) sheetEl.style.display = 'none'; sheetAction = null; sheetCopyVal = null; sheetExtraAction = null; sheetReplyUid = null; }
   if (sheetExtraBtn) sheetExtraBtn.addEventListener('click', function () { var a = sheetExtraAction; closeSheet(); if (a) a(); });
   function snippet(m) {
     var t = (m && m.text ? m.text : '').replace(/\s+/g, ' ').trim();
@@ -6758,9 +6783,207 @@
       extra = { label: on ? '☆ 저장 해제' : '⭐ 저장', action: function () { toggleStar(sid, !on); } };
     }
     openSheet('이 메시지', snippet(m), '삭제', function () { deleteMessage(uid); }, msgCopyText(m), extra);
+    if (REPLY_UI && sheetReplyBtn && replyRowId(m)) { sheetReplyBtn.style.display = 'flex'; sheetReplyUid = uid; }   // (O-0545)
   }
   // v4.0: 한 메시지를 지우면 그 "대화 줄(turn) 전체"(질문+답)를 지우고, 서버에도 숨김 반영해 모든 기기서 사라지게.
   function rowIdOf(m) { return (m && (m.rid || m.id || m.cid || m.bid)) || null; }
+
+  /* ===================== (O-0545) 답장 — 고른 메시지를 인용해서 이어 말하기 =====================
+   * 요청(10/15, 지시대장 O-0545): 「케이가 메시지 보내고 나서 해당 메시지에 대해서 내가 이어서 말해도 연속성이 없더라고 …
+   *   이전 메시지를 답변을 다는 방식으로 이전 메시지를 연계해서 메시지를 보낼 수 있게 해줘」
+   *  · 말풍선 ⋯ → 시트 맨 위 「↩ 답장」 → 입력칸이 바로 열리고 그 위에 답장 띠(폰은 네이티브 입력 바 안 인용 줄).
+   *  · 보내면 meta.reply_to = { id: 원 행 id, side: 'k'|'me', snip: 앱에 보인 첫 120자 } — PC 응답기(o0545_reply.py)가
+   *    원 행을 읽어 「이번 말씀은 이 메시지에 대한 답」으로 케이에게 준다. 내 말풍선 맨 위에는 인용 상자(누르면 원래 메시지로 · 0.9초 반짝).
+   *  · 답장은 입력 줄에서 직접 보낸 첫 한 건(글·사진·파일·음성 턴)에만 실리고 바로 지워진다.
+   *    sendPlainChat() 안에서는 꺼내 쓰지 않는다(작업 카드 [승인]·[수정 요청]·꾸미기 추가 요청이 같은 함수를 쓴다).
+   *  · 보내기에 실패하면 같은 인용을 띠로 되돌린다(다시 쓰시면 그대로 실린다). 음성 대화 중에는 3글자 이상인 첫 턴에만.
+   *  · 다른 기기에서 보낸 답장은 PC 가 남긴 summary_json.reply_of 로 같은 인용 상자를 그린다.
+   *  · 띠는 앱을 끄면 사라진다(저장하지 않음). 움직임 줄이기(KScene.calm · 폰 설정)면 움직임 없이.
+   *  · 스위치 REPLY_UI=false → ⋯ 시트에 「답장」이 안 보인다(이미 받은 인용 상자는 그대로 그린다). */
+  var REPLY_UI = true;
+  var REPLY_TIP_KEY = 'smart_reply_tip_seen';        // 처음 한 번 「⋯에 답장이 생겼습니다」 안내
+  var REPLY_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var chatReply = null;                              // { id, side, snip, at } — 지금 입력 줄에 걸린 답장
+  function replyCalm() {
+    try {
+      if (window.KScene && KScene.calm && KScene.calm()) return true;
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+  // 답장할 수 있는 말풍선인가 → 서버 행 id(소문자) · 아니면 null(보내는 중·못 보낸 말·이 기기 안내 글)
+  function replyRowId(m) {
+    if (!m || m.role === 'typing' || m.uploading || m.nosrv) return null;
+    var id = rowIdOf(m);
+    if (!id || !REPLY_UUID_RE.test(String(id))) return null;
+    if (m.role === 'me' && !(m.answered || m.sent || m.srv || m.cid)) return null;   // 서버에 올라간 것을 아직 모르는 말
+    return String(id).toLowerCase();
+  }
+  function replySnip(m, n) {
+    var t = (m && m.text ? String(m.text) : '').replace(/\s+/g, ' ').trim();
+    if (!t && m && m.files && m.files.length) t = '(첨부: ' + m.files.slice(0, 3).map(function (f) { return f.name || '파일'; }).join(', ') + ')';
+    if (!t && m && m.vin) t = '(음성 메시지)';
+    n = n || 120;
+    return t.length > n ? t.slice(0, n) + '…' : t;
+  }
+  function replyWhen(ts) {                          // 오늘이면 「13:55」, 아니면 「10/14 13:55」(한국 시각)
+    if (!ts) return '';
+    var d = new Date(ts + 9 * 3600000), n = new Date(Date.now() + 9 * 3600000);
+    var hm = ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
+    var same = d.getUTCFullYear() === n.getUTCFullYear() && d.getUTCMonth() === n.getUTCMonth() && d.getUTCDate() === n.getUTCDate();
+    return same ? hm : (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + ' ' + hm;
+  }
+  function findReplyOrig(id, side) {
+    var want = side === 'me' ? 'me' : 'k';
+    for (var i = chatMsgs.length - 1; i >= 0; i--) {
+      var x = chatMsgs[i];
+      if (x.role === want && String(rowIdOf(x) || '').toLowerCase() === id) return x;
+    }
+    return null;
+  }
+  function quoteHtml(rq) {
+    if (!rq || !rq.id) return '';
+    var o = findReplyOrig(rq.id, rq.side);
+    var gone = !o && isDeletedBid(rq.id);
+    var at = (o && o.ts) || rq.at || 0;
+    var t = gone ? '(지워진 메시지)' : (o ? replySnip(o, 140) : (rq.snip || '(이전 메시지)'));
+    return '<span class="bquote" role="button" tabindex="0" data-qid="' + esc(rq.id) + '" data-qside="' + (rq.side === 'me' ? 'me' : 'k') + '">' +
+      '<b>↩ ' + (rq.side === 'me' ? '내 메시지' : '케이') + (at ? ' · ' + esc(replyWhen(at)) : '') + '</b><span>' + esc(t) + '</span></span>';
+  }
+  function rqFromServer(ro) {                       // PC 가 남긴 summary_json.reply_of → 인용 상자 값(모양이 틀리면 null)
+    if (!ro || typeof ro !== 'object') return null;
+    var id = String(ro.id || '').toLowerCase(), side = ro.side === 'me' ? 'me' : (ro.side === 'k' ? 'k' : '');
+    if (!REPLY_UUID_RE.test(id) || !side) return null;
+    var at = ro.at ? Date.parse(ro.at) : 0;
+    return { id: id, side: side, snip: String(ro.snip || '').slice(0, 140), at: isNaN(at) ? 0 : at };
+  }
+  function replyLabel(r) { return (r.side === 'me' ? '내 메시지에 답장' : '케이에게 답장') + (r.at ? ' · ' + replyWhen(r.at) : ''); }
+  function showReplyBar() {
+    var bar = $('chatReplyBar'); if (!bar) return;
+    if (!chatReply) { hideReplyBar(false); return; }
+    if ($('chatReplyLabel')) $('chatReplyLabel').textContent = replyLabel(chatReply);
+    if ($('chatReplyText')) $('chatReplyText').textContent = chatReply.snip || '';
+    bar.classList.remove('off');
+    bar.style.display = '';
+    replyPlace(); replyWatch(true);
+    if (!replyCalm()) { bar.classList.remove('rb-in'); void bar.offsetWidth; bar.classList.add('rb-in'); }
+    if (chatView) chatView.classList.add('has-reply');
+  }
+  function hideReplyBar(anim) {
+    var bar = $('chatReplyBar'); if (!bar) return;
+    if (chatView) chatView.classList.remove('has-reply');
+    replyWatch(false);
+    if (bar.style.display === 'none') return;
+    if (anim && !replyCalm()) {
+      bar.classList.remove('rb-in'); bar.classList.add('off');
+      setTimeout(function () { if (!chatReply) { bar.classList.remove('off'); bar.style.display = 'none'; } else bar.classList.remove('off'); }, 130);
+    } else { bar.classList.remove('rb-in', 'off'); bar.style.display = 'none'; }
+  }
+  // 띠는 입력 줄 바로 위에 붙는다(둘 다 sticky) — 입력 줄 높이가 바뀌면(글이 여러 줄) 띠 자리도 따라 올린다
+  var replyRO = null;
+  function replyPlace() {
+    var bar = $('chatReplyBar'), cb = chatView && chatView.querySelector('.chatbar');
+    if (!bar || !cb) return;
+    var h = cb.offsetHeight;
+    if (h > 0) bar.style.bottom = h + 'px';
+  }
+  function replyWatch(on) {
+    var cb = chatView && chatView.querySelector('.chatbar');
+    if (!cb || typeof ResizeObserver !== 'function') return;
+    if (on && !replyRO) { replyRO = new ResizeObserver(function () { replyPlace(); }); replyRO.observe(cb); }
+    else if (!on && replyRO) { try { replyRO.disconnect(); } catch (e) {} replyRO = null; }
+  }
+  function replyNativeSync() { try { if (window.SmartNativeInput && SmartNativeInput.quoteSync) SmartNativeInput.quoteSync(); } catch (e) {} }
+  function startReply(uid) {
+    var m = null;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
+    var id = replyRowId(m);
+    if (!id) { toast(tw('이 메시지에는 답장할 수 없습니다.')); return; }
+    chatReply = { id: id, side: m.role === 'me' ? 'me' : 'k', snip: replySnip(m, 120), at: m.ts || 0 };
+    showReplyBar();
+    // 입력칸을 바로 연다: 폰 = 네이티브 입력 바(인용 줄 포함), PC판 = 글칸에 커서. 음성 대화 전체 화면이면 띠만(다음 음성 턴에 실림).
+    if (chatView && chatView.classList.contains('convo-full') && !chatView.classList.contains('convo-log')) return;
+    var opened = false;
+    try { if (window.SmartNativeInput && SmartNativeInput.open) opened = !!SmartNativeInput.open('chat'); } catch (e) { opened = false; }
+    if (!opened && chatInput) { try { chatInput.focus(); } catch (e) {} }
+  }
+  function clearReply(anim) { chatReply = null; hideReplyBar(anim); replyNativeSync(); }
+  function takeReply() {                            // 입력 줄 경로에서 보낼 때 한 번 — 실을 값을 돌려주고 띠를 내린다
+    if (!chatReply) return null;
+    var r = { id: chatReply.id, side: chatReply.side, snip: chatReply.snip, at: chatReply.at };
+    chatReply = null; hideReplyBar(false); replyNativeSync();
+    return r;
+  }
+  function takeReplyVoice(text) {                   // 음성 턴: 음성 대화(핸즈프리) 중엔 「음, 어」 같은 짧은 소리에 붙지 않게 3글자 이상일 때만
+    if (!chatReply) return null;
+    if (convoOn && text != null && String(text).replace(/\s+/g, '').length < 3) return null;
+    return takeReply();
+  }
+  function giveBackReply(r) {                       // 보내기 실패 → 같은 인용을 띠로(그새 다른 것을 고르셨으면 그대로 둔다)
+    if (!r || chatReply) return;
+    chatReply = { id: r.id, side: r.side, snip: r.snip, at: r.at || 0 };
+    showReplyBar(); replyNativeSync();
+  }
+  // 인용 상자·띠를 누르면 원래 메시지로(불러온 범위 밖이면 이전 대화를 최대 5쪽까지 불러 찾는다)
+  function jumpToReply(id, side, tries) {
+    if (!id) return;
+    var o = findReplyOrig(id, side);
+    if (o) {
+      var el = chatLog && chatLog.querySelector('.bubble[data-uid="' + msgUid(o) + '"]');
+      if (!el) { toast(tw(chatSearchOn ? '검색을 닫으면 그 메시지로 갈 수 있습니다.' : '그 메시지를 화면에서 찾지 못했습니다.')); return; }
+      var calm = replyCalm();
+      try { el.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' }); } catch (e) { try { el.scrollIntoView(); } catch (e2) {} }
+      el.classList.remove('rq-flash', 'calm'); void el.offsetWidth;
+      el.classList.add('rq-flash'); if (calm) el.classList.add('calm');
+      setTimeout(function () { el.classList.remove('rq-flash', 'calm'); }, calm ? 1200 : 950);
+      return;
+    }
+    if (isDeletedBid(id)) { toast(tw('지워진 메시지입니다.')); return; }
+    tries = tries || 0;
+    if (tries < 5 && chatHasMore && chatPageCanRun()) {
+      if (!tries) toast(tw('이전 대화에서 찾는 중…'));
+      loadOlderChat(function (ok) { if (ok) jumpToReply(id, side, tries + 1); else toast(tw('옛 대화라 찾지 못했습니다.')); });
+      return;
+    }
+    toast(tw('옛 대화라 찾지 못했습니다.'));
+  }
+  // 처음 한 번만: ⋯ 에 답장이 생겼다는 안내. 아래 입력칸·답장 띠를 가리지 않게 화면 위쪽(머리줄 아래)에 작은 알림판으로 띄운다.
+  //   누르면 닫히고, 6.5초 뒤 저절로 사라진다. 「봤다」 표시는 실제로 띄운 뒤에 남긴다(띄우기 전에 채팅을 닫으면 다음에 다시).
+  function replyTipOnce() {
+    if (!REPLY_UI) return;
+    try {
+      if (localStorage.getItem(REPLY_TIP_KEY)) return;
+      if (!chatMsgs.some(function (m) { return m.role === 'k' && replyRowId(m); })) return;
+    } catch (e) { return; }
+    setTimeout(function () {
+      if (!isOpen(chatView) || !chatView || $('replyTip')) return;
+      var el = document.createElement('div');
+      el.id = 'replyTip'; el.className = 'replytip'; el.setAttribute('role', 'status');
+      el.innerHTML = '<b>' + esc(tw('새 기능 · 답장')) + '</b><span>' + esc(tw('말풍선 오른쪽 위 ⋯ 를 누르면 그 메시지에 답장할 수 있습니다.')) + '</span>';
+      chatView.appendChild(el);
+      if (!replyCalm()) { void el.offsetWidth; el.classList.add('rt-in'); }
+      try { localStorage.setItem(REPLY_TIP_KEY, '1'); } catch (e) {}
+      var gone = false;
+      function hide() { if (gone) return; gone = true; if (el.parentNode) el.parentNode.removeChild(el); }
+      el.addEventListener('click', hide);
+      setTimeout(hide, 6500);
+    }, 900);
+  }
+  if (sheetReplyBtn) sheetReplyBtn.addEventListener('click', function () { var u = sheetReplyUid; closeSheet(); if (u) startReply(u); });
+  if ($('chatReplyBar')) $('chatReplyBar').addEventListener('click', function (ev) {
+    if (ev.target.closest && ev.target.closest('#chatReplyX')) return;
+    if (chatReply) jumpToReply(chatReply.id, chatReply.side);
+  });
+  if ($('chatReplyBar')) $('chatReplyBar').addEventListener('keydown', function (ev) {
+    if ((ev.key === 'Enter' || ev.key === ' ') && chatReply && ev.target === this) { ev.preventDefault(); jumpToReply(chatReply.id, chatReply.side); }
+  });
+  if ($('chatReplyX')) $('chatReplyX').addEventListener('click', function (ev) { ev.stopPropagation(); clearReply(true); });
+  // 폰 네이티브 입력 바(native-input.js)가 쓰는 입구: 인용 줄 내용 · ✕ · 인용 줄 누르기
+  window.SmartReply = {
+    get: function () { return chatReply ? { label: replyLabel(chatReply), text: chatReply.snip || '' } : null; },
+    clear: function () { clearReply(false); },
+    jump: function () { if (chatReply) jumpToReply(chatReply.id, chatReply.side); },
+    on: function () { return !!REPLY_UI; }
+  };
   function deleteMessage(uid) {
     var target = null;
     for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { target = chatMsgs[i]; break; } }

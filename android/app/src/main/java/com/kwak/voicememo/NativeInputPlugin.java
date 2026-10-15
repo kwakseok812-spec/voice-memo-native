@@ -59,6 +59,9 @@ import java.util.List;
  *  - v5.8(2026-09-25): 채팅(hasOpus)이면 입력 줄 위에 「오퍼스 5.5」 칩을 한 줄 둔다(1회 지정).
  *    탭하면 켜짐/꺼짐 → 'opus' 이벤트({on})로 웹 칩과 동기화. 보내면 'send' 이벤트에 opus 값을 실어 보내고
  *    칩은 자동으로 꺼진다(대표님: 중요 작업일 때만 체크 — 실수로 계속 오퍼스로 도는 일 방지).
+ *  - O-0545(2026-10-15) 답장: open({quote:{label,text}}) 이 오면 맨 위에 인용 줄(왼쪽 세로줄 · 두 줄 글 · ✕)을 둔다.
+ *    ✕ → 줄을 내리고 'quoteClear', 글을 누르면 'quoteTap'(웹이 원래 메시지로 이동). 보내면 줄을 내린다(웹이 그 한 건에 실음).
+ *    setQuote({quote}) 로 열린 바의 인용 줄을 바꾼다(보내기 실패로 되돌릴 때 등). quote 가 없으면 예전과 똑같은 입력 바.
  */
 @CapacitorPlugin(name = "NativeInput")
 public class NativeInputPlugin extends Plugin {
@@ -69,6 +72,9 @@ public class NativeInputPlugin extends Plugin {
     private TextView opusChip;
     private boolean opusOn = false;
     private int opusC1, opusC2, opusOffBg, opusOffFg, opusOffBorder;
+    // O-0545 답장 인용 줄
+    private LinearLayout quoteRow;
+    private TextView quoteLabel, quoteText;
 
     private int dp(float v) {
         return Math.round(TypedValue.applyDimension(
@@ -98,6 +104,7 @@ public class NativeInputPlugin extends Plugin {
         final boolean hasCamera = call.getBoolean("hasCamera", false);
         final boolean hasOpus = call.getBoolean("hasOpus", false);     // v5.8
         final boolean opusInit = call.getBoolean("opusOn", false);
+        final JSObject quote = call.getObject("quote");           // O-0545 { label, text } 또는 없음
         // v8.4(O-0162) 글자 크기 4단계: 웹이 고른 크기(sp)를 받는다. 없거나 엉뚱하면 예전 16sp.
         Float ts = null;
         try { ts = call.getFloat("textSize"); } catch (Exception e) { ts = null; }
@@ -107,13 +114,96 @@ public class NativeInputPlugin extends Plugin {
             public void run() {
                 try {
                     showBar(text == null ? "" : text, hint == null ? "메시지 입력" : hint,
-                            colors, hasAttach, hasCamera, hasOpus, opusInit);
+                            colors, hasAttach, hasCamera, hasOpus, opusInit, quote);
                     call.resolve();
                 } catch (Exception e) {
                     call.reject("입력창을 여는 데 실패했습니다: " + e.getMessage());
                 }
             }
         });
+    }
+
+    /** O-0545: 열린 입력 바의 인용 줄을 바꾼다(quote 가 없거나 글이 비면 내린다). 바가 닫혀 있으면 아무것도 안 함. */
+    @PluginMethod
+    public void setQuote(final PluginCall call) {
+        final JSObject quote = call.getObject("quote");
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try { applyQuote(quote); } catch (Exception ignored) {}
+                call.resolve();
+            }
+        });
+    }
+
+    /** O-0545: 인용 줄 내용 넣기 / 내리기. */
+    private void applyQuote(JSObject q) {
+        if (quoteRow == null || quoteLabel == null || quoteText == null) return;
+        String label = null, text = null;
+        try {
+            if (q != null) { label = q.getString("label", null); text = q.getString("text", null); }
+        } catch (Exception e) { label = null; text = null; }
+        if (text == null || text.trim().length() == 0) {
+            if (label == null || label.trim().length() == 0) { quoteRow.setVisibility(View.GONE); return; }
+            text = "";
+        }
+        quoteLabel.setText(label == null || label.length() == 0 ? "답장" : label);
+        quoteText.setText(text);
+        quoteRow.setVisibility(View.VISIBLE);
+    }
+
+    /** O-0545: 인용 줄(왼쪽 세로줄 · 「케이에게 답장 · 13:55」 · 원문 두 줄 · ✕) — 처음엔 숨겨 두고 applyQuote 로 보인다. */
+    private LinearLayout buildQuoteRow(int accent, int fg, int hintCol) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(8), dp(2), 0);
+
+        View line = new View(getContext());
+        GradientDrawable lineD = new GradientDrawable();
+        lineD.setColor(accent);
+        lineD.setCornerRadius(dp(2));
+        line.setBackground(lineD);
+        LinearLayout.LayoutParams lineLp = new LinearLayout.LayoutParams(dp(4), dp(38));
+        lineLp.rightMargin = dp(10);
+        row.addView(line, lineLp);
+
+        LinearLayout col = new LinearLayout(getContext());
+        col.setOrientation(LinearLayout.VERTICAL);
+        quoteLabel = new TextView(getContext());
+        quoteLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        quoteLabel.setTypeface(quoteLabel.getTypeface(), android.graphics.Typeface.BOLD);
+        quoteLabel.setTextColor(accent);
+        quoteLabel.setSingleLine(true);
+        quoteText = new TextView(getContext());
+        quoteText.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(13f, textSizeSp - 2f));
+        quoteText.setTextColor(fg);
+        quoteText.setMaxLines(2);
+        quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        col.addView(quoteLabel);
+        col.addView(quoteText);
+        col.setClickable(true);
+        col.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { notifyListeners("quoteTap", new JSObject()); }
+        });
+        row.addView(col, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView x = new TextView(getContext());
+        x.setText("✕");
+        x.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f);
+        x.setTextColor(hintCol);
+        x.setGravity(Gravity.CENTER);
+        x.setClickable(true);
+        x.setContentDescription("답장 취소");
+        x.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (quoteRow != null) quoteRow.setVisibility(View.GONE);
+                notifyListeners("quoteClear", new JSObject());
+            }
+        });
+        row.addView(x, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        row.setVisibility(View.GONE);
+        return row;
     }
 
     @PluginMethod
@@ -304,13 +394,14 @@ public class NativeInputPlugin extends Plugin {
 
     /** 입력 바(하단 도킹 다이얼로그)를 만들거나, 이미 떠 있으면 텍스트만 갱신한다. */
     private void showBar(String text, String hint, JSObject colors, boolean hasAttach, boolean hasCamera,
-                         boolean hasOpus, boolean opusInit) {
+                         boolean hasOpus, boolean opusInit, JSObject quote) {
         if (dialog != null && dialog.isShowing() && edit != null) {
             edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);   // v8.4
             edit.setText(text);
             edit.setSelection(edit.getText().length());
             edit.setHint(hint);
             if (opusChip != null) { opusOn = opusInit; styleOpusChip(); }   // v5.8: 웹 칩 상태로 맞춤
+            applyQuote(quote);                                              // O-0545
             focusAndShowKeyboard();
             return;
         }
@@ -346,6 +437,11 @@ public class NativeInputPlugin extends Plugin {
         final LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackground(barBgD);
+        // O-0545: 맨 위 인용 줄(답장할 때만 보임) — 키보드 바로 위, 오퍼스 칩 줄보다 위
+        quoteRow = buildQuoteRow(iconTint, fg, hintCol);
+        root.addView(quoteRow, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        applyQuote(quote);
         opusChip = null;
         opusOn = hasOpus && opusInit;
         if (hasOpus) {
@@ -524,6 +620,7 @@ public class NativeInputPlugin extends Plugin {
         o.put("opus", opusChip != null && opusOn);   // v5.8: 이번 1건 오퍼스 지정 여부
         notifyListeners("send", o);
         edit.setText("");
+        if (quoteRow != null) quoteRow.setVisibility(View.GONE);   // O-0545: 답장은 이 한 건에 실렸다(웹이 꺼냄)
         if (opusChip != null && opusOn) { opusOn = false; styleOpusChip(); }   // 보내면 자동으로 꺼짐(1회성)
     }
 }

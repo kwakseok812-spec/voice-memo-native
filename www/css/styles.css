@@ -1969,3 +1969,58 @@ html[data-kwhome="corner"] .kprof-hint,html[data-kwhome="row"] .kprof-hint{displ
 .recdone-badge{white-space:pre-line;word-break:keep-all;overflow-wrap:break-word}     /* 완료 딱지: 둘째 줄(빠진 구간 등)을 줄 단위로 */
 .rec-space{margin:14px 4px 0;padding:10px 14px;border-radius:14px;border:1px solid var(--warn);background:var(--warn-bg);color:var(--text);font-size:14px;font-weight:600;line-height:1.5;text-align:center;word-break:keep-all}
 .kh-side.bub-on .greet p.ksay-over{display:block}                                     /* 「끊긴 녹음이 남아 있습니다」는 말풍선이 떠 있어도 내리지 않는다 */
+
+/* ===================== (O-0545) 답장 — 입력 줄 위 띠 · 내 말풍선 안 인용 상자 · 원문 반짝 ===================== */
+/* 입력 줄(.chatbar)이 화면 아래에 붙어 있으므로(sticky) 띠도 그 바로 위에 붙는다 — 위쪽 옛 메시지를 보다가 답장을 골라도 띠가 보인다.
+   bottom 값(입력 줄 높이)은 app.js 가 재서 넣는다. 뒤 대화가 비치지 않게 바탕을 깐다. */
+.replybar{position:sticky;bottom:66px;z-index:4;display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:7px 4px 7px 11px;border-radius:14px;
+  background:linear-gradient(var(--glass2),var(--glass2)),var(--bg1);border:1px solid var(--glass-b2);border-left:4px solid var(--p1);cursor:pointer;-webkit-user-select:none;user-select:none;
+  box-shadow:0 -6px 14px -8px rgba(0,0,0,.35)}
+.replybar.rb-in{animation:rbIn .16s ease-out}
+.replybar.off{animation:rbOut .12s ease-in forwards}
+@keyframes rbIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes rbOut{to{opacity:0;transform:translateY(6px)}}
+.replybar .rbtx{flex:1;min-width:0}
+.replybar .rbtx b{display:block;font-size:12.5px;font-weight:800;color:var(--p1);letter-spacing:-.2px}
+html:not([data-style="light"]) .replybar .rbtx b{color:#93B4FF}
+.replybar .rbtx span{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.replybar .rbx{flex:none;width:40px;height:40px;border-radius:50%;border:0;background:transparent;color:var(--muted);font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.replybar .rbx:active{background:var(--glass)}
+/* 내 말풍선 맨 위 인용 상자(누르면 원래 메시지로) */
+.bquote{display:block;margin:-3px -14px 8px -5px;padding:6px 10px 7px;border-radius:11px;cursor:pointer;
+  background:rgba(255,255,255,.16);border-left:3px solid rgba(255,255,255,.85);font-size:13.5px;line-height:1.42;
+  -webkit-user-select:none;user-select:none;white-space:normal}
+.bquote b{display:block;font-size:12px;font-weight:800;opacity:.92}
+.bquote span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;opacity:.93;word-break:break-word}
+.bquote:active{background:rgba(255,255,255,.26)}
+.bubble.k .bquote{background:var(--glass2);border-left-color:var(--p1)}
+/* 원래 메시지로 이동했을 때 0.9초 반짝 */
+.bubble.rq-flash{animation:rqFlash .9s ease-out}
+@keyframes rqFlash{0%{box-shadow:0 0 0 0 rgba(34,211,238,.55)}30%{box-shadow:0 0 0 6px rgba(34,211,238,.55)}100%{box-shadow:0 0 0 0 transparent}}
+html[data-style="light"] .bubble.rq-flash{animation-name:rqFlashL}
+@keyframes rqFlashL{0%{box-shadow:0 0 0 0 rgba(8,145,178,.45)}30%{box-shadow:0 0 0 6px rgba(8,145,178,.45)}100%{box-shadow:0 0 0 0 transparent}}
+.bubble.rq-flash.calm{animation:none;outline:3px solid var(--cyan);outline-offset:2px}
+.sheet-btn .rpl-ic{font-size:19px;line-height:1}
+/* 처음 한 번 안내(새 기능 · 답장): 머리줄 아래 위쪽에 — 아래 입력칸 · 답장 띠를 가리지 않는다. 누르면 닫힘 */
+.replytip{position:fixed;z-index:30;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 128px);width:max-content;max-width:min(92vw,440px);
+  padding:10px 16px;border-radius:16px;background:rgba(8,12,28,.92);color:#fff;border:1px solid rgba(147,180,255,.55);box-shadow:0 10px 28px rgba(0,0,0,.35);
+  font-size:14.5px;line-height:1.45;text-align:center;cursor:pointer;-webkit-user-select:none;user-select:none}
+.replytip b{display:block;font-size:12.5px;color:#93B4FF;margin-bottom:2px}
+.replytip.rt-in{animation:rtIn .18s ease-out}
+@keyframes rtIn{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){.replytip.rt-in{animation:none}}
+/* ⋯ 시트의 「↩ 답장」: 바로 아래 [복사](파랑 그라데이션)와 겹쳐 보이지 않게 테두리·글자만 강조색 */
+#chatSheetReply{color:var(--p1);border:1.5px solid var(--p1);background:var(--glass2)}
+html:not([data-style="light"]) #chatSheetReply{color:#93B4FF;border-color:#5B8CF7}
+/* 음성 대화 전체 화면(접은 폰 — 위 v9.6 규칙과 같은 조건): 아래 음성 단추 두 개 바로 위에 띄운다(글 입력 줄은 그때 숨겨져 있다) */
+@media not all and (min-width:700px){ @media not all and (orientation:landscape) and (min-width:560px){
+  #chatView.convo-full:not(.convo-log) .replybar{position:fixed;z-index:16;left:14px;right:14px;bottom:calc(76px + env(safe-area-inset-bottom)) !important;margin:0;
+    background:rgba(8,12,28,.80);border-color:rgba(255,255,255,.22);border-left-color:#93B4FF}
+  #chatView.convo-full:not(.convo-log) .replybar .rbtx span{color:#fff}
+  #chatView.convo-full:not(.convo-log) .replybar .rbtx b{color:#93B4FF}
+  /* 띠가 「지금 보내기」 단추 줄 자리(76px)에 들어가므로, 그 위의 것들(지금 보내기 줄 · 자막 · 누르면 끊기 안내)을 띠 높이만큼(64px) 함께 올린다 */
+  #chatView.convo-full.has-reply:not(.convo-log) .kstage-act{bottom:calc(140px + env(safe-area-inset-bottom))}
+  #chatView.convo-full.has-reply:not(.convo-log) .kcall-cap{bottom:calc(196px + env(safe-area-inset-bottom))}
+  #chatView.convo-full.has-reply:not(.convo-log) .kstage-tap{bottom:calc(148px + env(safe-area-inset-bottom))}
+}}
+@media (prefers-reduced-motion:reduce){.replybar.rb-in,.replybar.off{animation:none}.bubble.rq-flash{animation:none;outline:3px solid var(--cyan);outline-offset:2px}}

@@ -82,8 +82,29 @@
     var bar = ta && ta.closest ? ta.closest('.chatbar') : null;
     if (bar) { bar.style.visibility = 'hidden'; hiddenBar = bar; }
   }
+  var hiddenReply = null;  // (O-0545) 네이티브 입력 바가 인용 줄을 보여 주는 동안 숨긴 웹 답장 띠
   function restoreWebBar() {
     if (hiddenBar) { hiddenBar.style.visibility = ''; hiddenBar = null; }
+    if (hiddenReply) { hiddenReply.style.visibility = ''; hiddenReply = null; }
+  }
+
+  /* (O-0545) 답장 인용 줄: 새 APK(NativeInput.setQuote 가 있는 판)만 입력 바 안에 인용 줄을 그린다.
+   *   옛 APK 면 인용을 넘기지 않고 웹 답장 띠를 숨기지 않는다(입력 바 위에 그대로 보임). */
+  function hasNativeQuote() {
+    try {
+      var hs = Cap.PluginHeaders || [];
+      for (var i = 0; i < hs.length; i++) {
+        if (hs[i] && hs[i].name === 'NativeInput') {
+          var ms = hs[i].methods || [];
+          for (var j = 0; j < ms.length; j++) if (ms[j] && ms[j].name === 'setQuote') return true;
+          return false;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+  function replyQuote() {
+    try { return (global.SmartReply && global.SmartReply.on && global.SmartReply.on()) ? global.SmartReply.get() : null; } catch (e) { return null; }
   }
 
   function openFor(target) {
@@ -94,8 +115,14 @@
     lastOpen = now;
     current = target;
     hideWebBar(ta);   // 웹 하단 바 숨김 → 화면엔 네이티브 입력 바 하나만
+    var quote = (target === 'chat' && hasNativeQuote()) ? replyQuote() : null;   // (O-0545)
+    if (target === 'chat' && hasNativeQuote()) {
+      var rb = el('chatReplyBar');
+      if (rb && rb.style.display !== 'none') { rb.style.visibility = 'hidden'; hiddenReply = rb; }
+    }
     try {
       var p = NI.open({
+        quote: quote,                                                          // (O-0545) { label, text } 또는 null(옛 APK 는 무시)
         target: target, text: ta.value || '', hint: m.hint,
         colors: readColors(target),
         hasAttach: !!m.attach, hasCamera: !!m.cam,
@@ -228,6 +255,22 @@
     }
     current = null;
   });
+
+  // (O-0545) 네이티브 인용 줄의 ✕ → 답장 취소 · 인용 줄 누르기 → 원래 메시지로(입력 바는 열린 채)
+  NI.addListener('quoteClear', function () {
+    try { if (global.SmartReply) global.SmartReply.clear(); } catch (e) {}
+  });
+  NI.addListener('quoteTap', function () {
+    try { if (global.SmartReply) global.SmartReply.jump(); } catch (e) {}
+  });
+  // (O-0545) app.js 가 쓰는 입구: ⋯ → 「↩ 답장」을 고르면 입력 바를 바로 연다 · 답장이 바뀌면(보냄·실패로 되돌림) 인용 줄을 맞춘다
+  global.SmartNativeInput = {
+    open: function (target) { openFor(target || 'chat'); return true; },
+    quoteSync: function () {
+      if (current !== 'chat' || !hasNativeQuote()) return;
+      try { var pr = NI.setQuote({ quote: replyQuote() }); if (pr && pr.catch) pr.catch(function () {}); } catch (e) {}
+    }
+  };
 
   // v8.2(O-0157) 아이콘 길게 누르기 「사진 보내기」가 입력 바 없이도 네이티브 사진 고르기를 쓰게 내보낸다.
   //   hookName = SmartAttach 입구 이름('chatCam' 등). 성공하면 true(고르기 창을 띄움), 옛 APK 면 false.
