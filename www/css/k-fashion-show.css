@@ -48,7 +48,7 @@
 .kfs-media img{z-index:0}
 .kfs-media video{z-index:1;opacity:0}
 .kfs-slot.vid-on .kfs-media video{opacity:1}
-.kfs-slot.kb .kfs-media img{animation:kfsKb 8s ease-out forwards}          /* 그림 장면: 한 벌 동안 천천히 다가가기(5%) */
+.kfs-slot.kb .kfs-media img{animation:kfsKb 8s ease-out forwards}          /* 그림 장면: 한 벌 동안 천천히 다가가기(5%) — 8s = app.js KFS_SEG(한 벌 길이). KFS_SEG 를 바꾸면 여기도 함께 */
 @keyframes kfsKb{from{transform:scale(1)}to{transform:scale(1.05) translateY(-1%)}}
 
 .kfs-floor{position:absolute;left:0;right:0;bottom:0;height:22%;background:linear-gradient(180deg,transparent,rgba(60,40,40,.18));pointer-events:none}

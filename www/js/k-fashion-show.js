@@ -191,7 +191,7 @@
     var cur = curOutfit();
     show.end = true; show.paused = true; paintBars(1);
     swapTo(cur, true);
-    el.nm.innerHTML = esc(cur.name) + '<span class="kfs-badge">입는 중</span><small>지금 옷으로 돌아왔어요</small>';
+    el.nm.innerHTML = esc(cur.name) + '<span class="kfs-badge">입는 중</span><small>지금 옷으로 돌아왔습니다</small>';
     el.cnt.textContent = show.list.length + '벌 끝';
     el.tag.classList.remove('in'); if (!calm()) { void el.tag.offsetWidth; el.tag.classList.add('in'); }
     el.ctlShow.hidden = true; el.ctlEnd.hidden = false;
@@ -322,7 +322,7 @@
   // 지금 옷이 바뀌었을 때(다른 기기에서 맞춰 옴 등) 「입는 중」 딱지와 「이 옷 입기」 단추를 바로 맞춘다(움직임 없이)
   function refresh() {
     if (!show) return;
-    if (show.end) { var cur = curOutfit(); el.nm.innerHTML = esc(cur.name) + '<span class="kfs-badge">입는 중</span><small>지금 옷으로 돌아왔어요</small>'; return; }
+    if (show.end) { var cur = curOutfit(); el.nm.innerHTML = esc(cur.name) + '<span class="kfs-badge">입는 중</span><small>지금 옷으로 돌아왔습니다</small>'; return; }
     tag(show.list[show.i], show.i, false);
   }
 
