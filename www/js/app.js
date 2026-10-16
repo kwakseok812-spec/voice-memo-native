@@ -2215,7 +2215,7 @@
   APP_VERSION = 'v9.15';        // v9.15(O-0544): 문서 뷰어 「수정 요청」 — [✏️ 편집하기]를 [✏️ 고치기]로 바꾸고 두 갈래(표시해서 요청하기 · PC 화면으로 직접 고치기). 문서 위에 [펜]으로 동그라미 · 밑줄(표는 칸 · 행 · 열 · 표 전체 칩), 양 끝 손잡이로 범위 조정, 메모(빠른 칩 · 글 · 🎤 받아쓰기), 번호 핀 · 목록(이 기기 7일 보관) · [PC로 보내기] → PC가 원본의 사본(_rev1)을 고쳐 「고친 곳 표시 PDF」와 함께 채팅으로. 보낸 뒤 [요청 취소] · 「이어서 고치기」. 문서를 0.5초 길게 눌러도 켜짐(옷·설정 → 설정에서 끄기), [? 사용법] 7장(처음 한 번 저절로). PDF 는 수정 요청만, 엑셀 · PPT · 스캔은 교정 표시 PDF 로 돌려드림. 진동 권한 추가(길게 누를 때 짧게 한 번) · versionCode 59
   APP_VERSION = 'v9.16';        // v9.16(O-0545): 채팅 답장 — 말풍선 ⋯ → 「↩ 답장」을 고르면 입력 줄 위에 원래 메시지가 붙고, 보낸 말풍선 맨 위에 인용(누르면 그 메시지로). PC 응답기가 그 메시지를 읽어 이어서 답한다. 폰 입력 바 안에도 인용 줄 · versionCode 60
   APP_VERSION = 'v9.17';        // v9.17(O-0547): 수정 요청 메모의 「🎤 말로 적기」가 누르자마자 꺼지던 문제 — 2초 멈춤 시계가 말하기 전부터 돌던 것을 말이 시작된 뒤부터로(말이 없으면 8초), 채팅 받아쓰기와 같은 길(이어 듣기 · 효과음 설정)로 켜고, 멈출 때 마지막 말까지 받아 넣음. 「준비 중 → 듣는 중」 표시, 꺼지면 이유(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음)를 짧게 보여 줌. 실제로 받아 적은 글이 있을 때만 「말로 적음」 표시. (O-0548) 문서 뷰어 머리줄 [💬]로 채팅 바로 가기(수정 요청 화면에도) — 채팅에서 뒤로 가면 보던 문서의 같은 쪽 · 같은 확대로, 수정 요청 화면이었으면 펜/손 · 적던 메모까지 그대로 · versionCode 61
-  APP_VERSION = 'v9.18';        // v9.18(O-0551): 케이 옷 자산 — 서버에서 그림 · 영상이 바뀐 옷을 입으면, 기기가 기억하던 옛 묶음의 빠진 파일(옛 인사 영상 등)을 받지 않고 새 묶음부터 받는다. 자리(인사 영상 짝 · 얼굴 영상 · 통화 · 자세 그림 · 서버 옷 사진)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꿔, 새 파일 하나를 못 받아도 옛 인사 영상이 남지 않는다(k-character.js 스위치 KA_NEXT_FIRST on / off — off 면 v9.17 과 같다) · versionCode 62
+  APP_VERSION = 'v9.18';        // v9.18(O-0551): 케이 옷 자산 — 서버에서 그림 · 영상이 바뀐 옷을 입으면, 기기가 기억하던 옛 묶음의 빠진 파일(옛 인사 영상 등)을 받지 않고 새 묶음부터 받는다. 자리(인사 영상 짝 · 얼굴 영상 · 통화 · 자세 그림 · 서버 옷 사진)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꿔, 새 파일 하나를 못 받아도 옛 인사 영상이 남지 않는다(k-character.js 스위치 KA_NEXT_FIRST on / off — off 면 v9.17 과 같다). (O-0545 ②) 채팅 말풍선을 왼쪽으로 밀면 답장 — 말풍선이 손가락(PC판은 마우스)을 따라 밀리고 ↩ 가 나타나며, 문턱을 넘겨 놓으면 ⋯ → 「↩ 답장」과 같은 답장 띠가 붙는다(세로 스크롤 · 글자 고르기 · 링크 · 첨부 · 화면 가장자리 뒤로 가기는 그대로 · 스위치 REPLY_SWIPE true / false) · versionCode 62
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -6811,6 +6811,8 @@
    *  · 스위치 REPLY_UI=false → ⋯ 시트에 「답장」이 안 보인다(이미 받은 인용 상자는 그대로 그린다). */
   var REPLY_UI = true;
   var REPLY_TIP_KEY = 'smart_reply_tip_seen';        // 처음 한 번 「⋯에 답장이 생겼습니다」 안내
+  var REPLY_SWIPE = true;                            // (O-0545 ②, v9.18) 말풍선을 왼쪽으로 밀어 답장 — false 면 ⋯ 시트만(v9.17 그대로). 아래 「밀어서 답장」
+  var REPLY_SWIPE_TIP_KEY = 'smart_reply_swipe_tip_seen';
   var REPLY_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   var chatReply = null;                              // { id, side, snip, at } — 지금 입력 줄에 걸린 답장
   function replyCalm() {
@@ -6957,20 +6959,27 @@
   }
   // 처음 한 번만: ⋯ 에 답장이 생겼다는 안내. 아래 입력칸·답장 띠를 가리지 않게 화면 위쪽(머리줄 아래)에 작은 알림판으로 띄운다.
   //   누르면 닫히고, 6.5초 뒤 저절로 사라진다. 「봤다」 표시는 실제로 띄운 뒤에 남긴다(띄우기 전에 채팅을 닫으면 다음에 다시).
+  //   (O-0545 ②) 밀어서 답장(REPLY_SWIPE)이 켜져 있으면 안내에 「말풍선을 왼쪽으로 밀어도 …」 한 줄을 더한다. ⋯ 안내를 이미 본 기기에는 그 한 줄만 한 번 더(따로 기억).
   function replyTipOnce() {
     if (!REPLY_UI) return;
+    var seenMenu = false, seenSwipe = true;
     try {
-      if (localStorage.getItem(REPLY_TIP_KEY)) return;
+      seenMenu = !!localStorage.getItem(REPLY_TIP_KEY);
+      seenSwipe = !REPLY_SWIPE || !!localStorage.getItem(REPLY_SWIPE_TIP_KEY);
+      if (seenMenu && seenSwipe) return;
       if (!chatMsgs.some(function (m) { return m.role === 'k' && replyRowId(m); })) return;
     } catch (e) { return; }
     setTimeout(function () {
       if (!isOpen(chatView) || !chatView || $('replyTip')) return;
       var el = document.createElement('div');
       el.id = 'replyTip'; el.className = 'replytip'; el.setAttribute('role', 'status');
-      el.innerHTML = '<b>' + esc(tw('새 기능 · 답장')) + '</b><span>' + esc(tw('말풍선 오른쪽 위 ⋯ 를 누르면 그 메시지에 답장할 수 있습니다.')) + '</span>';
+      var lines = [];
+      if (!seenMenu) lines.push(tw('말풍선 오른쪽 위 ⋯ 를 누르면 그 메시지에 답장할 수 있습니다.'));
+      if (!seenSwipe) lines.push(tw('말풍선을 왼쪽으로 밀어도 답장할 수 있습니다.'));
+      el.innerHTML = '<b>' + esc(tw(seenMenu ? '새 기능 · 밀어서 답장' : '새 기능 · 답장')) + '</b>' + lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('');
       chatView.appendChild(el);
       if (!replyCalm()) { void el.offsetWidth; el.classList.add('rt-in'); }
-      try { localStorage.setItem(REPLY_TIP_KEY, '1'); } catch (e) {}
+      try { localStorage.setItem(REPLY_TIP_KEY, '1'); if (REPLY_SWIPE) localStorage.setItem(REPLY_SWIPE_TIP_KEY, '1'); } catch (e) {}
       var gone = false;
       function hide() { if (gone) return; gone = true; if (el.parentNode) el.parentNode.removeChild(el); }
       el.addEventListener('click', hide);
@@ -6986,6 +6995,143 @@
     if ((ev.key === 'Enter' || ev.key === ' ') && chatReply && ev.target === this) { ev.preventDefault(); jumpToReply(chatReply.id, chatReply.side); }
   });
   if ($('chatReplyX')) $('chatReplyX').addEventListener('click', function (ev) { ev.stopPropagation(); clearReply(true); });
+  /* ===================== (O-0545 ②, v9.18) 밀어서 답장 — 말풍선을 왼쪽으로 밀면 답장(카카오톡처럼) =====================
+   * 요청(10/16, 지시대장 O-0545): 「보통 카카오톡에서는 왼쪽으로 드래그 하면 자동으로 답변기능이 되던데 할 수 없나」
+   *  · 말풍선이 손가락(PC판은 마우스)을 따라 왼쪽으로 조금 밀리고, 비는 자리에 ↩ 가 나타난다. 문턱(RS_TH)을 넘으면 ↩ 가 톡 커지며 짧은 진동,
+   *    그 상태로 놓으면 ⋯ → 「↩ 답장」과 같은 startReply() 를 부른다(답장 길은 하나 — 띠 · 입력칸 열기 · 보내기 모두 같은 함수).
+   *    문턱 전에 놓거나 되돌리면 아무 일 없이 제자리로(0.18초).
+   *  · 세로 스크롤과 헷갈리지 않게: 가로로 RS_SLOP 넘게, 세로보다 1.6배 넘게 움직였을 때만 시작한다. 세로가 먼저면 그 손길은 끝까지 스크롤.
+   *  · 방해하지 않는 것: 글자를 고르고 있을 때 · 길게 누른 뒤(글자 고르기) · 링크 · 첨부 · [전체 보기] · ⋯ · 인용 상자 · [듣기] · 작업 카드 ·
+   *    가로로 밀리는 칸(표 · 코드) 위에서 시작한 손길 · PC판에서 글자 바로 위를 끄는 것(= 글자 고르기). PC판은 말풍선의 빈 자리에서 끌 때만.
+   *  · 안드로이드 가장자리 뒤로 가기 몸짓과 겹치지 않게: 화면 양 끝 RS_EDGE 안에서 시작한 손길은 무시.
+   *  · 움직임 줄이기(KScene.calm · 폰 설정)면 말풍선은 움직이지 않고 ↩ 만 나타난다. 진동 = 이미 쓰는 방식(수정 요청과 같음 · VIBRATE 권한은 v9.15 부터 있음).
+   *  · 스위치 REPLY_SWIPE = false → 밀기를 받지 않는다(⋯ 시트 답장은 그대로). */
+  var RS_TH = 60, RS_SLOP = 10, RS_EDGE = 28, RS_LONG = 450, RS_RATIO = 1.6;
+  var RS_SKIP = 'a,button,input,textarea,select,video,audio,img.kav,.bmenu,.bfoldbtn,.bquote,.attach,.ordcard,.navchip,[data-att-url],[data-dl-url],[data-view-url],[data-lid],[data-link],[role="button"]';
+  var rs = null, rsIc = null, rsEatAt = 0;
+  function rsBuzz() {
+    try {
+      if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins && Capacitor.Plugins.Haptics) { Capacitor.Plugins.Haptics.vibrate({ duration: 20 }); return; }
+      if (navigator.vibrate) navigator.vibrate(20);
+    } catch (e) {}
+  }
+  function rsSelecting() { try { var s = window.getSelection && window.getSelection(); return !!(s && !s.isCollapsed && String(s).length); } catch (e) { return false; } }
+  function rsHScroll(el, bub) {                       // 가로로 밀리는 칸(넓은 표 · 코드) 안에서 시작했나
+    for (var n = el; n && n !== bub && n.nodeType === 1; n = n.parentNode) {
+      if (n.scrollWidth > n.clientWidth + 2) { var ox = ''; try { ox = getComputedStyle(n).overflowX; } catch (e) {} if (ox === 'auto' || ox === 'scroll') return true; }
+    }
+    return false;
+  }
+  function rsOnText(x, y) {                           // PC판: 마우스가 글자 바로 위인가(그렇다면 글자 고르기에 맡긴다). 알 수 없으면 「글자 위」로 본다
+    try {
+      var node = null, off = 0;
+      if (document.caretRangeFromPoint) { var r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; off = r.startOffset; } }
+      else if (document.caretPositionFromPoint) { var cp = document.caretPositionFromPoint(x, y); if (cp) { node = cp.offsetNode; off = cp.offset; } }
+      else return true;
+      if (!node || node.nodeType !== 3) return false;
+      var rg = document.createRange(), len = node.length || 0;
+      rg.setStart(node, Math.max(0, off - 1)); rg.setEnd(node, Math.min(len, off + 1));
+      var rc = rg.getClientRects();
+      for (var i = 0; i < rc.length; i++) { if (x >= rc[i].left - 3 && x <= rc[i].right + 3 && y >= rc[i].top - 2 && y <= rc[i].bottom + 2) return true; }
+      return false;
+    } catch (e) { return true; }
+  }
+  function rsMsg(uid) { for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) return chatMsgs[i]; } return null; }
+  function rsStart(target, x, y, mouse) {
+    rs = null;
+    if (!REPLY_SWIPE || !REPLY_UI || !chatLog || !target || !target.closest) return;
+    var bub = target.closest('.bubble[data-uid]');
+    if (!bub || !chatLog.contains(bub) || bub.classList.contains('typing')) return;
+    if (target.closest(RS_SKIP) || rsHScroll(target, bub)) return;
+    if (!mouse && (x < RS_EDGE || x > (window.innerWidth || 0) - RS_EDGE)) return;   // 화면 가장자리 = 안드로이드 뒤로 가기 몸짓
+    if (rsSelecting()) return;
+    if (mouse && rsOnText(x, y)) return;
+    var uid = bub.getAttribute('data-uid');
+    if (!replyRowId(rsMsg(uid))) return;
+    rs = { bub: bub, uid: uid, x0: x, y0: y, t0: Date.now(), mouse: !!mouse, on: false, d: 0, past: false, calm: replyCalm(), rect: null };
+  }
+  function rsIcon() {
+    if (rsIc && rsIc.parentNode) return rsIc;
+    rsIc = document.createElement('div');
+    rsIc.id = 'replySwipeIc'; rsIc.className = 'rsic'; rsIc.setAttribute('aria-hidden', 'true');
+    rsIc.innerHTML = '<span>↩</span>';
+    document.body.appendChild(rsIc);
+    return rsIc;
+  }
+  function rsPaint() {
+    if (!rs || !rs.on) return;
+    var d = rs.d, shown = d <= RS_TH ? d : RS_TH + (d - RS_TH) * 0.35;
+    shown = Math.min(shown, 96);
+    if (!rs.calm) rs.bub.style.transform = 'translateX(' + (-shown).toFixed(1) + 'px)';
+    var ic = rsIcon(), r = rs.rect, gap = rs.calm ? 0 : Math.min(shown, 64);
+    var p = Math.max(0, Math.min(1, rs.calm ? d / RS_TH : (shown - 12) / (RS_TH - 12)));
+    var top = Math.max(8, Math.min((window.innerHeight || 600) - 44, r.top + Math.min(r.height, 120) / 2 - 18));
+    ic.style.left = Math.round(r.right - (rs.calm ? 22 : gap / 2) - 18) + 'px';
+    ic.style.top = Math.round(top) + 'px';
+    ic.style.opacity = p.toFixed(2);
+    ic.style.transform = 'scale(' + (0.55 + 0.45 * p).toFixed(3) + ')';
+    ic.classList.toggle('past', rs.past);
+  }
+  function rsMove(x, y, ev) {
+    if (!rs) return;
+    if (!rs.bub.isConnected) { rsEnd(false); return; }  // 그 사이 채팅이 다시 그려졌다
+    var dx = x - rs.x0, dy = y - rs.y0;
+    if (!rs.on) {
+      if (Math.abs(dy) > RS_SLOP && Math.abs(dy) * RS_RATIO >= Math.abs(dx)) { rs = null; return; }   // 세로가 먼저 = 스크롤
+      if (dx > RS_SLOP) { rs = null; return; }                                                       // 오른쪽으로 미는 것은 답장이 아니다
+      if (!(dx < -RS_SLOP && Math.abs(dx) > Math.abs(dy) * RS_RATIO)) return;
+      if (!rs.mouse && Date.now() - rs.t0 > RS_LONG) { rs = null; return; }                            // 길게 누른 뒤 = 글자 고르기
+      if (rsSelecting()) { rs = null; return; }
+      rs.on = true; rs.rect = rs.bub.getBoundingClientRect();
+      rs.bub.classList.add('rs-drag');
+      if (rs.mouse) document.documentElement.classList.add('rs-mousedrag');
+    }
+    if (ev && ev.cancelable) ev.preventDefault();
+    rs.d = Math.max(0, -dx);
+    var past = rs.d >= RS_TH;
+    if (past && !rs.past) rsBuzz();
+    rs.past = past;
+    rsPaint();
+  }
+  function rsEnd(commit) {
+    var s = rs; rs = null;
+    if (!s || !s.on) return;
+    rsEatAt = Date.now();                              // 끌고 난 뒤 따라오는 누름(click)은 먹는다(링크 · 접기 등이 눌리지 않게)
+    document.documentElement.classList.remove('rs-mousedrag');
+    var b = s.bub;
+    b.classList.remove('rs-drag');
+    if (!s.calm) { b.classList.add('rs-back'); b.style.transform = ''; setTimeout(function () { b.classList.remove('rs-back'); }, 220); }
+    if (rsIc) {
+      var ic = rsIc;
+      if (commit && s.past && !s.calm) { ic.classList.add('go'); setTimeout(function () { ic.classList.remove('go', 'past'); ic.style.opacity = '0'; }, 200); }
+      else { ic.classList.remove('past'); ic.style.opacity = '0'; }
+    }
+    if (commit && s.past) startReply(s.uid);
+  }
+  if (chatLog) {
+    chatLog.addEventListener('touchstart', function (ev) {
+      if (!ev.touches || ev.touches.length !== 1) { if (rs) rsEnd(false); return; }
+      var t = ev.touches[0]; rsStart(ev.target, t.clientX, t.clientY, false);
+    }, { passive: true });
+    chatLog.addEventListener('touchmove', function (ev) {
+      if (!rs) return;
+      if (!ev.touches || ev.touches.length !== 1) { rsEnd(false); return; }
+      var t = ev.touches[0]; rsMove(t.clientX, t.clientY, ev);
+    }, { passive: false });                            // 가로로 미는 동안만 스크롤을 막는다(세로면 손대지 않음)
+    chatLog.addEventListener('touchend', function () { if (rs) rsEnd(true); }, { passive: true });
+    chatLog.addEventListener('touchcancel', function () { if (rs) rsEnd(false); }, { passive: true });
+    chatLog.addEventListener('mousedown', function (ev) {
+      if (ev.button !== 0 || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.metaKey) return;
+      if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;   // 손가락이 만든 흉내 마우스 사건은 위에서 이미 받았다
+      rsStart(ev.target, ev.clientX, ev.clientY, true);
+    });
+    document.addEventListener('mousemove', function (ev) { if (rs && rs.mouse) rsMove(ev.clientX, ev.clientY, ev); });
+    document.addEventListener('mouseup', function () { if (rs && rs.mouse) rsEnd(true); });
+    window.addEventListener('blur', function () { if (rs) rsEnd(false); });
+    chatLog.addEventListener('click', function (ev) {  // 끌고 난 직후의 누름은 여기서 멈춘다(아래 말풍선 누름 처리보다 먼저 — 잡는 단계)
+      if (rsEatAt && Date.now() - rsEatAt < 400) { rsEatAt = 0; ev.stopPropagation(); ev.preventDefault(); }
+    }, true);
+  }
   // 폰 네이티브 입력 바(native-input.js)가 쓰는 입구: 인용 줄 내용 · ✕ · 인용 줄 누르기
   window.SmartReply = {
     get: function () { return chatReply ? { label: replyLabel(chatReply), text: chatReply.snip || '' } : null; },
