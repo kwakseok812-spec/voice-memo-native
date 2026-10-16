@@ -2216,6 +2216,7 @@
   APP_VERSION = 'v9.16';        // v9.16(O-0545): 채팅 답장 — 말풍선 ⋯ → 「↩ 답장」을 고르면 입력 줄 위에 원래 메시지가 붙고, 보낸 말풍선 맨 위에 인용(누르면 그 메시지로). PC 응답기가 그 메시지를 읽어 이어서 답한다. 폰 입력 바 안에도 인용 줄 · versionCode 60
   APP_VERSION = 'v9.17';        // v9.17(O-0547): 수정 요청 메모의 「🎤 말로 적기」가 누르자마자 꺼지던 문제 — 2초 멈춤 시계가 말하기 전부터 돌던 것을 말이 시작된 뒤부터로(말이 없으면 8초), 채팅 받아쓰기와 같은 길(이어 듣기 · 효과음 설정)로 켜고, 멈출 때 마지막 말까지 받아 넣음. 「준비 중 → 듣는 중」 표시, 꺼지면 이유(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음)를 짧게 보여 줌. 실제로 받아 적은 글이 있을 때만 「말로 적음」 표시. (O-0548) 문서 뷰어 머리줄 [💬]로 채팅 바로 가기(수정 요청 화면에도) — 채팅에서 뒤로 가면 보던 문서의 같은 쪽 · 같은 확대로, 수정 요청 화면이었으면 펜/손 · 적던 메모까지 그대로 · versionCode 61
   APP_VERSION = 'v9.18';        // v9.18(O-0551): 케이 옷 자산 — 서버에서 그림 · 영상이 바뀐 옷을 입으면, 기기가 기억하던 옛 묶음의 빠진 파일(옛 인사 영상 등)을 받지 않고 새 묶음부터 받는다. 자리(인사 영상 짝 · 얼굴 영상 · 통화 · 자세 그림 · 서버 옷 사진)마다 새 파일이 다 준비되면 그 자리만 먼저 새것으로 바꿔, 새 파일 하나를 못 받아도 옛 인사 영상이 남지 않는다(k-character.js 스위치 KA_NEXT_FIRST on / off — off 면 v9.17 과 같다). (O-0545 ②) 채팅 말풍선을 왼쪽으로 밀면 답장 — 말풍선이 손가락(PC판은 마우스)을 따라 밀리고 ↩ 가 나타나며, 문턱을 넘겨 놓으면 ⋯ → 「↩ 답장」과 같은 답장 띠가 붙는다(세로 스크롤 · 글자 고르기 · 링크 · 첨부 · 화면 가장자리 뒤로 가기는 그대로 · 스위치 REPLY_SWIPE true / false) · versionCode 62
+  APP_VERSION = 'v9.19';        // v9.19(O-0557): 케이 패션쇼 — 꾸미기 「옷」 탭의 옷장 머리줄 [▶ 패션쇼]를 누르면 케이가 옷장의 옷을(옷장과 같은 목록 · 순서 · 묶음 이름) 한 벌에 8초씩 갈아입으며 걸어 나와 → 한 바퀴 → 포즈. 옷이 바뀔 때 플래시처럼 번쩍 · 진행 막대 · 아래 단추 줄([이전] [멈춤] [이 옷 입기] [다음])로만 조작 · 마지막엔 지금 입은 옷으로 돌아와 [다시 보기] [닫기]. 보기만 해서는 옷이 바뀌지 않고 「이 옷 입기」만 옷장 칸을 누를 때와 같은 함수로 갈아입는다. 패션쇼 영상이 아직 없는 옷은 인사 영상 → 서 있는 그림으로 대신 · 움직임 줄이기면 그림으로. 패션쇼 영상은 서버 묶음(show 칸)에서 쇼를 열 때만 받는다(다음 옷 미리 받기) · 스위치 KFS_UI · versionCode 63
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -5772,6 +5773,16 @@
     showHome(); setStatus('대기 중', 'idle');
     try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, $('kHero'), changed); } catch (e) {}
   }
+  /* v9.5: 같은 묶음끼리 이어지게 모은다(묶음 순서 = 처음 나온 순서, 묶음 안 순서는 그대로) — 서버에서 온 새 옷도 자기 묶음 끝에 붙는다.
+   *   v9.19(O-0557): 옷장 화면과 패션쇼가 같은 순서를 쓰도록 함수 하나로 뺐다(순서 규칙은 예전 그대로). cats = 묶음별 벌 수 · catOrder = 묶음 순서 */
+  function kwSorted(list) {
+    var cats = {}, catOrder = [];
+    list.forEach(function (o) { var c = o.category || ''; if (!cats[c]) catOrder.push(c); cats[c] = (cats[c] || 0) + 1; });
+    var out = list.map(function (o, i) { return { o: o, i: i }; }).sort(function (a, b) {
+      var d = catOrder.indexOf(a.o.category || '') - catOrder.indexOf(b.o.category || ''); return d || (a.i - b.i);
+    }).map(function (x) { return x.o; });
+    return { list: out, cats: cats, catOrder: catOrder };
+  }
   function renderKWardrobe() {
     if (!window.KChar) return;
     var cur = KChar.outfit(), list = KChar.outfits();
@@ -5779,12 +5790,8 @@
     if ($('kwCount')) $('kwCount').textContent = String(list.length);
     var g = $('kwGrid');
     if (g) {
-      var lastCat = null, cats = {}, catOrder = [];
-      list.forEach(function (o) { var c = o.category || ''; if (!cats[c]) catOrder.push(c); cats[c] = (cats[c] || 0) + 1; });
-      // v9.5: 같은 묶음끼리 이어지게 모은다(묶음 순서 = 처음 나온 순서, 묶음 안 순서는 그대로) — 서버에서 온 새 옷도 자기 묶음 끝에 붙는다
-      list = list.map(function (o, i) { return { o: o, i: i }; }).sort(function (a, b) {
-        var d = catOrder.indexOf(a.o.category || '') - catOrder.indexOf(b.o.category || ''); return d || (a.i - b.i);
-      }).map(function (x) { return x.o; });
+      var lastCat = null, srt = kwSorted(list), cats = srt.cats;
+      list = srt.list;
       var multiCat = Object.keys(cats).length > 1;
       g.innerHTML = list.map(function (o) {
         var on = o.id === cur.id, head = '';
@@ -5805,6 +5812,8 @@
       an.style.display = nop ? 'block' : 'none';
     }
     try { paintKwSyncNote(); } catch (e) {}           // (O-0487) 옷 맞추기가 실제로 켜져 있을 때만 「모든 기기에 함께 적용됩니다」
+    var sb = $('kwShowBtn');                           // v9.19(O-0557) 패션쇼 단추 — 스위치가 켜져 있고 옷이 있을 때만
+    if (sb) { sb.hidden = !kfsOn || !KChar.outfits().length; sb.classList.toggle('calm', !KChar.motionOn()); if (sb.parentNode) sb.parentNode.classList.toggle('has-show', !sb.hidden); }   // has-show: 폰 폭에서 안내 글을 둘째 줄로(k-fashion-show.css)
     renderKVoices();
     renderKFull();
     renderKIntro();
@@ -6311,9 +6320,32 @@
       if (o) KVStage.open();
     });
   } else if (KV_UI === 'stage') KV_UI = 'list';           // 무대 파일이 없으면(읽기 실패) 줄 목록으로 — 목소리를 고를 길이 사라지지 않게
+  /* ==================== O-0557 케이 패션쇼 ====================
+   * 꾸미기 「옷」 탭의 옷장 머리줄 [▶ 패션쇼](이 한 곳) → js/k-fashion-show.js 의 한 장. 그 화면은 그리기만 하고, 여기서 넘겨주는 것은 셋뿐이다:
+   *   목록 = 옷장과 같은 목록 · 순서 · 묶음 이름(kwSorted — 옷이 늘거나 빠지면 쇼도 함께) · 지금 옷 · 「이 옷 입기」 = kwWear(옷장 칸을 누를 때와 같은 함수).
+   * 무엇을 보일지(패션쇼 영상 → 인사 영상 → 서 있는 그림)와 받기는 KChar.show(k-character.js).
+   *   KFS_UI   'on' = 단추가 보인다 · 'off' = 단추가 없다(v9.18 과 같은 화면 — 쇼 화면은 만들어지지도 않는다)
+   *   KFS_SEG  한 벌 길이(초) — 패션쇼 영상(라2: 걸어 나와 → 한 바퀴 → 포즈)이 8초라 8 */
+  var KFS_UI = 'on', KFS_SEG = 8;
+  var kfsOn = KFS_UI === 'on' && !!window.KFShow && !!window.KChar && !!KChar.show;
+  if (kfsOn) {
+    KFShow.init({
+      seg: KFS_SEG,
+      list: function () { return kwSorted(KChar.outfits()).list; },
+      cur: function () { return KChar.outfit().id; },
+      plan: function (id) { return KChar.show.plan(id); },
+      ensure: function (id, o) { return KChar.show.ensure(id, o); },
+      wear: function (id) { kwWear(id); }
+    });
+    if ($('kwShowBtn')) $('kwShowBtn').addEventListener('click', function () {
+      try { if (kvPvStop()) renderKVoices(); } catch (e) {}       // 목소리 미리 듣기 · 전신 인사가 돌고 있으면 멈춘다(쇼는 소리가 없다)
+      try { stopKFullBow(); } catch (e) {}
+      KFShow.open();
+    });
+  }
   if (window.KChar) {
     KChar.voice.onVoices(function () { if (isOpen($('kWardrobeView'))) renderKVoices(); });
-    KChar.onChange(function () { if (isOpen($('kWardrobeView'))) renderKWardrobe(); });
+    KChar.onChange(function () { if (isOpen($('kWardrobeView'))) renderKWardrobe(); if (kfsOn) KFShow.refresh(); });   // v9.19: 쇼 도중 옷이 바뀌면(다른 기기) 「입는 중」 · 「이 옷 입기」를 바로 맞춘다
   }
   /* ---- (O-0487) 케이 옷 기기 간 맞추기 — 폰에서 갈아입히면 PC판(같은 코드)과 다른 기기의 케이도 같은 옷, 반대 방향도 같게 ----
    * 서버 한 줄(k_outfit_state)에 「지금 입은 옷」을 두고 폰·PC판이 함께 쓴다. PC 워커는 거치지 않는다(PC 가 꺼져도 맞춰진다).
@@ -6535,21 +6567,22 @@
     KChar.onWear(ofWear);
     try { (KChar.assetsReady || KChar.ready).then(ofGo, ofGo); } catch (e) { ofGo(); }
   }
+  /* 옷장에서 옷 한 벌을 입는다 — 옷장 칸을 누를 때와 패션쇼 「이 옷 입기」(O-0557)가 함께 쓰는 하나의 길(옷 맞추기 O-0487 도 KChar.setOutfit 의 onWear 로 그대로 따라간다) */
+  function kwWear(id) {
+    if (!window.KChar || !id) return;
+    var kmGhost = (window.KMotion && id !== KChar.outfit().id) ? KMotion.snap($('kwHero')) : null;   // v9.6(O-0387): 바꾸기 직전 모습을 한 장 떠 둔다(효과용 — 옷은 아래에서 즉시 바뀐다)
+    var sr = KChar.setOutfit(id);
+    if (sr === 'pending') { toast('옷을 받고 있습니다. 잠시만요.'); return; }        // v9.5: 서버 옷 — 사진을 다 받으면 바로 갈아입는다
+    if (sr) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast(KChar.outfit().name + josaRo(KChar.outfit().name) + ' 갈아입었습니다.');
+      if (window.KMotion) KMotion.outfitSwap($('kwHero'), kmGhost); }                                 // 옷은 이미 바뀌었고, 그 위에 반짝임만 얹는다(0.6초 안)
+  }
   if ($('kWardrobeView')) $('kWardrobeView').addEventListener('click', function (ev) {
     var t = ev.target;
     if (!t.closest || !window.KChar) return;
     var rq = t.closest('[data-kreq]');
     if (rq) { openKDecorRequest(rq.getAttribute('data-kreq')); return; }
     var it = t.closest('[data-outfit]');
-    if (it) {
-      var id = it.getAttribute('data-outfit');
-      var kmGhost = (window.KMotion && id !== KChar.outfit().id) ? KMotion.snap($('kwHero')) : null;   // v9.6(O-0387): 바꾸기 직전 모습을 한 장 떠 둔다(효과용 — 옷은 아래에서 즉시 바뀐다)
-      var sr = KChar.setOutfit(id);
-      if (sr === 'pending') { toast('옷을 받고 있습니다. 잠시만요.'); return; }        // v9.5: 서버 옷 — 사진을 다 받으면 바로 갈아입는다
-      if (sr) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast(KChar.outfit().name + josaRo(KChar.outfit().name) + ' 갈아입었습니다.');
-        if (window.KMotion) KMotion.outfitSwap($('kwHero'), kmGhost); }                                 // 옷은 이미 바뀌었고, 그 위에 반짝임만 얹는다(0.6초 안)
-      return;
-    }
+    if (it) { kwWear(it.getAttribute('data-outfit')); return; }
     var tr = t.closest('[data-try]');
     if (tr) {
       var v = null, nm = tr.getAttribute('data-try');
@@ -7325,6 +7358,7 @@
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
     if (isOpen(modal)) { closeModal(); return true; }
     if (window.KVStage && KVStage.isOpen()) { KVStage.close(); return true; }   // O-0490: 케이 목소리 무대 화면 → 꾸미기 「설정」으로(예시 소리도 멈춘다)
+    if (window.KFShow && KFShow.isOpen()) { KFShow.close(); return true; }      // O-0557: 케이 패션쇼 → 꾸미기 「옷」으로
     if (convoOn) { stopConvo(false); return true; }   // 연속 대화 중 뒤로 = 음성 대화 끝내기(화면 유지)
     if (chatRecording) { endListen('manualcancel'); return true; }   // 듣는 중 뒤로 = 이번 듣기 취소
     // 녹음 화면에서 뒤로 = 정지/계속 선택(예전엔 여기서 무조건 막혀 '먹통'이었음)
