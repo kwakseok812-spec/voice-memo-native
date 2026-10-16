@@ -162,6 +162,8 @@
     n.poseVideos = (o.pose_videos && typeof o.pose_videos === 'object') ? o.pose_videos : {};
     // v9.6: 음성 대화 전체 화면용 세로 영상(720×1280 · 소리 없음) — call: { listen, think, talk:[…], poster }. 없으면 빈 것(→ k-call.js 가 대체 그림)
     n.call = (o.call && typeof o.call === 'object') ? o.call : {};
+    // v9.19(O-0557): 패션쇼 동작 영상(720×1280 · 8초 · 소리 없음)과 그 첫 장면 — 지금은 서버 묶음에만 있다(앱에 넣을 때를 위해 읽어 둔다)
+    n.show = o.show || ''; n.showPoster = o.show_poster || o.showPoster || '';
     return n;
   }
   function bowAltList(vs, ps, cues, lens, wrap) {
@@ -389,7 +391,7 @@
   var catRemote = [];
   var ka = { m: null, eff: {}, state: 'none', want: '', busy: {}, lastFetch: 0, fetching: null };
   function kaSave() { try { lsSet(KA_KEY, JSON.stringify({ m: ka.m, eff: ka.eff })); } catch (e) {} }
-  function kaNames(e, kind) {              // 묶음 e 의 파일 이름들. kind: 'core'(옷장·표정·전신·1080) | 'thumb' | 'pose' | 'video' | 'bow' | 없음=전부
+  function kaNames(e, kind) {              // 묶음 e 의 파일 이름들. kind: 'core'(옷장·표정·전신·1080) | 'thumb' | 'pose' | 'video' | 'bow' | 'show' | 없음=전부
     var f = (e && e.files) || {}, out = [];
     function add(v) { if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (k) { if (v[k]) out.push(v[k]); }); }
     if (!kind || kind === 'core') { add(f.expr); add(f.avatar); add(f.thumb); add(f.fullbody); add(f.expr_hd); }
@@ -397,6 +399,8 @@
     if (!kind || kind === 'pose') add(f.poses);
     if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_poster); add(f.call_listen); add(f.call_think); add(f.call_talk); }   // 받는 순서이기도 하다: 통화 포스터(작다)를 통화 영상보다 먼저 — 통화 중에 받게 되면 포스터부터 보이게
     if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); add(f.bow_alt); add(f.bow_alt_poster); }
+    // v9.19(O-0557) 패션쇼 영상: 「전부」(기기 정리 kaGc 가 남길 것)에는 넣고, 입을 때 받는 「영상」 묶음(video)에는 넣지 않는다 — 패션쇼를 열 때만 받는다(KChar.show.ensure)
+    if (!kind || kind === 'show') { add(f.show); add(f.show_poster); }
     return out;
   }
   function kaHas(names) { var S = window.KStore; return !!S && names.every(function (n) { return S.has(n); }); }
@@ -529,7 +533,8 @@
     { f: ['bow', 'bow_poster', 'bow_alt', 'bow_alt_poster'], meta: ['bow_cue', 'bow_len', 'bow_alt_cue', 'bow_alt_len'] },   // 인사 영상과 첫 장면 그림은 짝 — 따로 바뀌면 시작 인사가 다른 그림에서 시작한다
     { f: ['call_poster', 'call_listen', 'call_think', 'call_talk'], meta: [] },
     { f: ['idle', 'talk'], meta: [] },                                                  // 평소 · 말하기 얼굴 영상 — 말할 때만 옛 얼굴로 바뀌어 보이지 않게
-    { f: ['expr', 'avatar', 'fullbody', 'expr_hd'], meta: [] }                          // 서버 옷의 표정 · 작은 얼굴 · 전신 · 큰 사진(옷장 사진 thumb 은 꾸미기를 열 때 따로 바뀐다 — ensureThumbs)
+    { f: ['expr', 'avatar', 'fullbody', 'expr_hd'], meta: [] },                         // 서버 옷의 표정 · 작은 얼굴 · 전신 · 큰 사진(옷장 사진 thumb 은 꾸미기를 열 때 따로 바뀐다 — ensureThumbs)
+    { f: ['show', 'show_poster'], meta: ['show_len'] }                                  // v9.19(O-0557) 패션쇼 영상과 첫 장면 그림은 짝(입을 때 받지 않으므로 늘 바로 새것으로 적힌다 · 쇼는 서버 목록(ka.m)을 직접 본다)
   ];
   function kaSlotList(a, b) {
     var keys = {}, out = [];
@@ -642,7 +647,9 @@
       if (!ka.eff[e.id]) ka.eff[e.id] = e;
       else if (JSON.stringify(ka.eff[e.id]) !== JSON.stringify(e)) {
         // 파일은 그대로이고 설명 값만 바뀐 경우(이름·자막 시점 등)는 바로 새 것으로
-        if (kaNames(e).every(function (n) { return kaNames(ka.eff[e.id]).indexOf(n) >= 0; })) ka.eff[e.id] = e;
+        //   v9.19(O-0557): 패션쇼 영상만 더해지거나 바뀐 경우도 바로 새 것으로(쇼 영상은 입을 때 받는 파일이 아니다)
+        var shw = kaNames(e, 'show');
+        if (kaNames(e).every(function (n) { return shw.indexOf(n) >= 0 || kaNames(ka.eff[e.id]).indexOf(n) >= 0; })) ka.eff[e.id] = e;
       }
     });
     Object.keys(ka.eff).forEach(function (id) { if (!seen[id]) delete ka.eff[id]; });
@@ -704,6 +711,49 @@
         if (changed) kaGc();                                    // 새 사진으로 다시 그린 뒤에 옛 사진을 지운다
         return true;
       });
+    });
+  }
+  /* ====================== v9.19(O-0557) 케이 패션쇼 ======================
+   * 쇼는 옷마다 「패션쇼 동작 영상(show) → 전신 인사 영상(bow) → 서 있는 그림」 차례로 대신한다(js/k-fashion-show.js 가 그린다).
+   * 영상 이름은 서버 목록(ka.m — 가장 새 목록)을 먼저 본다: 쇼 영상은 입을 때 받는 파일이 아니라서, 기억한 묶음(eff)이 옛것이어도 쇼는 새 목록의 영상을 쓴다.
+   * 받기는 쇼를 열었을 때만(show.ensure — 보는 옷과 다음 옷) · 한 번 받으면 기기에 남고, 서버 목록에 있는 동안 기기 정리(kaGc)가 지우지 않는다.
+   * 이 자리는 옷을 바꾸지 않는다(setOutfit 을 부르지 않는다 — 옷 맞추기 O-0487 에 기록이 가지 않는다). */
+  function showEntry(id) {
+    var e = null;
+    if (ka.m && Array.isArray(ka.m.outfits)) ka.m.outfits.forEach(function (x) { if (x && x.id === id) e = x; });
+    return e;
+  }
+  function showRefs(o) {                   // 그 옷의 파일 이름들('ks:이름' 또는 앱 안 파일) — 아직 못 받았어도 이름은 준다
+    var e = showEntry(o.id), f = (e && e.files) || {};
+    var sv = f.show ? ks(f.show) : (o.show || ''), sp = f.show ? ks(f.show_poster) : (o.showPoster || '');
+    var bv = f.bow ? ks(f.bow) : (o.bow || ''), bp = f.bow ? ks(f.bow_poster) : (o.bowPoster || '');
+    return { show: sv, showPoster: sp, bow: bv, bowPoster: bp, fullbody: o.fullbody || (f.fullbody ? ks(f.fullbody) : ''), len: (e && typeof e.show_len === 'number') ? e.show_len : null };
+  }
+  // 지금 그 옷을 쇼에서 어떻게 보일지: { kind: 'show' | 'bow' | 'still', video, under(영상 밑에 깔 첫 장면), still(그림만 보일 때), hasShow }
+  function showPlan(id) {
+    var o = findOutfit(id); if (!o) return null;
+    var r = showRefs(o);
+    var sv = url(o, r.show), sp = url(o, r.showPoster), bv = url(o, r.bow), bp = url(o, r.bowPoster);
+    var p = { id: o.id, kind: 'still', video: '', under: '', still: '', hasShow: !!r.show, len: r.len };
+    p.still = sp || bp || url(o, r.fullbody) || thumbUrl(o) || exprUrl(DEFAULT_EXPR, o, true);
+    if (sv) { p.kind = 'show'; p.video = sv; p.under = sp || p.still; }
+    else if (bv) { p.kind = 'bow'; p.video = bv; p.under = bp || p.still; }
+    return p;
+  }
+  // 그 옷의 쇼 파일을 받는다. opt.still = 그림만(움직임 줄이기). 다 준비됐으면 true. 서버 목록이 없거나 받지 못하면 false(쇼는 그림으로 넘어간다)
+  function ensureShow(id, opt) {
+    opt = opt || {};
+    var o = findOutfit(id); if (!o || !window.KStore || !ka.m) return Promise.resolve(false);
+    var r = showRefs(o);
+    function need(list) { return list.filter(function (f) { return isKs(f) && !url(o, f); }).map(function (f) { return f.slice(3); }); }
+    var first = r.show ? [r.showPoster].concat(opt.still ? [] : [r.show]) : (r.bow ? [r.bowPoster].concat(opt.still ? [] : [r.bow]) : []);
+    if (!r.showPoster && !r.bowPoster) first.push(r.fullbody);
+    var want = need(first);
+    if (!want.length) return Promise.resolve(true);
+    return kaFetchAll(want).then(function (ok) {
+      if (ok || !r.show || !r.bow || opt.still) return ok;
+      var w2 = need([r.bowPoster, r.bow]);                // 쇼 영상을 못 받았으면 인사 영상이라도(대신)
+      return w2.length ? kaFetchAll(w2).then(function () { return false; }) : false;
     });
   }
   // (v9.6) 지금 모습의 세로 영상 묶음: 실제로 틀 수 있는 것만 { listen, think, talk:[…], poster }. 다른 머리 조합이 보이는 중이면 없음(기본 머리 영상이라).
@@ -1094,6 +1144,7 @@
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState, callSet: callSet,
+    show: { plan: showPlan, ensure: ensureShow, has: function (id) { var o = findOutfit(id); return !!(o && showRefs(o).show); } },   // v9.19(O-0557) 케이 패션쇼
     assets: { state: function () { return ka.state; }, refresh: function () { return kaFetchManifest(true); }, ensureOutfit: ensureOutfit, ensureThumbs: ensureThumbs,
               wanting: function () { return ka.want; }, saveData: saveData,
               // (O-0487) 받는 중인 옷이 누구의 것인지 · 그 기다림 접기 · 아는 옷인지
