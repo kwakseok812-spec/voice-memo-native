@@ -1467,7 +1467,7 @@
     }
     if (pdfDoc && viewMode !== 'table') { go(); return; }
     if (isExcelDoc && excelView === 'table') {
-      toast('엑셀은 PDF로 바꿔서 표시해요. 잠시만요…');
+      toast('엑셀은 PDF로 바꿔서 표시합니다. 잠시만 기다려 주세요.');
       toggleExcelView();
       var t0 = Date.now(), iv = setInterval(function () {
         if (pdfDoc && viewMode !== 'table') { clearInterval(iv); go(); }

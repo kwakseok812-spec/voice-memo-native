@@ -7867,18 +7867,18 @@
     } catch (e) { return null; }
   }
   function mkSend(p) {
-    if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 안 됐어요'));
+    if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 되지 않았습니다'));
     if (!getSyncPass()) {
       try { window.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: true } })); } catch (x) {}
-      var pe = new Error('연동 암호가 필요해요'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
+      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
     }
     var d = p.doc || {}, s = d.src || {}, entries = [], src;
     if (s.pcPath) src = { type: 'pc_path', path: s.pcPath };
     else if (s.url) src = { type: 'url', url: s.url };
     else if (s.file) {
-      if ((s.file.size || 0) > CHAT_CHUNK_LIMIT) { var be = new Error('원본이 너무 커요'); be.friendly = '원본이 45MB를 넘어 폰에서 보낼 수 없어요 — PC에 있는 파일로 열어 주세요'; return Promise.reject(be); }
+      if ((s.file.size || 0) > CHAT_CHUNK_LIMIT) { var be = new Error('원본이 너무 큽니다'); be.friendly = '원본이 45MB를 넘어 폰에서 보낼 수 없습니다 — PC에 있는 파일로 열어 주세요'; return Promise.reject(be); }
       src = { type: 'upload', file: { name: d.name, size: s.file.size || 0 } };
-    } else return Promise.reject(new Error('원본 파일이 없어요'));
+    } else return Promise.reject(new Error('원본 파일이 없습니다'));
     var marks = (p.marks || []).map(function (m) {
       var shot = '';
       if (m.shot) { var f = mkDataUrlToFile(m.shot, 'mark_' + m.n + '.jpg'); if (f) { entries.push({ file: f }); shot = f.name; } }
@@ -7901,13 +7901,13 @@
       return { rid: id };
     }, function (e) {
       msg.answered = true; msg.uploading = false;
-      chatMsgs.push({ role: 'k', text: '수정 요청을 PC로 보내지 못했어요(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 문서 화면에서 다시 눌러 주세요. 적어 두신 요청은 그대로 남아 있어요.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '수정 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 문서 화면에서 다시 눌러 주세요. 적어 두신 요청은 그대로 남아 있습니다.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
       throw e;
     });
   }
   function mkCancel(rid) {
-    if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요해요'));
+    if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요합니다'));
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '✏️ 보낸 수정 요청을 취소해 주세요';
     chatMsgs.push({ role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true });
     saveChatMsgs(); if (isOpen(chatView)) renderChat();
@@ -7934,7 +7934,7 @@
     (function () {
       var cb = $('kwMkLong'); if (!cb) return;
       cb.checked = SmartMarkup.longPressOn();
-      cb.addEventListener('change', function () { SmartMarkup.setLongPress(cb.checked); toast(cb.checked ? '문서를 길게 누르면 수정 요청이 켜져요' : '길게 누르기로는 켜지지 않아요. [✏️ 고치기]로 여세요'); });
+      cb.addEventListener('change', function () { SmartMarkup.setLongPress(cb.checked); toast(cb.checked ? '문서를 길게 누르면 수정 요청이 켜집니다' : '길게 누르기로는 켜지지 않습니다. [✏️ 고치기]로 여십시오'); });
     })();
   }
 

@@ -121,7 +121,7 @@
     else if (a === 'send') trySend();
     else if (a === 'cancelreq') askCancel();
     else if (a === 'jobs' || a === 'chat' || a === 'gochat') goChat();
-    else if (a === 'cleardone') { S.items = S.items.filter(function (x) { return x.status !== 'done'; }); S.sent = S.sent.filter(function (s) { return s.state !== 'done'; }); persist(); renderAll(); toast('끝난 요청을 목록에서 뺐어요'); }
+    else if (a === 'cleardone') { S.items = S.items.filter(function (x) { return x.status !== 'done'; }); S.sent = S.sent.filter(function (s) { return s.state !== 'done'; }); persist(); renderAll(); toast('끝난 요청을 목록에서 뺐습니다'); }
   }
 
   /* ---------------- 알림·케이 ---------------- */
@@ -166,8 +166,8 @@
       renderAll(); refreshStatus();
       if (!reduce()) { var f = $('mkFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
       var pend = S.items.filter(notSent).length;
-      if (!rs) kSay(pend ? '이어서 적어 주세요. 적어 둔 ' + pend + '건은 그대로 있어요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
-      if (opts.how === 'long') { vibrate(); toast('수정 요청을 켰어요', '끄기', close, 3000); }
+      if (!rs) kSay(pend ? '이어서 적어 주세요. 적어 둔 ' + pend + '건은 그대로 있습니다' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+      if (opts.how === 'long') { vibrate(); toast('수정 요청을 켰습니다', '끄기', close, 3000); }
       if (rs && rs.memo && rs.memo.item) setTimeout(function () {          // 적던 메모 다시 펼치기 — 고치던 것이면 보관된 그 항목에(사본 말고)
         if (!S.on) return;
         var real = rs.memo.isNew ? null : S.items.filter(function (x) { return x.n === rs.memo.item.n && !x.status; })[0];
@@ -190,7 +190,7 @@
     if (io) { io.disconnect(); io = null; }
     R.scroll.innerHTML = ''; S.pages = [];
     renderViewerStrip();
-    if (n && host.toast && !quiet) host.toast('적어 둔 수정 요청 ' + n + '건은 남겨 둘게요');
+    if (n && host.toast && !quiet) host.toast('적어 둔 수정 요청 ' + n + '건은 남겨 두겠습니다');
   }
   // O-0548 채팅으로 가기 — 뷰어가 지금 자리(쪽 · 확대 · 이 화면이면 펜/손 · 적던 메모)를 적어 두고 채팅을 연다. 돌아오면 그대로.
   function goChat() { stopMic(true); if (host.goChat) host.goChat(); }
@@ -277,7 +277,7 @@
     var ry = (sc.scrollTop + oy) / Math.max(1, sc.scrollHeight), rx = (sc.scrollLeft + ox) / Math.max(1, sc.scrollWidth);
     S.zoom = z; layout();
     sc.scrollTop = ry * sc.scrollHeight - oy; sc.scrollLeft = rx * sc.scrollWidth - ox;
-    toast(z <= 1.01 ? '폭에 맞췄어요' : Math.round(z * 100) + '%로 보고 있어요', null, null, 1200);
+    toast(z <= 1.01 ? '폭에 맞췄습니다' : Math.round(z * 100) + '%로 보고 있습니다', null, null, 1200);
   }
   function getPage(P) { if (P.page) return Promise.resolve(P.page); return S.pdf.getPage(P.n).then(function (pg) { P.page = pg; var vp = pg.getViewport({ scale: 1 }); if (Math.abs(vp.width - P.w) > 0.5 || Math.abs(vp.height - P.h) > 0.5) { P.w = vp.width; P.h = vp.height; P.svg.setAttribute('viewBox', '0 0 ' + P.w + ' ' + P.h); layout(); } return pg; }); }
   function renderPage(P) {
@@ -503,7 +503,7 @@
     Promise.all([loadChars(P), loadSegs(P)]).then(function () {
       var ok = closed ? selectLoop(P, pts) : selectLine(P, a, b);
       st.el.classList.add('fade'); setTimeout(function () { st.el.remove(); }, 260);
-      if (!ok) kSay('글자가 없는 곳이에요. 글자 위에 그려 주세요', 'note');
+      if (!ok) kSay('글자가 없는 곳입니다. 글자 위에 그려 주세요', 'note');
     });
   }
   function inPoly(x, y, pts) { var ins = false; for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) { var xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins; } return ins; }
@@ -680,16 +680,16 @@
   //   멈춤: 말(소리)이 시작된 뒤 2초 조용하면 / 준비된 뒤 8초 동안 말이 없으면 / 다시 누르면. 멈출 때는 인식기에 「마무리」를 시키고 마지막 글(final)까지 받아 넣는다.
   //   꺼지면 이유를 화면에 짧게(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음 등) — 조용히 꺼지지 않는다.
   var mic = null, MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000;
-  var MIC_WHY = { permission: '마이크 권한이 없어요. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
-                  nospeech: '말씀이 들리지 않아 멈췄어요. 다시 누르고 말씀해 주세요', nomatch: '잘 못 알아들었어요. 다시 누르고 또박또박 말씀해 주세요',
-                  busy: '다른 곳에서 마이크를 쓰고 있어요. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄어요',
-                  lang: '이 폰에서 한국어 받아쓰기를 쓸 수 없어요', recording: '회의 녹음 중에는 받아쓰기를 쓸 수 없어요' };
+  var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
+                  nospeech: '말씀이 들리지 않아 멈췄습니다. 다시 누르고 말씀해 주세요', nomatch: '잘 알아듣지 못했습니다. 다시 누르고 또박또박 말씀해 주세요',
+                  busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
+                  lang: '이 폰에서 한국어 받아쓰기를 쓸 수 없습니다', recording: '회의 녹음 중에는 받아쓰기를 쓸 수 없습니다' };
   function micLabel(t) { if (R && $('mkMicTxt')) $('mkMicTxt').textContent = t; }
   function toggleMic() {
     if (mic) { stopMic(false, 'tap'); return; }
     var KS = null; try { if (isNative() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) {}
     if (!KS) { toast('이 기기에서는 글로 적어 주세요'); return; }
-    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없어요. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
+    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
     var ta = $('mkMemoTxt');
     var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
                     quietT: null, noSpT: null, finT: null, readyT: null, ready: false, stopping: false };
@@ -738,8 +738,8 @@
     if (mic === m) mic = null;
     if (m.heard && S.memo) S.memo.via = 'voice';          // 실제로 받아 적은 글이 있을 때만 「말로 적음」
     if (R && $('mkMic')) { $('mkMic').classList.remove('on'); micLabel('🎤 말로 적기'); }
-    if (reason && !cancel) toast(MIC_WHY[reason] || ('받아쓰기가 멈췄어요' + (detail ? '(' + String(detail).slice(0, 40) + ')' : '') + '. 다시 누르거나 글로 적어 주세요'), null, null, 4000);
-    else if (!cancel && !m.heard) toast('받아 적은 말이 없어요. 다시 누르고 말씀해 주세요', null, null, 3000);
+    if (reason && !cancel) toast(MIC_WHY[reason] || ('받아쓰기가 멈췄습니다' + (detail ? '(' + String(detail).slice(0, 40) + ')' : '') + '. 다시 누르거나 글로 적어 주세요'), null, null, 4000);
+    else if (!cancel && !m.heard) toast('받아 적은 말이 없습니다. 다시 누르고 말씀해 주세요', null, null, 3000);
   }
   function nextNum() { var m = 0; S.items.forEach(function (x) { if (x.n > m) m = x.n; }); return m + 1; }
   function saveMemo() {
@@ -747,11 +747,11 @@
     if (!note) { $('mkMemoTxt').focus(); toast('어떻게 고칠지 한 줄만 적어 주세요'); return; }
     stopMic(true);
     var it = S.memo.item;
-    if (S.memo.edit) { it.note = note; if (S.memo.via) it.via = 'voice'; persist(); renderAll(); closeMemo(); kSay(circ(it.n) + '번 메모를 바꿨어요', 'note'); return; }
+    if (S.memo.edit) { it.note = note; if (S.memo.via) it.via = 'voice'; persist(); renderAll(); closeMemo(); kSay(circ(it.n) + '번 메모를 바꿨습니다', 'note'); return; }
     it.n = nextNum(); it.note = note; it.via = S.memo.via || 'typed'; it.ts = Date.now();
     S.items.push(it); persist(); closeMemo(); clearSel(); renderAll(it.n);
     var cb = $('mkCount'); cb.classList.remove('bump'); void cb.offsetWidth; if (!reduce()) cb.classList.add('bump');
-    kSay(circ(it.n) + '번 적어 뒀어요. 다른 곳도 표시해 주세요', 'note');
+    kSay(circ(it.n) + '번 적어 두었습니다. 다른 곳도 표시해 주세요', 'note');
   }
 
   /* ---------------- 핀·목록 ---------------- */
@@ -771,17 +771,17 @@
       sv('circle', { cx: x, cy: y, r: pr, 'stroke-width': px(P, 2) }, g); var t = sv('text', { x: x, y: y + px(P, .5), 'font-size': px(P, 13) }, g); t.textContent = it.n;
       g.style.transformBox = 'fill-box'; g.style.transformOrigin = 'center';
       g.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-      g.addEventListener('click', function (e) { e.stopPropagation(); if (!it.status) openMemo(it); else toast(circ(it.n) + (it.status === 'sent' ? '번은 PC가 고치는 중이에요' : '번은 PC 작업이 끝났어요. 결과는 채팅에서 보세요')); });
+      g.addEventListener('click', function (e) { e.stopPropagation(); if (!it.status) openMemo(it); else toast(circ(it.n) + (it.status === 'sent' ? '번은 PC가 고치는 중입니다' : '번은 PC 작업이 끝났습니다. 결과는 채팅에서 확인하십시오')); });
     });
     var pend = S.items.filter(notSent).length;
     $('mkN').textContent = pend; $('mkSideN').textContent = pend; $('mkListN').textContent = pend;
     $('mkSideSend').textContent = pend ? 'PC로 보내기 (' + pend + '건)' : 'PC로 보내기'; $('mkListSend').textContent = $('mkSideSend').textContent;
-    var html = S.items.length ? S.items.map(itemHtml).join('') : '<div class="mk-empty">아직 적은 수정 요청이 없어요.<br>고칠 곳에 동그라미를 쳐 보세요.</div>';
+    var html = S.items.length ? S.items.map(itemHtml).join('') : '<div class="mk-empty">아직 적은 수정 요청이 없습니다.<br>고칠 곳에 동그라미를 쳐 보세요.</div>';
     $('mkListBody').innerHTML = html; $('mkSideList').innerHTML = html;
     [$('mkListBody'), $('mkSideList')].forEach(bindItems);
     var sent = S.items.filter(function (x) { return x.status === 'sent'; }).length, done = S.items.filter(function (x) { return x.status === 'done'; }).length;
     $('mkSent').classList.toggle('on', !!sent); $('mkSentTxt').textContent = 'PC가 고치는 중 · ' + sent + '건';
-    $('mkDone').classList.toggle('on', !!done && !sent); $('mkDoneTxt').textContent = 'PC 작업이 끝났어요 · ' + done + '건 — 결과는 채팅에서 보세요';
+    $('mkDone').classList.toggle('on', !!done && !sent); $('mkDoneTxt').textContent = 'PC 작업이 끝났습니다 · ' + done + '건 — 결과는 채팅에서 보세요';
   }
   function itemHtml(it) {
     var st = it.status === 'sent' ? '<span class="st">보냄 · PC가 고치는 중</span>' : it.status === 'done' ? '<span class="st">PC 작업 끝 · 결과는 채팅에</span>' : '';
@@ -805,8 +805,8 @@
   }
   function askRemove(it) {
     ask('<div class="mk-ptitle">' + circ(it.n) + '번 수정 요청을 뺄까요?</div><div class="mk-pnote">「' + esc(cut(it.text, 40)) + '」 · ' + esc(it.note) + '</div>',
-      [{ label: '빼기', cls: 'mk-big red', fn: function () { S.items = S.items.filter(function (x) { return x !== it; }); persist(); renderAll(); toast(circ(it.n) + '번을 뺐어요');
-        var left = S.items.filter(notSent).length; kSay(circ(it.n) + '번을 뺐어요. ' + (left ? '남은 건 ' + left + '건이에요' : '다시 표시해 주세요'), 'note'); } }]);
+      [{ label: '빼기', cls: 'mk-big red', fn: function () { S.items = S.items.filter(function (x) { return x !== it; }); persist(); renderAll(); toast(circ(it.n) + '번을 뺐습니다');
+        var left = S.items.filter(notSent).length; kSay(circ(it.n) + '번을 뺐습니다. ' + (left ? '남은 건 ' + left + '건입니다' : '다시 표시해 주세요'), 'note'); } }]);
   }
 
   /* ---------------- 보내기·취소·상태 ---------------- */
@@ -825,13 +825,13 @@
     closeSheets(); if (S.memo && S.memo.side) closeMemo();
     var s = S.d.src || {};
     if (!s.pcPath && !s.url && !s.file) {
-      ask('<div class="mk-ptitle">이 문서의 원본 파일이 폰에 없어요</div><div class="mk-pnote">「최근 연 문서」에는 보기용 사본만 남아 있어요. 같은 파일을 한 번 더 골라 주시면 그 원본으로 보낼게요.</div>',
+      ask('<div class="mk-ptitle">이 문서의 원본 파일이 폰에 없습니다</div><div class="mk-pnote">「최근 연 문서」에는 보기용 사본만 남아 있습니다. 같은 파일을 한 번 더 골라 주시면 그 원본으로 보내겠습니다.</div>',
         [{ label: '📁 원본 파일 고르기', cls: 'mk-big', fn: pickOriginal }]); return;
     }
     var working = S.items.filter(function (x) { return x.status === 'sent'; });
     if (working.length) {
       var prevRid = lastSentRid();          // 시트를 연 때의 앞 요청(누르는 사이에 끝나도 그 결과 위에 이어서)
-      ask('<div class="mk-ptitle">이 문서는 앞 요청(' + working.length + '건)을 PC가 고치는 중이에요</div><div class="mk-pnote">새로 적은 ' + pend.length + '건을 어떻게 보낼까요?</div>',
+      ask('<div class="mk-ptitle">이 문서는 앞 요청(' + working.length + '건)을 PC가 고치는 중입니다</div><div class="mk-pnote">새로 적은 ' + pend.length + '건을 어떻게 보낼까요?</div>',
         [{ label: '이어서 고치기로 보내기', cls: 'mk-big', fn: function () { doSend(S.items.filter(notSent), prevRid); } },
          { label: '앞 요청 취소하고 함께 보내기', cls: 'mk-big gray', fn: function () { cancelSent(true).then(function () { doSend(S.items.filter(notSent), null); }); } }]);
       return;
@@ -840,7 +840,7 @@
     ask('<div class="mk-ptitle">수정 요청 ' + pend.length + '건을 PC로 보낼까요?</div>' +
       '<div class="mk-pnote">' + pend.slice(0, 3).map(function (x) { return circ(x.n) + ' ' + x.page + '쪽 「' + esc(cut(x.kind === 'table' ? (x.first || x.text) : x.text, 18)) + '」 → ' + esc(cut(x.note, 24)); }).join('<br>') + (pend.length > 3 ? '<br>…' : '') + '</div>' +
       '<div class="mk-pnote">' + srcLine() + '. PC는 원본 대신 사본(_rev1)을 고쳐요.</div>' +
-      (EDIT_EXTS.indexOf(ext) < 0 ? '<div class="mk-pnote">이 형식(' + esc(ext) + ')은 아직 PC가 직접 고치지 못해요. 고칠 곳을 정리한 교정 표시 PDF로 돌려드릴게요.</div>' : ''),
+      (EDIT_EXTS.indexOf(ext) < 0 ? '<div class="mk-pnote">이 형식(' + esc(ext) + ')은 아직 PC가 직접 고치지 못합니다. 고칠 곳을 정리한 교정 표시 PDF로 돌려드리겠습니다.</div>' : ''),
       [{ label: 'PC로 보내기 (' + pend.length + '건)', cls: 'mk-big', fn: function () { doSend(pend, null); } }]);
   }
   function pickOriginal() {
@@ -850,27 +850,27 @@
   }
   function lastSentRid() { var s = S.sent.filter(function (x) { return x.state === 'sent'; }); return s.length ? s[s.length - 1].rid : null; }
   function doSend(list, afterRid) {
-    if (!host.send) { toast('보내기 준비가 안 됐어요'); return; }
+    if (!host.send) { toast('보내기 준비가 되지 않았습니다'); return; }
     var payload = { doc: { name: S.d.name, ext: S.d.ext, key: S.d.key, pages: S.pdf ? S.pdf.numPages : S.d.pages, src: S.d.src || {}, after_rid: afterRid || null },
                     marks: list.map(function (x) { return { n: x.n, page: x.page, kind: x.kind, rect: x.box.map(function (v) { return +v.toFixed(1); }), text: x.kind === 'table' ? (x.first || '') : x.text,
                       label: x.text, before: x.before || '', after: x.after || '', table: x.table || null, note: x.note, via: x.via || 'typed', ts: x.ts, shot: x.shot || '' }; }) };
-    kSay(list.length + '건, PC에서 고쳐서 채팅으로 보내 드릴게요', 'report');
-    toast('보내는 중이에요…', null, null, 8000);
+    kSay(list.length + '건, PC에서 고쳐서 채팅으로 보내 드리겠습니다', 'report');
+    toast('보내는 중입니다…', null, null, 8000);
     host.send(payload).then(function (r) {
       list.forEach(function (x) { x.status = 'sent'; x.rid = r.rid; });
       S.sent.push({ rid: r.rid, n: list.map(function (x) { return x.n; }), at: Date.now(), state: 'sent' });
       persist(); renderAll(); hideToast();
-      toast(afterRid ? '앞 요청이 끝나면 이어서 고칠게요' : 'PC로 보냈어요', '작업 현황에서 보기', goChat, 4200);
-      setTimeout(function () { if (S.on) kSay('다른 곳도 더 적으실 수 있어요', 'note', 'aside'); }, 1600);
+      toast(afterRid ? '앞 요청이 끝나면 이어서 고치겠습니다' : 'PC로 보냈습니다', '작업 현황에서 보기', goChat, 4200);
+      setTimeout(function () { if (S.on) kSay('다른 곳도 더 적으실 수 있습니다', 'note', 'aside'); }, 1600);
     }).catch(function (e) {
       hideToast();
-      kSay('보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요', 'note');
-      toast('보내지 못했어요: ' + ((e && (e.friendly || e.message)) || '알 수 없는 오류'), null, null, 4500);
+      kSay('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요', 'note');
+      toast('보내지 못했습니다: ' + ((e && (e.friendly || e.message)) || '알 수 없는 오류'), null, null, 4500);
     });
   }
   function askCancel() {
     var n = S.items.filter(function (x) { return x.status === 'sent'; }).length;
-    ask('<div class="mk-ptitle">보낸 수정 요청 ' + n + '건을 취소할까요?</div><div class="mk-pnote">원본은 처음부터 그대로예요. 취소한 요청은 목록에 남아 고쳐서 다시 보내실 수 있어요.</div>',
+    ask('<div class="mk-ptitle">보낸 수정 요청 ' + n + '건을 취소할까요?</div><div class="mk-pnote">원본은 처음부터 그대로입니다. 취소한 요청은 목록에 남아 고쳐서 다시 보내실 수 있습니다.</div>',
       [{ label: '취소하기', cls: 'mk-big red', fn: function () { cancelSent(false); } }]);
   }
   function cancelSent(silent) {
@@ -880,8 +880,8 @@
       S.items.forEach(function (x) { if (x.status === 'sent') { x.status = null; delete x.rid; } });
       S.sent.forEach(function (s) { if (s.state === 'sent') s.state = 'cancelled'; });
       persist(); renderAll();
-      if (!silent) { toast('취소했어요. 적은 요청은 그대로 남아 있어요'); kSay('요청을 멈췄어요. 고쳐서 다시 보내실 수 있어요', 'note'); }
-    }).catch(function () { toast('취소를 보내지 못했어요. 채팅에 「#번호 취소」라고 하셔도 돼요'); });
+      if (!silent) { toast('취소했습니다. 적은 요청은 그대로 남아 있습니다'); kSay('요청을 멈췄습니다. 고쳐서 다시 보내실 수 있습니다', 'note'); }
+    }).catch(function () { toast('취소를 보내지 못했습니다. 채팅에 「#번호 취소」라고 하셔도 됩니다'); });
   }
   function refreshStatus() {
     var rids = S.sent.filter(function (x) { return x.state === 'sent'; }).map(function (x) { return x.rid; });
@@ -894,7 +894,7 @@
         if (js === 'done' || js === 'need_approval' || st.status === '완료') { s.state = 'done'; S.items.forEach(function (x) { if (x.rid === s.rid) x.status = 'done'; }); changed = true; }
         else if (js === 'failed' || js === 'cancelled' || st.status === '실패' || st.status === '취소') {
           s.state = js || 'failed'; S.items.forEach(function (x) { if (x.rid === s.rid) { x.status = null; delete x.rid; } }); changed = true;
-          if (S.on) toast(js === 'cancelled' ? '보낸 요청이 취소됐어요' : 'PC가 끝내지 못했어요. 채팅의 이유를 보고 다시 보내 주세요');
+          if (S.on) toast(js === 'cancelled' ? '보낸 요청이 취소되었습니다' : 'PC가 끝내지 못했습니다. 채팅의 이유를 보고 다시 보내 주세요');
         }
       });
       if (changed) { persist(); renderAll(); }
@@ -912,11 +912,11 @@
 
   /* ---------------- 사용법(사용 안내서 「수정 요청」 문구에 맞춤) ---------------- */
   var HELP = [
-    { t: '켜기', h: '[✏️ 고치기] → 「표시해서 요청하기」', d: '두 갈래 중 아래 「PC 화면으로 직접 고치기」는 지금 쓰시는 원격 편집 그대로예요. 문서를 0.5초 꾹 눌러도 바로 켜지고, 켜지면 위에 붉은 띠가 내려와요.', svg:
+    { t: '켜기', h: '[✏️ 고치기] → 「표시해서 요청하기」', d: '두 갈래 중 아래 「PC 화면으로 직접 고치기」는 지금 쓰시는 원격 편집 그대로입니다. 문서를 0.5초 꾹 눌러도 바로 켜지고, 켜지면 위에 붉은 띠가 내려옵니다.', svg:
       '<rect x="20" y="10" width="140" height="150" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="34" y="28" width="110" height="7" rx="3"/><rect x="34" y="44" width="90" height="7" rx="3"/><rect x="34" y="60" width="100" height="7" rx="3"/></g>' +
       '<rect x="26" y="126" width="72" height="24" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="62" y="142" font-size="11" font-weight="800" text-anchor="middle" fill="var(--ink)">✏️ 고치기</text>' +
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
-    { t: '펜과 손', h: '펜: 한 손가락으로 그려요 · 손: 넘겨 봐요', d: '위 띠의 [펜 | 손]으로 바꿔요. 펜일 때 넘기려면 두 손가락으로 밀어요. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿔요.', svg:
+    { t: '펜과 손', h: '펜: 한 손가락으로 그립니다 · 손: 넘겨 봅니다', d: '위 띠의 [펜 | 손]으로 바꿉니다. 펜일 때 넘기려면 두 손가락으로 미십시오. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿀 수 있습니다.', svg:
       '<rect x="60" y="40" width="180" height="70" rx="16" fill="var(--card)" stroke="var(--mk-red-line)" stroke-width="3"/><rect x="66" y="46" width="82" height="58" rx="12" fill="var(--mk-red)"/><text x="107" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">펜</text><text x="194" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="var(--sub)">손</text>' +
       '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보여요</text>' },
     { t: '표시하기', h: '동그라미 · 밑줄 · 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나와요.', svg:
@@ -926,24 +926,24 @@
       '<path class="mk-draw" style="--len:120" d="M30 98 L140 98" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round" fill="none"/>' +
       '<rect x="28" y="104" width="234" height="16" rx="4" fill="var(--mk-hl)"/><circle class="mk-tap" cx="200" cy="112" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/>' +
       '<text x="214" y="148" font-size="11" font-weight="900" fill="var(--mk-red)">꾹 = 한 줄</text>' },
-    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁혀요', d: '낱말 단위로 늘고 줄어요. 표에서는 화면 위쪽 칩으로 「잡힌 칸만 · 이 행 전체 · 이 열 전체 · 표 전체」를 골라요.', svg:
+    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁힙니다', d: '낱말 단위로 늘고 줄어듭니다. 표에서는 화면 위쪽 칩으로 「잡힌 칸만 · 이 행 전체 · 이 열 전체 · 표 전체」를 고를 수 있습니다.', svg:
       '<g font-size="10" font-weight="800"><rect x="30" y="4" width="62" height="20" rx="10" fill="var(--mk-cell)" stroke="var(--mk-cell-line)"/><text x="61" y="18" text-anchor="middle" fill="var(--brand)">잡힌 칸만</text>' +
       '<rect x="98" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="121" y="18" text-anchor="middle" fill="var(--ink)">이 행</text>' +
       '<rect x="150" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="173" y="18" text-anchor="middle" fill="var(--ink)">이 열</text>' +
       '<rect x="202" y="4" width="58" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="231" y="18" text-anchor="middle" fill="var(--ink)">표 전체</text></g>' +
       '<g stroke="var(--line)" stroke-width="2" fill="none"><rect x="30" y="36" width="240" height="120" rx="4"/><path d="M30 76H270M30 116H270M110 36V156M190 36V156"/></g>' +
       '<rect x="111" y="77" width="158" height="38" fill="var(--mk-cell)" stroke="var(--mk-cell-line)" stroke-width="2"/><circle cx="111" cy="77" r="6" fill="var(--brand)" stroke="#fff" stroke-width="2"/><circle cx="269" cy="115" r="6" fill="var(--brand)" stroke="#fff" stroke-width="2"/>' },
-    { t: '메모 남기기', h: '[수정 요청] → 글이나 🎤 말로 메모', d: '빠른 칩을 누르면 문장 앞머리가 들어가요. [저장]하면 붉은 번호 핀이 꽂혀요. 여러 곳에 달 수 있어요.', svg:
+    { t: '메모 남기기', h: '[수정 요청] → 글이나 🎤 말로 메모', d: '빠른 칩을 누르면 문장 앞머리가 들어갑니다. [저장]하면 붉은 번호 핀이 꽂힙니다. 여러 곳에 달 수 있습니다.', svg:
       '<rect x="30" y="20" width="240" height="40" rx="10" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/><text x="44" y="45" font-size="12" font-weight="800" fill="var(--ink)">「취금」 → 취급으로 고쳐 줘</text>' +
       '<rect x="30" y="72" width="150" height="36" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="105" y="95" font-size="13" font-weight="900" text-anchor="middle" fill="var(--ink)">🎤 말로 적기</text>' +
       '<rect x="190" y="72" width="80" height="36" rx="10" fill="var(--mk-red)"/><text x="230" y="95" font-size="13" font-weight="900" text-anchor="middle" fill="#fff">저장</text>' +
       '<g transform="translate(150 140)"><circle r="12" fill="var(--mk-red)" stroke="#fff" stroke-width="2"/><text y="5" font-size="13" font-weight="900" text-anchor="middle" fill="#fff">1</text></g>' },
-    { t: 'PC로 보내기', h: '「수정 요청 N건」 목록 → [PC로 보내기]', d: '목록에서 [메모 바꾸기]·[빼기]. 앱을 껐다 켜도 남아요(7일). 보내면 PC가 원본의 사본(_rev1)을 고쳐요. 원본은 그대로예요.', svg:
+    { t: 'PC로 보내기', h: '「수정 요청 N건」 목록 → [PC로 보내기]', d: '목록에서 [메모 바꾸기]·[빼기]. 앱을 껐다 켜도 남습니다(7일). 보내면 PC가 원본의 사본(_rev1)을 고칩니다. 원본은 그대로입니다.', svg:
       '<rect x="20" y="40" width="70" height="110" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><rect x="200" y="40" width="90" height="70" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><rect x="230" y="110" width="30" height="16" fill="var(--line)"/>' +
       '<path class="mk-draw" style="--len:120" d="M96 95 C130 60 160 60 194 75" fill="none" stroke="var(--brand)" stroke-width="3" stroke-dasharray="6 5"/>' +
       '<text x="245" y="80" font-size="12" font-weight="900" text-anchor="middle" fill="var(--ink)">_rev1</text><text x="55" y="100" font-size="20" text-anchor="middle">📍</text>' },
-    { t: '채팅으로 받기', h: '고친 사본 + 고친 곳 표시 PDF가 채팅으로', d: '보통 10~25분(예상). 「확인 필요」에는 채팅으로 그냥 답하시면 rev2로 다시 만들어 드려요. 보낸 뒤에도 [요청 취소]로 멈출 수 있어요.', svg:
-      '<rect x="30" y="16" width="240" height="132" rx="14" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/><text x="46" y="42" font-size="12" font-weight="900" fill="var(--ink)">3건 중 3건 고쳤어요</text>' +
+    { t: '채팅으로 받기', h: '고친 사본 + 고친 곳 표시 PDF가 채팅으로', d: '보통 10~25분(예상). 「확인 필요」에는 채팅으로 그냥 답하시면 rev2로 다시 만들어 드립니다. 보낸 뒤에도 [요청 취소]로 멈출 수 있습니다.', svg:
+      '<rect x="30" y="16" width="240" height="132" rx="14" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/><text x="46" y="42" font-size="12" font-weight="900" fill="var(--ink)">3건 중 3건 고쳤습니다</text>' +
       '<rect x="46" y="56" width="208" height="30" rx="8" fill="var(--card)" stroke="var(--line)"/><text x="58" y="76" font-size="11.5" font-weight="800" fill="var(--ink)">📎 계획서_rev1.hwp</text>' +
       '<rect x="46" y="94" width="208" height="30" rx="8" fill="var(--card)" stroke="var(--line)"/><text x="58" y="114" font-size="11.5" font-weight="800" fill="var(--ink)">📎 계획서_rev1_표시.pdf</text>' }
   ];
@@ -991,7 +991,7 @@
       if (!pend && !sent) { el.style.display = 'none'; return; }
       el.className = 'mk-strip on ' + (sent ? 'mk-sent' : 'mk-resume');
       el.innerHTML = sent ? '<span class="mk-grow">PC가 고치는 중 · ' + sent + '건</span><button data-v="open">보기</button><button data-v="cancel">요청 취소</button>'
-                          : '<span class="mk-grow">적어 둔 수정 요청 ' + pend + '건이 있어요</span><button data-v="open">이어서</button><button data-v="clear">모두 빼기</button>';
+                          : '<span class="mk-grow">적어 둔 수정 요청 ' + pend + '건이 있습니다</span><button data-v="open">이어서</button><button data-v="clear">모두 빼기</button>';
       el.style.display = 'flex';
       el.onclick = function (e) {
         var a = e.target.getAttribute && e.target.getAttribute('data-v'); if (!a) return;
