@@ -1562,9 +1562,12 @@
             (dur ? '<span class="chip">' + esc(((r.kind === 'video') ? '영상 ' : '녹음 ') + dur) + '</span>' : '') +
             '<span class="chip on">요약</span></div></div>';
     // v5.3: 이름 변경 · 삭제(소프트삭제) — 연동암호 게이트, 확인은 기존 시트/모달 재사용
-    html += '<div class="btnrow">' +
-            '<button id="mtgRename" class="btn ghost sm"><svg><use href="#i-note"/></svg>이름 변경</button>' +
-            '<button id="mtgDelete" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button>' +
+    // v9.20: [복사] — 화면에 보이는 정리본(원문 제외)을 글로 복사. 스위치 MTG_COPY='off' 면 v9.19 와 같은 두 단추
+    var mcOn = (MTG_COPY === 'on'), mcSty = mcOn ? ' style="flex:1 1 0;min-width:0;padding-left:8px;padding-right:8px"' : '';
+    html += '<div class="btnrow"' + (mcOn ? ' style="flex-direction:row;gap:8px"' : '') + '>' +
+            (mcOn ? '<button id="mtgCopy" class="btn ghost sm"' + mcSty + '><svg><use href="#i-copy"/></svg>복사</button>' : '') +
+            '<button id="mtgRename" class="btn ghost sm"' + mcSty + '><svg><use href="#i-note"/></svg>이름 변경</button>' +
+            '<button id="mtgDelete" class="btn ghost sm danger"' + mcSty + '><svg><use href="#i-trash"/></svg>삭제</button>' +
             '</div>';
     if (sj.integrated && sj.minutes)   // 회의자료 함께 낸 경우: 통합 회의록
       html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
@@ -1583,9 +1586,54 @@
     d.style.display = 'block';
     meetingsDetailOpen = true;
     var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', showMeetingsList);
+    var mcb = $('mtgCopy'); if (mcb) mcb.addEventListener('click', function () { copyToClipboard(meetingCopyText(r)); });
     var rn = $('mtgRename'); if (rn) rn.addEventListener('click', function () { renameMeetingPrompt(idx); });
     var dl = $('mtgDelete'); if (dl) dl.addEventListener('click', function () { confirmDeleteMeeting(idx); });
     scrollTop();
+  }
+  // v9.20: 회의록 상세 [복사] 글 — 화면과 같은 순서(제목·일시·길이 → 통합 회의록 → 요약 카드들). 원문(접힌 항목)은 넣지 않는다.
+  //   renderBrief · renderCards 의 순서를 따라가는 글 전용 함수이며 HTML 을 쪼개 쓰지 않는다. 비어 있는 칸은 줄을 만들지 않는다.
+  function meetingCopyText(r) {
+    r = r || {};
+    var sj = r.summary_json || {}, out = [];
+    function T(v) { return (v == null) ? '' : String(v).replace(/\s+$/, ''); }
+    function list(arr, numbered) {
+      var o = [];
+      (Array.isArray(arr) ? arr : []).forEach(function (x, i) { var t = T(x); if (t) o.push((numbered ? (i + 1) + '. ' : '- ') + t); });
+      return o;
+    }
+    function section(title, lines) { if (lines && lines.length) { out.push(''); out.push('[' + title + ']'); lines.forEach(function (l) { out.push(l); }); } }
+    var kp = kstParts(r.created_at), when = kp ? (kp.date + ' ' + kp.time) : '', dur = fmtDurKo(memoDurSec(r));
+    out.push(T(r.title) || '회의 요약');
+    var meta = [when, dur ? (((r.kind === 'video') ? '영상 ' : '녹음 ') + dur) : ''].filter(function (x) { return x; }).join(' · ');
+    if (meta) out.push(meta);
+    if (sj.integrated && sj.minutes) section('통합 회의록', [T(sj.minutes)]);
+    var b = sj.brief;
+    if (b && b.headline) {
+      var tut = b.mode === 'tutoring';
+      section(tut ? '이번 튜터링 한 줄' : '한 줄 결론', [T(b.headline)]);
+      section(tut ? '진행 상황' : '핵심', list(b.key_points, true));
+      if (tut) section('교수 피드백', list(b.feedback, false));
+      section(tut ? '팀 결정 사항' : '결정 사항', list(b.decisions, false));
+      var td = [];
+      (Array.isArray(b.todos) ? b.todos : []).forEach(function (t) {
+        if (!t) return;
+        var task = T(typeof t === 'string' ? t : t.task); if (!task) return;
+        var tail = [];
+        if (t.owner) tail.push('담당 ' + T(t.owner));
+        if (t.due) tail.push('기한 ' + T(t.due));
+        td.push('- ' + task + (tail.length ? ' (' + tail.join(' · ') + ')' : ''));
+      });
+      section(tut ? '다음까지 할 일' : '할 일', td);
+      section(tut ? '미결·확인 필요' : '다음 일정·미결', list(b.next, false));
+      section('상세 정리', list(b.detail, false));
+    } else {
+      var sum = (Array.isArray(sj.summary) ? sj.summary : []).map(T).filter(function (x) { return x; }).join(' ');
+      section('요약', sum ? [sum] : []);
+      section('할 일', list(sj.todos, false));
+      section('결정 사항', list(sj.decisions, false));
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n');
   }
   // v5.3: 이름 변경 — 기존 modal 재사용(텍스트 입력). 서버 title 만 변경(PC 원본 무관).
   function renameMeetingPrompt(idx) {
@@ -6843,6 +6891,7 @@
    *  · 띠는 앱을 끄면 사라진다(저장하지 않음). 움직임 줄이기(KScene.calm · 폰 설정)면 움직임 없이.
    *  · 스위치 REPLY_UI=false → ⋯ 시트에 「답장」이 안 보인다(이미 받은 인용 상자는 그대로 그린다). */
   var REPLY_UI = true;
+  var MTG_COPY = 'on';                               // (v9.20) 회의록 상세 [복사] — 'off' 면 단추 없음(v9.19 와 같은 화면)
   var REPLY_TIP_KEY = 'smart_reply_tip_seen';        // 처음 한 번 「⋯에 답장이 생겼습니다」 안내
   var REPLY_SWIPE = true;                            // (O-0545 ②, v9.18) 말풍선을 왼쪽으로 밀어 답장 — false 면 ⋯ 시트만(v9.17 그대로). 아래 「밀어서 답장」
   var REPLY_SWIPE_TIP_KEY = 'smart_reply_swipe_tip_seen';
