@@ -7129,7 +7129,7 @@
   function rsEnd(commit) {
     var s = rs; rs = null;
     if (!s || !s.on) return;
-    rsEatAt = Date.now();                              // 끌고 난 뒤 따라오는 누름(click)은 먹는다(링크 · 접기 등이 눌리지 않게)
+    if (s.mouse) rsEatAt = Date.now();                 // 마우스로 끌고 난 뒤 따라오는 누름(click)은 먹는다(링크 · 접기 등이 눌리지 않게). 손가락으로 끌면 click 이 따라오지 않으므로 먹지 않는다(다음 정상 탭이 한 번 무시되던 것)
     document.documentElement.classList.remove('rs-mousedrag');
     var b = s.bub;
     b.classList.remove('rs-drag');
