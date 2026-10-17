@@ -2535,7 +2535,7 @@
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
           ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null, rq: m.rq || null, nosrv: !!m.nosrv, srv: !!m.srv }
-          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null, vtts: !!m.vtts, vplayed: !!m.vplayed }; });   // v8.3: vtts·vplayed
+          : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null, vtts: !!m.vtts, vplayed: !!m.vplayed, fe: m.fe || null }; });   // v8.3: vtts·vplayed
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
   }
@@ -3356,7 +3356,17 @@
     if (status === 'processing' && !m.got) { m.got = true; ch = true; }
     return ch;
   }
+  // (v9.20) 못 보낸 말(nosrv)에 붙는 줄 — 'text' = 글이라 다시 보낼 수 있음 / 'pick' = 사진 · 파일(앱을 다시 켠 뒤라 보관본이 없음) / '' = 줄 없음
+  function resendKind(m) {
+    if (RESEND_UI === 'off' || !m || m.role !== 'me' || !m.nosrv || m._resending || !m.id || !m.token || m.vin) return '';
+    if (Date.now() - (m.ts || 0) > RESEND_MAX_MS) return '';
+    if (m.files && m.files.length) return 'pick';
+    return m.text ? 'text' : '';
+  }
   function msgStatHtml(m) {
+    var rk = resendKind(m);
+    if (rk) return '<div class="msgstat fail" data-ms="' + msgUid(m) + '">못 보냈습니다 · ' +
+      (rk === 'text' ? '<button type="button" class="msgretry" data-retry="' + msgUid(m) + '">다시 보내기</button>' : '사진·파일은 다시 골라 주십시오') + '</div>';
     if (!msgWaiting(m) || m.uploading) return '';
     var t = m.got ? '받았습니다' : (m.sent ? (kStatState === 'down' ? '보냄 · PC가 응답하지 않아 아직 받지 못했습니다' : '보냄') : '보내는 중…');
     return '<div class="msgstat' + (m.got ? ' got' : '') + '" data-ms="' + msgUid(m) + '">' + t + '</div>';
@@ -3637,10 +3647,49 @@
       errLog('글', e);
       var m = findMsg(id); if (m) { m.answered = true; m.nosrv = true; }
       giveBackReply(rt);                          // (O-0545) 못 보낸 답장은 띠로 되돌려 다시 쓰실 때 그대로 실리게
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });   // fe = 이 사과가 가리키는 못 보낸 말의 id(다시 보내기 성공 때 지움)
       saveChatMsgs(); renderChat(); updateSendEnabled();
       return false;
     });
+  }
+
+  // (v9.20) 못 보낸 말 다시 보내기 — 같은 id · token 그대로(R1). 눌림 한 번에 한 번만(R3). 시간 제한은 지금부터 새로(R5).
+  function dropApology(id) {
+    var n = chatMsgs.length;
+    chatMsgs = chatMsgs.filter(function (x) { return !(x.role === 'k' && x.fe === id); });
+    return chatMsgs.length !== n;
+  }
+  function resendChatMsg(uid) {
+    var m = null;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
+    var rk = resendKind(m);
+    if (!rk || rk !== 'text') return false;
+    m._resending = true; m.nosrv = false; m.answered = false; m.sent = false; m.got = false; m.waitFrom = Date.now();
+    saveChatMsgs(); renderChat(); updateSendEnabled();
+    var id = m.id;
+    OfficeBridge.sendChat(id, m.token, chatThread, m.text, { speak: convoOn, modelPref: m.opus ? 'opus' : null, replyTo: m.rq || null }).then(function (res) {
+      if (res === 'exists') errLog('다시 보내기', '서버에 이미 있던 말(같은 id) — 새 행 없음');   // R7: 화면 변화 없음, 콘솔에만
+      m._resending = false; m.srv = true;
+      dropApology(id);
+      saveChatMsgs(); if (isOpen(chatView)) renderChat();
+      kickOrderPoll(); startChatReconcile();
+    }).catch(function (e) {
+      errLog('다시 보내기', e);
+      m._resending = false; m.nosrv = true; m.answered = true;
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();      // 사과 말풍선은 이미 있으니 새로 쌓지 않는다
+    });
+    return true;
+  }
+  function resendClick(uid) {
+    var m = null;
+    for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
+    if (resendKind(m) !== 'text') return;
+    if (RESEND_UI === 'text') {                       // 안전 모드: 한 번 더 묻는다
+      openSheet('다시 보낼까요?', '이미 PC에 도착했을 수도 있습니다. 같은 말을 다시 보냅니다.', '다시 보내기', function () { resendChatMsg(uid); });
+      if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-check'); }
+      return;
+    }
+    resendChatMsg(uid);
   }
 
   /* ---- 통합 전송: (선택)음성 + (선택)사진 + 텍스트 한 턴 → 케이가 보고/듣고 답 ---- */
@@ -3676,7 +3725,7 @@
       meMsg.answered = true; meMsg.uploading = false; meMsg.nosrv = true;
       giveBackReply(rt);                          // (O-0545)
       errLog('말·사진 한 턴', e);
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
@@ -6830,6 +6879,8 @@
     if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
     var bq = ev.target.closest ? ev.target.closest('.bquote[data-qid]') : null;   // (O-0545) 인용 상자 → 원래 메시지로
     if (bq) { jumpToReply(bq.getAttribute('data-qid'), bq.getAttribute('data-qside')); return; }
+    var rtb = ev.target.closest ? ev.target.closest('.msgretry[data-retry]') : null;   // (v9.20) 못 보낸 말 [다시 보내기]
+    if (rtb) { ev.preventDefault(); resendClick(rtb.getAttribute('data-retry')); return; }
     // ⋯ 메뉴 → 복사·삭제 시트
     var mb = ev.target.closest ? ev.target.closest('.bmenu') : null;
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openMsgActionSheet(bub.getAttribute('data-uid')); return; }
@@ -6929,6 +6980,10 @@
    *  · 띠는 앱을 끄면 사라진다(저장하지 않음). 움직임 줄이기(KScene.calm · 폰 설정)면 움직임 없이.
    *  · 스위치 REPLY_UI=false → ⋯ 시트에 「답장」이 안 보인다(이미 받은 인용 상자는 그대로 그린다). */
   var REPLY_UI = true;
+  /* (v9.20) 못 보낸 말풍선 [다시 보내기] — 'on' = 글(사진 · 작은 파일은 앱이 켜져 있는 동안) / 'text' = 글만(누르기 전 확인 시트) / 'off' = v9.19 와 같음.
+   *  같은 id · token 으로만 다시 보낸다(서버 submit_memo 가 같은 id 를 'exists' 로 돌려줘 PC 에 두 번 들어가지 않음). 새 id 는 만들지 않는다.
+   *  24시간이 지난 말 · 음성 말풍선은 단추를 보이지 않는다. 시간 제한은 다시 보낸 시각부터 새로 센다. */
+  var RESEND_UI = 'on', RESEND_MAX_MS = 24 * 3600 * 1000, RESEND_ATT_MAX = 100 * 1024 * 1024;
   var MTG_COPY = 'on';                               // (v9.20) 회의록 상세 [복사] — 'off' 면 단추 없음(v9.19 와 같은 화면)
   var REPLY_TIP_KEY = 'smart_reply_tip_seen';        // 처음 한 번 「⋯에 답장이 생겼습니다」 안내
   var REPLY_SWIPE = true;                            // (O-0545 ②, v9.18) 말풍선을 왼쪽으로 밀어 답장 — false 면 ⋯ 시트만(v9.17 그대로). 아래 「밀어서 답장」

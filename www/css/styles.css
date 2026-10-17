@@ -2036,3 +2036,8 @@ html.rs-mousedrag,html.rs-mousedrag *{cursor:grabbing !important;-webkit-user-se
 .replytip span{display:block}.replytip span + span{margin-top:3px}
 @media (prefers-reduced-motion:reduce){.bubble.rs-back{transition:none}.rsic.past{animation:none}.rsic.go{transition:none}}
 @media (prefers-reduced-motion:reduce){.replybar.rb-in,.replybar.off{animation:none}.bubble.rq-flash{animation:none;outline:3px solid var(--cyan);outline-offset:2px}}
+/* (v9.20) 못 보낸 말풍선 줄 — 「못 보냈습니다 · [다시 보내기]」. 좁은 폭(390)에서 한 줄에 안 들어가면 단추가 아래로 내려간다 */
+.msgstat.fail{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:2px 6px;color:var(--warn-t);max-width:100%}
+.msgstat.fail .msgretry{min-height:40px;padding:0 14px;border-radius:12px;border:1px solid var(--glass-b);background:var(--warn-bg);color:var(--warn-t);font:inherit;font-size:14px;font-weight:800;cursor:pointer;-webkit-user-select:none;user-select:none}
+.msgstat.fail .msgretry:active{opacity:.7}
+html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
