@@ -3360,13 +3360,13 @@
   function resendKind(m) {
     if (RESEND_UI === 'off' || !m || m.role !== 'me' || !m.nosrv || m._resending || !m.id || !m.token || m.vin) return '';
     if (Date.now() - (m.ts || 0) > RESEND_MAX_MS) return '';
-    if (m.files && m.files.length) return 'pick';
+    if (m.files && m.files.length) return (m._att && RESEND_UI === 'on') ? 'att' : 'pick';   // 'att' = 앱이 켜져 있는 동안 메모리에 남긴 사진 · 작은 파일(저장하지 않음)
     return m.text ? 'text' : '';
   }
   function msgStatHtml(m) {
     var rk = resendKind(m);
     if (rk) return '<div class="msgstat fail" data-ms="' + msgUid(m) + '">못 보냈습니다 · ' +
-      (rk === 'text' ? '<button type="button" class="msgretry" data-retry="' + msgUid(m) + '">다시 보내기</button>' : '사진·파일은 다시 골라 주십시오') + '</div>';
+      (rk !== 'pick' ? '<button type="button" class="msgretry" data-retry="' + msgUid(m) + '">다시 보내기</button>' : '사진·파일은 다시 골라 주십시오') + '</div>';
     if (!msgWaiting(m) || m.uploading) return '';
     var t = m.got ? '받았습니다' : (m.sent ? (kStatState === 'down' ? '보냄 · PC가 응답하지 않아 아직 받지 못했습니다' : '보냄') : '보내는 중…');
     return '<div class="msgstat' + (m.got ? ' got' : '') + '" data-ms="' + msgUid(m) + '">' + t + '</div>';
@@ -3659,31 +3659,47 @@
     chatMsgs = chatMsgs.filter(function (x) { return !(x.role === 'k' && x.fe === id); });
     return chatMsgs.length !== n;
   }
+  // 사진 · 작은 파일 보관: 보내기가 실패했을 때만 File 목록을 메모리(m._att)에 남긴다(저장 안 함 · 합계 100MB 초과면 남기지 않음 · 45MB 넘는 큰 파일(조각 전송)은 제외).
+  //   kind 'turn' = 사진(말·사진 한 턴, sendChatTurn) / 'batch' = 작은 파일(sendChatBatch). memo · opts 는 처음 보낼 때 쓴 것 그대로(같은 id · token · note).
+  function keepAtt(m, kind, files, memo, opts) {
+    try {
+      var total = 0, arr = Array.prototype.slice.call(files || []);
+      arr.forEach(function (f) { total += (f && f.size) || 0; });
+      if (!arr.length || total > RESEND_ATT_MAX) { delete m._att; return; }
+      m._att = { kind: kind, files: arr, memo: memo, opts: opts || null };
+    } catch (e) { delete m._att; }
+  }
   function resendChatMsg(uid) {
     var m = null;
     for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
     var rk = resendKind(m);
-    if (!rk || rk !== 'text') return false;
+    if (!rk || rk === 'pick') return false;
+    var a = (rk === 'att') ? m._att : null;
     m._resending = true; m.nosrv = false; m.answered = false; m.sent = false; m.got = false; m.waitFrom = Date.now();
+    if (a) m.uploading = true;
     saveChatMsgs(); renderChat(); updateSendEnabled();
-    var id = m.id;
-    OfficeBridge.sendChat(id, m.token, chatThread, m.text, { speak: convoOn, modelPref: m.opus ? 'opus' : null, replyTo: m.rq || null }).then(function (res) {
+    var id = m.id, work;
+    if (!a) work = OfficeBridge.sendChat(id, m.token, chatThread, m.text, { speak: convoOn, modelPref: m.opus ? 'opus' : null, replyTo: m.rq || null });
+    else if (a.kind === 'batch') work = OfficeBridge.sendChatBatch(a.memo, a.files);
+    else work = OfficeBridge.sendChatTurn(a.memo, a.opts || {});
+    work.then(function (res) {
       if (res === 'exists') errLog('다시 보내기', '서버에 이미 있던 말(같은 id) — 새 행 없음');   // R7: 화면 변화 없음, 콘솔에만
-      m._resending = false; m.srv = true;
+      m._resending = false; m.srv = true; m.uploading = false; delete m._att;
       dropApology(id);
       saveChatMsgs(); if (isOpen(chatView)) renderChat();
       kickOrderPoll(); startChatReconcile();
     }).catch(function (e) {
       errLog('다시 보내기', e);
-      m._resending = false; m.nosrv = true; m.answered = true;
-      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();      // 사과 말풍선은 이미 있으니 새로 쌓지 않는다
+      m._resending = false; m.nosrv = true; m.answered = true; m.uploading = false;
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();      // 사과 말풍선은 이미 있으니 새로 쌓지 않는다(보관본 m._att 는 그대로 남아 다시 누를 수 있음)
     });
     return true;
   }
   function resendClick(uid) {
     var m = null;
     for (var i = 0; i < chatMsgs.length; i++) { if (chatMsgs[i].uid === uid) { m = chatMsgs[i]; break; } }
-    if (resendKind(m) !== 'text') return;
+    var rk = resendKind(m);
+    if (!rk || rk === 'pick') return;
     if (RESEND_UI === 'text') {                       // 안전 모드: 한 번 더 묻는다
       openSheet('다시 보낼까요?', '이미 PC에 도착했을 수도 있습니다. 같은 말을 다시 보냅니다.', '다시 보내기', function () { resendChatMsg(uid); });
       if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-check'); }
@@ -3715,14 +3731,16 @@
     if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주세요.';
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
-    OfficeBridge.sendChatTurn(memo, { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
-                                      sttDevice: dev, vstream: vs, vend: o.vend || null, vprev: vprev, replyTo: rt }).then(function () {
+    var turnOpts = { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
+                     sttDevice: dev, vstream: vs, vend: o.vend || null, vprev: vprev, replyTo: rt };
+    OfficeBridge.sendChatTurn(memo, turnOpts).then(function () {
       vlatMark(id, 'sub');                        // O-0210
       meMsg.uploading = false; meMsg.srv = true; saveChatMsgs();
       if (isOpen(chatView)) renderChat();
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       meMsg.answered = true; meMsg.uploading = false; meMsg.nosrv = true;
+      keepAtt(meMsg, 'turn', imgs, memo, turnOpts);   // (v9.20) 다시 보내기용 보관(메모리만)
       giveBackReply(rt);                          // (O-0545)
       errLog('말·사진 한 턴', e);
       chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });
@@ -6826,9 +6844,10 @@
       startChatReconcile(); kickOrderPoll();      // v5.8
     }).catch(function (e) {
       msg.answered = true; msg.uploading = false; msg.nosrv = true;
+      if (!chunked) keepAtt(msg, 'batch', files, memo, null);   // (v9.20) 다시 보내기용 보관(메모리만 · 큰 파일(조각 전송)은 제외)
       giveBackReply(rt);                          // (O-0545)
       errLog('파일', e);
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
