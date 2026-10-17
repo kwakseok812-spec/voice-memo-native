@@ -139,10 +139,10 @@
     if (!end) playSlot(B);
     B.style.zIndex = 2; A.style.zIndex = 1;
     B.style.opacity = 1;
-    var done = function () { A.style.opacity = 0; stopSlot(A); };
+    var done = function (late) { if (late === true && slots[front] === A) return; A.style.opacity = 0; stopSlot(A); };   // 그사이 한 번 더 바꿔 A 가 다시 앞 칸이면 숨기지 않는다(움직임 줄이기 연타)
     if (calm()) {
       var a0 = an(B, [{ opacity: 0 }, { opacity: 1 }], { duration: 120 });
-      if (a0) a0.onfinish = done; else done();
+      if (a0) a0.onfinish = function () { done(true); }; else done();
     } else {
       done();
       an(el.flash, [{ opacity: 0 }, { opacity: .75, offset: .2 }, { opacity: 0 }], { duration: FX_MS, easing: 'ease-out' });
@@ -241,14 +241,14 @@
   }
   function start() {
     if (!show || show.started) return;
-    show.started = true; show.paused = false;
+    show.started = true; show.paused = !!document.hidden;   // 여는 글 동안 화면이 숨겨졌으면 멈춘 채 시작합니다
     el.intro.classList.remove('go');
     show.t0 = performance.now(); show.acc = 0; show.probe = 0;
     var p0 = planOf(show.list[show.i]), s0 = slots[front];
     if (!calm() && p0.hasShow && p0.kind !== 'show') show.hold = show.t0 + FIRST_WAIT_MS;   // 첫 옷의 패션쇼 영상을 받는 중 → 조금 기다린다
     else {
       if (!calm() && RANK[p0.kind] > RANK[s0._kind || 'still']) slotLoad(s0, show.list[show.i], false);   // 여는 글 동안 더 나은 영상이 받아졌으면 그것으로
-      playSlot(s0);
+      if (!show.paused) playSlot(s0);
     }
     setPlayIcon();
   }
