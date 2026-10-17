@@ -156,12 +156,14 @@
     if (MARKUP_ON !== 'on' || !opts || !opts.pdfDoc) return false;
     build(); if (!R) return false;
     var rs = opts.restore || null;            // O-0548: 채팅에 다녀왔을 때 — 같은 쪽 · 같은 확대 · 같은 펜/손 · 적던 메모
+    var tk = ++openSeq;                       // 열 때마다 번호표 — 닫힌 뒤(또는 다시 열린 뒤) 늦게 도착한 응답이 낡은 화면에 일하지 않게
     S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null; S.zoom = (rs && rs.zoom) || 1;
     $('mkName').textContent = S.d.name || '문서';
     R.root.classList.add('on');
     setTool((rs && rs.tool) || 'pen', true);
     buildPages(opts.page || 1, opts.anchor || (rs ? { ptTop: rs.off || 0, left: rs.left || 0 } : null));
     return DB.get(S.d.key).then(function (v) {
+      if (!S.on || tk !== openSeq) return false;
       S.items = (v && v.items) || []; S.sent = (v && v.sent) || [];
       renderAll(); refreshStatus();
       if (!reduce()) { var f = $('mkFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
@@ -173,13 +175,13 @@
         var real = rs.memo.isNew ? null : S.items.filter(function (x) { return x.n === rs.memo.item.n && !x.status; })[0];
         openMemo(real || rs.memo.item, { text: rs.memo.text, isNew: !real });
       }, 300);
-      if (!rs && lsGet(HELP_KEY, '') !== '1') { lsSet(HELP_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { help(0); }, 250); }
+      if (!rs && lsGet(HELP_KEY, '') !== '1') { lsSet(HELP_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
       if (statusT) clearInterval(statusT);
       statusT = setInterval(refreshStatus, 20000);
       return true;
     });
   }
-  var statusT = null;
+  var statusT = null, openSeq = 0;
   function close(o) {
     if (!R || !S.on) return;
     var quiet = !!(o && o.quiet);
@@ -231,8 +233,9 @@
     if (io) io.disconnect();
     io = new IntersectionObserver(function (ents) { ents.forEach(function (en) { var P = S.pages[+en.target.dataset.n - 1]; if (!P) return; if (en.isIntersecting) renderPage(P); else unrender(P); }); },
       { root: R.scroll, rootMargin: '900px 0px' });
-    var n = S.pdf.numPages;
+    var n = S.pdf.numPages, tk = openSeq;
     S.pdf.getPage(1).then(function (p1) {
+      if (!S.on || tk !== openSeq) return;      // 열자마자 닫았으면 쪽 상자를 만들지 않는다
       var vp1 = p1.getViewport({ scale: 1 });
       for (var i = 1; i <= n; i++) {
         var el = doc.createElement('div'); el.className = 'mk-pg'; el.dataset.n = i;
