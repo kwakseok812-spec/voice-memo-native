@@ -413,7 +413,8 @@
       if (ev.target.closest && (ev.target.closest('.mk-pop') || ev.target.closest('.mk-pin') || ev.target.closest('.mk-hit'))) return;
       ptrs[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
       var n = Object.keys(ptrs).length, P = pageAt(ev.clientX, ev.clientY);
-      S.lp = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, P: P, t: setTimeout(onLong, LP_MS) };
+      if (n < 2) S.lp = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, P: P, t: setTimeout(onLong, LP_MS) };   // 손가락이 둘 이상이면 길게 누르기(줄 선택)를 만들지 않고 이미 있던 것도 취소
+      else cancelLP();
       if (S.tool === 'pen') {
         if (n >= 2) { cancelStroke(); pan = { y: avgY(), x: avgX() }; cancelLP(); return; }
         if (!P) return;
@@ -699,7 +700,7 @@
     $('mkMic').classList.add('on'); micLabel('준비 중입니다…');
     function show() { var t = (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); m.ta.value = m.base + t; if (t) m.heard = true; }
     function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
-    function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
+    function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { if (m.ended) { try { x.remove(); } catch (e) {} } else m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
     // 「말 없음 8초」는 인식기가 준비된(ready) 뒤부터 센다 — 처음 쓰는 폰에서 권한 창이 떠 있는 동안 먼저 끝나 인식기가 혼자 돌지 않게.
     on('ready', function () {
       m.ready = true; clearTimeout(m.readyT);
