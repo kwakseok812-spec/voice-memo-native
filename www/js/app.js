@@ -3593,6 +3593,7 @@
     //   대기 상태는 '입력 막기'가 아니라 화면의 점 세 개(typing) 표시로만 알린다.
     unlockKaiAudio();                             // 이 탭(제스처)에 오디오를 깨워둠 → 답 목소리 자동재생 대비
     chatInput.value = ''; autoGrowChat();
+    draftDrop();                                  // (v9.20) 보낸 글은 임시 보관에서 바로(동기) 지운다 — 대기 중인 저장 타이머도 취소
     var opus = takeOpus();                        // v5.8: 켜져 있었으면 이번 1건(첨부 포함 한 번의 전송)에만 적용하고 끔
     var rt = takeReply();                         // (O-0545) 답장: 글이 실리는 한 건(없으면 첫 건)에만 싣고 띠를 내린다
     var textUsed = false;
@@ -6694,6 +6695,42 @@
   function flushChatRender() {
     if (chatRenderDeferred) { chatRenderDeferred = false; if (isOpen(chatView)) renderChat(); }
   }
+  /* ---- (v9.20) 쓰던 채팅 글 임시 보관 ----
+   *  · 입력칸(#chatInput)의 글을 이 기기(localStorage 'smart_chat_draft')에만 0.6초 뒤 저장 · 앱을 껐다 켜도 3일 안이면 입력칸이 비어 있을 때 되살린다.
+   *  · 보낼 때는 바로(동기) 지운다. 실패한 글은 보관을 되살리지 않는다(말풍선의 [다시 보내기]로 처리 — 같은 글이 두 곳에 생기지 않게).
+   *  · 되살리기 전에 보낸 말과 대조해 같은 글이 보관 시각 이후에 이미 나갔으면 버린다. 채팅 입력칸만 대상(공유함 · 아이디어 · 암호 입력칸은 제외).
+   *  · 한계: 폰의 네이티브 입력 바는 닫힐 때(또는 보낼 때)만 글이 웹 입력칸으로 넘어오므로, 바를 연 채 앱이 종료되면 그 글은 보관되지 않는다.
+   *  · 스위치 DRAFT_KEEP='off' → 저장 · 복원 없음(부팅 때 남은 보관 글도 지운다). */
+  var DRAFT_KEEP = 'on', DRAFT_KEY = 'smart_chat_draft', DRAFT_TTL_MS = 3 * 24 * 3600 * 1000, DRAFT_MAX = 20000, DRAFT_DEBOUNCE_MS = 600;
+  var draftT = null;
+  function draftDrop() { clearTimeout(draftT); draftT = null; try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+  function draftSaveNow() {
+    clearTimeout(draftT); draftT = null;
+    if (DRAFT_KEEP !== 'on' || !chatInput) return;
+    var v = String(chatInput.value || '');
+    try {
+      if (!v.trim()) localStorage.removeItem(DRAFT_KEY);
+      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ t: v.slice(0, DRAFT_MAX), at: Date.now() }));
+    } catch (e) {}
+  }
+  function draftLater() { if (DRAFT_KEEP !== 'on') return; clearTimeout(draftT); draftT = setTimeout(draftSaveNow, DRAFT_DEBOUNCE_MS); }   // 타이머가 돌 때 입력칸의 「그때 값」을 읽는다(보낸 글을 낡은 값으로 다시 쓰지 않음)
+  function draftRestore() {
+    if (!chatInput) return;
+    if (DRAFT_KEEP !== 'on') { draftDrop(); return; }
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { d = null; }
+    if (!d || typeof d.t !== 'string' || !d.t.trim() || !(d.at > 0)) { if (d) draftDrop(); return; }
+    if (Date.now() - d.at > DRAFT_TTL_MS) { draftDrop(); return; }                          // 3일이 지남
+    var same = chatMsgs.some(function (m) { return m && m.role === 'me' && String(m.text || '').trim() === d.t.trim() && (m.ts || 0) >= d.at; });
+    if (same) { draftDrop(); return; }                                                       // 이미 보낸 글
+    if (String(chatInput.value || '').trim()) return;                                       // 입력칸에 이미 글이 있으면 건드리지 않음(공유로 채워진 글 등)
+    chatInput.value = d.t; autoGrowChat();
+  }
+  if (DRAFT_KEEP === 'on') {
+    document.addEventListener('visibilitychange', function () { if (document.hidden) draftSaveNow(); });
+    window.addEventListener('pagehide', draftSaveNow);
+  }
+  draftRestore();
   if (chatInput) {
     // v4.7: 조합 상태(chatComposing)는 '대화목록 재렌더를 잠깐 미루는' 용도로만 쓴다.
     //   입력창(textarea)의 표시·높이확장은 조합 중에도 절대 막지 않는다 → 미확정 마지막 글자가 항상 보인다.
@@ -6701,6 +6738,7 @@
     chatInput.addEventListener('input', function (e) {
       chatComposing = !!(e && e.isComposing);   // 목록 재렌더 보류 판단용(true여도 아래 autoGrow는 그대로 실행)
       autoGrowChat();                            // 조합 중에도 입력창 높이 확장 → 마지막 글자 잘림 없음
+      draftLater();                              // (v9.20) 쓰던 글 임시 보관(0.6초 뒤)
       if (!chatComposing) flushChatRender();     // 조합이 끝난(또는 조합 아닌) 입력에서 미뤄둔 목록 렌더 반영
     });
     // 한글 조합 시작/끝 추적 → 조합 중에는 대화목록(chatLog) '재렌더만' 미룬다(입력창은 안 건드림)
@@ -7253,6 +7291,7 @@
     try { localStorage.setItem(CHAT_CLEARED_KEY, new Date().toISOString()); } catch (e) {}
     chatMsgs = [];
     saveChatMsgs();
+    draftDrop();                                      // (v9.20) 임시 보관 글도 함께 지운다
     officeHW = CHAT_EPOCH; chatSyncHW = CHAT_EPOCH;   // 다음 동기화는 경계 이후만 그린다
     chatOlder = null; chatHasMore = false;            // v7.0: 경계 이전 옛 쪽은 더 볼 게 없음(다음 열람 때 새로 잡음)
     stopChatReconcile();
