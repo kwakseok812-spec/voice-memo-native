@@ -693,7 +693,7 @@
     var ta = $('mkMemoTxt');
     var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
                     quietT: null, noSpT: null, finT: null, readyT: null, ready: false, stopping: false };
-    $('mkMic').classList.add('on'); micLabel('준비 중… 잠시만요');
+    $('mkMic').classList.add('on'); micLabel('준비 중입니다…');
     function show() { var t = (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); m.ta.value = m.base + t; if (t) m.heard = true; }
     function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
     function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
@@ -701,7 +701,7 @@
     on('ready', function () {
       m.ready = true; clearTimeout(m.readyT);
       if (m.stopping) return;
-      micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춰요');
+      micLabel('듣는 중… 말씀이 끝나고 2초 조용하면 멈춥니다');
       if (!m.heard) { clearTimeout(m.noSpT); m.noSpT = setTimeout(function () { if (mic === m && !m.heard) stopMic(false, 'nospeech'); }, MIC_NOSPEECH_MS); }
     });
     on('speech', function () { clearTimeout(m.noSpT); if (!m.stopping) quiet(); });   // 소리는 났는데 글이 아직 없어도 2초 멈춤 시계를 켠다
@@ -918,8 +918,8 @@
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
     { t: '펜과 손', h: '펜: 한 손가락으로 그립니다 · 손: 넘겨 봅니다', d: '위 띠의 [펜 | 손]으로 바꿉니다. 펜일 때 넘기려면 두 손가락으로 미십시오. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿀 수 있습니다.', svg:
       '<rect x="60" y="40" width="180" height="70" rx="16" fill="var(--card)" stroke="var(--mk-red-line)" stroke-width="3"/><rect x="66" y="46" width="82" height="58" rx="12" fill="var(--mk-red)"/><text x="107" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">펜</text><text x="194" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="var(--sub)">손</text>' +
-      '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보여요</text>' },
-    { t: '표시하기', h: '동그라미 · 밑줄 · 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나와요.', svg:
+      '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보입니다</text>' },
+    { t: '표시하기', h: '동그라미 · 밑줄 · 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나옵니다.', svg:
       '<g fill="var(--line)"><rect x="30" y="30" width="240" height="8" rx="4"/><rect x="30" y="56" width="60" height="8" rx="4"/><rect x="162" y="56" width="108" height="8" rx="4"/><rect x="30" y="82" width="200" height="8" rx="4"/><rect x="30" y="108" width="230" height="8" rx="4"/></g>' +
       '<rect x="96" y="51" width="60" height="18" rx="4" fill="var(--mk-hl)"/><text x="126" y="64" font-size="12" font-weight="900" text-anchor="middle" fill="var(--ink)">취금</text>' +
       '<ellipse class="mk-draw" style="--len:240" cx="126" cy="60" rx="44" ry="20" fill="none" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round"/>' +
@@ -998,7 +998,7 @@
         if (a === 'open' && renderViewerStrip.onResume) renderViewerStrip.onResume();
         else if (a === 'clear') {                // 한 번 더 눌러야 뺀다(실수로 지우지 않게 · confirm() 창 대신)
           var bt = e.target;
-          if (!bt.classList.contains('again')) { bt.classList.add('again'); bt.textContent = '한 번 더 누르면 빼요'; setTimeout(function () { if (bt.isConnected) { bt.classList.remove('again'); bt.textContent = '모두 빼기'; } }, 3000); return; }
+          if (!bt.classList.contains('again')) { bt.classList.add('again'); bt.textContent = '한 번 더 누르면 뺍니다'; setTimeout(function () { if (bt.isConnected) { bt.classList.remove('again'); bt.textContent = '모두 빼기'; } }, 3000); return; }
           DB.put({ key: vDoc.key, name: vDoc.name, items: items.filter(function (x) { return x.status; }), sent: (v && v.sent) || [] }).then(renderViewerStrip);
         }
         else if (a === 'cancel' && renderViewerStrip.onResume) { renderViewerStrip.onResume(function () { askCancel(); }); }

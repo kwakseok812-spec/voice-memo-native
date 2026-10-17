@@ -1445,7 +1445,7 @@
     var h = '<div class="dvf-head"><div class="dvs-title">✏️ 고치기</div><button class="mk-help" type="button" data-fact="help">? 사용법</button></div>' +
       '<div class="dvs-note">' + esc(t.name) + '</div>' +
       '<button class="dvf-choice main" type="button" data-fact="markup"><span class="ic">📍</span><span><span class="t1">표시해서 요청하기</span>' +
-        '<span class="t2" style="display:block">고칠 곳에 동그라미 치고 메모만 남기면, PC가 사본을 고쳐 채팅으로 보내 드려요</span></span></button>' +
+        '<span class="t2" style="display:block">고칠 곳에 동그라미 치고 메모만 남기면, PC가 사본을 고쳐 채팅으로 보내 드립니다</span></span></button>' +
       (pcOk ? '<button class="dvf-choice" type="button" data-fact="pc"><span class="ic">🖥️</span><span><span class="t1">PC 화면으로 직접 고치기</span>' +
         '<span class="t2" style="display:block">PC의 ' + esc(EDITABLE[ext]) + '로 열고 원격 제어로 직접 고쳐요</span></span></button>' : '') +
       '<button class="dvs-close" type="button" data-fact="close">닫기</button>';
