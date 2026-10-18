@@ -2674,6 +2674,7 @@
   APP_VERSION = 'v9.19';        // v9.19(O-0557): 케이 패션쇼 — 꾸미기 「옷」 탭의 옷장 머리줄 [▶ 패션쇼]를 누르면 케이가 옷장의 옷을(옷장과 같은 목록 · 순서 · 묶음 이름) 한 벌에 8초씩 갈아입으며 걸어 나와 → 한 바퀴 → 포즈. 옷이 바뀔 때 플래시처럼 번쩍 · 진행 막대 · 아래 단추 줄([이전] [멈춤] [이 옷 입기] [다음])로만 조작 · 마지막엔 지금 입은 옷으로 돌아와 [다시 보기] [닫기]. 보기만 해서는 옷이 바뀌지 않고 「이 옷 입기」만 옷장 칸을 누를 때와 같은 함수로 갈아입는다. 패션쇼 영상이 아직 없는 옷은 인사 영상 → 서 있는 그림으로 대신 · 움직임 줄이기면 그림으로. 패션쇼 영상은 서버 묶음(show 칸)에서 쇼를 열 때만 받는다(다음 옷 미리 받기) · 스위치 KFS_UI · versionCode 63
   APP_VERSION = 'v9.20';        // v9.20: 못 보낸 말풍선 [다시 보내기] · 쓰던 채팅 글 임시 보관 · 회의록 [복사] · 패션쇼 / 수정 요청 / 밀어서 답장 결함 수리
   APP_VERSION = 'v9.21';        // v9.21: 영수증 스캔 — ＋ 창 「영수증 등록」으로 영수증을 찍으면 케이가 읽어 카드로 보여 주고, [등록]을 누르면 운영비 앱·연구비 앱에 넣습니다(스위치 SCAN_HUB)
+  APP_VERSION = 'v9.22';        // v9.22(O-0574): 공유함을 열면 가장 최신(맨 아래) 메시지가 보이게 — 열 때 몇 번 다시 맞추고, 새 자료가 와도 위로 읽는 중이면 보던 자리를 지킴
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -5897,15 +5898,51 @@
     return false;
   }
   function lockerScroll() { try { if (lockerLog) lockerLog.scrollTop = lockerLog.scrollHeight; window.scrollTo(0, document.body.scrollHeight); } catch (e) {} }
+  /* ===== O-0574 공유함 열림 위치 — 열 때 맨 아래(최신)로 =====
+   * 원인: lockerScroll()이 renderLocker 직후 '한 번, 즉시'만 실행됐다. 말풍선은 content-visibility:auto 라
+   *   화면 밖 높이가 추정값(52px)이고 첨부 칩·긴 글은 뒤늦게 커져서, 그 시점의 scrollHeight 가 실제보다 작아 중간에 멈췄다.
+   * ▷ 열 때: rAF×2·80·300·800ms 재보정(채팅 chatScrollBottom 방식), 열고 약 3초(LOCKER_OPEN_MS)가 지나면 끝.
+   *   교수님이 손으로 스크롤을 시작하면(터치·휠·키) 즉시 멈춘다.
+   * ▷ 열린 채 다시 그릴 때: 그리기 직전에 맨 아래 근처(120px 이내)였을 때만 맨 아래로, 위로 읽는 중이면 보던 위치 유지.
+   * ▷ 내가 방금 올린 글/파일(sendLockerMsg 직후)은 무조건 맨 아래. */
+  var LOCKER_OPEN_MS = 3000, LOCKER_NEAR_PX = 120;
+  var lockerScrollSeq = 0, lockerUserTouchAt = 0, lockerOpenedAt = 0;
+  function markLockerUserScroll() { lockerUserTouchAt = Date.now(); }
+  ['touchstart', 'wheel', 'keydown'].forEach(function (ev) {
+    window.addEventListener(ev, function () { if (isOpen(lockerView)) markLockerUserScroll(); }, { passive: true, capture: true });
+  });
+  function lockerNearBottom() {
+    try {
+      if (lockerLog && lockerLog.scrollHeight > lockerLog.clientHeight + 1 && getComputedStyle(lockerLog).overflowY !== 'visible')
+        return lockerLog.scrollHeight - lockerLog.scrollTop - lockerLog.clientHeight <= LOCKER_NEAR_PX;
+      var de = document.documentElement;
+      return de.scrollHeight - (window.pageYOffset || de.scrollTop || 0) - window.innerHeight <= LOCKER_NEAR_PX;
+    } catch (e) { return true; }
+  }
+  function lockerScrollSettle() {
+    var token = ++lockerScrollSeq, started = Date.now();
+    function go() {
+      if (token !== lockerScrollSeq || lockerUserTouchAt > started || !isOpen(lockerView)) return;
+      if (Date.now() - started > LOCKER_OPEN_MS) return;
+      lockerScroll();
+    }
+    requestAnimationFrame(function () { requestAnimationFrame(go); });
+    [80, 300, 800].forEach(function (t) { setTimeout(go, t); });
+  }
   function lockerUid(m) { if (!m.uid) m.uid = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); return m.uid; }
 
-  function renderLocker() {
+  function renderLocker(forceBottom) {
     if (!lockerLog) return;
     if (!lockerMsgs.length) {
       lockerLog.innerHTML = '<div class="chatintro"><div class="chatintro-ic"><svg><use href="#i-copy"/></svg></div>' +
         '<b>PC↔폰 공유함</b><p>여기에 올린 글·파일은 <b>케이가 보지 않고</b> 폰과 PC에서 함께 보입니다.<br>한쪽에서 올리면 다른 쪽에도 뜹니다.</p></div>';
       return;
     }
+    // O-0574: 다시 그리기 직전 위치를 잰다(그린 뒤엔 높이가 바뀌어 잴 수 없음)
+    var opening = !lockerUserTouchAt && (Date.now() - lockerOpenedAt <= LOCKER_OPEN_MS);   // 열린 직후·손 안 댄 동안
+    var stick = forceBottom === true || opening || lockerNearBottom();
+    var keepY = 0, keepTop = 0;
+    try { keepY = window.pageYOffset || 0; keepTop = lockerLog.scrollTop; } catch (e) {}
     lockerLog.innerHTML = lockerMsgs.map(function (m) {
       var inner = m.text ? chatText(m.text) : '';
       if (m.up && m.uploading) inner += (inner ? '<br>' : '') + '<span class="lk-prog" style="opacity:.75">' + esc(lockerProgText(m)) + '</span>';
@@ -5915,7 +5952,9 @@
       return '<div class="bubble me" data-uid="' + lockerUid(m) + '">' + inner +
         '<button type="button" class="bmenu" aria-label="메뉴(복사·삭제)">⋯</button></div>';
     }).join('');
-    lockerScroll();
+    // O-0574: 열기 직후·내가 올린 직후·맨 아래 근처였을 때만 맨 아래(재보정 포함). 위로 읽는 중이면 보던 위치 복원.
+    if (stick) { lockerScroll(); lockerScrollSettle(); }
+    else { try { lockerLog.scrollTop = keepTop; window.scrollTo(0, keepY); } catch (e) {} }
   }
   function renderLockerPending() {
     var strip = $('lockerPendingStrip'); if (!strip) return;
@@ -5932,7 +5971,8 @@
 
   function openLocker() {
     openScreen(lockerView);
-    renderLocker(); renderLockerPending();
+    lockerOpenedAt = Date.now(); lockerUserTouchAt = 0;   // O-0574: 열기 직후 약 3초는 맨 아래로 재보정
+    renderLocker(); renderLockerPending(); lockerScrollSettle();
     loadLockerSync(); startLockerSync();
     // 공유함은 연동 암호가 있어야 다른 기기(PC↔폰)의 파일을 받아온다. 암호가 없으면
     // 조용히 '안 보이는' 상태가 되므로, 없을 땐 매번 암호 입력을 안내한다(v3.9).
@@ -5969,7 +6009,7 @@
     var item = { id: id, text: text, ts: Date.now(), files: disp.length ? disp : null, up: !!files.length, uploading: !!files.length };
     lockerUid(item);
     lockerMsgs.push(item); saveLockerMsgs();
-    lockerInput.value = ''; autoGrowLocker(); lockerPendingFiles = []; renderLockerPending(); renderLocker();
+    lockerInput.value = ''; autoGrowLocker(); lockerPendingFiles = []; renderLockerPending(); renderLocker(true);   // O-0574: 내가 올린 직후는 맨 아래
     var memo = { id: id, token: tok, text: text };
     OfficeBridge.sendLocker(memo, files, function (sent, total, index, count) {
       item.progress = { sent: sent, total: total, index: index, count: count };   // 화면용(저장 안 함)
