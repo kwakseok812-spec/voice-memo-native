@@ -1445,10 +1445,12 @@
       '앱 ' + (d.app === 'research' ? '연구비' : d.app === 'opex' ? '운영비' : ''),
       '항목 ' + (d.app === 'research' ? d.rcat + (d.rcat === '연구활동비' ? ' > ' + d.rsub : '') : d.ocat), '설명 ' + (d.desc || '')].join('\n');
   }
+  // 썸네일: PC 가 summary_json.scan.thumb_b64(JPEG 긴 변 240px · 품질 60 의 base64 글)로 준 것만 그린다. 없으면 한 줄 안내.
   function scanThumbHtml(e, sc) {
-    var u = scanThumbs[e.id] || '';
-    if (!u && sc.thumb_url && /^(https:\/\/|\/)/.test(String(sc.thumb_url))) u = String(sc.thumb_url);
-    return '<div class="scan-thumb">' + (u ? '<img src="' + esc(u) + '" alt="영수증 사진">' : '<span class="scan-nothumb">사진을<br>불러오지<br>못했습니다</span>') + '</div>';
+    var b = sc.thumb_b64;
+    if (typeof b === 'string' && b.length > 20 && b.length < 400000 && /^[A-Za-z0-9+\/]+={0,2}$/.test(b))
+      return '<div class="scan-thumb"><img src="data:image/jpeg;base64,' + b + '" alt="영수증 사진"></div>';
+    return '<div class="scan-thumb"><span class="scan-nothumb">사진은 PC에<br>보관되어<br>있습니다</span></div>';
   }
   function scanChips(items, cur, attr) {
     return items.map(function (it) {
@@ -1474,7 +1476,7 @@
     var body = '', foot = '';
     var cardLine = (sc.card_last4 && /^\d{4}$/.test(String(sc.card_last4))) ? '<span class="chip scan-cardchip">카드 ···· ' + esc(sc.card_last4) + '</span>' : '';
     if (st === 'registered') {
-      var where = (sc.registered_app || d.app) === 'research' ? '연구비 앱' : '운영비 앱';
+      var where = d.app === 'research' ? '연구비 앱' : '운영비 앱';
       body = '<div class="scan-done"><svg><use href="#i-check"/></svg><b>' + where + '에 ' + (amt ? scanWon(amt) + '원을' : '내용을') + ' 넣었습니다</b></div>' +
         '<div class="scan-sub">' + esc(sc.date || d.date || '') + ' · ' + esc(sc.merchant || d.merchant || '') + '</div>';
     } else if (st === 'registering') {
@@ -2385,7 +2387,6 @@
     };
     if (scan) {
       memo.scan = { type: 'receipt', v: 1 };
-      try { scanThumbs[memo.id] = URL.createObjectURL(files[0]); } catch (e) {}   // 보낸 직후 카드의 사진 — 이 기기 메모리에만(저장 안 함)
     }
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
     renderHistory();
@@ -2429,7 +2430,7 @@
    *   글 쓰는 중(폰 네이티브 입력 바)의 ＋ 는 예전처럼 곧장 파일 고르기(native-input.js) — 이 창은 웹 입력줄 ＋ 에서만.
    *   뒤로가기로 닫힘(goBack 의 .shin-sheet 처리). 보내기 뒤에는 홈 「진행 중인 메모」에서 상태가 보인다. */
   var photoAsCard = false, filePanelFromChat = false;
-  var photoAsScan = false, pendingScan = false, scanThumbs = {};
+  var photoAsScan = false, pendingScan = false;
   function setScanPanel(on, extra) {
     pendingScan = !!(SCAN_HUB === 'on' && on && pendingFiles.length);
     var fp = $('filePanel'); if (fp) fp.classList.toggle('scan-mode', pendingScan);
