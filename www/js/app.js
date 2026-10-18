@@ -1584,10 +1584,22 @@
       if (scanLockWhy(sc, d) || scanUi[e.id]) return;                      // 잠금 · 중복 누름
       var a = scanAmt(d.amount);
       if (d.app === 'research') {
-        openSheet('연구비 앱에 넣을까요?', d.rcat + (d.rcat === '연구활동비' ? '·' + d.rsub : '') + '에 ' + scanWon(a) + '원을 넣습니다. 앱에서 지울 수 없습니다.',
+        openSheet('연구비 앱에 넣겠습니까?', d.rcat + (d.rcat === '연구활동비' ? '·' + d.rsub : '') + '에 ' + scanWon(a) + '원을 넣습니다. 앱에서 지울 수 없습니다.',
           '넣기', function () { scanRegister(e, d); }, null, null, { positive: true, cancelLabel: '취소' });
       } else scanRegister(e, d);
     });
+  }
+  // 말풍선에 보일 글: 「#스캔 …」 기계 글은 짧은 안내로 바꾼다. 이 기기에서 보낸 것(m.disp)뿐 아니라 서버에서 되받은 말풍선(다른 기기·재동기화)도 글 모양으로 알아본다.
+  var SCAN_LINE_RE = /^\s*#스캔\s+[0-9a-f]{8}\s+(등록|안함|취소)(?:\s+(\{[\s\S]*\}))?\s*$/;
+  function scanBubbleText(m) {
+    if (SCAN_HUB !== 'on') return m.text;
+    if (m.disp) return m.disp;
+    var x = SCAN_LINE_RE.exec(String(m.text));
+    if (!x) return m.text;
+    if (x[1] !== '등록') return '🧾 영수증 등록 안 함';
+    var o = null; try { o = JSON.parse(x[2] || ''); } catch (er) {}
+    var a = o && scanAmt(o.amount);
+    return '🧾 영수증 등록 요청' + (a ? ' · ' + scanWon(a) + '원' : '') + (o && o.app ? ' · ' + (o.app === 'research' ? '연구비' : '운영비') : '');
   }
   function scanSkipLine(id) { return '#스캔 ' + String(id).replace(/-/g, '').slice(0, 8) + ' 안함'; }
   // [등록 안 함]: PC 에 「#스캔 <id8> 안함」 한 줄을 보낸 뒤 카드를 「등록하지 않았습니다」로 닫는다. 못 보냈으면 카드를 그대로 두고 다시 누르게 한다.
@@ -3786,7 +3798,8 @@
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
       if (q && !msgMatches(m, q)) return '';                // 검색 중이면 일치하는 말풍선만
-      var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText((SCAN_HUB === 'on' && m.disp) ? m.disp : m.text))
+      var shownTx = m.text ? scanBubbleText(m) : '';
+      var inner = m.text ? (q ? chatTextHL(shownTx, q) : chatText(shownTx))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
       if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">오퍼스 5.5</span><br>' + inner;   // v5.8
       // O-0111: 긴 글은 접어 보이게 — 본문 글만 .bfold 로 감싼다(첨부·[듣기]는 접지 않고 항상 보임).
