@@ -1334,6 +1334,7 @@
       resultArea.innerHTML = renderScanCard(e);
       wireScanCard(e);
       scanDelGuard(scanState(e) === 'registering');
+      scanSyncOnOpen(e);
       docBtns.innerHTML = '';
       setExportMsg('', '');
       openScreen(resultWrap);
@@ -1457,7 +1458,7 @@
   function scanState(e) {
     var sc = e.summary_json.scan, st = String(sc.state || 'read');
     if (e.scan_skip) return 'skipped';
-    if (st === 'read' && scanUi[e.id]) return 'registering';
+    if (st === 'read' && scanWaiting(e)) return 'registering';
     if (st === 'confirmed') return 'registering';
     return st;
   }
@@ -1580,11 +1581,14 @@
     if (!getSyncPass()) { showSyncGate(true, '영수증을 등록하려면 PC 연동 암호를 입력해 주세요.'); return; }
     var payload = scanBuildPayload(d), line = scanChatLine(e.id, payload);
     scanUi[e.id] = 'sending';                                         // 누르는 즉시 잠금(두 번 눌러도 한 번만 보냄)
+    var base = String(sc.last_error || '');
+    var cur = HistoryModule.get(e.id);                                // 옛 거절 사유는 화면에서 지운다(이번 요청의 결과와 섞이지 않게)
+    if (cur && cur.summary_json && cur.summary_json.scan && cur.summary_json.scan.last_error) { delete cur.summary_json.scan.last_error; HistoryModule.update(e.id, { summary_json: cur.summary_json }); }
     scanRedraw(e.id);
     unlockKaiAudio();
     scanNextDisp = '🧾 영수증 등록 요청 · ' + scanWon(payload.amount) + '원 · ' + (payload.app === 'research' ? '연구비' : '운영비');
     sendPlainChat(line, false).then(function (ok) {
-      if (ok) { scanUi[e.id] = 'registering'; scanRedraw(e.id); startScanPoll(e.id); }
+      if (ok) { scanUi[e.id] = 'registering'; HistoryModule.update(e.id, { scan_sent: { at: Date.now(), base: base } }); scanRedraw(e.id); startScanPoll(e.id); }
       else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); scanRedraw(e.id); }
     });
   }
@@ -1627,8 +1631,26 @@
     } else if (JSON.stringify(sj.scan) !== JSON.stringify(before)) { HistoryModule.update(id, { summary_json: sj }); res = 'changed'; }
     return res;
   }
-  function scanWaiting(en) { return !!scanUi[en.id]; }
-  function scanErrIsNew(en, le) { return true; }
+  // 「등록 요청을 보냈음」 표시: 이력(HistoryModule)의 scan_sent = { at, base } — 앱을 닫았다 열어도 남는다. base = 보낼 때 PC 가 남겨 둔 옛 사유(새 거절과 구별).
+  var SCAN_WAIT_MS = 15 * 60 * 1000;
+  function scanSentActive(en) { return !!(en && en.scan_sent && en.scan_sent.at && Date.now() - en.scan_sent.at < SCAN_WAIT_MS); }
+  function scanWaiting(en) { return !!scanUi[en.id] || scanSentActive(en); }
+  function scanErrIsNew(en, le) {
+    var s = en.scan_sent;
+    if (!s) return true;
+    return le !== (s.base || '') || Date.now() - s.at > 30000;       // 같은 사유가 30초 넘게 그대로면 PC 가 다시 거절한 것으로 본다
+  }
+  // 확인 카드를 열 때 서버의 최신 상태를 한 번 읽는다(앱을 닫은 사이 PC 가 처리했을 수 있다). 실패해도 화면은 그대로 둔다.
+  function scanSyncOnOpen(e) {
+    var id = e.id;
+    OfficeBridge.poll(id, e.token).then(function (res) {
+      var r = scanApply(id, res && res.summary_json);
+      if (r === 'final' || r === 'reject') { if (scanPollers[id]) { clearInterval(scanPollers[id]); delete scanPollers[id]; } }
+      if (r) scanRedraw(id);
+      var n = HistoryModule.get(id);
+      if (n && isScanSj(n.summary_json) && scanState(n) === 'registering') startScanPoll(id);
+    }).catch(function () {});
+  }
   function startScanPoll(id) {
     if (scanPollers[id]) return;
     var started = Date.now();
