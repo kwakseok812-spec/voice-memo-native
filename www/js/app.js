@@ -93,6 +93,7 @@
    *   DOC_SCAN_CHAT 도 'on' 이면 채팅 ＋ 창에 「📄 문서 스캔」 줄이 생긴다. 'off' 면 모든 입구가 닫혀 지금 동작과 같다. */
   var DOC_SCAN = 'on';
   var DOC_SCAN_CHAT = 'on';
+  var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
   /* v9.10(O-0449) 끊긴 녹음 찾기 — 스위치.
@@ -877,7 +878,7 @@
   function openScanForMeeting() {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);   // ADDENDUM 5: 막지 않고 안내만
-    DocScan.open({ purpose: 'meeting', onDone: attachScanned, isRecording: function () { return !!isRecording; } });   // O-0576
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'meeting', onDone: attachScanned, isRecording: function () { return !!isRecording; } });   // O-0576
   }
   [$('matScanPrep'), $('matScan')].forEach(function (b) {
     if (!b) return;
@@ -1236,7 +1237,7 @@
   function openScanForDraft(id) {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);
-    DocScan.open({ purpose: 'meeting', isRecording: function () { return !!isRecording; }, onDone: function (file, info) { attachScannedToDraft(id, file, info); } });   // O-0576
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'meeting', isRecording: function () { return !!isRecording; }, onDone: function (file, info) { attachScannedToDraft(id, file, info); } });   // O-0576
   }
   // 임시저장 재개 시 자료 첨부 전용 입력(모달에서 [회의자료 붙이기])
   var draftAttachId = null;
@@ -2733,6 +2734,7 @@
   APP_VERSION = 'v9.21';        // v9.21: 영수증 스캔 — ＋ 창 「영수증 등록」으로 영수증을 찍으면 케이가 읽어 카드로 보여 주고, [등록]을 누르면 운영비 앱·연구비 앱에 넣습니다(스위치 SCAN_HUB)
   APP_VERSION = 'v9.22';        // v9.22(O-0574): 공유함을 열면 가장 최신(맨 아래) 메시지가 보이게 — 열 때 몇 번 다시 맞추고, 새 자료가 와도 위로 읽는 중이면 보던 자리를 지킴
   APP_VERSION = 'v9.23';        // v9.23(O-0576): 문서 스캔 — 종이 문서를 한 장씩 찍어 PDF 한 파일로(최대 100쪽). 회의자료로 붙이기 · 임시저장 창 · 채팅 ＋ 창(공유함·문서 뷰어·폰 저장)
+  APP_VERSION = 'v9.24';        // v9.24(O-0583·O-0586): 문서 스캔 자동 보정 — 테두리 자동 찾기·반듯하게 펴기·그림자 제거/흑백/회색 보정·손가락으로 모서리 조정·펼친 책 두 쪽 나누기·PDF 화질 선택, 브리핑 [듣기]가 안내 소리만 나던 문제
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -2912,6 +2914,8 @@
       var my = ++kaiPlaySeq, st = null;
       if (lid) st = listenSet(lid, 'play', false);
       else listenAudioEnd();                    // 말풍선 없는 소리(음성 대화 조각)가 대신 들어온다 → 앞 말풍선 단추는 되돌린다
+      /* O-0586: 브리핑 [듣기] — 소리 자리(k_voice.mp3)는 안내 소리를 먼저 올렸다가 본 소리로 바꿔 끼우므로 주소가 같다. 폰이 안내 소리를 받아 두면 계속 그 소리가 나므로 눌 때마다 새로 받게 한다. */
+      if (/\/k_voice\.mp3\?/.test(url)) url += '&cb=' + Date.now();
       a.src = url; a.currentTime = 0;
       var p = a.play();
       if (p && p.then) p.catch(function () {
@@ -6129,7 +6133,7 @@
   function openScanGeneral() {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);   // O-0576: 다른 두 곳과 같은 규칙
-    DocScan.open({ purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
       share: function (file) {        // 기본: 공유함
         toast('공유함에 올리는 중입니다…', 2500);
         docScanShare(file).then(function () {

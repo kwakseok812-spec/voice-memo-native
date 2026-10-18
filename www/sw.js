@@ -37,7 +37,7 @@ self.addEventListener('fetch', function (event) {
   try {
     var url = new URL(req.url);
     isSameOrigin = (url.origin === self.location.origin);
-    isShellFile = /\.(?:html|css|js)$/i.test(url.pathname);
+    isShellFile = /\.(?:html|css|js)$/i.test(url.pathname) && !/\/vendor\//i.test(url.pathname);   // O-0586: 13MB opencv.js 는 일반 HTTP 캐시
   } catch (e) {}
 
   // 앱 셸 = 문서 네비게이션 이동 + 같은 출처의 .html/.css/.js → 항상 최신(no-store)
