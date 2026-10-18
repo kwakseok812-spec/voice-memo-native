@@ -412,8 +412,14 @@
   function _insertBatchRow(memo, filesMeta) {
     return _insertRow({
       id: memo.id, title: memo.title, status: 'pending', kind: memo.kind, note: memo.note || null,
-      client_token: memo.token, meta: { app: 'voice-memo-test', files: filesMeta }
+      client_token: memo.token, meta: _batchMeta(memo, filesMeta)
     });
+  }
+  // (스캔 허브) 영수증 전송이면 meta.scan 한 칸만 더한다 — memo.scan 이 없으면 예전 meta 와 똑같다
+  function _batchMeta(memo, filesMeta) {
+    var m = { app: 'voice-memo-test', files: filesMeta };
+    if (memo && memo.scan && memo.scan.type === 'receipt') m.scan = { type: 'receipt', v: 1 };
+    return m;
   }
   // memo.kind photo/video, files: [File] (1장 이상). onProgress(done,total) 선택.
   function sendBatch(memo, files, onProgress) {
@@ -435,7 +441,7 @@
     }
     return step().catch(function (e) {
       return idbPut({ id: memo.id, kind: memo.kind, note: memo.note, title: memo.title,
-                      token: memo.token, files: files, date: memo.date, time: memo.time })
+                      token: memo.token, files: files, date: memo.date, time: memo.time, scan: memo.scan || undefined })
         .then(function () { throw e; });
     });
   }
@@ -1554,7 +1560,7 @@
         //   자동복구/[다시 보내기]가 markResendable 로 sent 를 내리면 그때 이 흐름을 다시 탄다.
         if (rec.sent) { return next(); }
         var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
-                     materials: rec.materials || [], matSlots: rec.matSlots, date: rec.date, time: rec.time };   // 회의자료도 함께 재시도
+                     materials: rec.materials || [], matSlots: rec.matSlots, date: rec.date, time: rec.time, scan: rec.scan };   // 회의자료도 함께 재시도
         var p;
         if (rec.files) {
           p = sendBatch(memo, rec.files);              // 사진/영상 묶음 재업로드
