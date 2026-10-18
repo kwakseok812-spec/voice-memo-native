@@ -1376,8 +1376,8 @@
    * PC 가 남긴 summary_json.scan(v1)을 카드로 보여 주고, [등록]을 누르면 채팅에 한 줄 「#스캔 <행id 앞 8자리> 등록 <JSON>」을 보낸다.
    * 앱은 등록을 직접 하지 않는다(PC 가 검증해 한 번만 등록). 돈 값은 이 카드에서 고친 칸만 JSON 에 담는다(허용 키 7개).
    * 상태: read → (confirmed) → registering → registered / failed / unknown / skipped / duplicate. 앱은 poll 로 바뀐 상태를 보여 준다. */
-  var SCAN_OPEX = { from: '2026-08-01', to: '2027-02-28' };       // 운영비 앱 예산 기간(밖이면 경고 · 등록 잠금)
-  var SCAN_RSCH = { from: '2026-05-01', to: '2027-02-28' };       // 연구비 과제 기간(밖이면 경고만)
+  var SCAN_OPEX = { from: '2026-08-01', to: '2027-02-28' };       // 운영비 앱 예산 기간
+  var SCAN_RSCH = { from: '2026-05-01', to: '2027-02-28' };       // 연구비 과제 기간
   var SCAN_RCAT = ['연구재료비', '연구활동비', '연구수당'];
   var SCAN_RSUB = ['회의비', '국외 출장 여비', '수용비 및 수수료', '기술정보활동비(전문가활용비)', '조사연구비', '연구홍보비', '국내 출장 여비 및 시내교통비', '연구환경유지비', '야근(특근) 식대'];
   var SCAN_TERMINAL = { registered: 1, failed: 1, unknown: 1, skipped: 1, duplicate: 1 };
@@ -1395,10 +1395,13 @@
     var sc = e.summary_json.scan, sg = sc.suggest || {}, tc = Array.isArray(sc.target_candidates) ? sc.target_candidates : [];
     var app = '';
     for (var i = 0; i < tc.length; i++) { if (tc[i] && (tc[i].app === 'opex' || tc[i].app === 'research')) { app = tc[i].app; break; } }
-    var merchant = sc.merchant ? String(sc.merchant) : '';
+    var pm = scanPrefill(sc.merchant), pd = scanPrefill(sg.description || sc.merchant);
+    var pnote = '';
+    if (pm.why === 'instr' || pd.why === 'instr' || pm.why === 'long' || pd.why === 'long') pnote = '읽은 글자를 사용처·설명에 쓸 수 없어 비워 두었습니다 · 직접 입력해 주십시오';
+    else if (pm.why === 'chars' || pd.why === 'chars') pnote = '읽은 글자 중 쓸 수 없는 글자는 뺐습니다 · 내용을 확인해 주십시오';
     d = scanDraft[id] = {
-      app: app, date: sc.date || '', amount: (sc.amount != null && sc.amount !== '') ? String(sc.amount) : '', merchant: merchant,
-      desc: String(sg.description || merchant || ''),
+      app: app, date: sc.date || '', amount: (sc.amount != null && sc.amount !== '') ? String(sc.amount) : '', merchant: pm.v, pnote: pnote,
+      desc: pd.v,
       ocat: String(sg.category || '식비'),
       rcat: SCAN_RCAT.indexOf(sg.category) !== -1 ? sg.category : '연구활동비',
       rsub: SCAN_RSUB.indexOf(sg.sub_item) !== -1 ? sg.sub_item : SCAN_RSUB[0]
@@ -1406,13 +1409,30 @@
     return d;
   }
   // PC(scan_register.py)와 같은 규칙으로 앱에서 먼저 막는다: 사용처·설명 = 한글·영문·숫자·공백·-·&() 만 30자 이내(따옴표 등 불가) · 12자리 이상 연속 숫자 불가 · 운영비 항목 = 한글 1~10자.
-  var SCAN_FIELD_OK = /^[0-9A-Za-z가-힣 \-·&()]+$/, SCAN_FIELD_MAX = 30, SCAN_OCAT_OK = /^[가-힣]{1,10}$/;
+  // 값은 scan_contract.md §1 과 같다(시험이 대조). 지시문 낱말이 들어 있거나 20자를 넘으면 쓸 수 없다.
+  var SCAN_FIELD_OK = /^[0-9A-Za-z가-힣 \-·&()]+$/, SCAN_FIELD_MAX = 20, SCAN_OCAT_OK = /^[가-힣]{1,10}$/;
+  var SCAN_INSTR = '호출,도구,call,tool,ignore,무시,지시,instruction,system,프롬프트,prompt,명령,재시도,두번,twice,delete,삭제,export,내보내,실행'.split(',');
+  function scanInstrLike(v) {
+    var k = String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+    for (var i = 0; i < SCAN_INSTR.length; i++) if (k.indexOf(SCAN_INSTR[i]) !== -1) return true;
+    return false;
+  }
   function scanFieldBad(v, label) {
     var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
     if (!s) return '';
+    if (scanInstrLike(s)) return label + '에 지시문처럼 보이는 말은 쓸 수 없습니다';
     if (!SCAN_FIELD_OK.test(s) || /\d{12,}/.test(s)) return label + '에는 한글·영문·숫자·공백과 - · & ( ) 만 쓸 수 있습니다';
     if (s.length > SCAN_FIELD_MAX) return label + '은(는) ' + SCAN_FIELD_MAX + '자 이내로 적어 주십시오';
     return '';
+  }
+  // PC 가 준 사용처·설명 미리 채움 값 정리. 지시문 낱말·20자 초과·12자리 이상 숫자 → 비움(why instr/long). 허용 글자 밖 글자만 문제 → 허용 글자만 남김(why chars).
+  function scanPrefill(raw) {
+    var s = String(raw == null ? '' : raw).normalize('NFKC').replace(/\s+/g, ' ').trim();
+    if (!s) return { v: '', why: '' };
+    if (scanInstrLike(s) || /\d{12,}/.test(s)) return { v: '', why: 'instr' };
+    var t = s.replace(/[^0-9A-Za-z가-힣 \-·&()]/g, '').replace(/\s+/g, ' ').trim();
+    if (t.length > SCAN_FIELD_MAX) return { v: '', why: 'long' };
+    return { v: t, why: t !== s ? 'chars' : '' };
   }
   // 이 카드로 등록할 수 있는지 · 막힌 까닭(없으면 '')
   function scanLockWhy(sc, d) {
@@ -1528,7 +1548,8 @@
       }
       var desc = scanFld('desc', '설명', d.desc, 'type="text" maxlength="60"', !String(d.desc).trim() || !!scanFieldBad(d.desc, '설명'));
       body = '<div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine + fields + '</div></div>' +
-        '<div class="scan-form">' + appChips + item + desc + '</div><div class="scan-hint">사용처·설명은 한글·영문·숫자·공백과 - · & ( ) 만, 30자까지 쓸 수 있습니다.</div>' + warns +
+        '<div class="scan-form">' + appChips + item + desc + '</div><div class="scan-hint">사용처·설명은 한글·영문·숫자·공백과 - · & ( ) 만, ' + SCAN_FIELD_MAX + '자까지 쓸 수 있습니다.</div>' +
+        (d.pnote ? '<div class="scan-warn scan-pnote">⚠ ' + esc(d.pnote) + '</div>' : '') + warns +
         '<div class="scan-sumline" id="scanSum">' + esc(scanSummaryLine(d)) + '</div>' +
         '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>';
       foot = '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
@@ -1584,7 +1605,8 @@
       if (scanLockWhy(sc, d) || scanUi[e.id]) return;                      // 잠금 · 중복 누름
       var a = scanAmt(d.amount);
       if (d.app === 'research') {
-        openSheet('연구비 앱에 넣겠습니까?', d.rcat + (d.rcat === '연구활동비' ? '·' + d.rsub : '') + '에 ' + scanWon(a) + '원을 넣습니다. 앱에서 지울 수 없습니다.',
+        openSheet('연구비 앱에 넣겠습니까?', d.rcat + (d.rcat === '연구활동비' ? '·' + d.rsub : '') + '에 ' + scanWon(a) + '원을 넣습니다. 앱에서 지울 수 없습니다.' +
+          ' 설명: ' + String(d.desc).replace(/\s+/g, ' ').trim() + ' · 사용처: ' + String(d.merchant).replace(/\s+/g, ' ').trim(),
           '넣기', function () { scanRegister(e, d); }, null, null, { positive: true, cancelLabel: '취소' });
       } else scanRegister(e, d);
     });
@@ -1643,7 +1665,7 @@
       ['날짜가 없거나', '날짜를 확인해 주십시오.'],
       ['금액이 없거나', '금액을 확인해 주십시오.'],
       ['예산 기간', '날짜가 예산 기간 밖입니다. 날짜를 확인해 주십시오.'],
-      ['쓸 수 없는 글자', '사용처나 설명에 쓸 수 없는 글자가 있습니다. 한글·영문·숫자만 남겨 주십시오.'],
+      ['쓸 수 없는 글자', '사용처나 설명에 쓸 수 없는 글자나 말이 있습니다. 한글·영문·숫자·공백과 - · & ( ) 만, ' + SCAN_FIELD_MAX + '자 이내로 적어 주십시오.'],
       ['운영비 항목 글자', '항목은 한글 10자 이내로 적어 주십시오.'],
       ['세부항목', '세부 항목을 다시 골라 주십시오.'],
       ['연구비 대분류', '연구비 분류를 다시 골라 주십시오.'],
