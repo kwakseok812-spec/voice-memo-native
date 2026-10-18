@@ -1513,11 +1513,11 @@
         '<div class="scan-sub">' + esc(sc.date || d.date || '') + ' · ' + esc(sc.merchant || d.merchant || '') + '</div>';
     } else if (st === 'registering') {
       body = '<div class="scan-wait"><span class="scan-spin" aria-hidden="true"></span><b>등록 중입니다…</b></div><div class="scan-sub">잠시 기다려 주십시오. 결과가 바뀌면 이 화면에 나옵니다. 한 번만 넣으므로 다시 누르지 않으셔도 됩니다.</div>';
-    } else if (st === 'failed' && sc.amount == null && sc.date == null) {
+    } else if (st === 'failed' && sc.fail_code) {                   // PC 가 읽기 실패에 남기는 fail_code 가 있을 때만 「읽지 못했습니다」
       body = '<div class="scan-bad"><b>읽지 못했습니다 · 다시 찍기</b></div><div class="scan-sub">사진이 흐리거나 영수증이 아닐 수 있습니다. 밝은 곳에서 평평하게 놓고 다시 찍어 주십시오.</div>';
       foot = '<div class="scan-btns"><button type="button" class="btn primary" data-scan-retake>다시 찍기</button></div>';
     } else if (st === 'failed') {
-      body = '<div class="scan-bad"><b>넣지 못했습니다</b></div><div class="scan-sub">입력 내용을 복사해 앱에 직접 넣어 주십시오.</div>';
+      body = '<div class="scan-bad"><b>넣지 못했습니다</b></div><div class="scan-sub">입력 내용을 복사해 앱에 직접 넣어 주십시오.</div>';   // retry_ok 는 PC 내부 상태 — 앱은 다시 등록 단추를 만들지 않는다
       foot = '<div class="scan-btns"><button type="button" class="btn primary" data-scan-copy>입력 내용 복사</button></div>';
     } else if (st === 'unknown') {
       body = '<div class="scan-bad warn"><b>확인이 필요합니다</b></div><div class="scan-sub">등록이 되었는지 알 수 없습니다. 같은 내용을 또 넣지 않도록, 해당 앱에서 직접 확인해 주십시오.</div>';
