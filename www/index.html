@@ -231,6 +231,11 @@
         <span class="tx"><b>회의자료 붙이기</b><small>PPT·문서·PDF·한글 등, 여러 개 가능</small></span>
         <svg class="chev"><use href="#i-chev-r"/></svg>
       </button>
+      <button id="matScanPrep" class="card action wide" type="button" style="display:none"><!-- O-0576 문서 스캔: app.js DOC_SCAN 이 켜져 있을 때만 보인다 -->
+        <span class="ic blue"><svg><use href="#i-image"/></svg></span>
+        <span class="tx"><b>📷 스캔해서 붙이기</b><small>종이 자료를 찍어 PDF 한 파일로</small></span>
+        <svg class="chev"><use href="#i-chev-r"/></svg>
+      </button>
       <div id="matListPrep"></div>
     </section>
 
@@ -268,6 +273,11 @@
       <button id="matAttach" class="card action wide" type="button">
         <span class="ic blue"><svg><use href="#i-plus"/></svg></span>
         <span class="tx"><b>회의자료 붙이기</b><small>붙이면 자료 내용까지 반영해 정리합니다</small></span>
+        <svg class="chev"><use href="#i-chev-r"/></svg>
+      </button>
+      <button id="matScan" class="card action wide" type="button" style="display:none"><!-- O-0576 문서 스캔: app.js DOC_SCAN 이 켜져 있을 때만 보인다 -->
+        <span class="ic blue"><svg><use href="#i-image"/></svg></span>
+        <span class="tx"><b>📷 스캔해서 붙이기</b><small>종이 자료를 찍어 PDF 한 파일로</small></span>
         <svg class="chev"><use href="#i-chev-r"/></svg>
       </button>
       <div id="matList"></div>
@@ -822,6 +832,7 @@
 <script src="js/k-motion.js"></script><!-- v9.6 누른 뒤의 움직임 효과(지금은 옷 갈아입기 반짝임 하나) -->
 <script src="js/k-wardrobe-follow.js"></script><!-- O-0471 꾸미기: 옷 목록을 내려도 지금 모습이 따라온다 -->
 <script src="js/vad.js"></script><!-- O-0177 ③ 말 끝 판정(소음 적응) -->
+<script src="js/doc-scan.js"></script><!-- O-0576 문서 스캔(여러 장 → PDF) — app.js 보다 먼저 -->
 <script src="js/app.js"></script>
 <script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.

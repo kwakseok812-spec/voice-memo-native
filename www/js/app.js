@@ -89,6 +89,10 @@
   /* 스캔 허브 1단계(영수증) — 스위치. 'on' 이면 ＋ 창에 「영수증 등록」 줄 · 결과 화면에 확인 카드가 생긴다.
    *   'off' 면 이 기능의 모든 입구가 닫혀 v9.20 과 똑같이 움직인다(SCAN_HUB 를 보는 곳은 전부 이 값 하나만 본다). 앞쪽에 둔 까닭: 첫 채팅 그림보다 먼저 값이 있어야 해서. */
   var SCAN_HUB = 'on';
+  /* O-0576 문서 스캔(여러 장 → PDF) — 스위치. 'on' 이면 회의자료 준비·완료 화면 · 임시저장 창에 [📷 스캔해서 붙이기]가,
+   *   DOC_SCAN_CHAT 도 'on' 이면 채팅 ＋ 창에 「📄 문서 스캔」 줄이 생긴다. 'off' 면 모든 입구가 닫혀 지금 동작과 같다. */
+  var DOC_SCAN = 'on';
+  var DOC_SCAN_CHAT = 'on';
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
   /* v9.10(O-0449) 끊긴 녹음 찾기 — 스위치.
@@ -810,6 +814,7 @@
       var mb = Math.round((f.size || 0) / 1024 / 1024 * 10) / 10;
       return '<div class="filemeta"' + (compact ? ' style="padding:8px 12px;font-size:14px;border-radius:12px"' : '') + '><svg><use href="#i-doc"/></svg>' +
         '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name || '자료') + '</span>' +
+        (f.dscPages ? '<span style="flex:none;white-space:nowrap">· ' + (+f.dscPages) + '쪽</span>' : '') +   // O-0576 스캔 PDF 는 쪽수도
         (mb ? '<span style="flex:none;white-space:nowrap">· ' + mb + 'MB</span>' : '') +
         ' <button type="button" class="matdel" data-i="' + i + '" aria-label="빼기" ' +
         'style="flex:none;margin-left:auto;background:none;border:0;color:inherit;font-size:16px;cursor:pointer">✕</button></div>';
@@ -855,6 +860,28 @@
     renderMatList();
     if (add.dup && !arr.removed) toast('이미 붙인 자료 ' + add.dup + '개는 다시 붙이지 않았습니다.');
     this.value = '';
+  });
+  /* O-0576 문서 스캔 → 회의자료(준비·완료 화면 공용). matInput 변경 처리와 같은 규칙(keepSendable → newMaterials → concat → renderMatList)을
+   *   쓰되 그 이벤트 코드는 건드리지 않는다. info = DocScan onDone 의 두 번째 값({pages,bytes,ms}). */
+  function docScanOn() { return DOC_SCAN === 'on' && !!window.DocScan; }
+  function attachScanned(file, info) {
+    if (!file) return;
+    if (info && info.pages) file.dscPages = info.pages;   // 목록 줄에 쪽수를 보이기 위한 표시(저장·전송에는 쓰지 않음)
+    var arr = keepSendable([file]);
+    var add = newMaterials(pendingMaterials, arr);
+    pendingMaterials = pendingMaterials.concat(add);
+    renderMatList();
+    if (add.length) toast('회의자료로 붙였습니다' + (info && info.pages ? ' (' + info.pages + '쪽)' : ''));
+    else if (add.dup && !arr.removed) toast('이미 붙인 자료입니다. 다시 붙이지 않았습니다.');
+  }
+  function openScanForMeeting() {
+    if (!docScanOn()) return;
+    if (isRecording) toast('녹음은 계속됩니다.', 2500);   // ADDENDUM 5: 막지 않고 안내만
+    DocScan.open({ purpose: 'meeting', onDone: attachScanned, isRecording: function () { return !!isRecording; } });   // O-0576
+  }
+  [$('matScanPrep'), $('matScan')].forEach(function (b) {
+    if (!b) return;
+    if (docScanOn()) { b.style.display = ''; b.addEventListener('click', openScanForMeeting); }   // 스위치가 꺼졌거나 doc-scan.js 가 없으면 숨김 그대로
   });
 
   // 홈에서 녹음 오브 → 바로 녹음하지 않고 「준비 화면」으로(자료 첨부 + [녹음 시작])
@@ -1098,6 +1125,7 @@
         '<button id="mDraftAttach" class="btn ghost"><svg><use href="#i-plus"/></svg>회의자료 붙이기</button>' +
         '<button id="mDraftSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내기</button>' +
         '</div>' +
+        (docScanOn() ? '<div class="btnrow"><button id="mDraftScan" class="btn ghost" type="button">📷 스캔해서 붙이기</button></div>' : '') +   // O-0576
         '<div class="btnrow"><button id="mDraftDel" class="btn ghost sm danger"><svg><use href="#i-trash"/></svg>삭제</button></div>';
       modalBody.innerHTML = html;
       // 제목: 치는 동안엔 목록·창 머리글만(가벼움), 녹음이 든 draft 쓰기는 flushTitle 에서 한 번. 비우면 기본 이름.
@@ -1128,6 +1156,7 @@
         setTimeout(function () { try { ti.scrollIntoView({ block: 'center' }); } catch (x) {} }, 300);
       });
       $('mDraftAttach').addEventListener('click', function () { flushTitle(); draftAttachId = e.id; if ($('draftMatInput')) $('draftMatInput').click(); });
+      if ($('mDraftScan')) $('mDraftScan').addEventListener('click', function () { flushTitle(); openScanForDraft(e.id); });   // O-0576
       $('mDraftSend').addEventListener('click', function () {
         closeModal(); resumeSendDraft(e.id);          // closeModal 이 제목을 draft 에 쓰고(draftQ), 보내기는 그 뒤에 읽는다
       });
@@ -1182,6 +1211,32 @@
         });
       });
     });
+  }
+  /* O-0576 임시저장 창 [📷 스캔해서 붙이기] — draftMatInput 변경 처리의 복제본(그 코드는 그대로 둔다).
+   *   editDraft 한 줄로 rec.materials·matSlots 를 고치고, 고정 저장 번호(matNext)를 같은 규칙으로 쓴다. */
+  function attachScannedToDraft(id, file, info) {
+    if (!id || !file) return;
+    var fs = keepSendable([file]);
+    if (!fs.length) return;
+    var added = 0;
+    editDraft(id, function (rec) {
+      var add = newMaterials(rec.materials, fs);
+      added = add.length;
+      var slots = draftSlots(rec);
+      add.forEach(function () { slots.push(rec.matNext++); });
+      rec.materials = (rec.materials || []).concat(add);
+    }).then(function (rec) {
+      if (rec === null) { toast('임시 저장을 찾지 못했습니다.'); return; }
+      if (!rec) { toast('자료 붙이기에 실패했습니다.'); return; }
+      renderDraftMats(rec);
+      if (!added) { toast('이미 붙인 자료입니다. 다시 붙이지 않았습니다.'); return; }
+      toast('회의자료로 붙였습니다' + (info && info.pages ? ' (' + info.pages + '쪽)' : '') + ' [PC로 보내기]를 누르면 함께 정리됩니다.');
+    });
+  }
+  function openScanForDraft(id) {
+    if (!docScanOn()) return;
+    if (isRecording) toast('녹음은 계속됩니다.', 2500);
+    DocScan.open({ purpose: 'meeting', isRecording: function () { return !!isRecording; }, onDone: function (file, info) { attachScannedToDraft(id, file, info); } });   // O-0576
   }
   // 임시저장 재개 시 자료 첨부 전용 입력(모달에서 [회의자료 붙이기])
   var draftAttachId = null;
@@ -2503,6 +2558,7 @@
       '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>PC가 명함 대장에 넣거나 사진을 정리(명함 스위치로 고름)</small></span></button>' +
       (SCAN_HUB === 'on' ? '<button type="button" class="sheet-btn" data-atm="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증 등록</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
+      (docScanOn() && DOC_SCAN_CHAT === 'on' ? '<button type="button" class="sheet-btn" data-atm="docscan"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>📄 문서 스캔 (여러 장 → PDF)</b><small>종이 문서를 찍어 PDF 한 파일로 — 공유함에 넣기</small></span></button>' : '') +   // O-0576
       '<button type="button" class="sheet-btn atm-close" data-atm="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('[data-atm]') : null;
@@ -2513,6 +2569,7 @@
       else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
       else if (k === 'receipt' && SCAN_HUB === 'on') { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }
       else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
+      else if (k === 'docscan' && docScanOn() && DOC_SCAN_CHAT === 'on') openScanGeneral();   // O-0576
     });
     document.body.appendChild(sh);
     sh.style.display = 'flex';
@@ -2675,6 +2732,7 @@
   APP_VERSION = 'v9.20';        // v9.20: 못 보낸 말풍선 [다시 보내기] · 쓰던 채팅 글 임시 보관 · 회의록 [복사] · 패션쇼 / 수정 요청 / 밀어서 답장 결함 수리
   APP_VERSION = 'v9.21';        // v9.21: 영수증 스캔 — ＋ 창 「영수증 등록」으로 영수증을 찍으면 케이가 읽어 카드로 보여 주고, [등록]을 누르면 운영비 앱·연구비 앱에 넣습니다(스위치 SCAN_HUB)
   APP_VERSION = 'v9.22';        // v9.22(O-0574): 공유함을 열면 가장 최신(맨 아래) 메시지가 보이게 — 열 때 몇 번 다시 맞추고, 새 자료가 와도 위로 읽는 중이면 보던 자리를 지킴
+  APP_VERSION = 'v9.23';        // v9.23(O-0576): 문서 스캔 — 종이 문서를 한 장씩 찍어 PDF 한 파일로(최대 100쪽). 회의자료로 붙이기 · 임시저장 창 · 채팅 ＋ 창(공유함·문서 뷰어·폰 저장)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -6031,6 +6089,79 @@
       toast('올리지 못했습니다 — ' + why + (restored ? ' (파일은 보낼 칸에 다시 넣어 두었습니다)' : ''));
     });
   }
+  /* O-0576 문서 스캔 PDF 를 공유함에 넣기 — sendLockerMsg 의 복제본(파일 하나, 입력창·대기줄 글은 건드리지 않음).
+   *   복제를 택한 까닭: sendLockerMsg 는 입력칸 글·대기줄·재전송 규칙과 한 덩어리라, 안전하게 뽑아내려면 그 함수를 고쳐야 한다(기존 동작 유지 우선).
+   *   같은 부분: OfficeBridge.sendLocker 호출 · 말풍선(lockerMsgs) 모양 · 진행률(updateLockerProgress) · 실패 시 파일을 보낼 칸으로 되돌림(lockerRestored).
+   *   반환: Promise(공개 주소가 채워진 파일 정보 배열). 실패하면 reject(안내 토스트는 이 함수가 띄움). */
+  var docScanUrls = {};            // matKey(file) → 공유함 공개 주소(폰 저장에 쓴다)
+  var docScanUp = {};              // 같은 파일을 두 번 올리지 않게 진행 중 Promise
+  function docScanShare(file) {
+    var k = matKey(file);
+    if (docScanUp[k]) return docScanUp[k];
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var disp = [{ name: file.name || '문서.pdf', size: file.size || 0, mime: file.type || 'application/pdf', kind: fileKindOf(file.type, file.name) }];
+    var item = { id: id, text: '', ts: Date.now(), files: disp, up: true, uploading: true };
+    lockerUid(item);
+    lockerMsgs.push(item); saveLockerMsgs(); renderLocker(true);
+    var pr = OfficeBridge.sendLocker({ id: id, token: tok, text: '' }, [file], function (sent, total, index, count) {
+      item.progress = { sent: sent, total: total, index: index, count: count };
+      updateLockerProgress(item);
+    }).then(function (savedFiles) {
+      delete docScanUp[k];
+      item.uploading = false; delete item.progress; delete item._lastRender;
+      if (savedFiles && savedFiles.length) { item.files = savedFiles; if (savedFiles[0].url) docScanUrls[k] = savedFiles[0].url; }
+      saveLockerMsgs(); if (isOpen(lockerView)) renderLocker();
+      return savedFiles;
+    }).catch(function (e) {
+      delete docScanUp[k];
+      var why = (e && (e.friendly || e.message)) || String(e || '알 수 없는 오류'), restored = false;
+      item.uploading = false; item.error = true; item.errorMsg = why; delete item.progress; delete item._lastRender;
+      if (e && e.reason !== 'too_big' && e.reason !== 'unreadable') {
+        lockerPendingFiles = [file].concat(lockerPendingFiles); lockerRestored[item.uid] = true; restored = true; renderLockerPending();
+      }
+      saveLockerMsgs(); if (isOpen(lockerView)) renderLocker();
+      toast('올리지 못했습니다 — ' + why + (restored ? ' (파일은 공유함의 보낼 칸에 다시 넣어 두었습니다)' : ''), 5000);
+      throw e;
+    });
+    docScanUp[k] = pr;
+    return pr;
+  }
+  function openScanGeneral() {
+    if (!docScanOn()) return;
+    if (isRecording) toast('녹음은 계속됩니다.', 2500);   // O-0576: 다른 두 곳과 같은 규칙
+    DocScan.open({ purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
+      share: function (file) {        // 기본: 공유함
+        toast('공유함에 올리는 중입니다…', 2500);
+        docScanShare(file).then(function () {
+          if (window.DocScan && DocScan.isOpen()) DocScan.back();    // 결과 화면을 닫아야 아래 창이 보인다(스캔 화면이 더 위에 있음)
+          toast('공유함에 넣었습니다.');
+          openSheet('공유함에 넣었습니다', '앱과 PC 어디서든 공유함에서 열 수 있습니다.', '공유함 열기', function () { openLocker(); }, null, null, { positive: true, icon: 'i-check', cancelLabel: '닫기' });
+        }).catch(function () {});     // 실패 안내는 docScanShare 가 했다
+      },
+      view: function (file) {         // 문서 뷰어(SmartDocs.handleLocalFile — 공유로 받은 문서 열기와 같은 길)
+        if (!(window.SmartDocs && SmartDocs.handleLocalFile)) { toast('문서 뷰어를 준비하지 못했습니다.'); return; }
+        if (window.DocScan && DocScan.isOpen()) DocScan.back();
+        openScreen(docsView);
+        try { SmartDocs.handleLocalFile(file); } catch (e) { toast('문서를 여는 데 실패했습니다.'); }
+      },
+      save: function (file) {         // 폰에 저장 — 폰은 blob 다운로드가 파일을 못 만든다(v6.7). 네이티브 FileDownload 는 http 주소만 받으므로 공유함 공개 주소로 받는다
+        var fname = safeDownloadName(file.name || '문서.pdf');
+        if (!isNativeApp()) {         // PC판: 예전 방식(blob + <a download>)
+          var bu = URL.createObjectURL(file), a = document.createElement('a');
+          a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+          setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
+          toast('다운로드 폴더에 저장했습니다.'); return;
+        }
+        var url = docScanUrls[matKey(file)];
+        if (url) { nativeDownload(url, fname); return; }
+        toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
+        docScanShare(file).then(function (saved) {
+          var u = saved && saved[0] && saved[0].url;
+          if (u) nativeDownload(u, fname); else toast('저장 주소를 받지 못했습니다. 공유함에서 [⬇ 다운로드]를 눌러 주세요.', 5000);
+        }).catch(function () {});
+      }
+    } });
+  }
   function loadLockerSync() {
     if (lockerLoading || !(window.OfficeBridge && OfficeBridge.listLocker)) return;
     var pass = getSyncPass(); if (!pass) return;
@@ -7963,6 +8094,7 @@
     toast('녹음은 계속됩니다. 위\u2060쪽 띠로 돌아옵니다.', 3500);
   }
   function goBack() {
+    if (window.DocScan && DocScan.isOpen()) { DocScan.back(); return true; }   // O-0576: 문서 스캔 화면이 열려 있으면 그 화면만 닫는다(가장 위 덮개)
     if (fsSheet) { closeFontSheet(); return true; }                        // v8.4: 글자 크기 창
     if (window.TodayCard && TodayCard.closeWeather && TodayCard.closeWeather()) return true;   // v8.5(O-0169): 오늘 날씨 창
     if (document.querySelector('.shin-sheet')) { try { document.querySelector('.shin-sheet').remove(); } catch (e) {} return true; }   // v8.4: 공유 고르기 창(문서·녹음)
@@ -9077,6 +9209,7 @@
   }
   // v9.8(O-0442): 켜질 때 한 번 — 네이티브에서 계속 돌던 회의 녹음이 있으면 되찾는다
   setTimeout(function () { try { recRecover(); } catch (e) {} }, 400);
+  if (docScanOn()) setTimeout(function () { try { DocScan.sweep(); } catch (e) {} }, 4000);   // O-0576: 3일 지난 임시 쪽 정리
   function kbSkipIntro() { try { if (window.KIntro && KIntro.active && KIntro.active()) KIntro.skip(); } catch (e) {} }
   function runShortcut(name) {
     kbSkipIntro();
