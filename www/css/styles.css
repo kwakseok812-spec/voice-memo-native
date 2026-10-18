@@ -2045,3 +2045,42 @@ html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
 /* ===== 스캔 허브(영수증) — 사진 보내기 창 ===== */
 #filePanel.scan-mode .scanhide{display:none}
 .scan-note{margin:8px 2px 4px;font-size:14px;line-height:1.5;color:var(--muted,#9aa4b2)}
+
+/* ===== 스캔 허브(영수증) — 확인 카드 ===== */
+.scan-card{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:100%;overflow-wrap:anywhere}
+.scan-card *{min-width:0}
+.scan-top{display:flex;flex-direction:column;gap:12px}
+.scan-thumb{width:100%;max-height:220px;border-radius:16px;overflow:hidden;background:var(--ic-bg);border:1px solid var(--glass-b);display:grid;place-items:center;min-height:96px}
+.scan-thumb img{display:block;width:100%;max-height:220px;object-fit:contain}
+.scan-nothumb{padding:14px;text-align:center;font-size:13px;line-height:1.5;color:var(--dim)}
+.scan-fields{display:flex;flex-direction:column;gap:10px;min-width:0}
+.scan-cardchip{align-self:flex-start}
+.scan-f{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:700;color:var(--muted)}
+.scan-f input{width:100%;max-width:100%;box-sizing:border-box;height:46px;border-radius:12px;border:1.5px solid var(--glass-b2,var(--glass-b));background:var(--glass);color:var(--text);padding:0 12px;font-size:17px;font-family:inherit}
+.scan-f.empty input{border-color:var(--warn);background:var(--warn-bg)}
+.scan-form{display:flex;flex-direction:column;gap:12px}
+.scan-row{display:flex;flex-direction:column;gap:6px}
+.scan-lab{font-size:14px;font-weight:700;color:var(--muted)}
+.scan-chips{display:flex;flex-wrap:wrap;gap:8px}
+.scan-chip{height:42px;max-width:100%;white-space:normal;text-align:left;line-height:1.25;padding:6px 14px}
+.scan-warn,.scan-lockwhy{font-size:14px;line-height:1.5;color:var(--warn-t);background:var(--warn-bg);border-radius:12px;padding:8px 12px}
+.scan-sumline{font-size:17px;font-weight:800;line-height:1.45;color:var(--text)}
+.scan-btns{display:flex;gap:10px}
+.scan-btns .btn{flex:1 1 0;height:54px;font-size:17px;border-radius:16px;min-width:0}
+.scan-btns .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.scan-done{display:flex;align-items:center;gap:10px;font-size:18px}
+.scan-done svg{width:26px;height:26px;color:var(--cyan);flex:none}
+.scan-wait{display:flex;align-items:center;gap:12px;font-size:18px}
+.scan-spin{width:20px;height:20px;border-radius:50%;border:3px solid var(--glass-b2,var(--glass-b));border-top-color:var(--cyan);animation:scanspin 1s linear infinite;flex:none}
+.scan-bad{font-size:18px;color:var(--text)}
+.scan-bad.warn b{color:var(--warn-t)}
+.scan-sub{font-size:15px;line-height:1.55;color:var(--muted)}
+.scan-in{animation:scanin .2s ease-out}
+@keyframes scanin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes scanspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.scan-in{animation:none}.scan-spin{animation:none}}
+@media (min-width:600px){
+  .scan-top{flex-direction:row;align-items:flex-start}
+  .scan-top .scan-thumb{flex:0 0 38%;width:38%}
+  .scan-top .scan-fields{flex:1 1 0}
+}

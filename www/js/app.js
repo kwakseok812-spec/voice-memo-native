@@ -86,6 +86,9 @@
    *   true  : 녹음 화면 [뒤로](묻지 않고 나감) · 위쪽 띠(화면을 밀어 내림) · 홈 단추가 돌아가는 길 · 녹음 상태 되찾기 · 확인 창들.
    *   false : 2026-09-21 방식 그대로(「뒤로」 창 + 아래 알약). 화면 규칙(styles.css)은 html.rec-v2 일 때만 먹는다.
    *   네이티브(자바) 쪽은 덧붙이기만 해서 어느 쪽이든 맞물린다. */
+  /* 스캔 허브 1단계(영수증) — 스위치. 'on' 이면 ＋ 창에 「영수증 등록」 줄 · 결과 화면에 확인 카드가 생긴다.
+   *   'off' 면 이 기능의 모든 입구가 닫혀 v9.20 과 똑같이 움직인다(SCAN_HUB 를 보는 곳은 전부 이 값 하나만 본다). 앞쪽에 둔 까닭: 첫 채팅 그림보다 먼저 값이 있어야 해서. */
+  var SCAN_HUB = 'on';
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
   /* v9.10(O-0449) 끊긴 녹음 찾기 — 스위치.
@@ -1325,6 +1328,15 @@
     var e = HistoryModule.get(id); if (!e) return;
     viewId = id;
     var tl = $('transcriptLabel');
+    if (e.kind === 'photo' && isScanSj(e.summary_json)) {            // 스캔 허브: 영수증 확인 카드(스위치 off 면 이 줄을 건너뛴다 = v9.20 그대로)
+      if (tl) tl.style.display = 'none'; transcriptView.style.display = 'none';
+      resultArea.innerHTML = renderScanCard(e);
+      wireScanCard(e);
+      docBtns.innerHTML = '';
+      setExportMsg('', '');
+      openScreen(resultWrap);
+      return;
+    }
     if (e.kind === 'photo' || e.kind === 'video') {
       var result = (e.summary_json && e.summary_json.result) || '(결과 없음)';
       var detail = e.content_md || '';
@@ -1355,6 +1367,238 @@
     }
     setExportMsg('', '');
     openScreen(resultWrap);
+  }
+
+  /* ===================== 스캔 허브: 영수증 확인 카드 =====================
+   * PC 가 남긴 summary_json.scan(v1)을 카드로 보여 주고, [등록]을 누르면 채팅에 한 줄 「#스캔 <행id 앞 8자리> 등록 <JSON>」을 보낸다.
+   * 앱은 등록을 직접 하지 않는다(PC 가 검증해 한 번만 등록). 돈 값은 이 카드에서 고친 칸만 JSON 에 담는다(허용 키 7개).
+   * 상태: read → (confirmed) → registering → registered / failed / unknown / skipped / duplicate. 앱은 poll 로 바뀐 상태를 보여 준다. */
+  var SCAN_OPEX = { from: '2026-08-01', to: '2027-02-28' };       // 운영비 앱 예산 기간(밖이면 경고 · 등록 잠금)
+  var SCAN_RSCH = { from: '2026-05-01', to: '2027-02-28' };       // 연구비 과제 기간(밖이면 경고만)
+  var SCAN_RCAT = ['연구재료비', '연구활동비', '연구수당'];
+  var SCAN_RSUB = ['회의비', '국외 출장 여비', '수용비 및 수수료', '기술정보활동비(전문가활용비)', '조사연구비', '연구홍보비', '국내 출장 여비 및 시내교통비', '연구환경유지비', '야근(특근) 식대'];
+  var SCAN_TERMINAL = { registered: 1, failed: 1, unknown: 1, skipped: 1, duplicate: 1 };
+  var scanDraft = {}, scanUi = {}, scanPollers = {}, scanNextDisp = null;
+  function isScanSj(sj) { return SCAN_HUB === 'on' && !!sj && typeof sj === 'object' && !!sj.scan && typeof sj.scan === 'object' && sj.scan.type === 'receipt'; }
+  function scanWon(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function scanDateOk(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return false;
+    var d = new Date(s + 'T00:00:00Z'); return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }
+  function scanAmt(v) { var s = String(v == null ? '' : v).replace(/[,\s원]/g, ''); return /^\d{1,9}$/.test(s) && +s > 0 ? +s : 0; }
+  function scanDraftFor(e) {
+    var id = e.id, d = scanDraft[id];
+    if (d) return d;
+    var sc = e.summary_json.scan, sg = sc.suggest || {}, tc = Array.isArray(sc.target_candidates) ? sc.target_candidates : [];
+    var app = '';
+    for (var i = 0; i < tc.length; i++) { if (tc[i] && (tc[i].app === 'opex' || tc[i].app === 'research')) { app = tc[i].app; break; } }
+    var merchant = sc.merchant ? String(sc.merchant) : '';
+    d = scanDraft[id] = {
+      app: app, date: sc.date || '', amount: (sc.amount != null && sc.amount !== '') ? String(sc.amount) : '', merchant: merchant,
+      desc: String(sg.description || merchant || ''),
+      ocat: String(sg.category || '식비'),
+      rcat: SCAN_RCAT.indexOf(sg.category) !== -1 ? sg.category : '연구활동비',
+      rsub: SCAN_RSUB.indexOf(sg.sub_item) !== -1 ? sg.sub_item : SCAN_RSUB[0]
+    };
+    return d;
+  }
+  // 이 카드로 등록할 수 있는지 · 막힌 까닭(없으면 '')
+  function scanLockWhy(sc, d) {
+    if (!d.app) return '어느 앱에 넣을지 골라 주십시오';
+    if (!scanDateOk(d.date)) return '날짜를 입력해 주십시오';
+    if (!scanAmt(d.amount)) return '금액을 입력해 주십시오';
+    if (!String(d.merchant || '').trim()) return '사용처를 입력해 주십시오';
+    if (!String(d.desc || '').trim()) return '설명을 입력해 주십시오';
+    if (d.app === 'opex') {
+      if (!String(d.ocat || '').trim()) return '항목을 입력해 주십시오';
+      if (d.date < SCAN_OPEX.from || d.date > SCAN_OPEX.to) return '운영비 예산 기간(' + SCAN_OPEX.from + ' ~ ' + SCAN_OPEX.to + ') 밖의 날짜입니다';
+    } else {
+      if (SCAN_RCAT.indexOf(d.rcat) === -1) return '항목을 골라 주십시오';
+      if (d.rcat === '연구활동비' && SCAN_RSUB.indexOf(d.rsub) === -1) return '세부 항목을 골라 주십시오';
+    }
+    if (sc.dup_of) return '이미 처리한 영수증과 같습니다';
+    return '';
+  }
+  function scanSummaryLine(d) {
+    var a = scanAmt(d.amount), w = a ? scanWon(a) + '원' : '금액';
+    if (d.app === 'opex') return '운영비 앱에 ' + w + '을 넣습니다';
+    if (d.app === 'research') return '연구비 앱 · ' + d.rcat + (d.rcat === '연구활동비' ? ' > ' + d.rsub : '') + '에 ' + w + '을 넣습니다';
+    return '넣을 앱을 골라 주십시오';
+  }
+  // 채팅 한 줄(허용 키만 · 값은 형식 검사를 거친 것만). sub_item 은 연구비 · 연구활동비일 때만.
+  function scanBuildPayload(d) {
+    var o = { app: d.app };
+    if (d.app === 'opex') o.category = String(d.ocat).trim();
+    else { o.category = d.rcat; if (d.rcat === '연구활동비') o.sub_item = d.rsub; }
+    o.description = String(d.desc).replace(/\s+/g, ' ').trim().slice(0, 100);
+    o.date = d.date; o.amount = scanAmt(d.amount);
+    o.merchant = String(d.merchant).replace(/\s+/g, ' ').trim().slice(0, 60);
+    return o;
+  }
+  function scanChatLine(id, payload) { return '#스캔 ' + String(id).replace(/-/g, '').slice(0, 8) + ' 등록 ' + JSON.stringify(payload); }
+  function scanCopyText(sc, d) {
+    var a = scanAmt(d.amount) || sc.amount, dt = scanDateOk(d.date) ? d.date : (sc.date || '');
+    return ['날짜 ' + dt, '금액 ' + (a ? scanWon(a) + '원' : ''), '사용처 ' + (d.merchant || sc.merchant || ''),
+      '앱 ' + (d.app === 'research' ? '연구비' : d.app === 'opex' ? '운영비' : ''),
+      '항목 ' + (d.app === 'research' ? d.rcat + (d.rcat === '연구활동비' ? ' > ' + d.rsub : '') : d.ocat), '설명 ' + (d.desc || '')].join('\n');
+  }
+  function scanThumbHtml(e, sc) {
+    var u = scanThumbs[e.id] || '';
+    if (!u && sc.thumb_url && /^(https:\/\/|\/)/.test(String(sc.thumb_url))) u = String(sc.thumb_url);
+    return '<div class="scan-thumb">' + (u ? '<img src="' + esc(u) + '" alt="영수증 사진">' : '<span class="scan-nothumb">사진을<br>불러오지<br>못했습니다</span>') + '</div>';
+  }
+  function scanChips(items, cur, attr) {
+    return items.map(function (it) {
+      return '<button type="button" class="chip hchip scan-chip' + (cur === it.v ? ' on' : '') + '" ' + attr + '="' + esc(it.v) + '" aria-pressed="' + (cur === it.v) + '">' + esc(it.t) + '</button>';
+    }).join('');
+  }
+  function scanState(e) {
+    var sc = e.summary_json.scan, st = String(sc.state || 'read');
+    if (e.scan_skip) return 'skipped';
+    if (st === 'read' && scanUi[e.id]) return 'registering';
+    if (st === 'confirmed') return 'registering';
+    return st;
+  }
+  function scanFld(key, label, val, extra, bad) {
+    return '<label class="scan-f' + (bad ? ' empty' : '') + '" data-f="' + key + '"><span>' + label + '</span><input data-sf="' + key + '" ' + extra + ' value="' + esc(val) + '"></label>';
+  }
+  function renderScanCard(e) {
+    var sc = e.summary_json.scan, st = scanState(e), d = scanDraftFor(e), calm = replyCalm();
+    var amt = scanAmt(d.amount) || scanAmt(sc.amount);
+    var head = rtitle(e, '영수증');
+    var thumb = scanThumbHtml(e, sc);
+    var cls = 'card rcard scan-card' + (calm ? '' : ' scan-in');
+    var body = '', foot = '';
+    var cardLine = (sc.card_last4 && /^\d{4}$/.test(String(sc.card_last4))) ? '<span class="chip scan-cardchip">카드 ···· ' + esc(sc.card_last4) + '</span>' : '';
+    if (st === 'registered') {
+      var where = (sc.registered_app || d.app) === 'research' ? '연구비 앱' : '운영비 앱';
+      body = '<div class="scan-done"><svg><use href="#i-check"/></svg><b>' + where + '에 ' + (amt ? scanWon(amt) + '원을' : '내용을') + ' 넣었습니다</b></div>' +
+        '<div class="scan-sub">' + esc(sc.date || d.date || '') + ' · ' + esc(sc.merchant || d.merchant || '') + '</div>';
+    } else if (st === 'registering') {
+      body = '<div class="scan-wait"><span class="scan-spin" aria-hidden="true"></span><b>등록 중입니다…</b></div><div class="scan-sub">잠시 기다려 주십시오. 결과가 바뀌면 이 화면에 나옵니다. 한 번만 넣으므로 다시 누르지 않으셔도 됩니다.</div>';
+    } else if (st === 'failed' && sc.amount == null && sc.date == null) {
+      body = '<div class="scan-bad"><b>읽지 못했습니다 · 다시 찍기</b></div><div class="scan-sub">사진이 흐리거나 영수증이 아닐 수 있습니다. 밝은 곳에서 평평하게 놓고 다시 찍어 주십시오.</div>';
+      foot = '<div class="scan-btns"><button type="button" class="btn primary" data-scan-retake>다시 찍기</button></div>';
+    } else if (st === 'failed') {
+      body = '<div class="scan-bad"><b>넣지 못했습니다</b></div><div class="scan-sub">입력 내용을 복사해 앱에 직접 넣어 주십시오.</div>';
+      foot = '<div class="scan-btns"><button type="button" class="btn primary" data-scan-copy>입력 내용 복사</button></div>';
+    } else if (st === 'unknown') {
+      body = '<div class="scan-bad warn"><b>확인이 필요합니다</b></div><div class="scan-sub">등록이 되었는지 알 수 없습니다. 같은 내용을 또 넣지 않도록, 해당 앱에서 직접 확인해 주십시오.</div>';
+    } else if (st === 'duplicate') {
+      body = '<div class="scan-bad warn"><b>이미 같은 내역이 있습니다</b></div><div class="scan-sub">같은 날짜·금액이 앱에 있어 등록하지 않았습니다.</div>';
+    } else if (st === 'skipped') {
+      body = '<div class="scan-sub"><b>등록하지 않기로 했습니다.</b></div>';
+    } else {                                                          // read: 고쳐서 등록할 수 있는 카드
+      var why = scanLockWhy(sc, d), conf = sc.conf || {};
+      var warns = (Array.isArray(sc.warnings) ? sc.warnings : []).map(function (w) { return '<div class="scan-warn">⚠ ' + esc(w) + '</div>'; }).join('');
+      if (sc.dup_of) warns = '<div class="scan-warn">⚠ 이미 처리한 영수증과 같습니다</div>' + warns;
+      var fields =
+        scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date) || conf.date === 'low') +
+        scanFld('amount', '금액(원)', d.amount, 'type="text" inputmode="numeric" autocomplete="off"', !scanAmt(d.amount) || conf.amount === 'low') +
+        scanFld('merchant', '사용처', d.merchant, 'type="text" maxlength="60"', !String(d.merchant).trim() || conf.merchant === 'low');
+      var appChips = '<div class="scan-row"><span class="scan-lab">어느 앱에</span><div class="scan-chips" data-chips="app">' +
+        scanChips([{ v: 'opex', t: '운영비' }, { v: 'research', t: '연구비' }], d.app, 'data-scan-app') + '</div></div>';
+      var item = '';
+      if (d.app === 'opex') {
+        item = scanFld('ocat', '항목', d.ocat, 'type="text" maxlength="30"', !String(d.ocat).trim());
+      } else if (d.app === 'research') {
+        item = '<div class="scan-row"><span class="scan-lab">분류</span><div class="scan-chips" data-chips="rcat">' +
+          scanChips(SCAN_RCAT.map(function (c) { return { v: c, t: c }; }), d.rcat, 'data-scan-rcat') + '</div></div>';
+        if (d.rcat === '연구활동비') item += '<div class="scan-row"><span class="scan-lab">세부 항목</span><div class="scan-chips" data-chips="rsub">' +
+          scanChips(SCAN_RSUB.map(function (c) { return { v: c, t: c }; }), d.rsub, 'data-scan-rsub') + '</div></div>';
+        if (scanDateOk(d.date) && (d.date < SCAN_RSCH.from || d.date > SCAN_RSCH.to)) warns += '<div class="scan-warn">⚠ 과제 기간(' + SCAN_RSCH.from + ' ~ ' + SCAN_RSCH.to + ') 밖의 날짜입니다</div>';
+      }
+      var desc = scanFld('desc', '설명', d.desc, 'type="text" maxlength="100"', !String(d.desc).trim());
+      body = '<div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine + fields + '</div></div>' +
+        '<div class="scan-form">' + appChips + item + desc + '</div>' + warns +
+        '<div class="scan-sumline" id="scanSum">' + esc(scanSummaryLine(d)) + '</div>' +
+        '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>';
+      foot = '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
+        '<button type="button" class="btn primary" id="scanGo" data-scan-go' + (why ? ' disabled' : '') + '><svg><use href="#i-check"/></svg>등록</button></div>';
+      return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '">' + body + foot + '</div>';
+    }
+    return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '"><div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine + '</div></div>' + body + foot + '</div>';
+  }
+  function scanRefresh(e) {                       // 입력 중에는 칸을 다시 그리지 않고 요약·잠금만 갱신(커서 유지)
+    var sc = e.summary_json.scan, d = scanDraftFor(e), why = scanLockWhy(sc, d);
+    var s = $('scanSum'); if (s) s.textContent = scanSummaryLine(d);
+    var w = $('scanWhy'); if (w) { w.textContent = why; w.style.display = why ? '' : 'none'; }
+    var b = $('scanGo'); if (b) b.disabled = !!why;
+    Array.prototype.forEach.call(resultArea.querySelectorAll('.scan-f'), function (el) {
+      var k = el.getAttribute('data-f'), bad = false;
+      if (k === 'date') bad = !scanDateOk(d.date); else if (k === 'amount') bad = !scanAmt(d.amount);
+      else if (k === 'merchant') bad = !String(d.merchant).trim(); else if (k === 'desc') bad = !String(d.desc).trim(); else if (k === 'ocat') bad = !String(d.ocat).trim();
+      el.classList.toggle('empty', bad);
+    });
+  }
+  function scanRedraw(id) {
+    if (viewId !== id || !isOpen(resultWrap)) return;
+    var n = HistoryModule.get(id); if (!n || !isScanSj(n.summary_json)) return;
+    resultArea.innerHTML = renderScanCard(n); wireScanCard(n);
+  }
+  function wireScanCard(e) {
+    var root = resultArea.querySelector('[data-scan-id]'); if (!root) return;
+    var sc = e.summary_json.scan, d = scanDraftFor(e), st = scanState(e);
+    if (st === 'registering') startScanPoll(e.id);
+    Array.prototype.forEach.call(root.querySelectorAll('input[data-sf]'), function (inp) {
+      inp.addEventListener('input', function () { d[inp.getAttribute('data-sf')] = inp.value; scanRefresh(e); });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-scan-app]'), function (b) {
+      b.addEventListener('click', function () { d.app = b.getAttribute('data-scan-app'); scanRedraw(e.id); });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-scan-rcat]'), function (b) {
+      b.addEventListener('click', function () { d.rcat = b.getAttribute('data-scan-rcat'); scanRedraw(e.id); });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-scan-rsub]'), function (b) {
+      b.addEventListener('click', function () { d.rsub = b.getAttribute('data-scan-rsub'); scanRedraw(e.id); });
+    });
+    var skip = root.querySelector('[data-scan-skip]');
+    if (skip) skip.addEventListener('click', function () { HistoryModule.update(e.id, { scan_skip: true }); toast('등록하지 않습니다.'); scanRedraw(e.id); });
+    var cp = root.querySelector('[data-scan-copy]');
+    if (cp) cp.addEventListener('click', function () { copyToClipboard(scanCopyText(sc, d)); });
+    var rt = root.querySelector('[data-scan-retake]');
+    if (rt) rt.addEventListener('click', function () { photoAsScan = true; filePanelFromChat = false; $('photoInput').click(); });
+    var go = root.querySelector('[data-scan-go]');
+    if (go) go.addEventListener('click', function () {
+      if (scanLockWhy(sc, d) || scanUi[e.id]) return;                      // 잠금 · 중복 누름
+      var a = scanAmt(d.amount);
+      if (d.app === 'research') {
+        openSheet('연구비 앱에 넣을까요?', d.rcat + (d.rcat === '연구활동비' ? '·' + d.rsub : '') + '에 ' + scanWon(a) + '원을 넣습니다. 앱에서 지울 수 없습니다.',
+          '넣기', function () { scanRegister(e, d); }, null, null, { positive: true, cancelLabel: '취소' });
+      } else scanRegister(e, d);
+    });
+  }
+  function scanRegister(e, d) {
+    var sc = e.summary_json.scan;
+    if (scanLockWhy(sc, d) || scanUi[e.id]) return;
+    if (!getSyncPass()) { showSyncGate(true, '영수증을 등록하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    var payload = scanBuildPayload(d), line = scanChatLine(e.id, payload);
+    scanUi[e.id] = 'sending';                                         // 누르는 즉시 잠금(두 번 눌러도 한 번만 보냄)
+    scanRedraw(e.id);
+    unlockKaiAudio();
+    scanNextDisp = '🧾 영수증 등록 요청 · ' + scanWon(payload.amount) + '원 · ' + (payload.app === 'research' ? '연구비' : '운영비');
+    sendPlainChat(line, false).then(function (ok) {
+      if (ok) { scanUi[e.id] = 'registering'; scanRedraw(e.id); startScanPoll(e.id); }
+      else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); scanRedraw(e.id); }
+    });
+  }
+  function startScanPoll(id) {
+    if (scanPollers[id]) return;
+    var started = Date.now();
+    scanPollers[id] = setInterval(function () {
+      var en = HistoryModule.get(id);
+      if (!en || Date.now() - started > 15 * 60 * 1000) { clearInterval(scanPollers[id]); delete scanPollers[id]; return; }
+      OfficeBridge.poll(id, en.token).then(function (res) {
+        var sj = res && res.summary_json, st = sj && sj.scan && sj.scan.state;
+        if (!st || st === 'read') return;
+        HistoryModule.update(id, { summary_json: sj });
+        if (SCAN_TERMINAL[st]) {
+          clearInterval(scanPollers[id]); delete scanPollers[id]; delete scanUi[id];
+          toast(st === 'registered' ? '✅ 영수증을 앱에 넣었습니다.' : st === 'failed' ? '영수증을 넣지 못했습니다.' : st === 'duplicate' ? '이미 같은 내역이 있습니다.' : '영수증 등록 확인이 필요합니다.');
+        }
+        scanRedraw(id);
+      }).catch(function () {});
+    }, 4000);
   }
 
   function rtitle(e, fallback) {
@@ -2101,9 +2345,6 @@
    *   글 쓰는 중(폰 네이티브 입력 바)의 ＋ 는 예전처럼 곧장 파일 고르기(native-input.js) — 이 창은 웹 입력줄 ＋ 에서만.
    *   뒤로가기로 닫힘(goBack 의 .shin-sheet 처리). 보내기 뒤에는 홈 「진행 중인 메모」에서 상태가 보인다. */
   var photoAsCard = false, filePanelFromChat = false;
-  /* 스캔 허브 1단계(영수증) — 스위치. 'on' 이면 ＋ 창에 「영수증 등록」 줄 · 결과 화면에 확인 카드가 생긴다.
-   *   'off' 면 이 기능의 모든 입구가 닫혀 v9.20 과 똑같이 움직인다(아래 SCAN_HUB 를 보는 곳은 전부 이 값 하나만 본다). */
-  var SCAN_HUB = 'on';
   var photoAsScan = false, pendingScan = false, scanThumbs = {};
   function setScanPanel(on, extra) {
     pendingScan = !!(SCAN_HUB === 'on' && on && pendingFiles.length);
@@ -2567,7 +2808,7 @@
       //   chatUnseen 이 부풀고 안 읽은 게 0인데도 배지가 계속 「9+」로 남았다. rid 는 삭제 tombstone(rowIdOf)용.
       var slim = chatMsgs.filter(function (m) { return m.role !== 'typing'; }).slice(-120)
         .map(function (m) { return m.role === 'me'
-          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null, rq: m.rq || null, nosrv: !!m.nosrv, srv: !!m.srv }
+          ? { role: 'me', text: m.text, ts: m.ts, id: m.id, token: m.token, answered: !!m.answered, files: m.files || null, up: !!m.up, vin: !!m.vin, uid: m.uid || null, cid: m.cid || null, rid: m.rid || null, remote: !!m.remote, opus: !!m.opus, waitFrom: m.waitFrom || null, via: m.via || null, rq: m.rq || null, nosrv: !!m.nosrv, srv: !!m.srv, disp: m.disp || null }
           : { role: 'k', text: m.text, ts: m.ts, files: m.files || null, bid: m.bid || null, vurl: m.vurl || null, uid: m.uid || null, notice: !!m.notice, cid: m.cid || null, rid: m.rid || null, vtts: !!m.vtts, vplayed: !!m.vplayed, fe: m.fe || null }; });   // v8.3: vtts·vplayed
       localStorage.setItem(CHAT_MSGS_KEY, JSON.stringify(slim));
     } catch (e) {}
@@ -3448,7 +3689,7 @@
     var html = chatMsgs.map(function (m) {
       if (m.role === 'typing') return '';
       if (q && !msgMatches(m, q)) return '';                // 검색 중이면 일치하는 말풍선만
-      var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText(m.text))
+      var inner = m.text ? (q ? chatTextHL(m.text, q) : chatText((SCAN_HUB === 'on' && m.disp) ? m.disp : m.text))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
       if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">오퍼스 5.5</span><br>' + inner;   // v5.8
       // O-0111: 긴 글은 접어 보이게 — 본문 글만 .bfold 로 감싼다(첨부·[듣기]는 접지 않고 항상 보임).
@@ -3668,6 +3909,7 @@
   function sendPlainChat(text, opus, rt) {
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var pm = { role: 'me', text: text, ts: Date.now(), id: id, token: tok, answered: false, opus: opus };
+    if (SCAN_HUB === 'on' && scanNextDisp) { pm.disp = scanNextDisp; scanNextDisp = null; }   // 스캔 등록 줄은 말풍선에 짧은 안내로 보인다(실제로 보내는 글은 그대로)
     if (rt) pm.rq = { id: rt.id, side: rt.side, snip: rt.snip, at: rt.at || 0 };
     chatMsgs.push(pm);
     saveChatMsgs(); renderChat(); updateSendEnabled();
