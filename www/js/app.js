@@ -1494,6 +1494,7 @@
       var why = scanLockWhy(sc, d), conf = sc.conf || {};
       var warns = (Array.isArray(sc.warnings) ? sc.warnings : []).map(function (w) { return '<div class="scan-warn">⚠ ' + esc(w) + '</div>'; }).join('');
       if (sc.dup_of) warns = '<div class="scan-warn">⚠ 이미 처리한 영수증과 같습니다</div>' + warns;
+      if (sc.last_error) warns = '<div class="scan-warn scan-reject">⚠ ' + esc(scanRejectWhy(sc.last_error)) + '</div>' + warns;
       var fields =
         scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date) || conf.date === 'low') +
         scanFld('amount', '금액(원)', d.amount, 'type="text" inputmode="numeric" autocomplete="off"', !scanAmt(d.amount) || conf.amount === 'low') +
@@ -1587,6 +1588,47 @@
       else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); scanRedraw(e.id); }
     });
   }
+  // PC 가 거절(_reject)하면 state 는 read 그대로이고 scan.last_error 에 사유 글만 남는다. 사유는 PC 글을 그대로 쓰지 않고 아래 쉬운 말로 바꿔 보인다.
+  function scanRejectWhy(msg) {
+    var s = String(msg || '');
+    var map = [
+      ['허용되지 않은 항목', '보낸 내용에 처리할 수 없는 항목이 있었습니다. 다시 눌러 주십시오.'],
+      ['가리키는 앱과 다릅니다', '카드가 가리키는 앱과 다른 앱을 고르셨습니다. 어느 앱인지 다시 확인해 주십시오.'],
+      ['대상 앱이 올바르지', '넣을 앱을 다시 골라 주십시오.'],
+      ['날짜가 없거나', '날짜를 확인해 주십시오.'],
+      ['금액이 없거나', '금액을 확인해 주십시오.'],
+      ['예산 기간', '날짜가 예산 기간 밖입니다. 날짜를 확인해 주십시오.'],
+      ['쓸 수 없는 글자', '사용처나 설명에 쓸 수 없는 글자가 있습니다. 한글·영문·숫자만 남겨 주십시오.'],
+      ['운영비 항목 글자', '항목은 한글 10자 이내로 적어 주십시오.'],
+      ['세부항목', '세부 항목을 다시 골라 주십시오.'],
+      ['연구비 대분류', '연구비 분류를 다시 골라 주십시오.'],
+      ['사용처·설명이 필요', '사용처와 설명을 입력해 주십시오.'],
+      ['이미 처리한 영수증과 같', '이미 처리한 영수증과 같아 등록하지 않았습니다.'],
+      ['이미 처리 중', '이미 처리 중이거나 끝난 영수증입니다.']
+    ];
+    for (var i = 0; i < map.length; i++) if (s.indexOf(map[i][0]) !== -1) return map[i][1];
+    return '등록하지 못했습니다. 내용을 확인하고 다시 눌러 주십시오.';
+  }
+  // PC 에서 받은 최신 summary_json 을 반영한다. 반환: 'reject' | 'final' | 'changed' | ''
+  function scanApply(id, sj) {
+    var en = HistoryModule.get(id);
+    if (!en || !sj || !sj.scan || typeof sj.scan !== 'object') return '';
+    var st = String(sj.scan.state || 'read'), le = sj.scan.last_error ? String(sj.scan.last_error) : '';
+    var before = en.summary_json && en.summary_json.scan || {};
+    var waiting = scanWaiting(en);
+    var res = '';
+    if (st === 'read' && waiting && le && scanErrIsNew(en, le)) {       // 거절: 「등록 중」 잠금을 풀고 사유를 보인다
+      delete scanUi[id]; HistoryModule.update(id, { summary_json: sj, scan_sent: null });
+      toast(scanRejectWhy(le)); res = 'reject';
+    } else if (st !== 'read' && st !== 'confirmed' && st !== 'registering') {
+      delete scanUi[id]; HistoryModule.update(id, { summary_json: sj, scan_sent: null }); res = 'final';
+    } else if (st === 'read' && !waiting) {
+      if (JSON.stringify(sj.scan) !== JSON.stringify(before)) { HistoryModule.update(id, { summary_json: sj }); res = 'changed'; }
+    } else if (JSON.stringify(sj.scan) !== JSON.stringify(before)) { HistoryModule.update(id, { summary_json: sj }); res = 'changed'; }
+    return res;
+  }
+  function scanWaiting(en) { return !!scanUi[en.id]; }
+  function scanErrIsNew(en, le) { return true; }
   function startScanPoll(id) {
     if (scanPollers[id]) return;
     var started = Date.now();
@@ -1594,12 +1636,12 @@
       var en = HistoryModule.get(id);
       if (!en || Date.now() - started > 15 * 60 * 1000) { clearInterval(scanPollers[id]); delete scanPollers[id]; return; }
       OfficeBridge.poll(id, en.token).then(function (res) {
-        var sj = res && res.summary_json, st = sj && sj.scan && sj.scan.state;
-        if (!st || st === 'read') return;
-        HistoryModule.update(id, { summary_json: sj });
-        if (SCAN_TERMINAL[st]) {
-          clearInterval(scanPollers[id]); delete scanPollers[id]; delete scanUi[id];
-          toast(st === 'registered' ? '✅ 영수증을 앱에 넣었습니다.' : st === 'failed' ? '영수증을 넣지 못했습니다.' : st === 'duplicate' ? '이미 같은 내역이 있습니다.' : '영수증 등록 확인이 필요합니다.');
+        var r = scanApply(id, res && res.summary_json);
+        if (!r) return;
+        if (r === 'final' || r === 'reject') { clearInterval(scanPollers[id]); delete scanPollers[id]; }
+        if (r === 'final') {
+          var st = HistoryModule.get(id).summary_json.scan.state;
+          toast(st === 'registered' ? '✅ 영수증을 앱에 넣었습니다.' : st === 'failed' ? '영수증을 넣지 못했습니다.' : st === 'duplicate' ? '이미 같은 내역이 있습니다.' : st === 'skipped' ? '등록하지 않았습니다.' : '영수증 등록 확인이 필요합니다.');
         }
         scanRedraw(id);
       }).catch(function () {});
