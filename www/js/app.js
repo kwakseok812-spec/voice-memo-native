@@ -1328,10 +1328,12 @@
     var e = HistoryModule.get(id); if (!e) return;
     viewId = id;
     var tl = $('transcriptLabel');
+    scanDelGuard(false);
     if (e.kind === 'photo' && isScanSj(e.summary_json)) {            // 스캔 허브: 영수증 확인 카드(스위치 off 면 이 줄을 건너뛴다 = v9.20 그대로)
       if (tl) tl.style.display = 'none'; transcriptView.style.display = 'none';
       resultArea.innerHTML = renderScanCard(e);
       wireScanCard(e);
+      scanDelGuard(scanState(e) === 'registering');
       docBtns.innerHTML = '';
       setExportMsg('', '');
       openScreen(resultWrap);
@@ -1535,7 +1537,10 @@
     if (viewId !== id || !isOpen(resultWrap)) return;
     var n = HistoryModule.get(id); if (!n || !isScanSj(n.summary_json)) return;
     resultArea.innerHTML = renderScanCard(n); wireScanCard(n);
+    scanDelGuard(scanState(n) === 'registering');
   }
+  // 등록 중에는 아래쪽 「이 메모 삭제」를 숨긴다 — [등록]을 두 번 누르면 카드가 짧아지며 그 자리로 올라온 삭제 단추를 눌러 버리는 것을 막는다
+  function scanDelGuard(on) { var b = $('btnDelete'); if (b && b.parentNode) b.parentNode.style.display = on ? 'none' : ''; }
   function wireScanCard(e) {
     var root = resultArea.querySelector('[data-scan-id]'); if (!root) return;
     var sc = e.summary_json.scan, d = scanDraftFor(e), st = scanState(e);
