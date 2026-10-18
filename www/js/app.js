@@ -1376,6 +1376,7 @@
    * PC 가 남긴 summary_json.scan(v1)을 카드로 보여 주고, [등록]을 누르면 채팅에 한 줄 「#스캔 <행id 앞 8자리> 등록 <JSON>」을 보낸다.
    * 앱은 등록을 직접 하지 않는다(PC 가 검증해 한 번만 등록). 돈 값은 이 카드에서 고친 칸만 JSON 에 담는다(허용 키 7개).
    * 상태: read → (confirmed) → registering → registered / failed / unknown / skipped / duplicate. 앱은 poll 로 바뀐 상태를 보여 준다. */
+  // 아래 값은 scan_contract.md §2 와 같은 값이다(PC scan_switch.json 과 시험이 글자 단위로 대조). 밖이면 두 앱 모두 [등록] 잠금.
   var SCAN_OPEX = { from: '2026-08-01', to: '2027-02-28' };       // 운영비 앱 예산 기간
   var SCAN_RSCH = { from: '2026-05-01', to: '2027-02-28' };       // 연구비 과제 기간
   var SCAN_RCAT = ['연구재료비', '연구활동비', '연구수당'];
@@ -1450,6 +1451,7 @@
     } else {
       if (SCAN_RCAT.indexOf(d.rcat) === -1) return '항목을 골라 주십시오';
       if (d.rcat === '연구활동비' && SCAN_RSUB.indexOf(d.rsub) === -1) return '세부 항목을 골라 주십시오';
+      if (d.date < SCAN_RSCH.from || d.date > SCAN_RSCH.to) return '연구비 과제 기간(' + SCAN_RSCH.from + ' ~ ' + SCAN_RSCH.to + ') 밖의 날짜입니다';
     }
     if (sc.dup_of) return '이미 처리한 영수증과 같습니다';
     return '';
@@ -1508,7 +1510,8 @@
     var body = '', foot = '';
     var cardLine = (sc.card_last4 && /^\d{4}$/.test(String(sc.card_last4))) ? '<span class="chip scan-cardchip">카드 ···· ' + esc(sc.card_last4) + '</span>' : '';
     if (st === 'registered') {
-      var where = d.app === 'research' ? '연구비 앱' : '운영비 앱';
+      var wm = /^(연구비|운영비) 앱/.exec(String(sc.result || ''));      // PC 의 결과 문장이 실제로 넣은 앱을 말한다. 문장이 없을 때만 카드의 앱 값(없으면 「앱」)
+      var where = wm ? wm[1] + ' 앱' : (d.app === 'research' ? '연구비 앱' : d.app === 'opex' ? '운영비 앱' : '앱');
       body = '<div class="scan-done"><svg><use href="#i-check"/></svg><b>' + where + '에 ' + (amt ? scanWon(amt) + '원을' : '내용을') + ' 넣었습니다</b></div>' +
         '<div class="scan-sub">' + esc(sc.date || d.date || '') + ' · ' + esc(sc.merchant || d.merchant || '') + '</div>';
     } else if (st === 'registering') {
@@ -1544,7 +1547,7 @@
           scanChips(SCAN_RCAT.map(function (c) { return { v: c, t: c }; }), d.rcat, 'data-scan-rcat') + '</div></div>';
         if (d.rcat === '연구활동비') item += '<div class="scan-row"><span class="scan-lab">세부 항목</span><div class="scan-chips" data-chips="rsub">' +
           scanChips(SCAN_RSUB.map(function (c) { return { v: c, t: c }; }), d.rsub, 'data-scan-rsub') + '</div></div>';
-        if (scanDateOk(d.date) && (d.date < SCAN_RSCH.from || d.date > SCAN_RSCH.to)) warns += '<div class="scan-warn">⚠ 과제 기간(' + SCAN_RSCH.from + ' ~ ' + SCAN_RSCH.to + ') 밖의 날짜입니다</div>';
+        if (scanDateOk(d.date) && (d.date < SCAN_RSCH.from || d.date > SCAN_RSCH.to)) warns += '<div class="scan-warn">⚠ 과제 기간(' + SCAN_RSCH.from + ' ~ ' + SCAN_RSCH.to + ') 밖의 날짜입니다 · 등록할 수 없습니다</div>';
       }
       var desc = scanFld('desc', '설명', d.desc, 'type="text" maxlength="60"', !String(d.desc).trim() || !!scanFieldBad(d.desc, '설명'));
       body = '<div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine + fields + '</div></div>' +
