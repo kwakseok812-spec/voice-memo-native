@@ -1490,7 +1490,7 @@
     } else if (st === 'duplicate') {
       body = '<div class="scan-bad warn"><b>이미 같은 내역이 있습니다</b></div><div class="scan-sub">같은 날짜·금액이 앱에 있어 등록하지 않았습니다.</div>';
     } else if (st === 'skipped') {
-      body = '<div class="scan-sub"><b>등록하지 않기로 했습니다.</b></div>';
+      body = '<div class="scan-sub"><b>등록하지 않았습니다.</b></div>';
     } else {                                                          // read: 고쳐서 등록할 수 있는 카드
       var why = scanLockWhy(sc, d), conf = sc.conf || {};
       var warns = (Array.isArray(sc.warnings) ? sc.warnings : []).map(function (w) { return '<div class="scan-warn">⚠ ' + esc(w) + '</div>'; }).join('');
@@ -1560,7 +1560,7 @@
       b.addEventListener('click', function () { d.rsub = b.getAttribute('data-scan-rsub'); scanRedraw(e.id); });
     });
     var skip = root.querySelector('[data-scan-skip]');
-    if (skip) skip.addEventListener('click', function () { HistoryModule.update(e.id, { scan_skip: true }); toast('등록하지 않습니다.'); scanRedraw(e.id); });
+    if (skip) skip.addEventListener('click', function () { scanSkip(e); });
     var cp = root.querySelector('[data-scan-copy]');
     if (cp) cp.addEventListener('click', function () { copyToClipboard(scanCopyText(sc, d)); });
     var rt = root.querySelector('[data-scan-retake]');
@@ -1575,10 +1575,25 @@
       } else scanRegister(e, d);
     });
   }
+  function scanSkipLine(id) { return '#스캔 ' + String(id).replace(/-/g, '').slice(0, 8) + ' 안함'; }
+  // [등록 안 함]: PC 에 「#스캔 <id8> 안함」 한 줄을 보낸 뒤 카드를 「등록하지 않았습니다」로 닫는다. 못 보냈으면 카드를 그대로 두고 다시 누르게 한다.
+  function scanSkip(e) {
+    if (scanUi[e.id]) return;
+    if (!getSyncPass()) { showSyncGate(true, '영수증 등록을 취소하려면 PC 연동 암호를 입력해 주십시오.'); return; }
+    scanUi[e.id] = 'sending';
+    unlockKaiAudio();
+    scanNextDisp = '🧾 영수증 등록 안 함';
+    sendPlainChat(scanSkipLine(e.id), false).then(function (ok) {
+      delete scanUi[e.id];
+      if (ok) { HistoryModule.update(e.id, { scan_skip: true, scan_sent: null }); toast('등록하지 않았습니다.'); }
+      else toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.');
+      scanRedraw(e.id);
+    });
+  }
   function scanRegister(e, d) {
     var sc = e.summary_json.scan;
     if (scanLockWhy(sc, d) || scanUi[e.id]) return;
-    if (!getSyncPass()) { showSyncGate(true, '영수증을 등록하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (!getSyncPass()) { showSyncGate(true, '영수증을 등록하려면 PC 연동 암호를 입력해 주십시오.'); return; }
     var payload = scanBuildPayload(d), line = scanChatLine(e.id, payload);
     scanUi[e.id] = 'sending';                                         // 누르는 즉시 잠금(두 번 눌러도 한 번만 보냄)
     var base = String(sc.last_error || '');
@@ -1589,7 +1604,7 @@
     scanNextDisp = '🧾 영수증 등록 요청 · ' + scanWon(payload.amount) + '원 · ' + (payload.app === 'research' ? '연구비' : '운영비');
     sendPlainChat(line, false).then(function (ok) {
       if (ok) { scanUi[e.id] = 'registering'; HistoryModule.update(e.id, { scan_sent: { at: Date.now(), base: base } }); scanRedraw(e.id); startScanPoll(e.id); }
-      else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); scanRedraw(e.id); }
+      else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.'); scanRedraw(e.id); }
     });
   }
   // PC 가 거절(_reject)하면 state 는 read 그대로이고 scan.last_error 에 사유 글만 남는다. 사유는 PC 글을 그대로 쓰지 않고 아래 쉬운 말로 바꿔 보인다.
