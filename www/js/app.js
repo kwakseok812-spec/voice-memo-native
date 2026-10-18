@@ -1925,7 +1925,7 @@
     openScreen(filePanel);
   }
   if ($('fileCancel')) $('fileCancel').addEventListener('click', function () {
-    pendingFiles = []; pendingKind = null;
+    pendingFiles = []; pendingKind = null; setScanPanel(false);
     if (filePanelFromChat) { filePanelFromChat = false; openChat(); return; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
     showHome();
   });
@@ -1935,14 +1935,17 @@
     var title = ($('fileTitle').value || '').trim();
     var note = ($('fileNote').value || '').trim();
     var isCard = kind === 'photo' && $('isCard') && $('isCard').checked;
+    var asScan = pendingScan && kind === 'photo' && SCAN_HUB === 'on';
+    if (asScan) { files = [files[0]]; isCard = false; }
+    pendingScan = false; if ($('filePanel')) $('filePanel').classList.remove('scan-mode');
     filePanelFromChat = false;                               // (O-0176) 보낸 뒤엔 홈(「진행 중인 메모」에서 상태 확인)
     pendingFiles = []; pendingKind = null;
-    sendFiles(files, kind, title, note, isCard);
+    sendFiles(files, kind, title, note, isCard, asScan);
   });
 
   // 라우터: 영상 중 큰 것(>45MB)은 조각 전송(백그라운드), 나머지는 묶음 전송(포그라운드)
   var VIDEO_CHUNK_LIMIT = 45 * 1024 * 1024;
-  function sendFiles(files, kind, title, note, isCard) {
+  function sendFiles(files, kind, title, note, isCard, asScan) {
     if (!files || !files.length) return;
     if (kind === 'video') {
       var big = [], small = [];
@@ -1952,7 +1955,7 @@
       if (!small.length) showHome();
       return;
     }
-    sendBatchMemo(files, kind, title, note, isCard);
+    sendBatchMemo(files, kind, title, note, isCard, asScan);
   }
 
   /* 긴 영상: 조각 전송 + 백그라운드 진행(다른 기능 안 막음 — 대원칙) */
@@ -2040,16 +2043,22 @@
     }, 5000);
   }
 
-  function sendBatchMemo(files, kind, title, note, isCard) {
+  function sendBatchMemo(files, kind, title, note, isCard, asScan) {
     if (!files || !files.length) return;
     var t = now();
     var noteFull = note || '';
     if (isCard) noteFull = noteFull ? ('명함. ' + noteFull) : '명함';
+    var scan = !!(asScan && SCAN_HUB === 'on' && kind === 'photo');
+    if (scan) { files = [files[0]]; noteFull = '영수증'; }    // 영수증: note 는 정확히 '영수증', 한 장만
     var memo = {
       id: OfficeBridge.uuid(), token: OfficeBridge.token(),
       title: title || ((kind === 'photo' ? '사진 ' : '영상 ') + t.date + ' ' + t.time),
       kind: kind, note: noteFull || null, date: t.date, time: t.time
     };
+    if (scan) {
+      memo.scan = { type: 'receipt', v: 1 };
+      try { scanThumbs[memo.id] = URL.createObjectURL(files[0]); } catch (e) {}   // 보낸 직후 카드의 사진 — 이 기기 메모리에만(저장 안 함)
+    }
     HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
     renderHistory();
     openScreen(processing); setProcessing('⬆️ 올리는 중… (' + files.length + '개)', 'send', 'media');
@@ -2057,7 +2066,7 @@
       setProcessing('⬆️ 올리는 중… ' + done + '/' + total);
     }).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
-      setProcessing(kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록합니다)' : '🎬 영상 분석 중… (조금 걸릴 수 있습니다)', 'got', 'media');
+      setProcessing(scan ? '🧾 영수증을 읽는 중… (보통 1~2분)' : kind === 'photo' ? '🖼️ 사진 분석 중… (명함이면 등록합니다)' : '🎬 영상 분석 중… (조금 걸릴 수 있습니다)', 'got', 'media');
       startPolling(memo.id, memo.token);
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
@@ -2069,13 +2078,17 @@
   if ($('btnVideo')) $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
   $('photoInput').addEventListener('change', function () {
     if (this.files && this.files.length) {
-      reviewFiles(this.files, 'photo');
+      if (photoAsScan && SCAN_HUB === 'on') {                   // 영수증 모드: 한 장만(여러 장이면 첫 장 + 안내 한 줄)
+        reviewFiles([this.files[0]], 'photo'); setScanPanel(true, this.files.length > 1);
+      } else {
+        reviewFiles(this.files, 'photo'); setScanPanel(false);
+      }
       if (photoAsCard) {                                        // (O-0176) 채팅 ＋ 「명함 등록」 — 명함 스위치를 켠 채로(끄면 일반 사진 PC 정리)
         if ($('isCard')) $('isCard').checked = true;
         if ($('filePanelTitle')) $('filePanelTitle').textContent = '명함 등록 · 사진 PC 정리';
       }
     } else filePanelFromChat = false;
-    photoAsCard = false; this.value = '';
+    photoAsCard = false; photoAsScan = false; this.value = '';
   });
   $('videoInput').addEventListener('change', function () {
     if (this.files && this.files.length) { reviewFiles(this.files, 'video'); if ($('filePanelTitle')) $('filePanelTitle').textContent = '영상 정리 (PC로)'; }
@@ -2088,14 +2101,32 @@
    *   글 쓰는 중(폰 네이티브 입력 바)의 ＋ 는 예전처럼 곧장 파일 고르기(native-input.js) — 이 창은 웹 입력줄 ＋ 에서만.
    *   뒤로가기로 닫힘(goBack 의 .shin-sheet 처리). 보내기 뒤에는 홈 「진행 중인 메모」에서 상태가 보인다. */
   var photoAsCard = false, filePanelFromChat = false;
+  /* 스캔 허브 1단계(영수증) — 스위치. 'on' 이면 ＋ 창에 「영수증 등록」 줄 · 결과 화면에 확인 카드가 생긴다.
+   *   'off' 면 이 기능의 모든 입구가 닫혀 v9.20 과 똑같이 움직인다(아래 SCAN_HUB 를 보는 곳은 전부 이 값 하나만 본다). */
+  var SCAN_HUB = 'on';
+  var photoAsScan = false, pendingScan = false, scanThumbs = {};
+  function setScanPanel(on, extra) {
+    pendingScan = !!(SCAN_HUB === 'on' && on && pendingFiles.length);
+    var fp = $('filePanel'); if (fp) fp.classList.toggle('scan-mode', pendingScan);
+    var n = $('scanFileNote');
+    if (n) { n.style.display = pendingScan ? 'block' : 'none'; n.textContent = pendingScan ? ('영수증은 한 번에 한 장만 읽습니다.' + (extra ? ' 고르신 사진 중 첫 장만 보냅니다.' : '')) : ''; }
+    if (pendingScan) {
+      if ($('filePanelTitle')) $('filePanelTitle').textContent = '영수증 등록';
+      if ($('fileKindLabel')) $('fileKindLabel').textContent = '영수증 1장';
+      var t = now(); if ($('fileTitle')) $('fileTitle').value = '영수증 ' + t.date + ' ' + t.time;
+      if ($('cardCheckWrap')) $('cardCheckWrap').style.display = 'none';
+      if ($('isCard')) $('isCard').checked = false;
+    }
+  }
   function openAttachMenu() {
-    photoAsCard = false; filePanelFromChat = false;          // 지난번에 고르기를 취소했으면 남은 표시를 지움
+    photoAsCard = false; filePanelFromChat = false; photoAsScan = false;          // 지난번에 고르기를 취소했으면 남은 표시를 지움
     var old = document.querySelector('.atm-sheet'); if (old) { try { old.remove(); } catch (e) {} }
     var sh = document.createElement('div');
     sh.className = 'sheet shin-sheet atm-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="보내기 고르기"><div class="sheet-head">무엇을 보낼까요?</div>' +
       '<button type="button" class="sheet-btn" data-atm="file"><svg class="atm-ic"><use href="#i-image"/></svg><span><b>파일·사진을 케이에게</b><small>채팅에 붙여 케이에게 보여 주기</small></span></button>' +
       '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>PC가 명함 대장에 넣거나 사진을 정리(명함 스위치로 고름)</small></span></button>' +
+      (SCAN_HUB === 'on' ? '<button type="button" class="sheet-btn" data-atm="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증 등록</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
       '<button type="button" class="sheet-btn atm-close" data-atm="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
@@ -2105,6 +2136,7 @@
       var k = b && b.getAttribute('data-atm');
       if (k === 'file') $('chatFileInput').click();
       else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
+      else if (k === 'receipt' && SCAN_HUB === 'on') { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }
       else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
     });
     document.body.appendChild(sh);

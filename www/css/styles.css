@@ -2041,3 +2041,7 @@ html.rs-mousedrag,html.rs-mousedrag *{cursor:grabbing !important;-webkit-user-se
 .msgstat.fail .msgretry{min-height:40px;padding:0 14px;border-radius:12px;border:1px solid var(--glass-b);background:var(--warn-bg);color:var(--warn-t);font:inherit;font-size:14px;font-weight:800;cursor:pointer;-webkit-user-select:none;user-select:none}
 .msgstat.fail .msgretry:active{opacity:.7}
 html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
+
+/* ===== 스캔 허브(영수증) — 사진 보내기 창 ===== */
+#filePanel.scan-mode .scanhide{display:none}
+.scan-note{margin:8px 2px 4px;font-size:14px;line-height:1.5;color:var(--muted,#9aa4b2)}

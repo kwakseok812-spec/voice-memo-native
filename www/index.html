@@ -291,10 +291,11 @@
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title" id="filePanelTitle">파일 보내기</span><span class="spacer"></span></div>
       <div class="label">보낼 파일 <b id="fileKindLabel"></b></div>
       <div id="filePreview"></div>
-      <div class="label">제목 <span class="hint">(결과 구분용)</span></div>
-      <div class="input filled"><svg class="lead"><use href="#i-note"/></svg><input id="fileTitle" type="text" maxlength="40" placeholder="예: 회의 화이트보드"></div>
-      <div class="label">설명·지시 <span class="hint">(없으면 자동으로 정리)</span></div>
-      <div class="input textarea filled"><textarea id="fileNote" placeholder="예: 이건 명함이야 / 표만 정리해줘 / 회의록으로 만들어줘"></textarea></div>
+      <div id="scanFileNote" class="scan-note" style="display:none"></div>
+      <div class="label scanhide">제목 <span class="hint">(결과 구분용)</span></div>
+      <div class="input filled scanhide"><svg class="lead"><use href="#i-note"/></svg><input id="fileTitle" type="text" maxlength="40" placeholder="예: 회의 화이트보드"></div>
+      <div class="label scanhide">설명·지시 <span class="hint">(없으면 자동으로 정리)</span></div>
+      <div class="input textarea filled scanhide"><textarea id="fileNote" placeholder="예: 이건 명함이야 / 표만 정리해줘 / 회의록으로 만들어줘"></textarea></div>
       <label id="cardCheckWrap" class="card toggle"><span><b>이 사진은 명함입니다</b><small>켜면 명함으로 등록됩니다</small></span><input type="checkbox" id="isCard" hidden><span class="switch"></span></label>
       <div class="btnrow">
         <button id="fileSend" class="btn primary"><svg><use href="#i-spark"/></svg>PC로 보내기</button>
