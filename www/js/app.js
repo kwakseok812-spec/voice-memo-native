@@ -1405,6 +1405,15 @@
     };
     return d;
   }
+  // PC(scan_register.py)와 같은 규칙으로 앱에서 먼저 막는다: 사용처·설명 = 한글·영문·숫자·공백·-·&() 만 30자 이내(따옴표 등 불가) · 12자리 이상 연속 숫자 불가 · 운영비 항목 = 한글 1~10자.
+  var SCAN_FIELD_OK = /^[0-9A-Za-z가-힣 \-·&()]+$/, SCAN_FIELD_MAX = 30, SCAN_OCAT_OK = /^[가-힣]{1,10}$/;
+  function scanFieldBad(v, label) {
+    var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    if (!SCAN_FIELD_OK.test(s) || /\d{12,}/.test(s)) return label + '에는 한글·영문·숫자·공백과 - · & ( ) 만 쓸 수 있습니다';
+    if (s.length > SCAN_FIELD_MAX) return label + '은(는) ' + SCAN_FIELD_MAX + '자 이내로 적어 주십시오';
+    return '';
+  }
   // 이 카드로 등록할 수 있는지 · 막힌 까닭(없으면 '')
   function scanLockWhy(sc, d) {
     if (!d.app) return '어느 앱에 넣을지 골라 주십시오';
@@ -1412,8 +1421,11 @@
     if (!scanAmt(d.amount)) return '금액을 입력해 주십시오';
     if (!String(d.merchant || '').trim()) return '사용처를 입력해 주십시오';
     if (!String(d.desc || '').trim()) return '설명을 입력해 주십시오';
+    var fb = scanFieldBad(d.merchant, '사용처') || scanFieldBad(d.desc, '설명');
+    if (fb) return fb;
     if (d.app === 'opex') {
       if (!String(d.ocat || '').trim()) return '항목을 입력해 주십시오';
+      if (!SCAN_OCAT_OK.test(String(d.ocat).trim())) return '항목은 한글 10자 이내로 적어 주십시오';
       if (d.date < SCAN_OPEX.from || d.date > SCAN_OPEX.to) return '운영비 예산 기간(' + SCAN_OPEX.from + ' ~ ' + SCAN_OPEX.to + ') 밖의 날짜입니다';
     } else {
       if (SCAN_RCAT.indexOf(d.rcat) === -1) return '항목을 골라 주십시오';
@@ -1501,12 +1513,12 @@
       var fields =
         scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date) || conf.date === 'low') +
         scanFld('amount', '금액(원)', d.amount, 'type="text" inputmode="numeric" autocomplete="off"', !scanAmt(d.amount) || conf.amount === 'low') +
-        scanFld('merchant', '사용처', d.merchant, 'type="text" maxlength="60"', !String(d.merchant).trim() || conf.merchant === 'low');
+        scanFld('merchant', '사용처', d.merchant, 'type="text" maxlength="60"', !String(d.merchant).trim() || !!scanFieldBad(d.merchant, '사용처') || conf.merchant === 'low');
       var appChips = '<div class="scan-row"><span class="scan-lab">어느 앱에</span><div class="scan-chips" data-chips="app">' +
         scanChips([{ v: 'opex', t: '운영비' }, { v: 'research', t: '연구비' }], d.app, 'data-scan-app') + '</div></div>';
       var item = '';
       if (d.app === 'opex') {
-        item = scanFld('ocat', '항목', d.ocat, 'type="text" maxlength="30"', !String(d.ocat).trim());
+        item = scanFld('ocat', '항목', d.ocat, 'type="text" maxlength="30"', !SCAN_OCAT_OK.test(String(d.ocat).trim()));
       } else if (d.app === 'research') {
         item = '<div class="scan-row"><span class="scan-lab">분류</span><div class="scan-chips" data-chips="rcat">' +
           scanChips(SCAN_RCAT.map(function (c) { return { v: c, t: c }; }), d.rcat, 'data-scan-rcat') + '</div></div>';
@@ -1514,9 +1526,9 @@
           scanChips(SCAN_RSUB.map(function (c) { return { v: c, t: c }; }), d.rsub, 'data-scan-rsub') + '</div></div>';
         if (scanDateOk(d.date) && (d.date < SCAN_RSCH.from || d.date > SCAN_RSCH.to)) warns += '<div class="scan-warn">⚠ 과제 기간(' + SCAN_RSCH.from + ' ~ ' + SCAN_RSCH.to + ') 밖의 날짜입니다</div>';
       }
-      var desc = scanFld('desc', '설명', d.desc, 'type="text" maxlength="100"', !String(d.desc).trim());
+      var desc = scanFld('desc', '설명', d.desc, 'type="text" maxlength="60"', !String(d.desc).trim() || !!scanFieldBad(d.desc, '설명'));
       body = '<div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine + fields + '</div></div>' +
-        '<div class="scan-form">' + appChips + item + desc + '</div>' + warns +
+        '<div class="scan-form">' + appChips + item + desc + '</div><div class="scan-hint">사용처·설명은 한글·영문·숫자·공백과 - · & ( ) 만, 30자까지 쓸 수 있습니다.</div>' + warns +
         '<div class="scan-sumline" id="scanSum">' + esc(scanSummaryLine(d)) + '</div>' +
         '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>';
       foot = '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
@@ -1533,7 +1545,7 @@
     Array.prototype.forEach.call(resultArea.querySelectorAll('.scan-f'), function (el) {
       var k = el.getAttribute('data-f'), bad = false;
       if (k === 'date') bad = !scanDateOk(d.date); else if (k === 'amount') bad = !scanAmt(d.amount);
-      else if (k === 'merchant') bad = !String(d.merchant).trim(); else if (k === 'desc') bad = !String(d.desc).trim(); else if (k === 'ocat') bad = !String(d.ocat).trim();
+      else if (k === 'merchant') bad = !String(d.merchant).trim() || !!scanFieldBad(d.merchant, '사용처'); else if (k === 'desc') bad = !String(d.desc).trim() || !!scanFieldBad(d.desc, '설명'); else if (k === 'ocat') bad = !SCAN_OCAT_OK.test(String(d.ocat).trim());
       el.classList.toggle('empty', bad);
     });
   }

@@ -2064,6 +2064,7 @@ html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
 .scan-chips{display:flex;flex-wrap:wrap;gap:8px}
 .scan-chip{height:42px;max-width:100%;white-space:normal;text-align:left;line-height:1.25;padding:6px 14px}
 .scan-warn,.scan-lockwhy{font-size:14px;line-height:1.5;color:var(--warn-t);background:var(--warn-bg);border-radius:12px;padding:8px 12px}
+.scan-hint{font-size:13px;line-height:1.5;color:var(--dim)}
 .scan-sumline{font-size:17px;font-weight:800;line-height:1.45;color:var(--text)}
 .scan-btns{display:flex;gap:10px}
 .scan-btns .btn{flex:1 1 0;height:54px;font-size:17px;border-radius:16px;min-width:0}
