@@ -68,12 +68,16 @@
   function fmtMD(s) { var p = (s || '').split('-'); return p.length === 3 ? (+p[1]) + '월 ' + (+p[2]) + '일' : s; }
 
   /* ---------- 상태 ---------- */
-  var FIELDS = ['fasting_glucose', 'weight', 'sleep_hours', 'breakfast', 'lunch', 'dinner', 'snack', 'med_morning', 'med_evening', 'supplement'];
+  var FIELDS = ['fasting_glucose', 'weight', 'sleep_hours', 'breakfast', 'lunch', 'dinner', 'snack', 'med_morning', 'med_evening', 'supplement', 'exercise'];
   // 「N / 9 기록됨」에 세는 9칸 — 간식은 선택이라 세지 않는다.
   //   PC 쪽과 같은 9칸: health_reminder.py SLOTS(아침 4 + 저녁 3 + 밤 2) · chat_responder.py _HEALTH_MISS_SKIP=("snack",)
-  var REQUIRED = FIELDS.filter(function (k) { return k !== 'snack'; });
+  var REQUIRED = FIELDS.filter(function (k) { return k !== 'snack' && k !== 'exercise'; });   // v9.25: 운동도 선택 칸 — 9칸에 넣지 않는다
   var SHORT = { fasting_glucose: '혈당', weight: '체중', sleep_hours: '수면', breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식',
-                med_morning: '아침약', med_evening: '저녁약', supplement: '영양제' };
+                med_morning: '아침약', med_evening: '저녁약', supplement: '영양제', exercise: '운동' };
+  // v9.25(O-0588) 운동 섹션 스위치 — 사람이 켜고 끄는 값. 서버 SQL(exercise_tab_step1.sql) 적용 전에는 앱을 배포하지 않는다. false 면 섹션만 숨김(v9.24 모양).
+  var EXERCISE_TAB_ON = true;
+  var EXERCISE_BASE = ['런닝머신 30분', '런닝머신 1시간', '슬로우러닝', '가슴운동', '등운동', '어깨운동', '하체운동'];
+  var EXERCISE_NONE = '안 함';
   // v9.5.1(O-0386) 끼니 「안 먹음」: 끼니 글 칸에 이 글자를 그대로 넣는다. 손으로 「안먹음」·「결식」처럼 적으신 것도 같은 뜻으로 읽는다.
   var SKIP = '안 먹음';
   var SKIP_WORDS = { '안먹음': 1, '안먹었음': 1, '안드심': 1, '결식': 1, '굶음': 1, '거름': 1 };
@@ -150,18 +154,26 @@
     pendSet(r.log_date, dirty);
   }
 
+  // 칩 묶음 설정표(식단·운동이 같은 코드를 쓴다): 기본 칩 · 폰에 적어 두는 학습 저장 키
   var BASE_FOODS = ['양배추', '현미밥', '계란', '두부', '닭가슴살', '김치', '나물', '생선', '샐러드', '사과', '견과류', '우유', '블랙커피'];
   var FOODS_KEY = 'smart_health_foods';
-  function foodsGet() { try { return JSON.parse(localStorage.getItem(FOODS_KEY) || '{}') || {}; } catch (e) { return {}; } }
-  function foodsPut(m) { try { localStorage.setItem(FOODS_KEY, JSON.stringify(m)); } catch (e) {} }
-  function foodBump(name) {
+  var CHIPSETS = {
+    meal: { base: BASE_FOODS, key: FOODS_KEY },
+    exercise: { base: EXERCISE_BASE, key: 'smart_health_exercises' }
+  };
+  function setOf(k) { return k === 'exercise' ? CHIPSETS.exercise : CHIPSETS.meal; }
+  // 한 칸에서 「이 칸 전체를 대신하는」 배타 칩: 간식 「없음」, 운동 「안 함」
+  function noneOf(k) { return k === 'snack' ? '없음' : k === 'exercise' ? EXERCISE_NONE : null; }
+  function foodsGet(k) { try { return JSON.parse(localStorage.getItem(setOf(k).key) || '{}') || {}; } catch (e) { return {}; } }
+  function foodsPut(k, m) { try { localStorage.setItem(setOf(k).key, JSON.stringify(m)); } catch (e) {} }
+  function foodBump(k, name) {
     name = (name || '').trim(); if (!name) return;
-    var m = foodsGet(); m[name] = (m[name] || 0) + 1; foodsPut(m);
+    var m = foodsGet(k); m[name] = (m[name] || 0) + 1; foodsPut(k, m);
   }
   // 표시용 프리셋: 기본 + 학습분 합쳐 빈도순(자주 고른 게 위). 상한 24개.
-  function presetFoods() {
-    var counts = foodsGet(), order = {};
-    BASE_FOODS.forEach(function (f, i) { order[f] = i; if (!(f in counts)) counts[f] = 0; });
+  function presetFoods(k) {
+    var counts = foodsGet(k), order = {}, base = setOf(k).base;
+    base.forEach(function (f, i) { order[f] = i; if (!(f in counts)) counts[f] = 0; });
     var arr = Object.keys(counts).filter(function (f) { return !isSkip(f); });   // 「안 먹음」은 음식이 아니다(옛 버전에서 직접 입력으로 배웠어도 칩으로 내놓지 않는다)
     arr.sort(function (a, b) {
       if ((counts[b] || 0) !== (counts[a] || 0)) return (counts[b] || 0) - (counts[a] || 0);
@@ -577,7 +589,7 @@
   // 끼니: 이미 적은 끼니는 한 줄(누르면 펼침). 아직 안 적은 끼니·이번에 펼친 끼니는 칩이 보인다.
   //   v9.5.1: 아침·점심·저녁은 칩 줄 맨 앞에 「안 먹음」(점선 칩). 누르면 그 끼니는 「안 먹음」으로 적히고 한 줄로 접힌다.
   function mealBlock(k, label, withNone) {
-    var lab = label + (k === 'snack' ? ' <small>선택</small>' : '') + pendTag();
+    var lab = label + (k === 'snack' || k === 'exercise' ? ' <small>선택</small>' : '') + pendTag();
     var skip = skipOn(k, rec[k]);
     if (isSet(rec[k]) && !openMeals[k]) {
       return '<div class="hitem hmeal fold' + (skip ? ' skip' : '') + '" data-k="' + k + '">' +
@@ -587,8 +599,8 @@
     }
     var sel = skip ? [] : mealTokens(rec[k]);      // 「안 먹음」은 음식 낱말이 아니다(직접 입력 칸에도 내놓지 않는다)
     var selSet = {}; sel.forEach(function (t) { selSet[t] = 1; });
-    var presets = presetFoods();
-    if (withNone) presets = ['없음'].concat(presets.filter(function (f) { return f !== '없음'; }));
+    var presets = presetFoods(k), none = noneOf(k);
+    if (withNone && none) presets = [none].concat(presets.filter(function (f) { return f !== none; }));
     var chips = presets.map(function (f) {
       return '<button type="button" class="chip hchip' + (selSet[f] ? ' on' : '') + '" data-food="' + esc(f) + '">' + esc(f) + '</button>';
     }).join('');
@@ -656,6 +668,7 @@
       mealBlock('dinner', '저녁', false) +
       mealBlock('snack', '간식', true) +
       '</div>' +
+      (EXERCISE_TAB_ON ? '<div class="hsec">운동</div><div class="hgroup" id="hExercise">' + mealBlock('exercise', '운동', true) + '</div>' : '') +
       (past
         ? '<button type="button" class="hpast-foot" data-act="today"><span>' + md + ' 기록을 고치는 중</span><b>오늘로 돌아가기</b></button>'
         : '');
@@ -803,16 +816,16 @@
           if (chip.classList.contains('hskip')) { toggleSkip(k, T()); return; }     // v9.5.1 「안 먹음」: 켜면 그 끼니를 「안 먹음」으로 적고 접는다 · 다시 누르면 푼다
           var skipChip = block.querySelector('.hskip');                             // 음식을 고르면 「안 먹음」은 풀린다
           if (skipChip) { skipChip.classList.remove('on'); skipChip.setAttribute('aria-pressed', 'false'); }
-          if (k === 'snack' && food === '없음') {
+          if (noneOf(k) && food === noneOf(k)) {
             // '없음'은 배타 선택
             var turningOn = !chip.classList.contains('on');
             Array.prototype.forEach.call(block.querySelectorAll('.hchip'), function (c) { c.classList.remove('on'); });
             if (turningOn) chip.classList.add('on');
           } else {
-            var noneChip = block.querySelector('.hchip[data-food="없음"]');
+            var noneChip = noneOf(k) && block.querySelector('.hchip[data-food="' + noneOf(k) + '"]');
             if (noneChip) noneChip.classList.remove('on');
             chip.classList.toggle('on');
-            if (chip.classList.contains('on')) foodBump(food);
+            if (chip.classList.contains('on')) foodBump(k, food);
           }
           recombineMeal(block, k, T());
         });
@@ -824,7 +837,7 @@
             var nb = newBlock(h), ni = nb && nb.querySelector('.hcustomin');
             if (ni && ci.value !== ci.defaultValue) { ni.value = ci.value; fire(ni, 'change'); }   // 이 화면에서 새로 친 글만 옮긴다
           })) return;
-          if (learn) mealTokens(ci.value).forEach(function (x) { if (!isSkip(x)) foodBump(x); });
+          if (learn) mealTokens(ci.value).forEach(function (x) { if (!isSkip(x) && x !== noneOf(k)) foodBump(k, x); });
           recombineMeal(block, k, T());
         };
         ci.addEventListener('change', function () { commitCustom(true); });
@@ -962,6 +975,7 @@
       var m = r[mk]; if (!isSet(m)) return;
       meals.push(skipOn(mk, m) ? SHORT[mk] + ' ' + String(m).replace(/^\s+|\s+$/g, '') : m);
     });
+    if (EXERCISE_TAB_ON && isSet(r.exercise)) meals.push('운동 ' + r.exercise);
     var mealLine = meals.length ? '<div class="hday-meal">' + esc(meals.join(' / ')) + '</div>' : '';
     return '<button type="button" class="card hday" data-date="' + esc(r.log_date) + '" aria-label="' + esc(fmtDayShort(r.log_date)) + ' 기록 ' + (isToday ? '열기' : '고치기') + '">' +
       '<div class="hday-top"><b>' + esc(fmtDayLabel(r.log_date)) + '</b>' +
