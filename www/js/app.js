@@ -1671,7 +1671,7 @@
     var cp = root.querySelector('[data-scan-copy]');
     if (cp) cp.addEventListener('click', function () { copyToClipboard(scanCopyText(sc, d)); });
     var rt = root.querySelector('[data-scan-retake]');
-    if (rt) rt.addEventListener('click', function () { photoAsScan = true; filePanelFromChat = false; $('photoInput').click(); });
+    if (rt) rt.addEventListener('click', function () { openReceiptScan(false); });   // 스캔 화면(못 쓰면 사진 고르기) — 패널 상태는 예전 그대로(filePanelFromChat=false)
     var go = root.querySelector('[data-scan-go]');
     if (go) go.addEventListener('click', function () {
       if (scanLockWhy(sc, d) || scanUi[e.id]) return;                      // 잠금 · 중복 누름
@@ -2581,24 +2581,27 @@
   function receiptToPanel(file, extra) {
     reviewFiles([file], 'photo'); setScanPanel(true, !!extra);
   }
-  function receiptPick() { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }   // 기존 사진 고르기 길(v9.25 와 같음)
+  function receiptPick(fc) { photoAsScan = true; filePanelFromChat = fc !== false; $('photoInput').click(); }   // 기존 사진 고르기 길(v9.25 와 같음)
   function receiptCamOk() { return RECEIPT_SCAN_CAM === 'on' && docScanOn() && !!(window.DocScan && DocScan.RECEIPT); }
-  function openReceiptScan() {
+  // fc=false: 확인 카드 [다시 찍기] — 패널을 채팅에서 연 것이 아니므로 filePanelFromChat 을 false 로 둔다(그 밖엔 true)
+  function openReceiptScan(fc) {
+    fc = fc !== false;
     if (SCAN_HUB !== 'on') return;
-    if (!receiptCamOk()) { receiptPick(); return; }
+    function pick() { receiptPick(fc); }
+    if (!receiptCamOk()) { pick(); return; }
     function go() {
-      photoAsScan = true; filePanelFromChat = true;
+      photoAsScan = true; filePanelFromChat = fc;
       var ok = false;
       try {
         ok = DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'receipt', isRecording: function () { return !!isRecording; },
-          onDone: function (file) { photoAsScan = true; filePanelFromChat = true; receiptToPanel(file, false); photoAsScan = false; },
-          onGallery: receiptPick,
+          onDone: function (file) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(file, false); photoAsScan = false; },
+          onGallery: pick,
           onCancel: function () { photoAsScan = false; filePanelFromChat = false; } });
       } catch (e) { ok = false; }
-      if (!ok) receiptPick();                                  // 스캔 화면을 못 열면 영수증 등록이 막히지 않게 기존 길로
+      if (!ok) pick();                                  // 스캔 화면을 못 열면 영수증 등록이 막히지 않게 기존 길로
     }
     var done = false, tm;
-    function next(denied) { if (done) return; done = true; clearTimeout(tm); if (denied) { toast('카메라를 쓸 수 없어 사진 고르기로 엽니다.'); receiptPick(); } else go(); }
+    function next(denied) { if (done) return; done = true; clearTimeout(tm); if (denied) { toast('카메라를 쓸 수 없어 사진 고르기로 엽니다.'); pick(); } else go(); }
     try {
       if (navigator.permissions && navigator.permissions.query) {
         tm = setTimeout(function () { next(false); }, 400);
