@@ -2615,6 +2615,7 @@
   function scanTabOn() { return SCAN_TAB === 'on'; }
   function openScanTab() {
     if (!scanTabOn()) return;
+    photoAsScan = false; photoAsCard = false; filePanelFromChat = false;          // 지난번에 사진 고르기를 그냥 닫았으면 남은 영수증 모드를 지움
     var hasR = SCAN_HUB === 'on', hasD = docScanOn();
     if (!hasR && !hasD) { toast('스캔을 지금은 쓸 수 없습니다.'); return; }
     var old = document.querySelector('.stab-sheet'); if (old) { try { old.remove(); } catch (e) {} }
