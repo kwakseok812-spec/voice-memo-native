@@ -525,6 +525,7 @@
     '.dsc-btn:active{filter:brightness(.92)}',
     '.dsc-btn[disabled]{opacity:.45;cursor:default}',
     '.dsc-pri{background:linear-gradient(135deg,var(--p1,#3B82F6),var(--p2,#8B5CF6));color:#fff;border-color:transparent}',
+    '.dsc-rcpt-img{display:block;max-width:100%;max-height:50vh;margin:0 auto;border-radius:8px;object-fit:contain}',
     '.dsc-big{min-height:64px;font-size:19px;width:100%}',
     '.dsc-card{background:var(--bg1,#fff);border:1px solid var(--glass-b2,#cbd2e6);border-radius:16px;padding:14px}',
     '.dsc-sub{color:var(--muted,#55627D);font-size:15px}',
@@ -834,10 +835,77 @@
     S.token = (S.token || 0) + 1;
     S.body.textContent = ''; clearFoot();
     var col = h('div', 'dsc-col'); S.body.appendChild(col);
-    if (S.prog) { setTop('사진 정리'); col.appendChild(progCard()); paintProgress(); return; }
+    if (S.prog) { setTop(RCP() ? '영수증 스캔' : '사진 정리'); col.appendChild(progCard()); paintProgress(); return; }
+    if (RCP()) { (S.screen === 'rcptprev' && S.rcpt ? rRcptPrev : rRcptStart)(col); return; }   // v9.26: 영수증 한 장(쪽 저장소를 쓰지 않는다)
     ({ start: rStart, list: rList, name: rName, result: rResult, edit: S.ed ? rEdit : rList }[S.screen] || rStart)(col);
   }
   function memNote(col) { if (S.mem) col.appendChild(h('div', 'dsc-warn', '이 기기에서는 임시 저장을 쓸 수 없어, 앱을 닫으면 사라집니다.')); }
+
+  /* ───────── v9.26 영수증 한 장 (purpose:'receipt') ─────────
+   * 쪽 저장소(문서 세션)를 건드리지 않는다: 한 장을 같은 자동 처리(autoPage)로 펴고 → 미리보기 → [이 사진 사용] 이면 보정된 JPEG 한 장을 onDone(file, info) 로 넘기고 닫는다.
+   * 문서·회의 동작은 그대로(purpose 가 receipt 일 때만 이 길). 펴기·보정 본체는 문서 스캔과 같은 autoPage/finishOut 하나. */
+  function RCP() { return !!(S && S.opts.purpose === 'receipt'); }
+  function rcptFile(blob) { var d = new Date(Date.now() + 9 * 3600000).toISOString().replace(/[-:T]/g, '').slice(0, 14); return new File([blob], 'receipt_' + d + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }); }
+  function rcptFree() { if (S && S.rcpt && S.rcpt.url) { try { URL.revokeObjectURL(S.rcpt.url); } catch (e) {} } }
+  function rcptShoot(kind) {                       // kind: 'camera' | 'gallery'(앱이 onGallery 를 안 주었을 때만 쓰는 대체)
+    if (!S || S.busy) return;
+    var mine = S;
+    pageSource(kind).then(function (fs) { if (S === mine && fs && fs.length) return rcptProcess(fs[0], fs.length > 1); }).catch(function () {});
+  }
+  function rcptProcess(file, extra) {
+    var mine = S; S.busy = true; S.skipAuto = false;
+    S.prog = { i: 1, n: 1, label: '영수증 정리 중', auto: false, text: '영수증을 정리하는 중입니다…' }; paintProgress();
+    var pre = S.opts.auto ? ensureCv() : Promise.resolve(false);
+    return pre.then(function (ok) {
+      if (S !== mine) return null;
+      if (ok) { S.prog.auto = true; S.prog.text = '테두리를 찾아 반듯하게 펴는 중입니다…'; paintProgress(); }
+      var job = ok ? autoPage(file, { mode: 'doc', auto: true, two: false, rtl: false, q: 'normal' }, mine).catch(function (e) { if (e && e.message === BAD) throw e; return shrink(file).then(function (r) { r.how = 'skip'; return [r]; }); })
+                   : shrink(file).then(function (r) { r.how = 'skip'; return [r]; });
+      return job;
+    }).then(function (pgs) {
+      if (S !== mine || !pgs || !pgs.length) return;
+      var pg = pgs[0], blob = pg.out || pg.blob;
+      rcptFree();
+      S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, url: URL.createObjectURL(blob), extra: !!extra };
+      S.busy = false; S.prog = null; S.screen = 'rcptprev'; render();
+      if (extra) toast('고르신 사진 중 첫 장만 씁니다.', null, null, 4000);
+    }).catch(function (e) {
+      if (S !== mine) return;
+      S.busy = false; S.prog = null; S.screen = 'start'; render();
+      toast(storageMsg(e, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
+    });
+  }
+  function rcptGallery() {
+    if (!S || S.busy) return;
+    var cb = S.opts.onGallery;
+    if (!cb) return rcptShoot('gallery');
+    var s = S; s.doneCalled = true; closeUi(false, false);   // 닫은 뒤 앱의 기존 「사진 고르기」(#photoInput)를 같은 눌림 안에서 연다
+    try { cb(); } catch (e) {}
+  }
+  function rcptUse() {
+    if (!S || S.busy || !S.rcpt) return;
+    var r = S.rcpt, cb = S.opts.onDone, file = rcptFile(r.blob), info = { pages: 1, bytes: r.blob.size, w: r.w, h: r.h, how: r.how, corners: r.corners };
+    S.doneCalled = true; closeUi(false, false);
+    if (cb) cb(file, info);
+  }
+  function rRcptStart(col) {
+    setTop('영수증 스캔');
+    col.appendChild(h('div', 'dsc-sub', '영수증을 평평한 곳에 놓고 한 장 찍으면 테두리를 찾아 반듯하게 펴 드립니다. 한 번에 한 장입니다.'));
+    col.appendChild(h('button', 'dsc-btn dsc-pri dsc-big', '📷 영수증 찍기', function () { rcptShoot('camera'); }));
+    col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 불러오기', rcptGallery));
+    col.appendChild(h('div', 'dsc-sub', '미리 찍어 둔 사진은 [사진 불러오기]로 고르실 수 있습니다.'));
+    if (S.opts.auto && S.cvOk === false) col.appendChild(h('div', 'dsc-warn', '자동 보정을 쓸 수 없어 찍은 그대로 줄여서 씁니다.'));
+  }
+  function rRcptPrev(col) {
+    setTop('영수증 스캔', function () { rcptFree(); S.rcpt = null; S.screen = 'start'; render(); });
+    var r = S.rcpt, c = h('div', 'dsc-card dsc-item');
+    var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진'; c.appendChild(im);
+    c.appendChild(h('div', 'dsc-sub', (r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
+    col.appendChild(c);
+    col.appendChild(h('button', 'dsc-btn dsc-big', '📷 다시 찍기', function () { rcptShoot('camera'); }));
+    col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 불러오기', rcptGallery));
+    foot([h('button', 'dsc-btn dsc-pri', '이 사진 사용', rcptUse)]);
+  }
 
   function rStart(col) {
     setTop(S.opts.purpose === 'meeting' ? '회의 자료 찍기' : '문서 스캔');
@@ -1304,6 +1372,7 @@
     if (S.sheet) { history.pushState({ dsc: 1 }, ''); closeLook(); return; }   // O-0583: 보정 시트만 닫는다
     if (S.screen === 'edit' && !S.busy) { history.pushState({ dsc: 1 }, ''); leaveEdit(); return; }   // O-0583: 자르기 화면 → 목록
     if (S.busy) { S.pushed = false; closeUi(true, true); return; }          // O-0576: 사진 정리 중 뒤로가기 = ✕ 와 같이 정리를 멈추고 닫는다
+    if (RCP() && S.screen === 'rcptprev') { history.pushState({ dsc: 1 }, ''); rcptFree(); S.rcpt = null; S.screen = 'start'; render(); return; }
     if (S.screen === 'name') { history.pushState({ dsc: 1 }, ''); S.screen = 'list'; render(); return; }
     S.pushed = false; closeUi(true, S.screen !== 'result');
   }
@@ -1313,6 +1382,7 @@
     // O-0576: 리스너는 떼지 않는다(떼면 아래 history.back() 의 popstate 를 못 받아 ignorePop 이 1 남아, 다음에 연 화면의 첫 뒤로가기가 먹히지 않았다)
     Object.keys(s.thumbs).forEach(function (k) { try { URL.revokeObjectURL(s.thumbs[k]); } catch (e) {} });
     if (s.ed) freeCv(s.ed.cvs);
+    if (s.rcpt && s.rcpt.url) { try { URL.revokeObjectURL(s.rcpt.url); } catch (e) {} }
     store.commitRemoved();
     s.root.remove();
     if (!fromPop && s.pushed) { ignorePop++; try { history.back(); } catch (e) { ignorePop--; } }
@@ -1323,17 +1393,18 @@
     opts = opts || {};
     if (S) return false;
     ensureStyle();
-    var root = h('div', 'dsc-root'); root.id = 'dsc-root'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '문서 스캔');
+    var root = h('div', 'dsc-root'); root.id = 'dsc-root'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', opts.purpose === 'receipt' ? '영수증 스캔' : '문서 스캔');
     var top = h('div', 'dsc-top'), body = h('div', 'dsc-body'), ft = h('div', 'dsc-foot');
     var recEl = h('div', 'dsc-rec', '● 녹음은 계속되고 있습니다'); recEl.style.display = 'none'; recEl.setAttribute('role', 'status');   // O-0576
     root.appendChild(top); root.appendChild(recEl); root.appendChild(body); root.appendChild(ft);
     document.body.appendChild(root);
-    S = { opts: opts, recEl: recEl, root: root, top: top, body: body, foot: ft, screen: 'start', pages: [], thumbs: {}, busy: false, token: 0, pushed: false, fname: null, set: opts.auto ? loadSet() : null, cvOk: undefined, ed: null, sheet: null };
+    S = { opts: opts, recEl: recEl, root: root, top: top, body: body, foot: ft, screen: 'start', pages: [], thumbs: {}, busy: false, token: 0, pushed: false, fname: null, set: opts.auto && opts.purpose !== 'receipt' ? loadSet() : null, cvOk: undefined, ed: null, sheet: null };
     try { history.pushState({ dsc: 1 }, ''); S.pushed = true; if (!popHooked) { popHooked = true; window.addEventListener('popstate', onPop); } } catch (e) {}
     S.busy = true; render();
     var first = S;
     if (opts.auto) ensureCv(!!(cvLib() && cvLib().hasFailed && cvLib().hasFailed())).then(function () { if (S === first && !S.busy && !S.prog && (S.screen === 'start' || S.screen === 'list')) render(); });   // O-0583
     if (opts.isRecording) first.recTimer = setInterval(function () { if (S === first) updRec(); }, 3000);   // O-0576
+    if (opts.purpose === 'receipt') { S.pages = []; S.busy = false; S.mem = false; render(); return true; }   // v9.26: 영수증은 쪽 저장소를 건드리지 않는다
     pendingSave.then(function () { return store.listSession(); }).then(function (r) {
       if (S !== first) return;
       S.pages = r.pages; S.busy = false;
@@ -1370,6 +1441,6 @@
     clearSession: store.clearSession, getPageBlob: store.getPageBlob, getRec: store.getRec, updatePage: store.updatePage, encodeGrayJpeg: encodeGrayJpeg, QUALITY: DSC_QUALITY,
     isOpen: function () { return !!S; },
     back: function () { if (!S) return false; try { history.back(); } catch (e) { closeUi(true, true); } return true; },   // app.js goBack() 에서 호출 가능
-    KEEP_DAYS: DSC_KEEP_DAYS, MAX_PAGES: DSC_MAX_PAGES
+    RECEIPT: 1, KEEP_DAYS: DSC_KEEP_DAYS, MAX_PAGES: DSC_MAX_PAGES
   };
 })(window);
