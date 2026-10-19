@@ -526,6 +526,10 @@
     '.dsc-btn[disabled]{opacity:.45;cursor:default}',
     '.dsc-pri{background:linear-gradient(135deg,var(--p1,#3B82F6),var(--p2,#8B5CF6));color:#fff;border-color:transparent}',
     '.dsc-rcpt-img{display:block;max-width:100%;max-height:50vh;margin:0 auto;border-radius:8px;object-fit:contain}',
+    '.dsc-pv-img{display:block;max-width:100%;max-height:calc(100vh - 330px);min-height:120px;margin:0 auto;border-radius:8px;object-fit:contain;background:var(--glass2,#e5e8ef)}',
+    '.dsc-pvnav{display:flex;gap:8px}.dsc-pvnav .dsc-btn{flex:1}',
+    '.dsc-foot3 .dsc-btn{padding:8px 4px;font-size:15px}',
+    '.dsc-thumb-go{cursor:pointer}',
     '.dsc-big{min-height:64px;font-size:19px;width:100%}',
     '.dsc-card{background:var(--bg1,#fff);border:1px solid var(--glass-b2,#cbd2e6);border-radius:16px;padding:14px}',
     '.dsc-sub{color:var(--muted,#55627D);font-size:15px}',
@@ -701,7 +705,7 @@
       if (files.length > room) { toast(DSC_MAX_PAGES + '쪽까지만 담을 수 있어 앞의 ' + room + '장만 담습니다.', null, null, 6000); files = files.slice(0, room); }
     }
     S.busy = true; S.skipAuto = false;
-    var bad = 0, i = 0, n = files.length, added = 0, useAuto = false, quota = false, okFiles = 0, lastErr = null;
+    var pvId = null, bad = 0, i = 0, n = files.length, added = 0, useAuto = false, quota = false, okFiles = 0, lastErr = null;
     var pre;
     if (S.opts.auto && !cvReady() && cvLib()) {     // O-0586: 불러오는 동안 진행 카드 + [건너뛰기]
       S.prog = { i: 0, n: n, label: '자동 보정 준비', auto: false, loading: true, text: '자동 보정을 준비하는 중입니다… (처음 한 번 몇 초 걸립니다)' }; paintProgress();
@@ -722,13 +726,13 @@
           if (S !== mine || !pgs) return;
           okFiles++;
           if (replaceId == null && pgs.length > 1 && S.pages.length + added + pgs.length > DSC_MAX_PAGES) { okFiles--; bad++; toast('두 쪽을 담을 자리가 모자랍니다. 이 사진은 건너뜁니다.', null, null, 6000); return; }
-          if (replaceId != null) { var pr0 = store.replacePage(replaceId, pgs[0]); pendingSave = pr0.then(function () {}, function () {}); return pr0; }
+          if (replaceId != null) { var pr0 = store.replacePage(replaceId, pgs[0]); pendingSave = pr0.then(function () {}, function () {}); return pr0.then(function (r0) { pvId = replaceId; return r0; }); }
           var chain = Promise.resolve();
           pgs.forEach(function (pg) {
             chain = chain.then(function () {
               if (S !== mine) return;
               if (S.pages.length + added >= DSC_MAX_PAGES) { if (!S.capNote) { S.capNote = true; toast('최대 ' + DSC_MAX_PAGES + '쪽까지만 담을 수 있어 나머지는 담지 않았습니다.', null, null, 6000); } return; }
-              added++; var pr = store.addPage(pg, kind); pendingSave = pr.then(function () {}, function () {}); return pr;
+              added++; var pr = store.addPage(pg, kind); pendingSave = pr.then(function () {}, function () {}); return pr.then(function (nid) { if (pvId == null) pvId = nid; return nid; });
             });
           });
           return chain;
@@ -738,7 +742,8 @@
       return step();
     }).then(function () { if (S === mine) return refresh(); }).then(function () {
       if (S !== mine) return;
-      S.busy = false; S.prog = null; S.screen = 'list'; render();
+      S.busy = false; S.prog = null; S.screen = 'list';
+      if (pvOn() && n === 1 && okFiles === 1 && pvId != null && !quota) openPv(pvId); else render();   // v9.26: 한 장 찍은(다시 찍은) 직후 처리된 결과를 크게 보여 준다
       if (quota) toast(replaceId != null ? QUOTA_MSG : '저장 공간이 부족해 ' + n + '장 중 ' + okFiles + '장만 담았습니다. 불필요한 파일을 지운 뒤 다시 시도해 주세요.', null, null, 8000);
       else if (bad && bad === n) toast(n > 1 || !lastErr || !lastErr.message ? '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.' : storageMsg(lastErr, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
       else if (bad) toast(bad + '장은 넣지 못했습니다.', null, null, 6000);
@@ -809,6 +814,7 @@
         return make().catch(function () { if (S === mine) return make(); }).catch(function () {   // 한 번 재시도, 그래도 안 되면 쪽 번호 칸
           if (S !== mine) return;
           var ph = h('div', 'dsc-thumb dsc-thumb-ph', String(o.no)); ph.setAttribute('aria-label', o.no + '쪽');
+          if (o.open) { ph.className += ' dsc-thumb-go'; ph.setAttribute('role', 'button'); ph.addEventListener('click', o.open); }
           if (o.img.parentNode) o.img.parentNode.replaceChild(ph, o.img);
         });
       });
@@ -837,7 +843,7 @@
     var col = h('div', 'dsc-col'); S.body.appendChild(col);
     if (S.prog) { setTop(RCP() ? '영수증 스캔' : '사진 정리'); col.appendChild(progCard()); paintProgress(); return; }
     if (RCP()) { (S.screen === 'rcptprev' && S.rcpt ? rRcptPrev : rRcptStart)(col); return; }   // v9.26: 영수증 한 장(쪽 저장소를 쓰지 않는다)
-    ({ start: rStart, list: rList, name: rName, result: rResult, edit: S.ed ? rEdit : rList }[S.screen] || rStart)(col);
+    ({ start: rStart, list: rList, name: rName, result: rResult, edit: S.ed ? rEdit : rList, pv: S.pv ? rPv : rList }[S.screen] || rStart)(col);
   }
   function memNote(col) { if (S.mem) col.appendChild(h('div', 'dsc-warn', '이 기기에서는 임시 저장을 쓸 수 없어, 앱을 닫으면 사라집니다.')); }
 
@@ -905,6 +911,43 @@
     col.appendChild(h('button', 'dsc-btn dsc-big', '📷 다시 찍기', function () { rcptShoot('camera'); }));
     col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 불러오기', rcptGallery));
     foot([h('button', 'dsc-btn dsc-pri', '이 사진 사용', rcptUse)]);
+  }
+
+  /* ───────── v9.26 쪽 미리보기 (DOC_SCAN_PREVIEW) ─────────
+   * 찍은 직후 · 자르기/보정을 마친 직후 · 쪽 목록에서 썸네일을 눌렀을 때, 그 한 쪽의 «처리된 결과»를 크게 보여 준다.
+   * 해당 쪽 Blob 하나만 불러와 objectURL 하나로 보여 주고(쪽을 넘기거나 나가면 바로 해제) 쪽 저장소·PDF 만들기는 건드리지 않는다. */
+  function pvOn() { return !!(S && S.opts.preview && S.opts.purpose !== 'receipt'); }
+  function pvFree() { if (S && S.pv && S.pv.url) { try { URL.revokeObjectURL(S.pv.url); } catch (e) {} S.pv.url = null; } }
+  function pvIndex(id) { for (var i = 0; i < S.pages.length; i++) if (S.pages[i].id === id) return i; return -1; }
+  function openPv(id) {
+    if (!S) return;
+    if (!pvOn() || pvIndex(id) < 0) { S.screen = 'list'; render(); return; }
+    pvFree(); S.pv = { id: id, url: null }; S.screen = 'pv'; S.busy = false; render();
+  }
+  function leavePv() { if (!S) return; pvFree(); S.pv = null; S.screen = 'list'; render(); }
+  function rPv(col) {
+    var i = pvIndex(S.pv.id);
+    if (i < 0) { S.pv = null; S.screen = 'list'; return rList(col); }
+    var p = S.pages[i], n = S.pages.length, mine = S, token = S.token, id = p.id;
+    pvFree();
+    setTop('미리보기 · ' + (i + 1) + ' / ' + n + '쪽', function () { if (!S.busy) leavePv(); });
+    var c = h('div', 'dsc-card dsc-item'), im = h('img', 'dsc-pv-img'); im.alt = (i + 1) + '쪽 미리보기'; im.src = BLANK; c.appendChild(im);
+    var info = h('div', 'dsc-sub', (S.opts.auto ? statusText(p) + ' · ' + modeLabel(p.mode) + ' · ' : '') + mb(p.size || 0)); c.appendChild(info);
+    col.appendChild(c);
+    store.getPageBlob(id).then(function (b) {
+      if (!b || S !== mine || S.token !== token || !S.pv || S.pv.id !== id) return;
+      S.pv.url = URL.createObjectURL(b); im.src = S.pv.url;
+    }).catch(function () { if (S === mine && S.token === token) info.textContent = '미리보기를 불러오지 못했습니다.'; });
+    if (n > 1) {
+      var nv = h('div', 'dsc-pvnav');
+      var pb = h('button', 'dsc-btn', '◀ 앞 쪽', function () { if (!S.busy) openPv(S.pages[i - 1].id); }); pb.setAttribute('aria-label', '앞 쪽 보기'); if (i === 0) pb.disabled = true;
+      var nb = h('button', 'dsc-btn', '다음 쪽 ▶', function () { if (!S.busy) openPv(S.pages[i + 1].id); }); nb.setAttribute('aria-label', '다음 쪽 보기'); if (i === n - 1) nb.disabled = true;
+      nv.appendChild(pb); nv.appendChild(nb); col.appendChild(nv);
+    }
+    var fb = [h('button', 'dsc-btn', '다시 찍기', function () { retake(id); })];
+    if (S.opts.auto && cvUsable()) fb.push(h('button', 'dsc-btn', '편집', function () { openEdit(p, true); }));
+    fb.push(h('button', 'dsc-btn dsc-pri', '이 쪽 사용', leavePv));
+    foot(fb); S.foot.className = 'dsc-foot dsc-foot3';
   }
 
   function rStart(col) {
@@ -981,7 +1024,8 @@
     var imgs = [], cvOk = cvUsable();
     S.pages.forEach(function (p, i) {
       var it = h('div', 'dsc-card dsc-item'), hd = h('div', 'dsc-item-h'), im = h('img', 'dsc-thumb');
-      im.alt = ''; im.src = BLANK; imgs.push({ img: im, p: p, no: i + 1 });   // O-0576
+      im.alt = ''; im.src = BLANK; imgs.push({ img: im, p: p, no: i + 1, open: pvOn() ? function () { if (!S.busy) openPv(p.id); } : null });   // O-0576
+      if (pvOn()) { im.className += ' dsc-thumb-go'; im.setAttribute('role', 'button'); im.setAttribute('aria-label', (i + 1) + '쪽 크게 보기'); im.addEventListener('click', imgs[imgs.length - 1].open); }
       hd.appendChild(im);
       var t = h('div', 'dsc-info'), ln = h('div', 'dsc-line');
       ln.appendChild(h('span', 'dsc-num', (i + 1) + '쪽'));
@@ -1055,12 +1099,15 @@
   var HANDLE_NAMES = ['왼쪽 위 모서리', '오른쪽 위 모서리', '오른쪽 아래 모서리', '왼쪽 아래 모서리'];
   function cp(p) { return { x: p.x, y: p.y }; }
   function fullQuad(w, h) { return [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]; }
-  function leaveEdit() {
+  function leaveEdit(toPv) {                        // v9.26: 미리보기에서 들어왔거나 적용을 마쳤으면 그 쪽의 미리보기로(스위치 on 일 때)
     if (!S) return;
+    var id = S.ed ? S.ed.id : null, via = !!(S.ed && S.ed.viaPv);
     if (S.ed) { freeCv(S.ed.cvs); S.ed = null; }
-    S.screen = 'list'; S.busy = false; render();
+    S.busy = false;
+    if (pvOn() && id != null && (via || toPv) && pvIndex(id) >= 0) return openPv(id);
+    S.screen = 'list'; render();
   }
-  function openEdit(p) {
+  function openEdit(p, viaPv) {
     if (!S || S.busy || !cvUsable()) return;
     var mine = S; S.busy = true;
     store.getRec(p.id).then(function (r) {
@@ -1069,7 +1116,7 @@
         if (S !== mine) { freeCv(cvs); return; }
         var ow = cvs.width, oh = cvs.height;
         var cr = (r.orig && r.corners) ? r.corners.map(cp) : ((r.orig && r.cand) ? r.cand.map(cp) : fullQuad(ow, oh));
-        S.ed = { id: p.id, rec: r, cvs: cvs, ow: ow, oh: oh, corners: cr, hasSplit: !!r.split, newSplit: false, pos: r.split ? r.split.pos : 0.5, side: r.split ? r.split.side : null };
+        S.ed = { viaPv: !!viaPv, id: p.id, rec: r, cvs: cvs, ow: ow, oh: oh, corners: cr, hasSplit: !!r.split, newSplit: false, pos: r.split ? r.split.pos : 0.5, side: r.split ? r.split.side : null };
         S.busy = false; S.screen = 'edit'; render();
       });
     }).catch(function (e) { if (S === mine) { S.busy = false; toast(e && e.message || '자르기 화면을 열지 못했습니다.'); } });
@@ -1209,7 +1256,7 @@
         if (S !== mine) return;
         await refresh();
         if (S !== mine) return;
-        hideToast(); leaveEdit(); toast(ed.hasSplit ? '두 쪽으로 나누어 적용했습니다.' : '적용했습니다.');
+        hideToast(); leaveEdit(true); toast(ed.hasSplit ? '두 쪽으로 나누어 적용했습니다.' : '적용했습니다.');
       } catch (e) {
         if (S === mine) { S.busy = false; toast(storageMsg(e, '적용하지 못했습니다.')); }
       } finally { if (flat.flat !== ed.cvs) freeCv(flat.flat); }
@@ -1278,7 +1325,7 @@
             }
             if (S !== mine) return;
             await refresh(); if (S !== mine) return;
-            S.busy = false; S.prog = null; render();
+            S.busy = false; S.prog = null; if (!all && !fail && pvOn() && pvIndex(p.id) >= 0) openPv(p.id); else render();
             toast(fail ? done + '쪽을 바꿨고 ' + fail + '쪽은 바꾸지 못했습니다.' : (all ? '모든 쪽을 ' : '이 쪽을 ') + modeLabel(mode) + ' 모드로 바꿨습니다.');
           })();
         }
@@ -1371,6 +1418,7 @@
     if (S.making) { history.pushState({ dsc: 1 }, ''); toast('작업 중입니다. 잠시만 기다려 주세요.'); return; }   // O-0576: PDF 작성 중만 막는다
     if (S.sheet) { history.pushState({ dsc: 1 }, ''); closeLook(); return; }   // O-0583: 보정 시트만 닫는다
     if (S.screen === 'edit' && !S.busy) { history.pushState({ dsc: 1 }, ''); leaveEdit(); return; }   // O-0583: 자르기 화면 → 목록
+    if (S.screen === 'pv' && !S.busy) { history.pushState({ dsc: 1 }, ''); leavePv(); return; }   // v9.26: 미리보기 → 쪽 목록
     if (S.busy) { S.pushed = false; closeUi(true, true); return; }          // O-0576: 사진 정리 중 뒤로가기 = ✕ 와 같이 정리를 멈추고 닫는다
     if (RCP() && S.screen === 'rcptprev') { history.pushState({ dsc: 1 }, ''); rcptFree(); S.rcpt = null; S.screen = 'start'; render(); return; }
     if (S.screen === 'name') { history.pushState({ dsc: 1 }, ''); S.screen = 'list'; render(); return; }
@@ -1382,6 +1430,7 @@
     // O-0576: 리스너는 떼지 않는다(떼면 아래 history.back() 의 popstate 를 못 받아 ignorePop 이 1 남아, 다음에 연 화면의 첫 뒤로가기가 먹히지 않았다)
     Object.keys(s.thumbs).forEach(function (k) { try { URL.revokeObjectURL(s.thumbs[k]); } catch (e) {} });
     if (s.ed) freeCv(s.ed.cvs);
+    if (s.pv && s.pv.url) { try { URL.revokeObjectURL(s.pv.url); } catch (e) {} }
     if (s.rcpt && s.rcpt.url) { try { URL.revokeObjectURL(s.rcpt.url); } catch (e) {} }
     store.commitRemoved();
     s.root.remove();
