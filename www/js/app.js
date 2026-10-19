@@ -1617,7 +1617,7 @@
         (d.pnote ? '<div class="scan-warn scan-pnote">⚠ ' + esc(d.pnote) + '</div>' : '') + warns +
         '<div class="scan-sumline" id="scanSum">' + esc(scanSummaryLine(d)) + '</div>' +
         '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>';
-      foot = (SCAN_HANDOFF === 'on' ? '<button type="button" class="btn ghost scan-handoff" data-scan-handoff>💬 채팅으로 넘기기</button><div class="scan-handoff-note">케이와 채팅으로 이야기하며 정합니다. 등록은 채팅에서 『등록』이라고 답하셔야 됩니다.</div>' : '') +
+      foot = (SCAN_HANDOFF === 'on' ? '<button type="button" class="btn ghost scan-handoff" data-scan-handoff>💬 채팅으로 넘기기</button><div class="scan-handoff-note">케이와 채팅으로 이야기하며 정합니다. 등록은 채팅에서 『등록』이라고 답하시면 됩니다.</div>' : '') +
         '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
         '<button type="button" class="btn primary" id="scanGo" data-scan-go' + (why ? ' disabled' : '') + '><svg><use href="#i-check"/></svg>등록</button></div>';
       return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '">' + body + foot + '</div>';
