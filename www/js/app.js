@@ -97,6 +97,9 @@
    *   SCAN_HANDOFF 는 영수증 확인 카드의 [채팅으로 넘기기](한 줄 `#스캔 <id8> 상담`)만 끄는 스위치. */
   var SCAN_TAB = 'on';
   var SCAN_HANDOFF = 'on';
+  /* v9.26 영수증도 「스캔 화면」으로: 'on' 이면 영수증 입구가 문서 스캔 화면(영수증 스캔)을 열어 한 장을 자동 테두리·펴기·보정한 사진(JPEG) 한 장으로 영수증 등록 창에 넣는다.
+   *   'off' 면 v9.25 와 같다(사진 고르기 창만). DocScan 이 꺼졌거나(docScanOn) 카메라 권한이 막혀 있으면 'on' 이어도 사진 고르기로 대체. */
+  var RECEIPT_SCAN_CAM = 'on';
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -2536,7 +2539,7 @@
   $('photoInput').addEventListener('change', function () {
     if (this.files && this.files.length) {
       if (photoAsScan && SCAN_HUB === 'on') {                   // 영수증 모드: 한 장만(여러 장이면 첫 장 + 안내 한 줄)
-        reviewFiles([this.files[0]], 'photo'); setScanPanel(true, this.files.length > 1);
+        receiptToPanel(this.files[0], this.files.length > 1);
       } else {
         reviewFiles(this.files, 'photo'); setScanPanel(false);
       }
@@ -2573,9 +2576,36 @@
     }
   }
   // 영수증 등록 길(＋ 창 「영수증 등록」과 홈 「스캔」 창이 같이 쓴다) — 사진 한 장 고르기로 들어간다.
+  // 사진 한 장(갤러리에서 고른 것이든 스캔 화면이 만든 JPEG 든)을 「영수증 등록」 패널로 — 두 길이 똑같은 함수 하나를 지난다(photoAsScan → 패널 → sendBatchMemo asScan).
+  function receiptToPanel(file, extra) {
+    reviewFiles([file], 'photo'); setScanPanel(true, !!extra);
+  }
+  function receiptPick() { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }   // 기존 사진 고르기 길(v9.25 와 같음)
+  function receiptCamOk() { return RECEIPT_SCAN_CAM === 'on' && docScanOn() && !!(window.DocScan && DocScan.RECEIPT); }
   function openReceiptScan() {
     if (SCAN_HUB !== 'on') return;
-    photoAsScan = true; filePanelFromChat = true; $('photoInput').click();
+    if (!receiptCamOk()) { receiptPick(); return; }
+    function go() {
+      photoAsScan = true; filePanelFromChat = true;
+      var ok = false;
+      try {
+        ok = DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'receipt', isRecording: function () { return !!isRecording; },
+          onDone: function (file) { photoAsScan = true; filePanelFromChat = true; receiptToPanel(file, false); photoAsScan = false; },
+          onGallery: receiptPick,
+          onCancel: function () { photoAsScan = false; filePanelFromChat = false; } });
+      } catch (e) { ok = false; }
+      if (!ok) receiptPick();                                  // 스캔 화면을 못 열면 영수증 등록이 막히지 않게 기존 길로
+    }
+    var done = false, tm;
+    function next(denied) { if (done) return; done = true; clearTimeout(tm); if (denied) { toast('카메라를 쓸 수 없어 사진 고르기로 엽니다.'); receiptPick(); } else go(); }
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        tm = setTimeout(function () { next(false); }, 400);
+        navigator.permissions.query({ name: 'camera' }).then(function (st) { next(!!st && st.state === 'denied'); }, function () { next(false); });
+        return;
+      }
+    } catch (e) {}
+    go();
   }
   // 홈 「스캔」 칸: 무엇을 스캔할까요? (영수증 / 문서) — 스캔 본체는 openReceiptScan · openScanGeneral 하나씩뿐
   function scanTabOn() { return SCAN_TAB === 'on'; }
@@ -2587,7 +2617,7 @@
     var sh = document.createElement('div');
     sh.className = 'sheet shin-sheet atm-sheet stab-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="스캔 고르기"><div class="sheet-head">무엇을 스캔할까요?</div>' +
-      (hasR ? '<button type="button" class="sheet-btn" data-stab="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
+      (hasR ? '<button type="button" class="sheet-btn" data-stab="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증</b><small>한 장 찍으면 반듯하게 펴서 케이가 읽고, 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       (hasD ? '<button type="button" class="sheet-btn" data-stab="doc"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>문서</b><small>종이 문서를 여러 장 찍어 PDF 한 파일로 만듭니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn atm-close" data-stab="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
