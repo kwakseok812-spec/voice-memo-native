@@ -93,6 +93,9 @@
    *   DOC_SCAN_CHAT 도 'on' 이면 채팅 ＋ 창에 「📄 문서 스캔」 줄이 생긴다. 'off' 면 모든 입구가 닫혀 지금 동작과 같다. */
   var DOC_SCAN = 'on';
   var DOC_SCAN_CHAT = 'on';
+  /* v9.25(O-0589) 홈 「스캔」 칸 — 'on' 이면 도구 격자에 「스캔」 칸(아이디어 칸은 홈에서 빠짐), 'off' 면 홈이 v9.24 와 같고 아이디어 칸이 돌아온다.
+   */
+  var SCAN_TAB = 'on';
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -2549,6 +2552,35 @@
       if ($('isCard')) $('isCard').checked = false;
     }
   }
+  // 영수증 등록 길(＋ 창 「영수증 등록」과 홈 「스캔」 창이 같이 쓴다) — 사진 한 장 고르기로 들어간다.
+  function openReceiptScan() {
+    if (SCAN_HUB !== 'on') return;
+    photoAsScan = true; filePanelFromChat = true; $('photoInput').click();
+  }
+  // 홈 「스캔」 칸: 무엇을 스캔할까요? (영수증 / 문서) — 스캔 본체는 openReceiptScan · openScanGeneral 하나씩뿐
+  function scanTabOn() { return SCAN_TAB === 'on'; }
+  function openScanTab() {
+    if (!scanTabOn()) return;
+    var hasR = SCAN_HUB === 'on', hasD = docScanOn();
+    if (!hasR && !hasD) { toast('스캔을 지금은 쓸 수 없습니다.'); return; }
+    var old = document.querySelector('.stab-sheet'); if (old) { try { old.remove(); } catch (e) {} }
+    var sh = document.createElement('div');
+    sh.className = 'sheet shin-sheet atm-sheet stab-sheet';
+    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="스캔 고르기"><div class="sheet-head">무엇을 스캔할까요?</div>' +
+      (hasR ? '<button type="button" class="sheet-btn" data-stab="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
+      (hasD ? '<button type="button" class="sheet-btn" data-stab="doc"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>문서</b><small>종이 문서를 여러 장 찍어 PDF 한 파일로 만듭니다</small></span></button>' : '') +
+      '<button type="button" class="sheet-btn atm-close" data-stab="close">닫기</button></div>';
+    sh.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-stab]') : null;
+      if (!b && ev.target !== sh) return;
+      try { sh.remove(); } catch (e) {}
+      var k = b && b.getAttribute('data-stab');
+      if (k === 'receipt') openReceiptScan();
+      else if (k === 'doc' && docScanOn()) openScanGeneral();
+    });
+    document.body.appendChild(sh);
+    sh.style.display = 'flex';
+  }
   function openAttachMenu() {
     photoAsCard = false; filePanelFromChat = false; photoAsScan = false;          // 지난번에 고르기를 취소했으면 남은 표시를 지움
     var old = document.querySelector('.atm-sheet'); if (old) { try { old.remove(); } catch (e) {} }
@@ -2568,7 +2600,7 @@
       var k = b && b.getAttribute('data-atm');
       if (k === 'file') $('chatFileInput').click();
       else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
-      else if (k === 'receipt' && SCAN_HUB === 'on') { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }
+      else if (k === 'receipt' && SCAN_HUB === 'on') openReceiptScan();
       else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
       else if (k === 'docscan' && docScanOn() && DOC_SCAN_CHAT === 'on') openScanGeneral();   // O-0576
     });
@@ -8548,6 +8580,16 @@
   }
 
   if ($('btnIdeas')) $('btnIdeas').addEventListener('click', openIdeas);
+  // v9.25: 홈 도구 칸 — SCAN_TAB 'on' = 회의록·문서 뷰어·건강·스캔·명함 검색·공유함(아이디어 칸은 홈에서만 숨김, 화면·알림 길은 그대로) / 'off' = v9.24 와 같은 6칸
+  (function () {
+    var grid = $('homeTools'); if (!grid) return;
+    var on = scanTabOn(), sub = grid.querySelector('.tools-sub');
+    var ids = on ? ['btnMeetings', 'btnDocs', 'btnHealth', 'btnScanTab', 'btnSearchToggle', 'btnLocker']
+                 : ['btnMeetings', 'btnDocs', 'btnHealth', 'btnLocker', 'btnIdeas', 'btnSearchToggle'];
+    ids.forEach(function (id) { var b = $(id); if (b && sub) grid.insertBefore(b, sub); });
+    if ($('btnScanTab')) { $('btnScanTab').style.display = on ? '' : 'none'; $('btnScanTab').addEventListener('click', openScanTab); }
+    if ($('btnIdeas')) $('btnIdeas').style.display = on ? 'none' : '';
+  })();
   window.addEventListener('smartOpenIdeas', function () { openIdeas(); });   // 제안 알림 탭 → 아이디어 화면
 
   /* ===================== 시작 ===================== */
