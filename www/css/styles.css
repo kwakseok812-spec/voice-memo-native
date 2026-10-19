@@ -2085,3 +2085,9 @@ html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
   .scan-top .scan-thumb{flex:0 0 38%;width:38%}
   .scan-top .scan-fields{flex:1 1 0}
 }
+
+/* v9.25(O-0589) 영수증 카드 [채팅으로 넘기기] — 폭 가득 한 줄 단추(아래 [등록 안 함]·[등록] 두 단추와 줄이 따로라 360px 에서도 몰리지 않는다) */
+.scan-handoff{display:flex;align-items:center;justify-content:center;width:100%;height:50px;margin:0 0 6px;border-radius:16px;font-size:16px;font-weight:700;min-width:0}
+.scan-handoff-note{margin:0 2px 12px;font-size:12.5px;line-height:1.4;color:var(--dim);word-break:keep-all}
+html[data-fs] .scan-handoff{font-size:calc(16px * var(--fsx));height:auto;min-height:50px;padding:6px 10px}
+html[data-fs] .scan-handoff-note{font-size:calc(12.5px * var(--fsx))}

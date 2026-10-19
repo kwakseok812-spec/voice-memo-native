@@ -94,8 +94,9 @@
   var DOC_SCAN = 'on';
   var DOC_SCAN_CHAT = 'on';
   /* v9.25(O-0589) 홈 「스캔」 칸 — 'on' 이면 도구 격자에 「스캔」 칸(아이디어 칸은 홈에서 빠짐), 'off' 면 홈이 v9.24 와 같고 아이디어 칸이 돌아온다.
-   */
+   *   SCAN_HANDOFF 는 영수증 확인 카드의 [채팅으로 넘기기](한 줄 `#스캔 <id8> 상담`)만 끄는 스위치. */
   var SCAN_TAB = 'on';
+  var SCAN_HANDOFF = 'on';
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -1531,6 +1532,8 @@
     o.merchant = String(d.merchant).replace(/\s+/g, ' ').trim().slice(0, 60);
     return o;
   }
+  // 채팅으로 넘기기: 한 줄 `#스캔 <id앞8자리> 상담`(사진·내용은 싣지 않는다 — 원본은 PC 에 있다). 값은 scan_contract_v921.md 와 같다.
+  function scanHandoffLine(id) { return '#스캔 ' + String(id).replace(/-/g, '').slice(0, 8) + ' 상담'; }
   function scanChatLine(id, payload) { return '#스캔 ' + String(id).replace(/-/g, '').slice(0, 8) + ' 등록 ' + JSON.stringify(payload); }
   function scanCopyText(sc, d) {
     var a = scanAmt(d.amount) || sc.amount, dt = scanDateOk(d.date) ? d.date : (sc.date || '');
@@ -1614,7 +1617,8 @@
         (d.pnote ? '<div class="scan-warn scan-pnote">⚠ ' + esc(d.pnote) + '</div>' : '') + warns +
         '<div class="scan-sumline" id="scanSum">' + esc(scanSummaryLine(d)) + '</div>' +
         '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>';
-      foot = '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
+      foot = (SCAN_HANDOFF === 'on' ? '<button type="button" class="btn ghost scan-handoff" data-scan-handoff>💬 채팅으로 넘기기</button><div class="scan-handoff-note">케이와 채팅으로 이야기하며 정합니다. 등록은 채팅에서 『등록』이라고 답하셔야 됩니다.</div>' : '') +
+        '<div class="scan-btns"><button type="button" class="btn ghost" data-scan-skip>등록 안 함</button>' +
         '<button type="button" class="btn primary" id="scanGo" data-scan-go' + (why ? ' disabled' : '') + '><svg><use href="#i-check"/></svg>등록</button></div>';
       return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '">' + body + foot + '</div>';
     }
@@ -1658,6 +1662,8 @@
     });
     var skip = root.querySelector('[data-scan-skip]');
     if (skip) skip.addEventListener('click', function () { scanSkip(e); });
+    var ho = root.querySelector('[data-scan-handoff]');
+    if (ho) ho.addEventListener('click', function () { scanHandoff(e); });
     var cp = root.querySelector('[data-scan-copy]');
     if (cp) cp.addEventListener('click', function () { copyToClipboard(scanCopyText(sc, d)); });
     var rt = root.querySelector('[data-scan-retake]');
@@ -1674,12 +1680,13 @@
     });
   }
   // 말풍선에 보일 글: 「#스캔 …」 기계 글은 짧은 안내로 바꾼다. 이 기기에서 보낸 것(m.disp)뿐 아니라 서버에서 되받은 말풍선(다른 기기·재동기화)도 글 모양으로 알아본다.
-  var SCAN_LINE_RE = /^\s*#스캔\s+[0-9a-f]{8}\s+(등록|안함|취소)(?:\s+(\{[\s\S]*\}))?\s*$/;
+  var SCAN_LINE_RE = /^\s*#스캔\s+[0-9a-f]{8}\s+(등록|안함|취소|상담)(?:\s+(\{[\s\S]*\}))?\s*$/;
   function scanBubbleText(m) {
     if (SCAN_HUB !== 'on') return m.text;
     if (m.disp) return m.disp;
     var x = SCAN_LINE_RE.exec(String(m.text));
     if (!x) return m.text;
+    if (x[1] === '상담') return '🧾 영수증 상담 요청';
     if (x[1] !== '등록') return '🧾 영수증 등록 안 함';
     var o = null; try { o = JSON.parse(x[2] || ''); } catch (er) {}
     var a = o && scanAmt(o.amount);
@@ -1698,6 +1705,19 @@
       if (ok) { HistoryModule.update(e.id, { scan_skip: true, scan_sent: null }); toast('등록하지 않았습니다.'); }
       else toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.');
       scanRedraw(e.id);
+    });
+  }
+  // [채팅으로 넘기기]: 한 줄을 보내고 채팅 화면으로 간다. 못 보냈으면 카드를 그대로 두고 다시 누르게 한다. 등록은 하지 않는다.
+  function scanHandoff(e) {
+    if (SCAN_HANDOFF !== 'on' || scanUi[e.id]) return;
+    if (!getSyncPass()) { showSyncGate(true, '채팅으로 넘기려면 PC 연동 암호를 입력해 주십시오.'); return; }
+    scanUi[e.id] = 'sending';
+    unlockKaiAudio();
+    scanNextDisp = '🧾 영수증 상담 요청';
+    sendPlainChat(scanHandoffLine(e.id), false).then(function (ok) {
+      delete scanUi[e.id];
+      if (ok) { openChat(); }
+      else toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.');
     });
   }
   function scanRegister(e, d) {
