@@ -100,6 +100,7 @@
   /* v9.26 영수증도 「스캔 화면」으로: 'on' 이면 영수증 입구가 문서 스캔 화면(영수증 스캔)을 열어 한 장을 자동 테두리·펴기·보정한 사진(JPEG) 한 장으로 영수증 등록 창에 넣는다.
    *   'off' 면 v9.25 와 같다(사진 고르기 창만). DocScan 이 꺼졌거나(docScanOn) 카메라 권한이 막혀 있으면 'on' 이어도 사진 고르기로 대체. */
   var RECEIPT_SCAN_CAM = 'on';
+  var DOC_SCAN_PREVIEW = 'on';   // v9.26: 문서·회의 스캔의 쪽 미리보기(찍은 직후·편집 직후·썸네일 누르면 큰 화면). 'off' 면 v9.26 영수증 제외 동작과 같다
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -885,7 +886,7 @@
   function openScanForMeeting() {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);   // ADDENDUM 5: 막지 않고 안내만
-    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'meeting', onDone: attachScanned, isRecording: function () { return !!isRecording; } });   // O-0576
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', preview: DOC_SCAN_PREVIEW === 'on', purpose: 'meeting', onDone: attachScanned, isRecording: function () { return !!isRecording; } });   // O-0576
   }
   [$('matScanPrep'), $('matScan')].forEach(function (b) {
     if (!b) return;
@@ -1244,7 +1245,7 @@
   function openScanForDraft(id) {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);
-    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'meeting', isRecording: function () { return !!isRecording; }, onDone: function (file, info) { attachScannedToDraft(id, file, info); } });   // O-0576
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', preview: DOC_SCAN_PREVIEW === 'on', purpose: 'meeting', isRecording: function () { return !!isRecording; }, onDone: function (file, info) { attachScannedToDraft(id, file, info); } });   // O-0576
   }
   // 임시저장 재개 시 자료 첨부 전용 입력(모달에서 [회의자료 붙이기])
   var draftAttachId = null;
@@ -6217,7 +6218,7 @@
   function openScanGeneral() {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);   // O-0576: 다른 두 곳과 같은 규칙
-    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', preview: DOC_SCAN_PREVIEW === 'on', purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
       share: function (file) {        // 기본: 공유함
         toast('공유함에 올리는 중입니다…', 2500);
         docScanShare(file).then(function () {
