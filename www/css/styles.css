@@ -2091,3 +2091,14 @@ html[data-fs] .msgstat.fail .msgretry{font-size:calc(14px * var(--fsx))}
 .scan-handoff-note{margin:0 2px 12px;font-size:12.5px;line-height:1.4;color:var(--dim);word-break:keep-all}
 html[data-fs] .scan-handoff{font-size:calc(16px * var(--fsx));height:auto;min-height:50px;padding:6px 10px}
 html[data-fs] .scan-handoff-note{font-size:calc(12.5px * var(--fsx))}
+
+/* v9.27 기록 보기: 그래프 기간 칩 · 달 머리줄 (스위치 HIST_COMPACT, health.js) */
+.hspans{display:flex;gap:8px;margin:0 0 10px}
+.hspan{flex:1;min-height:40px;border-radius:999px;border:1px solid rgba(140,150,175,.45);background:transparent;color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background .18s,color .18s,transform .12s}
+.hspan:active{transform:scale(.96)}
+.hspan.on{background:var(--cyan);color:#06101f;border-color:transparent}
+.hday.hmonth .hday-meal{margin-top:6px}
+.hmonth-chev{transition:transform .2s}
+.hmonth.on .hmonth-chev{transform:rotate(90deg)}
+@media (prefers-reduced-motion:reduce){.hspan,.hmonth-chev{transition:none}.hspan:active{transform:none}}
+html[data-style="light"] .hspan.on{color:#fff}

@@ -86,6 +86,16 @@
   function skipOn(k, v) { return SKIP_MEALS[k] === 1 && isSkip(v); }
   var HIST_DAYS = 30;         // 「기록 보기」가 불러오는 범위 = 고칠 수 있는 범위(오늘 포함 30일)
   var GAP_DAYS = 7;           // 기록 보기에서 「통째로 빠진 날」도 줄로 보여 주는 범위(최근 7일). 0 이면 끔.
+  /* v9.27 (기록 보기 간소화·전체 보기): 스위치 HIST_COMPACT. false 면 예전 화면(최근 30일 날짜 줄 전부, 그래프 30일 고정)으로 돌아간다.
+   *  - 날짜 줄은 최근 RECENT_OPEN_DAYS 일만 펼치고, 그 앞은 달별로 접는다(달 머리줄에 체중 평균·범위·기록일수). 달을 눌러야 날짜가 펼쳐진다.
+   *  - 30일보다 오래된 기록은 화면 표시용으로만 서버에서 받는다(읽기만 - 원본은 지우거나 합치지 않는다). 고칠 수 있는 범위는 그대로 30일.
+   *  - 그래프 기간 칩(30일·3개월·1년·전체). 점이 많으면 주간(→월간) 평균으로 줄여 그린다. */
+  var HIST_COMPACT = true;
+  var RECENT_OPEN_DAYS = 14;
+  var CHART_SPANS = [{ k: 30, t: '30일' }, { k: 90, t: '3개월' }, { k: 365, t: '1년' }, { k: 0, t: '전체' }];
+  var chartSpan = 30;         // 이번에 연 화면의 그래프 기간(0=전체)
+  var monthOpen = {};         // 펼친 달 {'2026-09': 1}
+  var archRows = [], archAt = 0, archBusy = false, archFail = false;   // 30일보다 오래된 행(화면 표시용, 최신순)
   var rec = null;             // 지금 입력 화면에 떠 있는 날짜의 기록(오늘 또는 고치는 중인 지난 날짜)
   var mode = 'today';         // 'today' | 'past'
   var openMeals = {};         // 이번에 연 화면에서 펼쳐 둔 끼니(다시 그려도 접히지 않게)
@@ -921,7 +931,30 @@
       rangeRows = rows.slice().sort(function (a, b) { return a.log_date < b.log_date ? 1 : -1; });
       lastRemember();
       drawHistory(false);
+      loadArchive();
     }, function (e) { drawHistory(true, isCut(e)); });
+  }
+  // 30일보다 오래된 기록: 400일 단위로 거슬러 올라가며 받는다(서버 한도 400일). 연속 2번 비면 멈춘다. 10분 안에 받았으면 다시 받지 않는다.
+  function loadArchive() {
+    if (!HIST_COMPACT || archBusy || (archAt && Date.now() - archAt < 600000)) return;
+    archBusy = true; archFail = false;
+    var acc = [], empties = 0, hop = 0;
+    function step(toOff) {
+      var from = daysAgoStr(toOff + 399), to = daysAgoStr(toOff);
+      return listRange(from, to, true).then(function (rows) {
+        acc = acc.concat(rows);
+        empties = rows.length ? 0 : empties + 1;
+        hop++;
+        if (empties >= 2 || hop >= 6) return;
+        return step(toOff + 400);
+      });
+    }
+    step(HIST_DAYS).then(function () {
+      archRows = acc.sort(function (a, b) { return a.log_date < b.log_date ? 1 : -1; }); archAt = Date.now();
+    }, function () { archFail = true; }).then(function () {
+      archBusy = false;
+      var v = $('hHistory'); if (v && v.querySelector('.hsec')) drawHistory(false);
+    });
   }
   // failed=true 면 서버에서 못 읽은 것. cut=true 는 그 까닭이 연결 끊김(요청이 못 나감)일 때만.
   function kEmpty(pose, text) { return global.KScene ? global.KScene.emptyHtml(pose, text) : '<div class="empty-note">' + esc(text) + '</div>'; }
@@ -938,10 +971,14 @@
     }
     if (failed) html += '<div class="empty-note">' + esc(sorry + ' ' + (isNative() ? '폰' : '이 기기') + '에 적어 둔 것만 보여 드립니다.') + '</div>';
     // rows: 최신순. 그래프는 과거→현재(오름차순)로.
-    var asc = rows.slice().sort(function (a, b) { return a.log_date < b.log_date ? -1 : 1; });
-    var gluc = asc.filter(function (r) { return isSet(r.fasting_glucose); }).map(function (r) { return { d: r.log_date, v: +r.fasting_glucose }; });
-    var wt = asc.filter(function (r) { return isSet(r.weight); }).map(function (r) { return { d: r.log_date, v: +r.weight }; });
+    var all = (HIST_COMPACT && !failed) ? rows.concat(archRows) : rows;     // 오래된 달까지 합친 표시용 목록
+    var asc = all.slice().sort(function (a, b) { return a.log_date < b.log_date ? -1 : 1; });
+    var cutD = (HIST_COMPACT && chartSpan) ? daysAgoStr(chartSpan - 1) : '';
+    var inSpan = function (r) { return !cutD || r.log_date >= cutD; };
+    var gluc = asc.filter(function (r) { return inSpan(r) && isSet(r.fasting_glucose); }).map(function (r) { return { d: r.log_date, v: +r.fasting_glucose }; });
+    var wt = asc.filter(function (r) { return inSpan(r) && isSet(r.weight); }).map(function (r) { return { d: r.log_date, v: +r.weight }; });
     if (!failed) {
+      if (HIST_COMPACT) html += spanChips();
       html += chartCard('공복혈당', 'mg/dL', gluc, '#22D3EE', [70, 140]);
       html += chartCard('체중', 'kg', wt, '#8B5CF6', null, 4);   // 최소 y축 폭 4kg: 미세 변동이 절벽처럼 과장되지 않게
     }
@@ -953,12 +990,76 @@
       for (var i = 1; i <= GAP_DAYS; i++) { var gd = daysAgoStr(i); if (!have[gd]) list.push({ log_date: gd, _gap: 1 }); }
       list.sort(function (a, b) { return a.log_date < b.log_date ? 1 : -1; });
     }
-    list.forEach(function (r) { html += r._gap ? gapRow(r.log_date) : dayRow(r, !!ov.pend[r.log_date], r.log_date === t); });
+    if (!HIST_COMPACT || failed) {
+      list.forEach(function (r) { html += r._gap ? gapRow(r.log_date) : dayRow(r, !!ov.pend[r.log_date], r.log_date === t); });
+    } else {
+      var openFrom = daysAgoStr(RECENT_OPEN_DAYS - 1), months = [], mi = {};
+      var addM = function (r) {
+        var mk = r.log_date.slice(0, 7);
+        if (!(mk in mi)) { mi[mk] = months.length; months.push({ k: mk, rows: [] }); }
+        months[mi[mk]].rows.push(r);
+      };
+      list.forEach(function (r) {
+        if (r.log_date >= openFrom) { html += r._gap ? gapRow(r.log_date) : dayRow(r, !!ov.pend[r.log_date], r.log_date === t); return; }
+        if (!r._gap) addM(r);
+      });
+      archRows.forEach(addM);
+      months.forEach(function (m) {
+        var on = !!monthOpen[m.k];
+        html += monthHead(m, on);
+        if (on) m.rows.forEach(function (r) { html += dayRow(r, !!ov.pend[r.log_date], r.log_date === t); });
+      });
+      if (archBusy && !archAt) html += '<div class="empty-note">이전 달 기록을 가져오고 있습니다…</div>';
+      else if (archFail) html += '<div class="empty-note">이전 달 기록은 불러오지 못했습니다. 「기록 보기」를 다시 눌러 주세요.</div>';
+    }
     html += '</div>';
     host.innerHTML = html;
     Array.prototype.forEach.call(host.querySelectorAll('.hday[data-date]'), function (b) {
       b.addEventListener('click', function () { openDate(b.getAttribute('data-date')); });
     });
+    Array.prototype.forEach.call(host.querySelectorAll('.hmonth[data-month]'), function (b) {
+      b.addEventListener('click', function () {
+        var k = b.getAttribute('data-month'); monthOpen[k] = monthOpen[k] ? 0 : 1; drawHistory(false);
+      });
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('.hspan[data-span]'), function (b) {
+      b.addEventListener('click', function () { chartSpan = +b.getAttribute('data-span'); drawHistory(false); });
+    });
+  }
+  function spanChips() {
+    return '<div class="hspans" role="group" aria-label="그래프 기간">' + CHART_SPANS.map(function (c) {
+      return '<button type="button" class="hspan' + (c.k === chartSpan ? ' on' : '') + '" data-span="' + c.k + '" aria-pressed="' + (c.k === chartSpan) + '">' + c.t + '</button>';
+    }).join('') + '</div>';
+  }
+  // 달 머리줄: 「체중 평균 70.3 (68.9~71.2) · 기록 12일」 - 달을 누르면 그 달의 날짜 줄이 펼쳐진다
+  function monthHead(m, on) {
+    var ws = m.rows.filter(function (r) { return isSet(r.weight); }).map(function (r) { return +r.weight; });
+    var p = m.k.split('-');
+    var sum = '기록 ' + m.rows.length + '일';
+    if (ws.length) {
+      var av = ws.reduce(function (a, b) { return a + b; }, 0) / ws.length;
+      sum = '체중 평균 ' + av.toFixed(1) + ' (' + Math.min.apply(null, ws).toFixed(1) + '~' + Math.max.apply(null, ws).toFixed(1) + ') · ' + sum;
+    }
+    return '<button type="button" class="card hday hmonth' + (on ? ' on' : '') + '" data-month="' + m.k + '" aria-expanded="' + on + '">' +
+      '<div class="hday-top"><b>' + p[0] + '년 ' + (+p[1]) + '월</b>' +
+      '<span class="hday-r"><svg class="hday-chev hmonth-chev"><use href="#i-chev-r"/></svg></span></div>' +
+      '<div class="hday-meal">' + esc(sum) + '</div></button>';
+  }
+  // 점이 많으면 주(월요일 시작)→월 평균으로 줄인다. 반환 {pts, unit} (unit: '' | '주간' | '월간')
+  function condense(pts) {
+    if (pts.length <= 45) return { pts: pts, unit: '' };
+    function bucket(keyOf) {
+      var o = [], idx = {};
+      pts.forEach(function (q) {
+        var k = keyOf(q.d);
+        if (!(k in idx)) { idx[k] = o.length; o.push({ d: q.d, s: 0, n: 0 }); }
+        var b = o[idx[k]]; b.s += q.v; b.n++;
+      });
+      return o.map(function (b) { return { d: b.d, v: Math.round(b.s / b.n * 10) / 10 }; });
+    }
+    var wk = bucket(function (d) { return Math.floor((dayNum(d) + 3) / 7); });
+    if (wk.length <= 120) return { pts: wk, unit: '주간' };
+    return { pts: bucket(function (d) { return d.slice(0, 7); }), unit: '월간' };
   }
   function dayRow(r, pend, isToday) {
     var bits = [];
@@ -992,7 +1093,9 @@
   function chartCard(title, unit, pts, color, fixRange, minSpan) {
     var head = '<div class="hchart-h"><span>' + title + ' <small>' + unit + '</small></span>';
     if (!pts.length) return '<div class="card hchart">' + head + '</div><div class="hchart-empty">아직 ' + title + ' 기록이 없습니다.</div></div>';
+    var rawN = pts.length, cd = HIST_COMPACT ? condense(pts) : { pts: pts, unit: '' };
     var last = pts[pts.length - 1];
+    pts = cd.pts;
     head += '<b class="hchart-last">' + last.v + '<small> ' + unit + '</small></b></div>';
     var W = 320, H = 120, PADL = 34, PADR = 8, PADT = 12, PADB = 20;
     var vals = pts.map(function (p) { return p.v; });
@@ -1008,7 +1111,7 @@
     var d = '', dots = '';
     pts.forEach(function (p, i) {
       d += (i === 0 ? 'M' : 'L') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1) + ' ';
-      dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.6" fill="' + color + '"/>';
+      if (n <= 60) dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.6" fill="' + color + '"/>';
     });
     // y축 눈금 2개(최소/최대 근사)
     var yTop = Math.round(mx), yBot = Math.round(mn);
@@ -1026,7 +1129,7 @@
       '<path d="' + d.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
       dots + '</svg>';
     return '<div class="card hchart">' + head + svg +
-      '<div class="hchart-foot">최근 ' + n + '일 · ' + fmtDayLabel(pts[0].d).replace(/ · .*/, '') + ' → ' + fmtDayLabel(last.d).replace(/ · .*/, '') + '</div></div>';
+      '<div class="hchart-foot">' + (cd.unit ? '기록 ' + rawN + '일 · ' + cd.unit + ' 평균 · ' : '최근 ' + n + '일 · ') + fmtDayLabel(pts[0].d).replace(/ · .*/, '') + ' → ' + fmtDayLabel(last.d).replace(/ · .*/, '') + '</div></div>';
   }
 
   /* ============================ 탭 전환 / 진입 ============================ */
