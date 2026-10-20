@@ -982,7 +982,7 @@
       html += chartCard('공복혈당', 'mg/dL', gluc, '#22D3EE', [70, 140]);
       html += chartCard('체중', 'kg', wt, '#8B5CF6', null, 4);   // 최소 y축 폭 4kg: 미세 변동이 절벽처럼 과장되지 않게
     }
-    html += '<div class="hsec">날짜별 기록 <small>날짜를 누르면 그날 기록을 고칠 수 있습니다</small></div><div class="list hlist">';
+    html += '<div class="hsec">날짜별 기록 <small>' + (HIST_COMPACT ? '최근 30일 안의 날짜는 눌러서 고칠 수 있습니다' : '날짜를 누르면 그날 기록을 고칠 수 있습니다') + '</small></div><div class="list hlist">';
     // 최근 GAP_DAYS 일 안에서 통째로 빠진 날도 줄로 보여 준다(눌러서 적기) — 오늘은 「오늘 기록」 탭이 있으니 제외
     var have = {}, list = rows.slice(), t = todayStr();
     rows.forEach(function (r) { have[r.log_date] = 1; });
@@ -1006,7 +1006,7 @@
       archRows.forEach(addM);
       months.forEach(function (m) {
         var on = !!monthOpen[m.k];
-        html += monthHead(m, on);
+        html += monthHead(m, on, m.k === openFrom.slice(0, 7));
         if (on) m.rows.forEach(function (r) { html += dayRow(r, !!ov.pend[r.log_date], r.log_date === t); });
       });
       if (archBusy && !archAt) html += '<div class="empty-note">이전 달 기록을 가져오고 있습니다…</div>';
@@ -1032,7 +1032,7 @@
     }).join('') + '</div>';
   }
   // 달 머리줄: 「체중 평균 70.3 (68.9~71.2) · 기록 12일」 - 달을 누르면 그 달의 날짜 줄이 펼쳐진다
-  function monthHead(m, on) {
+  function monthHead(m, on, partial) {
     var ws = m.rows.filter(function (r) { return isSet(r.weight); }).map(function (r) { return +r.weight; });
     var p = m.k.split('-');
     var sum = '기록 ' + m.rows.length + '일';
@@ -1041,7 +1041,7 @@
       sum = '체중 평균 ' + av.toFixed(1) + ' (' + Math.min.apply(null, ws).toFixed(1) + '~' + Math.max.apply(null, ws).toFixed(1) + ') · ' + sum;
     }
     return '<button type="button" class="card hday hmonth' + (on ? ' on' : '') + '" data-month="' + m.k + '" aria-expanded="' + on + '">' +
-      '<div class="hday-top"><b>' + p[0] + '년 ' + (+p[1]) + '월</b>' +
+      '<div class="hday-top"><b>' + p[0] + '년 ' + (+p[1]) + '월' + (partial ? ' · ' + RECENT_OPEN_DAYS + '일 이전' : '') + '</b>' +
       '<span class="hday-r"><svg class="hday-chev hmonth-chev"><use href="#i-chev-r"/></svg></span></div>' +
       '<div class="hday-meal">' + esc(sum) + '</div></button>';
   }
@@ -1078,11 +1078,12 @@
     });
     if (EXERCISE_TAB_ON && isSet(r.exercise)) meals.push('운동 ' + r.exercise);
     var mealLine = meals.length ? '<div class="hday-meal">' + esc(meals.join(' / ')) + '</div>' : '';
-    return '<button type="button" class="card hday" data-date="' + esc(r.log_date) + '" aria-label="' + esc(fmtDayShort(r.log_date)) + ' 기록 ' + (isToday ? '열기' : '고치기') + '">' +
+    var ro = HIST_COMPACT && r.log_date < daysAgoStr(HIST_DAYS - 1);     // 30일 넘은 옛 기록: 고칠 수 없으니 누르는 줄·화살표 없이 보기만
+    return '<' + (ro ? 'div' : 'button type="button"') + ' class="card hday' + (ro ? ' hro' : '') + '"' + (ro ? '' : ' data-date="' + esc(r.log_date) + '" aria-label="' + esc(fmtDayShort(r.log_date)) + ' 기록 ' + (isToday ? '열기' : '고치기') + '"') + '>' +
       '<div class="hday-top"><b>' + esc(fmtDayLabel(r.log_date)) + '</b>' +
-      '<span class="hday-r">' + (pend ? '<em class="hpend on">' + esc(hereWord()) + '</em>' : '') + '<svg class="hday-chev"><use href="#i-chev-r"/></svg></span></div>' +
+      '<span class="hday-r">' + (pend ? '<em class="hpend on">' + esc(hereWord()) + '</em>' : '') + (ro ? '' : '<svg class="hday-chev"><use href="#i-chev-r"/></svg>') + '</span></div>' +
       (bits.length ? '<div class="hbadges">' + bits.join('') + '</div>' : '<div class="hday-meal" style="color:var(--dim)">기록 일부만</div>') +
-      mealLine + '</button>';
+      mealLine + '</' + (ro ? 'div' : 'button') + '>';
   }
   function gapRow(dateStr) {
     return '<button type="button" class="card hday hgap" data-date="' + esc(dateStr) + '" aria-label="' + esc(fmtDayShort(dateStr)) + ' 기록 적기">' +
@@ -1090,6 +1091,8 @@
       '<span class="hday-r"><span class="hgap-tx">기록 없음 · 눌러서 적기</span><svg class="hday-chev"><use href="#i-chev-r"/></svg></span></div></button>';
   }
   // 순수 SVG 라인 차트(외부 라이브러리 없음). pts: [{d,v}], fixRange: [min,max] 또는 null(자동).
+  // 그래프 아래 기간 글: 기간 칩이 3개월 이상이면(30일이 아니면) 연도를 붙인다
+  function footDay(d) { return (HIST_COMPACT && chartSpan !== 30 ? d.slice(0, 4) + '년 ' : '') + fmtDayLabel(d).replace(/ · .*/, ''); }
   function chartCard(title, unit, pts, color, fixRange, minSpan) {
     var head = '<div class="hchart-h"><span>' + title + ' <small>' + unit + '</small></span>';
     if (!pts.length) return '<div class="card hchart">' + head + '</div><div class="hchart-empty">아직 ' + title + ' 기록이 없습니다.</div></div>';
@@ -1129,7 +1132,7 @@
       '<path d="' + d.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
       dots + '</svg>';
     return '<div class="card hchart">' + head + svg +
-      '<div class="hchart-foot">' + (cd.unit ? '기록 ' + rawN + '일 · ' + cd.unit + ' 평균 · ' : '최근 ' + n + '일 · ') + fmtDayLabel(pts[0].d).replace(/ · .*/, '') + ' → ' + fmtDayLabel(last.d).replace(/ · .*/, '') + '</div></div>';
+      '<div class="hchart-foot">' + (cd.unit ? '기록 ' + rawN + '일 · ' + cd.unit + ' 평균 · ' : '최근 ' + n + '일 · ') + footDay(pts[0].d) + ' → ' + footDay(last.d) + '</div></div>';
   }
 
   /* ============================ 탭 전환 / 진입 ============================ */
