@@ -191,12 +191,16 @@
   //   ※ x-upsert 안 씀: 경로가 UUID라 고유 → 순수 INSERT(anon 업로드 정책과 일치). upsert 는 UPDATE 정책이 필요해 RLS 로 막힌다.
   function _storagePost(key, body, contentType, info) {
     info = info || {};
+    var ac = (info.timeoutMs && typeof AbortController !== 'undefined') ? new AbortController() : null;   // v9.28: 한 번에 올리는 길만 시간 제한(info.timeoutMs)
+    var to = ac ? setTimeout(function () { try { ac.abort(); } catch (e) {} }, info.timeoutMs) : null;
     return fetch(CONFIG.url + '/storage/v1/object/' + CONFIG.bucket + '/' + key, {
       method: 'POST',
       headers: { 'apikey': CONFIG.key, 'Authorization': 'Bearer ' + CONFIG.key,
                  'Content-Type': contentType || 'application/octet-stream' },
-      body: body
+      body: body,
+      signal: ac ? ac.signal : undefined
     }).then(function (r) {
+      if (to) clearTimeout(to);
       if (r.ok) return key;
       return r.text().catch(function () { return ''; }).then(function (txt) {
         if (isDuplicateStorage(r.status, txt)) return key;          // 이전 시도에 이미 올라감 = 성공
@@ -204,6 +208,7 @@
         throw voiceErr(c.reason, { name: info.name, size: info.size, status: r.status, code: c.code });
       });
     }, function () {
+      if (to) clearTimeout(to);
       // 요청이 서버에 닿지 못함(status 0): 인터넷 끊김 또는 폰 파일을 못 읽음 — 파일을 직접 읽어 구분.
       if (!(body && typeof body.slice === 'function' && typeof Blob !== 'undefined' && body instanceof Blob)) {
         throw voiceErr('network', info);
@@ -228,11 +233,34 @@
       } catch (x) { reject(voiceErr('unreadable', info)); }
     });
   }
+  /* v9.28 한 번에 올리는 길(녹음 40MB 이하 · 회의자료 · 메모 등록)의 순간 끊김 보호.
+   *   와이파이↔LTE 전환·화면 꺼짐 같은 한 번의 끊김에 바로 실패하던 것을, 간격을 늘려(3·8·15초) 최대 3번 다시 시도한다(총 4번).
+   *   요청에는 시간 제한(최저 50KB/초 속도 기준, 최대 20분)을 걸어 멈춰 버린 연결에 매달리지 않는다.
+   *   같은 경로는 「이미 올라감=성공」(서버가 중복을 400+KeyAlreadyExists 로 줌 — isDuplicateStorage), 행 등록은 같은 id 라 서버 기본키가 중복을 막고(409=exists) 같은 token 을 그대로 쓴다.
+   *   다시 해도 같은 실패(용량·경로·권한·읽기 불가)는 바로 던진다. 끄려면 UPLOAD_RETRY=false (v9.27 과 같은 한 번 시도). 조각 전송의 기존 재시도는 그대로다. */
+  var UPLOAD_RETRY = true;
+  var UPLOAD_GAPS = [3000, 8000, 15000];
+  function _uploadTimeoutMs(size) { return Math.min(20 * 60000, 60000 + Math.ceil((size || 0) / 50)); }
+  function _retriableUpload(e) { return !!(e && (e.reason === 'network' || e.reason === 'server' || e.reason === 'unknown')); }
+  function _retriableRow(e) { return !!(e && !e.badpass && !/HTTP 4\d\d/.test(String(e.message || ''))); }   // 연동 암호·4xx 거절은 다시 해도 같다
+  function _withRetry(fn, can) {
+    if (!UPLOAD_RETRY) return fn();
+    function go(n) {
+      return fn().catch(function (e) {
+        if (n >= UPLOAD_GAPS.length || !can(e)) throw e;
+        return new Promise(function (res) { setTimeout(res, UPLOAD_GAPS[n]); }).then(function () { return go(n + 1); });
+      });
+    }
+    return go(0);
+  }
   function uploadAudio(id, ext, blob) {
     var path = id + '.' + ext;
     // 같은 경로가 이미 있으면(이전 시도에 올라감) 중복=성공으로 통과 — _storagePost 참고.
     return readAllBytes(blob, { name: '녹음' }).then(function (buf) {
-      return _storagePost(path, buf, (blob && blob.type) || 'audio/webm', { name: '녹음', size: blob && blob.size });
+      return _withRetry(function () {
+        return _storagePost(path, buf, (blob && blob.type) || 'audio/webm',
+          { name: '녹음', size: blob && blob.size, timeoutMs: UPLOAD_RETRY ? _uploadTimeoutMs(blob && blob.size) : 0 });
+      }, _retriableUpload);
     });
   }
   /* ---------- v8.2(O-0158) 발신자 확인 ----------
@@ -334,7 +362,7 @@
       // v6.6: 5GB 초과 자료는 올리지 않고 건너뜀(녹음은 계속). 5GB 이하는 File(Blob) 그대로 스트리밍 — 메모리로 읽지 않음.
       var up = ((f.size || 0) > MAX_UPLOAD_BYTES)
         ? Promise.reject(voiceErr('too_big', { name: nm, size: f.size || 0 }))
-        : _storagePost(key, f, f.type || 'application/octet-stream', { name: nm, size: f.size || 0 });
+        : _withRetry(function () { return _storagePost(key, f, f.type || 'application/octet-stream', { name: nm, size: f.size || 0, timeoutMs: UPLOAD_RETRY ? _uploadTimeoutMs(f.size) : 0 }); }, _retriableUpload);
       return up.then(function () {
         out.push({ key: key, ext: ext, name: nm, size: f.size || 0, mime: f.type || '' });
       }, function (e) {
@@ -384,7 +412,7 @@
       .then(function () { try { if (memo.onStored) memo.onStored(); } catch (e) {} })   // v9.10: 원본이 폰 저장소에 들어간 뒤에 알린다(끊긴 녹음 찾기의 「넘김」 표시)
       .then(function () { return uploadMaterials(memo.id, memo.materials || [], null, memo.matSlots); })
       .then(function (matMeta) { memo.materialsMeta = matMeta; memo.materialsSkipped = (matMeta && matMeta.skipped) || []; return uploadAudio(memo.id, memo.ext, blob); })
-      .then(function (path) { return createMemo(memo, path); })
+      .then(function (path) { return _withRetry(function () { return createMemo(memo, path); }, _retriableRow); })   // v9.28: 같은 id·token 으로 다시 — 이미 등록됐으면 서버가 409(exists)로 받아 중복 행이 생기지 않는다
       .then(function () { rec.sent = true; return idbPut(rec); }) // (2) 업로드 완료 표시(원본은 done 확인까지 보존)
       .catch(function (e) {
         rec.sent = false;
@@ -639,11 +667,22 @@
    * 특정 답의 텍스트만 케이 목소리 mp3 로 만들어 달라는 요청. chat_responder 가 meta.tts_only 를 보면
    * 케이(LLM)를 호출하지 않고 곧장 목소리만 생성 → summary_json.voice_url 회신(빠름·낭비 없음). 목소리는 PC 가 정한다(v9.7: 고르신 케이 목소리, 안 되면 세라피나).
    * ⚠️ meta.thread 를 넣지 않는다 → 대화 기억(load_history)에 이 행이 섞이지 않게(맥락 오염 방지). */
-  function requestTts(id, token, text) {
+  function requestTts(id, token, text, opts) {
+    var meta = { app: 'voice-memo-test', tts_only: true };
+    if (opts && opts.stream) meta.tts_stream = 1;       // v9.28: 이 앱은 긴 글을 조각으로 받아 이어 튼다 — PC 가 조각으로 만들고 신호(ack/stop)를 기다려도 된다
     return _insertRow({
       id: id, title: '읽기', status: 'pending', kind: 'chat',
       note: text, client_token: token,
-      meta: { app: 'voice-memo-test', tts_only: true }
+      meta: meta
+    });
+  }
+  /* v9.28 [듣기] 신호: 조각을 틀기 시작했다(ack, n=지금까지 튼 조각 수) / 그만둔다(stop). PC 가 앞서 만드는 양을 조절하고 낭비를 멈춘다.
+   * 새 요청 종류를 만들지 않고 [듣기] 요청(tts_only)에 칸 하나(meta.tts_ctl)를 얹는다. 실패해도 소리에는 영향이 없다(PC 는 신호가 끊기면 스스로 멈춘다). */
+  function sendTtsCtl(forId, op, n) {
+    return _insertRow({
+      id: uuid(), title: '읽기', status: 'pending', kind: 'chat',
+      note: '읽기 신호', client_token: token(),
+      meta: { app: 'voice-memo-test', tts_only: true, tts_ctl: { for: String(forId || ''), op: String(op || ''), n: n | 0 } }
     });
   }
   /* ---------- v9.7(O-0401) 케이 목소리 바꾸기 요청 ----------
@@ -1673,7 +1712,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
-    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, requestVoiceSet: requestVoiceSet, poll: poll, flush: flush, pendingCount: pendingCount,
+    createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, sendTtsCtl: sendTtsCtl, requestVoiceSet: requestVoiceSet, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendChatDocAsk: sendChatDocAsk,     // v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기]
     sendDoc: sendDoc, convertDoc: convertDoc, docResultFrom: docResultFrom,

@@ -2824,7 +2824,7 @@
   APP_VERSION = 'v9.24';        // v9.24(O-0583·O-0586): 문서 스캔 자동 보정 — 테두리 자동 찾기·반듯하게 펴기·그림자 제거/흑백/회색 보정·손가락으로 모서리 조정·펼친 책 두 쪽 나누기·PDF 화질 선택, 브리핑 [듣기]가 안내 소리만 나던 문제
   APP_VERSION = 'v9.25';        // v9.25(O-0588·O-0589): 건강 화면에 「운동」 칸(칩 7개·안 함·직접 입력), 홈 도구 칸 「아이디어」→「스캔」(영수증·문서 고르기 창), 영수증 확인 카드 [채팅으로 넘기기](채팅에 한 줄 보내고 채팅에서 이어 정함) · versionCode 69
   APP_VERSION = 'v9.26';        // v9.26: 영수증도 「스캔 화면」으로 — 영수증 입구가 「영수증 스캔」(자동 테두리·펴기·보정, 사진 한 장)을 열고, 미리 찍은 사진은 [사진 불러오기]로 · 스위치 RECEIPT_SCAN_CAM on / off(off 면 v9.25 와 같음) · versionCode 70
-  APP_VERSION = 'v9.27';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
+  APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -2967,8 +2967,9 @@
         });
         ['ended', 'pause', 'error', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (window.KChar) KChar.setTalking(false); }); });
         // O-0468: 소리가 멈추면(끝남 · 다른 소리가 대신 들어옴 · 녹음 시작 · 대화 끝내기 등 어느 길이든) 그 말풍선 단추를 [듣기]로 되돌린다
-        ['pause', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (kaiAudio.paused) listenAudioEnd(); }); });
+        ['pause', 'emptied'].forEach(function (ev) { kaiAudio.addEventListener(ev, function () { if (kaiAudio.paused && !(lsq && lsq.busy && kaiAudio.ended)) listenAudioEnd(); }); });   // v9.28: 긴 글 조각이 자연히 끝난 것은 다음 조각으로 잇는다(아래 ended)
         kaiAudio.addEventListener('ended', function () {
+          if (lsq && lsq.busy) { var q0 = lsq; q0.busy = false; if (lsqPump(q0)) return; }   // v9.28 긴 글 [듣기]: 다음 조각이 와 있으면 곧장 이어서 · 아직이면 「준비 중」으로 기다림
           listenAudioEnd();
           if (vqHasMore()) { vqPump(); return; }  // O-0177 ①: 다음 목소리 조각이 이미 와 있으면 곧장 이어서
           if (convoOn && vqWaiting()) { setConvoStatus('케이가 답하는 중…'); return; }   // 다음 조각을 아직 만드는 중
@@ -2979,6 +2980,7 @@
         // O-0177: 조각 하나를 못 읽어도(주소 만료·네트워크) 멈추지 않고 다음 조각 → 없으면 다음 듣기
         kaiAudio.addEventListener('error', function () {
           if (!kaiAudio.src || kaiAudio.src.indexOf('data:') === 0) return;
+          if (lsq && lsq.busy) { var q1 = lsq; q1.busy = false; lsqPump(q1); return; }   // v9.28: 조각 하나를 못 읽어도 멈추지 않고 다음 조각으로
           if (vqHasMore()) { setTimeout(vqPump, 120); return; }
           if (kaiQ.rid && convoOn && !vqWaiting()) scheduleNextListen(500);
         });
@@ -4840,6 +4842,8 @@
   function listenStop(user) {
     var st = listenSt; if (!st) return false;
     listenSt = null;
+    lsqAbort();                                        // v9.28: 긴 글 조각 재생·PC 의 앞서 만들기도 함께 멈춘다(PC 에 「그만」 신호)
+    if (st.ph === 'load') { var jc = ttsJobs[st.lid]; if (jc) jc.cancelled = true; }   // 아직 첫 조각 전이면: 조각이 보이는 대로 PC 에 「그만」
     if (st.ph === 'play') {
       if (st.dev) { try { if (window.KChar) KChar.voice.stop(); } catch (e) {} }
       else { kaiStopSeq = kaiPlaySeq; try { if (kaiAudio && !kaiAudio.paused) kaiAudio.pause(); } catch (e) {} }
@@ -4888,9 +4892,9 @@
       playKaiVoice(m.vurl, lid); return;
     }
     listenSet(lid, 'load', false);
-    if (ttsJobs[lid]) return;                          // 앞서 청해 둔 소리가 아직 만들어지는 중 — 다시 청하지 않고 그것을 기다린다
+    if (ttsJobs[lid]) { ttsJobs[lid].cancelled = false; return; }   // 앞서 청해 둔 소리가 아직 만들어지는 중 — 다시 청하지 않고 그것을 기다린다 (v9.28: 그만뒀다가 다시 누른 것이면 「그만」 표시를 거둔다)
     var job = ttsJobs[lid] = { id: OfficeBridge.uuid(), tok: OfficeBridge.token(), t0: Date.now(), told: false, away: false };
-    OfficeBridge.requestTts(job.id, job.tok, m.text || '').then(function () {
+    OfficeBridge.requestTts(job.id, job.tok, m.text || '', { stream: LISTEN_STREAM }).then(function () {
       pollTts(job, m, 0);
     }).catch(function () { ttsEnd(job, m, '준비하지 못했습니다. 다시 눌러\u00a0주십시오.'); });
   }
@@ -4905,6 +4909,78 @@
    *     그만두기 전에 한 번은 꼭 확인한다 — 앱이 뒤에 가 있던 동안 이미 다 만들어졌을 수 있다.
    *   · 10초가 넘으면 한 번만 「만드는 중」 안내. 단추는 그동안 「준비 중…」(다시 누르면 그만둔다).
    *   · 다 됐을 때 채팅 화면이 아니거나 앱이 뒤에 있었으면 틀지 않는다 → 단추 「다시 듣기」 + 안내(갑자기 소리가 나지 않게). */
+  /* ==================== v9.28 긴 글 [듣기] — 조각으로 이어 듣기 ====================
+   * 요청(2026-10-21): 「긴 글도 끝까지 읽어 주도록 시간 제한을 없애라」. PC 는 긴 글을 문장 묶음 조각으로 나눠 앞에서부터 만들어
+   * 처리 중인 행의 summary_json.listen_parts=[{u}] 에 하나씩 붙인다(listen_total=전체 조각 수). 앱은 먼저 된 조각부터 차례로 틀고,
+   * 조각을 틀기 시작할 때마다 PC 에 ack 신호를 보내(앞서 만들 창을 연다), [멈춤]을 누르거나 다른 걸 누르면 stop 신호를 보낸다.
+   * 기다리는 한도는 총 시간이 아니라 「새 조각이 안 오는 시간」(LSQ_IDLE_S)뿐이라 아무리 긴 글도 끝까지 이어진다.
+   * 끝나면 PC 가 붙여 준 한 덩어리(voice_url)를 저장해 「다시 듣기」는 그것을 튼다. 옛 PC(listen_parts 를 모름)는 예전 그대로 한 덩어리를 기다린다.
+   * LISTEN_STREAM=false 면 요청에 표시를 싣지 않고 조각도 틀지 않는다 = v9.27 과 같은 동작. */
+  var LISTEN_STREAM = true;
+  var LSQ_IDLE_S = 420;                                // 새 조각이 이만큼 안 오면 그만둔다(느린 목소리의 조각 하나는 몇 분 걸릴 수 있다)
+  var lsq = null;                                      // { job, lid, parts[], next, busy, done, incomplete, cut, pre[] }
+  function lsqOf(job) { return (lsq && lsq.job === job) ? lsq : null; }
+  function lsqAlive(q) { return !!(q && lsq === q && listenSt && listenSt.lid === q.lid); }
+  function lsqCtl(q, op, n) { try { if (q.job.stream) OfficeBridge.sendTtsCtl(q.job.id, op, n).catch(function () {}); } catch (e) {} }
+  function lsqPre(q) {                                 // 다음 조각을 미리 받아 둔다(이어 틀 때 틈을 줄임)
+    var i = q.next, u = q.parts[i];
+    if (u && !q.pre[i]) { try { var pa = new Audio(); pa.preload = 'auto'; pa.src = u; q.pre[i] = pa; } catch (e) {} }
+    if (q.pre[i - 2]) q.pre[i - 2] = null;
+  }
+  function lsqAbort() {                                // 소리·기다림을 끝냈다(멈춤 · 다른 소리 · 끊김) → PC 에 그만 신호
+    var q = lsq; if (!q) return;
+    lsq = null; q.job.cancelled = true;
+    if (q.job.stream && !q.job.ended) {
+      lsqCtl(q, 'stop', 0); q.job.ended = true;
+      if (ttsJobs[q.lid] === q.job) delete ttsJobs[q.lid];
+    }
+  }
+  function lsqFinish(q) {
+    if (lsq === q) lsq = null;
+    if (listenSt && listenSt.lid === q.lid) listenClear();
+    if (q.incomplete) toast(tw('여기까지만 읽어 드렸습니다. 다시 누르면 처음부터 들려 드립니다.'), 3600);
+    else if (q.cut > 0) toast(tw('글이 너무 길어 앞쪽만 읽어 드렸습니다.'), 3600);
+  }
+  /* 다음 조각을 튼다 · 없으면 끝(done)이면 마무리, 아니면 「준비 중」으로 기다린다. 반환: 계속 이어지는 중인가 */
+  function lsqPump(q) {
+    if (lsq !== q) return false;
+    if (!lsqAlive(q)) { lsqAbort(); return false; }
+    if (q.busy) return true;
+    if (q.next < q.parts.length) {
+      var i = q.next++;
+      q.busy = true;
+      playKaiVoice(q.parts[i], q.lid);
+      lsqCtl(q, 'ack', i + 1);
+      lsqPre(q);
+      return true;
+    }
+    if (q.done) { lsqFinish(q); return false; }
+    if (!(listenSt && listenSt.lid === q.lid && listenSt.ph === 'load')) listenSet(q.lid, 'load', false);
+    return true;
+  }
+  function lsqFeed(job, m, lp, sj) {
+    var q = lsqOf(job);
+    if (!q) {
+      if (!ttsWaiting(m)) return;                      // 기다림을 그만두셨다(멈춤 신호는 cancelled 로 처리)
+      var away = job.away || document.hidden || !isOpen(chatView);
+      if ((REC_ROAM_V2 && isRecording && !m._recAsk) || away) return;   // 지금은 틀지 않는다(예전과 같은 규칙) — 끝난 뒤 안내
+      q = lsq = { job: job, lid: m.lid, parts: [], next: 0, busy: false, done: false, incomplete: false, cut: 0, pre: [] };
+    }
+    for (var i = q.parts.length; i < lp.length; i++) {
+      var u = lp[i] && (lp[i].u || lp[i].url);
+      if (u) q.parts.push(u);
+    }
+    lsqPre(q);
+    lsqPump(q);
+  }
+  function lsqGiveUp(job, m) {                         // 새 조각이 한참 안 온다 — 된 만큼만 읽고 끝낸다
+    job.ended = true;
+    try { OfficeBridge.sendTtsCtl(job.id, 'stop', 0).catch(function () {}); } catch (e) {}
+    if (ttsJobs[m.lid] === job) delete ttsJobs[m.lid];
+    var q = lsqOf(job);
+    if (q) { q.done = true; q.incomplete = true; if (!q.busy) lsqPump(q); return; }
+    if (ttsWaiting(m)) { listenClear(); toast(tw('준비가 지연됩니다. 다시 눌러 주십시오.')); }
+  }
   var TTS_READY_NOTE = '「다시\u00a0듣기」를 누르면 들립니다.';
   var ttsReadyHeld = false;                            // 앱이 뒤에 있을 때 준비가 끝남 → 돌아오면 한 번 알린다
   document.addEventListener('visibilitychange', function () {
@@ -4913,10 +4989,28 @@
   });
   function pollTts(job, m, tries) {
     if (ttsJobs[m.lid] !== job) return;
+    var q0 = lsqOf(job); if (q0 && !lsqAlive(q0)) { lsqAbort(); return; }   // v9.28: 다른 일로 소리가 끊겼다 — 더 기다리지 않고 PC 에 「그만」
     OfficeBridge.poll(job.id, job.tok).then(function (res) {
       if (ttsJobs[m.lid] !== job) return;
+      var sj0 = (res && res.summary_json) || {};
+      var lp = (LISTEN_STREAM && Array.isArray(sj0.listen_parts)) ? sj0.listen_parts : null;
+      if (lp && lp.length) {                           // v9.28: PC 가 긴 글을 조각으로 만드는 중(또는 끝) — 새 PC 라는 뜻
+        job.stream = true;
+        if (lp.length > (job.nparts || 0)) { job.nparts = lp.length; job.tPart = Date.now(); }
+        if (job.cancelled) { job.ended = true; delete ttsJobs[m.lid]; OfficeBridge.sendTtsCtl(job.id, 'stop', 0).catch(function () {}); return; }
+        lsqFeed(job, m, lp, sj0);
+      }
       if (res && res.status === 'done') {
         var url = res.summary_json && res.summary_json.voice_url;
+        var qd = lsqOf(job);
+        if (qd) {                                      // v9.28: 조각으로 틀던 중이었다 — 남은 조각까지 이어 튼다. 끝난 뒤 「다시 듣기」는 붙인 한 덩어리로
+          job.ended = true; delete ttsJobs[m.lid];
+          qd.done = true; qd.incomplete = !!sj0.incomplete; qd.cut = parseInt(sj0.cut_chars, 10) || 0;
+          if (url && !qd.incomplete) { m.vurl = url; saveChatMsgs(); }
+          if (!qd.busy) lsqPump(qd);
+          return;
+        }
+        if (sj0.incomplete) { job.ended = true; ttsEnd(job, m, '준비가 지연됩니다. 다시 눌러\u00a0주십시오.'); return; }   // v9.28: 틀지 못한 채 PC 가 중간에 그만뒀다 — 반쪽 소리를 저장하지 않는다
         if (!url) { ttsEnd(job, m, '음성을 만들지 못했습니다.'); return; }
         var waiting = ttsWaiting(m);
         delete ttsJobs[m.lid];
@@ -4934,10 +5028,11 @@
   }
   function ttsAgain(job, m, tries, gap) {
     if (ttsJobs[m.lid] !== job) return;
-    var el = Date.now() - job.t0, w = kvListenWaitS();
-    if (w ? el > w * 1000 : tries >= 40) { ttsEnd(job, m, '준비가 지연됩니다. 다시 눌러\u00a0주십시오.'); return; }
+    var el = Date.now() - (job.stream ? (job.tPart || job.t0) : job.t0), w = job.stream ? LSQ_IDLE_S : kvListenWaitS();   // v9.28: 조각이 오는 동안은 총 시간이 아니라 「새 조각이 안 오는 시간」만 센다
+    if (w ? el > w * 1000 : tries >= 40) { if (job.stream) { lsqGiveUp(job, m); return; } ttsEnd(job, m, '준비가 지연됩니다. 다시 눌러\u00a0주십시오.'); return; }
+    var q1 = lsqOf(job); if (q1 && q1.parts.length - q1.next >= 2) gap = Math.max(gap, 3500);   // 틀 조각이 넉넉하면 천천히 확인
     if (!job.told && el > 10000 && ttsWaiting(m) && isOpen(chatView) && !document.hidden) { job.told = true; toast(tw('목소리 준비 중입니다. 누르면 그만둡니다.'), 3200); }
-    setTimeout(function () { pollTts(job, m, tries + 1); }, el > 60000 ? Math.max(gap, 2000) : gap);
+    setTimeout(function () { pollTts(job, m, tries + 1); }, (el > 60000 || job.stream) ? Math.max(gap, 2000) : gap);
   }
 
   /* ---- 카메라/갤러리: 케이에게 보여줄 사진 붙이기(전송 전 대기) ---- */
