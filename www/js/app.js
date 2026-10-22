@@ -2662,7 +2662,7 @@
     var left = (window.DocScan && DocScan.MAX_PAGES) || 100;
     var pre = (docScanOn() && DocScan.listSession) ? DocScan.listSession().then(function (r) { left = Math.max(0, left - ((r && r.pages && r.pages.length) || 0)); }, function () {}) : Promise.resolve();
     pre.then(function () {
-      if (left <= 0) { toast('문서 스캔에 이미 100쪽이 담겨 있어요.'); left = 1; }
+      if (left <= 0 && last === 'doc') { toast('문서 스캔에 이미 100쪽이 담겨 있어 더 담을 수 없어요.'); return { kind: 'cancel' }; }   // 열지 않는다
       return SilentCam.shoot({ mode: last, from: 'tab', multi: last === 'doc', left: left });
     }).then(function (r) {
       if (!r) return;
@@ -2672,6 +2672,7 @@
       if (r.mode === 'photo') { chatAttachCaptured(r.files[0]); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); return; }
       if (r.mode === 'receipt') { if (SCAN_HUB === 'on') openReceiptScan(true, r.files[0]); else SilentCam.release(r.files[0]); return; }
       if (docScanOn()) openScanGeneral({ files: r.files });
+      else r.files.forEach(function (f) { SilentCam.release(f); });     // 열 수 없으면 임시 파일도 바로 지운다
     }).catch(function () { openScanTab(); });
   }
   // 앱이 카메라 도중 정리됐다 돌아왔을 때(폴드 접기·메모리 부족): 찍어 둔 사진을 이어서 쓸지 묻는다
@@ -2679,7 +2680,7 @@
     if (!(window.SilentCam && SilentCam.usable())) return;
     SilentCam.sweep().then(function () {
       return SilentCam.recover({
-        doc: function (files) { if (docScanOn()) openScanGeneral({ files: files }); },
+        doc: function (files) { if (docScanOn()) openScanGeneral({ files: files }); else files.forEach(function (f) { SilentCam.release(f); }); },
         receipt: function (file) { if (SCAN_HUB === 'on') openReceiptScan(true, file); },
         photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); }
       });
