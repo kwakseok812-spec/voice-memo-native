@@ -285,17 +285,17 @@ class SilentCameraActivity : ComponentActivity() {
         if (stroke != null) setStroke(dp(2), stroke)
     }
 
-    private fun button(label: String, primary: Boolean, weight: Float = 0f, onClick: () -> Unit): TextView = tv(label, 16f, Color.WHITE, true).apply {
+    private fun button(label: String, primary: Boolean, weight: Float = 0f, onClick: () -> Unit): TextView = tv(label, 15f, Color.WHITE, true).apply {
         gravity = Gravity.CENTER
         minHeight = dp(52)
         minimumHeight = dp(52)
-        setPadding(dp(12), dp(8), dp(12), dp(8))
+        setPadding(dp(8), dp(8), dp(8), dp(8))
         background = if (primary) round(0xFF3B82F6.toInt(), 14) else round(0x33FFFFFF, 14, 0x66FFFFFF)
         isClickable = true
         isFocusable = true
         contentDescription = label
         setOnClickListener { onClick() }
-        layoutParams = if (weight > 0f) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, weight).apply { setMargins(dp(4), 0, dp(4), 0) }
+        layoutParams = if (weight > 0f) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight).apply { setMargins(dp(4), 0, dp(4), 0) }
         else LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
@@ -455,6 +455,18 @@ class SilentCameraActivity : ComponentActivity() {
         insetViews.remove(l)
         layers.removeView(l)
     }
+
+    /** 가로 폭을 maxDp 로 묶는 세로/가로 상자 — 펼친 화면(폭 750dp 넘음)에서도 단추·글이 한 줄로 길게 늘어나지 않는다. */
+    class CapBox(ctx: Context, private val maxDp: Int) : LinearLayout(ctx) {
+        override fun onMeasure(w: Int, h: Int) {
+            val max = (maxDp * resources.displayMetrics.density).toInt()
+            val size = MeasureSpec.getSize(w)
+            val mode = MeasureSpec.getMode(w)
+            if (mode != MeasureSpec.UNSPECIFIED && size > max) super.onMeasure(MeasureSpec.makeMeasureSpec(max, MeasureSpec.EXACTLY), h)
+            else super.onMeasure(w, h)
+        }
+    }
+    private fun centerLp(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
 
     /** 가장자리 안내선: 화면 가장자리에서 6% 안쪽의 옅은 점선 사각형. 실시간 문서 인식은 하지 않는다(찍은 뒤 기존 자동 테두리가 한다). */
     class GuideView(ctx: Context) : View(ctx) {
@@ -862,10 +874,10 @@ class SilentCameraActivity : ComponentActivity() {
         col.addView(zv, LinearLayout.LayoutParams(-1, 0, 1f))
         val hl = hintLine(pg.q, shook.contains(pg.path))
         col.addView(tv(hl.first, 15f, hl.second, true).apply { gravity = Gravity.CENTER; setPadding(dp(14), dp(8), dp(14), dp(8)) })
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(10), dp(4), dp(10), dp(12)) }
+        val row = CapBox(this, 560).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(10), dp(4), dp(10), dp(12)) }
         row.addView(button("이 쪽 지우기", false, 1f) { removeLayer(l); deletePage(i) })
         row.addView(button("닫기", true, 1f) { removeLayer(l) })
-        col.addView(row)
+        col.addView(row, centerLp())
         bg.execute {
             val b = loadBitmap(pg.path, 2400)
             runOnUiThread { if (b != null) zv.setImageBitmap(b) }
@@ -902,7 +914,7 @@ class SilentCameraActivity : ComponentActivity() {
             else tv(hl.first, 15f, hl.second, true).apply { gravity = Gravity.CENTER; setPadding(dp(14), dp(8), dp(14), dp(2)) }
         val bar = View(this).apply { setBackgroundColor(0xFF3B82F6.toInt()) }
         val autoNote = tv("", 13f, 0xFFD0D6E6.toInt()).apply { gravity = Gravity.CENTER }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(10), dp(4), dp(10), dp(12)) }
+        val row = CapBox(this, 560).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(10), dp(4), dp(10), dp(12)) }
 
         if (mode == "photo") {
             col.addView(statusTv)
@@ -919,7 +931,7 @@ class SilentCameraActivity : ComponentActivity() {
             }
             row.addView(saveBtn)
             row.addView(button("케이에게 보내기", true, 1f) { removeLayer(l); finishWith("send") })
-            col.addView(row)
+            col.addView(row, centerLp())
             l.tag = { removeLayer(l); retakeAfterConfirm(pg) }
             return
         }
@@ -940,7 +952,7 @@ class SilentCameraActivity : ComponentActivity() {
         })
         val useBtn = button(useLabel, true, 1f) { autoAnim?.cancel(); removeLayer(l); finishWith("done") }
         row.addView(useBtn)
-        col.addView(row)
+        col.addView(row, centerLp())
         l.tag = { autoAnim?.cancel(); autoAnim = null; removeLayer(l); retakeAfterConfirm(pg) }
 
         if (auto) {
@@ -1019,9 +1031,9 @@ class SilentCameraActivity : ComponentActivity() {
     private fun openSettings() {
         if (busy) return
         val l = layer()
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(14)) }
+        val col = CapBox(this, 560).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(14)) }
         val sv = android.widget.ScrollView(this)
-        sv.addView(col)
+        sv.addView(col, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_HORIZONTAL))
         l.addView(sv, FrameLayout.LayoutParams(-1, -1))
         val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         head.addView(iconBtn("‹", "뒤로") { removeLayer(l) })
@@ -1088,7 +1100,7 @@ class SilentCameraActivity : ComponentActivity() {
         if (pages.isNotEmpty()) {
             val l = layer()
             l.setBackgroundColor(0xCC000000.toInt())
-            val card = LinearLayout(this).apply {
+            val card = CapBox(this, 480).apply {
                 orientation = LinearLayout.VERTICAL
                 background = round(0xFF1E2540.toInt(), 18)
                 setPadding(dp(20), dp(18), dp(20), dp(16))
