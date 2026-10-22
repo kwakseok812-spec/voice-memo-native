@@ -2104,3 +2104,7 @@ html[data-fs] .scan-handoff-note{font-size:calc(12.5px * var(--fsx))}
 html[data-style="light"] .hspan.on{color:#fff}
 
 .hday.hro{cursor:default}
+
+/* ===== v9.29(O-0607) 홈 「카메라」 칸의 「새로」 표시 — 칸 오른쪽 위 작은 알약(새 backdrop-filter 없음) ===== */
+.tool{position:relative}
+.tool .nw{position:absolute;top:6px;right:8px;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:800;line-height:1.4;color:#fff;background:linear-gradient(135deg,var(--p1,#3B82F6),var(--p2,#8B5CF6))}

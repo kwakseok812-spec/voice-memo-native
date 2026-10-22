@@ -101,6 +101,12 @@
    *   'off' 면 v9.25 와 같다(사진 고르기 창만). DocScan 이 꺼졌거나(docScanOn) 카메라 권한이 막혀 있으면 'on' 이어도 사진 고르기로 대체. */
   var RECEIPT_SCAN_CAM = 'on';
   var DOC_SCAN_PREVIEW = 'on';   // v9.26: 문서·회의 스캔의 쪽 미리보기(찍은 직후·편집 직후·썸네일 누르면 큰 화면). 'off' 면 v9.26 영수증 제외 동작과 같다
+  /* v9.29(O-0607) 소리 없는 카메라 — 스위치. 'on' 이면 문서·영수증 스캔의 촬영이 앱 안의 새 카메라 화면(찍은 직후 확인·여러 장 이어 찍기)으로 열리고, 홈 도구 칸의 「스캔」이 「카메라」(문서·영수증·일반 사진)가 된다.
+   *   'off' 면 v9.28 과 똑같이 폰 기본 카메라(capture 입력)로 열리고 홈 칸도 「스캔」 그대로다. 새 카메라를 열지 못할 때(플러그인 없음·카메라 오류)도 자동으로 예전 길로 간다.
+   *   SILENT_CAM_ENGINE: 'auto'(한 장=고화질, 이어 찍기=빠름) | 'quality' | 'fast' | 'frame'(화면 프레임 저장 — 소리가 날 때의 대체). */
+  var SILENT_CAM = 'on';
+  var SILENT_CAM_ENGINE = 'auto';
+  try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE }); } catch (e) {}
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -2584,16 +2590,16 @@
   function receiptPick(fc) { photoAsScan = true; filePanelFromChat = fc !== false; $('photoInput').click(); }   // 기존 사진 고르기 길(v9.25 와 같음)
   function receiptCamOk() { return RECEIPT_SCAN_CAM === 'on' && docScanOn() && !!(window.DocScan && DocScan.RECEIPT); }
   // fc=false: 확인 카드 [다시 찍기] — 패널을 채팅에서 연 것이 아니므로 filePanelFromChat 을 false 로 둔다(그 밖엔 true)
-  function openReceiptScan(fc) {
+  function openReceiptScan(fc, initFile) {
     fc = fc !== false;
     if (SCAN_HUB !== 'on') return;
     function pick() { receiptPick(fc); }
-    if (!receiptCamOk()) { pick(); return; }
+    if (!receiptCamOk()) { if (initFile) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(initFile, false); photoAsScan = false; try { SilentCam.release(initFile); } catch (e) {} } else pick(); return; }
     function go() {
       photoAsScan = true; filePanelFromChat = fc;
       var ok = false;
       try {
-        ok = DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'receipt', isRecording: function () { return !!isRecording; },
+        ok = DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'receipt', initialFile: initFile || null, isRecording: function () { return !!isRecording; },
           onDone: function (file) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(file, false); photoAsScan = false; },
           onGallery: pick,
           onCancel: function () { photoAsScan = false; filePanelFromChat = false; } });
@@ -2602,6 +2608,7 @@
     }
     var done = false, tm;
     function next(denied) { if (done) return; done = true; clearTimeout(tm); if (denied) { toast('카메라를 쓸 수 없어 사진 고르기로 엽니다.'); pick(); } else go(); }
+    if (initFile || (window.SilentCam && SilentCam.usable())) { go(); return; }     // O-0607: 새 카메라는 자기 허락 안내를 따로 한다(웹뷰 카메라 상태와 무관)
     try {
       if (navigator.permissions && navigator.permissions.query) {
         tm = setTimeout(function () { next(false); }, 400);
@@ -2635,6 +2642,48 @@
     });
     document.body.appendChild(sh);
     sh.style.display = 'flex';
+  }
+  /* v9.29(O-0607) 홈 「카메라」 칸 — 새 카메라 화면(문서 / 영수증 / 일반 사진)을 연다.
+   *  문서·영수증은 찍은 사진이 «기존 스캔 처리»(테두리·펴기·보정·목록·PDF / 영수증 칸)로 이어지고, 일반 사진은 카메라 화면 안에서 [갤러리에 저장] · [케이에게 보내기] · [다시 찍기].
+   *  새 카메라를 쓸 수 없으면(스위치 off·플러그인 없음·카메라 오류·허락 거절 뒤 사진 고르기) 예전 「무엇을 스캔할까요?」 창(openScanTab)으로 간다. */
+  var CAM_MODE_KEY = 'smart_cam_mode';
+  function silentTabOn() { return SILENT_CAM === 'on' && scanTabOn() && !!(window.SilentCam && SilentCam.usable()); }
+  function chatAttachCaptured(file) {              // 채팅 카메라와 같은 첨부 함수 하나(onChatCamPicked) — 새 전송 길을 만들지 않는다
+    try {
+      openChat();
+      onChatCamPicked([file]);
+      if (window.SilentCam) SilentCam.release(file);
+    } catch (e) { toast('채팅에 붙이지 못했어요.'); }
+  }
+  function openCameraTab() {
+    if (!silentTabOn()) { openScanTab(); return; }
+    photoAsScan = false; photoAsCard = false; filePanelFromChat = false;
+    var last = 'doc'; try { var m = localStorage.getItem(CAM_MODE_KEY); if (m === 'doc' || m === 'receipt' || m === 'photo') last = m; } catch (e) {}
+    var left = (window.DocScan && DocScan.MAX_PAGES) || 100;
+    var pre = (docScanOn() && DocScan.listSession) ? DocScan.listSession().then(function (r) { left = Math.max(0, left - ((r && r.pages && r.pages.length) || 0)); }, function () {}) : Promise.resolve();
+    pre.then(function () {
+      if (left <= 0) { toast('문서 스캔에 이미 100쪽이 담겨 있어요.'); left = 1; }
+      return SilentCam.shoot({ mode: last, from: 'tab', multi: last === 'doc', left: left });
+    }).then(function (r) {
+      if (!r) return;
+      if (r.mode) { try { localStorage.setItem(CAM_MODE_KEY, r.mode); } catch (e) {} }
+      if (r.kind === 'fallback' || r.kind === 'gallery') { openScanTab(); return; }
+      if (r.kind !== 'files' || !r.files || !r.files.length) return;
+      if (r.mode === 'photo') { chatAttachCaptured(r.files[0]); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); return; }
+      if (r.mode === 'receipt') { if (SCAN_HUB === 'on') openReceiptScan(true, r.files[0]); else SilentCam.release(r.files[0]); return; }
+      if (docScanOn()) openScanGeneral({ files: r.files });
+    }).catch(function () { openScanTab(); });
+  }
+  // 앱이 카메라 도중 정리됐다 돌아왔을 때(폴드 접기·메모리 부족): 찍어 둔 사진을 이어서 쓸지 묻는다
+  function silentRecover() {
+    if (!(window.SilentCam && SilentCam.usable())) return;
+    SilentCam.sweep().then(function () {
+      return SilentCam.recover({
+        doc: function (files) { if (docScanOn()) openScanGeneral({ files: files }); },
+        receipt: function (file) { if (SCAN_HUB === 'on') openReceiptScan(true, file); },
+        photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); }
+      });
+    }).catch(function () {});
   }
   function openAttachMenu() {
     photoAsCard = false; filePanelFromChat = false; photoAsScan = false;          // 지난번에 고르기를 취소했으면 남은 표시를 지움
@@ -2825,6 +2874,7 @@
   APP_VERSION = 'v9.25';        // v9.25(O-0588·O-0589): 건강 화면에 「운동」 칸(칩 7개·안 함·직접 입력), 홈 도구 칸 「아이디어」→「스캔」(영수증·문서 고르기 창), 영수증 확인 카드 [채팅으로 넘기기](채팅에 한 줄 보내고 채팅에서 이어 정함) · versionCode 69
   APP_VERSION = 'v9.26';        // v9.26: 영수증도 「스캔 화면」으로 — 영수증 입구가 「영수증 스캔」(자동 테두리·펴기·보정, 사진 한 장)을 열고, 미리 찍은 사진은 [사진 불러오기]로 · 스위치 RECEIPT_SCAN_CAM on / off(off 면 v9.25 와 같음) · versionCode 70
   APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
+  APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -6315,10 +6365,10 @@
     docScanUp[k] = pr;
     return pr;
   }
-  function openScanGeneral() {
+  function openScanGeneral(init) {
     if (!docScanOn()) return;
     if (isRecording) toast('녹음은 계속됩니다.', 2500);   // O-0576: 다른 두 곳과 같은 규칙
-    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', preview: DOC_SCAN_PREVIEW === 'on', purpose: 'general', isRecording: function () { return !!isRecording; }, actions: {
+    DocScan.open({ auto: DOC_SCAN_AUTO === 'on', preview: DOC_SCAN_PREVIEW === 'on', purpose: 'general', initialFiles: (init && init.files) || null, isRecording: function () { return !!isRecording; }, actions: {
       share: function (file) {        // 기본: 공유함
         toast('공유함에 올리는 중입니다…', 2500);
         docScanShare(file).then(function () {
@@ -8740,7 +8790,16 @@
     var ids = on ? ['btnMeetings', 'btnDocs', 'btnHealth', 'btnScanTab', 'btnSearchToggle', 'btnLocker']
                  : ['btnMeetings', 'btnDocs', 'btnHealth', 'btnLocker', 'btnIdeas', 'btnSearchToggle'];
     ids.forEach(function (id) { var b = $(id); if (b && sub) grid.insertBefore(b, sub); });
-    if ($('btnScanTab')) { $('btnScanTab').style.display = on ? '' : 'none'; $('btnScanTab').addEventListener('click', openScanTab); }
+    if ($('btnScanTab')) {
+      $('btnScanTab').style.display = on ? '' : 'none'; $('btnScanTab').addEventListener('click', openCameraTab);
+      // v9.29(O-0607): 새 카메라를 쓸 수 있으면 칸 이름이 「카메라」(문서·영수증·사진) + 「새로」. 못 쓰면 예전 「스캔」 그대로(스위치 off·PC판)
+      if (silentTabOn()) {
+        var tb = $('btnScanTab'), nm = tb.querySelector('b'), sm = tb.querySelector('small');
+        if (nm) nm.textContent = '카메라'; if (sm) sm.textContent = '문서·영수증·사진';
+        var nw = document.createElement('span'); nw.className = 'nw'; nw.textContent = '새로'; tb.appendChild(nw);
+        tb.setAttribute('aria-label', '카메라: 문서, 영수증, 사진');
+      }
+    }
     if ($('btnIdeas')) $('btnIdeas').style.display = on ? 'none' : '';
   })();
   window.addEventListener('smartOpenIdeas', function () { openIdeas(); });   // 제안 알림 탭 → 아이디어 화면
@@ -9409,6 +9468,7 @@
   // v9.8(O-0442): 켜질 때 한 번 — 네이티브에서 계속 돌던 회의 녹음이 있으면 되찾는다
   setTimeout(function () { try { recRecover(); } catch (e) {} }, 400);
   if (docScanOn()) setTimeout(function () { try { DocScan.sweep(); } catch (e) {} }, 4000);   // O-0576: 3일 지난 임시 쪽 정리
+  setTimeout(function () { try { silentRecover(); } catch (e) {} }, 4500);                  // O-0607: 3일 청소(카메라가 닫혀 있을 때만) → 찍어 둔 사진 되찾기
   function kbSkipIntro() { try { if (window.KIntro && KIntro.active && KIntro.active()) KIntro.skip(); } catch (e) {} }
   function runShortcut(name) {
     kbSkipIntro();

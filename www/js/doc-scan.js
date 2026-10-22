@@ -499,7 +499,7 @@
    * pageSource(kind) → Promise<File[]> ; kind: 'camera'(한 장씩 폰 기본 카메라) | 'gallery'(여러 장, 고른 순서).
    * 취소하면 빈 배열. SDK 로 바꾸면 여기서 스캔 결과 이미지(Blob/File)들을 돌려주면 된다.
    * 참고: 기존 SmartNativePick 은 채팅 첨부 훅(chatCam 등)으로만 결과를 돌려줘 여기서는 쓸 수 없다 → 파일 입력 사용. */
-  function pageSource(kind) {
+  function legacySource(kind) {
     return new Promise(function (res) {
       var inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*'; inp.className = 'dsc-hidden-input';
@@ -511,6 +511,22 @@
       inp.click();
     });
   }
+  /* O-0607 v9.29: 촬영(kind 'camera')은 앱의 «소리 없는 카메라»(SilentCam)로 연다. 결과는 예전과 같은 약속(Promise<File[]>, 취소 = [])이라 뒤쪽(테두리·펴기·보정·영수증·PDF)은 한 줄도 안 바뀐다.
+   *  플러그인이 없거나 스위치가 꺼졌거나 카메라를 열지 못하면 예전 길(폰 기본 카메라), 카메라 허락이 거절됐으면 사진 고르기로 간다.
+   *  opt: {mode:'doc'|'receipt', from:'scan', multi, left, title} — 어느 입구에서 불렀는지 알려 주는 값. */
+  function pageSource(kind, opt) {
+    if (kind === 'camera' && global.SilentCam && global.SilentCam.usable()) {
+      return global.SilentCam.shoot(opt || { mode: 'doc', from: 'scan', multi: false, left: 1 }).then(function (r) {
+        if (r.kind === 'files') return r.files;
+        if (r.kind === 'cancel') return [];
+        if (r.kind === 'gallery') return legacySource('gallery');
+        return legacySource('camera');
+      });
+    }
+    return legacySource(kind);
+  }
+  function relFile(f) { try { if (f && f._p && global.SilentCam) global.SilentCam.release(f); } catch (e) {} }   // 담기에 성공한 사진은 앱 안 임시 파일을 바로 지운다
+  function markQ(id, f) { if (S && f && f._q) { if (!S.qmap) S.qmap = {}; S.qmap[id] = f._q; } }                   // 흐림·어두움 표시(목록에서 느낌표)
 
   /* ───────── D. 화면 ───────── */
   var CSS = [
@@ -719,25 +735,25 @@
         if (i >= n || S !== mine || quota) return Promise.resolve();
         var auto = useAuto && !S.skipAuto;
         S.prog = { i: i + 1, n: n, label: '사진 정리 중', auto: useAuto, text: useAuto ? n + '장 중 ' + (i + 1) + '장 정리 중' : null }; paintProgress();
-        var f = files[i], job;
+        var f = files[i], job, fin = false;     // fin: 이 사진 처리가 끝났다(담았거나 읽을 수 없다고 확정) → 앱 안 임시 파일을 지워도 된다
         if (auto && !(cfg.mode === 'orig' && !cfg.auto && !cfg.two)) job = autoPage(f, cfg, mine).catch(function (e) { if (e && e.message === BAD) throw e; return plainPage(f, 'skip'); });
         else job = plainPage(f, useAuto ? (auto ? 'off' : 'skip') : null);
         return job.then(function (pgs) {
           if (S !== mine || !pgs) return;
           okFiles++;
           if (replaceId == null && pgs.length > 1 && S.pages.length + added + pgs.length > DSC_MAX_PAGES) { okFiles--; bad++; toast('두 쪽을 담을 자리가 모자랍니다. 이 사진은 건너뜁니다.', null, null, 6000); return; }
-          if (replaceId != null) { var pr0 = store.replacePage(replaceId, pgs[0]); pendingSave = pr0.then(function () {}, function () {}); return pr0.then(function (r0) { pvId = replaceId; return r0; }); }
+          if (replaceId != null) { var pr0 = store.replacePage(replaceId, pgs[0]); pendingSave = pr0.then(function () {}, function () {}); return pr0.then(function (r0) { pvId = replaceId; if (S) { if (!S.qmap) S.qmap = {}; S.qmap[replaceId] = (f && f._q) || 'sharp'; } fin = true; return r0; }); }
           var chain = Promise.resolve();
           pgs.forEach(function (pg) {
             chain = chain.then(function () {
               if (S !== mine) return;
               if (S.pages.length + added >= DSC_MAX_PAGES) { if (!S.capNote) { S.capNote = true; toast('최대 ' + DSC_MAX_PAGES + '쪽까지만 담을 수 있어 나머지는 담지 않았습니다.', null, null, 6000); } return; }
-              added++; var pr = store.addPage(pg, kind); pendingSave = pr.then(function () {}, function () {}); return pr.then(function (nid) { if (pvId == null) pvId = nid; return nid; });
+              added++; var pr = store.addPage(pg, kind); pendingSave = pr.then(function () {}, function () {}); return pr.then(function (nid) { if (pvId == null) pvId = nid; markQ(nid, f); fin = true; return nid; });
             });
           });
           return chain;
-        }).catch(function (e) { bad++; okFiles--; lastErr = e; if (isQuota(e)) quota = true; })
-          .then(function () { i++; return tick().then(step); });
+        }).catch(function (e) { bad++; okFiles--; lastErr = e; if (isQuota(e)) quota = true; else fin = true; })
+          .then(function () { if (fin && S === mine) relFile(f); i++; return tick().then(step); });
       }
       return step();
     }).then(function () { if (S === mine) return refresh(); }).then(function () {
@@ -774,7 +790,7 @@
     if (!S || S.busy) return;
     var mine = S;
     if (S.pages.length >= DSC_MAX_PAGES) return toast('최대 ' + DSC_MAX_PAGES + '쪽까지입니다. 더 찍을 수 없습니다.');
-    pageSource('camera').then(function (f) { if (S === mine) return addFiles(f, 'camera'); }).catch(function () {});
+    pageSource('camera', { mode: 'doc', from: 'scan', multi: true, left: DSC_MAX_PAGES - S.pages.length, title: S.opts.purpose === 'meeting' ? '회의 자료' : '문서 스캔' }).then(function (f) { if (S === mine) return addFiles(f, 'camera'); }).catch(function () {});
   }
   function gallery() {
     if (!S || S.busy) return;
@@ -791,7 +807,8 @@
   function retake(id) {
     if (!S || S.busy) return;
     var mine = S;
-    pageSource('camera').then(function (fs) {
+    var ri = pvIndex(id);
+    pageSource('camera', { mode: 'doc', from: 'scan', multi: false, left: 1, title: (ri >= 0 ? (ri + 1) + '쪽 ' : '') + '다시 찍기' }).then(function (fs) {
       if (S !== mine || !fs.length) return;
       return addFiles([fs[0]], 'camera', id);      // O-0583: 한 장 처리(자동 보정 포함) 후 그 쪽을 통째로 바꾼다
     }).catch(function () {});
@@ -856,7 +873,7 @@
   function rcptShoot(kind) {                       // kind: 'camera' | 'gallery'(앱이 onGallery 를 안 주었을 때만 쓰는 대체)
     if (!S || S.busy) return;
     var mine = S;
-    pageSource(kind).then(function (fs) { if (S === mine && fs && fs.length) return rcptProcess(fs[0], fs.length > 1); }).catch(function () {});
+    pageSource(kind, { mode: 'receipt', from: 'scan', multi: false, left: 1, title: '영수증 스캔' }).then(function (fs) { if (S === mine && fs && fs.length) return rcptProcess(fs[0], fs.length > 1); }).catch(function () {});
   }
   function rcptProcess(file, extra) {
     var mine = S; S.busy = true; S.skipAuto = false;
@@ -873,10 +890,12 @@
       var pg = pgs[0], blob = pg.out || pg.blob;
       rcptFree();
       S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, url: URL.createObjectURL(blob), extra: !!extra };
+      relFile(file);
       S.busy = false; S.prog = null; S.screen = 'rcptprev'; render();
       if (extra) toast('고르신 사진 중 첫 장만 씁니다.', null, null, 4000);
     }).catch(function (e) {
       if (S !== mine) return;
+      if (!isQuota(e)) relFile(file);
       S.busy = false; S.prog = null; S.screen = 'start'; render();
       toast(storageMsg(e, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
     });
@@ -964,7 +983,7 @@
     col.appendChild(h('div', 'dsc-sub', '종이 문서를 한 쪽씩 사진으로 찍어 PDF 한 파일로 만듭니다. 최대 ' + DSC_MAX_PAGES + '쪽.'));
     col.appendChild(h('button', 'dsc-btn dsc-pri dsc-big', '📷 카메라로 찍기', shoot));
     col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 여러 장 고르기', gallery));
-    col.appendChild(h('div', 'dsc-sub', '찍은 사진은 폰 사진첩에도 남을 수 있습니다.'));   // O-0576
+    col.appendChild(h('div', 'dsc-sub', global.SilentCam && global.SilentCam.usable() ? '찍은 사진은 사진첩에 남기지 않고 이 앱 안에서만 써요.' : '찍은 사진은 폰 사진첩에도 남을 수 있습니다.'));   // O-0576 · O-0607
     memNote(col);
   }
 
@@ -1021,6 +1040,14 @@
     if (!n) { col.appendChild(h('div', 'dsc-card', '아직 쪽이 없습니다.')); }
     if (n > DSC_SLOW_PAGES) col.appendChild(h('div', 'dsc-warn', '쪽이 많아 정리에 시간이 더 걸립니다.'));
     memNote(col);
+    var qBad = 0, qSeen = false;                  // O-0607: 소리 없는 카메라가 알려 준 «흐리거나 어두운 쪽»
+    S.pages.forEach(function (p) { var q = S.qmap && S.qmap[p.id]; if (q != null) { qSeen = true; if (q !== 'sharp') qBad++; } });
+    if (qSeen) {
+      var qc = h('div', 'dsc-card dsc-item');
+      if (qBad) { qc.appendChild(h('div', 'dsc-warn', '흐리거나 어두운 쪽이 ' + qBad + '개 있어요')); qc.appendChild(h('div', 'dsc-sub', '느낌표가 붙은 쪽을 눌러서 다시 찍을 수 있어요.')); }
+      else qc.appendChild(h('div', 'dsc-sub', '모든 쪽이 선명해요.'));
+      col.appendChild(qc);
+    }
     var imgs = [], cvOk = cvUsable();
     S.pages.forEach(function (p, i) {
       var it = h('div', 'dsc-card dsc-item'), hd = h('div', 'dsc-item-h'), im = h('img', 'dsc-thumb');
@@ -1029,6 +1056,8 @@
       hd.appendChild(im);
       var t = h('div', 'dsc-info'), ln = h('div', 'dsc-line');
       ln.appendChild(h('span', 'dsc-num', (i + 1) + '쪽'));
+      var pq = S.qmap && S.qmap[p.id];
+      if (pq && pq !== 'sharp') { var qbtn = h('button', 'dsc-badge', '! ' + (pq === 'dark' ? '어두워요' : '흐려요'), function () { if (!S.busy) retake(p.id); }); qbtn.setAttribute('aria-label', (i + 1) + '쪽이 ' + (pq === 'dark' ? '어두워요' : '흐려요') + ': 눌러서 다시 찍기'); ln.appendChild(qbtn); }
       if (S.opts.auto) {
         var st = statusText(p);
         if (st === '테두리 확인' && cvOk) { var wb = h('button', 'dsc-badge', st, function () { openEdit(p); }); wb.setAttribute('aria-label', '테두리 확인: 자르기 화면 열기'); ln.appendChild(wb); }
@@ -1447,13 +1476,13 @@
     var recEl = h('div', 'dsc-rec', '● 녹음은 계속되고 있습니다'); recEl.style.display = 'none'; recEl.setAttribute('role', 'status');   // O-0576
     root.appendChild(top); root.appendChild(recEl); root.appendChild(body); root.appendChild(ft);
     document.body.appendChild(root);
-    S = { opts: opts, recEl: recEl, root: root, top: top, body: body, foot: ft, screen: 'start', pages: [], thumbs: {}, busy: false, token: 0, pushed: false, fname: null, set: opts.auto && opts.purpose !== 'receipt' ? loadSet() : null, cvOk: undefined, ed: null, sheet: null };
+    S = { opts: opts, recEl: recEl, root: root, top: top, body: body, foot: ft, screen: 'start', pages: [], thumbs: {}, busy: false, token: 0, pushed: false, fname: null, qmap: {}, set: opts.auto && opts.purpose !== 'receipt' ? loadSet() : null, cvOk: undefined, ed: null, sheet: null };
     try { history.pushState({ dsc: 1 }, ''); S.pushed = true; if (!popHooked) { popHooked = true; window.addEventListener('popstate', onPop); } } catch (e) {}
     S.busy = true; render();
     var first = S;
     if (opts.auto) ensureCv(!!(cvLib() && cvLib().hasFailed && cvLib().hasFailed())).then(function () { if (S === first && !S.busy && !S.prog && (S.screen === 'start' || S.screen === 'list')) render(); });   // O-0583
     if (opts.isRecording) first.recTimer = setInterval(function () { if (S === first) updRec(); }, 3000);   // O-0576
-    if (opts.purpose === 'receipt') { S.pages = []; S.busy = false; S.mem = false; render(); return true; }   // v9.26: 영수증은 쪽 저장소를 건드리지 않는다
+    if (opts.purpose === 'receipt') { S.pages = []; S.busy = false; S.mem = false; render(); if (opts.initialFile) rcptProcess(opts.initialFile, false); return true; }   // O-0607: 홈 「카메라」 칸에서 찍은 영수증은 곧바로 처리   // v9.26: 영수증은 쪽 저장소를 건드리지 않는다
     pendingSave.then(function () { return store.listSession(); }).then(function (r) {
       if (S !== first) return;
       S.pages = r.pages; S.busy = false;
@@ -1461,6 +1490,7 @@
         if (!S) return;
         S.mem = m; render();
         if (r.expired) toast('3일이 지난 작업 중 사진은 지웠습니다.');
+        if (opts.initialFiles && opts.initialFiles.length && S === first) addFiles(opts.initialFiles, 'camera');   // O-0607: 홈 「카메라」 칸·복구에서 온 사진은 곧바로 같은 처리로
       });
     }).catch(function () {                        // O-0576: 저장소 예외 → 메모리 모드 폴백으로 시작 화면
       if (S !== first) return;

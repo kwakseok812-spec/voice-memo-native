@@ -482,11 +482,7 @@ class SilentCameraActivity : ComponentActivity() {
         else -> "문서 스캔"
     }
 
-    private fun capPages(): Int {
-        var c = if (mode == "doc") minOf(Session.MAX_PAGES, left) else 1
-        if (lowDisk) c = minOf(c, Session.LOW_DISK_PAGES)
-        return c
-    }
+    private fun capPages(): Int = Session.cap(mode, left, lowDisk)
 
     private fun setMode(m: String) {
         if (from != "tab" || pages.isNotEmpty() || busy) return
@@ -521,6 +517,7 @@ class SilentCameraActivity : ComponentActivity() {
         applyMode()
         val n = pages.size
         titleTv.text = when {
+            from == "scan" && customTitle != null && mode == "doc" && multi -> customTitle + " · " + (n + 1) + "쪽째"
             from == "scan" && customTitle != null -> customTitle
             mode == "doc" && multi -> baseTitle() + " · " + (n + 1) + "쪽째"
             mode == "doc" -> baseTitle() + " · 한 장"
