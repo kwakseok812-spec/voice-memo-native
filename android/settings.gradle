@@ -6,3 +6,6 @@ apply from: 'capacitor.settings.gradle'
 
 // 미러링(O-0247) 모듈 — android/mirror (폰 화면을 로키드 안경에 비추기)
 include ':mirror'
+
+// 소리 없는 카메라(O-0607) 모듈 — android/silentcam
+include ':silentcam'

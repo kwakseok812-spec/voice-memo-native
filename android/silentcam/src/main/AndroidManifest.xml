@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 소리 없는 카메라(O-0607) 모듈의 선언. 빌드 때 스마트비서 매니페스트에 합쳐진다.
+     새로 생기는 권한은 CAMERA(런타임 허락) 하나뿐이다 — 알림 접근·접근성·문자 권한은 없다(규칙 10).
+     카메라가 없는 기기에서도 설치되게 required=false 로 둔다(없으면 JS 가 예전 길로 간다). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <application>
+        <activity
+            android:name="com.kwak.silentcam.SilentCameraActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|layoutDirection"
+            android:resizeableActivity="true"
+            android:excludeFromRecents="false"
+            android:launchMode="singleTop" />
+    </application>
+</manifest>
