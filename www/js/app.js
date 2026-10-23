@@ -8889,7 +8889,7 @@
               var saved = (r && r.name) || fname, id = r && r.id;
               return { ok: true, name: saved, open: (id != null && FD.open) ? function () { return FD.open({ id: String(id), mime: (r && r.mime) || file.type || '', askPermission: true }); } : null };
             }, function (e) {
-              if (e && e.code === 'CANCELLED') return { ok: true, quiet: true, name: fname };
+              if (e && e.code === 'CANCELLED') { var ce = new Error('다운로드를 취소했어요'); ce.friendly = '다운로드를 취소했어요'; throw ce; }   // 취소는 저장 성공이 아니다: 틀이 실패 흐름(앱 안 보관·다시 시도)으로 처리
               nativeDownload(url, fname); return { ok: true, quiet: true, name: fname };   // 앱 저장이 안 되면 웹페이지로 받기로 넘어간다(예전과 같음)
             });
           }
