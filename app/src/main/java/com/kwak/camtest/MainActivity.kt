@@ -9,6 +9,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Typeface
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -17,15 +19,18 @@ import android.os.Vibrator
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
@@ -34,19 +39,27 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.ZoomState
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.max
 
 // 소리가 나는지 시험하는 최소 앱. 이 앱은 소리를 내는 코드를 전혀 넣지 않았다
 // (MediaActionSound 등 사용 안 함). 소리가 난다면 시스템이 낸 것이다.
+// v0.2: 확대/축소(줌) 추가 — 핀치, 막대, 빠른 단추, 배율 표시, 사진 정보에 배율 기록.
 class MainActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
@@ -68,6 +81,21 @@ class MainActivity : ComponentActivity() {
     private var count = 0
     private var lastLine = "아직 찍은 사진이 없어요"
 
+    // ---- 줌 (v0.2) ----
+    private var desiredZoom = 1f // 사용자가 정한 배율. 방식 변경으로 다시 연결될 때, 화면 회전·접기로 화면이 새로 만들어질 때 이 값을 다시 적용
+    private var zoomMin = 1f
+    private var zoomMax = 1f
+    private var shotZoom = 1f // 셔터를 누른 순간의 배율
+    private var lensInfo = ""
+    private var multiTouch = false
+    private var builtRange = ""
+    private lateinit var zoomLabel: TextView
+    private lateinit var zoomSeek: SeekBar
+    private lateinit var zoomBtnRow: LinearLayout
+    private lateinit var scaleDetector: ScaleGestureDetector
+    private var zoomLive: LiveData<ZoomState>? = null
+    private var zoomObs: Observer<ZoomState>? = null
+
     private val photoDir: File by lazy {
         File(getExternalFilesDir(null), "photos").apply { mkdirs() }
     }
@@ -80,12 +108,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        desiredZoom = savedInstanceState?.getFloat("zoom", 1f) ?: 1f
         buildUi()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
             permLauncher.launch(Manifest.permission.CAMERA)
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putFloat("zoom", desiredZoom)
     }
 
     private fun smallBtn(label: String, onClick: () -> Unit): Button = Button(this).apply {
@@ -125,6 +159,30 @@ class MainActivity : ComponentActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(10))
             gravity = Gravity.CENTER_HORIZONTAL
         }
+
+        // 줌: 배율 표시 + 막대, 그 아래 빠른 단추(1× 2× 3× …)
+        val zoomRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        zoomLabel = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 16f; typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER; text = "×1.0"
+        }
+        zoomSeek = SeekBar(this).apply {
+            max = 1000; isEnabled = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    if (!fromUser || zoomMax <= zoomMin) return
+                    setZoom(zoomMin * exp(ln(zoomMax / zoomMin) * (p / 1000f)))
+                }
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {}
+            })
+        }
+        zoomRow.addView(zoomLabel, LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
+        zoomRow.addView(zoomSeek, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        panel.addView(zoomRow)
+        zoomBtnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        panel.addView(zoomBtnRow)
+
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         btnMode = smallBtn("") { mode = (mode + 1) % 3; refreshLabels(); bindUseCases() }
         btnVib = smallBtn("") { vibrateOn = !vibrateOn; refreshLabels() }
@@ -148,18 +206,108 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
         refreshLabels()
 
-        // 화면을 톡 누르면 그 자리로 초점(초점 속도 확인용)
+        // 두 손가락으로 벌리면 확대, 오므리면 축소
+        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                setZoom(desiredZoom * d.scaleFactor)
+                return true
+            }
+        })
+        // 화면을 톡 누르면 그 자리로 초점(초점 속도 확인용). 핀치 뒤에는 초점을 잡지 않는다.
         previewView.setOnTouchListener { v, ev ->
-            if (ev.action == MotionEvent.ACTION_UP) {
-                val cam = camera
-                if (cam != null) {
-                    val p = previewView.meteringPointFactory.createPoint(ev.x, ev.y)
-                    cam.cameraControl.startFocusAndMetering(FocusMeteringAction.Builder(p).build())
+            scaleDetector.onTouchEvent(ev)
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> multiTouch = false
+                MotionEvent.ACTION_POINTER_DOWN -> multiTouch = true
+                MotionEvent.ACTION_UP -> {
+                    if (!multiTouch && !scaleDetector.isInProgress) {
+                        val cam = camera
+                        if (cam != null) {
+                            val p = previewView.meteringPointFactory.createPoint(ev.x, ev.y)
+                            cam.cameraControl.startFocusAndMetering(FocusMeteringAction.Builder(p).build())
+                        }
+                    }
+                    v.performClick()
                 }
-                v.performClick()
             }
             true
         }
+    }
+
+    private fun fmtZoom(z: Float) = String.format(Locale.US, "×%.1f", z)
+
+    // 배율을 허용 범위 안으로 맞춰 카메라에 적용. 사용자가 정한 값(desiredZoom)은 다시 연결할 때 재적용된다.
+    private fun setZoom(ratio: Float) {
+        val r = if (zoomMax > zoomMin) ratio.coerceIn(zoomMin, zoomMax) else ratio
+        desiredZoom = r
+        camera?.cameraControl?.setZoomRatio(r)
+        updateZoomUi(r)
+    }
+
+    private fun updateZoomUi(r: Float) {
+        zoomLabel.text = fmtZoom(r)
+        if (zoomMax > zoomMin) {
+            zoomSeek.isEnabled = true
+            zoomSeek.progress = (ln(r.coerceIn(zoomMin, zoomMax) / zoomMin) / ln(zoomMax / zoomMin) * 1000f).toInt()
+        } else {
+            zoomSeek.isEnabled = false
+        }
+        refreshInfo()
+    }
+
+    private fun buildZoomButtons() {
+        val key = "$zoomMin-$zoomMax"
+        if (key == builtRange) return
+        builtRange = key
+        zoomBtnRow.removeAllViews()
+        for (c in listOf(0.5f, 1f, 2f, 3f, 5f, 10f)) {
+            if (c < zoomMin - 0.01f || c > zoomMax + 0.01f) continue
+            val label = if (c == c.toInt().toFloat()) "${c.toInt()}×" else "${c}×"
+            val b = smallBtn(label) { setZoom(c) }
+            b.minWidth = dp(48); b.minimumWidth = dp(48)
+            zoomBtnRow.addView(b)
+        }
+        if (zoomMax > 10.5f) {
+            val b = smallBtn("최대") { setZoom(zoomMax) }
+            b.minWidth = dp(48); b.minimumWidth = dp(48)
+            zoomBtnRow.addView(b)
+        }
+    }
+
+    // 카메라가 (다시) 연결될 때마다: 배율 범위를 읽고, 사용자가 정해 둔 배율을 다시 적용
+    private fun afterBind(cam: Camera) {
+        zoomObs?.let { zoomLive?.removeObserver(it) }
+        val live = cam.cameraInfo.zoomState
+        val obs = Observer<ZoomState> { zs ->
+            zoomMin = zs.minZoomRatio; zoomMax = zs.maxZoomRatio
+            buildZoomButtons()
+            updateZoomUi(zs.zoomRatio)
+        }
+        zoomLive = live; zoomObs = obs
+        live.observe(this, obs)
+        lensInfo = describeLens(cam)
+        live.value?.let { zoomMin = it.minZoomRatio; zoomMax = it.maxZoomRatio }
+        if (zoomMax > zoomMin) desiredZoom = desiredZoom.coerceIn(zoomMin, zoomMax)
+        cam.cameraControl.setZoomRatio(desiredZoom)
+        buildZoomButtons()
+        updateZoomUi(desiredZoom)
+    }
+
+    // 폴드8의 광각·망원이 한 카메라(논리 카메라)로 묶여 줌으로 전환되는지 보기 위한 정보 줄
+    @Suppress("UnsafeOptInUsageError")
+    private fun describeLens(cam: Camera): String = try {
+        val id = Camera2CameraInfo.from(cam.cameraInfo).cameraId
+        val cm = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val ch = cm.getCameraCharacteristics(id)
+        val phys = if (Build.VERSION.SDK_INT >= 28) ch.physicalCameraIds.size else 0
+        val focals = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            ?.joinToString("/") { String.format(Locale.US, "%.1f", it) } ?: "?"
+        val range = if (Build.VERSION.SDK_INT >= 30) {
+            ch.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)?.let { "${it.lower}~${it.upper}" } ?: "?"
+        } else "(안드로이드 11 미만)"
+        "카메라 $id · 묶인 물리렌즈 ${phys}개 · 초점거리 ${focals}mm · 줌 범위 $range"
+    } catch (e: Throwable) {
+        "렌즈 정보 읽기 실패: ${e.javaClass.simpleName}"
     }
 
     private fun modeName() = when (mode) {
@@ -176,7 +324,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshInfo() {
-        info.text = "카메라 시험 (소리 내는 코드 없음)\n방식 ${modeName()} · 저장 ${count}장\n$lastLine"
+        info.text = "카메라 시험 (소리 내는 코드 없음)\n방식 ${modeName()} · 저장 ${count}장 · 지금 줌 ${fmtZoom(desiredZoom)}\n$lastLine" +
+            (if (lensInfo.isNotEmpty()) "\n$lensInfo" else "")
     }
 
     private fun startCamera() {
@@ -211,6 +360,7 @@ class MainActivity : ComponentActivity() {
                 imageCapture = ic
                 camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic)
             }
+            camera?.let { afterBind(it) }
             refreshInfo()
         } catch (e: Exception) {
             info.text = "카메라 연결 실패: ${e.message}"
@@ -233,11 +383,12 @@ class MainActivity : ComponentActivity() {
 
     private fun newFile(tag: String): File {
         val n = System.currentTimeMillis()
-        return File(photoDir, "cam_${tag}_$n.jpg")
+        return File(photoDir, "cam_${tag}_${String.format(Locale.US, "x%.1f", shotZoom)}_$n.jpg")
     }
 
     private fun shoot() {
         shotStart = SystemClock.elapsedRealtime()
+        shotZoom = camera?.cameraInfo?.zoomState?.value?.zoomRatio ?: desiredZoom
         feedback()
         if (mode == 2) {
             wantFrame.set(true)
@@ -276,7 +427,10 @@ class MainActivity : ComponentActivity() {
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, o)
         count = photoDir.listFiles()?.size ?: count
-        lastLine = "방금: ${o.outWidth}x${o.outHeight}px · ${file.length() / 1024}KB · 저장까지 ${ms}ms\n(가로x세로, 사진 속 회전 정보 별도)"
+        // 디지털 줌이면 사진 크기(픽셀)는 그대로여도 실제로 담긴 정보는 줄어든다. 긴 변 ÷ 배율로 대략 추정해 보여 준다.
+        val longSide = max(o.outWidth, o.outHeight)
+        val eff = if (shotZoom > 1.05f) " · 실제 담긴 정보 약 ${(longSide / shotZoom).toInt()}px(추정)" else ""
+        lastLine = "방금: 줌 ${fmtZoom(shotZoom)} · ${o.outWidth}x${o.outHeight}px · ${file.length() / 1024}KB · 저장까지 ${ms}ms$eff\n(가로x세로, 사진 속 회전 정보 별도)"
         refreshInfo()
     }
 
