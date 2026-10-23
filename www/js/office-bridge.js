@@ -1052,7 +1052,7 @@
   function docResultFrom(res) {
     var d = res && res.summary_json && res.summary_json.doc;
     if (!d) return null;
-    return { pdf_url: d.pdf_url || null, name: d.name || '', pages: d.pages || 0, error: d.error || null };
+    return { pdf_url: d.pdf_url || null, name: d.name || '', pages: d.pages || 0, error: d.error || null, media: d.media || null };   // v9.30 media = PPT 영상·발표자 노트(PC 변환기가 영상·노트가 있을 때만 적음)
   }
 
   /* ---------- 케이 답장의 첨부(케이 → 대표님, 하향) ----------

@@ -311,3 +311,73 @@ html[data-fs] #docOverlay .sub{font-size:calc(14px * var(--fsx))}
 }
 html[data-fs] #docRoot .dve-big{font-size:calc(17.5px * var(--fsx))}
 html[data-fs] #docRoot .dve-sub, html[data-fs] #docRoot .dve-tip{font-size:calc(14px * var(--fsx))}
+
+/* ============================================================================
+ * v9.30 PPT 「영상 보기」 단추 + 발표자 노트 (docviewer.js 의 영상·노트 블록)
+ *   · 단추 층(.dv-vl)은 쪽 그림(.page-slot) 위에 비율 좌표로 얹힌다 — 확대·축소·회전해도 그림과 함께 움직인다.
+ *   · 야간(색 반전) 보기에서는 단추 층을 한 번 더 뒤집어 원래 색으로 둔다. 재생창은 #docRoot 밖(슬라이드쇼 위로도 뜸).
+ * ==========================================================================*/
+#docRoot .page-slot{position:relative;}
+.dv-vl{position:absolute; inset:0; pointer-events:none; z-index:3;}
+#docRoot.dark #pages .dv-vl{filter:invert(1) hue-rotate(180deg);}
+.dv-vr{position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; pointer-events:none;
+  outline:2px solid rgba(37,99,235,.5); outline-offset:-2px; font-family:"Pretendard",-apple-system,"Segoe UI","Malgun Gothic",sans-serif;}
+.dv-vb{pointer-events:auto; display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px; margin:0; border:0; background:transparent;
+  color:#fff; font-family:inherit; cursor:pointer; transition:transform .12s ease; -webkit-tap-highlight-color:transparent; min-width:0; min-height:0; width:auto; height:auto; box-shadow:none;}
+.dv-vb:active{transform:scale(.95);}
+.dv-vb:active .dv-vc{background:rgba(0,0,0,.84);}
+.dv-vb.dim, .dv-vb:disabled{opacity:.5; cursor:default; transform:none;}
+.dv-vc{display:flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%; background:rgba(0,0,0,.62);
+  border:2px solid rgba(255,255,255,.92); box-shadow:0 2px 10px rgba(0,0,0,.4); transition:background .12s ease;}
+.dv-vc svg{width:28px; height:28px; margin-left:3px;}
+.dv-vr.tiny .dv-vc{width:40px; height:40px;} .dv-vr.tiny .dv-vc svg{width:20px; height:20px; margin-left:2px;}
+.dv-vp{display:inline-flex; align-items:baseline; justify-content:center; flex-wrap:wrap; gap:3px 7px; max-width:100%; padding:6px 13px; border-radius:999px;
+  background:rgba(0,0,0,.74); color:#fff; font-size:13px; line-height:1.25; text-align:center; word-break:keep-all; box-shadow:0 1px 6px rgba(0,0,0,.35);}
+.dv-vp b{font-weight:800;} .dv-vp i{font-style:normal; font-weight:600; opacity:.88;}
+.dv-vre{pointer-events:auto; min-height:38px; padding:0 16px; border:0; border-radius:999px; background:#fff; color:#1d4ed8; font-family:inherit; font-size:14px; font-weight:800;
+  cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); width:auto; height:auto;}
+.dv-vre:active{transform:scale(.96);}
+.dv-vn{max-width:92%; padding:9px 14px; border-radius:14px; background:rgba(0,0,0,.74); color:#fff; font-size:13px; font-weight:700; line-height:1.4; text-align:center; word-break:keep-all;}
+#ssFrame{position:relative; display:block; line-height:0; flex:none;}
+#ssFrame canvas{display:block;}
+
+/* 발표자 노트 띠 — 지금 보는 쪽에 노트가 있을 때만 */
+#docRoot #dvNote{flex:none; background:var(--bar); border-top:1px solid var(--line);}
+#docRoot #dvNoteBar{display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:46px; padding:0 16px; margin:0; border:0; background:transparent;
+  color:var(--ink); font-family:inherit; font-size:15px; font-weight:800; text-align:left; cursor:pointer; box-shadow:none; height:auto;}
+#docRoot #dvNoteBar:active{background:var(--icon-bg);}
+#docRoot #dvNotePg{font-size:13px; font-weight:700; color:var(--sub);}
+#docRoot #dvNoteBody{display:none; max-height:40vh; overflow:auto; padding:2px 16px 14px; font-size:15.5px; line-height:1.65; color:var(--ink);
+  white-space:pre-wrap; word-break:keep-all; overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;}
+#docRoot #dvNote.open #dvNoteBody{display:block;}
+
+/* 영상 재생창 */
+#dvVideoModal{display:none; position:fixed; inset:0; z-index:160; background:rgba(0,0,0,.92); align-items:center; justify-content:center;
+  padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom)); font-family:"Pretendard",-apple-system,"Segoe UI","Malgun Gothic",sans-serif; box-sizing:border-box;}
+#dvVideoModal *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+#dvVideoModal.on{display:flex; animation:dvvFade .15s ease-out;}
+#dvVideoModal .dvv-box{position:relative; width:100%; max-width:720px; display:flex; flex-direction:column; align-items:stretch; gap:10px; animation:dvvPop .15s ease-out;}
+@keyframes dvvFade{from{opacity:0}to{opacity:1}}
+@keyframes dvvPop{from{transform:scale(.97)}to{transform:scale(1)}}
+#dvVideoModal .dvv-x{align-self:flex-end; width:46px; height:46px; margin:0; padding:0; border:0; border-radius:50%; background:rgba(255,255,255,.16); color:#fff; font-size:20px; font-weight:800; cursor:pointer; line-height:1;}
+#dvVideoModal .dvv-x:active{background:rgba(255,255,255,.32);}
+#dvVideoModal .dvv-stage{position:relative; width:100%; background:#000; border-radius:10px; overflow:hidden;}
+#dvVideoModal video{display:block; width:100%; aspect-ratio:16/9; max-height:calc(100vh - 170px); background:#000;}
+#dvVideoModal .dvv-msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:16px; text-align:center; color:#fff; font-size:15px; font-weight:700; line-height:1.5; background:rgba(0,0,0,.4); pointer-events:none; word-break:keep-all;}
+#dvVideoModal .dvv-title{color:#e8eaed; font-size:14px; font-weight:700; text-align:center; word-break:break-all;}
+#dvVideoModal .dvv-acts{display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+#dvVideoModal .dvv-acts button{min-height:46px; padding:0 18px; border:0; border-radius:14px; background:#fff; color:#1d4ed8; font-family:inherit; font-size:15px; font-weight:800; cursor:pointer;}
+@media (orientation:landscape) and (max-height:520px){           /* 폰 가로 보기: 영상이 높이에 맞춰 꽉 차고 닫기는 우상단 반투명 */
+  #dvVideoModal{padding:0;}
+  #dvVideoModal .dvv-box{max-width:none; height:100%; gap:0; justify-content:center;}
+  #dvVideoModal .dvv-stage{height:100%; border-radius:0;}
+  #dvVideoModal video{height:100%; max-height:none; aspect-ratio:auto; object-fit:contain;}
+  #dvVideoModal .dvv-x{position:absolute; top:calc(8px + env(safe-area-inset-top)); right:8px; z-index:3; background:rgba(0,0,0,.55);}
+  #dvVideoModal .dvv-title{display:none;}
+  #dvVideoModal .dvv-acts{position:absolute; left:8px; bottom:56px; z-index:3;}
+}
+@media (prefers-reduced-motion:reduce){
+  #dvVideoModal.on, #dvVideoModal .dvv-box{animation:none;} .dv-vb, .dv-vc{transition:none;} .dv-vb:active, .dv-vre:active{transform:none;}
+}
+#dvVideoModal.calm.on, #dvVideoModal.calm .dvv-box{animation:none;}
+.dv-vl.calm .dv-vb, .dv-vl.calm .dv-vc{transition:none;} .dv-vl.calm .dv-vb:active, .dv-vl.calm .dv-vre:active{transform:none;}

@@ -62,6 +62,13 @@
   // O-0171 PC에서 편집하기: 지금 문서의 「원본」을 어디서 다시 구할 수 있나(폰 파일 / 서버 주소 전체 / PC 경로)
   var curOrig = null, curSrcFull = null, curPcPath = null;
 
+  // v9.30 PPT 「영상 보기」 단추 + 발표자 노트. DOC_MEDIA = 'off' 로 바꾸면 PC가 보내 준 영상·노트 정보를 통째로 무시한다(예전과 같은 화면).
+  //   PC 쪽 스위치(doc_media.OFF / doc_media_switch.json)와는 별개 — PC 를 끄면 새로 변환하는 PPT 부터 정보가 없고, 이 상수는 앱에서 막는다.
+  var DOC_MEDIA = 'on';
+  var curMedia = null;            // {media:{v,slides:{"쪽":{note,videos[]}}}, job:{id,tok}} — 지금 문서의 영상·노트(없으면 null)
+  var noteOpen = false, noteShownPg = 0;
+  var mediaWatchT = null, mediaWatchSeq = 0, mediaStale = false, forceKey = null;
+
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function blobToBuf(blob) {
     if (blob && typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
@@ -222,6 +229,7 @@
     cancelUpload(); // v6.9: 올리던 조각 전송도 멈춘다(이미 올라간 조각은 장부에 남아 다음에 이어 올림)
     releaseWake();
     hideOverlay();  // 변환 스피너 오버레이가 남아 화면을 가리는(갇히는) 것을 막는다
+    closeVideo(); forceKey = null;       // v9.30
     closeSlideshow();
     closeSheet();
     if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
@@ -309,6 +317,7 @@
     $('zoomFit').textContent = isTable ? '기본' : '폭맞춤';
     updateFeatureButtons();
     sheetBar.style.display = (isTable && excelWorkbook && excelWorkbook.SheetNames.length > 1) ? 'flex' : 'none';
+    updateNoteDock();
   }
   function updateFeatureButtons() {
     var isPdf = (viewMode === 'pdf') && !!pdfDoc;
@@ -341,7 +350,7 @@
       if (isExcelExt(ext)) { openExcelFile(file); return; }
       convertAndShowPdf(file);
     }
-    DocStore.keyOf(file).then(function (key) {
+    function afterKey(key) {
       if (op !== opToken) return null;
       if (openIntent === 'new') {                                   // v8.0: 이미 탭에 열린 문서면 그 탭으로
         var di = tabByKey(key);
@@ -361,11 +370,22 @@
         }
         proceed();
       });
+    }
+    DocStore.keyOf(file).then(function (key) {
+      if (op !== opToken) return null;
+      if (forceKey && key === forceKey) {                           // v9.30 영상 [다시 준비]: 저장본·지난 요청 기록·열린 탭을 버리고 처음부터 변환
+        forceKey = null; var fdi = tabByKey(key);
+        if (fdi >= 0) { tabs.splice(fdi, 1); if (fdi <= activeIdx) activeIdx--; }
+        jobDel(key);
+        return DocStore.del(key).then(function () { renderRecent(); return afterKey(key); });
+      }
+      return afterKey(key);
     }).catch(function () { proceed(); });
   }
   // v6.9: 새 문서를 열기 전에 앞 문서 화면을 비운다(예전엔 새 문서 변환이 실패하면 앞 문서가 새 이름 아래 그대로 보였다).
   function clearDocView() {
     renderToken++;
+    stopMediaWatch(); curMedia = null; mediaStale = false; noteOpen = false; updateNoteDock();   // v9.30 앞 문서의 영상·노트가 남지 않게
     if (io) { try { io.disconnect(); } catch (e) {} }
     if (pdfDoc) { try { pdfDoc.destroy(); } catch (e) {} pdfDoc = null; }
     if (pagesEl) { pagesEl.innerHTML = ''; pagesEl.style.transform = 'none'; }
@@ -401,6 +421,7 @@
       if (!b.pdf) { showError('저장본을 열지 못했습니다.', '원래 파일을 다시 골라 주세요.'); return; }
       setProgress(70);
       pendingPdfBlob = b.pdf;                                       // v8.0: 탭이 들고 있을 PDF(저장본 = 기기 저장소 사본)
+      curMedia = (DOC_MEDIA === 'on' && meta.media && meta.media.slides) ? { media: meta.media, job: meta.mediaJob || null } : null;   // v9.30 (준비 중 상태는 열 때마다 loadPdf 가 다시 확인)
       blobToBuf(b.pdf).then(function (buf) {
         if (op !== opToken) return;
         loadPdf({ data: new Uint8Array(buf) }, meta.name, meta.isPpt);
@@ -412,7 +433,8 @@
     if (!curKey || !curFileInfo) return;
     var key = curKey;
     DocStore.save({ key: key, name: curFileInfo.name, ext: curFileInfo.ext, kind: kind, isPpt: !!isPpt,
-                    size: curFileInfo.size, srcUrl: curSrcUrl || null }, blobs).then(function (r) {
+                    size: curFileInfo.size, srcUrl: curSrcUrl || null,
+                    media: curMedia ? curMedia.media : null, mediaJob: curMedia ? curMedia.job : null }, blobs).then(function (r) {   // v9.30 영상·노트 정보(없으면 null → 저장 안 함)
       if (r && r.removed > 0) toast('저장 공간을 위해 오래 안 연 문서 ' + r.removed + '개를 목록에서 정리했습니다.');
       if (r && r.skipped === 'quota') toast('폰 저장 공간이 모자라 이 문서는 최근 목록에 넣지 못했습니다.');
       if (r && r.skipped === 'unavailable' && !idbWarned) { idbWarned = true; toast('이 기기에서는 목록 저장을 쓸 수 없습니다. 문서 보기는 그대로 됩니다.'); }
@@ -726,7 +748,7 @@
                    sub: reused ? '지난번에 PC가 변환해 둔 결과라 다시 올리지 않습니다.' : '', pct: 92, pctText: '', hint: '' });
       job.doneAt = Date.now(); jobPut(jk, job);
       downloadPdf(d.pdf_url, function (p) { if (alive()) setLoading({ pct: 92 + 8 * p, pctText: Math.floor(p * 100) + '%' }); })
-        .then(function (buf) { if (!alive()) return; releaseWake(); onDone(buf); }, function (e) {
+        .then(function (buf) { if (!alive()) return; releaseWake(); setMediaFromResult(job, d); onDone(buf); }, function (e) {
           if (!alive()) return;
           if (reused) { jobDel(jk); startFresh(); return; }   // 지난 결과 주소가 만료 → 새로
           fail((e && e.message) || '변환된 문서를 받지 못했습니다.', true);
@@ -761,6 +783,237 @@
     loadPdf({ data: new Uint8Array(buf) }, name, isPpt);
   }
 
+  /* ============ v9.30 PPT 「영상 보기」 단추 + 발표자 노트 ============
+   * 교수님 요청: PPT 를 앱에서 열면 PDF 라 영상 슬라이드가 그림만 보이고 재생이 안 됨.
+   *   · PC 변환기(doc_worker)가 PPTX 에서 슬라이드별 영상·발표자 노트를 꺼내 변환 결과 행(summary_json.doc.media)에 함께 적는다.
+   *       media = { v:1, slides:{ "<PDF 쪽>": { note:"…", videos:[{id,ext,rect:[x,y,w,h](0~1),state,size,dur,name,url}] } } }
+   *       state: preparing(PC가 올리는 중) | ready(url 로 재생) | failed | unsupported(mov 등) | toolarge(300MB 초과)
+   *   · 영상은 파일째 폰에 받지 않는다 — 단추를 누를 때만 서명 주소로 스트리밍(Range)해서 앱 안 재생창에서 튼다.
+   *   · 노트는 「지금 보는 쪽」의 노트를 아래 띠 하나로 보여 준다(기본 접힘, 눌러서 펼침). 슬라이드쇼에는 노트를 넣지 않는다.
+   *   · media 가 없는 문서(영상·노트 없는 PPT, PDF·한글·워드·엑셀)는 이 코드가 아무 일도 하지 않는다. */
+  function setMediaFromResult(job, d) {
+    curMedia = (DOC_MEDIA === 'on' && d && d.media && d.media.slides) ? { media: d.media, job: { id: job.id, tok: job.tok } } : null;
+  }
+  function mediaSlides() { return (curMedia && curMedia.media && curMedia.media.slides) || null; }
+  function pageMedia(pg) { var s = mediaSlides(); return (s && s[String(pg)]) || null; }
+  function slideHasVideo(pg) {
+    var m = pageMedia(pg); if (!m || !m.videos) return false;
+    return m.videos.some(function (v) { return v.state === 'ready' || v.state === 'preparing'; });
+  }
+  // 슬라이드 안 비율 자리 [x,y,w,h] 를 보는 회전(시계 방향 0/90/180/270)에 맞게 바꾼다
+  function rotRect(r, rot) {
+    var x = r[0], y = r[1], w = r[2], h = r[3];
+    rot = ((rot % 360) + 360) % 360;
+    if (rot === 90) return [1 - (y + h), x, h, w];
+    if (rot === 180) return [1 - (x + w), 1 - (y + h), w, h];
+    if (rot === 270) return [y, 1 - (x + w), h, w];
+    return [x, y, w, h];
+  }
+  function fmtDurSec(s) { s = Math.round(s || 0); if (s < 60) return s + '초'; var m = Math.floor(s / 60), r = s % 60; return r ? (m + '분 ' + r + '초') : (m + '분'); }
+  function pctStyle(r) { return 'left:' + (r[0] * 100).toFixed(2) + '%;top:' + (r[1] * 100).toFixed(2) + '%;width:' + (r[2] * 100).toFixed(2) + '%;height:' + (r[3] * 100).toFixed(2) + '%;'; }
+  var PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+  function stop(e) { e.stopPropagation(); }
+  // 움직임 줄이기: 폰 설정(prefers-reduced-motion) 또는 앱의 「케이 얼굴 움직이기」 끔 → 누름·전환 효과 없이
+  function calmNow() { try { return !!((global.KChar && KChar.motionOn && !KChar.motionOn()) || (global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)); } catch (e) { return false; } }
+
+  // 영상 하나의 단추(쪽 그림 위에 겹침). 모양은 상태에 따라 다르다.
+  //   ready      : 지름 56px 동그라미 + 「영상 보기 2분 · 27MB」 알약
+  //   preparing  : 흐리게(눌러지지 않음, 안내 토스트 없음) + 「영상 준비 중…」 — 3분 넘으면 「아직 올리는 중입니다」+ [다시 확인]
+  //   failed     : 「영상을 올리지 못했습니다」 + [다시 준비]
+  //   unsupported / toolarge : 눌러지지 않는 안내 글만
+  function buildVideoBtn(v, pg, rot, pxW, pxH) {
+    var r = rotRect(v.rect || [0.25, 0.25, 0.5, 0.5], rot);
+    var wrap = document.createElement('div'); wrap.className = 'dv-vr'; wrap.setAttribute('data-state', v.state || ''); wrap.setAttribute('style', pctStyle(r));
+    var tiny = Math.min(r[2] * pxW, r[3] * pxH) < 96;          // 영상 상자가 작으면 동그라미만(글자는 못 넣는다)
+    if (tiny) wrap.classList.add('tiny');
+    ['touchstart', 'touchend', 'mousedown', 'dblclick'].forEach(function (ev) { wrap.addEventListener(ev, stop, { passive: true }); });
+    function pill(t1, t2) { return '<span class="dv-vp">' + (t1 ? '<b>' + esc(t1) + '</b>' : '') + (t2 ? '<i>' + esc(t2) + '</i>' : '') + '</span>'; }
+    function circle(dim) { return '<span class="dv-vc' + (dim ? ' dim' : '') + '">' + PLAY_SVG + '</span>'; }
+    if (v.state === 'ready' && v.url) {
+      var meta = [v.dur ? fmtDurSec(v.dur) : '', v.size ? fmtSize(v.size) : ''].filter(Boolean).join(' · ');
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'dv-vb'; b.setAttribute('aria-label', '영상 보기' + (meta ? ' ' + meta : ''));
+      b.innerHTML = circle(false) + (tiny ? '' : pill('영상 보기', meta));
+      b.addEventListener('click', function (e) { e.stopPropagation(); openVideo(v, pg); });
+      wrap.appendChild(b);
+    } else if (v.state === 'preparing') {
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'dv-vb dim'; d.disabled = true; d.setAttribute('aria-disabled', 'true');
+      d.innerHTML = circle(true) + (tiny ? '' : pill(mediaStale ? '영상을 아직 올리는 중입니다' : '영상 준비 중…', ''));
+      wrap.appendChild(d);
+      if (mediaStale && !tiny) wrap.appendChild(actBtn('다시 확인', function () { refreshMediaNow(); }));
+    } else if (v.state === 'failed') {
+      if (!tiny) wrap.appendChild(noteBox('영상을 올리지 못했습니다'));
+      wrap.appendChild(actBtn('다시 준비', function () { regenerateMedia(); }));
+    } else if (!tiny) {
+      wrap.appendChild(noteBox(v.state === 'toolarge' ? '이 영상은 크기가 커서(300MB 초과) 폰에서 재생할 수 없습니다.' : '이 영상 형식은 폰에서 재생할 수 없습니다.'));
+    }
+    return wrap;
+  }
+  function actBtn(label, fn) {
+    var a = document.createElement('button'); a.type = 'button'; a.className = 'dv-vre'; a.textContent = label;
+    a.addEventListener('click', function (e) { e.stopPropagation(); fn(); });
+    return a;
+  }
+  function noteBox(t) { var d = document.createElement('div'); d.className = 'dv-vn'; d.textContent = t; return d; }
+
+  // 쪽 그림(.page-slot) 위에 영상 단추 층을 얹는다. 쪽을 다시 그릴 때마다(canvas 가 바뀔 때) 같이 다시 얹는다.
+  function decorateSlot(slot, pg) {
+    var old = slot.querySelector('.dv-vl'); if (old) old.parentNode.removeChild(old);
+    if (!curMedia || !curIsPpt || viewMode !== 'pdf') return;
+    var m = pageMedia(pg); if (!m || !m.videos || !m.videos.length) return;
+    var layer = document.createElement('div'); layer.className = 'dv-vl' + (calmNow() ? ' calm' : '');
+    var pxW = parseFloat(slot.style.width) || slot.clientWidth || 360, pxH = parseFloat(slot.style.height) || slot.clientHeight || 200;
+    m.videos.forEach(function (v) { layer.appendChild(buildVideoBtn(v, pg, userRotation, pxW, pxH)); });
+    slot.appendChild(layer);
+  }
+  function redecorateAll() {
+    if (!pagesEl) return;
+    var kids = pagesEl.children;
+    for (var i = 0; i < kids.length; i++) {
+      var sl = kids[i], num = +(sl.dataset.page || (pdfPaged ? pageModeCur : 0));
+      if (sl.querySelector('canvas')) decorateSlot(sl, num); else { var o = sl.querySelector('.dv-vl'); if (o) o.parentNode.removeChild(o); }
+    }
+    if (ssOpen && ssFrame) decorateSS(parseFloat(ssCanvas.style.width) || 0, parseFloat(ssCanvas.style.height) || 0);
+  }
+  // 슬라이드쇼(전체화면) 그림 위의 단추 — 노트는 넣지 않는다
+  var ssFrame = null;
+  function decorateSS(cw, ch) {
+    if (!ssFrame) return;
+    var old = ssFrame.querySelector('.dv-vl'); if (old) old.parentNode.removeChild(old);
+    if (!curMedia || !curIsPpt || ssMode !== 'show') return;
+    var m = pageMedia(ssIndex); if (!m || !m.videos || !m.videos.length) return;
+    var layer = document.createElement('div'); layer.className = 'dv-vl' + (calmNow() ? ' calm' : '');
+    m.videos.forEach(function (v) { layer.appendChild(buildVideoBtn(v, ssIndex, ssRot, cw || 640, ch || 360)); });
+    ssFrame.appendChild(layer);
+  }
+
+  // ---------- 발표자 노트 띠(지금 보는 쪽의 노트 · 기본 접힘) ----------
+  function updateNoteDock() {
+    var dock = $('dvNote'); if (!dock) return;
+    var pg = (pdfDoc && viewMode === 'pdf') ? getCurrentPage() : 0;
+    var m = (curMedia && curIsPpt && pg) ? pageMedia(pg) : null, text = (m && m.note) || '';
+    if (!text) { if (noteShownPg !== 0 || dock.style.display !== 'none') { dock.style.display = 'none'; noteShownPg = 0; } return; }
+    if (dock.style.display === 'none') dock.style.display = '';
+    if (noteShownPg !== pg) {
+      noteShownPg = pg;
+      $('dvNoteBody').textContent = text;                       // 글자 그대로(HTML 로 읽지 않음)
+      $('dvNoteBody').scrollTop = 0; $('dvNotePg').textContent = pg + '쪽';
+    }
+    dock.classList.toggle('open', noteOpen);
+    $('dvNoteBar').setAttribute('aria-expanded', noteOpen ? 'true' : 'false');
+    $('dvNoteLbl').textContent = noteOpen ? '발표자 노트 ▴' : '발표자 노트 ▾';
+  }
+  function toggleNote() { noteOpen = !noteOpen; updateNoteDock(); }
+
+  // ---------- 영상 준비 확인(PC 가 올리는 중이면 5초마다 행을 다시 읽음 · 최대 3분) ----------
+  var MEDIA_WATCH_MS = 3 * 60 * 1000, MEDIA_POLL_MS = 5000;
+  function mediaPreparing() {
+    var s = mediaSlides(); if (!s) return false;
+    for (var k in s) if (s.hasOwnProperty(k)) { var vs = s[k].videos || []; for (var i = 0; i < vs.length; i++) if (vs[i].state === 'preparing') return true; }
+    return false;
+  }
+  function stopMediaWatch() { mediaWatchSeq++; if (mediaWatchT) { clearTimeout(mediaWatchT); mediaWatchT = null; } }
+  function applyMedia(nm, key) {
+    if (!curMedia || key !== curKey || !nm || !nm.slides) return;
+    if (JSON.stringify(nm) === JSON.stringify(curMedia.media)) return;
+    curMedia.media = nm;
+    if (curKey) DocStore.touch(curKey, { media: nm });          // 「준비 중」 상태가 목록에 굳지 않게: 바뀐 상태를 저장하고, 열 때마다 다시 확인
+    redecorateAll(); updateNoteDock();
+  }
+  function startMediaWatch() {
+    stopMediaWatch();
+    if (!curMedia || !curMedia.job || !global.OfficeBridge || !mediaPreparing()) return;
+    var seq = ++mediaWatchSeq, t0 = Date.now(), key = curKey, job = curMedia.job;
+    function next() {
+      if (seq !== mediaWatchSeq) return;
+      if (!mediaPreparing()) { stopMediaWatch(); return; }
+      if (Date.now() - t0 > MEDIA_WATCH_MS) { mediaStale = true; redecorateAll(); return; }     // 3분 넘음 → 「아직 올리는 중」+ [다시 확인]
+      mediaWatchT = setTimeout(loop, MEDIA_POLL_MS);
+    }
+    function loop() {
+      if (seq !== mediaWatchSeq) return;
+      OfficeBridge.poll(job.id, job.tok).then(function (res) {
+        if (seq !== mediaWatchSeq) return;
+        var d = OfficeBridge.docResultFrom(res);
+        if (d && d.media) applyMedia(d.media, key);
+        next();
+      }, function () { next(); });
+    }
+    loop();
+  }
+  function refreshMediaNow() {
+    mediaStale = false; redecorateAll();
+    if (!curMedia || !curMedia.job) { regenerateMedia(); return; }
+    startMediaWatch();
+  }
+  // 영상 주소가 만료됐거나 올리기에 실패했을 때: 저장본·요청 기록을 버리고 원본 PPT 로 처음부터(영상은 서버에 해시로 남아 있으면 다시 올리지 않음)
+  function regenerateMedia() {
+    closeVideo();
+    if (!curKey) { toast('원본 파일을 다시 골라 주세요.'); return; }
+    forceKey = curKey;
+    if (curOrig) { handleLocalFile(curOrig); return; }
+    toast('원본 PPT 파일을 다시 골라 주세요. 같은 파일이면 영상을 새로 준비합니다.');
+    if (fileInput) fileInput.click();
+  }
+
+  // ---------- 영상 재생창(앱 안 · 닫으면 문서 자리 그대로) ----------
+  var vmEl = null, vmVideo = null, vmMsg = null, vmTitle = null, vmExt = null, vmRe = null, vmSeq = 0, vmCur = null;
+  function videoOpen() { return !!(vmEl && vmEl.classList.contains('on')); }
+  function ensureVideoModal() {
+    if (vmEl) return;
+    vmEl = document.createElement('div'); vmEl.id = 'dvVideoModal'; vmEl.setAttribute('role', 'dialog'); vmEl.setAttribute('aria-modal', 'true'); vmEl.setAttribute('aria-label', '영상 재생');
+    vmEl.innerHTML = '<div class="dvv-box">' +
+      '<button class="dvv-x" type="button" aria-label="닫기">✕</button>' +
+      '<div class="dvv-stage"><video playsinline controls preload="metadata"></video><div class="dvv-msg"></div></div>' +
+      '<div class="dvv-title"></div>' +
+      '<div class="dvv-acts"><button class="dvv-ext" type="button" style="display:none">다른 앱으로 열기</button><button class="dvv-re" type="button" style="display:none">다시 준비</button></div>' +
+      '</div>';
+    document.body.appendChild(vmEl);
+    vmVideo = vmEl.querySelector('video'); vmMsg = vmEl.querySelector('.dvv-msg'); vmTitle = vmEl.querySelector('.dvv-title');
+    vmExt = vmEl.querySelector('.dvv-ext'); vmRe = vmEl.querySelector('.dvv-re');
+    vmEl.querySelector('.dvv-x').onclick = closeVideo;
+    vmEl.addEventListener('click', function (e) { if (e.target === vmEl) closeVideo(); });
+    vmExt.onclick = function () { if (vmCur && vmCur.v.url) { var w = null; try { w = global.open(vmCur.v.url, '_blank'); } catch (e) {} if (!w) toast('다른 앱으로 열지 못했습니다. 다시 눌러 주세요.'); } };
+    vmRe.onclick = function () { regenerateMedia(); };
+    vmVideo.addEventListener('playing', function () { setVmMsg(''); });
+    vmVideo.addEventListener('waiting', function () { if (vmCur && !vmVideo.paused) setVmMsg('영상을 불러오는 중입니다…'); });
+    vmVideo.addEventListener('error', function () {
+      if (!vmCur || !vmVideo.getAttribute('src')) return;
+      if (navigator.onLine === false) setVmMsg('인터넷 연결이 끊겼습니다. 연결을 확인해 주세요.');
+      else { setVmMsg('이 영상은 폰에서 재생할 수 없는 형식입니다.'); vmExt.style.display = ''; }     // [다른 앱으로 열기]는 재생이 안 될 때만
+    });
+    try { document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && videoOpen()) closeVideo(); }); } catch (e) {}
+  }
+  function setVmMsg(t) { if (!vmMsg) return; vmMsg.textContent = t || ''; vmMsg.style.display = t ? '' : 'none'; }
+  // 주소가 아직 살아 있는지 1바이트만 받아 본다. 'ok' | 'expired'(만료·없음) | 'offline'
+  function probeVideo(url) {
+    if (!global.fetch) return Promise.resolve('ok');
+    return fetch(url, { headers: { Range: 'bytes=0-0' } }).then(function (r) {
+      return (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) ? 'expired' : 'ok';
+    }, function () { return navigator.onLine === false ? 'offline' : 'ok'; });
+  }
+  function openVideo(v, pg) {
+    ensureVideoModal();
+    var seq = ++vmSeq; vmCur = { v: v, pg: pg };
+    vmEl.classList.toggle('calm', calmNow()); vmEl.classList.add('on');
+    vmTitle.textContent = (v.name ? v.name.replace(/\.[A-Za-z0-9]{2,4}$/, '') : ((fnameLabel && fnameLabel.textContent) || '문서') + ' · ' + pg + '쪽 영상');
+    vmExt.style.display = 'none'; vmRe.style.display = 'none';
+    try { vmVideo.pause(); vmVideo.removeAttribute('src'); vmVideo.load(); } catch (e) {}
+    setVmMsg('영상을 불러오는 중입니다…');
+    probeVideo(v.url).then(function (res) {
+      if (seq !== vmSeq || !videoOpen()) return;
+      if (res === 'expired') { setVmMsg('영상 주소가 만료되었습니다. 다시 준비합니다.'); vmRe.textContent = curOrig ? '다시 준비' : '원본 파일 고르기'; vmRe.style.display = ''; return; }
+      if (res === 'offline') { setVmMsg('인터넷 연결이 끊겼습니다. 연결을 확인해 주세요.'); return; }
+      vmVideo.src = v.url;
+      try { var p = vmVideo.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    });
+  }
+  function closeVideo() {
+    if (!vmEl || !vmEl.classList.contains('on')) return;
+    vmSeq++; vmCur = null;
+    try { vmVideo.pause(); vmVideo.removeAttribute('src'); vmVideo.load(); } catch (e) {}
+    vmEl.classList.remove('on');
+  }
+
   // ============ 렌더링(지연 렌더) ============
   var p1w = 612, p1h = 792, renderToken = 0, io = null;
   function loadPdf(src, name, isPpt) {
@@ -787,6 +1040,8 @@
       if (curKey) DocStore.touch(curKey, { pages: pdfDoc.numPages });
       var lt = activeTab(); if (lt && liveTabId === lt.id) lt.pages = pdfDoc.numPages;   // v8.1: 케이에게 「전체 ○쪽」
       updatePageBadge(); updateFeatureButtons();
+      noteOpen = false; noteShownPg = 0; mediaStale = false; updateNoteDock(); startMediaWatch();   // v9.30 노트 띠(접힘)·영상 준비 확인
+      if (lt && liveTabId === lt.id && curMedia) lt.media = curMedia;                            // v9.30 다시 준비한 결과를 보던 탭에도
     }).catch(function (err) { if (err === STALE) return; showError('문서를 표시하지 못했습니다.', (err && err.message) ? err.message : ''); });
   }
   function computeBaseScale() {
@@ -807,7 +1062,7 @@
       var vp = page.getViewport({ scale: scale, rotation: userRotation });
       slot.style.width = Math.floor(vp.width) + 'px'; slot.style.height = Math.floor(vp.height) + 'px';
       var canvas = document.createElement('canvas'); canvas.width = Math.floor(vp.width * DPR); canvas.height = Math.floor(vp.height * DPR);
-      var ctx = canvas.getContext('2d'); slot.innerHTML = ''; slot.appendChild(canvas);
+      var ctx = canvas.getContext('2d'); slot.innerHTML = ''; slot.appendChild(canvas); decorateSlot(slot, num);
       return page.render({ canvasContext: ctx, viewport: vp, transform: DPR !== 1 ? [DPR, 0, 0, DPR, 0, 0] : null }).promise.then(function () {
         if (token !== renderToken) { slot.innerHTML = ''; slot.dataset.rendered = '0'; } else slot.dataset.rendered = '1'; slot.dataset.rendering = '0';
       });
@@ -823,7 +1078,7 @@
       var vp = page.getViewport({ scale: scale, rotation: userRotation });
       var slot = document.createElement('div'); slot.className = 'page-slot'; slot.style.width = Math.floor(vp.width) + 'px'; slot.style.height = Math.floor(vp.height) + 'px';
       var canvas = document.createElement('canvas'); canvas.width = Math.floor(vp.width * DPR); canvas.height = Math.floor(vp.height * DPR);
-      var ctx = canvas.getContext('2d'); slot.appendChild(canvas); pagesEl.appendChild(slot);
+      var ctx = canvas.getContext('2d'); slot.appendChild(canvas); pagesEl.appendChild(slot); decorateSlot(slot, pageModeCur);
       return page.render({ canvasContext: ctx, viewport: vp, transform: DPR !== 1 ? [DPR, 0, 0, DPR, 0, 0] : null }).promise.then(function () { if (token !== renderToken) return; scroller.scrollTop = 0; scroller.scrollLeft = 0; });
     }).catch(function () {});
   }
@@ -864,7 +1119,7 @@
     if (!pdfDoc) { pageBadge.textContent = '– / –'; return; }
     pageBadge.textContent = getCurrentPage() + ' / ' + pdfDoc.numPages;
     prevBtn.disabled = (getCurrentPage() <= 1); nextBtn.disabled = (getCurrentPage() >= pdfDoc.numPages);
-    scheduleLastPage();
+    scheduleLastPage(); updateNoteDock();
   }
   // v6.9: 지금 보는 쪽을 최근 목록에 기억(1.2초 모아서 한 번 저장)
   var lastPageT = null;
@@ -903,7 +1158,7 @@
       ssCanvas.width = Math.floor(cw * DPR); ssCanvas.height = Math.floor(ch * DPR); ssCanvas.style.width = cw + 'px'; ssCanvas.style.height = ch + 'px';
       var ctx = ssCanvas.getContext('2d'); ctx.clearRect(0, 0, ssCanvas.width, ssCanvas.height);
       return page.render({ canvasContext: ctx, viewport: vp, transform: DPR !== 1 ? [DPR, 0, 0, DPR, 0, 0] : null }).promise.then(function () {
-        applySSZoomState();
+        decorateSS(cw, ch); applySSZoomState();
         if (ssZoom > 1.01) requestAnimationFrame(function () { ssStage.scrollLeft = Math.max(0, (ssStage.scrollWidth - ssStage.clientWidth) / 2); ssStage.scrollTop = Math.max(0, (ssStage.scrollHeight - ssStage.clientHeight) / 2); });
       });
     }).catch(function () {});
@@ -916,7 +1171,9 @@
   function ssNext() { if (ssIndex < pdfDoc.numPages) ssGo(ssIndex + 1); else if (ssLoop) ssGo(1); }
   function ssPrev() { if (ssIndex > 1) ssGo(ssIndex - 1); else if (ssLoop) ssGo(pdfDoc.numPages); }
   function updatePlayBtn() { ssPlayBtn.textContent = ssPlaying ? '⏸' : '▶'; ssPlayBtn.title = ssPlaying ? '정지' : '자동 재생'; ssPlayBtn.classList.toggle('on', ssPlaying); }
-  function scheduleNext() { if (ssTimer) clearTimeout(ssTimer); ssTimer = setTimeout(function () { if (!ssPlaying || !ssOpen) return; if (ssIndex >= pdfDoc.numPages) { if (ssLoop) { renderSlide(1); scheduleNext(); } else stopAutoplay(); } else { renderSlide(ssIndex + 1); scheduleNext(); } }, ssInterval); }
+  function scheduleNext() { if (ssTimer) clearTimeout(ssTimer); ssTimer = setTimeout(function () { if (!ssPlaying || !ssOpen) return; if (ssVideoPause()) return; if (ssIndex >= pdfDoc.numPages) { if (ssLoop) { renderSlide(1); if (!ssVideoPause()) scheduleNext(); } else stopAutoplay(); } else { renderSlide(ssIndex + 1); if (!ssVideoPause()) scheduleNext(); } }, ssInterval); }
+  // v9.30 영상이 있는 슬라이드에서는 자동 넘김을 멈춘다(영상을 보는 동안 넘어가 버리지 않게). 멈췄으면 true.
+  function ssVideoPause() { if (!ssPlaying || !curMedia || !slideHasVideo(ssIndex)) return false; stopAutoplay(); showFlipHint('영상 슬라이드에서는 자동 넘김이 멈춥니다'); return true; }
   function startAutoplay() { if (!pdfDoc) return; ssPlaying = true; updatePlayBtn(); if (ssIndex >= pdfDoc.numPages && !ssLoop) renderSlide(1); scheduleNext(); showSSControls(); }
   function stopAutoplay() { ssPlaying = false; updatePlayBtn(); if (ssTimer) { clearTimeout(ssTimer); ssTimer = null; } }
   function showSSControls() { ssEl.classList.remove('controls-hidden'); if (ssHideT) clearTimeout(ssHideT); if (bookActive) return; ssHideT = setTimeout(function () { if (ssOpen) ssEl.classList.add('controls-hidden'); }, 2800); }
@@ -1075,7 +1332,7 @@
     var t = { id: ++tabSeq, key: curKey || null, srcUrl: curSrcUrl || null, name: info.name || fnameLabel.textContent || '문서',
               ext: info.ext || extOf(info.name), size: info.size || 0, kind: kind, state: {} };
     if (kind === 'excel') { t.file = excelFile; t.pdfBlob = excelPdfBlob || null; }
-    else { t.blob = pendingPdfBlob; t.isPpt = curIsPpt; }
+    else { t.blob = pendingPdfBlob; t.isPpt = curIsPpt; t.media = curMedia; }
     t.orig = (kind === 'excel') ? (excelFile || curOrig) : curOrig;   // O-0171 편집하기용 원본
     t.srcFull = curSrcFull || null; t.pcPath = curPcPath || null;
     pendingPdfBlob = null; openIntent = null;
@@ -1105,6 +1362,7 @@
     curKey = t.key || null; curSrcUrl = t.srcUrl || null; resumePage = 0;
     curFileInfo = { name: t.name, ext: t.ext, size: t.size };
     curOrig = t.orig || null; curSrcFull = t.srcFull || null; curPcPath = t.pcPath || null;   // O-0171
+    curMedia = (DOC_MEDIA === 'on' && t.media) ? t.media : null;                              // v9.30
     showViewer(); fnameLabel.textContent = t.name; renderTabs(); renderOpenCard();
     openIntent = 'restore'; pendingRestore = copyState(t.state);
     if (t.kind === 'excel' && t.file) { openExcelFile(t.file, { pdfBlob: t.pdfBlob || null, stored: true }); return; }
@@ -1129,6 +1387,7 @@
   }
   // 뒤로(← · 폰 뒤로가기): 시트 닫기 → 여는 중이면 취소(보던 탭으로) → 뷰어 닫기
   function backAction() {
+    if (videoOpen()) { closeVideo(); return; }          // v9.30 영상 재생창이 열려 있으면 그것부터
     if (!viewerOpen()) { leaveViewer(); return; }
     if (global.SmartMarkup && SmartMarkup.isOpen()) { SmartMarkup.back(); return; }   // O-0544 수정 요청 화면(시트·선택·끝내기 순)
     if (fixEl && fixEl.classList.contains('on')) { closeFix(); return; }               // O-0544 [✏️ 고치기] 시트
@@ -1908,6 +2167,10 @@
     ssExitBtn = $('ssExit'); ssPrevBtn = $('ssPrev'); ssNextBtn = $('ssNext'); ssPlayBtn = $('ssPlay'); ssLoopBtn = $('ssLoop'); ssRotateBtn = $('ssRotate'); ssIntervalSel = $('ssInterval');
     ssCtlShow = $('ssCtlShow'); ssCtlPage = $('ssCtlPage'); ssPrevPBtn = $('ssPrevP'); ssNextPBtn = $('ssNextP'); ssZoomInBtn = $('ssZoomIn'); ssZoomOutBtn = $('ssZoomOut'); ssFitBtn = $('ssFit'); ssFlipBtn = $('ssFlip'); flipStageEl = $('flipStage'); flipHintEl = $('flipHint');
 
+    // v9.30 슬라이드쇼 그림을 감싸는 틀(영상 단추를 그림 위에 얹기 위해) · 발표자 노트 띠 누르기
+    if (ssCanvas && ssCanvas.parentNode && !$('ssFrame')) { ssFrame = document.createElement('div'); ssFrame.id = 'ssFrame'; ssCanvas.parentNode.insertBefore(ssFrame, ssCanvas); ssFrame.appendChild(ssCanvas); }
+    if ($('dvNoteBar')) $('dvNoteBar').onclick = toggleNote;
+
     // v8.0(O-0153) 탭 띠·파일 더 열기 시트
     tabsEl = $('dvTabs'); tabListEl = $('dvTabList'); tabAddBtn = $('dvTabAdd'); sheetEl = $('dvSheet');
     initTabs();
@@ -2021,8 +2284,8 @@
     viewChatAttachment: viewChatAttachment,
     isViewable: isViewable, extOf: extOf,
     isViewerOpen: function () { return !!(rootEl && rootEl.classList.contains('on')); },
-    isFullscreen: function () { return ssOpen; },
-    closeFullscreen: closeSlideshow,
+    isFullscreen: function () { return ssOpen || videoOpen(); },                       // v9.30 영상 재생창도 「전체 화면」으로 취급 → 폰 뒤로가기가 그것부터 닫음
+    closeFullscreen: function () { if (videoOpen()) closeVideo(); else closeSlideshow(); },
     leave: function () { closeSlideshow(); leaveViewer(); },
     openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     openFix: openFix,                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
@@ -2034,6 +2297,7 @@
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
     editState: function () { return { ctx: editCtx ? { name: editCtx.name, ext: editCtx.ext, step: editCtx.step || 0 } : null, sessions: editsLoad() }; },   // O-0171 점검용
+    mediaState: function () { return { media: curMedia ? curMedia.media : null, job: curMedia ? curMedia.job : null, stale: mediaStale, noteOpen: noteOpen }; },   // v9.30 점검용
     openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
     _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관

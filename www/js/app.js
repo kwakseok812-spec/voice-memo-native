@@ -106,7 +106,9 @@
    *   SILENT_CAM_ENGINE: 'auto'(한 장=고화질, 이어 찍기=빠름) | 'quality' | 'fast' | 'frame'(화면 프레임 저장 — 소리가 날 때의 대체). */
   var SILENT_CAM = 'on';
   var SILENT_CAM_ENGINE = 'auto';
-  try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE }); } catch (e) {}
+  /* 확대·축소(줌): 'on' = 두 손가락 핀치·줌 막대·빠른 배율 단추 / 'off' = 줌 없이 예전 카메라 화면(v9.29)과 같음. 새 앱(줌이 든 버전)에서만 효과가 있다. */
+  var SILENT_CAM_ZOOM = 'on';
+  try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE, zoom: SILENT_CAM_ZOOM }); } catch (e) {}
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}
@@ -2876,6 +2878,7 @@
   APP_VERSION = 'v9.26';        // v9.26: 영수증도 「스캔 화면」으로 — 영수증 입구가 「영수증 스캔」(자동 테두리·펴기·보정, 사진 한 장)을 열고, 미리 찍은 사진은 [사진 불러오기]로 · 스위치 RECEIPT_SCAN_CAM on / off(off 면 v9.25 와 같음) · versionCode 70
   APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
   APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
+  APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
