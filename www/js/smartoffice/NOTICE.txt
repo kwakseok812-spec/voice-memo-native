@@ -1,0 +1,30 @@
+S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라이선스 고지
+
+[앱에 들어 있는 부품]  (각 부품 폴더에 라이선스 전문 또는 고지 파일이 있습니다)
+ - PDF.js (Mozilla, Apache-2.0)                 www/vendor/so/pdf/NOTICE-pdfjs.txt, LICENSE-Apache-2.0.txt
+ - pdf-lib (MIT)                                www/vendor/so/pdf/PDF-LIB_LICENSE.txt
+ - SheetJS Community Edition 0.18.5 (Apache-2.0) www/vendor/so/xlsx/NOTICE-sheetjs.txt, LICENSE-Apache-2.0.txt
+ - docx-preview, JSZip                          www/vendor/so/docx/
+ - pptx-preview 번들(JSZip, lodash, uuid, tslib 0BSD, ECharts Apache-2.0 포함)   www/vendor/so/pptx/
+ - marked, DOMPurify                            www/vendor/so/md/
+ (위 목록은 앱 안 「S-Office 정보」 화면에도 나옵니다.)
+
+[한글(HWP·HWPX) 부품 — 현재 앱에 들어 있지 않음]
+ 한글 문서는 아직 「변환해서 보기」로만 열립니다. 아래 1)~4)는 한글 부품(vendor/so/hwp)을 앱에 넣을 때에만
+ 적용되는 고지이며, 그때 앱 안 정보 화면에도 함께 표시됩니다.
+
+ 1) 이음오피스 (IeumOffice), Apache License 2.0 — https://github.com/pblsketch/openoffice
+    한글 편집 화면 번들 등을 이음오피스 0.12.3 배포본에서 가져와 수정해서 사용합니다.
+    수정 내용: 폰 화면에 맞춘 연결 코드를 새로 만들고, AI 관련 부분(AI 플러그인)을 뺍니다.
+    "이음오피스"·"IeumOffice" 이름과 로고는 사용하지 않습니다.
+    Apache License 2.0 전문: https://www.apache.org/licenses/LICENSE-2.0
+ 2) GenOffice (Genspark / Mainfunc, Inc.), Apache License 2.0 — https://github.com/genspark-ai/genoffice
+    Copyright 2026 Mainfunc, Inc.   (이음오피스의 바탕. 위와 같은 조건)
+ 3) rhwp, MIT License — https://github.com/edwardkim/rhwp
+    Copyright (c) 2025-2026 Edward Kim
+    (MIT 라이선스 전문은 한글 부품을 넣을 때 vendor/so/hwp/studio/LICENSE-rhwp.txt 로 함께 들어옵니다.)
+ 4) 한글 문서 고지: 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+
+[제휴 아님]
+ S-Office는 Microsoft, 주식회사 한글과컴퓨터, Adobe, Google, Artifex Software(SmartOffice) 등과 제휴하거나
+ 후원·보증을 받은 관계가 아닙니다. 「Office」는 Microsoft Office를 뜻하는 말이 아니며, 상표는 각 소유자의 것입니다.

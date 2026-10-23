@@ -1,0 +1,37 @@
+/* S-Office 엑셀 모듈 스타일 — 앱 테마 변수를 그대로 쓴다 */
+.sx-root{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--page-bg);color:var(--text);font-size:14px}
+.sx-root *{box-sizing:border-box}
+.sx-note{padding:7px 12px;font-size:12.5px;line-height:1.5;background:rgba(245,166,35,.16);color:var(--text);border-bottom:1px solid var(--glass-b);word-break:keep-all}
+.sx-fbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--glass-b)}
+.sx-addr{min-width:46px;text-align:center;font-weight:800;font-size:13px;color:var(--p1)}
+.sx-input{flex:1;min-width:0;height:38px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:10px;padding:0 10px;font-size:15px;font-family:inherit}
+.sx-input:read-only{opacity:.85}
+.sx-ok{appearance:none;border:0;border-radius:10px;min-width:38px;height:38px;font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;font-family:inherit}
+.sx-ok:disabled{opacity:.35}
+.sx-gridwrap{position:relative;flex:1;min-height:0;overflow:hidden;background:#fff;color:#111}
+.sx-corner,.sx-hcol,.sx-hrow{position:absolute;overflow:hidden;background:#f1f3f5;color:#555;font-size:12px;font-weight:700;z-index:4;user-select:none}
+.sx-corner{left:0;top:0;border-right:1px solid #cfd4da;border-bottom:1px solid #cfd4da}
+.sx-hcol{top:0;right:0;border-bottom:1px solid #cfd4da}
+.sx-hrow{left:0;bottom:0;border-right:1px solid #cfd4da}
+.sx-h{position:absolute;text-align:center;border-right:1px solid #d9dde2;border-bottom:1px solid #d9dde2;overflow:hidden;white-space:nowrap}
+.sx-h.sel{background:#d6e4ff;color:#0b3a8f}
+.sx-scroll{position:absolute;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain;background:#fff}
+.sx-spacer{position:relative}
+.sx-layer{position:absolute;left:0;top:0}
+.sx-fz{position:absolute;overflow:hidden;z-index:3;background:#fff;pointer-events:auto}
+.sx-fz.sx-fr{border-bottom:2px solid #8a94a0}
+.sx-fz.sx-fc{border-right:2px solid #8a94a0}
+.sx-fz.sx-fx{z-index:3;border-right:2px solid #8a94a0;border-bottom:2px solid #8a94a0}
+.sx-c{position:absolute;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 6px;border-right:1px solid #e1e4e8;border-bottom:1px solid #e1e4e8;background:#fff;color:#111;user-select:none;-webkit-user-select:none}
+.sx-c.m{z-index:1}
+.sx-c.sel{box-shadow:inset 0 0 0 2px #2f6bff;z-index:2}
+.sx-c.ed{background-image:linear-gradient(135deg,#ff9f1a 0 7px,transparent 7px)}
+.sx-c.ed.fl{background-image:linear-gradient(135deg,#ff9f1a 0 7px,transparent 7px)}
+.sx-tools{display:flex;align-items:center;gap:6px;padding:5px 8px;border-top:1px solid var(--glass-b);overflow-x:auto;white-space:nowrap}
+.sx-tabs{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto}
+.sx-tab,.sx-chip{appearance:none;flex-shrink:0;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:10px;min-height:40px;padding:0 12px;font-size:14px;font-weight:700;font-family:inherit}
+.sx-tab.on{border-color:transparent;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
+.sx-chip.on{border-color:var(--p1);color:var(--p1)}
+.sx-zoom{min-width:40px;padding:0}
+.sx-pct{font-size:12px;min-width:38px;text-align:center;color:var(--dim)}
+.sx-h.fz{background:#e4e8ee;z-index:1}

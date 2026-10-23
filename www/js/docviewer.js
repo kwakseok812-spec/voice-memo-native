@@ -2056,6 +2056,7 @@
   // ============ 진입점 ============
   function handleLocalFile(file) {
     if (!file) return;
+    if (global.SOffice && SOffice.intercept(file)) return;   // S-Office: 「열기 방식」이 ②면 폰 안 뷰어가 맡는다(못 여는 형식은 ①로 되돌아옴)
     if (!isViewable(file.name, file.type)) {
       if (liveTabId) { toast('이 형식은 뷰어에서 열 수 없습니다. (' + (extOf(file.name) || file.name) + ')'); return; }   // v8.0: 보던 문서는 그대로
       opToken++; showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 뷰어에서 열 수 없습니다.', extOf(file.name) || file.name); return;
@@ -2296,7 +2297,7 @@
     isViewerOpen: function () { return !!(rootEl && rootEl.classList.contains('on')); },
     isFullscreen: function () { return ssOpen || videoOpen(); },                       // v9.30 영상 재생창도 「전체 화면」으로 취급 → 폰 뒤로가기가 그것부터 닫음
     closeFullscreen: function () { if (videoOpen()) closeVideo(); else closeSlideshow(); },
-    leave: function () { closeSlideshow(); leaveViewer(); },
+    leave: function () { if (global.SOffice) SOffice.close(); closeSlideshow(); leaveViewer(); },
     openRemote: editOpenRemote,            // v8.7(O-0173): 홈 「PC 원격 제어」(옛 「PC 화면」, O-0176 이름 바꿈) — 크롬 원격 데스크톱 앱(없으면 스토어)·PC판은 원격 데스크톱 웹
     openFix: openFix,                      // O-0544: 사용법을 닫으면 [✏️ 고치기] 시트로 돌아감
     setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」

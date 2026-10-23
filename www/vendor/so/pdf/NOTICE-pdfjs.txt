@@ -1,0 +1,6 @@
+PDF.js — Copyright 2023 Mozilla Foundation
+라이선스: Apache License, Version 2.0 (전문: 같은 폴더의 LICENSE-Apache-2.0.txt)
+출처: https://github.com/mozilla/pdf.js  (라이선스 파일: https://github.com/mozilla/pdf.js/blob/master/LICENSE)
+앱 안 위치: www/vendor/pdf.min.js, www/vendor/pdf.worker.min.js (스마트비서에 원래 들어 있던 파일. 파일 머리말의 고지:
+  "Copyright 2023 Mozilla Foundation / Licensed under the Apache License, Version 2.0")
+S-Office에서는 PDF 보기에 이 파일을 그대로(수정 없이) 사용한다.

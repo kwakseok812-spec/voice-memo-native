@@ -1,0 +1,9 @@
+pptx-preview.bundle.min.js = pptx-preview 1.0.7 (npm "pptx-preview", license field: ISC; https://www.npmjs.com/package/pptx-preview)
+bundled with esbuild (minified) together with:
+  JSZip 3.10.2 (MIT option) / lodash 4.x (MIT) / uuid 10 (MIT) / tslib 2.8 (0BSD)
+The chart library (Apache ECharts, Apache-2.0) is NOT included: its init() is replaced by an empty stub, so charts are not drawn.
+
+ISC License:
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted,
+provided that the above copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES.

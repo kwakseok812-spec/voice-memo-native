@@ -1,0 +1,6 @@
+.so-docx-host{background:#e9e9ee;overflow:auto}
+.so-docx-box{min-width:min-content;padding:4px 0}
+.so-docx-box .docx-wrapper{background:transparent !important;padding:6px 0 !important;align-items:flex-start}
+.so-docx-box .docx-wrapper>section.docx{box-shadow:0 1px 6px rgba(0,0,0,.25);margin-bottom:8px !important;color:#000;background:#fff}
+.so-docx-tip{position:sticky;bottom:10px;left:0;display:block;width:max-content;max-width:90%;margin:0 auto;padding:7px 12px;border-radius:14px;background:rgba(20,20,30,.78);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
+.so-docx-tip.hide{opacity:0}

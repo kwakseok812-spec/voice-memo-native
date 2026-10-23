@@ -1,0 +1,6 @@
+SheetJS Community Edition (xlsx.js) 0.18.5 — (C) 2013-present SheetJS LLC
+라이선스: Apache License, Version 2.0 (전문: 같은 폴더의 LICENSE-Apache-2.0.txt)
+출처: https://sheetjs.com  ·  https://github.com/SheetJS/sheetjs  (0.18.5 은 Apache-2.0 으로 공개된 마지막 판)
+앱 안 위치: www/vendor/xlsx.full.min.js (스마트비서에 원래 들어 있던 파일. 파일 머리말 고지:
+  "xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com", 안에서 확인한 버전 문자열 "0.18.5")
+S-Office에서는 엑셀 보기·고치기(사본 저장)에 이 파일을 그대로(수정 없이) 사용한다.

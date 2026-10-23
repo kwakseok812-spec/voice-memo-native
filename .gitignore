@@ -16,3 +16,10 @@ android/app/google-services.json
 *.keystore
 *.jks
 android/app/smart-assistant-release.keystore
+
+# S-Office: 내부 시험 문서·측정 묶음은 저장소(공개!)에 올리지 않는다. 시험 문서는 C:\Users\jongh\hwp-fidelity\ (저장소 밖)
+hwp-fidelity/
+smartoffice-test/
+*.hwp
+*.hwpx
+www/js/smartoffice/**/samples/

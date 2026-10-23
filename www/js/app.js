@@ -2879,7 +2879,7 @@
   APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
   APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
   APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
-  APP_VERSION = 'v9.31';        // v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
+  APP_VERSION = 'v9.32';        // v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -8362,6 +8362,7 @@
       try { if (window.SmartDocs && SmartDocs.resumeFromChat) SmartDocs.resumeFromChat(); } catch (e) {}
       return true;
     }
+    if (window.SOffice && SOffice.isOpen && SOffice.isOpen()) { try { SOffice.back(); } catch (e) {} return true; }   // S-Office 화면(뒤로가기는 이 화면부터)
     if (window.SmartDocs && SmartDocs.isFullscreen && SmartDocs.isFullscreen()) { try { SmartDocs.closeFullscreen(); } catch (e) {} return true; }
     if (window.SmartDocs && SmartDocs.isViewerOpen && SmartDocs.isViewerOpen()) { try { SmartDocs.showPick(); } catch (e) {} return true; }
     if (isOpen($('docsView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }
@@ -8859,6 +8860,31 @@
     ask: askKFromDoc,
     edit: { download: downloadAttachment },                      // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
     chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0548 뷰어 [💬] → 채팅(뒤로 가면 보던 문서로)
+  /* S-Office(js/smartoffice/so-core.js) 연결: 토스트·확인 시트·「사본 저장」(폰은 공유함 공개 주소로 받는다 — 문서 스캔 [폰에 저장]과 같은 길) */
+  if (window.SOffice && SOffice.configure) {
+    try {
+      SOffice.configure({
+        toast: toast,
+        confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); },
+        save: function (file) {
+          var fname = safeDownloadName(file.name || '문서');
+          if (!isNativeApp()) {
+            var bu = URL.createObjectURL(file), a = document.createElement('a');
+            a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+            setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
+            toast('다운로드 폴더에 저장했습니다.'); return;
+          }
+          var url = docScanUrls[matKey(file)];
+          if (url) { nativeDownload(url, fname); return; }
+          toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
+          docScanShare(file).then(function (saved) {
+            var u = saved && saved[0] && saved[0].url;
+            if (u) nativeDownload(u, fname); else toast('저장 주소를 받지 못했습니다. 공유함에서 [⬇ 다운로드]를 눌러 주세요.', 5000);
+          }).catch(function () {});
+        }
+      });
+    } catch (e) {}
+  }
 
   /* ---- O-0544 문서 뷰어 「수정 요청」 — 보내기 · 취소 · 상태(화면은 markup.js) ----
    *   [PC로 보내기] → 채팅 첨부 통로(sendChatDocAsk, 연동 암호 확인 submit_memo)로 한 행:
