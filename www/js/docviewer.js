@@ -968,6 +968,7 @@
       '<div class="dvv-acts"><button class="dvv-ext" type="button" style="display:none">다른 앱으로 열기</button><button class="dvv-re" type="button" style="display:none">다시 준비</button></div>' +
       '</div>';
     document.body.appendChild(vmEl);
+    ['touchstart', 'touchmove', 'touchend', 'mousedown', 'dblclick'].forEach(function (ev) { vmEl.addEventListener(ev, stop, { passive: true }); });   // 아래 슬라이드쇼의 탭 이동·핀치와 격리
     vmVideo = vmEl.querySelector('video'); vmMsg = vmEl.querySelector('.dvv-msg'); vmTitle = vmEl.querySelector('.dvv-title');
     vmExt = vmEl.querySelector('.dvv-ext'); vmRe = vmEl.querySelector('.dvv-re');
     vmEl.querySelector('.dvv-x').onclick = closeVideo;
@@ -983,6 +984,15 @@
     });
     try { document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && videoOpen()) closeVideo(); }); } catch (e) {}
   }
+  // 브라우저 전체화면(슬라이드쇼·한 장 크게 보기)이 열려 있으면 그 요소 밖의 화면은 그려지지 않는다 → 재생창을 전체화면 요소 안으로 옮겨 그린다.
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function placeVideoModal() {
+    if (!vmEl) return;
+    var fe = fsElement(), want = (fe && fe !== vmEl) ? fe : document.body;
+    if (vmEl.parentNode !== want) want.appendChild(vmEl);
+  }
+  function onFsChange() { if (vmEl) placeVideoModal(); }
+  try { document.addEventListener('fullscreenchange', onFsChange); document.addEventListener('webkitfullscreenchange', onFsChange); } catch (e) {}
   function setVmMsg(t) { if (!vmMsg) return; vmMsg.textContent = t || ''; vmMsg.style.display = t ? '' : 'none'; }
   // 주소가 아직 살아 있는지 1바이트만 받아 본다. 'ok' | 'expired'(만료·없음) | 'offline'
   function probeVideo(url) {
@@ -994,7 +1004,7 @@
   function openVideo(v, pg) {
     ensureVideoModal();
     var seq = ++vmSeq; vmCur = { v: v, pg: pg };
-    vmEl.classList.toggle('calm', calmNow()); vmEl.classList.add('on');
+    placeVideoModal(); vmEl.classList.toggle('calm', calmNow()); vmEl.classList.add('on');
     vmTitle.textContent = (v.name ? v.name.replace(/\.[A-Za-z0-9]{2,4}$/, '') : ((fnameLabel && fnameLabel.textContent) || '문서') + ' · ' + pg + '쪽 영상');
     vmExt.style.display = 'none'; vmRe.style.display = 'none';
     try { vmVideo.pause(); vmVideo.removeAttribute('src'); vmVideo.load(); } catch (e) {}
@@ -1011,7 +1021,7 @@
     if (!vmEl || !vmEl.classList.contains('on')) return;
     vmSeq++; vmCur = null;
     try { vmVideo.pause(); vmVideo.removeAttribute('src'); vmVideo.load(); } catch (e) {}
-    vmEl.classList.remove('on');
+    vmEl.classList.remove('on'); placeVideoModal();
   }
 
   // ============ 렌더링(지연 렌더) ============
