@@ -106,6 +106,10 @@
    *   SILENT_CAM_ENGINE: 'auto'(한 장=고화질, 이어 찍기=빠름) | 'quality' | 'fast' | 'frame'(화면 프레임 저장 — 소리가 날 때의 대체). */
   var SILENT_CAM = 'on';
   var SILENT_CAM_ENGINE = 'auto';
+  /* v9.32 영수증 여러 장 · 「맞나요?」 확인 말풍선 — RECEIPT_MULTI 'off' 면 영수증은 한 장만(v9.31 과 같음), RECEIPT_ACK 'off' 면 PC 가 보낸 확인 단추를 그리지 않고 글만 보인다.
+   *   RECEIPT_MULTI_MAX 는 한 번에 보내는 장수(PC 계약과 같은 값 10). */
+  var RECEIPT_MULTI = 'on', RECEIPT_ACK = 'on', RECEIPT_MULTI_MAX = 10;
+  var rcb = null, rcbReturn = false, SA_KEY = 'smart_scanack', SA_INFO = 'smart_scanack_info', scanFixDraft = {};
   /* 확대·축소(줌): 'on' = 두 손가락 핀치·줌 막대·빠른 배율 단추 / 'off' = 줌 없이 예전 카메라 화면(v9.29)과 같음. 새 앱(줌이 든 버전)에서만 효과가 있다. */
   var SILENT_CAM_ZOOM = 'on';
   try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE, zoom: SILENT_CAM_ZOOM }); } catch (e) {}
@@ -221,7 +225,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -262,6 +266,7 @@
   var chatFromDocs = false;      // O-0548: 문서 뷰어 [💬]로 채팅에 왔으면 뒤로 = 보던 문서로
   function dropChatReturn() { chatFromDocs = false; try { if (window.SmartDocs && SmartDocs.dropChatReturn) SmartDocs.dropChatReturn(); } catch (e) {} }
   function showHome() {
+    rcbReturn = false;
     dropChatReturn();
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
@@ -1454,7 +1459,7 @@
   var SCAN_RSCH = { from: '2026-05-01', to: '2027-02-28' };       // 연구비 과제 기간
   var SCAN_RCAT = ['연구재료비', '연구활동비', '연구수당'];
   var SCAN_RSUB = ['회의비', '국외 출장 여비', '수용비 및 수수료', '기술정보활동비(전문가활용비)', '조사연구비', '연구홍보비', '국내 출장 여비 및 시내교통비', '연구환경유지비', '야근(특근) 식대'];
-  var SCAN_TERMINAL = { registered: 1, failed: 1, unknown: 1, skipped: 1, duplicate: 1 };
+  var SCAN_TERMINAL = { registered: 1, failed: 1, unknown: 1, skipped: 1, duplicate: 1, cancelled: 1 };
   var scanDraft = {}, scanUi = {}, scanPollers = {}, scanNextDisp = null;
   function isScanSj(sj) { return SCAN_HUB === 'on' && !!sj && typeof sj === 'object' && !!sj.scan && typeof sj.scan === 'object' && sj.scan.type === 'receipt'; }
   function scanWon(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
@@ -1584,9 +1589,10 @@
     var cls = 'card rcard scan-card' + (calm ? '' : ' scan-in');
     var body = '', foot = '';
     var cardLine = (sc.card_last4 && /^\d{4}$/.test(String(sc.card_last4))) ? '<span class="chip scan-cardchip">카드 ···· ' + esc(sc.card_last4) + '</span>' : '';
+    if (st === 'registered' && RECEIPT_ACK === 'on' && saFix(e.id)) return renderScanFix(e, head, cls, thumb, cardLine);     // v9.32: 정정할 수 있는 동안은 고치는 카드
     if (st === 'registered') {
-      var wm = /^(연구비|운영비) 앱/.exec(String(sc.result || ''));      // PC 의 결과 문장이 실제로 넣은 앱을 말한다. 문장이 없을 때만 카드의 앱 값(없으면 「앱」)
-      var where = wm ? wm[1] + ' 앱' : (d.app === 'research' ? '연구비 앱' : d.app === 'opex' ? '운영비 앱' : '앱');
+      var wm = /^(연구비|운영비) 앱/.exec(String(sc.result || '')), wd = /^학교 장부 (연구비|운영비)/.exec(String(sc.result || ''));      // PC 의 결과 문장이 실제로 넣은 앱을 말한다. 문장이 없을 때만 카드의 앱 값(없으면 「앱」)
+      var where = wd ? '학교 장부 ' + wd[1] : wm ? wm[1] + ' 앱' : (sc.reg && sc.reg.app) ? '학교 장부 ' + saAppT(sc.reg.app) : (d.app === 'research' ? '연구비 앱' : d.app === 'opex' ? '운영비 앱' : '앱');
       body = '<div class="scan-done"><svg><use href="#i-check"/></svg><b>' + where + '에 ' + (amt ? scanWon(amt) + '원을' : '내용을') + ' 넣었습니다</b></div>' +
         '<div class="scan-sub">' + esc(sc.date || d.date || '') + ' · ' + esc(sc.merchant || d.merchant || '') + '</div>';
     } else if (st === 'registering') {
@@ -1601,6 +1607,8 @@
       body = '<div class="scan-bad warn"><b>확인이 필요합니다</b></div><div class="scan-sub">등록이 되었는지 알 수 없습니다. 같은 내용을 또 넣지 않도록, 해당 앱에서 직접 확인해 주십시오.</div>';
     } else if (st === 'duplicate') {
       body = '<div class="scan-bad warn"><b>이미 같은 내역이 있습니다</b></div><div class="scan-sub">같은 날짜·금액이 앱에 있어 등록하지 않았습니다.</div>';
+    } else if (st === 'cancelled') {
+      body = '<div class="scan-sub"><b>등록을 취소했습니다.</b> 학교 장부의 휴지통에 있습니다.</div>';
     } else if (st === 'skipped') {
       body = '<div class="scan-sub"><b>등록하지 않았습니다.</b></div>';
     } else {                                                          // read: 고쳐서 등록할 수 있는 카드
@@ -1660,6 +1668,7 @@
   function wireScanCard(e) {
     var root = resultArea.querySelector('[data-scan-id]'); if (!root) return;
     var sc = e.summary_json.scan, d = scanDraftFor(e), st = scanState(e);
+    if (st === 'registered' && RECEIPT_ACK === 'on' && saFix(e.id)) { wireScanFix(e); return; }      // v9.32
     if (st === 'registering') startScanPoll(e.id);
     Array.prototype.forEach.call(root.querySelectorAll('input[data-sf]'), function (inp) {
       inp.addEventListener('input', function () { d[inp.getAttribute('data-sf')] = inp.value; scanRefresh(e); });
@@ -1698,7 +1707,10 @@
     if (SCAN_HUB !== 'on') return m.text;
     if (m.disp) return m.disp;
     var x = SCAN_LINE_RE.exec(String(m.text));
-    if (!x) return m.text;
+    if (!x) {
+      var ax = /^\s*#스캔\s+[0-9a-f]{8}\s+(맞음|정정|철회|모두맞음)(?:\s+\{[\s\S]*\})?\s*$/.exec(String(m.text));      // v9.32: 확인 단추가 보내는 줄
+      return ax ? (ax[1] === '맞음' ? '🧾 영수증 맞아요' : ax[1] === '모두맞음' ? '🧾 영수증 전부 맞아요' : ax[1] === '정정' ? '🧾 영수증 정정 요청' : '🧾 영수증 등록 취소 요청') : m.text;
+    }
     if (x[1] === '상담') return '🧾 영수증 상담 요청';
     if (x[1] !== '등록') return '🧾 영수증 등록 안 함';
     var o = null; try { o = JSON.parse(x[2] || ''); } catch (er) {}
@@ -2548,7 +2560,11 @@
   if ($('btnVideo')) $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
   $('photoInput').addEventListener('change', function () {
     if (this.files && this.files.length) {
-      if (photoAsScan && SCAN_HUB === 'on') {                   // 영수증 모드: 한 장만(여러 장이면 첫 장 + 안내 한 줄)
+      if (RECEIPT_MULTI === 'on' && SCAN_HUB === 'on' && rcb && rcb.step === 'pick') {      // v9.32: 열려 있는 묶음에 더 담기
+        rcbOpen(this.files, true);
+      } else if (photoAsScan && SCAN_HUB === 'on' && RECEIPT_MULTI === 'on' && this.files.length > 1) {     // v9.32: 영수증 여러 장 → 묶음 보내기 화면(1장이면 아래 예전 길 그대로)
+        rcbOpen(this.files, false);
+      } else if (photoAsScan && SCAN_HUB === 'on') {                   // 영수증 모드: 한 장만(여러 장이면 첫 장 + 안내 한 줄)
         receiptToPanel(this.files[0], this.files.length > 1);
       } else {
         reviewFiles(this.files, 'photo'); setScanPanel(false);
@@ -2576,7 +2592,7 @@
     pendingScan = !!(SCAN_HUB === 'on' && on && pendingFiles.length);
     var fp = $('filePanel'); if (fp) fp.classList.toggle('scan-mode', pendingScan);
     var n = $('scanFileNote');
-    if (n) { n.style.display = pendingScan ? 'block' : 'none'; n.textContent = pendingScan ? ('영수증은 한 번에 한 장만 읽습니다.' + (extra ? ' 고르신 사진 중 첫 장만 보냅니다.' : '')) : ''; }
+    if (n) { n.style.display = pendingScan ? 'block' : 'none'; n.textContent = pendingScan ? (RECEIPT_MULTI === 'on' ? '영수증 한 장입니다. 여러 장은 사진을 한꺼번에 고르면 장마다 따로 읽습니다.' : ('영수증은 한 번에 한 장만 읽습니다.' + (extra ? ' 고르신 사진 중 첫 장만 보냅니다.' : ''))) : ''; }
     if (pendingScan) {
       if ($('filePanelTitle')) $('filePanelTitle').textContent = '영수증 등록';
       if ($('fileKindLabel')) $('fileKindLabel').textContent = '영수증 1장';
@@ -2714,6 +2730,375 @@
     });
     document.body.appendChild(sh);
     sh.style.display = 'flex';
+  }
+
+  /* ===================== v9.32 영수증 여러 장 · 「맞나요?」 확인 말풍선 ===================== */
+  /* 여러 장(RECEIPT_MULTI): 사진 고르기에서 2장 이상 고르면 «묶음 보내기» 화면(rcbWrap)이 열린다. 한 장이 한 건으로 따로 올라가 따로 읽힌다
+   *   (행 meta.scan.batch = {id,i,n}). 1장이면 이 화면이 나오지 않고 v9.31 의 «영수증 등록» 패널 그대로다.
+   * 확인 말풍선(RECEIPT_ACK): PC 가 자동 등록한 뒤 보내는 알림 행의 summary_json.scanack 을 [맞아요]·[고쳐요] 단추로 그린다.
+   *   단추는 채팅에 «#스캔 <id8> 맞음|정정|철회|모두맞음» 한 줄을 보낸다(PC scan_ack.py). 옛 PC 는 이 칸을 보내지 않아 아무것도 달라지지 않는다. */
+  function rcbHex8() {
+    var a = new Uint8Array(4);
+    try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < 4; i++) a[i] = Math.floor(Math.random() * 256); }
+    return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function rcbKey(f) { return (f.name || '') + '|' + (f.size || 0) + '|' + (f.lastModified || 0); }
+  function rcbFree() { if (!rcb) return; rcb.files.forEach(function (x) { try { URL.revokeObjectURL(x.url); } catch (e) {} }); }
+  function rcbStopPoll() { if (rcb && rcb.poll) { clearInterval(rcb.poll); rcb.poll = null; } }
+  function rcbDiscard() { rcbStopPoll(); rcbFree(); rcb = null; rcbReturn = false; }
+  function rcbCamOk() { return !!(window.SilentCam && SilentCam.usable() && SCAN_HUB === 'on'); }
+  /* 사진을 담는다. add=true 면 이미 열린 묶음에 더한다. 담긴 것이 1장뿐이면(처음부터든 빼다 보니든) 한 장 흐름으로 넘긴다. */
+  function rcbOpen(fileList, add) {
+    var list = Array.prototype.slice.call(fileList || []);
+    if (!list.length) return;
+    if (!rcb || rcb.step !== 'pick' || !add) { rcbDiscard(); rcb = { step: 'pick', files: [], items: [], bid: null, poll: null, started: 0 }; }
+    var seen = {}, dup = 0, over = 0;
+    rcb.files.forEach(function (x) { seen[x.key] = 1; });
+    list.forEach(function (f) {
+      var k = rcbKey(f);
+      if (seen[k]) { dup++; try { if (window.SilentCam) SilentCam.release(f); } catch (e) {} return; }
+      if (rcb.files.length >= RECEIPT_MULTI_MAX) { over++; try { if (window.SilentCam) SilentCam.release(f); } catch (e) {} return; }
+      seen[k] = 1; rcb.files.push({ file: f, key: k, url: URL.createObjectURL(f) });
+    });
+    if (dup) toast('같은 사진이 이미 있어 한 장만 담았습니다.');
+    if (over) toast('한 번에 ' + RECEIPT_MULTI_MAX + '장까지 보낼 수 있습니다. 앞의 ' + RECEIPT_MULTI_MAX + '장만 담았습니다.');
+    if (!rcb.files.length) { rcbDiscard(); return; }
+    if (rcb.files.length === 1 && !add) {                 // 한 장이면 예전 길 그대로
+      var one = rcb.files[0].file; rcbDiscard(); receiptToPanel(one, false); return;
+    }
+    rcbRender(); openScreen($('rcbWrap'));
+  }
+  function rcbRemove(i) {
+    if (!rcb || rcb.step !== 'pick') return;
+    var x = rcb.files.splice(i, 1)[0]; if (x) { try { URL.revokeObjectURL(x.url); } catch (e) {} }
+    if (rcb.files.length === 1) { var one = rcb.files[0].file; rcb.files = []; rcbDiscard(); receiptToPanel(one, false); return; }   // 마지막 한 장 = 한 장 흐름으로 복귀
+    if (!rcb.files.length) { rcbDiscard(); openChat(); return; }
+    rcbRender();
+  }
+  function rcbStatus(it) {
+    if (it.st === 'queued' || it.st === 'uploading') return { txt: '올리는 중…', cls: 'busy' };
+    if (it.st === 'failed') return { txt: '올리지 못했습니다 · 다시 보내기', cls: 'bad', retry: true };
+    var e = it.id && HistoryModule.get(it.id), sj = e && e.summary_json;
+    if (!(e && isScanSj(sj))) return { txt: '읽는 중…', cls: 'busy' };
+    var sc = sj.scan, st = scanState(e), tc = Array.isArray(sc.target_candidates) && sc.target_candidates[0] || {};
+    var appT = tc.app === 'research' ? '연구비' : tc.app === 'opex' ? '운영비' : '장부 확인 필요';
+    var base = { name: sc.merchant || '사용처 미확인', sub: (sc.amount ? scanWon(sc.amount) + '원' : '금액 미확인') + ' · ' + appT, open: true };
+    function mk(txt, cls) { base.txt = txt; base.cls = cls; return base; }
+    if (st === 'registered') return mk('✔ 등록됨', 'ok');
+    if (st === 'cancelled') return mk('취소됨', 'warn');
+    if (st === 'registering') return mk('등록 중…', 'busy');
+    if (st === 'failed' && sc.fail_code) { base.open = false; base.retake = true; return mk('읽지 못했습니다 · 다시 찍기', 'bad'); }
+    if (st === 'failed') return mk('넣지 못했습니다', 'bad');
+    if (st === 'unknown') return mk('확인이 필요합니다', 'warn');
+    if (st === 'duplicate') return mk('이미 같은 내역', 'warn');
+    if (st === 'skipped') return mk('등록 안 함', 'warn');
+    var risk = sc.risk || {};
+    if (!tc.app || sc.dup_of || risk.refund || risk.foreign || risk.amount_mismatch) return mk('확인해 주세요 ›', 'warn');
+    return mk('읽음 ›', 'ok');
+  }
+  function rcbRender() {
+    var body = $('rcbBody'), ttl = $('rcbTitle'); if (!body || !rcb) return;
+    var calm = replyCalm(), n = rcb.files.length, h;
+    if (rcb.step === 'pick') {
+      if (ttl) ttl.textContent = '영수증 ' + n + '장';
+      h = '<p class="rcb-sub">한 장이 한 건으로 따로 읽힙니다. 긴 영수증은 한 장에 길게 찍어 주십시오.</p><div class="rcb-grid">' +
+        rcb.files.map(function (x, i) {
+          return '<div class="rcb-th' + (calm ? '' : ' rcb-pop') + '"><img src="' + esc(x.url) + '" alt="' + (i + 1) + '번 영수증"><span class="rcb-no">' + (i + 1) + '</span>' +
+            '<button type="button" class="rcb-x" data-rcb-x="' + i + '" aria-label="' + (i + 1) + '번 빼기">✕</button></div>';
+        }).join('') + '</div>' +
+        '<div class="rcb-cnt">최대 ' + RECEIPT_MULTI_MAX + '장 · ' + n + '장 담김</div>' +
+        '<div class="rcb-add">' + (n < RECEIPT_MULTI_MAX ? '<button type="button" class="btn ghost" data-rcb-more="pick">＋ 사진 더 고르기</button>' + (rcbCamOk() ? '<button type="button" class="btn ghost" data-rcb-more="cam">📷 더 찍기</button>' : '') : '') + '</div>' +
+        '<div class="rcb-foot"><button type="button" class="btn primary rcb-send" data-rcb-send><svg><use href="#i-check"/></svg>' + n + '장 보내기</button></div>';
+    } else {
+      var done = 0, fin = 0;
+      rcb.items.forEach(function (it) { var s = rcbStatus(it); if (s.open || s.retake) done++; if (s.cls === 'ok' || s.cls === 'bad' || s.cls === 'warn') fin++; });
+      if (ttl) ttl.textContent = '영수증 ' + done + '/' + n + ' 읽음';
+      var pct = Math.round(done * 100 / Math.max(1, n));
+      h = '<div class="rcb-prog" role="progressbar" aria-valuemin="0" aria-valuemax="' + n + '" aria-valuenow="' + done + '"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="rcb-rows">' + rcb.items.map(function (it, k) {
+          var s = rcbStatus(it), tap = s.open || s.retry || s.retake;
+          return '<div class="rcb-row' + (tap ? ' tap' : '') + ' ' + s.cls + '" ' + (tap ? 'role="button" tabindex="0" data-rcb-row="' + k + '"' : '') + '>' +
+            '<span class="rcb-no">' + (k + 1) + '</span><span class="rcb-main"><b>' + esc(s.name || (k + 1) + '번 영수증') + '</b>' + (s.sub ? '<small>' + esc(s.sub) + '</small>' : '') + '</span>' +
+            '<span class="rcb-st">' + esc(s.txt) + '</span></div>';
+        }).join('') + '</div>' +
+        '<p class="rcb-sub">읽은 줄을 누르면 확인 카드가 열립니다. 이 화면을 닫아도 읽기는 뒤에서 계속됩니다.</p>';
+    }
+    body.innerHTML = h;
+    body.className = 'rcb-body' + (calm ? ' calm' : '');
+  }
+  function rcbSend() {
+    if (!rcb || rcb.step !== 'pick' || !rcb.files.length) return;
+    var n = rcb.files.length;
+    rcb.step = 'list'; rcb.bid = rcbHex8();
+    rcb.items = rcb.files.map(function (x) { return { file: x.file, url: x.url, id: null, token: null, st: 'queued' }; });
+    rcbRender();
+    function next(k) {
+      if (!rcb) return;
+      if (k >= rcb.items.length) { rcbPollStart(); return; }
+      var it = rcb.items[k], t = now();
+      var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
+                   kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
+      it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
+      HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }); renderHistory();
+      OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
+        HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
+        it.st = 'reading'; rcbRender(); next(k + 1);
+      }).catch(function (e) {
+        HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) }); renderHistory();
+        it.st = 'failed'; it.err = String(e && e.message || e); rcbRender(); next(k + 1);
+      });
+    }
+    next(0);
+  }
+  function rcbRetry(k) {
+    if (!rcb || rcb.step !== 'list') return;
+    var it = rcb.items[k]; if (!it || it.st !== 'failed') return;
+    var t = now(), n = rcb.items.length;
+    var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
+                 kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
+    it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
+    HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }); renderHistory();
+    OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
+      HistoryModule.update(memo.id, { status: 'processing' }); renderHistory(); it.st = 'reading'; rcbRender(); rcbPollStart();
+    }).catch(function (e) {
+      HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) }); renderHistory(); it.st = 'failed'; rcbRender();
+    });
+  }
+  function rcbPollStart() {
+    if (!rcb || rcb.poll) return;
+    rcb.started = Date.now();
+    var announced = false;
+    rcb.poll = setInterval(function () {
+      if (!rcb) return;
+      var work = rcb.items.filter(function (it) {
+        if (!it.id) return false;
+        if (it.st === 'reading') return true;
+        var e = HistoryModule.get(it.id);
+        return !!(e && isScanSj(e.summary_json) && !SCAN_TERMINAL[scanState(e)] && scanState(e) !== 'read');      // 읽은 뒤 등록 중인 건의 상태 변화도 따라간다
+      });
+      work.forEach(function (it) {
+        OfficeBridge.poll(it.id, it.token).then(function (res) {
+          if (!res) return;
+          if (it.st === 'reading' && res.status === 'done') {
+            HistoryModule.update(it.id, { status: 'done', kind: res.kind, transcript: res.transcript, summary_json: res.summary_json, content_md: res.content_md,
+              pdf_url: res.pdf_url, docx_url: res.docx_url, pptx_url: res.pptx_url, title: res.title, error: res.error || null });
+            OfficeBridge.dropPending(it.id); it.st = 'done'; renderHistory();
+          } else if (it.st === 'done' && res.summary_json) { scanApply(it.id, res.summary_json); }
+          if (isOpen($('rcbWrap'))) rcbRender();
+        }).catch(function () {});
+      });
+      var pendingRead = rcb.items.some(function (it) { return it.st === 'reading' || it.st === 'uploading' || it.st === 'queued'; });
+      if (!pendingRead && !announced) {
+        announced = true;
+        if (!isOpen($('rcbWrap'))) toast('🧾 영수증 ' + rcb.items.length + '장을 읽었습니다 — 홈 「진행 중인 메모」에서 확인하세요.', 4000);
+      }
+      if (!work.length && !pendingRead) rcbStopPoll();
+      if (Date.now() - rcb.started > 25 * 60 * 1000) rcbStopPoll();
+    }, 5000);
+  }
+  if ($('rcbBody')) {
+    $('rcbBody').addEventListener('click', function (ev) {
+      var t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+      var x = t.closest('[data-rcb-x]'); if (x) { rcbRemove(+x.getAttribute('data-rcb-x')); return; }
+      var mo = t.closest('[data-rcb-more]');
+      if (mo) {
+        if (mo.getAttribute('data-rcb-more') === 'cam') {
+          SilentCam.shoot({ mode: 'receipt', from: 'tab', multi: false, left: 1 }).then(function (r) {
+            if (r && r.kind === 'files' && r.files && r.files.length) rcbOpen(r.files, true);
+          }).catch(function () { toast('카메라를 열지 못했습니다. 사진 고르기를 이용해 주십시오.'); });
+        } else { photoAsScan = true; filePanelFromChat = true; $('photoInput').click(); }
+        return;
+      }
+      if (t.closest('[data-rcb-send]')) { rcbSend(); return; }
+      var row = t.closest('[data-rcb-row]');
+      if (row && rcb && rcb.step === 'list') {
+        var k = +row.getAttribute('data-rcb-row'), it = rcb.items[k], s = rcbStatus(it);
+        if (s.retry) { rcbRetry(k); return; }
+        if (s.retake) { rcbReturn = false; openReceiptScan(false); return; }
+        if (s.open && it.id) { rcbReturn = true; showResult(it.id); }
+      }
+    });
+    $('rcbBody').addEventListener('keydown', function (ev) {
+      if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.getAttribute && ev.target.getAttribute('data-rcb-row') != null) { ev.preventDefault(); ev.target.click(); }
+    });
+  }
+  /* 뒤로 가기: 묶음 보내기 화면에서는 담은 사진을 버리고 나가고, 읽기 목록에서는 읽기를 뒤에 두고 홈으로(읽기는 계속된다). 확인 카드에서 돌아오면 목록으로. */
+  function rcbBack() {
+    if (!rcb) { showHome(); setStatus('대기 중', 'idle'); return true; }
+    if (rcb.step === 'pick') { rcbDiscard(); openChat(); return true; }
+    showHome(); setStatus('대기 중', 'idle'); toast('읽기는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true;
+  }
+
+  /* ---- 확인 말풍선 ---- */
+  function saLoad(k) { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch (e) { return {}; } }
+  function saSave(k, o) { try { localStorage.setItem(k, JSON.stringify(o)); } catch (e) {} }
+  function saMark(id, v) { var m = saLoad(SA_KEY); m[id] = v; var ks = Object.keys(m); if (ks.length > 400) delete m[ks[0]]; saSave(SA_KEY, m); }
+  function saFix(id) { var i = saLoad(SA_INFO)[String(id).replace(/-/g, '').slice(0, 8)]; return i && i.fix ? i : null; }
+  function saRemember(p) {
+    var inf = saLoad(SA_INFO), ks;
+    (p.items || []).forEach(function (x) { if (x && /^[0-9a-f]{8}$/.test(x.id) && x.st === 'registered') inf[x.id] = { fix: !!p.fix, until: p.until || '', hours: p.hours || 24 }; });
+    ks = Object.keys(inf); while (ks.length > 200) { delete inf[ks.shift()]; }
+    saSave(SA_INFO, inf);
+  }
+  function saAppT(a) { return a === 'research' ? '연구비' : a === 'opex' ? '운영비' : ''; }
+  function scanackChip(f) {
+    if (RECEIPT_ACK !== 'on' || SCAN_HUB !== 'on') return '';
+    var p = f.scanack, marks = saLoad(SA_KEY); saRemember(p);
+    var reg = p.items.filter(function (x) { return x.st === 'registered'; });
+    var unacked = reg.filter(function (x) { return !marks[x.id]; });
+    var rows = p.items.map(function (x) {
+      var m = marks[x.id], act;
+      if (x.st === 'registered') {
+        act = m === 'ok' ? '<span class="sa-done">✔ 확인함</span>' : m === 'fixed' ? '<span class="sa-done">✎ 정정함</span>' : m === 'revoked' ? '<span class="sa-done sa-bad">취소함</span>' :
+          '<button type="button" class="sa-b ok" data-sa-act="ok" data-sa-id="' + esc(x.id) + '">맞아요</button><button type="button" class="sa-b fix" data-sa-act="fix" data-sa-id="' + esc(x.id) + '">고쳐요</button>';
+      } else if (x.st === 'failed') act = '<span class="sa-done sa-bad">읽지 못함</span>';
+      else if (x.st === 'cancelled') act = '<span class="sa-done sa-bad">취소됨</span>';
+      else act = '<button type="button" class="sa-b chk" data-sa-act="open" data-sa-id="' + esc(x.id) + '">확인하기</button>';
+      return '<div class="sa-row" data-sa-id="' + esc(x.id) + '"><span class="sa-no">' + (x.i || '') + '</span><span class="sa-nm"><b>' + esc(x.name) + '</b><small>' +
+        (x.amount ? scanWon(x.amount) + '원' : '금액 미확인') + (saAppT(x.app) ? ' · ' + saAppT(x.app) : '') + '</small></span><span class="sa-act">' + act + '</span></div>';
+    }).join('');
+    var all = (p.items.length > 1 && !p.research && unacked.length > 0) ?
+      '<button type="button" class="btn primary sa-all" data-sa-act="all" data-sa-id="' + esc(unacked[0].id) + '" data-sa-total="' + unacked.reduce(function (s, x) { return s + (x.amount || 0); }, 0) + '" data-sa-n="' + unacked.length + '">' +
+      unacked.length + '장 전부 맞아요 (합계 ' + scanWon(unacked.reduce(function (s, x) { return s + (x.amount || 0); }, 0)) + '원)</button>' : '';
+    var note = p.fix ? '정정은 ' + (p.hours || 24) + '시간 안에 이 말풍선에서 할 수 있습니다.' : '정정은 학교 장부 화면에서 해 주십시오.';
+    return '<div class="attachitem sa-item"><div class="sa-box' + (replyCalm() ? '' : ' sa-in') + '">' + rows +
+      (p.items.length > 1 ? '<div class="sa-total">등록한 ' + reg.length + '장 합계 <b>' + scanWon(p.total || 0) + '원</b></div>' : '') + all +
+      '<div class="sa-note">' + esc(note) + '</div></div></div>';
+  }
+  function saSend(line, disp) {
+    if (!getSyncPass()) { showSyncGate(true, '영수증 확인을 보내려면 PC 연동 암호를 입력해 주십시오.'); return Promise.resolve(false); }
+    unlockKaiAudio(); scanNextDisp = disp;
+    return sendPlainChat(line, false);
+  }
+  function saPaint(id, kind) {       // 같은 줄의 단추를 확인 표시로 바꾸고 «전부 맞아요» 단추를 다시 센다
+    Array.prototype.forEach.call(document.querySelectorAll('.sa-row[data-sa-id="' + id + '"] .sa-act'), function (el) {
+      el.innerHTML = kind === 'ok' ? '<span class="sa-done">✔ 확인함</span>' : kind === 'fixed' ? '<span class="sa-done">✎ 정정함</span>' : '<span class="sa-done sa-bad">취소함</span>';
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.sa-all'), function (b) {
+      var box = b.closest('.sa-box'); if (!box) return;
+      var left = box.querySelectorAll('.sa-b.ok').length;
+      if (!left) b.parentNode.removeChild(b);
+    });
+  }
+  function scanAckClick(ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest('[data-sa-act]') : null; if (!b) return false;
+    var act = b.getAttribute('data-sa-act'), id = b.getAttribute('data-sa-id') || '';
+    if (!/^[0-9a-f]{8}$/.test(id)) return true;
+    if (b.disabled) return true;
+    if (act === 'ok') {
+      b.disabled = true;
+      saSend('#스캔 ' + id + ' 맞음', '🧾 영수증 맞아요').then(function (ok) { if (ok) { saMark(id, 'ok'); saPaint(id, 'ok'); } else b.disabled = false; });
+    } else if (act === 'all') {
+      b.disabled = true;
+      var box = b.closest('.sa-box'), ids = Array.prototype.map.call(box ? box.querySelectorAll('.sa-b.ok') : [], function (x) { return x.getAttribute('data-sa-id'); });
+      saSend('#스캔 ' + id + ' 모두맞음', '🧾 영수증 ' + (b.getAttribute('data-sa-n') || '') + '장 전부 맞아요').then(function (ok) {
+        if (ok) ids.forEach(function (i) { saMark(i, 'ok'); saPaint(i, 'ok'); }); else b.disabled = false;
+      });
+    } else if (act === 'fix' || act === 'open') {
+      if (act === 'fix' && !saFix(id)) {      // PC 의 정정 스위치가 꺼져 있으면: 이 기기에 사진이 있든 없든 같은 안내
+        openSheet('정정은 학교 장부 화면에서', '지금은 여기서 고치지 않습니다. 학교 장부 앱에서 그 건을 열어 직접 고쳐 주십시오.', '알겠습니다', function () {}, null, null, { positive: true, cancelLabel: '닫기' });
+        return true;
+      }
+      var en = HistoryModule.list().filter(function (e) { return String(e.id).replace(/-/g, '').slice(0, 8) === id; })[0];
+      if (!en || !en.summary_json || !isScanSj(en.summary_json)) { toast('이 영수증은 이 기기에서 보낸 것이 아니라 카드를 열 수 없습니다. 보낸 기기에서 열어 주십시오.', 3600); return true; }
+      rcbReturn = false; showResult(en.id);
+    }
+    return true;
+  }
+  /* ---- 등록된 영수증 카드의 «고치기» (정정 가능할 때만) ---- */
+  function scanFixBase(e) {
+    var sc = e.summary_json.scan, reg = sc.reg || {}, app = reg.app || ((sc.target_candidates || [])[0] || {}).app || 'opex';
+    return { date: sc.date || '', amount: String(sc.amount || ''), merchant: String(sc.merchant || ''), app: app };
+  }
+  function scanFixDraftFor(e) { var d = scanFixDraft[e.id]; if (!d) { d = scanFixDraft[e.id] = scanFixBase(e); } return d; }
+  function scanFixChanges(e, d) {
+    var b = scanFixBase(e), o = {}, n = 0;
+    if (d.date !== b.date) { o.date = d.date; n++; }
+    if (scanAmt(d.amount) !== scanAmt(b.amount)) { o.amount = scanAmt(d.amount); n++; }
+    if (String(d.merchant).replace(/\s+/g, ' ').trim() !== String(b.merchant).replace(/\s+/g, ' ').trim()) { o.merchant = String(d.merchant).replace(/\s+/g, ' ').trim(); n++; }
+    if (d.app !== b.app) { o.app = d.app; n++; }
+    return n ? o : null;
+  }
+  function scanFixWhy(e, d) {
+    if (!scanDateOk(d.date)) return '날짜를 확인해 주십시오';
+    if (!scanAmt(d.amount)) return '금액을 확인해 주십시오';
+    var m = String(d.merchant || '').trim(); if (!m) return '사용처를 입력해 주십시오';
+    return scanFieldBad(m, '사용처') || '';
+  }
+  function renderScanFix(e, head, cls, thumb, cardLine) {
+    var sc = e.summary_json.scan, d = scanFixDraftFor(e), fi = saFix(e.id), busy = scanUi[e.id] === 'fixing';
+    var until = fi && fi.until ? ' · ' + String(fi.until).slice(5, 16).replace('T', ' ') + '까지' : '';
+    if (busy) return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '"><div class="scan-wait"><span class="scan-spin" aria-hidden="true"></span><b>고치는 중입니다…</b></div><div class="scan-sub">잠시 기다려 주십시오. 결과가 바뀌면 이 화면에 나타납니다.</div></div>';
+    var why = scanFixWhy(e, d), ch = scanFixChanges(e, d);
+    var body = '<div class="scan-done"><svg><use href="#i-check"/></svg><b>학교 장부 ' + saAppT(scanFixBase(e).app) + '에 ' + scanWon(scanAmt(sc.amount)) + '원이 들어 있습니다</b></div>' +
+      (sc.result && /^정정/.test(sc.result) ? '<div class="scan-sub">' + esc(sc.result) + '</div>' : '') +
+      '<div class="scan-top">' + thumb + '<div class="scan-fields">' + cardLine +
+      scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date)) + scanFld('amount', '금액(원)', d.amount, 'type="text" inputmode="numeric" autocomplete="off"', !scanAmt(d.amount)) +
+      scanFld('merchant', '사용처', d.merchant, 'type="text" maxlength="60"', !String(d.merchant).trim() || !!scanFieldBad(d.merchant, '사용처')) + '</div></div>' +
+      '<div class="scan-form"><div class="scan-row"><span class="scan-lab">어느 장부</span><div class="scan-chips">' + scanChips([{ v: 'opex', t: '운영비' }, { v: 'research', t: '연구비' }], d.app, 'data-scan-app') + '</div></div></div>' +
+      '<div class="scan-sumline" id="scanSum">' + esc(ch ? '고칠 내용이 있습니다' + until : '고칠 내용이 없습니다' + until) + '</div>' +
+      '<div class="scan-lockwhy" id="scanWhy"' + (why ? '' : ' style="display:none"') + '>' + esc(why) + '</div>' +
+      '<div class="scan-btns"><button type="button" class="btn ghost" data-fix-revoke>등록 취소</button>' +
+      '<button type="button" class="btn primary" id="scanFixGo" data-fix-save' + (why || !ch ? ' disabled' : '') + '><svg><use href="#i-check"/></svg>정정 저장</button></div>';
+    return head + '<div class="' + cls + '" data-scan-id="' + esc(e.id) + '">' + body + '</div>';
+  }
+  function scanFixWatch(id) {
+    var started = Date.now(), t = setInterval(function () {
+      var en = HistoryModule.get(id);
+      if (!en || Date.now() - started > 45000) { clearInterval(t); if (scanUi[id] === 'fixing') { delete scanUi[id]; toast('결과를 아직 받지 못했습니다. 채팅의 답을 확인해 주십시오.'); scanRedraw(id); } return; }
+      var before = JSON.stringify(en.summary_json && en.summary_json.scan || {});
+      OfficeBridge.poll(id, en.token).then(function (res) {
+        if (!res || !res.summary_json || !res.summary_json.scan) return;
+        if (JSON.stringify(res.summary_json.scan) !== before) {
+          clearInterval(t); delete scanUi[id]; delete scanFixDraft[id];
+          HistoryModule.update(id, { summary_json: res.summary_json });
+          var r = res.summary_json.scan.result || '';
+          toast(res.summary_json.scan.state === 'cancelled' ? '취소했습니다.' : /^정정/.test(r) ? r : '처리했습니다.', 3000);
+          var rem = String(id).replace(/-/g, '').slice(0, 8); saMark(rem, res.summary_json.scan.state === 'cancelled' ? 'revoked' : 'fixed');
+          scanRedraw(id);
+        }
+      }).catch(function () {});
+    }, 3000);
+  }
+  function wireScanFix(e) {
+    var root = resultArea.querySelector('[data-scan-id]'); if (!root) return;
+    var d = scanFixDraftFor(e);
+    Array.prototype.forEach.call(root.querySelectorAll('input[data-sf]'), function (inp) {
+      inp.addEventListener('input', function () {
+        d[inp.getAttribute('data-sf')] = inp.value;
+        var why = scanFixWhy(e, d), ch = scanFixChanges(e, d), w = $('scanWhy'), g = $('scanFixGo');
+        if (w) { w.textContent = why; w.style.display = why ? '' : 'none'; }
+        if (g) g.disabled = !!why || !ch;
+        var s = $('scanSum'); if (s) s.textContent = ch ? '고칠 내용이 있습니다' : '고칠 내용이 없습니다';
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-scan-app]'), function (b) {
+      b.addEventListener('click', function () { d.app = b.getAttribute('data-scan-app'); scanRedraw(e.id); });
+    });
+    var go = root.querySelector('[data-fix-save]');
+    if (go) go.addEventListener('click', function () {
+      var ch = scanFixChanges(e, d); if (!ch || scanFixWhy(e, d) || scanUi[e.id]) return;
+      var id8 = String(e.id).replace(/-/g, '').slice(0, 8);
+      var send = function () {
+        scanUi[e.id] = 'fixing'; scanRedraw(e.id);
+        saSend('#스캔 ' + id8 + ' 정정 ' + JSON.stringify(ch), '🧾 영수증 정정 요청').then(function (ok) {
+          if (ok) scanFixWatch(e.id); else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.'); scanRedraw(e.id); }
+        });
+      };
+      if (ch.app) openSheet('장부를 옮길까요?', '이 건을 ' + saAppT(scanFixBase(e).app) + '에서 빼고 ' + saAppT(ch.app) + '에 다시 넣습니다. 영수증 한 장당 한 번만 옮길 수 있습니다.', '옮기기', send, null, null, { positive: true, cancelLabel: '취소' });
+      else send();
+    });
+    var rv = root.querySelector('[data-fix-revoke]');
+    if (rv) rv.addEventListener('click', function () {
+      if (scanUi[e.id]) return;
+      var id8 = String(e.id).replace(/-/g, '').slice(0, 8);
+      openSheet('이 영수증 등록을 취소할까요?', '학교 장부에서 이 건이 빠집니다(휴지통으로 옮겨집니다).', '취소하기', function () {
+        scanUi[e.id] = 'fixing'; scanRedraw(e.id);
+        saSend('#스캔 ' + id8 + ' 철회', '🧾 영수증 등록 취소 요청').then(function (ok) {
+          if (ok) scanFixWatch(e.id); else { delete scanUi[e.id]; toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.'); scanRedraw(e.id); }
+        });
+      }, null, null, { positive: true, cancelLabel: '닫기' });
+    });
   }
 
   /* ===================== 명함 검색 ===================== */
@@ -2881,6 +3266,7 @@
   APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
   APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
   APP_VERSION = 'v9.35';        // v9.35: S-Office 저장 직후 창(열기·공유)·고친 내용 자동 복구·엑셀 되돌리기·한글·워드·PPT·엑셀 찾기·열기 방식 줄 위로·최근 문서 합침. v9.34: S-Office 폰 화면 다듬기(한글 폰용 도구줄·글꼴, 워드·PPT·엑셀·PDF 키보드·터치 정리), 홈 칸 이름 S-Office, 마크다운 바깥 그림 차단 보강. v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
+  APP_VERSION = 'v9.36';        // v9.36: 영수증 여러 장 보내기(묶음 화면·최대 10장)와 「맞아요/고쳐요」 확인 말풍선 (S-Office v9.35 위)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3373,6 +3759,7 @@
     if (!files || !files.length) return '';
     return '<div class="attachlist">' + files.map(function (f) {
       if (f && f.kind === 'nav' && f.nav) return navChip(f);    // (O-0217) 케이 답의 길 안내 칩
+      if (f && f.kind === 'scanack' && f.scanack) return scanackChip(f);    // v9.32: 영수증 «맞나요?» 단추 줄(RECEIPT_ACK 'off' 면 아무것도 그리지 않는다)
       var sz = f.size ? '<span class="asz">' + esc(fmtBytes(f.size)) + '</span>' : '';
       var attrs = (!isUp && f.url) ? (' data-att-url="' + esc(f.url) + '" data-att-name="' + esc(f.name || '파일') + '"') : ' disabled';   // 이름: v7.9 폰에서 칩을 눌렀을 때 저장으로 보낼지 판정
       var chip = '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
@@ -7721,6 +8108,7 @@
     if (ln) { ev.preventDefault(); var lu = ln.getAttribute('data-link') || ln.getAttribute('href'); var lw = window.open(lu, '_blank'); if (!lw) toast('링크를 열지 못했습니다.'); return; }
     if (ordDecideClick(ev)) return;                    // (O-0201 추가) 작업 카드 안 [승인]·[수정 요청]
     if (navChipClick(ev)) return;                      // (O-0217) 케이 답의 [길찾기] 칩 → 네이버 지도
+    if (scanAckClick(ev)) return;                      // v9.32: 영수증 [맞아요]·[고쳐요]·[N장 전부 맞아요]
     var oc = ev.target.closest ? ev.target.closest('.ordcard[data-ord]') : null;   // v5.8: 작업 카드 → 작업 현황(그 항목 강조)
     if (oc) { openOrders(true, oc.getAttribute('data-ord')); return; }
     var bq = ev.target.closest ? ev.target.closest('.bquote[data-qid]') : null;   // (O-0545) 인용 상자 → 원래 메시지로
@@ -8356,6 +8744,8 @@
     if (REC_ROAM_V2 && isOpen(recView)) { showHome(); setStatus('대기 중', 'idle'); return true; }      // 녹음이 시작되지 못한 채 남은 녹음 화면
     if (isOpen(recordedPanel) && pendingBlob && recCur && recCur.recovered && recFindApi()) { discardRecorded(); return true; }   // v9.10: 폰에 남아 있던 녹음을 연 화면 — 닫으면 목록으로 돌아간다
     if (isOpen(recordedPanel) && guardRecorded()) return true;                                          // v9.8: 아직 보내지 않은 녹음 — 한 번 묻는다
+    if (isOpen($('rcbWrap'))) return rcbBack();      // v9.32: 영수증 묶음 화면
+    if (rcbReturn && isOpen(resultWrap)) { rcbReturn = false; if (rcb && rcb.step === 'list') { openScreen($('rcbWrap')); rcbRender(); return true; } }   // v9.32: 확인 카드 → 묶음 목록
     if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (chatFromDocs && isOpen(chatView)) {     // O-0548: 뷰어 [💬]로 온 채팅 → 보던 문서의 같은 쪽 · 같은 확대(수정 요청 화면이었으면 그 화면)로

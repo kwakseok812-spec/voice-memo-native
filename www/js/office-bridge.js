@@ -446,7 +446,11 @@
   // (스캔 허브) 영수증 전송이면 meta.scan 한 칸만 더한다 — memo.scan 이 없으면 예전 meta 와 똑같다
   function _batchMeta(memo, filesMeta) {
     var m = { app: 'voice-memo-test', files: filesMeta };
-    if (memo && memo.scan && memo.scan.type === 'receipt') m.scan = { type: 'receipt', v: 1 };
+    if (memo && memo.scan && memo.scan.type === 'receipt') {
+      m.scan = { type: 'receipt', v: 1 };
+      var bt = memo.scan.batch;      // v9.32: 여러 장 묶음 소속(PC 가 알림을 모아 한 번 보낸다). 형식이 틀리면 싣지 않는다 → 한 장과 같다
+      if (bt && /^[0-9a-f]{8}$/.test(String(bt.id)) && bt.i >= 1 && bt.n >= bt.i && bt.n <= 10) m.scan.batch = { id: String(bt.id), i: bt.i | 0, n: bt.n | 0 };
+    }
     return m;
   }
   // memo.kind photo/video, files: [File] (1장 이상). onProgress(done,total) 선택.
@@ -1077,6 +1081,10 @@
       var u = res && res[d[0]];
       if (u && !out.some(function (x) { return x.url === u; })) out.push({ name: d[1], url: u, mime: d[2], size: 0, kind: 'document' });
     });
+    // v9.32: 영수증 «맞나요?» 확인 말풍선 — PC 가 summary_json.scanack 에 남긴 값(v=1, items 10개 이하)을 «scanack» 칩으로 넘긴다. 앱이 그리는 방법은 app.js scanackChip.
+    var sa = sj && sj.scanack;
+    if (sa && typeof sa === 'object' && sa.v === 1 && Array.isArray(sa.items) && sa.items.length && sa.items.length <= 10)
+      out.push({ name: '영수증 확인', url: '', mime: '', size: 0, kind: 'scanack', scanack: sa });
     // (O-0217) 케이 답의 길 안내 — PC 응답기가 [[NAV: 목적지 | 수단]] 표식을 summary_json.nav 로 바꿔 둔다.
     //   첨부 칩 줄에 「길찾기」 칩으로 붙인다(새 카드·새 화면 없이 기존 첨부 자리 재사용). url 이 없으므로 다운로드·뷰어 대상이 아니다.
     var nv = sj && sj.nav;
