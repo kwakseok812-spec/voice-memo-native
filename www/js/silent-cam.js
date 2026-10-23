@@ -5,7 +5,7 @@
  * 플러그인이 없거나(PC판·옛 앱) 스위치가 꺼졌거나 카메라를 못 열면 kind:'fallback' 을 돌려주고, 부른 쪽이 예전 길(폰 기본 카메라/사진 고르기)로 간다. */
 (function (global) {
   'use strict';
-  var CFG = { on: false, engine: 'auto' };
+  var CFG = { on: false, engine: 'auto', zoom: 'on' };
   var busy = false;                       // 카메라 화면이 열려 있거나 열리는 중
   var CSS_ID = 'silentcam-css';
 
@@ -116,7 +116,7 @@
       if (!st || !st.available) return done({ kind: 'fallback', why: 'nocamera' });
       return ensurePerm(mode, st).then(function (g) {
         if (g !== 'ok') return done(g);
-        return p.open({ mode: mode, from: opt.from || 'tab', multi: !!opt.multi, left: opt.left == null ? 100 : opt.left, title: opt.title || null, engine: engine(), resume: !!opt.resume }).then(function (r) {
+        return p.open({ mode: mode, from: opt.from || 'tab', multi: !!opt.multi, left: opt.left == null ? 100 : opt.left, title: opt.title || null, engine: engine(), resume: !!opt.resume, zoom: CFG.zoom }).then(function (r) {
           r = r || {};
           if (r.action === 'denied') return deniedFlow(mode).then(done);
           if (r.action === 'error') return done({ kind: 'fallback', why: r.reason || 'error' });
@@ -165,7 +165,7 @@
   }
 
   global.SilentCam = {
-    config: function (c) { if (c) { if (c.on != null) CFG.on = !!c.on; if (c.engine) CFG.engine = c.engine; } },
+    config: function (c) { if (c) { if (c.on != null) CFG.on = !!c.on; if (c.engine) CFG.engine = c.engine; if (c.zoom != null) CFG.zoom = c.zoom === 'off' ? 'off' : 'on'; } },
     usable: usable, shoot: shoot, release: release, releasePath: releasePath, recover: recover, sweep: sweep,
     isBusy: function () { return busy; }
   };

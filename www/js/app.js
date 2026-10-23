@@ -106,7 +106,9 @@
    *   SILENT_CAM_ENGINE: 'auto'(한 장=고화질, 이어 찍기=빠름) | 'quality' | 'fast' | 'frame'(화면 프레임 저장 — 소리가 날 때의 대체). */
   var SILENT_CAM = 'on';
   var SILENT_CAM_ENGINE = 'auto';
-  try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE }); } catch (e) {}
+  /* 확대·축소(줌): 'on' = 두 손가락 핀치·줌 막대·빠른 배율 단추 / 'off' = 줌 없이 예전 카메라 화면(v9.29)과 같음. 새 앱(줌이 든 버전)에서만 효과가 있다. */
+  var SILENT_CAM_ZOOM = 'on';
+  try { if (window.SilentCam) SilentCam.config({ on: SILENT_CAM === 'on', engine: SILENT_CAM_ENGINE, zoom: SILENT_CAM_ZOOM }); } catch (e) {}
   var DOC_SCAN_AUTO = 'on';   // O-0583: 'off' 면 문서 스캔의 자동 테두리·펴기·보정·두 쪽 나누기·PDF 화질이 모두 사라져 v9.23 과 같다(opencv 도 불러오지 않음)
   var REC_ROAM_V2 = true;
   try { document.documentElement.classList.toggle('rec-v2', REC_ROAM_V2); } catch (e) {}

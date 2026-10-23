@@ -15,6 +15,10 @@ import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.InsetDrawable
+import android.content.res.ColorStateList
+import android.view.ScaleGestureDetector
+import android.widget.SeekBar
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.hardware.Sensor
@@ -48,12 +52,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraState
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.ZoomState
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -71,6 +79,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.sqrt
 
 /**
@@ -92,8 +102,14 @@ class SilentCameraActivity : ComponentActivity() {
         const val X_TITLE = "title"
         const val X_ENGINE = "engine"       // auto | quality | fast | frame
         const val X_RESUME = "resume"
+        const val X_ZOOM = "zoom"           // on | off  (off 면 v9.29 와 같은 화면·동작)
         const val RESULT = "json"
         const val AUTO_MS = 2800L
+        /** 이어 찍기에서 다음 쪽에도 배율을 그대로 둔다(같은 문서를 같은 거리에서 찍는 장면). false 면 쪽마다 1×로 돌아간다. */
+        const val ZOOM_KEEP_ACROSS_PAGES = true
+        /** 이 배율부터는 «가까이 다가가 주세요» 안내를 띄운다(디지털 확대는 사진이 거칠어진다). 실기기 확인 뒤 조정. */
+        const val ZOOM_COARSE_FROM = 4f
+        private val ZOOM_QUICK = floatArrayOf(0.5f, 1f, 2f, 3f, 5f, 10f)
         private const val PREFS = "silentcam"
     }
 
@@ -115,6 +131,28 @@ class SilentCameraActivity : ComponentActivity() {
     private var darkLive = false
     private var shakeLevel = 0f
     private var lastTap: Pair<Float, Float>? = null
+
+    // 확대·축소(줌)
+    private var zoomOn = true
+    private var zoomWanted = 1f                              // 사용자가 정한 배율. 카메라가 다시 연결돼도(앱이 뒤로 갔다 옴) 이 값을 다시 적용한다
+    private var zoomMin = 1f
+    private var zoomMax = 1f
+    private var shotZoom = 1f                                // 셔터를 누른 순간의 배율
+    private val pageZoom = HashMap<String, Float>()
+    private var multiTouch = false
+    private var zoomAnim: ValueAnimator? = null
+    private var zoomRange = ""
+    private var zoomLive: LiveData<ZoomState>? = null
+    private var zoomObs: Observer<ZoomState>? = null
+    private var stateLive: LiveData<CameraState>? = null
+    private var stateObs: Observer<CameraState>? = null
+    private lateinit var scaleDetector: ScaleGestureDetector
+    private lateinit var zoomBox: LinearLayout
+    private lateinit var zoomLabel: TextView
+    private lateinit var zoomSeek: SeekBar
+    private lateinit var zoomBtnRow: LinearLayout
+    private lateinit var topGroup: View
+    private lateinit var bottomGroup: View
 
     private val main = Handler(Looper.getMainLooper())
     private val bg = Executors.newSingleThreadExecutor()
@@ -183,6 +221,7 @@ class SilentCameraActivity : ComponentActivity() {
         left = intent.getIntExtra(X_LEFT, Session.MAX_PAGES).coerceIn(0, Session.MAX_PAGES)
         customTitle = intent.getStringExtra(X_TITLE)
         engine = intent.getStringExtra(X_ENGINE) ?: "auto"
+        zoomOn = (intent.getStringExtra(X_ZOOM) ?: "on") != "off"
         lowDisk = Session.freeBytes(this) < Session.LOW_DISK_BYTES
         if (from == "tab" && mode == "doc") multi = prefs.getBoolean("multiDoc", true)
         if (mode != "doc") multi = false
@@ -228,6 +267,7 @@ class SilentCameraActivity : ComponentActivity() {
         sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sm.registerListener(sensorL, it, SensorManager.SENSOR_DELAY_UI) }
         sm?.getDefaultSensor(Sensor.TYPE_LIGHT)?.let { sm.registerListener(sensorL, it, SensorManager.SENSOR_DELAY_NORMAL) }
         main.post(guideTick)
+        if (zoomOn && camera != null) main.postDelayed({ pushZoom() }, 400)       // 뒤로 갔다 돌아오면 카메라가 배율을 1×로 되돌린다 → 다시 적용
     }
 
     override fun onPause() {
@@ -241,6 +281,7 @@ class SilentCameraActivity : ComponentActivity() {
         super.onDestroy()
         isOpen = false
         autoAnim?.cancel()
+        zoomAnim?.cancel()
         main.removeCallbacksAndMessages(null)
         bg.shutdown()
         camExec.shutdown()
@@ -343,14 +384,28 @@ class SilentCameraActivity : ComponentActivity() {
         }
         root.addView(focusRing, FrameLayout.LayoutParams(dp(64), dp(64)))
 
+        // 두 손가락으로 벌리면 확대, 오므리면 축소. 핀치가 있었던 손짓 뒤에는 초점을 잡지 않는다.
+        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                if (zoomOn && !busy && !closing) { zoomAnim?.cancel(); setZoom(zoomWanted * d.scaleFactor) }
+                return true
+            }
+        })
         previewView.setOnTouchListener { v, ev ->
-            if (ev.action == MotionEvent.ACTION_UP && !busy) {
-                lastTap = Pair(ev.x, ev.y)
-                val cam = camera
-                if (cam != null) {
-                    val p = previewView.meteringPointFactory.createPoint(ev.x, ev.y)
-                    try { cam.cameraControl.startFocusAndMetering(FocusMeteringAction.Builder(p).build()) } catch (e: Exception) { }
-                    showFocusRing(ev.x, ev.y)
+            if (zoomOn) scaleDetector.onTouchEvent(ev)
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> multiTouch = false
+                MotionEvent.ACTION_POINTER_DOWN -> multiTouch = true
+            }
+            if (ev.actionMasked == MotionEvent.ACTION_UP && !busy) {
+                if (!(zoomOn && (multiTouch || scaleDetector.isInProgress))) {
+                    lastTap = Pair(ev.x, ev.y)
+                    val cam = camera
+                    if (cam != null) {
+                        val p = previewView.meteringPointFactory.createPoint(ev.x, ev.y)
+                        try { cam.cameraControl.startFocusAndMetering(FocusMeteringAction.Builder(p).build()) } catch (e: Exception) { }
+                        showFocusRing(ev.x, ev.y)
+                    }
                 }
                 v.performClick()
             }
@@ -389,6 +444,7 @@ class SilentCameraActivity : ComponentActivity() {
         noticeTv = tv("", 14f, 0xFF111111.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(dp(12), dp(8), dp(12), dp(8)); setBackgroundColor(0xFFFBBF24.toInt()); visibility = View.GONE }
         top.addView(noticeTv)
         ui.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        topGroup = top
 
         // 아래 묶음: 안내 한 줄 · 썸네일 줄 · 촬영 줄
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0x99000000.toInt()) }
@@ -430,6 +486,8 @@ class SilentCameraActivity : ComponentActivity() {
         bottomBar.addView(doneBtn, FrameLayout.LayoutParams(-2, dp(52), Gravity.END or Gravity.CENTER_VERTICAL))
         bottom.addView(bottomBar)
         ui.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        bottomGroup = bottom
+        buildZoomUi()
 
         layers = FrameLayout(this)
         root.addView(layers, FrameLayout.LayoutParams(-1, -1))
@@ -478,11 +536,17 @@ class SilentCameraActivity : ComponentActivity() {
         }
         var on = true
             set(v) { field = v; invalidate() }
+        private var bTop = -1f
+        private var bBot = -1f
+        /** 위·아래 단추 묶음 사이(줌 막대 포함)로 안내선을 맞춘다. 부르지 않으면(줌 끔) 예전처럼 위아래 20% 안쪽. */
+        fun setBounds(t: Float, b: Float) { if (t != bTop || b != bBot) { bTop = t; bBot = b; invalidate() } }
         override fun onDraw(c: Canvas) {
             if (!on) return
             val mx = width * 0.06f
-            val my = height * 0.20f
-            val r = RectF(mx, my, width - mx, height - my)
+            var top = height * 0.20f
+            var bot = height * 0.80f
+            if (bTop >= 0f && bBot - bTop > height * 0.25f) { top = bTop; bot = bBot }
+            val r = RectF(mx, top, width - mx, bot)
             c.drawRoundRect(r, 24f, 24f, p)
         }
     }
@@ -590,6 +654,7 @@ class SilentCameraActivity : ComponentActivity() {
         hintTv.text = when {
             shakeLevel > 1.6f -> "조금만 가만히 있어 주세요"
             darkLive && flashMode == ImageCapture.FLASH_MODE_OFF -> "조금 어두워요. 밝은 쪽으로 가거나 불빛을 켜 볼까요?"
+            zoomOn && zoomWanted >= ZOOM_COARSE_FROM -> "많이 확대했어요. 글자가 거칠면 가까이 다가가 주세요"
             mode == "receipt" -> "영수증이 세로로 꽉 차게 비춰 주세요"
             mode == "photo" -> "찍을 장면을 비춰 주세요"
             else -> "문서 전체가 들어오게 비춰 주세요"
@@ -612,6 +677,174 @@ class SilentCameraActivity : ComponentActivity() {
         }
         imageCapture?.flashMode = flashMode
         refreshAll()
+    }
+
+    // ───────── 확대·축소(줌) ─────────
+    // 배율은 카메라 세션 전체에 걸린다 — 미리보기·한 장 촬영·이어 찍기·프레임 저장이 모두 같은 범위를 얻고, 앱이 사진을 따로 자르지 않는다.
+    private fun fmtX(z: Float): String = String.format(java.util.Locale.US, "×%.1f", z)
+    private fun fmtBtn(c: Float): String =
+        if (abs(c - Math.round(c)) < 0.05f) Math.round(c).toString() + "×" else String.format(java.util.Locale.US, "%.1f×", c)
+
+    private fun pill(color: Int): InsetDrawable = InsetDrawable(round(color, 18), 0, dp(4), 0, dp(4))     // 눈에 보이는 높이 36dp, 누르는 칸 44dp
+
+    private fun buildZoomUi() {
+        zoomBox = CapBox(this, 420).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            visibility = View.GONE                           // 기기가 배율 범위를 알려 줄 때까지 숨김
+            setPadding(dp(8), 0, dp(8), dp(2))
+        }
+        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        zoomLabel = tv("×1.0", 15f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER
+            minWidth = dp(54); minimumWidth = dp(54)
+            minHeight = dp(44); minimumHeight = dp(44)
+            setPadding(dp(8), 0, dp(8), 0)
+            contentDescription = "지금 확대 배율"
+        }
+        head.addView(zoomLabel, LinearLayout.LayoutParams(-2, -2).apply { setMargins(0, 0, dp(6), 0) })
+        zoomBtnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        head.addView(zoomBtnRow)
+        zoomBox.addView(head, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        zoomSeek = SeekBar(this).apply {
+            max = 1000
+            progressTintList = ColorStateList.valueOf(Color.WHITE)
+            progressBackgroundTintList = ColorStateList.valueOf(0x66FFFFFF)
+            thumbTintList = ColorStateList.valueOf(Color.WHITE)
+            setPadding(dp(16), 0, dp(16), 0)
+            contentDescription = "확대 정도 조절"
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    if (!fromUser || busy || zoomMax <= zoomMin) return
+                    zoomAnim?.cancel()
+                    setZoom(zoomMin * exp(ln(zoomMax / zoomMin) * (p / 1000f)), true)
+                }
+                override fun onStartTrackingTouch(sb: SeekBar) { }
+                override fun onStopTrackingTouch(sb: SeekBar) { }
+            })
+        }
+        zoomBox.addView(zoomSeek, LinearLayout.LayoutParams(-1, dp(32)))
+        ui.addView(zoomBox, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        if (!zoomOn) return
+        val sync = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncOverlay() }
+        topGroup.addOnLayoutChangeListener(sync)
+        bottomGroup.addOnLayoutChangeListener(sync)
+        zoomBox.addOnLayoutChangeListener(sync)
+    }
+
+    /** 줌 막대를 아래 묶음 바로 위에 놓고, 문서 안내선이 위·아래 묶음과 줌 막대를 피하게 한다. 가로(낮은) 화면에서는 막대를 접고 단추만 둔다. */
+    private fun syncOverlay() {
+        if (!zoomOn) return
+        val h = root.height
+        if (h <= 0) return
+        val lp = zoomBox.layoutParams as FrameLayout.LayoutParams
+        val bm = bottomGroup.height
+        if (lp.bottomMargin != bm) { lp.bottomMargin = bm; zoomBox.layoutParams = lp }
+        val seekVis = if (h >= dp(420)) View.VISIBLE else View.GONE
+        if (zoomSeek.visibility != seekVis) zoomSeek.visibility = seekVis
+        val boxH = if (zoomBox.visibility == View.VISIBLE) zoomBox.height else 0
+        guide.setBounds((topGroup.bottom + dp(10)).toFloat(), (bottomGroup.top - boxH - dp(10)).toFloat())
+    }
+
+    private fun pushZoom() {
+        if (!zoomOn) return
+        try { camera?.cameraControl?.setZoomRatio(zoomWanted) } catch (e: Exception) { }
+    }
+
+    /** 배율을 기기가 허용하는 범위 안으로 맞춰 카메라에 적용한다. 정한 값(zoomWanted)은 카메라가 다시 연결될 때 다시 적용된다. */
+    private fun setZoom(ratio: Float, fromSeek: Boolean = false) {
+        if (!zoomOn || zoomMax <= zoomMin) return
+        val r = ratio.coerceIn(zoomMin, zoomMax)
+        if (abs(r - zoomWanted) > 0.005f) lastTap = null     // 초점 점은 화면 안 위치라 배율이 바뀌면 의미가 없다 → 중앙 기준으로
+        zoomWanted = r
+        pushZoom()
+        updateZoomUi(fromSeek)
+    }
+
+    private fun animateZoomTo(t: Float) {
+        zoomAnim?.cancel()
+        val from = zoomWanted
+        if (reduceMotion() || abs(t - from) < 0.01f || from <= 0f) { setZoom(t); return }
+        val a = ValueAnimator.ofFloat(0f, 1f).setDuration(160)
+        a.addUpdateListener { v ->
+            val f = v.animatedValue as Float
+            setZoom(if (f >= 1f) t else from * Math.pow((t / from).toDouble(), f.toDouble()).toFloat())
+        }
+        zoomAnim = a
+        a.start()
+    }
+
+    private fun buildZoomButtons() {
+        val key = "$zoomMin-$zoomMax"
+        if (key == zoomRange) return
+        zoomRange = key
+        zoomBtnRow.removeAllViews()
+        val vals = ArrayList<Float>()
+        for (c in ZOOM_QUICK) if (c >= zoomMin - 0.01f && c <= zoomMax + 0.01f) vals.add(c)
+        if (zoomMin < 0.95f && (vals.isEmpty() || vals[0] > zoomMin + 0.05f)) vals.add(0, zoomMin)     // 기기의 가장 넓은 화각(예: 0.6×)
+        for (c in vals) {
+            val b = tv(fmtBtn(c), 14f, Color.WHITE, true).apply {
+                gravity = Gravity.CENTER
+                minWidth = dp(42); minimumWidth = dp(42)
+                minHeight = dp(44); minimumHeight = dp(44)
+                setPadding(dp(6), 0, dp(6), 0)
+                isClickable = true
+                isFocusable = true
+                tag = c
+                setOnClickListener { if (!busy) animateZoomTo(c) }
+            }
+            zoomBtnRow.addView(b, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(2), 0, dp(2), 0) })
+        }
+    }
+
+    private fun updateZoomUi(fromSeek: Boolean = false) {
+        if (!zoomOn) return
+        val ok = zoomMax > zoomMin
+        val vis = if (ok) View.VISIBLE else View.GONE
+        if (zoomBox.visibility != vis) zoomBox.visibility = vis
+        if (!ok) return
+        zoomLabel.text = fmtX(zoomWanted)
+        zoomLabel.background = pill(0x99000000.toInt())
+        for (i in 0 until zoomBtnRow.childCount) {
+            val b = zoomBtnRow.getChildAt(i) as TextView
+            val v = b.tag as Float
+            val sel = abs(zoomWanted - v) / v < 0.04f
+            b.background = pill(if (sel) 0xFF3B82F6.toInt() else 0x66000000)
+            b.contentDescription = "확대 " + b.text + if (sel) " 선택됨" else ""
+        }
+        if (!fromSeek) zoomSeek.progress = (ln(zoomWanted / zoomMin) / ln(zoomMax / zoomMin) * 1000f).toInt().coerceIn(0, 1000)
+        updateGuideText()
+        syncOverlay()
+    }
+
+    /** 카메라가 (다시) 연결될 때마다: 기기의 배율 범위를 읽고, 정해 둔 배율을 다시 적용한다. */
+    private fun setupZoom(cam: Camera) {
+        if (!zoomOn) return
+        zoomObs?.let { zoomLive?.removeObserver(it) }
+        stateObs?.let { stateLive?.removeObserver(it) }
+        val zl = cam.cameraInfo.zoomState
+        val zo = Observer<ZoomState> { zs ->
+            if (zs.minZoomRatio != zoomMin || zs.maxZoomRatio != zoomMax) {
+                zoomMin = zs.minZoomRatio
+                zoomMax = zs.maxZoomRatio
+                if (zoomMax > zoomMin) zoomWanted = zoomWanted.coerceIn(zoomMin, zoomMax)
+                buildZoomButtons()
+            }
+            updateZoomUi()
+        }
+        zoomLive = zl
+        zoomObs = zo
+        zl.observe(this, zo)
+        val sl = cam.cameraInfo.cameraState
+        val so = Observer<CameraState> { st -> if (st.type == CameraState.Type.OPEN) pushZoom() }     // 앱이 뒤로 갔다 오면 카메라가 1×로 돌아가므로 열릴 때마다 다시 적용
+        stateLive = sl
+        stateObs = so
+        sl.observe(this, so)
+        zl.value?.let { zoomMin = it.minZoomRatio; zoomMax = it.maxZoomRatio }
+        if (zoomMax > zoomMin) zoomWanted = zoomWanted.coerceIn(zoomMin, zoomMax)
+        buildZoomButtons()
+        pushZoom()
+        updateZoomUi()
     }
 
     // ───────── 카메라 ─────────
@@ -653,6 +886,7 @@ class SilentCameraActivity : ComponentActivity() {
                     imageCapture = ic
                     camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic)
                 }
+                camera?.let { setupZoom(it) }
                 flashNote("카메라가 준비됐어요", 1200)
             } catch (e: Exception) {
                 finishWith("error")
@@ -703,6 +937,7 @@ class SilentCameraActivity : ComponentActivity() {
         if (Session.freeBytes(this) < 20L * 1024 * 1024) { flashNote("저장 공간이 거의 없어요. 공간을 비운 뒤 다시 찍어 주세요", 4000); return }
         val willShake = shakeLevel > 1.2f
         busy = true
+        shotZoom = zoomWanted                                // 찍는 동안은 배율을 바꾸지 않는다(busy) — 화면에 보인 범위와 사진이 같다
         vibrateNow()
         flashScreen()
         val prefix = if (mode == "photo") "photo" else "scan"
@@ -770,11 +1005,13 @@ class SilentCameraActivity : ComponentActivity() {
                 val pg = Session.Page(file.absolutePath, h.q, h.w, h.h, file.length())
                 pages.add(pg)
                 if (shake) shook.add(pg.path)
+                pageZoom[pg.path] = shotZoom
                 if (thumb != null) thumbs[pg.path] = thumb
                 persist()
                 busy = false
                 if (mode == "doc" && multi) {
                     addThumb(pg)
+                    if (zoomOn && !ZOOM_KEEP_ACROSS_PAGES) setZoom(1f)
                     refreshAll()
                     val extra = if (h.q == "blur") " · 조금 흐려요" else if (h.q == "dark") " · 조금 어두워요" else ""
                     flashNote(pages.size.toString() + "쪽 찍었어요" + extra)
@@ -1136,7 +1373,7 @@ class SilentCameraActivity : ComponentActivity() {
         val j = JSONObject().put("action", action).put("mode", mode).put("from", from).put("multi", multi)
         val arr = JSONArray()
         if (action == "done" || action == "send") {
-            for (p in pages) arr.put(JSONObject().put("path", p.path).put("q", p.q).put("w", p.w).put("h", p.h).put("size", File(p.path).length()).put("shake", shook.contains(p.path)))
+            for (p in pages) arr.put(JSONObject().put("path", p.path).put("q", p.q).put("w", p.w).put("h", p.h).put("size", File(p.path).length()).put("shake", shook.contains(p.path)).put("zoom", Math.round((pageZoom[p.path] ?: 1f) * 100f) / 100.0))
         }
         j.put("pages", arr)
         setResult(RESULT_OK, Intent().putExtra(RESULT, j.toString()))
