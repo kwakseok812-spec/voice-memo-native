@@ -1467,7 +1467,25 @@
     });
   }
   function closeSheet() { if (sheetEl) sheetEl.classList.remove('on'); }
+  // S-Office 로 연 문서도 같은 「최근 연 문서」 목록에 넣는다(별도 목록 없음). 키는 'so:' + 내용 지문 — 변환해서 보기(PDF 저장본)와 섞이지 않게.
+  //   원본 바이트를 그대로 보관한다(용량 규칙 = DocStore 그대로: 40개·1GB·기기 저장 공간 절반). 한 파일이 SO_RECENT_MAX 를 넘으면 목록에 넣지 않는다.
+  var SO_RECENT_MAX = 40 * 1024 * 1024;
+  function recordSOffice(file) {
+    if (!file || !file.size || file.size > SO_RECENT_MAX) return Promise.resolve(false);
+    return DocStore.keyOf(file).then(function (k) {
+      return DocStore.save({ key: 'so:' + k, name: file.name, ext: extOf(file.name), kind: 'soffice', size: file.size, lm: file.lastModified || 0, mime: file.type || '' }, { orig: file });
+    }).then(function (r) { renderRecent(); return !!(r && r.saved); }, function () { return false; });
+  }
+  function openSOfficeRecent(meta) {
+    DocStore.getBlobs(meta.key).then(function (b) {
+      if (!b || !b.orig) { DocStore.del(meta.key); renderRecent(); toast('폰에 저장해 둔 문서가 없어졌어요. 원래 파일을 다시 골라 주세요.'); return; }
+      DocStore.touch(meta.key, { openedAt: Date.now() }).then(renderRecent);
+      var f = new File([b.orig], meta.name, { type: meta.mime || b.orig.type || 'application/octet-stream', lastModified: meta.lm || Date.now() });
+      if (!(global.SOffice && SOffice.openFile && SOffice.openFile(f))) toast('이 문서는 지금 열 수 없어요. 원래 파일을 다시 골라 주세요.');
+    });
+  }
   function openRecentKey(key) {
+    if (String(key).indexOf('so:') === 0) { closeSheet(); DocStore.get(key).then(function (m) { if (m) openSOfficeRecent(m); else { renderRecent(); toast('목록에서 이미 지워진 문서입니다.'); } }); return; }
     closeSheet();
     var di = tabByKey(key);
     if (di >= 0) { showTab(di); return; }
@@ -2115,7 +2133,7 @@
       list.innerHTML = items.map(function (m) {
         var b = TYPE_BADGE[m.ext || extOf(m.name)] || [String(m.ext || '문서').toUpperCase().slice(0, 4), 't-etc'];
         var bits = [fmtWhen(m.openedAt)];
-        if (m.kind === 'excel') bits.push('표로 보기'); else if (m.pages) bits.push(m.pages + '쪽');
+        if (m.kind === 'excel') bits.push('표로 보기'); else if (m.kind === 'soffice') bits.push(global.SOffice ? SOffice.NAME : 'S-Office'); else if (m.pages) bits.push(m.pages + '쪽');
         if (m.size) bits.push(fmtSize(m.size));
         var last = (m.kind !== 'excel' && m.lastPage > 1) ? '<span class="dv-rlast">📖 ' + m.lastPage + '쪽까지 보셨습니다</span>' : '';
         return '<div class="dv-ritem' + (m.fav ? ' fav' : '') + '" data-key="' + esc(m.key) + '">' +
@@ -2311,6 +2329,7 @@
     editState: function () { return { ctx: editCtx ? { name: editCtx.name, ext: editCtx.ext, step: editCtx.step || 0 } : null, sessions: editsLoad() }; },   // O-0171 점검용
     mediaState: function () { return { media: curMedia ? curMedia.media : null, job: curMedia ? curMedia.job : null, stale: mediaStale, noteOpen: noteOpen }; },   // v9.30 점검용
     openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
+    recordSOffice: recordSOffice,          // S-Office(so-core.js)가 문서를 연 뒤 부른다 — 최근 연 문서에 원본을 보관
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기
     _store: DocStore                       // v6.9: 점검용(저장 개수·용량 확인) — 화면 기능과 무관
   };

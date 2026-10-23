@@ -371,6 +371,108 @@
     if (/^(true|false)$/i.test(t) && ext !== 'csv') return { cell: { t: 'b', v: /^true$/i.test(t) } };
     return { cell: { t: 's', v: txt } };    // CSV 는 읽을 때도 전부 글자이므로 글자로 둔다
   }
+  // ---- 수식이 이 칸을 쓰는지(저장 안내·토스트에 쓴다) ----
+  var REF_RE = /(?<![A-Za-z0-9_.$])(?:(?:'((?:[^']|'')+)'|([A-Za-z_][\w.]*))!)?(?:(\$?[A-Z]{1,3})\$?(\d+)(?::(\$?[A-Z]{1,3})\$?(\d+))?(?![A-Za-z0-9_(])|(\$?[A-Z]{1,3}):(\$?[A-Z]{1,3})(?![A-Za-z0-9_(]))/g;
+  function colIdx(s) { s = s.replace('$', ''); var n = 0; for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64); return n - 1; }
+  function parseRefs(f, ownSheet) {
+    var out = [], txt = String(f).replace(/"[^"]*"/g, '""'), m;
+    REF_RE.lastIndex = 0;
+    while ((m = REF_RE.exec(txt))) {
+      var sheet = m[1] ? m[1].replace(/''/g, "'") : (m[2] || ownSheet);
+      if (m[3]) { var c0 = colIdx(m[3]), r0 = +m[4] - 1, c1 = m[5] ? colIdx(m[5]) : c0, r1 = m[6] ? +m[6] - 1 : r0; out.push({ s: sheet, r0: Math.min(r0, r1), r1: Math.max(r0, r1), c0: Math.min(c0, c1), c1: Math.max(c0, c1) }); }
+      else if (m[7]) { var a = colIdx(m[7]), b = colIdx(m[8]); out.push({ s: sheet, r0: 0, r1: MAX_R, c0: Math.min(a, b), c1: Math.max(a, b) }); }
+    }
+    return out;
+  }
+  function fmapSet(name, a, f) { if (!S.fmap) return; var k = name + '|' + a; if (f) S.fmap[k] = { s: name, a: a, refs: parseRefs(f, name) }; else delete S.fmap[k]; }
+  function fmapBuild() {
+    if (S.fmap) return; S.fmap = {};
+    S.names.forEach(function (nm) {
+      var ws = S.wb.Sheets[nm]; if (!ws) return;
+      for (var k in ws) { if (k.charAt(0) === '!' || !Object.prototype.hasOwnProperty.call(ws, k)) continue; var cl = ws[k]; if (cl && cl.f) fmapSet(nm, k, cl.f); }
+    });
+  }
+  function affects(name, r, c) {            // 다른 칸의 수식이 (name 시트의 r,c) 칸을 쓰면 true
+    fmapBuild();
+    var ka = name + '|' + addr(r, c);
+    for (var k in S.fmap) {
+      if (k === ka) continue;
+      var rs = S.fmap[k].refs;
+      for (var i = 0; i < rs.length; i++) { var x = rs[i]; if (x.s === name && r >= x.r0 && r <= x.r1 && c >= x.c0 && c <= x.c1) return true; }
+    }
+    return false;
+  }
+  function anyAffected() {
+    var ks = Object.keys(S.edits);
+    for (var i = 0; i < ks.length; i++) { var e = S.edits[ks[i]]; if (e.res && e.res.formula != null) return true; if (affects(e.name, e.r, e.c)) return true; }
+    return false;
+  }
+
+  // ---- 칸 하나를 바꾸고 되돌리기 기록을 남긴다 ----
+  var UNDO_MAX = 60;
+  function capture(name, r, c) {            // 이 칸·이 시트의 지금 상태를 통째로 적어 둔다
+    var ws = S.wb.Sheets[name], a = addr(r, c), psh = S.an && S.an.sheets[name], k = S.names.indexOf(name) + '|' + r + '|' + c;
+    return { name: name, r: r, c: c, a: a, k: k, has: !!ws && Object.prototype.hasOwnProperty.call(ws, a), cell: ws && ws[a] ? Object.assign({}, ws[a]) : null,
+      hasRef: !!ws && Object.prototype.hasOwnProperty.call(ws, '!ref'), ref: ws ? ws['!ref'] : undefined, xml: psh ? psh.xml : null, edit: S.edits[k] || null, patched: !!S.patched[name] };
+  }
+  function reinstate(st) {
+    var ws = S.wb.Sheets[st.name] || (S.wb.Sheets[st.name] = {}), psh = S.an && S.an.sheets[st.name];
+    if (st.has && st.cell) ws[st.a] = Object.assign({}, st.cell); else delete ws[st.a];
+    if (st.hasRef) ws['!ref'] = st.ref; else delete ws['!ref'];
+    if (psh && st.xml != null) psh.xml = st.xml;
+    if (st.edit) S.edits[st.k] = st.edit; else delete S.edits[st.k];
+    if (st.patched) S.patched[st.name] = 1; else delete S.patched[st.name];
+    fmapSet(st.name, st.a, st.cell && st.cell.f ? st.cell.f : null);
+  }
+  function noteOrig(name, r, c) {           // 처음 고치기 전 모양을 기억(모두 되돌리기용)
+    var ws = S.wb.Sheets[name], a = addr(r, c), k = S.names.indexOf(name) + '|' + r + '|' + c;
+    if (!(k in S.orig)) S.orig[k] = { name: name, a: a, cell: ws && ws[a] ? Object.assign({}, ws[a]) : null };
+    if (!(name in S.origRef)) S.origRef[name] = { has: !!ws && Object.prototype.hasOwnProperty.call(ws, '!ref'), ref: ws ? ws['!ref'] : undefined };
+  }
+  // 칸 (r,c) 를 res(parseInput 결과)대로 바꾼다. 못 하면 { err }, 되면 { hadFormula }
+  function applyRes(name, r, c, res) {
+    var XLSX = global.XLSX, ws = S.wb.Sheets[name] || (S.wb.Sheets[name] = {}), a = addr(r, c), old = ws[a], hadFormula = !!(old && old.f), key = S.names.indexOf(name) + '|' + r + '|' + c;
+    var before = capture(name, r, c);
+    if (S.mode === 'patch') {
+      var psh = S.an.sheets[name];
+      if (!psh || psh.readOnly) return { err: (psh && psh.why) || '이 시트는 고칠 수 없어요.' };
+      var blk = global.SOXlsxPatch.cellBlock(psh, a);
+      if (blk) return { err: blk };
+      var spec = res.formula != null ? { kind: 'f', f: res.formula } : res.empty ? { kind: 'empty' } :
+        res.cell.t === 'n' ? { kind: 'n', v: res.cell.v } : res.cell.t === 'b' ? { kind: 'b', v: res.cell.v } : { kind: 's', v: res.cell.v };
+      var pr = global.SOXlsxPatch.patchCell(psh.xml, a, spec);
+      if (pr.err) return { err: pr.err };
+      noteOrig(name, r, c);
+      psh.xml = pr.xml; S.patched[name] = 1;
+    } else noteOrig(name, r, c);
+    function widen() {
+      var rg = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: r, c: c }, e: { r: r, c: c } };
+      if (r > rg.e.r) rg.e.r = r; if (c > rg.e.c) rg.e.c = c; if (r < rg.s.r) rg.s.r = r; if (c < rg.s.c) rg.s.c = c;
+      ws['!ref'] = XLSX.utils.encode_range(rg);
+    }
+    if (res.formula != null) {
+      var fcell = { t: 's', v: '', f: res.formula, w: '⟳' };
+      if (old && old.s) fcell.s = old.s;
+      ws[a] = fcell; widen();
+    } else if (res.empty) delete ws[a];
+    else {
+      var cell = Object.assign({}, res.cell);
+      if (cell.t === 'n') cell.w = (cell.z && cell.z !== 'General') ? XLSX.SSF.format(cell.z, cell.v) : String(cell.v);
+      else if (cell.t === 's') cell.w = cell.v;
+      if (old && old.s) cell.s = old.s;
+      ws[a] = cell; widen();
+    }
+    fmapSet(name, a, res.formula != null ? res.formula : null);
+    S.edits[key] = { name: name, r: r, c: c, res: res };
+    S.undo.push(before); if (S.undo.length > UNDO_MAX) S.undo.shift();
+    S.redo = [];
+    return { hadFormula: hadFormula };
+  }
+  function syncDirty() {
+    var d = Object.keys(S.edits).length > 0;
+    if (d !== S.dirty) { S.dirty = d; S.ctx.setDirty(d); }
+    refreshActions();
+  }
   // stay=true 이면 아래 칸으로 옮기지 않는다. 넣었거나 바꿀 게 없으면 true, 못 넣었으면 false
   function commit(stay) {
     if (!S.editable || !S.editing) return true;
@@ -379,90 +481,200 @@
     var sh = S.sh, r = S.sel.r, c = S.sel.c, a = addr(r, c), old = sh.ws[a];
     var res = parseInput(txt, old, S.ext);
     if (res.err) { S.ctx.toast(res.err, 3200); return false; }
-    var XLSX = global.XLSX;
-    var hadFormula = !!(old && old.f);
-    if (S.mode === 'patch') {
-      var psh = S.an.sheets[sh.name];
-      if (!psh || psh.readOnly) { S.ctx.toast((psh && psh.why) || '이 시트는 고칠 수 없어요.', 3600); return false; }
-      var blk = global.SOXlsxPatch.cellBlock(psh, a);
-      if (blk) { S.ctx.toast(blk, 4200); return false; }
-      var spec = res.formula != null ? { kind: 'f', f: res.formula } : res.empty ? { kind: 'empty' } :
-        res.cell.t === 'n' ? { kind: 'n', v: res.cell.v } : res.cell.t === 'b' ? { kind: 'b', v: res.cell.v } : { kind: 's', v: res.cell.v };
-      var pr = global.SOXlsxPatch.patchCell(psh.xml, a, spec);
-      if (pr.err) { S.ctx.toast(pr.err, 4200); return false; }
-      psh.xml = pr.xml; S.patched[sh.name] = 1;
-    }
-    if (res.formula != null) {
-      var fcell = { t: 's', v: '', f: res.formula, w: '⟳' };
-      if (old && old.s) fcell.s = old.s;
-      sh.ws[a] = fcell;
-      var rgf = sh.ws['!ref'] ? XLSX.utils.decode_range(sh.ws['!ref']) : { s: { r: r, c: c }, e: { r: r, c: c } };
-      if (r > rgf.e.r) rgf.e.r = r; if (c > rgf.e.c) rgf.e.c = c; if (r < rgf.s.r) rgf.s.r = r; if (c < rgf.s.c) rgf.s.c = c;
-      sh.ws['!ref'] = XLSX.utils.encode_range(rgf);
-    }
-    else if (res.empty) delete sh.ws[a];
-    else {
-      var cell = res.cell;
-      if (cell.t === 'n') cell.w = (cell.z && cell.z !== 'General') ? XLSX.SSF.format(cell.z, cell.v) : String(cell.v);
-      else if (cell.t === 's') cell.w = cell.v;
-      if (old && old.s) cell.s = old.s;
-      sh.ws[a] = cell;
-      var rg = sh.ws['!ref'] ? XLSX.utils.decode_range(sh.ws['!ref']) : { s: { r: r, c: c }, e: { r: r, c: c } };
-      if (r > rg.e.r) rg.e.r = r; if (c > rg.e.c) rg.e.c = c; if (r < rg.s.r) rg.s.r = r; if (c < rg.s.c) rg.s.c = c;
-      sh.ws['!ref'] = XLSX.utils.encode_range(rg);
-    }
-    S.edits[sh.i + '|' + r + '|' + c] = 1;
-    if (!S.dirty) { S.dirty = true; S.ctx.setDirty(true); refreshActions(); }
+    var willAffect = res.formula == null && S.ext !== 'csv' && !S.calcToasted && affects(sh.name, r, c);
+    var ap = applyRes(sh.name, r, c, res);
+    if (ap.err) { S.ctx.toast(ap.err, 4200); return false; }
+    syncDirty();
     if (res.formula != null) S.ctx.toast('수식을 넣었어요. 계산 결과는 엑셀에서 열면 나와요.', 3600);
-    else if (hadFormula) S.ctx.toast('수식이 있던 칸이라, 이제 값만 남았어요.', 2600);
-    else if (S.ext !== 'csv' && !S.calcToasted) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요.', 3200); }
+    else if (ap.hadFormula) S.ctx.toast('수식이 있던 칸이라, 이제 값만 남았어요.', 2600);
+    else if (willAffect) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요.', 3200); }
     if (!stay && r + 1 < sh.nr) { select(r + 1, c, true); ensureVisible(); }
     else S.barOrig = S.el.inp.value;
-    render(true);
+    render(true); refreshEd();
     return true;
   }
+  // ---- 되돌리기 · 다시하기 · 모두 되돌리기 ----
+  function jumpTo(name, r, c) {
+    var i = S.names.indexOf(name);
+    if (i >= 0 && S.sh.i !== i) { if (S.vis.indexOf(i) < 0) return; showSheet(i); }
+    select(r, c, true); ensureVisible(); render(true);
+  }
+  function stepHistory(from, to, doneMsg) {
+    if (!S || !S.editing || !from.length) return;
+    S.el.inp.blur();
+    var st = from.pop();
+    to.push(capture(st.name, st.r, st.c));
+    reinstate(st);
+    syncDirty(); jumpTo(st.name, st.r, st.c); refreshEd();
+    S.ctx.toast(doneMsg + ' (' + st.a + ')', 1800);
+  }
+  function undoEdit() { stepHistory(S.undo, S.redo, '되돌렸어요'); }
+  function redoEdit() { stepHistory(S.redo, S.undo, '다시 했어요'); }
+  function resetAll() {
+    if (!S || !S.editing) return;
+    var n = Object.keys(S.edits).length;
+    if (!n) { S.ctx.toast('고친 칸이 없어요.', 1800); return; }
+    S.ctx.confirm('모두 되돌릴까요?', '지금까지 고친 ' + n + '칸을 모두 처음 모양으로 돌려요. 이미 저장한 사본 파일은 그대로예요.', '모두 되돌리기', function () {
+      if (!S) return;
+      Object.keys(S.orig).forEach(function (k) {
+        var o = S.orig[k], ws = S.wb.Sheets[o.name]; if (!ws) return;
+        if (o.cell) ws[o.a] = Object.assign({}, o.cell); else delete ws[o.a];
+        fmapSet(o.name, o.a, o.cell && o.cell.f ? o.cell.f : null);
+      });
+      Object.keys(S.origRef).forEach(function (nm) { var o = S.origRef[nm], ws = S.wb.Sheets[nm]; if (!ws) return; if (o.has) ws['!ref'] = o.ref; else delete ws['!ref']; });
+      if (S.an && S.an.sheets) Object.keys(S.patched).forEach(function (nm) { var p = S.an.sheets[nm]; if (p && p.orig != null) p.xml = p.orig; });
+      S.edits = {}; S.patched = {}; S.undo = []; S.redo = []; S.orig = {}; S.origRef = {}; S.calcToasted = false;
+      syncDirty(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
+      S.ctx.toast('고친 내용을 모두 되돌렸어요.', 2400);
+    }, { danger: true });
+  }
+  function refreshEd() {
+    if (!S || !S.el || !S.el.ed) return;
+    S.el.ed.style.display = (S.editable && S.editing) ? '' : 'none';
+    S.el.undoB.disabled = !S.undo.length; S.el.redoB.disabled = !S.redo.length; S.el.allB.disabled = !Object.keys(S.edits).length;
+  }
+  function leaveEdit() {
+    if (!S || !S.editing) return;
+    if (!commit(true)) return;
+    S.el.inp.blur(); S.editing = false; refreshActions(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
+    S.ctx.toast(S.dirty ? '보기로 돌아왔어요. 고친 내용은 그대로 있어요.' : '보기로 돌아왔어요.', 2400);
+  }
+
+  // ---- 찾기(시트 전체 칸 값 검색 → 칸으로 이동. 바꾸기는 없다) ----
+  var FIND_MAX = 2000;
+  function findAll(q) {
+    var out = [], needle = q.toLowerCase(), XLSX = global.XLSX;
+    S.vis.forEach(function (si) {
+      var nm = S.names[si], ws = S.wb.Sheets[nm]; if (!ws) return;
+      var hits = [];
+      for (var k in ws) {
+        if (k.charAt(0) === '!' || !Object.prototype.hasOwnProperty.call(ws, k) || out.length + hits.length >= FIND_MAX) continue;
+        var cl = ws[k]; if (!cl) continue;
+        var t = display(cl); if (!t && cl.v != null) t = String(cl.v);
+        if (t && t.toLowerCase().indexOf(needle) >= 0) { var p = XLSX.utils.decode_cell(k); hits.push({ si: si, r: p.r, c: p.c }); }
+      }
+      hits.sort(function (x, y) { return x.r - y.r || x.c - y.c; });
+      out = out.concat(hits);
+    });
+    return out;
+  }
+  function toggleFind() {
+    var f = S.el.find;
+    if (f.style.display === 'none') { f.style.display = ''; S.el.fq.focus(); }
+    else { f.style.display = 'none'; S.finds = null; }
+  }
+  function runFind() {
+    var q = S.el.fq.value.trim();
+    if (!q) { S.finds = null; S.el.fcnt.textContent = ''; return; }
+    S.finds = { q: q, list: findAll(q), i: -1 };
+    if (!S.finds.list.length) { S.el.fcnt.textContent = '없음'; S.ctx.toast('「' + q + '」을 찾지 못했어요.', 2000); return; }
+    stepFind(1);
+  }
+  function stepFind(d) {
+    if (!S.finds || !S.finds.list.length) { runFind(); return; }
+    var n = S.finds.list.length; S.finds.i = (S.finds.i + d + n) % n;
+    var h = S.finds.list[S.finds.i];
+    S.el.fcnt.textContent = (S.finds.i + 1) + ' / ' + n + (n >= FIND_MAX ? '+' : '');
+    if (S.editing && S.el.inp.value !== S.barOrig) { if (!commit(true)) return; }
+    S.el.fq.blur();
+    jumpTo(S.names[h.si], h.r, h.c);
+  }
+
+  function saveBase() { return (S.ctx.name || 'sheet').replace(/\.[^.]+$/, ''); }
   function saveCopyNow() {
-    var ctx = S.ctx, XLSX = global.XLSX, base = (ctx.name || 'sheet').replace(/\.[^.]+$/, '');
+    var ctx = S.ctx, XLSX = global.XLSX, base = saveBase();
     try {
       if (S.ext === 'csv') {
         var csv = XLSX.utils.sheet_to_csv(S.wb.Sheets[S.names[0]]);
-        ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv');
+        Promise.resolve(ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv')).then(function (ok) {
+          if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+          S.dirty = false; ctx.setDirty(false); refreshActions();
+          ctx.toast('사본으로 저장했어요. 원래 파일은 그대로예요.', 3000);
+        });
+        return;
       } else {
-        ctx.busy('새 파일 만드는 중…');
+        ctx.busy('사본 만드는 중…');
         global.SOXlsxPatch.finalize(S.zip, S.an, Object.keys(S.patched)).then(function () {
           return S.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
         }).then(function (out) {
           ctx.busy(null);
           if (!S) return;
-          ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx');
-          S.dirty = false; ctx.setDirty(false); refreshActions();
-          ctx.toast('새 파일로 저장했어요. 원래 파일은 그대로예요.', 3000);
+          return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx')).then(function (ok) {
+            if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+            S.dirty = false; ctx.setDirty(false); refreshActions();
+            ctx.toast('사본으로 저장했어요. 원래 파일은 그대로예요.', 3000);
+          });
         }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); });
         return;
       }
-      S.dirty = false; ctx.setDirty(false); refreshActions();
-      ctx.toast('새 파일로 저장했어요. 원래 파일은 그대로예요.', 3000);
     } catch (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); }
   }
   function askSave() {
-    if (!S.editable || !S.editing || !S.dirty) return;
+    if (!S.editable || !S.dirty) return;
+    if (S.editing && !commit(true)) return;
+    var base = saveBase();
     var msg = S.ext === 'csv'
-      ? '고친 값을 새 CSV 파일(원래이름_수정.csv)로 저장해요. 원래 파일은 그대로예요.'
-      : '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(원래이름_수정.xlsx)로 저장해요. 글꼴·색·차트·그림은 그대로예요. ' +
-        '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요. 원래 파일은 그대로예요.';
-    S.ctx.confirmCopy('새 파일로 저장할까요?', msg, '저장하기', saveCopyNow);
+      ? '고친 값을 새 CSV 파일(' + base + '_수정.csv)로 저장해요. 원래 파일은 그대로예요.'
+      : '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + base + '_수정.xlsx)로 저장해요. 글꼴·색·차트·그림은 그대로예요. ' +
+        (anyAffected() ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있어요. ' : '') +
+        '원래 파일은 그대로예요.';
+    S.ctx.confirmCopy('사본으로 저장할까요?', msg, '사본 저장', saveCopyNow);
   }
   function startEdit() {
     if (!S || !S.editable) return;
-    S.editing = true; refreshActions(); select(S.sel.r, S.sel.c);
+    S.editing = true; refreshActions(); select(S.sel.r, S.sel.c); refreshEd();
     S.ctx.toast('고치기를 켰어요. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르세요.', 3600);
   }
   function refreshActions() {
     var list = [];
-    if (S.editable && !S.editing) list.push({ label: '고치기', onClick: startEdit });
-    else if (S.editable) list.push({ label: '저장', primary: S.dirty, disabled: !S.dirty, onClick: askSave });
+    if (S.editable && !S.editing) {
+      list.push({ label: '고치기', onClick: startEdit });
+      if (S.dirty) list.push({ label: '사본 저장', primary: true, onClick: askSave });
+    } else if (S.editable) list.push({ label: '사본 저장', primary: S.dirty, disabled: !S.dirty, onClick: askSave });
     else list.push({ label: '보기 전용', disabled: true, onClick: function () {} });
     S.ctx.setActions(list);
+  }
+
+  // ---- 임시 보관(snapshot) · 되살리기(restore) ----
+  function snapshot() {
+    if (!S || !S.editable) return null;
+    var out = [];
+    Object.keys(S.edits).forEach(function (k) {
+      var e = S.edits[k], rs = e.res, o = { s: e.name, a: addr(e.r, e.c) };
+      if (rs.empty) o.k = 'e';
+      else if (rs.formula != null) { o.k = 'f'; o.f = rs.formula; }
+      else { o.k = rs.cell.t; o.v = rs.cell.v; if (rs.cell.z) o.z = rs.cell.z; }
+      out.push(o);
+    });
+    return out.length ? { v: 1, ext: S.ext, names: S.names.slice(), edits: out } : null;
+  }
+  function restore(data) {
+    var rep = { applied: 0, skipped: 0 };
+    if (!S || !S.editable || !data || !Array.isArray(data.edits)) return rep;
+    if (Array.isArray(data.names) && (data.names.length !== S.names.length || data.names.some(function (n, i) { return n !== S.names[i]; }))) {   // 시트 구성(수·이름)이 달라졌으면 적용하지 않는다
+      rep.skipped = data.edits.length; S.ctx.toast('문서의 시트 구성이 달라져 이어서 고치던 내용을 되살리지 않았어요.', 4200); return rep;
+    }
+    var XLSX = global.XLSX;
+    data.edits.forEach(function (e) {
+      try {
+        var si = e && typeof e.s === 'string' ? S.names.indexOf(e.s) : -1, p = e && typeof e.a === 'string' && /^[A-Z]{1,3}[0-9]{1,7}$/.test(e.a) ? XLSX.utils.decode_cell(e.a) : null;
+        if (si < 0 || !p || p.r >= MAX_R || p.c >= MAX_C) { rep.skipped++; return; }
+        var res;
+        if (e.k === 'e') res = { empty: true };
+        else if (e.k === 'f' && typeof e.f === 'string' && S.mode === 'patch') res = { formula: e.f };
+        else if (e.k === 'n' && typeof e.v === 'number' && isFinite(e.v)) { res = { cell: { t: 'n', v: e.v } }; if (typeof e.z === 'string') res.cell.z = e.z; }
+        else if (e.k === 's' && typeof e.v === 'string') res = { cell: { t: 's', v: e.v } };
+        else if (e.k === 'b' && typeof e.v === 'boolean') res = { cell: { t: 'b', v: e.v } };
+        else { rep.skipped++; return; }
+        var ap = applyRes(e.s, p.r, p.c, res);
+        if (ap.err) rep.skipped++; else rep.applied++;
+      } catch (x) { rep.skipped++; }
+    });
+    if (rep.applied) {
+      S.editing = true; syncDirty(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
+      S.ctx.toast('이어서 고치던 ' + rep.applied + '칸을 되살렸어요.' + (rep.skipped ? ' (' + rep.skipped + '칸은 맞는 칸이 없어 건너뛰었어요)' : ''), 4200);
+    } else if (rep.skipped) S.ctx.toast('이어서 고치던 내용을 되살리지 못했어요.', 3200);
+    return rep;
   }
 
   // 처음 열 때: 좁은 화면은 5열쯤, 펼친 화면(넓음)은 10열쯤이 한눈에 보이게 배율을 맞춘다(키우지는 않는다)
@@ -484,6 +696,10 @@
     var root = document.createElement('div'); root.className = 'sx-root';
     var note = S.noteText ? '<div class="sx-note">' + esc(S.noteText) + '</div>' : '';
     root.innerHTML = note +
+      '<div class="sx-edbar" style="display:none"><button type="button" class="sx-eb sx-undo" aria-label="되돌리기">↶</button><button type="button" class="sx-eb sx-redo" aria-label="다시하기">↷</button>' +
+        '<button type="button" class="sx-eb sx-eall">모두 되돌리기</button><span class="sx-edsp"></span><button type="button" class="sx-eb sx-eview">보기로</button></div>' +
+      '<div class="sx-find" style="display:none"><input class="sx-fq" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="칸 값 찾기" aria-label="찾을 말"><span class="sx-fcnt"></span>' +
+        '<button type="button" class="sx-eb sx-fprev" aria-label="이전">▲</button><button type="button" class="sx-eb sx-fnext" aria-label="다음">▼</button><button type="button" class="sx-eb sx-fx" aria-label="찾기 닫기">✕</button></div>' +
       '<div class="sx-fbar"><div class="sx-addr">A1</div><input class="sx-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="칸 내용"><button type="button" class="sx-exp" aria-label="칸 내용 크게 보기">⤢</button><button type="button" class="sx-ok" aria-label="입력 확정">✓</button></div>' +
       '<div class="sx-gridwrap">' +
         '<div class="sx-corner"></div><div class="sx-hcol"></div><div class="sx-hrow"></div>' +
@@ -492,13 +708,14 @@
       '</div>' +
       '<div class="sx-bottom"><div class="sx-tools sx-tabrow"><div class="sx-tabs"></div></div>' +
       '<div class="sx-tools sx-toolrow"><button type="button" class="sx-chip sx-zoom" data-z="-" aria-label="축소">−</button><span class="sx-pct">100%</span><button type="button" class="sx-chip sx-zoom" data-z="+" aria-label="확대">＋</button>' +
-        '<button type="button" class="sx-chip" data-f="fit">화면에 맞춤</button>' +
+        '<button type="button" class="sx-chip" data-f="find">찾기</button><button type="button" class="sx-chip" data-f="fit">화면에 맞춤</button>' +
         '<button type="button" class="sx-chip' + (S.showHdr ? ' on' : '') + '" data-f="hdr" aria-pressed="' + S.showHdr + '">머리글 표시</button>' +
         '<button type="button" class="sx-chip" data-f="row">첫 행 고정</button><button type="button" class="sx-chip" data-f="col">첫 열 고정</button></div></div>';
     ctx.body.appendChild(root);
     var q = function (s) { return root.querySelector(s); };
     S.el = { root: root, addr: q('.sx-addr'), inp: q('.sx-input'), ok: q('.sx-ok'), wrap: q('.sx-gridwrap'), corner: q('.sx-corner'), hcol: q('.sx-hcol'), hrow: q('.sx-hrow'),
-      sc: q('.sx-scroll'), spacer: q('.sx-spacer'), layer: q('.sx-layer'), fr: q('.sx-fr'), fc: q('.sx-fc'), fx: q('.sx-fx'), tabs: q('.sx-tabs'), pct: q('.sx-pct') };
+      sc: q('.sx-scroll'), spacer: q('.sx-spacer'), layer: q('.sx-layer'), fr: q('.sx-fr'), fc: q('.sx-fc'), fx: q('.sx-fx'), tabs: q('.sx-tabs'), pct: q('.sx-pct'),
+      ed: q('.sx-edbar'), undoB: q('.sx-undo'), redoB: q('.sx-redo'), allB: q('.sx-eall'), viewB: q('.sx-eview'), find: q('.sx-find'), fq: q('.sx-fq'), fcnt: q('.sx-fcnt') };
     S.el.tabs.innerHTML = S.vis.map(function (i) { return '<button type="button" class="sx-tab" data-i="' + i + '">' + esc(S.names[i]) + '</button>'; }).join('');
     S.el.tabs.addEventListener('click', function (e) { var b = e.target.closest('.sx-tab'); if (b) showSheet(+b.getAttribute('data-i')); });
     root.addEventListener('click', function (e) {
@@ -507,6 +724,7 @@
       else if (f) {
         var k = f.getAttribute('data-f');
         if (k === 'fit') setScale(fitScale());
+        else if (k === 'find') toggleFind();
         else if (k === 'hdr') {
           S.showHdr = !S.showHdr; S.hw = S.showHdr ? HDR_W : 0; S.hh = S.showHdr ? HDR_H : 0;
           f.classList.toggle('on', S.showHdr); f.setAttribute('aria-pressed', S.showHdr);
@@ -518,9 +736,14 @@
     S.el.sc.addEventListener('scroll', schedule, { passive: true });
     S.el.wrap.addEventListener('click', function (e) { if (e.target.closest('.sx-fz') || e.target.closest('.sx-scroll')) onTap(e); });
     S.el.ok.onclick = function () { commit(); };
+    S.el.undoB.onclick = undoEdit; S.el.redoB.onclick = redoEdit; S.el.allB.onclick = resetAll; S.el.viewB.onclick = leaveEdit;
+    q('.sx-fprev').onclick = function () { stepFind(-1); }; q('.sx-fnext').onclick = function () { stepFind(1); };
+    q('.sx-fx').onclick = function () { toggleFind(); };
+    S.el.fq.addEventListener('keydown', function (e) { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter') { e.preventDefault(); if (S.finds && S.finds.q === S.el.fq.value.trim()) stepFind(e.shiftKey ? -1 : 1); else runFind(); } });
+    S.el.fq.addEventListener('input', function () { S.finds = null; S.el.fcnt.textContent = ''; });
     S.el.exp = q('.sx-exp'); S.el.exp.onclick = openDetail;
     // 단추를 눌러도 입력줄의 키보드가 내려가지 않게(한글을 치다가 끊기지 않게)
-    [S.el.ok, S.el.exp].forEach(function (b) { b.addEventListener('pointerdown', function (e) { if (document.activeElement === S.el.inp) e.preventDefault(); }); });
+    [S.el.ok, S.el.exp, S.el.undoB, S.el.redoB, S.el.allB, S.el.viewB].forEach(function (b) { b.addEventListener('pointerdown', function (e) { if (document.activeElement === S.el.inp) e.preventDefault(); }); });
     S.el.inp.addEventListener('keydown', function (e) {
       if (e.isComposing || e.keyCode === 229) return;       // 한글 글자를 만드는 중의 Enter 는 글자 확정용이다
       if (e.key === 'Enter') { e.preventDefault(); commit(); S.el.inp.blur(); }
@@ -558,15 +781,17 @@
           }
           S = { ctx: ctx, ext: ctx.ext, wb: wb, names: wb.SheetNames, vis: visibleSheets(wb), scale: 1, frz: { row: false, col: false },
             showHdr: hdrPref(), hw: 0, hh: 0, lp: false, lk: null, edits: {}, dirty: false, editing: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason, mode: mode,
-            zip: pk && pk.zip, an: pk && pk.an, patched: {} };
+            zip: pk && pk.zip, an: pk && pk.an, patched: {}, undo: [], redo: [], orig: {}, origRef: {}, fmap: null, finds: null };
           S.hw = S.showHdr ? HDR_W : 0; S.hh = S.showHdr ? HDR_H : 0;
           build(ctx);
           ctx.onBack(function () { if (S && S.el && S.el.det) { closeDetail(); return true; } return false; });
           refreshActions();
-          showSheet(S.vis[0]);
+          showSheet(S.vis[0]); refreshEd();
         });
       });
     },
+    snapshot: snapshot,
+    restore: restore,
     close: function () {
       if (!S) return;
       try { if (S.ro) S.ro.disconnect(); } catch (e) {}

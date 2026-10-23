@@ -8,6 +8,11 @@
   var MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
   function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function hash(t) {                                  // 문단 원문 지문(복구할 때 같은 문서인지 확인용)
+    var h = 0x811c9dc5; t = String(t == null ? '' : t);
+    for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16);
+  }
   function anyEdit(s) { return s.edits.some(function (e) { return Object.keys(e).length > 0; }); }
 
   // 그림판 다시 그리기(원본 또는 고친 파일). 슬라이드 목록을 s 에 새로 채운다
@@ -72,6 +77,7 @@
         playIn();
         var acts = [
           { label: s.mode === 'list' ? '한 장' : '목록', onClick: function () { s.mode = s.mode === 'list' ? 'one' : 'list'; s.scale = 1; render(); } },
+          { label: '찾기', onClick: openFind },
           { label: '−', onClick: function () { s.scale = Math.max(0.5, s.scale * 0.8); render(); } },
           { label: '＋', onClick: function () { s.scale = Math.min(3, s.scale * 1.25); render(); } },
           { label: '고치기', primary: !anyEdit(s), onClick: enterEdit }
@@ -244,18 +250,105 @@
       function saveCopy() {
         if (!s.info || !anyEdit(s)) { ctx.toast('아직 고친 곳이 없어요.'); return; }
         var name = (ctx.name || 'slides.pptx').replace(/\.pptx$/i, '') + '_수정.pptx';
-        ctx.confirmCopy('사본으로 저장', '고친 글자를 담아 「' + name + '」로 저장합니다.\n글꼴·그림·도형·애니메이션은 그대로 두고 글자만 바꿉니다. 원본은 바꾸지 않습니다.', '저장하기', function () {
+        ctx.confirmCopy('사본으로 저장', '고친 글자를 담아 「' + name + '」로 저장합니다.\n글꼴·그림·도형·애니메이션은 그대로 두고 글자만 바꿉니다. 원본은 바꾸지 않습니다.', '사본 저장', function () {
           ctx.busy('사본을 만드는 중…');
           window.SOPptxEdit.build(s.info, s.edits).then(function (r) {
             return window.SOPptxEdit.verify(s.orig, r.bytes, r.changed, s.JSZip).then(function (v) {
               if (!v.ok) throw new Error('검사에서 걸렸어요 (' + v.why + ') — 저장하지 않았습니다');
               ctx.busy(null);
-              ctx.saveCopy(new Blob([r.bytes], { type: MIME }), name);
-              ctx.toast('사본을 만들었어요 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
+              return Promise.resolve(ctx.saveCopy(new Blob([r.bytes], { type: MIME }), name)).then(function (ok) {
+                if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내
+                ctx.toast('사본을 만들었어요 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
+              });
             });
           }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000); });
         });
       }
+
+      // ---------------- 찾기: 슬라이드에 그려진 글 안에서 검색 → 누르면 그 장으로 가서 잠깐 표시(바꾸기는 없음) ----------------
+      var findBox = null;
+      function closeFind() { if (findBox && findBox.parentNode) findBox.parentNode.removeChild(findBox); findBox = null; }
+      cleanup.push(closeFind);
+      function openFind() {
+        if (findBox) { closeFind(); return; }
+        findBox = document.createElement('div'); findBox.className = 'so-pptx-find';
+        findBox.innerHTML = '<div class="so-pptx-find-h"><b>슬라이드에서 찾기</b><button type="button" class="so-pptx-find-x" aria-label="닫기">×</button></div>' +
+          '<input type="search" class="so-pptx-fi" placeholder="찾을 글" enterkeyhint="search" autocomplete="off" spellcheck="false"><div class="so-pptx-fr"></div>';
+        var inp = findBox.querySelector('input'), out = findBox.querySelector('.so-pptx-fr'), hits = [], comp = false;
+        function run() {
+          var q = inp.value.replace(/\s+/g, ' ').trim().toLowerCase(); hits = []; out.innerHTML = '';
+          if (!q) return;
+          slides().forEach(function (sl, k) {
+            var w = document.createTreeWalker(sl, NodeFilter.SHOW_TEXT, null), n;
+            while ((n = w.nextNode()) && hits.length < 40) {
+              var t = n.nodeValue.replace(/\s+/g, ' ').trim(), at = t.toLowerCase().indexOf(q);
+              if (at >= 0 && n.parentElement) hits.push({ k: k, el: n.parentElement, t: t, at: at });
+            }
+          });
+          if (!hits.length) { out.innerHTML = '<div class="so-pptx-fe">찾는 글이 없어요.</div>'; return; }
+          hits.forEach(function (h, i) {
+            var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-hit', i);
+            var a = Math.max(0, h.at - 10);
+            b.textContent = (h.k + 1) + '장 · ' + (a > 0 ? '…' : '') + h.t.slice(a, a + 40);
+            out.appendChild(b);
+          });
+        }
+        inp.addEventListener('compositionstart', function () { comp = true; });
+        inp.addEventListener('compositionend', function () { comp = false; run(); });
+        inp.addEventListener('input', function () { if (!comp) run(); });
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+        findBox.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.so-pptx-find-x')) { closeFind(); return; }
+          var b = e.target.closest ? e.target.closest('button[data-hit]') : null; if (!b) return;
+          var h = hits[Number(b.getAttribute('data-hit'))]; if (!h) return;
+          closeFind();
+          s.mode = 'one'; s.idx = h.k; s.scale = 1; s.dir = 0; render();
+          h.el.classList.add('so-pptx-hit'); setTimeout(function () { h.el.classList.remove('so-pptx-hit'); }, 2600);
+        });
+        hudb.appendChild(findBox);
+        ctx.onBack(function () { if (findBox) { closeFind(); return true; } return false; });
+        setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
+      }
+
+      // ---------------- 복구 규약: 고친 글 목록을 돌려주고(snapshot), 같은 문서를 다시 열면 구조를 확인한 뒤 되살린다(restore) ----------------
+      function deckSig() {
+        return hash(s.info.slides.map(function (sl) { return sl.paras.map(function (p) { return p.ord + ':' + hash(p.text); }).join(','); }).join('|'));
+      }
+      s.api = {
+        snapshot: function () {
+          if (!s.info || !anyEdit(s)) return null;
+          var list = [];
+          s.edits.forEach(function (ed, i) {
+            Object.keys(ed).forEach(function (o) {
+              var p = s.info.slides[i].paras.filter(function (x) { return String(x.ord) === o; })[0];
+              if (p) list.push({ s: i, o: Number(o), h: hash(p.text), t: ed[o] });
+            });
+          });
+          return list.length ? { v: 1, fmt: 'pptx', n: s.info.slides.length, sig: deckSig(), edits: list } : null;
+        },
+        restore: function (data) {
+          if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
+          function fail() { ctx.toast('저장해 둔 고친 내용이 이 파일과 맞지 않아 되살리지 않았어요.', 4600); return false; }
+          if (!data || data.fmt !== 'pptx' || !data.edits || !data.edits.length) return Promise.resolve(false);
+          return loadEditor().then(function () {
+            if (data.n !== s.info.slides.length || data.sig !== deckSig()) return fail();
+            var i, e, p;
+            for (i = 0; i < data.edits.length; i++) {     // 먼저 전부 확인하고, 하나라도 어긋나면 하나도 적용하지 않는다
+              e = data.edits[i];
+              p = s.info.slides[e.s] && s.info.slides[e.s].paras.filter(function (x) { return x.ord === e.o; })[0];
+              if (!p || p.locked || hash(p.text) !== e.h || typeof e.t !== 'string') return fail();
+            }
+            data.edits.forEach(function (x) {
+              var p0 = s.info.slides[x.s].paras.filter(function (y) { return y.ord === x.o; })[0];
+              if (x.t === p0.text) delete s.edits[x.s][x.o]; else s.edits[x.s][x.o] = x.t;
+            });
+            ctx.setDirty(anyEdit(s));
+            s.mode = 'one'; leaveEdit();
+            ctx.toast('이어서 고칠 수 있게 고친 글 ' + data.edits.length + '곳을 되살렸어요.', 3600);
+            return true;
+          }, function () { return fail(); });
+        }
+      };
 
       showTip(slides().length + '장 · 「고치기」로 글자를 고칠 수 있어요 · 애니메이션·차트는 화면에 표시되지 않아요');
       render();
@@ -269,6 +362,8 @@
       { name: 'JSZip · lodash · uuid', license: 'MIT', note: 'pptx-preview 와 함께 묶음' }
     ],
     canOpen: function (ext) { return ext === 'pptx'; },
+    snapshot: function () { return state && state.api ? state.api.snapshot() : null; },
+    restore: function (data) { return state && state.api ? state.api.restore(data) : Promise.resolve(false); },
     open: function (ctx) {
       ctx.loadCss('js/smartoffice/pptx/so-pptx.css');
       return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () {

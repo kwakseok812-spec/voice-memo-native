@@ -14,6 +14,8 @@
  *   · 머리줄 [고치기]를 눌러야 편집이 켜지고, 아래에 폰용 간단 도구줄(실행 취소·굵게·기울임·밑줄·글자 크기·정렬·확대)이 나온다.
  *   · PC용 메뉴·도구줄·상태줄은 숨기고(요소 id 로 CSS 숨김), 쪽 위치는 「3 / 12」 알약으로 보여 준다(누르면 쪽 이동).
  *   · 두 손가락 벌리기·오므리기 = 확대·축소. 키보드가 올라오면 visualViewport 로 화면 높이를 맞춘다.
+ *   · 고친 내용 복구: 공통 틀이 snapshot()으로 고친 문서 전체를 바이트로 받아 두고, 같은 파일을 다시 열면 restore()로 편집 상태를 되살린다.
+ *   · 도구줄은 자주 쓰는 것 한 줄 + 「⋯」 더보기 줄(정렬·확대·찾기). 넓은 화면(펼침)은 한 줄에 모두.
  *   · 저장은 언제나 「사본 저장」(원본은 건드리지 않는다). 저장 전에 한 번 확인(공유함 업로드 안내) → 사본 이름에 무작위 꼬리표.
  * ==========================================================================*/
 (function (global) {
@@ -27,7 +29,6 @@
 
   var st = null;      // { editor, iframe, editing, wrap, frame, tb, pill, timers, pages, ... }
 
-  function rand8() { var a = new Uint8Array(4); try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < 4; i++) a[i] = Math.floor(Math.random() * 256); } return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
   function baseOf(name) { return String(name || '문서').replace(/\.[^.]+$/, ''); }
   function readBytes(file) {
     return new Promise(function (res, rej) {
@@ -73,7 +74,9 @@
     var bottomEdge = vv ? (vv.height + vv.offsetTop) : global.innerHeight;   // 키보드가 올라오면 보이는 높이만큼만 쓴다
     var h = Math.max(160, Math.round(bottomEdge - b.top));
     st.wrap.style.top = Math.round(b.top) + 'px'; st.wrap.style.height = h + 'px';
-    var tb = st.editing ? TB_H : 0;
+    arrangeExtra(global.innerWidth >= 640);
+    var rows = st.editing ? (1 + ((!st.wide && st.moreOpen) ? 1 : 0)) : 0, tb = rows * TB_H;
+    st.wrap.classList.toggle('more', !!(st.editing && !st.wide && st.moreOpen));
     st.frame.style.height = (h - tb) + 'px';
     st.pill.style.bottom = (tb + 12) + 'px';
     kickResize();
@@ -86,25 +89,42 @@
     ['mousedown', 'mouseup', 'click'].forEach(function (t) { e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: d.defaultView })); });
     return true;
   }
-  var TB_DEFS = [
-    { t: '↶', sel: '[data-cmd="edit:undo"]', label: '실행 취소' }, { t: '↷', sel: '[data-cmd="edit:redo"]', label: '다시 실행' }, 'sep',
-    { t: 'B', sel: '#btn-bold', label: '굵게', state: true }, { t: 'I', cls: 'it', sel: '#btn-italic', label: '기울임', state: true }, { t: 'U', cls: 'ul', sel: '#btn-underline', label: '밑줄', state: true }, 'sep',
-    { t: '가－', sel: '[data-cmd="format:font-size-decrease"]', label: '글자 작게' }, { t: '가＋', sel: '[data-cmd="format:font-size-increase"]', label: '글자 크게' }, 'sep',
-    { t: '좌', sel: '[data-cmd="format:align-left"]', ss: '#btn-align-left', label: '왼쪽 정렬', state: true }, { t: '중', sel: '[data-cmd="format:align-center"]', ss: '#btn-align-center', label: '가운데 정렬', state: true },
-    { t: '우', sel: '[data-cmd="format:align-right"]', ss: '#btn-align-right', label: '오른쪽 정렬', state: true }, { t: '양', sel: '[data-cmd="format:align-justify"]', ss: '#btn-align-justify', label: '양쪽 정렬', state: true }, 'sep',
-    { t: '－', sel: '#sb-zoom-out', label: '축소' }, { t: '＋', sel: '#sb-zoom-in', label: '확대' }, { t: '폭', sel: '#sb-zoom-fit-width', label: '폭에 맞추기' }
+  var TB_MAIN = [
+    { t: '↶', sel: '[data-cmd="edit:undo"]', label: '실행 취소' }, { t: '↷', sel: '[data-cmd="edit:redo"]', label: '다시 실행' },
+    { t: 'B', sel: '#btn-bold', label: '굵게', state: true }, { t: 'I', cls: 'it', sel: '#btn-italic', label: '기울임', state: true }, { t: 'U', cls: 'ul', sel: '#btn-underline', label: '밑줄', state: true },
+    { t: '가－', sel: '[data-cmd="format:font-size-decrease"]', label: '글자 작게' }, { t: '가＋', sel: '[data-cmd="format:font-size-increase"]', label: '글자 크게' }
   ];
+  var TB_EXTRA = [
+    { t: '좌', sel: '[data-cmd="format:align-left"]', ss: '#btn-align-left', label: '왼쪽 정렬', state: true }, { t: '중', sel: '[data-cmd="format:align-center"]', ss: '#btn-align-center', label: '가운데 정렬', state: true },
+    { t: '우', sel: '[data-cmd="format:align-right"]', ss: '#btn-align-right', label: '오른쪽 정렬', state: true }, { t: '양', sel: '[data-cmd="format:align-justify"]', ss: '#btn-align-justify', label: '양쪽 정렬', state: true },
+    { t: '－', sel: '#sb-zoom-out', label: '축소' }, { t: '＋', sel: '#sb-zoom-in', label: '확대' }, { t: '폭', sel: '#sb-zoom-fit-width', label: '폭에 맞추기' },
+    { t: '찾기', sel: '[data-cmd="edit:find"]', label: '찾기' }
+  ];
+  function mkBtn(d0, host) {
+    var b = el('button', d0.cls || '', d0.t); b.type = 'button'; b.setAttribute('aria-label', d0.label); b.title = d0.label;
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); });       // 글자 칸의 포커스(키보드)를 빼앗지 않는다
+    b.addEventListener('click', function () { if (!clickIn(d0.sel)) st.ctx.toast('지금은 쓸 수 없어요.', 1800); else if (d0.state || /edit:undo|edit:redo|font-size/.test(d0.sel)) markDirty(); });
+    host.appendChild(b); if (d0.state) st.tbBtns.push({ b: b, sel: d0.ss || d0.sel });
+    return b;
+  }
   function buildToolbar() {
     var tb = el('div', 'so-hwp-tb'); tb.setAttribute('role', 'toolbar'); tb.setAttribute('aria-label', '한글 고치기 도구');
-    st.tbBtns = [];
-    TB_DEFS.forEach(function (d0) {
-      if (d0 === 'sep') { tb.appendChild(el('span', 'sep')); return; }
-      var b = el('button', d0.cls || '', d0.t); b.type = 'button'; b.setAttribute('aria-label', d0.label); b.title = d0.label;
-      b.addEventListener('pointerdown', function (e) { e.preventDefault(); });       // 글자 칸의 포커스(키보드)를 빼앗지 않는다
-      b.addEventListener('click', function () { if (!clickIn(d0.sel)) st.ctx.toast('지금은 쓸 수 없어요.', 1800); });
-      tb.appendChild(b); if (d0.state) st.tbBtns.push({ b: b, sel: d0.ss || d0.sel });
-    });
+    var tb2 = el('div', 'so-hwp-tb so-hwp-tb2'); tb2.setAttribute('role', 'toolbar'); tb2.setAttribute('aria-label', '한글 고치기 도구 더보기');
+    st.tbBtns = []; st.tb2 = tb2; st.extraBtns = [];
+    TB_MAIN.forEach(function (d0) { mkBtn(d0, tb); });
+    st.moreBtn = el('button', 'more', '⋯'); st.moreBtn.type = 'button'; st.moreBtn.setAttribute('aria-label', '더보기'); st.moreBtn.setAttribute('aria-expanded', 'false');
+    st.moreBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    st.moreBtn.addEventListener('click', function () { st.moreOpen = !st.moreOpen; st.moreBtn.classList.toggle('on', st.moreOpen); st.moreBtn.setAttribute('aria-expanded', String(st.moreOpen)); layout(); });
+    tb.appendChild(st.moreBtn);
+    TB_EXTRA.forEach(function (d0) { st.extraBtns.push(mkBtn(d0, tb2)); });
     return tb;
+  }
+  // 좁은 화면(폰)은 정렬·확대·찾기를 「더보기」 줄로, 넓은 화면(펼침)은 한 줄에 모두
+  function arrangeExtra(wide) {
+    if (st.wide === wide) return; st.wide = wide;
+    st.extraBtns.forEach(function (b) { (wide ? st.tb : st.tb2).appendChild(b); });
+    st.moreBtn.style.display = wide ? 'none' : '';
+    if (wide) st.moreOpen = false;
   }
   function syncState() {
     var d = doc(); if (!d || !st) return;
@@ -149,6 +169,18 @@
     d.addEventListener('touchend', function (e) { if (e.touches.length < 2) pz = null; }, true);
   }
 
+  // 고친 내용이 있는지: 편집 화면의 변경 알림(onDocumentChanged)은 쓸 수 없는 경우가 있어, 편집 중 글자 입력·지우기·붙이기·도구줄 조작을 직접 본다
+  function markDirty() { if (!st || !st.editing) return; st.dirty = true; try { st.ctx.setDirty(true); } catch (e) {} }
+  var NAV_KEYS = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+  function bindDirty(d) {
+    ['beforeinput', 'compositionend', 'paste', 'cut', 'drop'].forEach(function (n) { d.addEventListener(n, function (e) { if (!e.defaultPrevented) markDirty(); }, false); });
+    d.addEventListener('keydown', function (e) {
+      if (!st || !st.editing || NAV_KEYS.indexOf(e.key) >= 0) return;
+      if ((e.ctrlKey || e.metaKey) && ['z', 'y', 'v', 'x', 'b', 'i', 'u'].indexOf(String(e.key).toLowerCase()) < 0) return;
+      markDirty();
+    }, false);
+  }
+
   function setActions(ctx) {
     if (!st) return;
     if (!st.editing) ctx.setActions([{ label: '고치기', primary: true, onClick: function () { startEdit(ctx); } }]);
@@ -169,27 +201,61 @@
     if (st.dirty) ctx.confirm('고친 내용이 저장되지 않았어요', '보기로 돌아가도 고친 내용은 화면에 남지만, 닫으면 사라집니다.', '보기로', go); else go();
   }
 
+  // 고친 문서 전체를 엔진의 내보내기로 바이트로 뽑는다(hwp 는 다시 읽어 쪽 수가 같은지 점검한 뒤)
+  function exportBytes() {
+    var ext = (st.ctx.ext === 'hwpx') ? 'hwpx' : 'hwp', ed = st.editor;
+    if (ext === 'hwpx') return ed.exportHwpx();
+    return ed.exportHwpVerify().then(function (v) {
+      if (!v || !v.recovered || v.pageCountBefore !== v.pageCountAfter) throw new Error('저장 전 점검에서 문서를 다시 읽지 못해 저장을 멈췄습니다.');
+      return ed.exportHwp();
+    });
+  }
+  // ---- 고친 내용 복구(공통 틀이 고치는 동안 15초마다·앱이 내려갈 때 snapshot(), 같은 파일을 다시 열면 restore()) ----
+  var SNAP_MAX_FILE = 30 * 1024 * 1024, SNAP_SLOW_MS = 4000;
+  function snapshot() {
+    var s = st;
+    if (!s || !s.editor || !s.dirty || s.exporting || s.composing || s.snapOff) return Promise.resolve(null);     // 글자 조합 중에는 건드리지 않는다
+    if (s.ctx.file && s.ctx.file.size > SNAP_MAX_FILE) { s.snapOff = true; s.ctx.toast('문서가 커서 고친 내용 자동 보관은 건너뜁니다. 중간에 「사본 저장」을 눌러 주세요.', 5200); return Promise.resolve(null); }
+    s.exporting = true; var t0 = Date.now();
+    return exportBytes().then(function (bytes) {
+      s.exporting = false;
+      if (Date.now() - t0 > SNAP_SLOW_MS && !s.snapOff) { s.snapOff = true; s.ctx.toast('문서가 커서 화면이 멈출 수 있어 고친 내용 자동 보관을 멈춥니다. 중간에 「사본 저장」을 눌러 주세요.', 5200); }
+      if (!bytes || bytes.length < 512) return null;
+      return { blob: new Blob([bytes], { type: 'application/octet-stream' }), name: s.ctx.name, ext: s.ctx.ext };
+    }, function () { s.exporting = false; return null; });
+  }
+  function restore(data) {
+    var s = st; if (!s || !s.editor) return Promise.resolve(false);
+    var b = data && (data.blob || data), p;
+    if (b instanceof Blob) p = readBytes(b); else if (b instanceof ArrayBuffer) p = Promise.resolve(new Uint8Array(b)); else p = Promise.resolve(b);
+    return p.then(function (bytes) {
+      if (!bytes || !bytes.length) throw new Error('보관된 내용이 비어 있습니다.');
+      s.ctx.busy('고치던 내용을 불러오는 중…');
+      return s.editor.loadFile(bytes, s.ctx.name, { skipUnsavedGuard: true });
+    }).then(function () {
+      if (st !== s) return false;
+      s.ctx.busy(null); s.dirty = true; s.ctx.setDirty(true); s.editing = true; applyMode(s.ctx);
+      s.ctx.toast('이전에 고치던 내용을 이어서 열었어요. 저장은 「사본 저장」으로 하세요.', 4600);
+      return true;
+    }).catch(function () { if (st === s) { s.ctx.busy(null); s.ctx.toast('고치던 내용을 불러오지 못해 원본을 열었어요.', 4600); } return false; });
+  }
+
   function saveCopy(ctx) {
     if (!st || !st.editor) return;
     var ext = (ctx.ext === 'hwpx') ? 'hwpx' : 'hwp';
-    var name = baseOf(ctx.name) + '_S-Office_' + rand8() + '.' + ext;
+    var name = baseOf(ctx.name) + '_수정.' + ext;      // 같은 이름 중복 처리는 공통 틀이 한다
     ctx.confirmCopy('사본을 저장할까요?',
       '고친 문서를 새 파일로 저장합니다.\n저장 이름: ' + name,
       '저장하기', function () {
         ctx.busy('사본을 만드는 중…');
-        var p;
-        if (ext === 'hwp') {
-          p = st.editor.exportHwpVerify().then(function (v) {
-            if (!v || !v.recovered || v.pageCountBefore !== v.pageCountAfter) throw new Error('저장 전 점검에서 문서를 다시 읽지 못해 저장을 멈췄습니다.');
-            return st.editor.exportHwp();
-          });
-        } else p = st.editor.exportHwpx();
-        p.then(function (bytes) {
+        exportBytes().then(function (bytes) {
           ctx.busy(null);
           if (!bytes || bytes.length < 512) throw new Error('저장할 내용이 비어 있습니다.');
-          ctx.saveCopy(new Blob([bytes], { type: ext === 'hwpx' ? 'application/haansofthwpx' : 'application/x-hwp' }), name);
-          ctx.setDirty(false); if (st) st.dirty = false;
-          try { st.editor.notifySaved(name); } catch (e) {}
+          return Promise.resolve(ctx.saveCopy(new Blob([bytes], { type: ext === 'hwpx' ? 'application/haansofthwpx' : 'application/x-hwp' }), name)).then(function (ok) {
+            if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 고침 해제
+            ctx.setDirty(false); if (st) st.dirty = false;
+            try { st.editor.notifySaved(name); } catch (e) {}
+          });
         }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — ' + ((e && e.message) || e), 6000); });
       });
   }
@@ -200,7 +266,7 @@
     ctx.body.style.overflow = 'hidden';
     var wrap = el('div', 'so-hwp-wrap'), frame = el('div', 'so-hwp-frame');
     wrap.appendChild(frame); st.wrap = wrap; st.frame = frame;
-    st.tb = buildToolbar(); wrap.appendChild(st.tb);
+    st.tb = buildToolbar(); wrap.appendChild(st.tb2); wrap.appendChild(st.tb);
     st.pill = buildPill(); wrap.appendChild(st.pill);
     ctx.body.appendChild(wrap);
     st.onVV = function () { layout(); };
@@ -228,10 +294,10 @@
       });
     }).then(function () {
       clearInterval(tick);
-      var d = doc(); if (d) { injectStudioCss(d); bindPinch(d); }
+      var d = doc(); if (d) { injectStudioCss(d); bindPinch(d); bindDirty(d); d.addEventListener('compositionstart', function () { if (st) st.composing = true; }, true); d.addEventListener('compositionend', function () { if (st) st.composing = false; }, true); }
       applyMode(ctx); ctx.busy(null);
       st.timers.push(setInterval(syncState, 400)); syncState();
-      try { if (st.editor.onDocumentChanged) st.editor.onDocumentChanged(function () { if (st && st.editing) { st.dirty = true; ctx.setDirty(true); } }); } catch (e) {}
+      try { if (st.editor.onDocumentChanged) st.editor.onDocumentChanged(function () { markDirty(); }); } catch (e) {}
     }, function (e) { clearInterval(tick); throw e; });
   }
   function close() {
@@ -254,6 +320,7 @@
       { name: 'Pretendard (고딕 대체) · Noto Serif KR (명조 대체) 일부 글자', license: 'SIL OFL 1.1', note: '폰에 없는 PC 글꼴의 대체 글꼴(이름을 바꾼 파생본 · 라이선스 vendor/so/hwp/studio/fonts/*-OFL.txt)' }
     ],
     canOpen: function () { return SO_HWP === 'on'; },
-    open: open, close: close
+    open: open, close: close, snapshot: snapshot, restore: restore,
+    _state: function () { return st; }                  // 점검용(시험에서 상태를 들여다본다)
   });
 })(window);

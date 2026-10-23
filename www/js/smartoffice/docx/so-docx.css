@@ -28,6 +28,11 @@ html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0
 .so-docx-nav button.on{background:linear-gradient(135deg,var(--p1,#2d6be6),var(--p2,#7c3aed));color:#fff;border-color:transparent}
 .so-docx-nav-h{display:block;width:100%;text-align:left;padding:0 12px;margin-bottom:6px;font-weight:600 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+.so-docx-find{width:min(340px,calc(100% - 16px))}
+.so-docx-fi{width:100%;box-sizing:border-box;min-height:48px;padding:0 12px;margin-bottom:8px;font-size:16px;font-family:inherit;border:1.5px solid var(--glass-b2,#bbb);border-radius:12px;background:var(--in-bg,#fff);color:var(--text,#111)}
+.so-docx-fe{font-size:13px;color:var(--dim,#666);padding:4px 4px 8px}
+.so-docx-box p.so-docx-hit{background:rgba(245,158,11,.35);outline:3px solid #f59e0b;outline-offset:2px}
+
 /* 고치기 표시 */
 .so-docx-editing section.docx>article p.so-docx-ok{outline:2px dashed rgba(40,110,230,.7);outline-offset:2px;background:rgba(40,110,230,.07);cursor:pointer}
 .so-docx-editing section.docx>article p.so-docx-ok:active{background:rgba(40,110,230,.22)}

@@ -23,6 +23,27 @@
     return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function norm(s) { return String(s || '').replace(/[\s​ ﻿]/g, ''); }
+  function hash(s) {                                  // 문단 원문 지문(복구할 때 같은 문서인지 확인용)
+    var h = 0x811c9dc5, t = String(s == null ? '' : s);
+    for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16);
+  }
+  var MIN_PX = 12;                                    // 폰에서 읽을 수 있는 가장 작은 본문 글자 크기(화면 px)
+  // 확대하지 않은 상태에서 본문 글자 크기(글자 수 가중 중앙값, px)를 잰다. 못 재면 0
+  function bodyFontPx(box) {
+    var w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, null), n, arr = [], seen = 0;
+    while ((n = w.nextNode()) && seen < 600) {
+      seen++;
+      var t = n.nodeValue.replace(/\s+/g, ''); if (t.length < 2 || !n.parentElement) continue;
+      var px = parseFloat(window.getComputedStyle(n.parentElement).fontSize); if (!(px > 0)) continue;
+      arr.push([px, t.length]);
+    }
+    if (!arr.length) return 0;
+    arr.sort(function (a, b) { return a[0] - b[0]; });
+    var tot = arr.reduce(function (a, x) { return a + x[1]; }, 0), acc = 0;
+    for (var i = 0; i < arr.length; i++) { acc += arr[i][1]; if (acc >= tot / 2) return arr[i][0]; }
+    return arr[arr.length - 1][0];
+  }
 
   // document.xml 에서 맨 바깥 <w:p> 의 위치 목록 {s,e,anc}. (텍스트상자 안 문단은 바깥 문단 안에 있으므로 따로 세지 않는다)
   function scanParagraphs(xml) {
@@ -246,6 +267,11 @@
   var S = null;   // 고치기 상태
   var hud = null, pill = null, noteEl = null, navEl = null, pageEls = [], curPage = 1;
 
+  // 처음 열 때 배율: 글자가 MIN_PX 이상으로 보이는 배율(쪽이 화면보다 넓으면 가로로 밀어 본다). 「맞춤」은 쪽 전체가 한 화면에 들어오는 보조 배율
+  function initialScale() {
+    var readable = S && S.readable ? Math.min(1, S.readable) : 1;
+    return Math.max(Math.min(1, fit), readable);
+  }
   function clampScale(v) { return Math.max(Math.min(0.3, fit * 0.8), Math.min(4, v)); }
   function applyScale() {
     scale = clampScale(scale);
@@ -312,6 +338,7 @@
   function closeNav() { if (navEl && navEl.parentNode) navEl.parentNode.removeChild(navEl); navEl = null; }
   function toggleNav() {
     if (navEl) { closeNav(); return; }
+    closeFind();
     var host = ctxRef.body, heads = [];
     [].forEach.call(wrap.querySelectorAll('section.docx > article p'), function (p) {
       if (heads.length >= 80) return;
@@ -358,7 +385,8 @@
     } else {
       ctx.setActions([
         { label: '−', onClick: function () { zoomTo(host, scale * 0.8); } },
-        { label: '맞춤', onClick: function () { userZoomed = false; measure(host); scale = Math.min(1, fit); applyScale(); host.scrollLeft = 0; } },
+        { label: '맞춤', onClick: function () { userZoomed = true; measure(host); scale = clampScale(Math.min(1, fit)); applyScale(); host.scrollLeft = 0; } },
+        { label: '찾기', onClick: function () { openFind(); } },
         { label: '＋', onClick: function () { zoomTo(host, scale * 1.25); } },
         { label: '고치기', primary: true, disabled: !S.ready || !!S.disabled || S.nEdit === 0, onClick: function () { enterEdit(); } }
       ]);
@@ -481,9 +509,11 @@
       ctx.busy('사본 만드는 중…');
       buildCopy().then(function (blob) {
         ctx.busy(null);
-        ctx.saveCopy(blob, outName);
-        ctx.setDirty(false);
-        ctx.toast('사본을 저장했어요: ' + outName, 3600);
+        return Promise.resolve(ctx.saveCopy(blob, outName)).then(function (ok) {
+          if (ok === false) return;   // 저장이 실패하면 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+          ctx.setDirty(false);
+          ctx.toast('사본을 저장했어요: ' + outName, 3600);
+        });
       }).catch(function (e) {
         ctx.busy(null);
         ctx.toast('저장하지 못했어요 — 원본은 그대로예요. (' + ((e && e.message) || e) + ')', 5200);
@@ -569,6 +599,83 @@
     });
   }
 
+  // ---- 찾기: 화면에 그려진 문단 글 안에서 검색 → 누르면 그 문단으로 가서 잠깐 표시(바꾸기는 없음)
+  var findBox = null;
+  function paraEls() { return wrap ? [].slice.call(wrap.querySelectorAll('section.docx > article p')) : []; }
+  function closeFind() { if (findBox && findBox.parentNode) findBox.parentNode.removeChild(findBox); findBox = null; }
+  function openFind() {
+    if (!hud) return;
+    if (findBox) { closeFind(); return; }
+    closeNav();
+    findBox = document.createElement('div'); findBox.className = 'so-docx-nav so-docx-find';
+    findBox.style.maxHeight = Math.max(160, ctxRef.body.clientHeight - 80) + 'px';
+    findBox.innerHTML = '<h4>문서에서 찾기</h4><input type="search" class="so-docx-fi" placeholder="찾을 글" enterkeyhint="search" autocomplete="off" spellcheck="false"><div class="so-docx-fr"></div>';
+    var inp = findBox.querySelector('input'), out = findBox.querySelector('.so-docx-fr'), hits = [], composing = false;
+    function run() {
+      var q = inp.value.replace(/\s+/g, ' ').trim().toLowerCase(); hits = []; out.innerHTML = '';
+      if (!q) return;
+      paraEls().forEach(function (el, k) {
+        var t = el.textContent.replace(/\s+/g, ' ').trim(), at = t.toLowerCase().indexOf(q);
+        if (at >= 0 && hits.length < 40) hits.push({ el: el, t: t, at: at });
+      });
+      if (!hits.length) { out.innerHTML = '<div class="so-docx-fe">찾는 글이 없어요.</div>'; return; }
+      hits.forEach(function (h, k) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'so-docx-nav-h'; b.setAttribute('data-hit', k);
+        var a = Math.max(0, h.at - 12);
+        b.textContent = (a > 0 ? '…' : '') + h.t.slice(a, a + 44);
+        out.appendChild(b);
+      });
+    }
+    inp.addEventListener('compositionstart', function () { composing = true; });
+    inp.addEventListener('compositionend', function () { composing = false; run(); });
+    inp.addEventListener('input', function () { if (!composing) run(); });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+    findBox.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-hit]') : null; if (!b) return;
+      var h = hits[Number(b.getAttribute('data-hit'))]; if (!h) return;
+      closeFind(); scrollToEl(h.el);
+      h.el.classList.add('so-docx-hit'); setTimeout(function () { h.el.classList.remove('so-docx-hit'); }, 2600);
+    });
+    hud.appendChild(findBox);
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
+  }
+
+  // ---- 복구 규약: 고친 문단 목록을 돌려주고(snapshot), 같은 문서를 다시 열면 구조를 확인한 뒤 되살린다(restore)
+  function docSig() { return hash(S.doc.paras.map(function (p) { return hash(p.text); }).join('|')); }
+  function snapshot() {
+    if (!S || !S.doc || !S.ready || !editCount()) return null;
+    var list = Object.keys(S.edits).map(Number).sort(function (a, b) { return a - b; }).map(function (i) {
+      return { i: i, h: hash(S.doc.paras[i].text), t: S.edits[i] };
+    });
+    return { v: 1, fmt: 'docx', n: S.doc.paras.length, sig: docSig(), edits: list };
+  }
+  function restore(data) {
+    var ctx = ctxRef;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
+    function fail(m) { if (ctx) ctx.toast(m || '저장해 둔 고친 내용이 이 문서와 맞지 않아 되살리지 않았어요.', 4600); return false; }
+    if (!data || data.fmt !== 'docx' || !data.edits || !data.edits.length) return Promise.resolve(false);
+    return Promise.resolve(S && S.prepP).then(function () {
+      if (!S || !S.ready || !S.doc) return fail('문서 준비가 덜 돼서 고친 내용을 되살리지 못했어요.');
+      if (S.disabled) return fail('이 문서는 지금 보기만 돼서 고친 내용을 되살리지 않았어요.');
+      if (data.n !== S.doc.paras.length || data.sig !== docSig()) return fail();
+      var i, e;
+      for (i = 0; i < data.edits.length; i++) {      // 먼저 전부 확인하고, 하나라도 어긋나면 하나도 적용하지 않는다
+        e = data.edits[i];
+        var para = S.doc.paras[e.i];
+        if (!para || !para.editable || !para.r || hash(para.text) !== e.h || typeof e.t !== 'string') return fail();
+      }
+      data.edits.forEach(function (x) {
+        var para = S.doc.paras[x.i], v = String(x.t).replace(/\r\n?/g, '\n');
+        if (v === para.text) delete S.edits[x.i]; else S.edits[x.i] = v;
+        setRendered(para.r, (x.i in S.edits) ? v : null);
+      });
+      afterChange();
+      if (S.mode !== 'edit') enterEdit();
+      ctx.toast('이어서 고칠 수 있게 고친 내용 ' + editCount() + '개 문단을 되살렸어요.', 3600);
+      return true;
+    });
+  }
+
   SOffice.register({
     id: 'docx', label: '워드', editable: true,
     credits: [
@@ -576,6 +683,8 @@
       { name: 'JSZip', license: 'MIT', note: '압축 풀기·묶기' }
     ],
     canOpen: function (ext) { return ext === 'docx'; },
+    snapshot: snapshot,
+    restore: restore,
     open: function (ctx) {
       ctxRef = ctx;
       S = { mode: 'view', edits: {}, ready: false, disabled: null, nEdit: 0, pages: 0, tip: null };
@@ -606,7 +715,13 @@
           var pages = pageEls.length;
           if (!pages) throw new Error('쪽을 그리지 못함');
           S.pages = pages;
-          measure(host); scale = Math.min(1, fit); applyScale();
+          measure(host);
+          var bpx = bodyFontPx(box); S.readable = bpx ? MIN_PX / bpx : 0;
+          scale = initialScale(); applyScale();
+          if (scale > fit * 1.05) {                      // 쪽이 화면보다 넓으면 왼쪽 여백은 건너뛰고 글이 시작하는 곳부터 보인다
+            var art = box.querySelector('section.docx > article');
+            if (art) host.scrollLeft = Math.max(0, art.getBoundingClientRect().left - host.getBoundingClientRect().left + host.scrollLeft - 10);
+          }
           setupPinch(host);
           var tip = document.createElement('div'); tip.className = 'so-docx-tip'; S.tip = tip; hud.appendChild(tip);
           S.disabled = '고칠 수 있는지 확인하는 중…';
@@ -617,7 +732,7 @@
           var onR = function () {
             host.style.setProperty('--soh', host.clientHeight + 'px');
             if (host.clientWidth === hostW) return;
-            measure(host); if (!userZoomed) { scale = Math.min(1, fit); applyScale(); } else applyScale();
+            measure(host); if (!userZoomed) { scale = initialScale(); applyScale(); } else applyScale();
             closeNav(); if (sheet) placeSheet(true); updatePage();
           };
           window.addEventListener('resize', onR); cleanup.push(function () { window.removeEventListener('resize', onR); });
@@ -637,6 +752,7 @@
           }
           var onClick = function (e) {
             if (navEl && !e.target.closest('.so-docx-nav')) closeNav();
+            if (findBox && !e.target.closest('.so-docx-find')) closeFind();
             if (!S || S.mode !== 'edit' || S.sheetOpen) return;
             var p = pick(e); if (!p) return;
             var xi = p._soX; var para = xi != null ? S.doc.paras[xi] : null;
@@ -645,9 +761,10 @@
             openSheet(p, xi);
           };
           box.addEventListener('click', onClick); cleanup.push(function () { box.removeEventListener('click', onClick); });
-          ctx.onBack(function () { if (navEl) { closeNav(); return true; } if (sheet) { closeSheet(); return true; } if (S && S.mode === 'edit' && editCount() === 0) { exitEdit(); return true; } return false; });
+          ctx.onBack(function () { if (findBox) { closeFind(); return true; } if (navEl) { closeNav(); return true; } if (sheet) { closeSheet(); return true; } if (S && S.mode === 'edit' && editCount() === 0) { exitEdit(); return true; } return false; });
           // 짝짓기는 보기를 막지 않게 뒤에서 한다. 실패해도 보기는 그대로.
-          return prepareEdit(box).then(function () { if (S) { if (S.disabled === '고칠 수 있는지 확인하는 중…') S.disabled = null; setActions(); setTip(); } }, function (e) {
+          S.prepP = prepareEdit(box);
+          return S.prepP.then(function () { if (S) { if (S.disabled === '고칠 수 있는지 확인하는 중…') S.disabled = null; setActions(); setTip(); } }, function (e) {
             try { console.warn('[S-Office/docx] 고치기 준비 실패', e); } catch (x) {}
             if (S) { S.disabled = '이 문서는 고칠 준비를 하지 못해 보기만 됩니다.'; S.ready = false; setActions(); setTip(); }
           });
@@ -656,10 +773,10 @@
     },
     close: function () {
       cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = [];
-      closeSheet(); closeNav(); clearTimeout(noteT); if (S && S.tipTimer) clearTimeout(S.tipTimer);
+      closeSheet(); closeNav(); closeFind(); clearTimeout(noteT); if (S && S.tipTimer) clearTimeout(S.tipTimer);
       hud = pill = noteEl = null; pageEls = []; pageW = 0;
       wrap = null; ctxRef = null; S = null;
     },
-    _t: { diffHunks: diffHunks, analyze: analyze, analyzeDoc: analyzeDoc, rebuildParagraph: rebuildParagraph, applyEdits: applyEdits, align: align, scanParagraphs: scanParagraphs, norm: norm }
+    _t: { snapshot: snapshot, restore: restore, hash: hash, diffHunks: diffHunks, analyze: analyze, analyzeDoc: analyzeDoc, rebuildParagraph: rebuildParagraph, applyEdits: applyEdits, align: align, scanParagraphs: scanParagraphs, norm: norm }
   });
 })();

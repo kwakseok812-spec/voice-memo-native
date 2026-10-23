@@ -552,9 +552,12 @@
       var base = (ctx.name || 'document').replace(/\.pdf$/i, '');
       var name = base + '_수정.pdf';
       ctx.busy(null);
-      ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name);
-      S.savedRev = S.rev; ctx.setDirty(false);
-      ctx.toast('새 파일로 저장했어요: ' + name + ' (원래 파일은 그대로)', 4200);
+      var mySt = S;
+      return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name)).then(function (ok) {
+        if (ok === false || S !== mySt) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+        S.savedRev = S.rev; ctx.setDirty(false);
+        ctx.toast('사본으로 저장했어요: ' + name + ' (원래 파일은 그대로)', 4200);
+      });
     }).catch(function (e) {
       if (S !== cur || S.dead) return;
       ctx.busy(null);
@@ -601,6 +604,53 @@
     });
   }
 
+  // ---------------------------------------------------------------- 임시 보관(snapshot) · 되살리기(restore)
+  // 넣은 형광펜·글·메모·서명의 목록을 JSON 으로(없으면 null). 서명 그림은 데이터 주소로 담는다.
+  function snapshot() {
+    if (!S || S.dead || !S.anns.length) return null;
+    var list = S.anns.map(function (a) {
+      var o = { t: a.type, p: a.page, x: a.x, y: a.y };
+      if (a.type === 'hl') { o.w = a.w; o.h = a.h; o.c = a.color; }
+      else if (a.type === 'stamp') { o.w = a.w; o.h = a.h; o.img = a.img; }
+      else { o.text = a.text; o.size = a.size; o.c = a.color; o.maxw = a.maxw; }
+      return o;
+    });
+    return { v: 1, n: S.n, anns: list };
+  }
+  function restore(data) {
+    var rep = { applied: 0, skipped: 0 };
+    if (!S || S.dead || !S.pages.length || !data || !Array.isArray(data.anns)) return rep;
+    if (typeof data.n === 'number' && data.n !== S.n) {   // 저장해 둔 쪽 수와 지금 문서가 다르면 적용하지 않는다
+      rep.skipped = data.anns.length; S.ctx.toast('문서의 쪽 수가 달라져(저장 ' + data.n + '쪽, 지금 ' + S.n + '쪽) 이어서 넣던 내용을 되살리지 않았어요.', 4200); return rep;
+    }
+    var num = function (v) { return typeof v === 'number' && isFinite(v); }, hex = /^#[0-9a-fA-F]{6}$/, png = /^data:image\/png;base64,[A-Za-z0-9+\/=]+$/;
+    data.anns.forEach(function (o) {
+      try {
+        var P = o && num(o.p) ? S.pages[Math.round(o.p) - 1] : null;
+        if (!P || !num(o.x) || !num(o.y) || (o.t !== 'hl' && o.t !== 'stamp' && o.t !== 'text' && o.t !== 'memo')) { rep.skipped++; return; }
+        var a = { type: o.t, page: P.n, x: o.x, y: o.y };
+        if (o.t === 'hl') {
+          if (!num(o.w) || !num(o.h) || !hex.test(o.c || '')) { rep.skipped++; return; }
+          a.w = clamp(o.w, 1, P.w); a.h = clamp(o.h, 1, P.h); a.color = o.c;
+        } else if (o.t === 'stamp') {
+          if (!num(o.w) || !num(o.h) || typeof o.img !== 'string' || !png.test(o.img)) { rep.skipped++; return; }
+          a.w = clamp(o.w, 8, P.w); a.h = clamp(o.h, 8, P.h); a.img = o.img;
+        } else {
+          if (typeof o.text !== 'string' || !o.text || !num(o.size) || !num(o.maxw) || !hex.test(o.c || '')) { rep.skipped++; return; }
+          a.text = o.text.slice(0, 5000); a.size = clamp(o.size, 6, 60); a.color = o.c; a.maxw = clamp(o.maxw, 40, P.w);
+          layoutText(a);
+        }
+        a.x = clamp(a.x, 0, Math.max(0, P.w - a.w)); a.y = clamp(a.y, 0, Math.max(0, P.h - a.h));
+        a.id = ++S.idc; S.anns.push(a); mount(a); rep.applied++;
+      } catch (e) { rep.skipped++; }
+    });
+    if (rep.applied) {
+      commit();
+      S.ctx.toast('이어서 넣던 ' + rep.applied + '개를 되살렸어요.' + (rep.skipped ? ' (' + rep.skipped + '개는 건너뛰었어요)' : ''), 3600);
+    } else if (rep.skipped) S.ctx.toast('이어서 넣던 내용을 되살리지 못했어요.', 3200);
+    return rep;
+  }
+
   // ---------------------------------------------------------------- 모듈 등록
   function openDoc(ctx) {
     teardown();
@@ -637,7 +687,7 @@
     }).then(function (sizes) {
       if (!sizes || S !== cur) return;
       for (var i = 0; i < cur.n; i++) { var z = sizes[i] || sizes[0]; cur.pages.push({ n: i + 1, w: z[0], h: z[1] }); cur.maxW = Math.max(cur.maxW, z[0]); }
-      ctx.setActions([{ label: '저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
+      ctx.setActions([{ label: '사본 저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
       buildUI(); initPages(); layout(); updateCurPage();
       return waitFirst(cur);
     });
@@ -668,6 +718,8 @@
     credits: [{ name: 'pdf-lib', license: 'MIT', note: 'PDF에 형광펜·글·메모·서명 넣기 (사본 저장)' }],
     canOpen: function (ext) { return ext === 'pdf'; },
     open: openDoc,
+    snapshot: snapshot,
+    restore: restore,
     close: teardown
   });
 })(window);

@@ -16,6 +16,17 @@ html[data-style="dark"] .sx-root{--sx-bg:#14171f;--sx-fg:#e8eaf0;--sx-line:#2b30
 .sx-ok:disabled{opacity:.35}
 .sx-exp{background:var(--glass);color:var(--text);border:1px solid var(--glass-b);font-size:18px}
 .sx-exp:active,.sx-chip:active,.sx-tab:active{background:var(--glass2)}
+/* 고치기 줄(되돌리기·다시하기·모두 되돌리기·보기로)과 찾기 줄 — 전부 44px */
+.sx-edbar,.sx-find{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--glass-b);background:var(--bg0,var(--page-bg));flex-shrink:0}
+.sx-edsp{flex:1}
+.sx-eb{appearance:none;flex-shrink:0;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;min-width:44px;min-height:44px;padding:0 12px;font-size:14px;font-weight:800;font-family:inherit;white-space:nowrap}
+.sx-undo,.sx-redo,.sx-fprev,.sx-fnext,.sx-fx{padding:0;font-size:20px}
+.sx-eb:active{background:var(--glass2)}
+.sx-eb:disabled{opacity:.35}
+.sx-eview{border-color:var(--p1);color:var(--p1)}
+.sx-fq{flex:1;min-width:0;height:44px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;padding:0 12px;font-size:16px;font-family:inherit}
+.sx-fq:focus{outline:2px solid var(--p1);outline-offset:0}
+.sx-fcnt{font-size:13px;color:var(--muted);min-width:44px;text-align:center}
 /* 글을 치는 동안: 입력줄이 키보드 바로 위로 올라오고, 표는 그 위쪽에 남는다 */
 .sx-root.kb{padding-bottom:calc(var(--sx-kb) + 58px)}
 .sx-root.kb .sx-fbar{position:absolute;left:0;right:0;bottom:var(--sx-kb);z-index:30;border-top:1px solid var(--glass-b);border-bottom:0;box-shadow:0 -4px 14px rgba(0,0,0,.18)}

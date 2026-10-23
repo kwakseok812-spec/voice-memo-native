@@ -9,11 +9,16 @@
   background:var(--bg0, var(--page-bg, #fff));border-top:1px solid var(--glass-b, rgba(0,0,0,.12));-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:4}
 .so-hwp-tb::-webkit-scrollbar{display:none}
 .so-hwp-wrap.editing .so-hwp-tb{display:flex}
-.so-hwp-tb button{flex:0 0 auto;min-width:44px;height:44px;border-radius:12px;border:1px solid var(--glass-b, rgba(0,0,0,.12));background:var(--glass, #f1f3f8);color:var(--text, #111);
-  font-weight:800;font-size:16px;line-height:1;font-family:inherit;padding:0 10px;cursor:pointer;touch-action:manipulation}
+.so-hwp-tb button{flex:1 0 44px;min-width:44px;height:44px;border-radius:12px;border:1px solid var(--glass-b, rgba(0,0,0,.12));background:var(--glass, #f1f3f8);color:var(--text, #111);
+  font-weight:800;font-size:16px;line-height:1;font-family:inherit;padding:0 4px;cursor:pointer;touch-action:manipulation}
 .so-hwp-tb button:active{transform:scale(.95)}
 .so-hwp-tb button.on{border-color:transparent;background:linear-gradient(135deg,var(--p1, #3b82f6),var(--p2, #8b5cf6));color:#fff}
 .so-hwp-tb .sep{flex:0 0 1px;height:28px;background:var(--glass-b, rgba(0,0,0,.15));margin:0 2px}
 .so-hwp-tb .it{font-style:italic;font-family:serif}
 .so-hwp-tb .ul{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.so-hwp-tb button:active{transform:none}}
+
+/* 「더보기」 줄(정렬·확대·찾기) — 좁은 화면에서만 위쪽에 한 줄 더 */
+.so-hwp-wrap.editing .so-hwp-tb2{display:none;bottom:54px}
+.so-hwp-wrap.editing.more .so-hwp-tb2{display:flex}
+.so-hwp-tb .more{flex:0 0 44px;font-size:20px}

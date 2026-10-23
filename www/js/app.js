@@ -2880,7 +2880,7 @@
   APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
   APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
   APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
-  APP_VERSION = 'v9.34';        // v9.34: S-Office 폰 화면 다듬기(한글 폰용 도구줄·글꼴, 워드·PPT·엑셀·PDF 키보드·터치 정리), 홈 칸 이름 S-Office, 마크다운 바깥 그림 차단 보강. v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
+  APP_VERSION = 'v9.35';        // v9.35: S-Office 저장 직후 창(열기·공유)·고친 내용 자동 복구·엑셀 되돌리기·한글·워드·PPT·엑셀 찾기·열기 방식 줄 위로·최근 문서 합침. v9.34: S-Office 폰 화면 다듬기(한글 폰용 도구줄·글꼴, 워드·PPT·엑셀·PDF 키보드·터치 정리), 홈 칸 이름 S-Office, 마크다운 바깥 그림 차단 보강. v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -8866,22 +8866,41 @@
     try {
       SOffice.configure({
         toast: toast,
-        confirm: function (t, m, label, fn) { openSheet(t, m, label, fn); },
+        dismiss: function () { closeSheet(); },   // 문서를 닫을 때 떠 있던 확인 시트도 함께 닫는다
+        // 저장·열기 같은 보통 단추는 파란색, 「그래도 닫기」처럼 잃는 일만 빨간 단추(o.danger). o.extra = 가운데 단추, o.cancelLabel = 맨 아래 단추 이름
+        confirm: function (t, m, label, fn, o) {
+          o = o || {};
+          var danger = !!o.danger || /그래도|삭제|지우/.test(label || '');
+          openSheet(t, m, label, fn, null, o.extra || null, { positive: !danger, cancelLabel: o.cancelLabel });
+        },
+        // 사본 저장 → Promise({ok, name, open?, quiet?}) — 저장 직후 안내 시트는 틀(so-core.js)이 띄운다. 실패하면 reject(틀이 앱 안 보관·다시 시도를 안내)
         save: function (file) {
           var fname = safeDownloadName(file.name || '문서');
           if (!isNativeApp()) {
             var bu = URL.createObjectURL(file), a = document.createElement('a');
             a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
             setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
-            toast('다운로드 폴더에 저장했습니다.'); return;
+            toast('다운로드 폴더에 저장했습니다.'); return Promise.resolve({ ok: true, quiet: true, name: fname });
+          }
+          var FD = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
+          function dl(url) {
+            if (!FD || !FD.download) { nativeDownload(url, fname); return Promise.resolve({ ok: true, quiet: true, name: fname }); }   // 옛 빌드: 예전 길(웹페이지로 받기)
+            return FD.download({ url: url, name: fname, open: false }).then(function (r) {
+              var saved = (r && r.name) || fname, id = r && r.id;
+              return { ok: true, name: saved, open: (id != null && FD.open) ? function () { return FD.open({ id: String(id), mime: (r && r.mime) || file.type || '', askPermission: true }); } : null };
+            }, function (e) {
+              if (e && e.code === 'CANCELLED') return { ok: true, quiet: true, name: fname };
+              nativeDownload(url, fname); return { ok: true, quiet: true, name: fname };   // 앱 저장이 안 되면 웹페이지로 받기로 넘어간다(예전과 같음)
+            });
           }
           var url = docScanUrls[matKey(file)];
-          if (url) { nativeDownload(url, fname); return; }
+          if (url) return dl(url);
           toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
-          docScanShare(file).then(function (saved) {
+          return docScanShare(file).then(function (saved) {
             var u = saved && saved[0] && saved[0].url;
-            if (u) nativeDownload(u, fname); else toast('저장 주소를 받지 못했습니다. 공유함에서 [⬇ 다운로드]를 눌러 주세요.', 5000);
-          }).catch(function () {});
+            if (!u) throw new Error('저장 주소를 받지 못했어요');
+            return dl(u);
+          });
         }
       });
     } catch (e) {}
