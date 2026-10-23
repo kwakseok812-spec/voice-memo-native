@@ -100,7 +100,7 @@
       '<div class="sheet-box" role="dialog" aria-label="공유받은 문서">' +
         '<div class="sheet-head">이 문서를 어떻게 할까요?</div>' +
         '<div class="shin-file"><svg><use href="#i-doc"/></svg><span class="nm">' + esc(file.name) + '</span><small>' + esc(sizeLabel(file.size)) + '</small></div>' +
-        '<button type="button" class="sheet-btn primary" data-act="view"><svg><use href="#i-doc"/></svg><span>문서 뷰어로 열기</span></button>' +
+        '<button type="button" class="sheet-btn primary" data-act="view"><svg><use href="#i-doc"/></svg><span>문서 열기</span></button>' +
         '<button type="button" class="sheet-btn" data-act="chat"><svg><use href="#i-chat"/></svg><span>케이에게 보내기</span></button>' +
         '<button type="button" class="sheet-btn" data-act="cancel">취소</button>' +
       '</div>';

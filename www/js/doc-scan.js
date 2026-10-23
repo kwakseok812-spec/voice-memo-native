@@ -1434,7 +1434,7 @@
     col.appendChild(c);
     function call(k) { return function () { try { a[k] && a[k](f); } catch (e) { toast('실행하지 못했습니다.'); } }; }
     if (a.share) col.appendChild(h('button', 'dsc-btn dsc-pri dsc-big', '공유함에 넣기', call('share')));
-    if (a.view) col.appendChild(h('button', 'dsc-btn dsc-big', '문서 뷰어로 열기', call('view')));
+    if (a.view) col.appendChild(h('button', 'dsc-btn dsc-big', '문서 열기', call('view')));
     if (a.save) col.appendChild(h('button', 'dsc-btn dsc-big', '폰에 저장', call('save')));
     foot([h('button', 'dsc-btn', '닫기', function () { closeUi(false, false); })]);
   }

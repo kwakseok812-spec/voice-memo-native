@@ -23,7 +23,7 @@
   // ---------------------------------------------------------------- 상태
   function newState(ctx) {
     return { ctx: ctx, dead: false, pdf: null, bytes: null, n: 0, pages: [], maxW: 1, z: 1, s: 1, fit: 1, mode: 'hand',
-      hlColor: HL_COLORS[0], txColor: TX_COLORS[0], size: 14, sig: null, anns: [], hist: [[]], rev: 0, savedRev: 0, sel: null,
+      bigDoc: false, hlColor: HL_COLORS[0], txColor: TX_COLORS[0], size: 14, sig: null, anns: [], hist: [[]], rev: 0, savedRev: 0, sel: null,
       rendering: false, pinch: null, dlg: null, idc: 0, curPage: 1, io: null, ro: null, failedToasted: false, cache: null };
   }
 
@@ -44,10 +44,11 @@
     var bp = el('button', 'sp-pbtn', '+'); bp.setAttribute('aria-label', '확대');
     var pg = el('button', 'sp-pg', '1 / ' + S.n); pg.setAttribute('aria-label', '쪽 이동');
     pill.appendChild(bm); pill.appendChild(pg); pill.appendChild(bp); root.appendChild(pill);
-    S.pgBtn = pg;
+    S.pgBtn = pg; S.pill = pill;
     bm.onclick = function () { zoomTo(S.z / 1.25); };
     bp.onclick = function () { zoomTo(S.z * 1.25); };
     pg.onclick = jumpDialog;
+    pill.addEventListener('pointerdown', pillWake);
 
     // 아래 도구줄
     var tb = el('div', 'sp-tools'); root.appendChild(tb); S.tb = tb;
@@ -70,16 +71,23 @@
     sc.addEventListener('touchcancel', onTouchEnd, { passive: true });
     sc.addEventListener('wheel', function (e) { if (e.ctrlKey) { e.preventDefault(); zoomTo(S.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX, e.clientY); } }, { passive: false });
     var raf = 0;
-    sc.addEventListener('scroll', function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; if (!S || S.dead) return; updateCurPage(); }); }, { passive: true });
+    sc.addEventListener('scroll', function () { pillWake(); if (raf) return; raf = requestAnimationFrame(function () { raf = 0; if (!S || S.dead) return; updateCurPage(); }); }, { passive: true });
     if (global.ResizeObserver) { S.ro = new ResizeObserver(function () { if (S && !S.dead && S.pages.length) { layout(); pump(); } }); S.ro.observe(sc); }
     sc.addEventListener('pointerdown', function (e) { if (e.target === sc || e.target === inner) select(null); });
+    pillWake();
   }
 
+  // 쪽 알약은 만지거나 넘길 때만 또렷하고, 잠시 뒤 옅어져 글을 덜 가린다
+  function pillWake() {
+    if (!S || !S.pill) return;
+    S.pill.classList.remove('dim');
+    clearTimeout(S.pillT); S.pillT = setTimeout(function () { if (S && S.pill) S.pill.classList.add('dim'); }, 2600);
+  }
   function setMode(m) {
     S.mode = m; S.root.setAttribute('data-mode', m); select(null);
     Object.keys(S.modeBtns).forEach(function (k) { S.modeBtns[k].classList.toggle('on', k === m); });
     renderOpt();
-    var hint = { hl: '손가락을 문질러 칠하세요. 스크롤은 「보기」에서.', text: '글을 넣을 자리를 한 번 누르세요.', memo: '메모를 붙일 자리를 한 번 누르세요.', sig: '서명을 넣을 자리를 한 번 누르세요.' }[m];
+    var hint = { hl: '글 위를 손가락으로 쓸어 칠하세요. 화면을 넘기려면 「보기」를 누르세요.', text: '글을 넣을 자리를 한 번 누르세요.', memo: '메모를 붙일 자리를 한 번 누르세요.', sig: '서명을 넣을 자리를 한 번 누르세요.' }[m];
     if (hint) S.ctx.toast(hint, 2400);
   }
   function renderOpt() {
@@ -88,7 +96,7 @@
     if (m === 'hl' || m === 'text') {
       var cols = m === 'hl' ? HL_COLORS : TX_COLORS, cur = m === 'hl' ? S.hlColor : S.txColor;
       cols.forEach(function (c) {
-        var b = el('button', 'sp-chip' + (c === cur ? ' on' : '')); b.type = 'button'; b.style.background = c; b.setAttribute('aria-label', '색');
+        var b = el('button', 'sp-chip' + (c === cur ? ' on' : '')); b.type = 'button'; b.style.backgroundColor = c; b.setAttribute('aria-label', '색');
         b.onclick = function () { if (m === 'hl') S.hlColor = c; else S.txColor = c; renderOpt(); };
         o.appendChild(b);
       });
@@ -116,7 +124,7 @@
     S.io = new IntersectionObserver(function (es) {
       es.forEach(function (en) { S.pages[+en.target.getAttribute('data-n') - 1].vis = en.isIntersecting; });
       pump();
-    }, { root: S.sc, rootMargin: '80% 0px 80% 0px' });
+    }, { root: S.sc, rootMargin: (S.n > 80 || S.bigDoc ? '45%' : '80%') + ' 0px ' + (S.n > 80 || S.bigDoc ? '45%' : '80%') + ' 0px' });
     S.pages.forEach(function (P) { S.io.observe(P.el); });
   }
   function layout() {
@@ -151,8 +159,9 @@
     S.rendering = P;
     return S.pdf.getPage(P.n).then(function (page) {
       if (S.dead) return;
-      var dpr = Math.min(global.devicePixelRatio || 1, 2.5), r = s * dpr, vp0 = page.getViewport({ scale: 1 });
-      var px = vp0.width * r * vp0.height * r; if (px > MAXPX) r *= Math.sqrt(MAXPX / px);
+      var dpr = Math.min(global.devicePixelRatio || 1, (S.bigDoc || S.n > 80) ? 2 : 2.5), r = s * dpr, vp0 = page.getViewport({ scale: 1 });
+      var lim = (S.bigDoc || S.n > 80) ? MAXPX * 0.6 : MAXPX;
+      var px = vp0.width * r * vp0.height * r; if (px > lim) r *= Math.sqrt(lim / px);
       var vp = page.getViewport({ scale: r });
       var cv = document.createElement('canvas'); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
       cv.className = 'sp-cv';
@@ -171,7 +180,7 @@
       if (e && e.name === 'RenderingCancelledException') return;
       P.failed = key;
       try { console.warn('[S-Office PDF] 쪽 그리기 실패', P.n, e); } catch (x) {}
-      if (!S.failedToasted) { S.failedToasted = true; S.ctx.toast('일부 쪽을 그리지 못했습니다.', 3000); }
+      if (!S.failedToasted) { S.failedToasted = true; S.ctx.toast('일부 쪽을 그리지 못했어요.', 3000); }
     }).then(function () { S.rendering = false; });
   }
   function isNear(P) { return P.vis; }
@@ -205,6 +214,7 @@
       var r = S.sc.getBoundingClientRect(), cx = (e.touches[0].clientX + e.touches[1].clientX) / 2, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       S.pinch = { d0: dist(e.touches), z0: S.z, cx: cx, cy: cy, fx: S.sc.scrollLeft + cx - r.left, fy: S.sc.scrollTop + cy - r.top, ratio: 1 };
       S.inner.style.transformOrigin = S.pinch.fx + 'px ' + S.pinch.fy + 'px';
+      S.sc.style.overflow = 'hidden';                    // 두 손가락 확대 중에는 스크롤이 끼어들지 않게
       if (S.draw) { S.draw.cancel(); }
     }
   }
@@ -216,7 +226,7 @@
   }
   function onTouchEnd(e) {
     var p = S.pinch; if (!p || e.touches.length >= 2) return;
-    S.pinch = null;
+    S.pinch = null; S.sc.style.overflow = '';
     S.inner.style.transform = ''; S.inner.style.transformOrigin = '';
     var tz = p.z0 * p.ratio;
     S.z = p.z0;                            // zoomTo 가 비교할 기준
@@ -325,11 +335,11 @@
     function btn(label, fn, cls) { var b = el('button', 'sp-sbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.onclick = fn; bar.appendChild(b); }
     if (a.type === 'text' || a.type === 'memo') {
       btn('수정', function () { textDialog(a.type, a, null); });
-      btn('글자 크게', function () { a.size = Math.min(60, a.size * 1.2); layoutText(a); remount(a); commit(); });
-      btn('작게', function () { a.size = Math.max(6, a.size / 1.2); layoutText(a); remount(a); commit(); });
+      btn('글자 키우기', function () { a.size = Math.min(60, a.size * 1.2); layoutText(a); remount(a); commit(); });
+      btn('줄이기', function () { a.size = Math.max(6, a.size / 1.2); layoutText(a); remount(a); commit(); });
     } else if (a.type === 'stamp') {
-      btn('크게', function () { scaleStamp(a, 1.2); });
-      btn('작게', function () { scaleStamp(a, 1 / 1.2); });
+      btn('키우기', function () { scaleStamp(a, 1.2); });
+      btn('줄이기', function () { scaleStamp(a, 1 / 1.2); });
     }
     btn('삭제', function () {
       S.anns = S.anns.filter(function (x) { return x.id !== a.id; });
@@ -390,9 +400,17 @@
 
   // ---------------------------------------------------------------- 대화상자
   function closeDlg() { if (S.dlg) { S.dlg.parentNode && S.dlg.parentNode.removeChild(S.dlg); S.dlg = null; } }
-  function dialog(title, content, buttons) {
+  function onVvChange() { dlgFit(); }
+  function dlgFit() {
+    if (!S || !S.dlg) return;
+    var vv = global.visualViewport, inset = 0;
+    if (vv) inset = Math.max(0, Math.round(S.root.getBoundingClientRect().bottom - (vv.offsetTop + vv.height)));
+    S.dlg.style.paddingBottom = (inset + 12) + 'px';
+  }
+  function dialog(title, content, buttons, opts) {
     closeDlg();
-    var back = el('div', 'sp-dlg'), box = el('div', 'sp-dbox');
+    opts = opts || {};
+    var back = el('div', 'sp-dlg'), box = el('div', 'sp-dbox' + (opts.wide ? ' wide' : ''));
     box.appendChild(el('div', 'sp-dt', title)); box.appendChild(content);
     var bs = el('div', 'sp-db');
     buttons.forEach(function (b) {
@@ -401,7 +419,8 @@
       bs.appendChild(x);
     });
     box.appendChild(bs); back.appendChild(box); S.root.appendChild(back); S.dlg = back;
-    back.addEventListener('pointerdown', function (e) { if (e.target === back) closeDlg(); });
+    back.addEventListener('pointerdown', function (e) { if (e.target === back && !(opts.keep && opts.keep())) closeDlg(); });
+    dlgFit();
     return box;
   }
   function textDialog(type, existing, at) {
@@ -409,7 +428,7 @@
     var ta = el('textarea', 'sp-ta'); ta.rows = 4; ta.value = existing ? existing.text : '';
     ta.placeholder = type === 'memo' ? '메모 내용' : '넣을 글';
     wrap.appendChild(ta);
-    var asciiNote = el('div', 'sp-note', '영문·숫자는 PDF 글자로, 한글 등은 그림으로 들어갑니다(복사는 안 됨).');
+    var asciiNote = el('div', 'sp-note', '영어·숫자는 글자로, 한글은 그림으로 들어가요(복사는 안 돼요).');
     wrap.appendChild(asciiNote);
     var size = existing ? existing.size : S.size;
     if (!existing) {
@@ -425,7 +444,7 @@
       { label: '취소' },
       { label: '확인', primary: true, onClick: function () {
         var t = ta.value.replace(/\s+$/, '');
-        if (!t) { S.ctx.toast('내용을 적어 주세요.', 1800); return false; }
+        if (!t) { S.ctx.toast('내용을 먼저 적어 주세요.', 1800); return false; }
         if (existing) {
           existing.text = t; layoutText(existing); remount(existing); commit(); select(existing.id);
         } else {
@@ -435,36 +454,43 @@
           addAnn(a);
         }
       } }
-    ]);
-    setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
+    ], { keep: function () { return ta.value.replace(/\s+$/, '') !== (existing ? existing.text : ''); } });   // 적던 내용이 있으면 바깥을 눌러도 닫지 않는다
+    setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) {} }, 60);
   }
   function jumpDialog() {
     var wrap = el('div'); var inp = el('input', 'sp-ta sp-num'); inp.type = 'number'; inp.min = 1; inp.max = S.n; inp.value = S.curPage; inp.inputMode = 'numeric';
     wrap.appendChild(inp); wrap.appendChild(el('div', 'sp-note', '1 ~ ' + S.n + '쪽'));
+    var quick = el('div', 'sp-sizes');
+    [['맨 처음', 1], ['맨 끝', S.n]].forEach(function (d) {
+      var b = el('button', 'sp-sz', d[0]); b.type = 'button';
+      b.onclick = function () { goPage(d[1]); closeDlg(); };
+      quick.appendChild(b);
+    });
+    wrap.appendChild(quick);
     dialog('쪽 이동', wrap, [{ label: '취소' }, { label: '이동', primary: true, onClick: function () { goPage(+inp.value); } }]);
     setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 60);
   }
   function sigDialog(placeAfter) {
-    var wrap = el('div'); var cv = el('canvas', 'sp-pad'); var W = 300, H = 150, dpr = 2;
+    var wrap = el('div'); var cv = el('canvas', 'sp-pad'); var W = 600, H = 450, dpr = 2;
     cv.width = W * dpr; cv.height = H * dpr; wrap.appendChild(cv);
-    var g = cv.getContext('2d'); g.scale(dpr, dpr); g.lineWidth = 2.6; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111';
+    var g = cv.getContext('2d'); g.scale(dpr, dpr); g.lineWidth = 4.4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111';
     var drawing = false, last = null, any = false;
     function pos(e) { var r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
-    cv.addEventListener('pointerdown', function (e) { drawing = true; last = pos(e); any = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} g.beginPath(); g.arc(last.x, last.y, 1.2, 0, 7); g.fillStyle = '#111'; g.fill(); e.preventDefault(); });
+    cv.addEventListener('pointerdown', function (e) { drawing = true; last = pos(e); any = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} g.beginPath(); g.arc(last.x, last.y, 2.2, 0, 7); g.fillStyle = '#111'; g.fill(); e.preventDefault(); });
     cv.addEventListener('pointermove', function (e) { if (!drawing) return; var p = pos(e); g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); last = p; e.preventDefault(); });
     function stop() { drawing = false; } cv.addEventListener('pointerup', stop); cv.addEventListener('pointercancel', stop);
-    wrap.appendChild(el('div', 'sp-note', '위 칸에 손가락으로 서명하세요. 이 서명은 이 문서를 보는 동안만 기억합니다.'));
+    wrap.appendChild(el('div', 'sp-note', '위 칸에 손가락으로 서명하세요. 이 서명은 이 문서를 보는 동안만 기억해요.'));
     dialog('서명 그리기', wrap, [
       { label: '지우기', onClick: function () { g.clearRect(0, 0, W, H); any = false; return false; } },
       { label: '취소' },
       { label: '완료', primary: true, onClick: function () {
-        if (!any) { S.ctx.toast('서명을 그려 주세요.', 1800); return false; }
+        if (!any) { S.ctx.toast('서명을 먼저 그려 주세요.', 1800); return false; }
         var url = trimPad(cv);
-        if (!url) { S.ctx.toast('서명이 비어 있습니다.', 1800); return false; }
+        if (!url) { S.ctx.toast('서명이 비어 있어요.', 1800); return false; }
         S.sig = url; renderOpt();
-        if (placeAfter) placeSig(placeAfter.P, placeAfter.at); else S.ctx.toast('서명 완료. 넣을 자리를 한 번 누르세요.', 2400);
+        if (placeAfter) placeSig(placeAfter.P, placeAfter.at); else S.ctx.toast('서명을 만들었어요. 넣을 자리를 한 번 누르세요.', 2400);
       } }
-    ]);
+    ], { wide: true, keep: function () { return any; } });     // 그리던 서명은 바깥을 잘못 눌러도 지워지지 않게
   }
   function trimPad(cv) {
     var g = cv.getContext('2d'), w = cv.width, h = cv.height, d = g.getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -498,14 +524,16 @@
 
   function save() {
     var ctx = S.ctx, cur = S;
-    if (!S.anns.length) { ctx.toast('고친 내용이 없어요. 형광펜·글·메모·서명을 넣은 뒤 저장하세요.', 3000); return; }
+    if (!S.anns.length) { ctx.toast('아직 넣은 것이 없어요. 형광펜·글·메모·서명을 넣은 뒤 저장해 주세요.', 3000); return; }
     select(null);
-    ctx.busy('사본 만드는 중…');
+    ctx.busy('새 파일 만드는 중…');
     var L, doc, font, byPage = {};
     S.anns.forEach(function (a) { (byPage[a.page] = byPage[a.page] || []).push(a); });
     var nums = Object.keys(byPage).map(Number).sort(function (a, b) { return a - b; });
     loadLib().then(function (lib) {
-      L = lib; return L.PDFDocument.load(cur.bytes, { updateMetadata: false });
+      L = lib; return ctx.file.arrayBuffer();
+    }).then(function (buf) {
+      return L.PDFDocument.load(new Uint8Array(buf), { updateMetadata: false });
     }).then(function (d) {
       doc = d; return doc.embedFont(L.StandardFonts.Helvetica);
     }).then(function (f) {
@@ -526,12 +554,12 @@
       ctx.busy(null);
       ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name);
       S.savedRev = S.rev; ctx.setDirty(false);
-      ctx.toast('사본을 저장했습니다: ' + name + ' (원본은 그대로)', 4200);
+      ctx.toast('새 파일로 저장했어요: ' + name + ' (원래 파일은 그대로)', 4200);
     }).catch(function (e) {
       if (S !== cur || S.dead) return;
       ctx.busy(null);
       try { console.warn('[S-Office PDF] 저장 실패', e); } catch (x) {}
-      ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000);
+      ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 5000);
     });
   }
   function toPdf(vp, x, y) { var p = vp.convertToPdfPoint(x, y); return { x: p[0], y: p[1] }; }
@@ -579,6 +607,7 @@
     S = newState(ctx);
     var cur = S;
     ctx.loadCss('js/smartoffice/pdf/so-pdf.css');
+    if (global.visualViewport) { global.visualViewport.addEventListener('resize', onVvChange); cur.vvOn = true; }
     if (!global.pdfjsLib) return Promise.reject(new Error('PDF 보기 엔진을 찾지 못함'));
     try { if (!global.pdfjsLib.GlobalWorkerOptions.workerSrc) global.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; } catch (e) {}
     ctx.onBack(function () {
@@ -588,7 +617,7 @@
       return false;
     });
     return ctx.file.arrayBuffer().then(function (buf) {
-      cur.bytes = new Uint8Array(buf);
+      cur.bigDoc = buf.byteLength > 25 * 1024 * 1024;       // 큰 파일은 한 쪽에 쓰는 메모리를 더 줄인다
       return global.pdfjsLib.getDocument({ data: new Uint8Array(buf.slice(0)), isEvalSupported: false }).promise;
     }).then(function (doc) {
       if (S !== cur) { try { doc.destroy(); } catch (e) {} return; }
@@ -603,12 +632,12 @@
       })(i);
       return chain.then(function () { return sizes; });
     }, function (e) {
-      if (e && e.name === 'PasswordException') { ctx.fallback('암호가 걸린 PDF는 S-Office가 열 수 없어 변환해서 보여 드려요.'); return null; }
+      if (e && e.name === 'PasswordException') { ctx.fallback('암호가 걸린 PDF는 S-Office가 열 수 없어서 변환해서 보여 드려요.'); return null; }
       throw e;
     }).then(function (sizes) {
       if (!sizes || S !== cur) return;
       for (var i = 0; i < cur.n; i++) { var z = sizes[i] || sizes[0]; cur.pages.push({ n: i + 1, w: z[0], h: z[1] }); cur.maxW = Math.max(cur.maxW, z[0]); }
-      ctx.setActions([{ label: '사본 저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
+      ctx.setActions([{ label: '저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
       buildUI(); initPages(); layout(); updateCurPage();
       return waitFirst(cur);
     });
@@ -627,10 +656,11 @@
   function teardown() {
     if (!S) return;
     var o = S; S = null; o.dead = true;
+    try { if (o.vvOn && global.visualViewport) global.visualViewport.removeEventListener('resize', onVvChange); clearTimeout(o.pillT); } catch (e) {}
     try { if (o.io) o.io.disconnect(); if (o.ro) o.ro.disconnect(); } catch (e) {}
     o.pages.forEach(function (P) { if (P.task) { try { P.task.cancel(); } catch (e) {} } if (P.canvas) { P.canvas.width = 0; P.canvas.height = 0; } });
     try { if (o.pdf) o.pdf.destroy(); } catch (e) {}
-    o.bytes = null; o.sig = null; o.anns = []; o.hist = [];
+    o.sig = null; o.anns = []; o.hist = [];
   }
 
   global.SOffice.register({

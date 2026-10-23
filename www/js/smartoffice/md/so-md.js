@@ -5,6 +5,10 @@
 (function () {
   'use strict';
   var cleanup = [];
+  var FS_KEY = 'so_md_fs_v1', LH_KEY = 'so_md_lh_v1';
+  var LH_STEPS = [1.55, 1.75, 2.0];
+  function lsGet(k, d) { try { var v = parseFloat(localStorage.getItem(k)); return isFinite(v) ? v : d; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
 
   function decode(buf) {
     var u8 = new Uint8Array(buf), s;
@@ -36,6 +40,24 @@
     }).then(function (r) {
       var host = ctx.body; host.classList.add('so-md-host');
       var page = document.createElement('div'); page.className = 'so-md-page'; host.appendChild(page);
+      // 글자 크기·줄 간격: 눈에 맞게 바꾸고 기억한다
+      var fs = Math.min(26, Math.max(13, lsGet(FS_KEY, 17))), lhI = Math.min(2, Math.max(0, Math.round(lsGet(LH_KEY, 1))));
+      function applyType() { host.style.setProperty('--md-fs', fs + 'px'); host.style.setProperty('--md-lh', LH_STEPS[lhI]); }
+      applyType();
+      var fab = document.createElement('div'); fab.className = 'so-md-fab';
+      fab.innerHTML = '<div class="so-md-fab-in"><button type="button" data-k="fs-" aria-label="글자 작게">가<small>−</small></button><button type="button" data-k="fs+" aria-label="글자 크게">가<small>＋</small></button><button type="button" data-k="lh" aria-label="줄 간격 바꾸기">줄 간격</button></div>';
+      var fabT = 0;
+      function fabWake() { fab.classList.remove('dim'); clearTimeout(fabT); fabT = setTimeout(function () { fab.classList.add('dim'); }, 2800); }
+      fab.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return; var k = b.getAttribute('data-k');
+        if (k === 'fs-') fs = Math.max(13, fs - 1); else if (k === 'fs+') fs = Math.min(26, fs + 1); else lhI = (lhI + 1) % LH_STEPS.length;
+        lsSet(FS_KEY, fs); lsSet(LH_KEY, lhI); applyType(); fabWake();
+        if (k === 'lh') ctx.toast(['줄 간격: 좁게', '줄 간격: 보통', '줄 간격: 넓게'][lhI], 1200);
+      });
+      fab.addEventListener('pointerdown', fabWake);
+      host.addEventListener('scroll', fabWake, { passive: true });
+      host.appendChild(fab); fabWake();
+      cleanup.push(function () { clearTimeout(fabT); host.classList.remove('so-md-host'); host.style.removeProperty('--md-fs'); host.style.removeProperty('--md-lh'); });
       var showSrc = isTxt, blockedImgs = 0, extImgOk = false;
 
       function draw() {
@@ -45,17 +67,26 @@
         }
         var html = window.marked.parse(r.text, { gfm: true, breaks: false, async: false });
         var clean = sanitize(html);
-        var doc = document.createElement('div'); doc.className = 'so-md-doc'; doc.innerHTML = clean;
+        // 화면에 붙이기 전에, 요청이 나가지 않는 비활성 문서(DOMParser)에서 바깥 주소를 먼저 걷어낸다
+        var doc = document.createElement('div'); doc.className = 'so-md-doc';
+        var inert = new DOMParser().parseFromString('<!doctype html><body>' + clean, 'text/html').body;
+        var isExt = function (u) { return /^\s*(?:https?:)?\/\//i.test(u || ''); };
+        [].forEach.call(inert.querySelectorAll('*'), function (el) {
+          ['srcset', 'poster', 'background'].forEach(function (n) { if (el.hasAttribute(n) && (n !== 'srcset' || /https?:|\/\//i.test(el.getAttribute(n)))) el.removeAttribute(n); });
+          var st = el.getAttribute('style'); if (st && /url\s*\(|@import/i.test(st)) el.removeAttribute('style');
+          if (el.tagName === 'SOURCE' || el.tagName === 'VIDEO' || el.tagName === 'AUDIO' || el.tagName === 'IFRAME' || el.tagName === 'EMBED' || el.tagName === 'OBJECT') { if (isExt(el.getAttribute('src'))) el.removeAttribute('src'); }
+        });
         blockedImgs = 0;
-        [].forEach.call(doc.querySelectorAll('img'), function (im) {
+        [].forEach.call(inert.querySelectorAll('img'), function (im) {
           var src = im.getAttribute('src') || '';
           if (/^data:image\//i.test(src)) return;
           if (/^https?:/i.test(src) && extImgOk) return;
           if (/^https?:/i.test(src)) { blockedImgs++; }
-          var ph = document.createElement('span'); ph.className = 'so-md-img'; ph.textContent = '🖼 ' + (im.getAttribute('alt') || '그림') + (/^https?:/i.test(src) ? ' (바깥 주소 · 막음)' : ' (폰에 없는 그림)');
+          var ph = document.createElement('span'); ph.className = 'so-md-img'; ph.textContent = '🖼 ' + (im.getAttribute('alt') || '그림') + (/^https?:/i.test(src) ? ' (바깥 그림 · 막음)' : ' (폰에 없는 그림)');
           im.replaceWith(ph);
         });
-        [].forEach.call(doc.querySelectorAll('a'), function (a) { a.setAttribute('rel', 'noopener noreferrer'); a.removeAttribute('target'); });
+        [].forEach.call(inert.querySelectorAll('a'), function (a) { a.setAttribute('rel', 'noopener noreferrer'); a.removeAttribute('target'); });
+        while (inert.firstChild) doc.appendChild(document.adoptNode(inert.firstChild));
         page.appendChild(doc);
         if (blockedImgs) {
           var b = document.createElement('button'); b.type = 'button'; b.className = 'so-md-extimg'; b.textContent = '바깥 그림 ' + blockedImgs + '개 불러오기';

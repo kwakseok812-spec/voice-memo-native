@@ -48,7 +48,8 @@
 (function (global) {
   'use strict';
 
-  var SOFFICE_NAME = 'S-Office';            // 이름 표기는 여기 한 곳
+  var SOFFICE_NAME = 'S-Office';            // 이름 표기는 여기 한 곳 (홈 칸·열기 화면·설정·채팅 단추의 이름은 mount() 가 data-so-name / data-so-sub 자리에 채운다)
+  var SOFFICE_SUB = '문서 보기·고치기';       // 홈 도구 칸의 작은 글씨
   var SOFFICE_LONG = '스마트오피스';          // 풀이(정보 화면에서만)
   var SO_ON = 'on';                         // 스위치 — 'off' 면 통째로 꺼진 것과 같다
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
@@ -118,13 +119,13 @@
       '<div class="so-row-title">열기 방식</div>' +
       '<div class="so-seg" role="radiogroup" aria-label="열기 방식">' +
         '<button type="button" class="so-opt' + (m === 'convert' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'convert') + '" data-som="convert">' +
-          '<b>변환해서 보기</b><span>PC가 변환 · 한글과 가장 같은 모양 · 수정 요청</span></button>' +
+          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줘요 · 원본 모양 그대로 · 수정 요청</span></button>' +
         '<button type="button" class="so-opt' + (m === 'soffice' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'soffice') + '" data-som="soffice">' +
-          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰 안에서 바로 열기 · 고치기</span></button>' +
+          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고쳐요</span></button>' +
       '</div>' +
       '<div class="so-row-hint">' + (m === 'soffice'
-        ? SOFFICE_NAME + '가 아직 열지 못하는 형식은 자동으로 「변환해서 보기」로 열립니다.'
-        : '문서를 고른 뒤 바로 열립니다. 마지막에 고른 방식을 기억합니다.') +
+        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열려요.'
+        : '고른 문서를 PC가 PDF로 바꿔 보여 줘요(PC가 켜져 있어야 해요). 마지막에 고른 방식은 기억해 둬요.') +
         ' <button type="button" class="so-link" data-sinfo="1">' + SOFFICE_NAME + ' 정보</button></div>';
   }
   function onRowClick(e) {
@@ -294,7 +295,8 @@
   // ============ 정보 화면 (출처 · 한컴 고지 · 제휴 아님 · 변경 표시) ============
   var infoEl = null;
   var BASE_CREDITS = [
-    { name: 'PDF.js (Mozilla)', license: 'Apache-2.0', note: 'PDF 보기' }
+    { name: 'PDF.js (Mozilla)', license: 'Apache-2.0', note: 'PDF 보기' },
+    { name: 'tslib', license: '0BSD', note: '파워포인트 보기 부품에 함께 묶임' }     // pptx-preview 번들 안(차트 그리기용 ECharts 는 들어 있지 않음)
   ];
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function showInfo() {
@@ -316,7 +318,7 @@
       '<div class="so-info-bar"><button type="button" class="so-bar-btn" id="soInfoClose" aria-label="닫기">←</button><div class="so-title">' + SOFFICE_NAME + ' 정보</div></div>' +
       '<div class="so-info-body">' +
       '<h3>' + SOFFICE_NAME + ' (' + SOFFICE_LONG + ')</h3>' +
-      '<p>스마트비서 안에서 PDF·엑셀·워드·파워포인트 등 여러 형식의 문서를 폰에서 바로 열고(일부는 고치는) 기능입니다. AI 기능은 들어 있지 않습니다.' +
+      '<p>스마트비서 안에서 한글·워드·엑셀·파워포인트·PDF·마크다운·HTML 문서를 폰에서 바로 열고, 간단히 고치는 기능입니다. AI 기능은 들어 있지 않습니다.' +
         (hwpReady ? '' : ' 한글(HWP·HWPX) 문서는 아직 준비 중이라 「변환해서 보기」로 열립니다.') + '</p>' +
       (hwpReady ?
         '<h3>바탕으로 한 오픈소스</h3>' +
@@ -338,7 +340,13 @@
   }
 
   // ============ 설치(문서 뷰어 고르기 화면에 열기 방식 줄 연결) ============
+  function fillNames() {        // 화면 곳곳의 이름 자리를 상수로 채운다(이름을 바꿀 때 이 파일만 고치도록)
+    var i, a = document.querySelectorAll('[data-so-name]'), b = document.querySelectorAll('[data-so-sub]');
+    for (i = 0; i < a.length; i++) a[i].textContent = SOFFICE_NAME;
+    for (i = 0; i < b.length; i++) b[i].textContent = SOFFICE_SUB;
+  }
   function mount() {
+    fillNames();
     var row = $('soModeRow'); if (!row || row._soBound) { renderRow(); return; }
     row._soBound = true; row.addEventListener('click', onRowClick); renderRow();
   }
@@ -346,6 +354,7 @@
 
   global.SOffice = {
     NAME: SOFFICE_NAME,
+    SUB: SOFFICE_SUB,
     register: register,
     configure: function (o) { o = o || {}; if (o.toast) cfg.toast = o.toast; if (o.save) cfg.save = o.save; if (o.confirm) cfg.confirm = o.confirm; },
     intercept: intercept,

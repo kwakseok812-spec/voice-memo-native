@@ -1,18 +1,54 @@
-.so-docx-host{background:#e9e9ee;overflow:auto}
-.so-docx-box{min-width:min-content;padding:4px 0}
+/* 워드 보기·고치기 — 폰 화면용. 문서 쪽(종이)은 항상 흰색, 주변만 밝은/어두운 화면에 맞춘다.
+   색은 앱 테마 변수(--page-bg 등)를 쓰고, 없을 때(단독 시험)는 뒤의 값을 쓴다. */
+.so-docx-host{background:#e4e5ec;overflow:auto;touch-action:pan-x pan-y;overscroll-behavior:contain}
+html[data-style="dark"] .so-docx-host{background:#0b0d16}
+.so-docx-box{width:max-content;margin:0 auto;padding:4px 0}
 .so-docx-box .docx-wrapper{background:transparent !important;padding:6px 0 !important;align-items:flex-start}
 .so-docx-box .docx-wrapper>section.docx{box-shadow:0 1px 6px rgba(0,0,0,.25);margin-bottom:8px !important;color:#000;background:#fff}
-.so-docx-tip{position:sticky;bottom:10px;left:0;display:block;width:max-content;max-width:90%;margin:0 auto;padding:7px 12px;border-radius:14px;background:rgba(20,20,30,.78);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
+html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0 1px rgba(255,255,255,.10),0 2px 14px rgba(0,0,0,.6)}
+
+/* 떠 있는 표시줄(스크롤 판 위에 올려 둔다. 높이 0이라 문서 자리를 차지하지 않는다) */
+.so-docx-hud{position:sticky;top:0;height:0;z-index:6;pointer-events:none}
+.so-docx-pill{pointer-events:auto;position:absolute;top:8px;right:8px;min-height:44px;min-width:44px;padding:0 14px;border:0;border-radius:22px;
+  background:rgba(20,22,34,.82);color:#fff;font:700 14px/1 inherit;font-family:inherit;font-variant-numeric:tabular-nums;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.so-docx-pill:active{transform:scale(.96)}
+.so-docx-note{position:absolute;top:10px;left:8px;right:64px;margin:0 auto;width:max-content;max-width:calc(100% - 72px);padding:9px 14px;border-radius:14px;
+  background:rgba(20,22,34,.9);color:#fff;font-size:13.5px;line-height:1.45;opacity:0;transition:opacity .18s;pointer-events:none;word-break:keep-all}
+.so-docx-note.on{opacity:1}
+.so-docx-tip{position:absolute;top:calc(var(--soh,600px) - 52px);left:8px;right:8px;margin:0 auto;width:max-content;max-width:calc(100% - 16px);padding:7px 12px;border-radius:14px;background:rgba(20,22,34,.82);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
 .so-docx-tip.hide{opacity:0}
-.so-docx-editing section.docx>article p.so-docx-ok{outline:1.5px dashed rgba(40,110,230,.55);outline-offset:1px;cursor:pointer}
-.so-docx-editing section.docx>article p.so-docx-ok:active{background:rgba(40,110,230,.12)}
-.so-docx-box p.so-docx-edited{background:rgba(60,180,90,.18);outline:1.5px solid rgba(40,150,70,.7);outline-offset:1px;white-space:pre-wrap}
-.so-docx-sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;color:#111;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.28);padding:12px 14px calc(12px + env(safe-area-inset-bottom));max-height:70vh;overflow:auto;font-family:inherit}
-.so-docx-sh-t{font-weight:700;font-size:15px;margin-bottom:4px}
-.so-docx-sh-n{font-size:12px;color:#666;margin-bottom:8px;line-height:1.4}
-.so-docx-ta{width:100%;box-sizing:border-box;min-height:110px;max-height:38vh;font-size:16px;line-height:1.5;padding:8px 10px;border:1px solid #bbb;border-radius:10px;resize:vertical;color:#111;background:#fff}
-.so-docx-sh-b{display:flex;gap:8px;margin-top:10px}
-.so-docx-sh-b button{flex:1;padding:11px 0;border-radius:10px;border:1px solid #bbb;background:#f4f4f7;font-size:15px;color:#111}
-.so-docx-sh-b button.primary{background:#2d6be6;color:#fff;border-color:#2d6be6;font-weight:700}
+.so-docx-sheeting .so-docx-tip{display:none}
+
+/* 쪽·목차 이동 판 */
+.so-docx-nav{pointer-events:auto;position:absolute;top:58px;right:8px;width:min(300px,calc(100% - 16px));overflow:auto;-webkit-overflow-scrolling:touch;
+  padding:10px;border-radius:16px;background:var(--bg0,#fff);color:var(--text,#111);border:1px solid var(--glass-b,#ccd);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.so-docx-nav h4{margin:2px 2px 8px;font-size:13px;font-weight:800;color:var(--muted,#555)}
+.so-docx-nav-g{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+.so-docx-nav button{appearance:none;font-family:inherit;color:inherit;cursor:pointer;border:1px solid var(--glass-b,#ccd);background:var(--glass,#f4f4f7);border-radius:10px;min-height:44px;font-size:14px;font-weight:700}
+.so-docx-nav button.on{background:linear-gradient(135deg,var(--p1,#2d6be6),var(--p2,#7c3aed));color:#fff;border-color:transparent}
+.so-docx-nav-h{display:block;width:100%;text-align:left;padding:0 12px;margin-bottom:6px;font-weight:600 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 고치기 표시 */
+.so-docx-editing section.docx>article p.so-docx-ok{outline:2px dashed rgba(40,110,230,.7);outline-offset:2px;background:rgba(40,110,230,.07);cursor:pointer}
+.so-docx-editing section.docx>article p.so-docx-ok:active{background:rgba(40,110,230,.22)}
+.so-docx-box p.so-docx-edited{background:rgba(60,180,90,.2);outline:2px solid rgba(40,150,70,.8);outline-offset:2px;white-space:pre-wrap}
+.so-docx-box p.so-docx-cur{outline:3px solid #f59e0b !important;outline-offset:2px}
+
+/* 고치는 시트 — 키보드 위로 올라온다(bottom 값은 스크립트가 visualViewport 로 계산) */
+.so-docx-sheet{position:absolute;left:0;right:0;bottom:0;z-index:50;background:var(--bg0,#fff);color:var(--text,#111);border-radius:18px 18px 0 0;border:1px solid var(--glass-b,#ccd);border-bottom:0;
+  box-shadow:0 -6px 24px rgba(0,0,0,.28);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));overflow:auto;font-family:inherit;display:flex;flex-direction:column;gap:6px;
+  animation:so-docx-up .18s ease-out}
+@keyframes so-docx-up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.so-docx-sh-h{display:flex;align-items:center;gap:6px}
+.so-docx-sh-t{flex:1;min-width:0;font-weight:800;font-size:15px}
+.so-docx-sh-mv{appearance:none;font-family:inherit;color:inherit;border:1px solid var(--glass-b,#ccd);background:var(--glass,#f4f4f7);border-radius:12px;min-width:44px;min-height:44px;font-size:20px;font-weight:800;cursor:pointer}
+.so-docx-sh-mv:disabled{opacity:.35}
+.so-docx-sh-n{font-size:12px;color:var(--dim,#666);line-height:1.45;word-break:keep-all}
+.so-docx-ta{width:100%;box-sizing:border-box;min-height:84px;font-size:16px;line-height:1.5;padding:10px 12px;border:1.5px solid var(--glass-b2,#bbb);border-radius:12px;resize:none;color:var(--text,#111);background:var(--in-bg,#fff);font-family:inherit}
+.so-docx-ta:focus{outline:2px solid var(--p1,#2d6be6);outline-offset:0}
+.so-docx-sh-b{display:flex;gap:8px;margin-top:2px}
+.so-docx-sh-b button{flex:1;min-height:48px;padding:0 6px;border-radius:12px;border:1px solid var(--glass-b2,#bbb);background:var(--glass,#f4f4f7);font-size:15px;font-weight:700;color:var(--text,#111);font-family:inherit;cursor:pointer}
+.so-docx-sh-b button.primary{flex:1.5;background:linear-gradient(135deg,var(--p1,#2d6be6),var(--p2,#7c3aed));color:#fff;border-color:transparent}
+.so-docx-sh-b button:active{transform:scale(.97)}
 .so-docx-sh-b button:disabled{opacity:.4}
-@media (prefers-color-scheme:dark){.so-docx-sheet{background:#23242b;color:#eee}.so-docx-ta{background:#15161b;color:#eee;border-color:#555}.so-docx-sh-b button{background:#34353d;color:#eee;border-color:#555}.so-docx-sh-n{color:#aaa}}
+@media (prefers-reduced-motion:reduce){.so-docx-sheet{animation:none}.so-docx-note,.so-docx-tip{transition:none}.so-docx-pill:active,.so-docx-sh-b button:active{transform:none}}

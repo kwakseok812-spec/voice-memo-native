@@ -258,6 +258,7 @@
   }
   document.addEventListener('visibilitychange', function () { try { if (!document.hidden && isOpen(homeView)) paintHomeGreet(); } catch (e) {} });
   document.addEventListener('kintro:line', function () { try { homeGreetBand = ''; paintHomeGreet(); } catch (e) {} });   // v9.6: 시작 인사가 고른 말로 홈 인사를 맞춘다
+  function soName() { return (window.SOffice && SOffice.NAME) || 'S-Office'; }   // 문서 열기·고치기 기능의 이름 — 한 곳은 js/smartoffice/so-core.js (SOFFICE_NAME)
   var chatFromDocs = false;      // O-0548: 문서 뷰어 [💬]로 채팅에 왔으면 뒤로 = 보던 문서로
   function dropChatReturn() { chatFromDocs = false; try { if (window.SmartDocs && SmartDocs.dropChatReturn) SmartDocs.dropChatReturn(); } catch (e) {} }
   function showHome() {
@@ -2879,7 +2880,7 @@
   APP_VERSION = 'v9.28';        // v9.27: 건강 「기록 보기」 — 그래프 기간(30일·3개월·1년·전체)과 달별 접기, 점이 많으면 주간·월간 평균(스위치 health.js HIST_COMPACT)
   APP_VERSION = 'v9.29';        // v9.29(O-0607): 소리 없는 카메라 — 문서·영수증 스캔의 촬영이 앱 안 새 카메라 화면으로(찍은 직후 크게 확인·여러 장 이어 찍기·흐림 알림), 홈 「스캔」 칸이 「카메라」(문서·영수증·일반 사진)로 · 스위치 SILENT_CAM on / off(off 면 v9.28 과 같음) · versionCode 73
   APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
-  APP_VERSION = 'v9.33';        // v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
+  APP_VERSION = 'v9.34';        // v9.34: S-Office 폰 화면 다듬기(한글 폰용 도구줄·글꼴, 워드·PPT·엑셀·PDF 키보드·터치 정리), 홈 칸 이름 S-Office, 마크다운 바깥 그림 차단 보강. v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3376,11 +3377,11 @@
       var attrs = (!isUp && f.url) ? (' data-att-url="' + esc(f.url) + '" data-att-name="' + esc(f.name || '파일') + '"') : ' disabled';   // 이름: v7.9 폰에서 칩을 눌렀을 때 저장으로 보낼지 판정
       var chip = '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
         '<svg><use href="#' + attachIcon(f) + '"/></svg><span class="an">' + esc(f.name || '파일') + '</span>' + sz + '</button>';
-      // 케이가 보낸 문서(하향)면 [뷰어로 보기] 버튼을 함께 — 폰에서 PC와 똑같이 열람
+      // 케이가 보낸 문서(하향)면 [문서 보기] 버튼을 함께 — 폰에서 PC와 똑같이 열람
       if (!isUp && isViewableDoc(f)) {
         chip += '<button type="button" class="attach-view" data-view-url="' + esc(f.url) +
           '" data-view-name="' + esc(f.name || '문서') + '" data-view-mime="' + esc(f.mime || '') + '">' +
-          '<svg><use href="#i-doc"/></svg>뷰어로 보기</button>';
+          '<svg><use href="#i-doc"/></svg>문서 보기</button>';
       }
       // 받은 파일(url 있음)이면 [다운로드] — 기기 다운로드 폴더로 저장(안드로이드·PC 공용, 2026-09-21)
       if (!isUp && f.url) {
@@ -6383,7 +6384,7 @@
         }).catch(function () {});     // 실패 안내는 docScanShare 가 했다
       },
       view: function (file) {         // 문서 뷰어(SmartDocs.handleLocalFile — 공유로 받은 문서 열기와 같은 길)
-        if (!(window.SmartDocs && SmartDocs.handleLocalFile)) { toast('문서 뷰어를 준비하지 못했습니다.'); return; }
+        if (!(window.SmartDocs && SmartDocs.handleLocalFile)) { toast(soName() + '를 준비하지 못했습니다.'); return; }
         if (window.DocScan && DocScan.isOpen()) DocScan.back();
         openScreen(docsView);
         try { SmartDocs.handleLocalFile(file); } catch (e) { toast('문서를 여는 데 실패했습니다.'); }
@@ -8267,7 +8268,7 @@
     });
     h += '</div><div class="fs-preview"><div class="bubble k">대표님, 오늘 오후 3시에 학과 회의가 있습니다. 회의자료는 아침에 보내 드렸습니다.</div>' +
       '<div class="bubble me">고마워, 4시로 옮겨 줘</div></div>' +
-      '<div class="sheet-hint">채팅·입력창·홈 카드·문서 뷰어 글에 적용됩니다. 이 폰에만 저장됩니다.</div>' +
+      '<div class="sheet-hint">채팅·입력창·홈 카드·문서 보기 글에 적용됩니다. 이 폰에만 저장됩니다.</div>' +
       '<button type="button" class="sheet-btn" data-fs-close>닫기</button></div>';
     fsSheet.innerHTML = h;
     fsSheet.addEventListener('click', function (ev) {
@@ -9083,7 +9084,7 @@
       var f = new File([bytes], d.name || 'document', { type: d.mime || 'application/octet-stream' });
       openScreen(docsView);
       if (window.SmartDocs && SmartDocs.handleLocalFile) { SmartDocs.handleLocalFile(f); }
-      else { toast('문서 뷰어를 준비하지 못했습니다.'); }
+      else { toast(soName() + '를 준비하지 못했습니다.'); }
     } catch (e) { toast('공유된 문서를 여는 데 실패했습니다.'); }
   }
   // 조기 스텁(index.html head)을 실제 처리기로 교체하고, 그동안 큐에 쌓인 것을 처리한다.
@@ -9212,7 +9213,7 @@
     openDocFile: function (f) {
       openScreen(docsView);
       if (window.SmartDocs && SmartDocs.handleLocalFile) { try { SmartDocs.handleLocalFile(f); } catch (e) { toast('문서를 여는 데 실패했습니다.'); } }
-      else toast('문서 뷰어를 준비하지 못했습니다.');
+      else toast(soName() + '를 준비하지 못했습니다.');
     }
   };
   setTimeout(function () { try { if (window.TodayCard) TodayCard.refresh(true); } catch (e) {} }, 1600);

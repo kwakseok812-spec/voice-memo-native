@@ -5,7 +5,7 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
  - pdf-lib (MIT)                                www/vendor/so/pdf/PDF-LIB_LICENSE.txt
  - SheetJS Community Edition 0.18.5 (Apache-2.0) www/vendor/so/xlsx/NOTICE-sheetjs.txt, LICENSE-Apache-2.0.txt
  - docx-preview, JSZip                          www/vendor/so/docx/
- - pptx-preview 번들(JSZip, lodash, uuid, tslib 0BSD, ECharts Apache-2.0 포함)   www/vendor/so/pptx/
+ - pptx-preview 1.0.7 번들(ISC; JSZip, lodash, uuid(MIT), tslib(0BSD) 포함. 차트 그리기용 ECharts는 들어 있지 않음)   www/vendor/so/pptx/
  - marked, DOMPurify                            www/vendor/so/md/
  (위 목록은 앱 안 「S-Office 정보」 화면에도 나옵니다.)
 
@@ -23,7 +23,10 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
      서드파티 목록: vendor/so/hwp/studio/THIRD-PARTY-LICENSES-rhwp.md)
  4) @rhwp/editor 0.8.7, MIT — vendor/so/hwp/sdk/ (앱 화면과 한글 편집 화면을 잇는 작은 부품)
  5) CanvasKit (Skia), BSD-3-Clause — 한글 화면 그리기 (THIRD-PARTY-LICENSES-rhwp.md 참고)
- 6) 한글 문서 고지: 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+ 6) 대체 글꼴: Pretendard(SIL OFL 1.1, https://github.com/orioncactus/pretendard)와 Noto Serif KR(SIL OFL 1.1,
+    https://github.com/notofonts/noto-cjk)의 일부 글자만 남긴 파생본(이름을 "SO Sans KR"·"SO Serif KR"로 바꿈).
+    vendor/so/hwp/studio/fonts/ (라이선스 전문: Pretendard-OFL.txt, NotoSerifKR-OFL.txt, FONTS-README.txt)
+ 7) 한글 문서 고지: 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
 
 [제휴 아님]
  S-Office는 Microsoft, 주식회사 한글과컴퓨터, Adobe, Google, Artifex Software(SmartOffice) 등과 제휴하거나

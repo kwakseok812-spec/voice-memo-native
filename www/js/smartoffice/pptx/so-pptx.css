@@ -1,29 +1,49 @@
-.so-pptx-host{background:#e9e9ee;overflow:auto}
+/* 파워포인트 보기·글자 고치기 — 폰 화면용. 색은 앱 테마 변수를 쓰고, 슬라이드 그림은 그대로 둔다. */
+.so-pptx-host{background:#e4e5ec;overflow:auto;touch-action:pan-x pan-y;overscroll-behavior:contain}
+html[data-style="dark"] .so-pptx-host{background:#0b0d16}
 .so-pptx-stage{padding:6px;min-width:min-content}
+.so-pptx-stage .pptx-preview-wrapper{margin:0 auto}
 .so-pptx-stage .pptx-preview-slide-wrapper{box-shadow:0 1px 6px rgba(0,0,0,.25);margin-bottom:10px !important}
-.so-pptx-nav{position:sticky;bottom:10px;display:flex;align-items:center;justify-content:center;gap:12px;width:max-content;margin:0 auto;padding:4px 8px;border-radius:24px;background:rgba(20,20,30,.82);color:#fff;z-index:3}
-.so-pptx-nav button{appearance:none;border:0;background:transparent;color:#fff;font-size:26px;min-width:48px;min-height:44px;cursor:pointer}
-.so-pptx-pos{font-size:14px;font-weight:700;min-width:56px;text-align:center}
-.so-pptx-tip{position:sticky;bottom:64px;display:block;width:max-content;max-width:92%;margin:0 auto;padding:7px 12px;border-radius:14px;background:rgba(20,20,30,.78);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
+html[data-style="dark"] .so-pptx-stage .pptx-preview-slide-wrapper{box-shadow:0 0 0 1px rgba(255,255,255,.10),0 2px 14px rgba(0,0,0,.6)}
+/* 짧은 전환(0.16초) */
+.so-pptx-in-f{animation:so-pptx-f .16s ease-out}
+.so-pptx-in-r{animation:so-pptx-r .16s ease-out}
+.so-pptx-in-l{animation:so-pptx-l .16s ease-out}
+@keyframes so-pptx-f{from{opacity:.25}to{opacity:1}}
+@keyframes so-pptx-r{from{opacity:.25;transform:translateX(22px)}to{opacity:1;transform:none}}
+@keyframes so-pptx-l{from{opacity:.25;transform:translateX(-22px)}to{opacity:1;transform:none}}
+/* 떠 있는 줄: 높이 0 이라 스크롤 내용 자리를 차지하지 않는다 */
+.so-pptx-hudb{position:sticky;top:0;height:0;z-index:4;pointer-events:none}
+.so-pptx-nav{pointer-events:auto;position:absolute;top:calc(var(--soh,700px) - 72px);left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:4px;padding:4px 6px;border-radius:30px;background:rgba(20,22,34,.88);color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.so-pptx-nav button{appearance:none;border:0;background:transparent;color:#fff;font-size:30px;line-height:1;min-width:64px;min-height:52px;border-radius:26px;cursor:pointer}
+.so-pptx-nav button:active{background:rgba(255,255,255,.18)}
+.so-pptx-pos{font-size:15px;font-weight:700;min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
+.so-pptx-tip{position:absolute;top:calc(var(--soh,700px) - 124px);left:8px;right:8px;margin:0 auto;width:max-content;max-width:calc(100% - 16px);padding:7px 12px;border-radius:14px;background:rgba(20,22,34,.82);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
 .so-pptx-tip.hide{opacity:0}
-.so-pe{padding:8px 8px 40px;background:#f4f4f8;min-height:100%;box-sizing:border-box;color:#222}
+/* 글자 목록 고치기 */
+.so-pe{padding:8px 10px 40px;background:var(--page-bg,#f4f4f8);min-height:100%;box-sizing:border-box;color:var(--text,#222)}
 .so-pe-top{display:flex;gap:6px;align-items:center;margin-bottom:8px}
-.so-pe-nb{appearance:none;border:1px solid #c9c9d4;background:#fff;border-radius:10px;min-width:44px;min-height:44px;font-size:22px;cursor:pointer}
-.so-pe-sel{flex:1;min-width:0;min-height:44px;border:1px solid #c9c9d4;border-radius:10px;padding:0 8px;font-size:14px;background:#fff}
-.so-pe-prev{background:#e4e4ea;border-radius:8px;padding:4px;overflow:hidden;margin-bottom:8px}
+.so-pe-nb{appearance:none;border:1px solid var(--glass-b2,#c9c9d4);background:var(--glass,#fff);color:var(--text,#222);border-radius:12px;min-width:48px;min-height:48px;font-size:24px;cursor:pointer}
+.so-pe-nb:active{background:var(--glass2,#eee)}
+.so-pe-sel{flex:1;min-width:0;min-height:48px;border:1px solid var(--glass-b2,#c9c9d4);border-radius:12px;padding:0 10px;font-size:15px;background:var(--bg0,#fff);color:var(--text,#222);font-family:inherit}
+.so-pe-prev{background:#d9dae2;border-radius:10px;padding:4px;overflow:hidden;margin-bottom:8px}
+html[data-style="dark"] .so-pe-prev{background:#05060c}
 .so-pe-prev .pptx-preview-slide-wrapper{margin:0 auto !important;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .so-pe-stale{font-size:12px;color:#8a5a00;background:#fff4d6;border-radius:6px;padding:4px 8px;margin-top:4px}
-.so-pe-hint{font-size:12.5px;color:#555;line-height:1.5;margin:0 2px 8px}
-.so-pe-card{background:#fff;border:1px solid #d6d6e0;border-left:4px solid #d6d6e0;border-radius:10px;padding:8px;margin-bottom:8px}
-.so-pe-card.changed{border-left-color:#2f6fed;background:#f3f7ff}
-.so-pe-lab{display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-bottom:4px}
-.so-pe-kind{background:#eceef6;border-radius:6px;padding:1px 6px;font-weight:700}
+.so-pe-hint{font-size:12.5px;color:var(--dim,#555);line-height:1.55;margin:0 2px 8px;word-break:keep-all}
+.so-pe-card{background:var(--glass2,#fff);border:1px solid var(--glass-b,#d6d6e0);border-left:5px solid var(--glass-b2,#d6d6e0);border-radius:12px;padding:8px;margin-bottom:10px}
+.so-pe-card.changed{border-left-color:#2f6fed;background:rgba(47,111,237,.10)}
+.so-pe-lab{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim,#666);margin-bottom:6px;min-height:28px}
+.so-pe-kind{background:var(--glass,#eceef6);border:1px solid var(--glass-b,transparent);border-radius:6px;padding:1px 6px;font-weight:700;color:var(--muted,#555)}
 .so-pe-shape{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.so-pe-mark{display:none;color:#2f6fed;font-weight:700}
+.so-pe-mark{display:none;color:#fff;background:#2f6fed;border-radius:8px;padding:2px 8px;font-weight:700}
 .so-pe-card.changed .so-pe-mark{display:inline}
-.so-pe-undo{display:none;appearance:none;border:1px solid #b9c7ee;background:#fff;color:#2f6fed;border-radius:8px;min-height:32px;padding:0 8px;font-size:12px;cursor:pointer}
+.so-pe-undo{display:none;appearance:none;border:1px solid #6f93ee;background:transparent;color:var(--p1,#2f6fed);border-radius:10px;min-height:44px;min-width:76px;padding:0 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.so-pe-undo:active{background:rgba(47,111,237,.18)}
 .so-pe-card.changed .so-pe-undo{display:inline-block}
-.so-pe-ta{width:100%;box-sizing:border-box;border:1px solid #ccd;border-radius:8px;padding:8px;font:inherit;font-size:15px;line-height:1.45;resize:none;overflow:auto;background:#fff;color:#111}
-.so-pe-ta.lock{background:#eee;color:#666}
-.so-pe-lockmsg,.so-pe-empty,.so-pe-foot{font-size:12px;color:#777;margin-top:4px}
-.so-pe-foot{margin:10px 2px}
+.so-pe-ta{width:100%;box-sizing:border-box;border:1.5px solid var(--glass-b2,#ccd);border-radius:10px;padding:10px;font:inherit;font-size:16px;line-height:1.5;resize:none;overflow:auto;background:var(--in-bg,#fff);color:var(--text,#111)}
+.so-pe-ta:focus{outline:2px solid var(--p1,#2f6fed);outline-offset:0}
+.so-pe-ta.lock{background:rgba(128,128,128,.18);color:var(--dim,#666)}
+.so-pe-lockmsg,.so-pe-empty,.so-pe-foot{font-size:12px;color:var(--dim,#777);margin-top:4px}
+.so-pe-foot{margin:10px 2px;line-height:1.5;word-break:keep-all}
+@media (prefers-reduced-motion:reduce){.so-pptx-in-f,.so-pptx-in-r,.so-pptx-in-l{animation:none}.so-pptx-tip{transition:none}}

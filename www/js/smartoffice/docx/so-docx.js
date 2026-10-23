@@ -242,30 +242,96 @@
   }
 
   // ============================================================ 화면
-  var wrap = null, scale = 1, fit = 1, pageW = 794, ctxRef = null, cleanup = [];
+  var wrap = null, scale = 1, fit = 1, pageW = 0, ctxRef = null, cleanup = [], userZoomed = false, hostW = 0;
   var S = null;   // 고치기 상태
+  var hud = null, pill = null, noteEl = null, navEl = null, pageEls = [], curPage = 1;
 
+  function clampScale(v) { return Math.max(Math.min(0.3, fit * 0.8), Math.min(4, v)); }
   function applyScale() {
-    scale = Math.max(0.3, Math.min(4, scale));
+    scale = clampScale(scale);
     if (wrap) wrap.style.zoom = String(scale);
     var lab = document.getElementById('soDocxZoomLab'); if (lab) lab.textContent = Math.round(scale * 100) + '%';
   }
-  function measure(host) {
-    var pg = wrap && wrap.querySelector('section.docx');
-    pageW = pg ? pg.getBoundingClientRect().width / (wrap.style.zoom ? Number(wrap.style.zoom) || 1 : 1) : 794;
-    if (!pageW || pageW < 100) pageW = 794;
-    fit = Math.max(0.3, (host.clientWidth - 8) / pageW);
+  // 확대·축소할 때 손가락(또는 화면 가운데) 아래 내용이 제자리에 있도록 스크롤을 보정한다
+  function zoomTo(host, next, cx, cy) {
+    var old = scale; scale = next; applyScale();
+    var r = old ? scale / old : 1;
+    if (cx == null) { cx = host.clientWidth / 2; cy = host.clientHeight / 2; }
+    host.scrollLeft = (host.scrollLeft + cx) * r - cx;
+    host.scrollTop = (host.scrollTop + cy) * r - cy;
+    userZoomed = true;
   }
+  function measure(host) {
+    if (!pageW) {                                   // 쪽 폭은 확대하지 않은 상태에서 한 번만 잰다
+      var pg = wrap && wrap.querySelector('section.docx');
+      var w = pg ? pg.getBoundingClientRect().width / (wrap.style.zoom ? Number(wrap.style.zoom) || 1 : 1) : 794;
+      pageW = (!w || w < 100) ? 794 : w;
+    }
+    fit = Math.max(0.2, (host.clientWidth - 8) / pageW);
+    hostW = host.clientWidth;
+  }
+  // 두 손가락 확대 / 한 손가락 스크롤: 호스트에 touch-action:pan-x pan-y 를 주어 브라우저 확대는 막고, 두 손가락일 때만 직접 확대한다
   function setupPinch(host) {
     var d0 = 0, s0 = 1;
     function dist(t) { var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.sqrt(dx * dx + dy * dy); }
-    function ts(e) { if (e.touches.length === 2) { d0 = dist(e.touches); s0 = scale; } }
-    function tm(e) { if (e.touches.length === 2 && d0) { e.preventDefault(); scale = s0 * dist(e.touches) / d0; applyScale(); } }
+    function ts(e) { if (e.touches.length === 2) { d0 = dist(e.touches); s0 = scale; } else d0 = 0; }
+    function tm(e) {
+      if (e.touches.length === 2 && d0) {
+        e.preventDefault();
+        var r = host.getBoundingClientRect();
+        var cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
+        zoomTo(host, clampScale(s0 * dist(e.touches) / d0), cx, cy);
+      }
+    }
     function te(e) { if (e.touches.length < 2) d0 = 0; }
     host.addEventListener('touchstart', ts, { passive: true });
     host.addEventListener('touchmove', tm, { passive: false });
     host.addEventListener('touchend', te, { passive: true });
-    cleanup.push(function () { host.removeEventListener('touchstart', ts); host.removeEventListener('touchmove', tm); host.removeEventListener('touchend', te); });
+    host.addEventListener('touchcancel', te, { passive: true });
+    cleanup.push(function () { host.removeEventListener('touchstart', ts); host.removeEventListener('touchmove', tm); host.removeEventListener('touchend', te); host.removeEventListener('touchcancel', te); });
+  }
+
+  // ---- 위쪽 알림(시트 단추를 가리지 않게 화면 위쪽에 둔다) / 쪽 번호 알약 / 쪽·목차 이동
+  var noteT = 0;
+  function note(msg, ms) {
+    if (!noteEl) return;
+    noteEl.textContent = msg; noteEl.classList.add('on');
+    clearTimeout(noteT); noteT = setTimeout(function () { if (noteEl) noteEl.classList.remove('on'); }, ms || 3200);
+  }
+  function updatePage() {
+    if (!hud || !pageEls.length) return;
+    var host = ctxRef && ctxRef.body; if (!host) return;
+    var line = host.getBoundingClientRect().top + host.clientHeight * 0.35, n = 1;
+    for (var i = 0; i < pageEls.length; i++) { if (pageEls[i].getBoundingClientRect().top <= line) n = i + 1; else break; }
+    if (n !== curPage || !pill.textContent) { curPage = n; pill.textContent = n + ' / ' + pageEls.length + '쪽'; }
+  }
+  function scrollToEl(el) {
+    var host = ctxRef && ctxRef.body; if (!host || !el) return;
+    host.scrollTop += el.getBoundingClientRect().top - host.getBoundingClientRect().top - 56;
+  }
+  function closeNav() { if (navEl && navEl.parentNode) navEl.parentNode.removeChild(navEl); navEl = null; }
+  function toggleNav() {
+    if (navEl) { closeNav(); return; }
+    var host = ctxRef.body, heads = [];
+    [].forEach.call(wrap.querySelectorAll('section.docx > article p'), function (p) {
+      if (heads.length >= 80) return;
+      if (/(^|\s)docx_(heading\d*|title|subtitle|제목\d*|\d)(\s|$)/i.test(p.className) && p.textContent.trim()) heads.push(p);
+    });
+    navEl = document.createElement('div'); navEl.className = 'so-docx-nav';
+    navEl.style.maxHeight = Math.max(160, host.clientHeight - 80) + 'px';
+    var h = '<h4>쪽 이동</h4><div class="so-docx-nav-g">';
+    for (var i = 1; i <= pageEls.length; i++) h += '<button type="button" data-pg="' + i + '"' + (i === curPage ? ' class="on"' : '') + '>' + i + '</button>';
+    h += '</div>';
+    if (heads.length) { h += '<h4>목차</h4>'; heads.forEach(function (p, k) { h += '<button type="button" class="so-docx-nav-h" data-hd="' + k + '"></button>'; }); }
+    navEl.innerHTML = h;
+    [].forEach.call(navEl.querySelectorAll('[data-hd]'), function (b) { b.textContent = heads[Number(b.getAttribute('data-hd'))].textContent.trim().replace(/\s+/g, ' '); });
+    navEl.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
+      if (b.hasAttribute('data-pg')) scrollToEl(pageEls[Number(b.getAttribute('data-pg')) - 1]);
+      else if (b.hasAttribute('data-hd')) scrollToEl(heads[Number(b.getAttribute('data-hd'))]);
+      closeNav();
+    });
+    hud.appendChild(navEl);
   }
 
   function editCount() { return S ? Object.keys(S.edits).length : 0; }
@@ -291,9 +357,9 @@
       ]);
     } else {
       ctx.setActions([
-        { label: '−', onClick: function () { scale *= 0.8; applyScale(); } },
-        { label: '맞춤', onClick: function () { scale = fit; applyScale(); host.scrollLeft = 0; } },
-        { label: '＋', onClick: function () { scale *= 1.25; applyScale(); } },
+        { label: '−', onClick: function () { zoomTo(host, scale * 0.8); } },
+        { label: '맞춤', onClick: function () { userZoomed = false; measure(host); scale = Math.min(1, fit); applyScale(); host.scrollLeft = 0; } },
+        { label: '＋', onClick: function () { zoomTo(host, scale * 1.25); } },
         { label: '고치기', primary: true, disabled: !S.ready || !!S.disabled || S.nEdit === 0, onClick: function () { enterEdit(); } }
       ]);
     }
@@ -303,7 +369,7 @@
     if (!S || S.disabled) return;
     S.mode = 'edit'; wrap.classList.add('so-docx-editing');
     setActions(); setTip();
-    ctxRef.toast('고칠 문단(점선)을 눌러 글을 고치세요. 그림·표 모양은 그대로 유지됩니다.', 3400);
+    note('고칠 문단(점선)을 눌러 글을 고치세요. 그림·표 모양은 그대로 유지됩니다.', 3600);
   }
   function exitEdit() {
     if (!S) return; closeSheet();
@@ -312,35 +378,84 @@
   }
 
   // ---- 문단 고치는 시트 (textarea: 폰 한글 조합 입력이 가장 안정적. contenteditable 은 docx-preview 가 만든 DOM·CSS zoom 위에서 커서·조합이 흔들려 쓰지 않음)
-  var sheet = null;
-  function closeSheet() { if (sheet && sheet.parentNode) sheet.parentNode.removeChild(sheet); sheet = null; if (S) S.sheetOpen = false; }
+  //      시트는 화면 맨 아래 고정(position:fixed)이 아니라 틀 안에 두고, 키보드가 올라오면 visualViewport 로 높이를 재서 키보드 바로 위로 올린다.
+  var sheet = null, sheetVV = null, sheetCur = null;
+  function closeSheet() {
+    if (sheetVV && window.visualViewport) { window.visualViewport.removeEventListener('resize', sheetVV); window.visualViewport.removeEventListener('scroll', sheetVV); }
+    sheetVV = null;
+    if (sheetCur) { sheetCur.classList.remove('so-docx-cur'); sheetCur = null; }
+    if (sheet && sheet.parentNode) sheet.parentNode.removeChild(sheet); sheet = null;
+    if (ctxRef && ctxRef.body) { ctxRef.body.style.paddingBottom = ''; ctxRef.body.classList.remove('so-docx-sheeting'); }
+    if (S) S.sheetOpen = false;
+  }
+  function placeSheet(reveal) {
+    if (!sheet) return;
+    var vv = window.visualViewport, kb = 0, avail = window.innerHeight;
+    if (vv) { kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop); avail = vv.height; }
+    sheet.style.bottom = Math.round(kb) + 'px';
+    sheet.style.maxHeight = Math.round(avail * 0.62) + 'px';
+    var ta = sheet.querySelector('textarea'); if (ta) ta.style.maxHeight = Math.max(84, Math.round(avail * 0.28)) + 'px';
+    var host = ctxRef.body, h = sheet.offsetHeight;
+    host.style.paddingBottom = (h + 12) + 'px';                         // 시트 뒤에 가려진 문서도 끝까지 스크롤할 수 있게
+    if (reveal && sheetCur) {                                           // 고치는 문단이 시트에 가리지 않게 위로 올린다
+      var pr = sheetCur.getBoundingClientRect(), top = sheet.getBoundingClientRect().top, hr = host.getBoundingClientRect();
+      if (pr.bottom > top - 8) host.scrollTop += Math.min(pr.bottom - (top - 8), Math.max(0, pr.top - (hr.top + 60)));
+    }
+  }
+  // 이웃 고칠 문단(delta = -1 / +1) 번호
+  function neighbor(xi, delta) {
+    var i = xi + delta;
+    while (i >= 0 && i < S.doc.paras.length) { var p = S.doc.paras[i]; if (p.editable && p.r) return i; i += delta; }
+    return -1;
+  }
   function openSheet(pEl, xi) {
     closeSheet();
     var para = S.doc.paras[xi], cur = (xi in S.edits) ? S.edits[xi] : para.text;
     sheet = document.createElement('div'); sheet.className = 'so-docx-sheet';
     sheet.innerHTML =
+      '<div class="so-docx-sh-h"><button type="button" class="so-docx-sh-mv" data-a="prev" aria-label="앞 문단"' + (neighbor(xi, -1) < 0 ? ' disabled' : '') + '>‹</button>' +
       '<div class="so-docx-sh-t">문단 고치기' + (xi in S.edits ? ' · 고친 문단' : '') + '</div>' +
+      '<button type="button" class="so-docx-sh-mv" data-a="next" aria-label="다음 문단"' + (neighbor(xi, 1) < 0 ? ' disabled' : '') + '>›</button></div>' +
       '<div class="so-docx-sh-n"></div>' +
-      '<textarea class="so-docx-ta" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>' +
+      '<textarea class="so-docx-ta" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="enter"></textarea>' +
       '<div class="so-docx-sh-b"><button type="button" data-a="cancel">취소</button><button type="button" data-a="revert"' + ((xi in S.edits) ? '' : ' disabled') + '>원래 글로</button><button type="button" data-a="ok" class="primary">적용</button></div>';
-    var note = [];
-    if (para.mixed) note.push('한 문단에 글자 모양이 섞여 있어요. 바꾼 부분만 그 자리의 글자 모양으로 들어가고 나머지 글자는 그대로예요.');
-    note.push('줄을 바꾸면 줄 나눔으로 들어가요.');
-    sheet.querySelector('.so-docx-sh-n').textContent = note.join(' ');
+    var noteT2 = [];
+    if (para.mixed) noteT2.push('한 문단에 글자 모양이 섞여 있어요. 바꾼 부분만 그 자리의 글자 모양으로 들어가고 나머지 글자는 그대로예요.');
+    noteT2.push('줄을 바꾸면 줄 나눔으로 들어가요.');
+    sheet.querySelector('.so-docx-sh-n').textContent = noteT2.join(' ');
     var ta = sheet.querySelector('textarea'); ta.value = cur;
-    sheet.addEventListener('click', function (e) {
-      var b = e.target.closest ? e.target.closest('button[data-a]') : null; if (!b || b.disabled) return;
-      var a = b.getAttribute('data-a');
-      if (a === 'cancel') { closeSheet(); return; }
-      if (a === 'revert') { delete S.edits[xi]; setRendered(pEl, null); afterChange(); closeSheet(); return; }
+    var composing = false;                                               // 한글 조합 중에는 값이 아직 확정 전이므로, 단추를 눌러도 조합이 끝난 뒤에 읽는다
+    ta.addEventListener('compositionstart', function () { composing = true; });
+    ta.addEventListener('compositionend', function () { composing = false; });
+    function commit() {
       var v = ta.value.replace(/\r\n?/g, '\n');
       if (v === para.text) delete S.edits[xi]; else S.edits[xi] = v;
       setRendered(pEl, (xi in S.edits) ? v : null);
-      afterChange(); closeSheet();
+      afterChange();
+    }
+    function act(a) {
+      if (!sheet) return;
+      if (a === 'cancel') { closeSheet(); return; }
+      if (a === 'revert') { delete S.edits[xi]; setRendered(pEl, null); afterChange(); closeSheet(); return; }
+      commit();
+      if (a === 'ok') { closeSheet(); return; }
+      var nx = neighbor(xi, a === 'next' ? 1 : -1);
+      closeSheet();
+      if (nx >= 0) { var q = S.doc.paras[nx].r; openSheet(q, nx); }
+    }
+    sheet.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-a]') : null; if (!b || b.disabled) return;
+      var a = b.getAttribute('data-a');
+      if (composing) { try { ta.blur(); } catch (x) {} setTimeout(function () { act(a); }, 60); }
+      else act(a);
     });
     var root = ctxRef.body.parentNode || document.body; root.appendChild(sheet);
+    ctxRef.body.classList.add('so-docx-sheeting');
+    sheetCur = pEl; pEl.classList.add('so-docx-cur');
     S.sheetOpen = true;
-    setTimeout(function () { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }, 60);
+    placeSheet(true);
+    if (window.visualViewport) { sheetVV = function () { placeSheet(true); }; window.visualViewport.addEventListener('resize', sheetVV); window.visualViewport.addEventListener('scroll', sheetVV); }
+    setTimeout(function () { if (!sheet) return; try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} placeSheet(true); }, 60);
   }
   function setRendered(p, text) {
     if (text == null) { if (p._soOrig != null) { p.innerHTML = p._soOrig; } p.classList.remove('so-docx-edited'); return; }
@@ -471,36 +586,66 @@
         if (!window.docx || !window.docx.renderAsync) throw new Error('워드 부품을 찾지 못함');
         var host = ctx.body;
         host.classList.add('so-docx-host');
+        pageW = 0; userZoomed = false;
+        hud = document.createElement('div'); hud.className = 'so-docx-hud';
+        pill = document.createElement('button'); pill.type = 'button'; pill.className = 'so-docx-pill'; pill.setAttribute('aria-label', '쪽·목차 이동');
+        noteEl = document.createElement('div'); noteEl.className = 'so-docx-note'; noteEl.setAttribute('role', 'status');
+        hud.appendChild(noteEl); hud.appendChild(pill);
+        pill.onclick = function () { toggleNav(); };
         var box = document.createElement('div'); box.className = 'so-docx-box';
         var styleBox = document.createElement('div'); styleBox.style.display = 'none';
-        host.appendChild(styleBox); host.appendChild(box);
+        host.appendChild(styleBox); host.appendChild(hud); host.appendChild(box);
+        host.style.setProperty('--soh', host.clientHeight + 'px');
         wrap = box;
         return window.docx.renderAsync(ctx.file, box, styleBox, {
           className: 'docx', inWrapper: true, ignoreWidth: false, ignoreHeight: false, ignoreFonts: false,
           breakPages: true, ignoreLastRenderedPageBreak: false, renderHeaders: true, renderFooters: true,
           renderFootnotes: true, renderEndnotes: true, useBase64URL: true, experimental: false
         }).then(function () {
-          var pages = box.querySelectorAll('section.docx').length;
+          pageEls = [].slice.call(box.querySelectorAll('section.docx'));
+          var pages = pageEls.length;
           if (!pages) throw new Error('쪽을 그리지 못함');
           S.pages = pages;
           measure(host); scale = Math.min(1, fit); applyScale();
           setupPinch(host);
-          var tip = document.createElement('div'); tip.className = 'so-docx-tip'; S.tip = tip; host.appendChild(tip);
+          var tip = document.createElement('div'); tip.className = 'so-docx-tip'; S.tip = tip; hud.appendChild(tip);
           S.disabled = '고칠 수 있는지 확인하는 중…';
-          setActions(); setTip();
-          var onR = function () { measure(host); };
+          setActions(); setTip(); updatePage();
+          var raf = 0, onS = function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; updatePage(); }); };
+          host.addEventListener('scroll', onS, { passive: true }); cleanup.push(function () { host.removeEventListener('scroll', onS); if (raf) cancelAnimationFrame(raf); });
+          // 폭이 바뀔 때(접기·펼치기·가로 돌리기)만 다시 맞춘다. 키보드가 올라와 높이만 바뀔 때는 건드리지 않는다
+          var onR = function () {
+            host.style.setProperty('--soh', host.clientHeight + 'px');
+            if (host.clientWidth === hostW) return;
+            measure(host); if (!userZoomed) { scale = Math.min(1, fit); applyScale(); } else applyScale();
+            closeNav(); if (sheet) placeSheet(true); updatePage();
+          };
           window.addEventListener('resize', onR); cleanup.push(function () { window.removeEventListener('resize', onR); });
-          // 눌러서 고치기
+          // 눌러서 고치기 (문단 사이 좁은 틈을 눌러도 가장 가까운 고칠 문단을 잡아 준다)
+          function pick(e) {
+            var p = e.target.closest ? e.target.closest('section.docx > article p') : null; if (p) return p;
+            if (!S || !S.doc) return null;
+            var best = null, bd = 18;
+            S.doc.paras.forEach(function (q) {
+              if (!q.editable || !q.r) return;
+              var r = q.r.getBoundingClientRect();
+              if (e.clientX < r.left - 12 || e.clientX > r.right + 12) return;
+              var d = e.clientY < r.top ? r.top - e.clientY : (e.clientY > r.bottom ? e.clientY - r.bottom : 0);
+              if (d < bd) { bd = d; best = q.r; }
+            });
+            return best;
+          }
           var onClick = function (e) {
+            if (navEl && !e.target.closest('.so-docx-nav')) closeNav();
             if (!S || S.mode !== 'edit' || S.sheetOpen) return;
-            var p = e.target.closest ? e.target.closest('section.docx > article p') : null; if (!p) return;
+            var p = pick(e); if (!p) return;
             var xi = p._soX; var para = xi != null ? S.doc.paras[xi] : null;
-            if (!para) { ctx.toast(REASON.nomatch, 3200); return; }
-            if (!para.editable) { ctx.toast(REASON[para.reason] || REASON.other, 3600); return; }
+            if (!para) { note(REASON.nomatch, 3600); return; }
+            if (!para.editable) { note(REASON[para.reason] || REASON.other, 3800); return; }
             openSheet(p, xi);
           };
           box.addEventListener('click', onClick); cleanup.push(function () { box.removeEventListener('click', onClick); });
-          ctx.onBack(function () { if (sheet) { closeSheet(); return true; } if (S && S.mode === 'edit' && editCount() === 0) { exitEdit(); return true; } return false; });
+          ctx.onBack(function () { if (navEl) { closeNav(); return true; } if (sheet) { closeSheet(); return true; } if (S && S.mode === 'edit' && editCount() === 0) { exitEdit(); return true; } return false; });
           // 짝짓기는 보기를 막지 않게 뒤에서 한다. 실패해도 보기는 그대로.
           return prepareEdit(box).then(function () { if (S) { if (S.disabled === '고칠 수 있는지 확인하는 중…') S.disabled = null; setActions(); setTip(); } }, function (e) {
             try { console.warn('[S-Office/docx] 고치기 준비 실패', e); } catch (x) {}
@@ -511,7 +656,8 @@
     },
     close: function () {
       cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = [];
-      closeSheet(); if (S && S.tipTimer) clearTimeout(S.tipTimer);
+      closeSheet(); closeNav(); clearTimeout(noteT); if (S && S.tipTimer) clearTimeout(S.tipTimer);
+      hud = pill = noteEl = null; pageEls = []; pageW = 0;
       wrap = null; ctxRef = null; S = null;
     },
     _t: { diffHunks: diffHunks, analyze: analyze, analyzeDoc: analyzeDoc, rebuildParagraph: rebuildParagraph, applyEdits: applyEdits, align: align, scanParagraphs: scanParagraphs, norm: norm }

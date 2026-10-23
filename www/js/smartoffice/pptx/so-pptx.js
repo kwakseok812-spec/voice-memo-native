@@ -4,7 +4,7 @@
  * .ppt(옛 형식)는 열 수 없어 ①로 보낸다. */
 (function () {
   'use strict';
-  var cleanup = [], state = null;
+  var cleanup = [], state = null, composing = false;
   var MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
   function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -22,6 +22,7 @@
       if (!slides.length) throw new Error('슬라이드를 그리지 못함');
       wrapper.style.background = 'transparent';
       s.wrapper = wrapper; s.slides = slides; s.idx = Math.min(s.idx, slides.length - 1);
+      s.sh = slides[0].offsetHeight || 540; s.drawW = W;
     });
   }
 
@@ -29,16 +30,36 @@
     var host = ctx.body;
     host.classList.add('so-pptx-host');
     var stage = document.createElement('div'); stage.className = 'so-pptx-stage'; host.appendChild(stage);
-    var s = state = { prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null };
+    var s = state = { prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null, sh: 540, drawW: 0, dir: 0 };
     return drawDeck(host, s, buf).then(function () {
       var slides = function () { return s.slides; };
-      var nav = document.createElement('div'); nav.className = 'so-pptx-nav'; host.appendChild(nav);
+      var hudb = document.createElement('div'); hudb.className = 'so-pptx-hudb'; host.insertBefore(hudb, stage);   // 높이 0 의 떠 있는 줄(문서 자리를 차지하지 않는다). 위쪽에 두고 --soh(화면 높이)로 아래로 내려 그린다
+      var nav = document.createElement('div'); nav.className = 'so-pptx-nav'; hudb.appendChild(nav);
       nav.innerHTML = '<button type="button" data-d="-1" aria-label="이전">‹</button><span class="so-pptx-pos"></span><button type="button" data-d="1" aria-label="다음">›</button>';
       var pos = nav.querySelector('.so-pptx-pos');
       var tip = document.createElement('div'); tip.className = 'so-pptx-tip';
-      host.appendChild(tip);
+      hudb.appendChild(tip);
       function showTip(t, ms) { tip.textContent = t; tip.classList.remove('hide'); clearTimeout(showTip._t); showTip._t = setTimeout(function () { tip.classList.add('hide'); }, ms || 4500); }
 
+      // 한 장씩 볼 때는 슬라이드 한 장이 화면 높이에 다 들어오게(밑의 ‹ › 줄 자리를 뺀다) 기본 크기를 줄인다. 목록은 폭에 맞춰 이미 그렸다
+      function baseZoom() {
+        if (s.mode !== 'one' || !s.sh) return 1;
+        return Math.max(0.3, Math.min(1, (host.clientHeight - 84) / s.sh));
+      }
+      function applyZoom() {
+        host.style.setProperty('--soh', host.clientHeight + 'px');
+        var z = baseZoom() * s.scale; s.wrapper.style.zoom = String(z);
+        // 한 장씩 볼 때 슬라이드가 화면 높이보다 작으면 위아래 가운데쯤에 놓는다
+        stage.style.paddingTop = (s.mode === 'one' && s.scale <= 1.05) ? Math.max(6, Math.round((host.clientHeight - 84 - s.sh * z) / 2)) + 'px' : '';
+      }
+      // 목록 ↔ 한 장, 이전·다음 장 바뀔 때 0.16초 안의 짧은 전환(움직임 줄이기 설정이면 CSS 에서 꺼진다)
+      function playIn() {
+        var cls = s.dir > 0 ? 'so-pptx-in-r' : (s.dir < 0 ? 'so-pptx-in-l' : 'so-pptx-in-f');
+        s.dir = 0;
+        stage.classList.remove('so-pptx-in-r', 'so-pptx-in-l', 'so-pptx-in-f');
+        void stage.offsetWidth; stage.classList.add(cls);
+        clearTimeout(playIn._t); playIn._t = setTimeout(function () { stage.classList.remove(cls); }, 220);
+      }
       function render() {
         s.editing = false;
         if (s.panel) s.panel.style.display = 'none';
@@ -46,10 +67,11 @@
         slides().forEach(function (el, i) { el.style.display = (s.mode === 'list' || i === s.idx) ? '' : 'none'; });
         nav.style.display = s.mode === 'one' ? '' : 'none';
         pos.textContent = (s.idx + 1) + ' / ' + slides().length;
-        s.wrapper.style.zoom = String(s.scale);
+        applyZoom();
         if (s.mode === 'one') host.scrollTop = 0;
+        playIn();
         var acts = [
-          { label: s.mode === 'list' ? '한 장씩' : '목록', onClick: function () { s.mode = s.mode === 'list' ? 'one' : 'list'; s.scale = 1; render(); } },
+          { label: s.mode === 'list' ? '한 장' : '목록', onClick: function () { s.mode = s.mode === 'list' ? 'one' : 'list'; s.scale = 1; render(); } },
           { label: '−', onClick: function () { s.scale = Math.max(0.5, s.scale * 0.8); render(); } },
           { label: '＋', onClick: function () { s.scale = Math.min(3, s.scale * 1.25); render(); } },
           { label: '고치기', primary: !anyEdit(s), onClick: enterEdit }
@@ -57,7 +79,7 @@
         if (anyEdit(s)) acts.push({ label: '사본 저장', primary: true, onClick: saveCopy });
         ctx.setActions(acts);
       }
-      function go(d) { s.idx = Math.max(0, Math.min(slides().length - 1, s.idx + d)); render(); }
+      function go(d) { var n = Math.max(0, Math.min(slides().length - 1, s.idx + d)); if (n === s.idx) return; s.dir = d; s.idx = n; render(); }
       nav.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(Number(b.getAttribute('data-d'))); });
       // 한 장씩 모드: 좌우 쓸기
       var x0 = null, y0 = 0;
@@ -68,10 +90,32 @@
       var d0 = 0, s0 = 1;
       function dist(t) { var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.sqrt(dx * dx + dy * dy); }
       function ps(e) { if (!s.editing && e.touches.length === 2) { d0 = dist(e.touches); s0 = s.scale; } }
-      function pm(e) { if (!s.editing && e.touches.length === 2 && d0) { e.preventDefault(); s.scale = Math.max(0.5, Math.min(3, s0 * dist(e.touches) / d0)); s.wrapper.style.zoom = String(s.scale); } }
+      function pm(e) {
+        if (!s.editing && e.touches.length === 2 && d0) {
+          e.preventDefault();
+          var old = s.scale, r = host.getBoundingClientRect();
+          var cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
+          s.scale = Math.max(0.5, Math.min(3, s0 * dist(e.touches) / d0)); applyZoom();
+          var k = s.scale / old; host.scrollLeft = (host.scrollLeft + cx) * k - cx; host.scrollTop = (host.scrollTop + cy) * k - cy;
+        }
+      }
       function pe(e) { if (e.touches.length < 2) d0 = 0; }
       host.addEventListener('touchstart', ps, { passive: true }); host.addEventListener('touchmove', pm, { passive: false }); host.addEventListener('touchend', pe, { passive: true });
+      host.style.touchAction = 'pan-x pan-y';   // 브라우저 자체 확대는 막고 두 손가락 확대는 위 코드가 맡는다 (한 손가락 스크롤과 충돌 없음)
       cleanup.push(function () { host.removeEventListener('touchstart', ts); host.removeEventListener('touchend', te); host.removeEventListener('touchstart', ps); host.removeEventListener('touchmove', pm); host.removeEventListener('touchend', pe); });
+      // 폭이 바뀌면(접기·펼치기·가로 돌리기) 슬라이드를 새 폭에 맞춰 다시 그린다. 키보드로 높이만 바뀔 때는 하지 않는다
+      var lastW = host.clientWidth, rt = 0;
+      function onResize() {
+        var w = host.clientWidth;
+        if (Math.abs(w - lastW) < 24 || !w) { if (s.mode === 'one' && !s.editing) applyZoom(); return; }
+        clearTimeout(rt); rt = setTimeout(function () {
+          lastW = host.clientWidth; if (s.editing) { s.stale = true; return; }
+          var k = JSON.stringify(s.edits), edited = anyEdit(s) && s.info;
+          var p = edited ? window.SOPptxEdit.build(s.info, s.edits).then(function (r) { return r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength); }) : Promise.resolve(s.orig);
+          p.then(function (buf) { return drawDeck(host, s, buf); }).then(function () { render(); }, function () {});
+        }, 250);
+      }
+      window.addEventListener('resize', onResize); cleanup.push(function () { window.removeEventListener('resize', onResize); clearTimeout(rt); });
       var key = function (e) { if (!s.editing && s.mode === 'one') { if (e.key === 'ArrowRight' || e.key === 'PageDown') go(1); else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1); } };
       document.addEventListener('keydown', key); cleanup.push(function () { document.removeEventListener('keydown', key); });
 
@@ -100,11 +144,17 @@
       }
       function showEdit() {
         s.editing = true;
-        stage.style.display = 'none'; nav.style.display = 'none';
+        stage.style.display = 'none'; nav.style.display = 'none'; tip.classList.add('hide'); clearTimeout(showTip._t);
         if (!s.panel) { s.panel = document.createElement('div'); s.panel.className = 'so-pe'; host.appendChild(s.panel); }
         s.panel.style.display = '';
         host.scrollTop = 0;
         ctx.onBack(function () { if (s.editing) { leaveEdit(); return true; } return false; });
+        if (window.visualViewport && !s.vvOn) {            // 키보드가 올라와 가려지는 높이만큼 아래 여백을 줘서 맨 아래 칸도 키보드 위로 올릴 수 있게
+          s.vvOn = true;
+          var vf = function () { var vv = window.visualViewport; s.panel.style.paddingBottom = (Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 40) + 'px'; };
+          window.visualViewport.addEventListener('resize', vf); window.visualViewport.addEventListener('scroll', vf);
+          cleanup.push(function () { window.visualViewport.removeEventListener('resize', vf); window.visualViewport.removeEventListener('scroll', vf); });
+        }
         ctx.setActions([
           { label: '보기', onClick: leaveEdit },
           { label: '사본 저장', primary: true, id: 'soPeSave', onClick: saveCopy }
@@ -152,27 +202,37 @@
           if (p.locked) { ta.readOnly = true; ta.classList.add('lock'); }
           card.appendChild(ta);
           if (p.locked) card.insertAdjacentHTML('beforeend', '<div class="so-pe-lockmsg">자동 숫자·수식이 들어 있어 보기만 돼요</div>');
-          function fit() { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 360) + 'px'; }
+          function fit() {
+            var vv = window.visualViewport, cap = Math.max(120, Math.round((vv ? vv.height : window.innerHeight) * 0.42));   // 키보드가 올라와도 한 칸이 화면을 다 채우지 않게
+            ta.style.height = 'auto'; ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 44), cap) + 'px';
+          }
+          var comp = false;
+          ta.addEventListener('compositionstart', function () { comp = true; composing = true; });
+          ta.addEventListener('compositionend', function () { comp = false; composing = false; sync(); });
+          function sync() { if (ta.value === p.text) delete ed[p.ord]; else ed[p.ord] = ta.value; mark(); fit(); }
+          ta.addEventListener('focus', function () { setTimeout(function () { try { card.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) {} }, 320); });
           function mark() {
             var ch = Object.prototype.hasOwnProperty.call(ed, p.ord);
             card.classList.toggle('changed', ch);
             ctx.setDirty(anyEdit(s));
           }
-          ta.addEventListener('input', function () {
-            if (ta.value === p.text) delete ed[p.ord]; else ed[p.ord] = ta.value;
-            mark(); fit();
-          });
+          ta.addEventListener('input', sync);
           card.querySelector('.so-pe-undo').addEventListener('click', function () { delete ed[p.ord]; ta.value = p.text; mark(); fit(); });
           list.appendChild(card); mark(); setTimeout(fit, 0);
         });
         ctx.setDirty(anyEdit(s));
-        function jump(k) { s.idx = Math.max(0, Math.min(n - 1, k)); renderEdit(); host.scrollTop = 0; }
+        function jump(k) {
+          if (composing) { try { document.activeElement.blur(); } catch (e) {} setTimeout(function () { composing = false; jump(k); }, 80); return; }   // 한글 조합 중이면 확정된 뒤에 넘어간다
+          s.idx = Math.max(0, Math.min(n - 1, k)); renderEdit(); host.scrollTop = 0;
+        }
         P.querySelector('.so-pe-sel').addEventListener('change', function (e) { jump(Number(e.target.value)); });
         [].forEach.call(P.querySelectorAll('.so-pe-nb'), function (b) { b.addEventListener('click', function () { jump(s.idx + Number(b.getAttribute('data-d'))); }); });
       }
       function leaveEdit() {
         var k = JSON.stringify(s.edits);
-        if (!anyEdit(s) || k === s.drawnKey) { render(); return; }
+        if (s.stale && !anyEdit(s)) { s.stale = false; drawDeck(host, s, s.orig).then(function () { render(); }, function () { render(); }); return; }
+        if (!s.stale && (!anyEdit(s) || k === s.drawnKey)) { render(); return; }
+        s.stale = false;
         ctx.busy('고친 모습으로 다시 그리는 중…');
         window.SOPptxEdit.build(s.info, s.edits).then(function (r) {
           return drawDeck(host, s, r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength));

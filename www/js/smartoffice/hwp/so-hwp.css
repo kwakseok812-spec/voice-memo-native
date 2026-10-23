@@ -1,0 +1,19 @@
+/* S-Office 한글 모듈 — 폰용 화면(아래 도구줄 · 쪽 알약) */
+.so-hwp-wrap{position:fixed;left:0;right:0;z-index:1;overflow:hidden;background:var(--page-bg, #fff)}
+.so-hwp-wrap .so-hwp-frame{position:absolute;left:0;right:0;top:0}
+.so-hwp-wrap iframe{display:block;width:100%;height:100%;border:0}
+.so-hwp-pill{position:absolute;left:50%;transform:translateX(-50%);min-width:64px;height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--glass-b2, rgba(0,0,0,.18));
+  background:var(--float-bg, rgba(30,36,60,.92));color:var(--text, #111);font-weight:800;font-size:14px;line-height:34px;font-family:inherit;text-align:center;box-shadow:var(--float-sh, 0 4px 14px rgba(0,0,0,.25));cursor:pointer;z-index:3;white-space:nowrap}
+.so-hwp-pill input{width:54px;height:26px;border:0;border-radius:8px;text-align:center;font-family:inherit;font-size:14px;font-weight:800;background:var(--glass, #eee);color:var(--text, #111)}
+.so-hwp-tb{position:absolute;left:0;right:0;bottom:0;height:54px;display:none;align-items:center;gap:4px;padding:5px 6px;overflow-x:auto;overflow-y:hidden;
+  background:var(--bg0, var(--page-bg, #fff));border-top:1px solid var(--glass-b, rgba(0,0,0,.12));-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:4}
+.so-hwp-tb::-webkit-scrollbar{display:none}
+.so-hwp-wrap.editing .so-hwp-tb{display:flex}
+.so-hwp-tb button{flex:0 0 auto;min-width:44px;height:44px;border-radius:12px;border:1px solid var(--glass-b, rgba(0,0,0,.12));background:var(--glass, #f1f3f8);color:var(--text, #111);
+  font-weight:800;font-size:16px;line-height:1;font-family:inherit;padding:0 10px;cursor:pointer;touch-action:manipulation}
+.so-hwp-tb button:active{transform:scale(.95)}
+.so-hwp-tb button.on{border-color:transparent;background:linear-gradient(135deg,var(--p1, #3b82f6),var(--p2, #8b5cf6));color:#fff}
+.so-hwp-tb .sep{flex:0 0 1px;height:28px;background:var(--glass-b, rgba(0,0,0,.15));margin:0 2px}
+.so-hwp-tb .it{font-style:italic;font-family:serif}
+.so-hwp-tb .ul{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){.so-hwp-tb button:active{transform:none}}

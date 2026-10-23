@@ -11,6 +11,10 @@
     catch (e) { try { s = new TextDecoder('euc-kr').decode(u8); } catch (e2) { s = new TextDecoder('utf-8').decode(u8); } }
     return s.replace(/^﻿/, '');
   }
+  var ZK = 'so_html_zoom_v1', ZSTEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
+  var curHost = null, fabT = 0;
+  function zGet() { try { var v = parseInt(localStorage.getItem(ZK), 10); return v >= 0 && v < ZSTEPS.length ? v : 1; } catch (e) { return 1; } }
+  function zSet(v) { try { localStorage.setItem(ZK, String(v)); } catch (e) {} }
   var CSP = "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; media-src data: blob:; form-action 'none'; frame-src 'none'; base-uri 'none'";
 
   SOffice.register({
@@ -29,11 +33,29 @@
         frame.setAttribute('csp', CSP);
         frame.setAttribute('title', ctx.name);
         // CSP 메타를 맨 앞에 둔다(문서 안의 어떤 태그보다 먼저 적용)
-        frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="' + CSP + '"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{background:#fff;color:#000}</style>' + src;
+        curHost = host;
+        var zi = zGet();
+        // 문서 맨 앞에 두는 기본 모양(문서 자신의 CSS 가 우선): 폰 폭에서 그림·표가 넘치지 않게, 긴 글은 줄바꿈
+        function docHead() {
+          return '<meta http-equiv="Content-Security-Policy" content="' + CSP + '"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<style>html{background:#fff;color:#000;zoom:' + ZSTEPS[zi] + ';-webkit-text-size-adjust:100%}:where(img,video,svg,canvas){max-width:100%;height:auto}:where(body){overflow-wrap:anywhere}:where(pre){white-space:pre-wrap}</style>';
+        }
+        frame.srcdoc = docHead() + src;
         var pre = document.createElement('pre'); pre.className = 'so-html-src'; pre.textContent = src; pre.style.display = 'none';
         var tip = document.createElement('div'); tip.className = 'so-html-tip';
         tip.textContent = '보기 전용 · 스크립트와 바깥 주소 요청은 막았어요';
-        host.appendChild(frame); host.appendChild(pre); host.appendChild(tip);
+        pre.style.fontSize = Math.round(13.5 * ZSTEPS[zi]) + 'px';
+        var fab = document.createElement('div'); fab.className = 'so-html-fab';
+        fab.innerHTML = '<button type="button" data-k="-" aria-label="글자 작게">가<small>−</small></button><button type="button" data-k="+" aria-label="글자 크게">가<small>＋</small></button>';
+        function fabWake() { fab.classList.remove('dim'); clearTimeout(fabT); fabT = setTimeout(function () { fab.classList.add('dim'); }, 2800); }
+        fab.addEventListener('click', function (e) {
+          var b = e.target.closest('button'); if (!b) return;
+          zi = Math.max(0, Math.min(ZSTEPS.length - 1, zi + (b.getAttribute('data-k') === '+' ? 1 : -1))); zSet(zi);
+          frame.srcdoc = docHead() + src; pre.style.fontSize = Math.round(13.5 * ZSTEPS[zi]) + 'px';
+          ctx.toast('글자 크기 ' + Math.round(ZSTEPS[zi] * 100) + '%', 1000); fabWake();
+        });
+        fab.addEventListener('pointerdown', fabWake);
+        host.appendChild(frame); host.appendChild(pre); host.appendChild(tip); host.appendChild(fab); fabWake();
         setTimeout(function () { tip.classList.add('hide'); }, 4500);
         function acts() {
           ctx.setActions([{ label: showSrc ? '보기' : '원문', onClick: function () {
@@ -43,6 +65,6 @@
         acts();
       });
     },
-    close: function () {}
+    close: function () { clearTimeout(fabT); if (curHost) { curHost.classList.remove('so-html-host'); curHost = null; } }
   });
 })();

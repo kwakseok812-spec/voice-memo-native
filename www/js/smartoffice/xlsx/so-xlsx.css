@@ -1,37 +1,70 @@
-/* S-Office 엑셀 모듈 스타일 — 앱 테마 변수를 그대로 쓴다 */
-.sx-root{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--page-bg);color:var(--text);font-size:14px}
-.sx-root *{box-sizing:border-box}
-.sx-note{padding:7px 12px;font-size:12.5px;line-height:1.5;background:rgba(245,166,35,.16);color:var(--text);border-bottom:1px solid var(--glass-b);word-break:keep-all}
-.sx-fbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--glass-b)}
-.sx-addr{min-width:46px;text-align:center;font-weight:800;font-size:13px;color:var(--p1)}
-.sx-input{flex:1;min-width:0;height:38px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:10px;padding:0 10px;font-size:15px;font-family:inherit}
-.sx-input:read-only{opacity:.85}
-.sx-ok{appearance:none;border:0;border-radius:10px;min-width:38px;height:38px;font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;font-family:inherit}
+/* S-Office 엑셀 모듈 스타일 — 앱 테마 변수를 그대로 쓴다 (밝은·어두운 화면, 폰 접은 화면·펼친 화면) */
+.sx-root{--sx-bg:#fff;--sx-fg:#111;--sx-line:#e1e4e8;--sx-hbg:#f1f3f5;--sx-hfg:#555;--sx-hline:#d9dde2;--sx-hsel:#d6e4ff;--sx-hselfg:#0b3a8f;--sx-fzbg:#e4e8ee;--sx-fzline:#8a94a0;--sx-sel:#2f6bff;--sx-seltint:rgba(47,107,255,.10);--sx-kb:0px;
+  position:absolute;inset:0;display:flex;flex-direction:column;background:var(--page-bg);color:var(--text);font-size:14px}
+html[data-style="dark"] .sx-root{--sx-bg:#14171f;--sx-fg:#e8eaf0;--sx-line:#2b303b;--sx-hbg:#1d212b;--sx-hfg:#a9b1c3;--sx-hline:#2f3541;--sx-hsel:#26407a;--sx-hselfg:#dbe6ff;--sx-fzbg:#262b37;--sx-fzline:#6b7587;--sx-sel:#6ea0ff;--sx-seltint:rgba(110,160,255,.18)}
+.sx-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.sx-note{padding:8px 12px;font-size:13px;line-height:1.55;background:rgba(245,166,35,.16);color:var(--text);border-bottom:1px solid var(--glass-b);word-break:keep-all}
+
+/* 입력줄 — 손가락으로 누르기 쉬운 44px */
+.sx-fbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--glass-b);background:var(--bg0,var(--page-bg));flex-shrink:0}
+.sx-addr{min-width:48px;text-align:center;font-weight:800;font-size:14px;color:var(--p1)}
+.sx-input{flex:1;min-width:0;height:44px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;padding:0 12px;font-size:16px;font-family:inherit}
+.sx-input:focus{outline:2px solid var(--p1);outline-offset:0}
+.sx-input:read-only{opacity:.9}
+.sx-ok,.sx-exp{appearance:none;border:0;border-radius:12px;min-width:44px;height:44px;font-size:19px;font-weight:800;font-family:inherit;flex-shrink:0}
+.sx-ok{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
 .sx-ok:disabled{opacity:.35}
-.sx-gridwrap{position:relative;flex:1;min-height:0;overflow:hidden;background:#fff;color:#111}
-.sx-corner,.sx-hcol,.sx-hrow{position:absolute;overflow:hidden;background:#f1f3f5;color:#555;font-size:12px;font-weight:700;z-index:4;user-select:none}
-.sx-corner{left:0;top:0;border-right:1px solid #cfd4da;border-bottom:1px solid #cfd4da}
-.sx-hcol{top:0;right:0;border-bottom:1px solid #cfd4da}
-.sx-hrow{left:0;bottom:0;border-right:1px solid #cfd4da}
-.sx-h{position:absolute;text-align:center;border-right:1px solid #d9dde2;border-bottom:1px solid #d9dde2;overflow:hidden;white-space:nowrap}
-.sx-h.sel{background:#d6e4ff;color:#0b3a8f}
-.sx-scroll{position:absolute;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain;background:#fff}
+.sx-exp{background:var(--glass);color:var(--text);border:1px solid var(--glass-b);font-size:18px}
+.sx-exp:active,.sx-chip:active,.sx-tab:active{background:var(--glass2)}
+/* 글을 치는 동안: 입력줄이 키보드 바로 위로 올라오고, 표는 그 위쪽에 남는다 */
+.sx-root.kb{padding-bottom:calc(var(--sx-kb) + 58px)}
+.sx-root.kb .sx-fbar{position:absolute;left:0;right:0;bottom:var(--sx-kb);z-index:30;border-top:1px solid var(--glass-b);border-bottom:0;box-shadow:0 -4px 14px rgba(0,0,0,.18)}
+.sx-root.kb .sx-bottom{display:none}
+
+/* 표 */
+.sx-gridwrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--sx-bg);color:var(--sx-fg)}
+.sx-corner,.sx-hcol,.sx-hrow{position:absolute;overflow:hidden;background:var(--sx-hbg);color:var(--sx-hfg);font-size:12.5px;font-weight:700;z-index:4;user-select:none;-webkit-user-select:none}
+.sx-corner{left:0;top:0;border-right:1px solid var(--sx-hline);border-bottom:1px solid var(--sx-hline)}
+.sx-hcol{top:0;right:0;border-bottom:1px solid var(--sx-hline)}
+.sx-hrow{left:0;bottom:0;border-right:1px solid var(--sx-hline)}
+.sx-h{position:absolute;text-align:center;border-right:1px solid var(--sx-hline);border-bottom:1px solid var(--sx-hline);overflow:hidden;white-space:nowrap}
+.sx-h.sel{background:var(--sx-hsel);color:var(--sx-hselfg)}
+.sx-h.fz{background:var(--sx-fzbg);z-index:1}
+.sx-scroll{position:absolute;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain;background:var(--sx-bg)}
 .sx-spacer{position:relative}
 .sx-layer{position:absolute;left:0;top:0}
-.sx-fz{position:absolute;overflow:hidden;z-index:3;background:#fff;pointer-events:auto}
-.sx-fz.sx-fr{border-bottom:2px solid #8a94a0}
-.sx-fz.sx-fc{border-right:2px solid #8a94a0}
-.sx-fz.sx-fx{z-index:3;border-right:2px solid #8a94a0;border-bottom:2px solid #8a94a0}
-.sx-c{position:absolute;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 6px;border-right:1px solid #e1e4e8;border-bottom:1px solid #e1e4e8;background:#fff;color:#111;user-select:none;-webkit-user-select:none}
+.sx-fz{position:absolute;overflow:hidden;z-index:3;background:var(--sx-bg);pointer-events:auto}
+.sx-fz.sx-fr{border-bottom:2px solid var(--sx-fzline)}
+.sx-fz.sx-fc{border-right:2px solid var(--sx-fzline)}
+.sx-fz.sx-fx{z-index:3;border-right:2px solid var(--sx-fzline);border-bottom:2px solid var(--sx-fzline)}
+.sx-c{position:absolute;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 7px;border-right:1px solid var(--sx-line);border-bottom:1px solid var(--sx-line);background:var(--sx-bg);color:var(--sx-fg);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .sx-c.m{z-index:1}
-.sx-c.sel{box-shadow:inset 0 0 0 2px #2f6bff;z-index:2}
-.sx-c.ed{background-image:linear-gradient(135deg,#ff9f1a 0 7px,transparent 7px)}
-.sx-c.ed.fl{background-image:linear-gradient(135deg,#ff9f1a 0 7px,transparent 7px)}
-.sx-tools{display:flex;align-items:center;gap:6px;padding:5px 8px;border-top:1px solid var(--glass-b);overflow-x:auto;white-space:nowrap}
+.sx-c.sel{box-shadow:inset 0 0 0 3px var(--sx-sel),inset 0 0 0 999px var(--sx-seltint);z-index:2}
+.sx-c.ed{background-image:linear-gradient(135deg,#ff9f1a 0 8px,transparent 8px)}
+
+/* 아래쪽 줄(시트 탭 · 확대/표시 단추) — 엄지로 닿는 44px */
+.sx-bottom{flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg0,var(--page-bg))}
+.sx-tools{display:flex;align-items:center;gap:6px;padding:5px 8px;border-top:1px solid var(--glass-b);overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
 .sx-tabs{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto}
-.sx-tab,.sx-chip{appearance:none;flex-shrink:0;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:10px;min-height:40px;padding:0 12px;font-size:14px;font-weight:700;font-family:inherit}
+.sx-tab,.sx-chip{appearance:none;flex-shrink:0;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;min-height:44px;padding:0 14px;font-size:14px;font-weight:700;font-family:inherit}
 .sx-tab.on{border-color:transparent;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
-.sx-chip.on{border-color:var(--p1);color:var(--p1)}
-.sx-zoom{min-width:40px;padding:0}
-.sx-pct{font-size:12px;min-width:38px;text-align:center;color:var(--dim)}
-.sx-h.fz{background:#e4e8ee;z-index:1}
+.sx-chip.on{border-color:var(--p1);color:var(--p1);background:var(--glass2)}
+.sx-zoom{min-width:44px;padding:0;font-size:18px}
+.sx-pct{font-size:13px;min-width:42px;text-align:center;color:var(--muted)}
+
+/* 긴 글 칸 상세 보기 */
+.sx-det{position:absolute;left:0;right:0;top:0;bottom:0;z-index:40;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.sx-detbox{width:100%;max-width:640px;max-height:100%;display:flex;flex-direction:column;background:var(--bg0,var(--page-bg));color:var(--text);border:1px solid var(--glass-b);border-radius:18px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.sx-dett{font-size:15px;font-weight:800;margin-bottom:8px}
+.sx-detta{flex:1;min-height:140px;max-height:60vh;width:100%;resize:none;border:1px solid var(--glass-b);border-radius:12px;padding:10px 12px;font-size:16px;line-height:1.6;font-family:inherit;background:var(--glass);color:var(--text)}
+.sx-detb{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.sx-detbtn{appearance:none;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;min-height:44px;padding:0 20px;font-size:15px;font-weight:800;font-family:inherit}
+.sx-detbtn.primary{border-color:transparent;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
+
+/* 펼친 화면(넓음): 시트 탭과 확대 단추를 한 줄에, 여백은 조금 더 넉넉하게 */
+@media (min-width:600px){
+  .sx-bottom{display:flex;align-items:center}
+  .sx-bottom .sx-tabrow{flex:1;min-width:0;border-top:1px solid var(--glass-b)}
+  .sx-bottom .sx-toolrow{flex-shrink:0;max-width:62%}
+  .sx-input{font-size:15px}
+}
