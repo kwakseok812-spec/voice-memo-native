@@ -4,3 +4,15 @@
 .so-docx-box .docx-wrapper>section.docx{box-shadow:0 1px 6px rgba(0,0,0,.25);margin-bottom:8px !important;color:#000;background:#fff}
 .so-docx-tip{position:sticky;bottom:10px;left:0;display:block;width:max-content;max-width:90%;margin:0 auto;padding:7px 12px;border-radius:14px;background:rgba(20,20,30,.78);color:#fff;font-size:12.5px;transition:opacity .4s;pointer-events:none}
 .so-docx-tip.hide{opacity:0}
+.so-docx-editing section.docx>article p.so-docx-ok{outline:1.5px dashed rgba(40,110,230,.55);outline-offset:1px;cursor:pointer}
+.so-docx-editing section.docx>article p.so-docx-ok:active{background:rgba(40,110,230,.12)}
+.so-docx-box p.so-docx-edited{background:rgba(60,180,90,.18);outline:1.5px solid rgba(40,150,70,.7);outline-offset:1px;white-space:pre-wrap}
+.so-docx-sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;color:#111;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.28);padding:12px 14px calc(12px + env(safe-area-inset-bottom));max-height:70vh;overflow:auto;font-family:inherit}
+.so-docx-sh-t{font-weight:700;font-size:15px;margin-bottom:4px}
+.so-docx-sh-n{font-size:12px;color:#666;margin-bottom:8px;line-height:1.4}
+.so-docx-ta{width:100%;box-sizing:border-box;min-height:110px;max-height:38vh;font-size:16px;line-height:1.5;padding:8px 10px;border:1px solid #bbb;border-radius:10px;resize:vertical;color:#111;background:#fff}
+.so-docx-sh-b{display:flex;gap:8px;margin-top:10px}
+.so-docx-sh-b button{flex:1;padding:11px 0;border-radius:10px;border:1px solid #bbb;background:#f4f4f7;font-size:15px;color:#111}
+.so-docx-sh-b button.primary{background:#2d6be6;color:#fff;border-color:#2d6be6;font-weight:700}
+.so-docx-sh-b button:disabled{opacity:.4}
+@media (prefers-color-scheme:dark){.so-docx-sheet{background:#23242b;color:#eee}.so-docx-ta{background:#15161b;color:#eee;border-color:#555}.so-docx-sh-b button{background:#34353d;color:#eee;border-color:#555}.so-docx-sh-n{color:#aaa}}

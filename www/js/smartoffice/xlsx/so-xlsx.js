@@ -2,7 +2,9 @@
  * 출처·라이선스: 표 읽기·쓰기는 SheetJS Community Edition 0.18.5 (Apache-2.0, https://sheetjs.com, 앱 vendor/xlsx.full.min.js).
  * 화면(가상 스크롤 격자·입력줄·시트 탭)은 이 앱을 위해 새로 짠 것이며, 이음오피스(IeumOffice, Apache-2.0)의
  * 엑셀 부품은 구조 참고만 했고 코드를 가져오지 않았다. AI 기능 없음, 새 권한 없음.
- * 한계: SheetJS 커뮤니티판은 글꼴·테두리·차트·도형·그림·조건부 서식을 저장하지 못한다 → 그런 파일은 고치기를 막거나 강하게 경고한다.
+ * 저장 방식(xlsx): SheetJS 로 다시 쓰지 않는다. 원본 zip 을 JSZip(MIT)으로 열어 고친 셀만 해당 시트 XML 에 끼워 넣고(so-xlsx-patch.js),
+ * 나머지 파일(서식·차트·그림·정의된 이름·조건부 서식)은 그대로 둔다. 피벗표·매크로가 있거나 보호·특수 구조인 파일/시트/칸은 고치기를 막는다.
+ * 옛 xls 는 보기만, csv 는 예전 방식(글자 그대로 사본 저장).
  */
 (function (global) {
   'use strict';
@@ -24,27 +26,13 @@
       catch (e) { try { text = new TextDecoder('euc-kr').decode(bytes); } catch (e2) { text = new TextDecoder('utf-8').decode(bytes); } }
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       // raw:true = 글자를 숫자로 바꾸지 않는다(00123 이 123 이 되는 것을 막는다)
-      return { wb: XLSX.read(text, { type: 'string', raw: true }), files: null };
+      return { wb: XLSX.read(text, { type: 'string', raw: true }) };
     }
-    var wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true, cellNF: true, bookFiles: ext === 'xlsx' });
-    var files = wb.files ? Object.keys(wb.files) : null;
-    try { delete wb.files; } catch (e) {}
-    return { wb: wb, files: files };
+    return { wb: XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true, cellNF: true }) };
   }
-  function lossReason(ext, files) {
+  function lossReason(ext) {
     if (ext === 'xls') return '옛 형식(xls)은 차트·그림이 들어 있는지 확인할 수 없어, 안전을 위해 고치기를 막았어요. 보기만 가능합니다.';
-    if (ext !== 'xlsx' || !files) return '';
-    var found = [];
-    files.forEach(function (k) {
-      if (/^xl\/charts\//.test(k)) found.push('차트');
-      else if (/^xl\/media\//.test(k)) found.push('그림');
-      else if (/^xl\/drawings\/drawing/.test(k)) found.push('도형·그림');
-      else if (/^xl\/pivot/.test(k)) found.push('피벗표');
-      else if (/^xl\/vbaProject/.test(k)) found.push('매크로');
-      else if (/^xl\/(slicers|embeddings|diagrams|ctrlProps)/.test(k)) found.push('삽입 개체');
-    });
-    var uniq = found.filter(function (x, i) { return found.indexOf(x) === i; });
-    return uniq.length ? ('이 파일에는 ' + uniq.join('·') + '이(가) 들어 있어서, 저장하면 사라지기 때문에 고치기를 막았어요. 보기만 가능합니다.') : '';
+    return '';
   }
 
   // ---------------- 시트 준비 ----------------
@@ -201,8 +189,8 @@
     var cell = cellOf(sh, r, c);
     S.el.addr.textContent = addr(r, c);
     S.el.inp.value = barText(cell); S.barOrig = S.el.inp.value;
-    S.el.inp.readOnly = !S.editable;
-    S.el.ok.disabled = !S.editable;
+    S.el.inp.readOnly = !(S.editable && S.editing);
+    S.el.ok.disabled = !(S.editable && S.editing);
     if (!noRender) render();
   }
   function ensureVisible() {
@@ -221,7 +209,7 @@
     var m = mergeAt(sh, r, c), tr = m ? m.s.r : r, tc = m ? m.s.c : c;
     var same = (S.sel.r === tr && S.sel.c === tc);
     select(r, c);
-    if (same && S.editable) { try { el.inp.focus(); } catch (x2) {} }
+    if (same && S.editable && S.editing) { try { el.inp.focus(); } catch (x2) {} }
   }
 
   // ---------------- 줌 ----------------
@@ -250,32 +238,88 @@
   }
 
   // ---------------- 고치기 ----------------
+  // 날짜(+시간) 글자를 엑셀 날짜 번호로. 못 읽으면 null
+  function parseDate(t) {
+    var m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(t), y, mo, d;
+    if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else {
+      m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(t);
+      if (!m) return null;
+      mo = +m[1]; d = +m[2]; y = +m[3]; if (m[3].length === 2) y += 2000;
+    }
+    var hh = m[4] ? +m[4] : 0, mi = m[5] ? +m[5] : 0, ss = m[6] ? +m[6] : 0;
+    if (mo < 1 || mo > 12 || d < 1 || hh > 23 || mi > 59 || ss > 59) return null;
+    var dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+    var days = Math.round((dt.getTime() - Date.UTC(1899, 11, 30)) / 86400000);
+    return days + (hh * 3600 + mi * 60 + ss) / 86400;
+  }
   function parseInput(txt, old, ext) {
     var XLSX = global.XLSX, t = txt.trim();
     if (t === '') return { empty: true };
-    if (t.charAt(0) === '=') return { err: '수식 입력은 아직 지원하지 않아요. (수식은 엑셀에서 고쳐 주세요)' };
-    if (old && old.t === 'n' && old.z && XLSX.SSF.is_date(old.z)) {
-      var d = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(t);
-      if (d) return { cell: { t: 'n', v: Math.round((Date.UTC(+d[1], +d[2] - 1, +d[3]) - Date.UTC(1899, 11, 30)) / 86400000), z: old.z } };
+    if (t.charAt(0) === '=') {
+      if (!S || S.mode !== 'patch') return { err: '이 파일 형식에서는 수식 입력을 지원하지 않아요.' };
+      var fx = t.slice(1).trim(), q = 0, dp = 0, i2;
+      for (i2 = 0; i2 < fx.length; i2++) { var ch = fx.charAt(i2); if (ch === '"') q ^= 1; else if (!q) { if (ch === '(') dp++; else if (ch === ')') dp--; if (dp < 0) break; } }
+      if (!fx || q || dp !== 0) return { err: '수식의 괄호나 따옴표가 맞지 않아요.' };
+      var outside = fx.replace(/"[^"]*"/g, '""');
+      if (/[;；，（）]/.test(outside) || /[+\-*\/^&,=<>]$/.test(outside) || /,\s*\)|\(\s*,/.test(outside)) return { err: '수식 모양이 이상해요. 쉼표(,)로 구분하고 영어 함수 이름을 써 주세요. 예: =SUM(B2:B5)' };
+      var fnr = /([^\s(+\-*\/^&,=<>:!]+)\(/g, fm2;
+      while ((fm2 = fnr.exec(outside))) if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(fm2[1]) && !/^'.*'$/.test(fm2[1])) return { err: '함수 이름은 영어로 써 주세요. (예: SUM, AVERAGE, IF)' };
+      return { formula: fx };
+    }
+    if (ext !== 'csv' && old && old.t === 'n' && old.z && XLSX.SSF.is_date(old.z)) {
+      var ds = parseDate(t);
+      if (ds == null) return { err: '날짜 칸이에요. 「2026-10-09」, 「2026/10/09」, 「10/09/26」(월/일/연), 「2026-10-09 14:30」처럼 적어 주세요.' };
+      var dc = { t: 'n', v: ds, z: old.z }; return { cell: dc };
+    }
+    if (ext !== 'csv' && old && old.t === 's') return { cell: { t: 's', v: txt } };      // 글자 칸은 글자로 둔다(앞자리 0·큰 수 보호)
+    var digits = t.replace(/^[-+]/, '');
+    if (ext !== 'csv' && /^\d+$/.test(digits)) {
+      if (/^0\d/.test(digits) && !(old && old.t === 'n')) return { cell: { t: 's', v: txt } };
+      if (digits.length > 15) {
+        if (old && old.t === 'n') return { err: '16자리 이상 숫자는 숫자 칸에 정확히 넣을 수 없어요. (글자 칸에는 넣을 수 있어요)' };
+        return { cell: { t: 's', v: txt } };
+      }
     }
     var n = t.replace(/,/g, '');
     if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(n) && !(ext === 'csv')) {
       var cell = { t: 'n', v: parseFloat(n) }; if (old && old.t === 'n' && old.z && old.z !== 'General') cell.z = old.z; return { cell: cell };
     }
     var pc = /^([-+]?\d+(\.\d+)?)%$/.exec(t);
-    if (pc && ext !== 'csv') return { cell: { t: 'n', v: parseFloat(pc[1]) / 100, z: (old && old.z && old.z !== 'General') ? old.z : '0%' } };
+    if (pc && ext !== 'csv') { var pz = (old && old.z && old.z !== 'General') ? old.z : (S && S.mode === 'patch' ? '' : '0%'); var pcell = { t: 'n', v: parseFloat(pc[1]) / 100 }; if (pz) pcell.z = pz; return { cell: pcell }; }
     if (/^(true|false)$/i.test(t) && ext !== 'csv') return { cell: { t: 'b', v: /^true$/i.test(t) } };
     return { cell: { t: 's', v: txt } };    // CSV 는 읽을 때도 전부 글자이므로 글자로 둔다
   }
   function commit() {
-    if (!S.editable) return;
+    if (!S.editable || !S.editing) return;
     var inp = S.el.inp, txt = inp.value;
     if (txt === S.barOrig) return;
     var sh = S.sh, r = S.sel.r, c = S.sel.c, a = addr(r, c), old = sh.ws[a];
     var res = parseInput(txt, old, S.ext);
     if (res.err) { S.ctx.toast(res.err, 3200); return; }
     var XLSX = global.XLSX;
-    if (res.empty) delete sh.ws[a];
+    var hadFormula = !!(old && old.f);
+    if (S.mode === 'patch') {
+      var psh = S.an.sheets[sh.name];
+      if (!psh || psh.readOnly) { S.ctx.toast((psh && psh.why) || '이 시트는 고칠 수 없어요.', 3600); return; }
+      var blk = global.SOXlsxPatch.cellBlock(psh, a);
+      if (blk) { S.ctx.toast(blk, 4200); return; }
+      var spec = res.formula != null ? { kind: 'f', f: res.formula } : res.empty ? { kind: 'empty' } :
+        res.cell.t === 'n' ? { kind: 'n', v: res.cell.v } : res.cell.t === 'b' ? { kind: 'b', v: res.cell.v } : { kind: 's', v: res.cell.v };
+      var pr = global.SOXlsxPatch.patchCell(psh.xml, a, spec);
+      if (pr.err) { S.ctx.toast(pr.err, 4200); return; }
+      psh.xml = pr.xml; S.patched[sh.name] = 1;
+    }
+    if (res.formula != null) {
+      var fcell = { t: 's', v: '', f: res.formula, w: '⟳' };
+      if (old && old.s) fcell.s = old.s;
+      sh.ws[a] = fcell;
+      var rgf = sh.ws['!ref'] ? XLSX.utils.decode_range(sh.ws['!ref']) : { s: { r: r, c: c }, e: { r: r, c: c } };
+      if (r > rgf.e.r) rgf.e.r = r; if (c > rgf.e.c) rgf.e.c = c; if (r < rgf.s.r) rgf.s.r = r; if (c < rgf.s.c) rgf.s.c = c;
+      sh.ws['!ref'] = XLSX.utils.encode_range(rgf);
+    }
+    else if (res.empty) delete sh.ws[a];
     else {
       var cell = res.cell;
       if (cell.t === 'n') cell.w = (cell.z && cell.z !== 'General') ? XLSX.SSF.format(cell.z, cell.v) : String(cell.v);
@@ -288,7 +332,8 @@
     }
     S.edits[sh.i + '|' + r + '|' + c] = 1;
     if (!S.dirty) { S.dirty = true; S.ctx.setDirty(true); refreshActions(); }
-    if (old && old.f) S.ctx.toast('수식이 값으로 바뀌었어요.', 2400);
+    if (res.formula != null) S.ctx.toast('수식을 넣었어요. 계산 결과는 엑셀(또는 다른 표 프로그램)에서 열 때 나와요.', 3600);
+    else if (hadFormula) S.ctx.toast('수식이 값으로 바뀌었어요.', 2400);
     else if (S.ext !== 'csv') S.ctx.toast('다른 수식의 계산 결과는 엑셀에서 열면 다시 계산돼요.', 3000);
     if (r + 1 < sh.nr) { select(r + 1, c, true); ensureVisible(); }
     render();
@@ -300,24 +345,39 @@
         var csv = XLSX.utils.sheet_to_csv(S.wb.Sheets[S.names[0]]);
         ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv');
       } else {
-        S.wb.Workbook = S.wb.Workbook || {}; S.wb.Workbook.CalcPr = { fullCalcOnLoad: true };
-        var out = XLSX.write(S.wb, { bookType: 'xlsx', type: 'array' });
-        ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx');
+        ctx.busy('사본 만드는 중…');
+        global.SOXlsxPatch.finalize(S.zip, S.an, Object.keys(S.patched)).then(function () {
+          return S.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        }).then(function (out) {
+          ctx.busy(null);
+          if (!S) return;
+          ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx');
+          S.dirty = false; ctx.setDirty(false); refreshActions();
+          ctx.toast('사본을 저장했어요. 원본은 그대로예요.', 3000);
+        }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); });
+        return;
       }
       S.dirty = false; ctx.setDirty(false); refreshActions();
       ctx.toast('사본을 저장했어요. 원본은 그대로예요.', 3000);
-    } catch (e) { ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); }
+    } catch (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); }
   }
   function askSave() {
-    if (!S.editable || !S.dirty) return;
+    if (!S.editable || !S.editing || !S.dirty) return;
     var msg = S.ext === 'csv'
       ? '고친 값을 새 CSV 사본(원래이름_수정.csv)으로 저장해요. 원본은 바뀌지 않아요.'
-      : '차트·도형·일부 서식이 사라질 수 있어요. 글꼴·글자색·배경색·테두리·조건부 서식·드롭다운 같은 꾸밈은 저장되지 않고, 숫자·글자·수식·병합·열 너비·숫자 모양만 남아요. 새 파일(원래이름_수정.xlsx)로 저장하며 원본은 바뀌지 않아요.';
+      : '고친 칸(' + Object.keys(S.edits).length + '개)만 파일에 반영하고, 글꼴·색·테두리·조건부 서식·차트·그림·수식·병합·열 너비는 그대로 둬요. ' +
+        '고친 값에 연결된 다른 수식과 차트의 값은 엑셀에서 열 때 다시 계산돼요(새로 넣은 수식 칸은 그때까지 값이 비어 있어요). 새 파일(원래이름_수정.xlsx)로 저장하며 원본은 바뀌지 않아요.';
     S.ctx.confirmCopy('사본으로 저장할까요?', msg, '사본 저장', saveCopyNow);
+  }
+  function startEdit() {
+    if (!S || !S.editable) return;
+    S.editing = true; refreshActions(); select(S.sel.r, S.sel.c);
+    S.ctx.toast('고치기를 켰어요. 칸을 누르고 위 입력줄에서 고친 뒤 ✓를 누르세요.', 3200);
   }
   function refreshActions() {
     var list = [];
-    if (S.editable) list.push({ label: S.dirty ? '사본 저장' : '보기·고치기', primary: S.dirty, disabled: !S.dirty, onClick: askSave });
+    if (S.editable && !S.editing) list.push({ label: '고치기', onClick: startEdit });
+    else if (S.editable) list.push({ label: '사본 저장', primary: S.dirty, disabled: !S.dirty, onClick: askSave });
     else list.push({ label: '보기 전용', disabled: true, onClick: function () {} });
     S.ctx.setActions(list);
   }
@@ -370,21 +430,33 @@
   // ---------------- 등록 ----------------
   global.SOffice.register({
     id: 'xlsx', label: '엑셀', editable: true,
-    credits: [{ name: 'SheetJS Community Edition 0.18.5', license: 'Apache-2.0', note: '엑셀·CSV 읽기와 사본 저장 (https://sheetjs.com)' }],
+    credits: [{ name: 'SheetJS Community Edition 0.18.5', license: 'Apache-2.0', note: '엑셀·CSV 읽기 (https://sheetjs.com)' }, { name: 'JSZip', license: 'MIT', note: '엑셀 파일(zip) 열기·사본 저장 (https://stuk.github.io/jszip/)' }],
     canOpen: function (ext) { return ext === 'xlsx' || ext === 'xls' || ext === 'csv'; },
     open: function (ctx) {
       if (ctx.file && ctx.file.size > MAX_BYTES) { ctx.fallback('파일이 너무 커서(40MB 초과) 변환해서 보여 드려요.'); return; }
       ctx.loadCss('js/smartoffice/xlsx/so-xlsx.css');
+      var isX = ctx.ext === 'xlsx';
       var need = global.XLSX ? Promise.resolve() : ctx.loadScript('vendor/xlsx.full.min.js');
+      if (isX) need = need.then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-patch.js'); })
+        .then(function () { return global.JSZip ? null : ctx.loadScript('vendor/so/docx/jszip.min.js'); });
       return need.then(function () { return ctx.file.arrayBuffer(); }).then(function (buf) {
         var res = readWorkbook(ctx, buf), wb = res.wb;
         if (!wb || !wb.SheetNames || !wb.SheetNames.length) throw new Error('시트를 찾지 못했어요');
-        var reason = lossReason(ctx.ext, res.files);
-        S = { ctx: ctx, ext: ctx.ext, wb: wb, names: wb.SheetNames, vis: visibleSheets(wb), scale: 1, frz: { row: false, col: false },
-          edits: {}, dirty: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason };
-        build(ctx);
-        refreshActions();
-        showSheet(S.vis[0]);
+        var an = isX ? global.JSZip.loadAsync(buf, { createFolders: false }).then(function (z) { return global.SOXlsxPatch.analyze(z).then(function (a) { return { zip: z, an: a }; }); })
+          .catch(function () { return { zip: null, an: { ok: false, reason: '파일 구조를 알아볼 수 없어요.' } }; }) : Promise.resolve(null);
+        return an.then(function (pk) {
+          var reason = lossReason(ctx.ext), mode = '';
+          if (isX) {
+            if (pk.an.ok) mode = 'patch';
+            else reason = pk.an.reason + ' 저장하면 내용이 달라질 수 있어, 안전을 위해 고치기를 막았어요. 보기만 가능합니다.';
+          }
+          S = { ctx: ctx, ext: ctx.ext, wb: wb, names: wb.SheetNames, vis: visibleSheets(wb), scale: 1, frz: { row: false, col: false },
+            edits: {}, dirty: false, editing: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason, mode: mode,
+            zip: pk && pk.zip, an: pk && pk.an, patched: {} };
+          build(ctx);
+          refreshActions();
+          showSheet(S.vis[0]);
+        });
       });
     },
     close: function () {

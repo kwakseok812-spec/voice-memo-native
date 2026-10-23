@@ -51,7 +51,7 @@
   var SOFFICE_NAME = 'S-Office';            // 이름 표기는 여기 한 곳
   var SOFFICE_LONG = '스마트오피스';          // 풀이(정보 화면에서만)
   var SO_ON = 'on';                         // 스위치 — 'off' 면 통째로 꺼진 것과 같다
-  var SO_HWP_READY = 'off';                 // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
+  var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
 
   // 확장자 → 형식 모듈. (모듈 파일이 없거나 canOpen 이 false 면 ①로 자동 연결)

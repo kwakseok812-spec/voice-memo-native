@@ -1,7 +1,7 @@
 /* ============================================================================
  * so-hwp.js — S-Office 한글(HWP·HWPX) 모듈
  * ----------------------------------------------------------------------------
- * 상태: 초안(시험 전). 아래 부품 파일이 www/vendor/so/hwp/ 에 들어와야 동작한다.
+ * 부품 파일은 www/vendor/so/hwp/ 에 있다(앱 포함).
  *   vendor/so/hwp/studio/   rhwp-studio 편집 화면(오픈소스 이음오피스 설치본에서 가져온 빌드: 패치한 rhwp WASM 포함)
  *   vendor/so/hwp/sdk/      @rhwp/editor 0.8.7 (index.js · transport.js · document-agent-contract.js) — MIT
  *
@@ -48,9 +48,9 @@
     });
     var id = 'so-hwp-view-css', old = d.getElementById(id);
     if (old) old.remove();
-    if (on) {      // 보기 상태: 메뉴·도구줄을 숨겨 문서만 크게(이름은 rhwp-studio 의 요소 번호 — 시험 때 확인)
+    if (on) {      // 보기 상태: 메뉴·도구줄을 숨기고 눈금자는 자리만 남겨 두어(숨기면 쪽 그림이 틀어짐) 문서만 크게(rhwp-studio 요소 id — PC 브라우저 시험으로 확인함)
       var s = d.createElement('style'); s.id = id;
-      s.textContent = '#menu-bar,#icon-toolbar,#style-bar,#studio-header{display:none !important}';
+      s.textContent = '#menu-bar,#icon-toolbar,#style-bar,#studio-header{display:none !important}#h-ruler,#v-ruler,#ruler-corner{visibility:hidden !important}';
       d.head.appendChild(s);
     }
     return true;
