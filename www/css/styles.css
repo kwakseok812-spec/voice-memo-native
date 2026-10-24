@@ -558,6 +558,13 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 /* v9.5.1(O-0386) 끼니 「안 먹음」 — 음식 칩 줄 맨 앞. 점선 테두리(음식이 아니라는 표시), 켜지면 회색 바탕(음식 칩의 파랑·보라와 구분 · 흰 글씨 대비 6:1). 누르는 자리는 다른 식단 칩과 같이 44px */
 .chip.hchip.hskip{border-style:dashed;border-color:var(--glass-b2);color:var(--text)}
 .chip.hchip.hskip.on{background:#52607A;color:#fff;border-style:solid;border-color:transparent;box-shadow:none}
+/* v9.38(O-0617) 공복혈당·체중 「측정 안 함」 — 끼니 「안 먹음」과 같은 점선 칩을 ＋ 오른쪽 같은 줄에. 켜지면 숫자 줄은 흐리게(눌러 숫자를 넣으면 저절로 풀림) */
+.hstep .chip.hchip.hmskip{flex:none;height:44px;padding:0 11px;font-size:14.5px;white-space:nowrap}
+@media (max-width:380px){ .hstep{gap:7px} .hstep .chip.hchip.hmskip{padding:0 8px;font-size:13.5px} }
+.hnum.mskipped .hstepbtn,.hnum.mskipped .hval{opacity:.55}
+.hnum.mskipped .hval{padding:0 2px}
+.hnum.mskipped .hval::placeholder{color:var(--text);font-weight:700;font-size:16px;letter-spacing:-.03em;white-space:nowrap}
+@media (max-width:374px){.hnum.mskipped .hval::placeholder{font-size:13px}}
 .hcustom{margin-top:10px;min-height:50px}
 .hcustom .hcustomin{flex:1;border:0;outline:0;background:transparent;color:var(--text);font-family:inherit;font-size:16px;font-weight:600;width:100%}
 .hcustom .hcustomin::placeholder{color:var(--dim);font-weight:500}

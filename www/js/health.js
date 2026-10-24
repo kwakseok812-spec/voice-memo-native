@@ -28,6 +28,13 @@
  *   음식을 고르거나 적으면 「안 먹음」은 저절로 풀린다(한 칸에 둘이 같이 남지 않는다). 간식은 예전 그대로(「없음」 칩).
  *   판정(isSkip): 칸 전체가(띄어쓰기 무시) SKIP_WORDS 중 하나일 때만 — PC 쪽 health_read.py 의 SKIP_WORDS 와 같은 목록(한쪽만 고치지 말 것).
  *
+ * v9.38(O-0617) 공복혈당·체중 「측정 안 함」
+ *   두 칸 아래에 점선 칩 「측정 안 함」(끼니 「안 먹음」·운동 「안 함」과 같은 모양). 누르면 그날 그 칸은 「일부러 측정하지 않음」 = 적은 칸이다(9칸 세기 · 체크 · 케이 한 줄 · 건강 알림(PC) 모두).
+ *   숫자 칸은 숫자 컬럼이라 글자를 못 넣는다 → 서버에 새 글 칸 skips(예: 'fasting_glucose,weight') 하나만 둔다(health_upsert 도 같은 칸을 올림, 옛 앱이 이 키를 안 보내면 서버 값 유지).
+ *   숫자와 「측정 안 함」은 한 칸에 같이 남지 않는다: 안 함을 켜면 숫자는 비워지고(다시 누르면 같은 화면에서는 그 숫자로 돌아감), 숫자를 넣거나 ＋/− 를 누르면 안 함은 풀린다.
+ *   기록 보기 그래프는 숫자가 있는 날만 점을 찍는다(안 잰 날을 0 으로 그리지 않음). 날짜 줄에는 「혈당 측정 안 함」으로 보인다.
+ *   스위치: MEASURE_SKIP_ON(false 면 칩만 숨김 · 이미 저장된 값의 읽기 규칙은 그대로). PC: health_reminder.py · health_read.py · chat_responder.py 가 같은 규칙(skips)으로 읽는다.
+ *
  * app.js 연결: window 이벤트/버튼으로 화면을 열면 HealthTab.open() 이 렌더한다.
  *   HealthTab.init({toast}) 로 토스트만 주입받는다(결합 최소화). HealthTab.flush() = 밀린 칸 다시 올리기.
  * ==========================================================================*/
@@ -68,12 +75,19 @@
   function fmtMD(s) { var p = (s || '').split('-'); return p.length === 3 ? (+p[1]) + '월 ' + (+p[2]) + '일' : s; }
 
   /* ---------- 상태 ---------- */
-  var FIELDS = ['fasting_glucose', 'weight', 'sleep_hours', 'breakfast', 'lunch', 'dinner', 'snack', 'med_morning', 'med_evening', 'supplement', 'exercise'];
+  var FIELDS = ['fasting_glucose', 'weight', 'sleep_hours', 'breakfast', 'lunch', 'dinner', 'snack', 'med_morning', 'med_evening', 'supplement', 'exercise', 'skips'];
   // 「N / 9 기록됨」에 세는 9칸 — 간식은 선택이라 세지 않는다.
   //   PC 쪽과 같은 9칸: health_reminder.py SLOTS(아침 4 + 저녁 3 + 밤 2) · chat_responder.py _HEALTH_MISS_SKIP=("snack",)
-  var REQUIRED = FIELDS.filter(function (k) { return k !== 'snack' && k !== 'exercise'; });   // v9.25: 운동도 선택 칸 — 9칸에 넣지 않는다
+  var REQUIRED = FIELDS.filter(function (k) { return k !== 'snack' && k !== 'exercise' && k !== 'skips'; });   // v9.25: 운동도 선택 칸 — 9칸에 넣지 않는다
   var SHORT = { fasting_glucose: '혈당', weight: '체중', sleep_hours: '수면', breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식',
-                med_morning: '아침약', med_evening: '저녁약', supplement: '영양제', exercise: '운동' };
+                med_morning: '아침약', med_evening: '저녁약', supplement: '영양제', exercise: '운동', skips: '측정 안 함' };
+  // v9.38(O-0617) 공복혈당·체중 「측정 안 함」 — 서버 칸 skips(글, 쉼표로 이은 칸 이름). 서버 SQL(skips_step1.sql) 적용 뒤에 배포한다.
+  var MEASURE_SKIP_ON = true;
+  var MEASURE_SKIP = '측정 안 함';
+  var MEASURE_PH = '측정 안 함';           // 숫자 칸 안내 글(칩 이름과 같게)
+  var SKIPPABLE = { fasting_glucose: 1, weight: 1 };
+  function skipList(v) { return (typeof v === 'string' ? v.split(',') : []).map(function (x) { return x.trim(); }).filter(function (x) { return SKIPPABLE[x] === 1; }); }
+  function skipMark(r, k) { return !!r && SKIPPABLE[k] === 1 && skipList(r.skips).indexOf(k) >= 0; }
   // v9.25(O-0588) 운동 섹션 스위치 — 사람이 켜고 끄는 값. 서버 SQL(exercise_tab_step1.sql) 적용 전에는 앱을 배포하지 않는다. false 면 섹션만 숨김(v9.24 모양).
   var EXERCISE_TAB_ON = true;
   var EXERCISE_BASE = ['런닝머신 30분', '런닝머신 1시간', '슬로우러닝', '가슴운동', '등운동', '어깨운동', '하체운동'];
@@ -111,6 +125,9 @@
   }
   function isSet(v) { return !(v === null || v === undefined || v === ''); }
   function norm(v) { return isSet(v) ? v : null; }
+  // 「측정 안 함」: 숫자가 없을 때만 인정(둘이 같이 남은 옛 값은 숫자가 이긴다). 「적은 칸」 = 값이 있거나 일부러 안 잰 칸.
+  function isMeasSkipped(r, k) { return skipMark(r, k) && !isSet(r[k]); }
+  function isDone(r, k) { return isSet(r[k]) || isMeasSkipped(r, k); }
   // 같은 값인가 — 숫자는 서버가 문자열/소수로 돌려줘도 같게 본다(71.3 vs "71.30").
   function eq(a, b) {
     a = norm(a); b = norm(b);
@@ -121,7 +138,7 @@
     return String(a) === String(b);
   }
   function recordedCount() {
-    var n = 0; REQUIRED.forEach(function (k) { if (isSet(rec[k])) n++; }); return n;
+    var n = 0; REQUIRED.forEach(function (k) { if (isDone(rec, k)) n++; }); return n;
   }
   function dirtyKeys(r, all) {                    // 아직 서버에 안 올라간 칸. all=false 면 화면에 보여 줄 것만(옛 캐시 확인용은 제외)
     var d = (r && r._dirty) || {};
@@ -343,6 +360,7 @@
     if (isNaN(srvT)) srvT = 0;
     var d = r._dirty || (r._dirty = {}), out = { changed: false, push: [], lost: [] };
     FIELDS.forEach(function (k) {
+      if (k === 'skips' && row && !('skips' in row)) return;       // 서버에 skips 칸이 아직 없다(SQL 적용 전) — 폰에 있는 값을 서버의 「없음」으로 덮지 않는다
       var sv = row ? norm(row[k]) : null, e = d[k];
       if (!e) { if (!eq(r[k], sv)) { r[k] = sv; out.changed = true; } return; }
       if (eq(r[k], sv)) { delete d[k]; return; }
@@ -353,6 +371,7 @@
     return out;
   }
   function fmtVal(k, v) {
+    if (k === 'skips') return isSet(v) ? skipList(v).map(function (x) { return SHORT[x]; }).join('·') + ' 측정 안 함' : '비움';
     if (!isSet(v)) return '비움';
     if (k === 'sleep_hours') return fmtSleep(+v);
     if (typeof v === 'boolean') return v ? '복용함' : '미복용';
@@ -473,6 +492,19 @@
     r[k] = v;
     return true;
   }
+  // v9.38 「측정 안 함」 켜고 끄기(skips 칸만 바꾼다 · 숫자 칸은 부르는 쪽이 정리)
+  function setMeasSkip(r, k, on) {
+    var a = skipList(r.skips).filter(function (x) { return x !== k; });
+    if (on) a.push(k);
+    a.sort();
+    return setField(r, 'skips', a.join(',') || null);
+  }
+  // 숫자를 넣는 모든 길(직접 입력 · ＋/−)이 지나는 곳: 숫자가 들어가면 그 칸의 「측정 안 함」은 저절로 풀린다.
+  function setNumber(r, k, nv) {
+    var ch = setField(r, k, nv);
+    if (isSet(r[k]) && skipMark(r, k)) { setMeasSkip(r, k, false); ch = true; }
+    return ch;
+  }
 
   /* ---------- v9.4 케이 한마디(머리줄) + 9칸을 다 채운 순간의 반응 ----------
    * 머리줄의 케이는 늘 작게 접힌 모습(머리 + 한 줄)이다 — 화면 길이·약 칸 위치는 예전(「N / 9 기록됨」 줄)과 같다.
@@ -484,7 +516,7 @@
   var lastCount = -1, cheerT = null;
   function sayText() {
     var N = REQUIRED.length;
-    var miss = SAY_ORDER.filter(function (k) { return REQUIRED.indexOf(k) >= 0 && !isSet(rec[k]); }).map(function (k) { return SHORT[k]; });
+    var miss = SAY_ORDER.filter(function (k) { return REQUIRED.indexOf(k) >= 0 && !isDone(rec, k); }).map(function (k) { return SHORT[k]; });
     var n = N - miss.length;
     if (mode === 'past') return miss.length ? N + '칸 중 ' + n + '칸 적혀 있습니다' : N + '칸 다 적혀 있습니다';
     if (!miss.length) return '오늘 ' + N + '칸 다 적혀 있습니다';
@@ -562,17 +594,21 @@
   function numRow(k, label, unit, step) {
     var v = isSet(rec[k]) ? rec[k] : '';
     var hint = lastHint(k);
-    return '<div class="hitem hnum" data-k="' + k + '" data-step="' + step + '">' +
+    var sk = isMeasSkipped(rec, k);
+    return '<div class="hitem hnum' + (sk ? ' mskipped' : '') + '" data-k="' + k + '" data-step="' + step + '">' +
       '<div class="hitem-top"><span class="hlab">' + label + ' <small>' + unit + '</small>' + pendTag() + '</span>' +
       '<span class="hitem-r"><span class="hlast">' + esc(hint) + '</span>' + chk(k) + '</span></div>' +
       '<div class="hstep">' +
       '<button type="button" class="hstepbtn" data-d="-1" aria-label="줄이기">−</button>' +
-      '<input class="hval" inputmode="decimal" value="' + esc(v) + '" placeholder="—" aria-label="' + label + '">' +
+      '<input class="hval" inputmode="decimal" value="' + esc(v) + '" placeholder="' + (sk ? MEASURE_PH : '—') + '" aria-label="' + label + '">' +
       '<button type="button" class="hstepbtn" data-d="1" aria-label="늘리기">＋</button>' +
+      // v9.38: 「측정 안 함」 칩은 ＋ 오른쪽 같은 줄에 둔다(칸을 한 줄 더 만들지 않아 첫 화면에 약 줄까지 그대로 보인다)
+      (MEASURE_SKIP_ON ? '<button type="button" class="chip hchip hskip hmskip' + (sk ? ' on' : '') + '" data-k="' + k + '" aria-pressed="' + (sk ? 'true' : 'false') +
+        '" aria-label="' + label + ' ' + MEASURE_SKIP + '">' + MEASURE_SKIP + '</button>' : '') +
       '</div></div>';
   }
   function chk(k) {
-    return '<i class="hchk' + (isSet(rec[k]) ? ' on' : '') + '"><svg><use href="#i-check"/></svg></i>';
+    return '<i class="hchk' + (isDone(rec, k) ? ' on' : '') + '"><svg><use href="#i-check"/></svg></i>';
   }
   // 수면시간: 「시간」 + 「분」 두 드롭다운. 내부 저장은 소수 시간(sleep_hours)으로 그대로.
   function sleepRow() {
@@ -693,7 +729,7 @@
   function softRender() {
     var host = $('hToday'), a = document.activeElement;
     if (host && a && host.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) {
-      refreshAllChk(); paintState();
+      refreshAllChk(); paintState(); paintMeas('fasting_glucose'); paintMeas('weight');
       Array.prototype.forEach.call(host.querySelectorAll('.hnum'), function (row) {       // 「지난 기록」 안내만 새로
         var h = row.querySelector('.hlast'); if (h) h.textContent = lastHint(row.getAttribute('data-k'));
       });
@@ -709,7 +745,7 @@
     if (item) {
       var c = item.querySelector('.hchk');
       if (c) {
-        var wasOn = c.className.indexOf(' on') >= 0, nowOn = isSet(rec[k]);
+        var wasOn = c.className.indexOf(' on') >= 0, nowOn = isDone(rec, k);
         c.className = 'hchk' + (nowOn ? ' on' : '');
         // v9.6(O-0387 3번): 대표님이 방금 눌러 칸이 「처음 채워진」 순간에만 체크를 그린다(＋/− 를 연달아 눌러 값만 바뀔 때·서버 값을 받아 맞출 때는 그대로)
         try { if (quiet !== true && nowOn && !wasOn && global.KMotion) global.KMotion.checkDraw(c); } catch (e) {}
@@ -764,9 +800,9 @@
           var i = h.querySelector('.hitem[data-k="' + k + '"] .hval');
           if (i && typed) { i.value = raw; fire(i, 'change'); }
         })) return;
-        var t = T(), ch = setField(t, k, nv);
+        var t = T(), ch = setNumber(t, k, nv);
         input.value = isSet(t[k]) ? t[k] : '';
-        if (t === rec) refreshChk(k);
+        if (t === rec) { paintMeas(k); refreshChk(k); }
         if (ch) scheduleSave(t);
       }
       Array.prototype.forEach.call(row.querySelectorAll('.hstepbtn'), function (b) {
@@ -778,14 +814,23 @@
           var cur = isSet(t[k]) ? parseFloat(t[k]) : startFor(k, t.log_date);
           var nv = cur + d * step;
           if (nv < 0) nv = 0;
-          var ch = setField(t, k, fix(nv));
+          var ch = setNumber(t, k, fix(nv));
           input.value = t[k];
-          if (t === rec) refreshChk(k);
+          if (t === rec) { paintMeas(k); refreshChk(k); }
           if (ch) scheduleSave(t);
         });
       });
       input.addEventListener('change', commit);
       input.addEventListener('blur', commit);
+    });
+
+    // v9.38 공복혈당·체중 「측정 안 함」 칩: 켜면 그 칸은 일부러 안 잰 것으로 적고 숫자는 비운다 · 다시 누르면 푼다(같은 화면에서는 누르기 전 숫자로)
+    Array.prototype.forEach.call(host.querySelectorAll('.hmskip'), function (btn) {
+      var k = btn.getAttribute('data-k');
+      btn.addEventListener('click', function () {
+        if (moved(function (h) { var nb = h.querySelector('.hmskip[data-k="' + k + '"]'); if (nb) nb.click(); })) return;
+        toggleMeasSkip(k, T());
+      });
     });
 
     // 수면시간: 시/분 드롭다운 → 소수 시간으로 저장
@@ -889,6 +934,30 @@
   // v9.5.1(O-0386) 「안 먹음」 켜고 끄기. 켜면: 그 끼니 칸 = 「안 먹음」(적혀 있던 식단은 「안 먹음」으로 바뀐다) → 적은 칸으로 세고 한 줄로 접는다.
   //   끄면: 누르기 전 모습으로 돌아간다 — 비어 있던 끼니는 빈 칸, 식단이 적혀 있던 끼니는 그 식단(같은 화면에서 잘못 눌렀을 때 한 번 더 누르면 되돌아오게).
   //         칩이 펼쳐진 채 남아 바로 식단을 고를 수 있다. 9칸이 이 누름으로 막 찼으면 평소처럼 케이가 한마디 한다.
+  function paintMeas(k) {                          // 한 칸의 「측정 안 함」 모양(칩 · 칸 흐림 · 안내 글 · 숫자)을 지금 기록에 맞춘다
+    var host = $('hToday'); if (!host || !rec) return;
+    var row = host.querySelector('.hnum[data-k="' + k + '"]'); if (!row) return;
+    var sk = isMeasSkipped(rec, k), b = row.querySelector('.hmskip'), inp = row.querySelector('.hval');
+    row.classList.toggle('mskipped', sk);
+    if (b) { b.classList.toggle('on', sk); b.setAttribute('aria-pressed', sk ? 'true' : 'false'); }
+    if (inp) { inp.placeholder = sk ? MEASURE_PH : '—'; if (document.activeElement !== inp) inp.value = isSet(rec[k]) ? rec[k] : ''; }
+  }
+  function toggleMeasSkip(k, t) {
+    var on = !isMeasSkipped(t, k), pk = 'm|' + t.log_date + '|' + k;
+    var before = (t === rec) ? recordedCount() : -1, ch = false;
+    if (on) {
+      if (isSet(t[k])) skipPrev[pk] = t[k]; else delete skipPrev[pk];
+      ch = setField(t, k, null) | setMeasSkip(t, k, true);
+    } else {
+      var back = isSet(skipPrev[pk]) ? skipPrev[pk] : null; delete skipPrev[pk];
+      ch = setMeasSkip(t, k, false) | setField(t, k, back);
+    }
+    if (t === rec) {
+      paintMeas(k);
+      refreshChk(k);
+    }
+    if (ch) scheduleSave(t);
+  }
   function toggleSkip(k, t) {
     var on = !skipOn(k, t[k]), pk = t.log_date + '|' + k, nv = null;
     var before = (t === rec) ? recordedCount() : -1;
@@ -1064,7 +1133,9 @@
   function dayRow(r, pend, isToday) {
     var bits = [];
     if (isSet(r.fasting_glucose)) bits.push('<span class="hb glu">혈당 ' + esc(r.fasting_glucose) + '</span>');
+    else if (isMeasSkipped(r, 'fasting_glucose')) bits.push('<span class="hb">혈당 ' + MEASURE_SKIP + '</span>');
     if (isSet(r.weight)) bits.push('<span class="hb wt">체중 ' + esc(r.weight) + '</span>');
+    else if (isMeasSkipped(r, 'weight')) bits.push('<span class="hb">체중 ' + MEASURE_SKIP + '</span>');
     if (isSet(r.sleep_hours)) bits.push('<span class="hb">수면 ' + esc(fmtSleep(+r.sleep_hours)) + '</span>');
     var med = [];
     if (r.med_morning === true) med.push('아침'); if (r.med_evening === true) med.push('저녁');
