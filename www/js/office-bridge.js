@@ -1321,6 +1321,9 @@
     var age = Math.round(Number(ageMs) || 0); if (!(age > 0)) age = 0;
     return _outfitRpc('set_k_outfit', { p_outfit: String(id || ''), p_pass: pass || '', p_via: via || '', p_age_ms: age });
   }
+  /* (O-0616) 케이 옷 매일 자동 바꾸기 스위치(모든 기기 공유) — setKAuto(on, pass, via) → {auto, auto_at, server_now}. 읽기는 getKOutfit 답의 auto·auto_at.
+   *   서버에 함수가 없으면(SQL 미적용) err.notready, 암호가 틀리면 err.badpass (_outfitRpc 와 같은 번역). */
+  function setKAuto(on, pass, via) { return _outfitRpc('set_k_auto', { p_on: !!on, p_pass: pass || '', p_via: via || '' }); }
   function listOfficeOrders(limit, pass) {
     return _ordersRpc('list_office_orders', { p_limit: limit || 60, p_pass: pass || '' }, '작업 현황');
   }
@@ -1735,6 +1738,7 @@
     getKStatus: getKStatus,         // v8.4(O-0162) 채팅 머리줄 PC 케이 상태 점
     getChatRead: getChatRead, markChatRead: markChatRead,   // (O-0201) 읽음 기준 기기 간 공유
     getKOutfit: getKOutfit, setKOutfit: setKOutfit,         // (O-0487) 케이 옷 기기 간 맞추기
+    setKAuto: setKAuto,                                     // (O-0616) 옷 매일 자동 바꾸기 스위치
     listOfficeOrders: listOfficeOrders, listOfficeOrdersBySource: listOfficeOrdersBySource,   // v5.8: 작업 현황·작업 카드
     hideOfficeOrders: hideOfficeOrders, restoreOfficeOrders: restoreOfficeOrders,             // v5.9: 작업 현황 끝난 일 지우기(숨김)·되살리기
     listReminders: listReminders, cancelReminder: cancelReminder,                             // v8.3: ⏰ 예약한 알림

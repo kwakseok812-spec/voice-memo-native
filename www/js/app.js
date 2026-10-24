@@ -3267,6 +3267,7 @@
   APP_VERSION = 'v9.30';        // v9.30: 무음 카메라 확대·축소(핀치·줌 막대·배율 단추) + 문서 뷰어 PPT 「영상 보기」·발표자 노트
   APP_VERSION = 'v9.35';        // v9.35: S-Office 저장 직후 창(열기·공유)·고친 내용 자동 복구·엑셀 되돌리기·한글·워드·PPT·엑셀 찾기·열기 방식 줄 위로·최근 문서 합침. v9.34: S-Office 폰 화면 다듬기(한글 폰용 도구줄·글꼴, 워드·PPT·엑셀·PDF 키보드·터치 정리), 홈 칸 이름 S-Office, 마크다운 바깥 그림 차단 보강. v9.33: S-Office 한글(hwp·hwpx) 열기·고치기, 워드·PPT 글자 고치기, 엑셀 서식 보존 저장 추가. v9.32: 문서 열기 화면에 「S-Office로 열기」(폰 안에서 PDF·엑셀·워드·PPT·md·html 보기, 엑셀·PDF 간단 고치기) 추가. v9.31: 문서 뷰어 슬라이드쇼(전체화면)에서 「영상 보기」 영상 그림이 안 보이던 문제 수정
   APP_VERSION = 'v9.36';        // v9.36: 영수증 여러 장 보내기(묶음 화면·최대 10장)와 「맞아요/고쳐요」 확인 말풍선 (S-Office v9.35 위)
+  APP_VERSION = 'v9.37';        // v9.37(O-0616): 꾸미기 「옷」 탭에 「매일 새 옷으로 갈아입기」 — 새벽 4시마다 어제와 다른 옷(20벌 한 바퀴), 모든 기기 공유 스위치(기본 꺼짐).
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -7141,6 +7142,7 @@
       an.textContent = nop ? '연동 암호를 넣으면 다른 옷의 움직임·자세 그림과 새 옷을 받아 옵니다.' : '';
       an.style.display = nop ? 'block' : 'none';
     }
+    try { paintKwAuto(); } catch (e) {}                // (O-0616) 매일 새 옷으로 갈아입기 줄
     try { paintKwSyncNote(); } catch (e) {}           // (O-0487) 옷 맞추기가 실제로 켜져 있을 때만 「모든 기기에 함께 적용됩니다」
     var sb = $('kwShowBtn');                           // v9.19(O-0557) 패션쇼 단추 — 스위치가 켜져 있고 옷이 있을 때만
     if (sb) { sb.hidden = !kfsOn || !KChar.outfits().length; sb.classList.toggle('calm', !KChar.motionOn()); if (sb.parentNode) sb.parentNode.classList.toggle('has-show', !sb.hidden); }   // has-show: 폰 폭에서 안내 글을 둘째 줄로(k-fashion-show.css)
@@ -7764,6 +7766,7 @@
       if (!d || !('outfit' in d)) { ofTry(); return; }             // 답의 모양이 다르다(칸이 없다) → 이번에는 넘어간다. null(아직 아무도 안 올림)과는 다르다
       ofSetLive(true);
       ofTake(d.outfit);
+      try { aoAfterPull(d); } catch (e) {}                         // (O-0616) 자동 바꾸기 스위치 값 · 직접 고른 때를 받아 두고, 시작 직후라면 오늘 옷을 맞춘다
       if (ofUp()) ofPushSoon(0);                                   // 올리지 못하고 남은 것이 있으면 이어서
     }).catch(function (e) {
       ofPulling = false;
@@ -7839,6 +7842,7 @@
   }
   function ofWear(id, src, at) {                      // KChar 가 실제로 갈아입혔을 때
     if (!ofCan()) return;
+    if (src === 'remote' && aoNow && aoNow.id === id) return;   // (O-0616) 새벽 4시 자동 바꾸기로 입은 것 — 다른 기기에서 고른 옷이 아니다(안내·올리기 없음, aoWear 가 마무리)
     if (src === 'remote') {
       var w = ofWant; if (w && w.id === id) ofResolve(w);
       ofArrive();
@@ -7892,11 +7896,157 @@
     ofLsSet(OF_UP_KEY, { id: id, at: Date.now() });
     ofPushSoon(0);
   }
-  function ofGo() { ofReady = true; if (ofSrvNull) ofSeed(); ofTry(); }   // 옷장(받아 둔 서버 옷 포함)을 다 읽은 뒤부터 반영한다
+  function ofGo() { ofReady = true; if (ofSrvNull) ofSeed(); ofTry(); try { aoStart(); } catch (e) {} }   // 옷장(받아 둔 서버 옷 포함)을 다 읽은 뒤부터 반영한다
   if (ofCan()) {
     KChar.onWear(ofWear);
     try { (KChar.assetsReady || KChar.ready).then(ofGo, ofGo); } catch (e) { ofGo(); }
   }
+  /* ==================== O-0616 케이 옷 매일 자동 바꾸기 ====================
+   * 꾸미기 「옷」 탭의 스위치 한 줄(kwAutoRow). 켜면 한국시간 새벽 4시마다 어제와 다른 옷(20벌 한 바퀴, 겹침 없음 — js/k-outfit-auto.js)으로 갈아입는다.
+   *  · 스위치 값은 **서버에 하나**(k_outfit_state 의 'auto' 줄 — get_k_outfit 답의 auto·auto_at, 쓰기 set_k_auto). 폰·PC판 어디서 켜고 꺼도 모든 연동 기기에 같이 적용된다.
+   *    기기에는 사본만(smart_k_auto_outfit · smart_k_auto_since) — 시작 인사 전 준비(KOutfitAuto.early)가 서버를 기다리지 않고 읽으려고.
+   *    켜는 것은 연동 암호가 있는 기기에서, 서버가 받아 준 뒤에만(실패하면 켜지지 않고 안내). 켠 날은 그대로, 다음 날 새벽 4시부터 바뀐다.
+   *  · 오늘 옷은 각 기기가 같은 계산으로 스스로 정한다(서버 계산 아님). 서버에 올리지 않는다 = 다른 기기의 「직접 고른 옷」을 덮어쓰지 않는다.
+   *  · 직접 고른 옷은 그날(다음 새벽 4시까지)만 유지: 이 기기에서 고른 때(smart_k_user_pick_at) 또는 서버의 마지막 직접 선택(k_outfit_state 'k')이 오늘 4시 이후면 자동은 건너뛴다.
+   *  · 앱을 열 때: 서버 답(스위치·직접 고른 때)을 먼저 받고(6초까지만 기다림), 시작 인사가 도는 동안·통화 중에는 미뤘다가 끝나면 갈아입는다.
+   *    이 기기가 입어 본 옷이면 시작 인사 전에 이미 맞춰 둔다(KOutfitAuto.early). 아직 못 받은 옷은 받아만 두고 **다음 실행부터** 입는다(시작을 늦추지 않는다).
+   *  · 열려 있던 앱은 새벽 4시가 지나도 그 자리에서 바꾸지 않는다 — 화면이 다시 보일 때·앱에 돌아올 때 한 번 확인한다.
+   *  · 「움직임 줄이기」·케이 움직임 끔: 효과 없이(KMotion 이 스스로 쉼) 바뀌고 안내 한 줄만. 안내는 한국어 옷 이름이 있을 때만 이름을 넣는다.
+   * 스위치: OUTFIT_AUTO 'on' | 'off'(끄면 줄이 안 보이고 아무것도 하지 않는다 = v9.36 과 같다) */
+  var OUTFIT_AUTO = 'on';
+  var aoNow = null, aoSrv = null, aoPending = true, aoGot = false, aoSetting = false, aoWatchT = 0, aoWatchN = 0, aoFetchDay = 0;
+  function aoUse() { return OUTFIT_AUTO === 'on' && !!window.KOutfitAuto && !!window.KChar; }
+  function aoRaw(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function aoRawSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, String(v)); } catch (e) {} }
+  function aoMirrorOn() { return aoRaw(KOutfitAuto.K.ON) === '1'; }
+  function aoSetMirror(on, atMs) {
+    aoRawSet(KOutfitAuto.K.ON, on ? '1' : '0');
+    if (on && typeof atMs === 'number' && !isNaN(atMs)) aoRawSet(KOutfitAuto.K.SINCE, KOutfitAuto.dayNum(atMs));
+  }
+  function aoPickedToday(d) {
+    var A = KOutfitAuto, st = A.dayStart(d), pick = parseInt(aoRaw(A.K.PICK) || '0', 10) || 0;
+    if (pick >= st) return true;
+    if (aoSrv) { var ago = aoSrv.ago + (Date.now() - aoSrv.at); if (ago <= Date.now() - st) return true; }   // 서버 기준: 마지막 직접 선택이 오늘 4시 뒤인가(두 시각의 차이라 기기 시계와 무관)
+    return false;
+  }
+  function paintKwAuto() {
+    var row = $('kwAutoRow'); if (!row) return;
+    var show = aoUse() && ofCan();
+    row.style.display = show ? '' : 'none';
+    if (!show) return;
+    var ck = $('kwAutoOutfit'), sub = $('kwAutoSub'), nop = !getSyncPass(), on = aoMirrorOn() && !nop;
+    if (ck && !aoSetting) ck.checked = on;
+    if (sub) {
+      var t = nop ? '연동 암호를 넣은 기기에서만 켤 수 있습니다' : (on ? '오늘 직접 고르신 옷은 내일 새벽 4시까지 유지됩니다. 모든 기기에 함께 적용됩니다' : '새벽 4시마다 어제와 다른 옷을 입습니다. 모든 기기에 함께 적용됩니다');
+      if (sub.textContent !== t) sub.textContent = t;
+    }
+  }
+  function aoAfterPull(d) {                           // 서버 답 d = {outfit, server_now, auto, auto_at}
+    if (!aoUse()) return;
+    var o = d.outfit, sn = ofTs(d.server_now);
+    aoSrv = null; aoGot = true;
+    if (o && typeof o === 'object' && ofTs(o.changed_at).ok && sn.ok) aoSrv = { ago: Date.parse(d.server_now) - Date.parse(o.changed_at), at: Date.now() };
+    if (!aoSetting) {
+      if (d.auto === true) aoSetMirror(true, Date.parse(d.auto_at));
+      else aoSetMirror(false);                         // 'auto' 칸이 없거나 false → 꺼짐(서버 SQL 이 없거나 되돌려졌을 때도 멈춘다)
+    }
+    try { paintKwAuto(); } catch (e) {}
+    if (aoPending && ofReady) { aoPending = false; aoRun(); }
+  }
+  function aoStart() {                                // 옷장을 다 읽은 직후(앱 시작)
+    if (!aoUse()) return;
+    if (!ofOn() || aoGot) { aoPending = false; aoRun(); return; }
+    ofPull();                                         // 답이 오면 aoAfterPull 이 이어서 한다
+    setTimeout(function () { if (aoPending) { aoPending = false; aoRun(); } }, 6000);   // 6초 안에 못 받으면 기기 사본으로(시작을 막지 않는다)
+  }
+  function aoCheckNewDay() {                          // 화면이 다시 보일 때 · 앱에 돌아올 때 — 날이 바뀌었으면 한 번 확인
+    if (!aoUse() || !ofReady) return;
+    var d = KOutfitAuto.dayNum(Date.now());
+    if (aoRaw(KOutfitAuto.K.DAY) === String(d) || aoFetchDay === d) return;
+    aoFetchDay = d;
+    aoPending = true;
+    if (!ofPull()) { aoPending = false; aoRun(); }
+  }
+  function aoWatch() {                                // 인사·통화·받는 중인 옷이 끝나기를 1초마다(최대 60초) 본 뒤 한 번 더
+    if (aoWatchT) return;
+    aoWatchN = 0;
+    aoWatchT = setInterval(function () {
+      if (++aoWatchN > 60) { clearInterval(aoWatchT); aoWatchT = 0; return; }
+      if (ofBusy() || ofWant) return;
+      clearInterval(aoWatchT); aoWatchT = 0;
+      aoRun();
+    }, 1000);
+  }
+  function aoRun() {
+    if (!aoUse() || !ofReady || !ofCan()) return;
+    var A = KOutfitAuto, K = KChar, d = A.dayNum(Date.now());
+    if (!aoMirrorOn() || !A.onFor(d)) return;
+    if (aoRaw(A.K.DAY) === String(d)) return;
+    if (aoPickedToday(d)) { aoRawSet(A.K.DAY, d); return; }        // 오늘 직접 고르셨다 → 그대로(다음 새벽 4시에 다시)
+    var tg = A.outfitFor(d);
+    if (K.outfit().id === tg) { aoFinish(tg, null, d); return; }
+    if (ofBusy() || ofWant) { aoWatch(); return; }
+    var o = ofHas(tg);
+    if (o && !o.pending) {
+      var ghost = null;
+      try { ghost = (isOpen($('kWardrobeView')) && window.KMotion && KMotion.snap) ? KMotion.snap($('kwHero')) : null; } catch (e) { ghost = null; }
+      aoNow = { id: tg, ghost: ghost, d: d };
+      if (K.setOutfit(tg, 'remote') !== true) aoNow = null;       // 갈아입으면 aoWear 가 마무리한다
+      return;
+    }
+    // 이 기기가 아직 못 받은 옷 → 받아만 둔다(데이터 절약 설정은 받기 쪽이 지킨다). 입는 것은 다음 실행부터.
+    try {
+      var A2 = K.assets || {};
+      Promise.resolve(A2.ensureThumbs ? A2.ensureThumbs() : false).then(function () { return A2.ensureOutfit ? A2.ensureOutfit(tg) : false; }).catch(function () {});
+    } catch (e) {}
+  }
+  function aoFinish(id, ghost, d) {                   // 오늘 옷으로 맞춰졌다(갈아입었거나 이미 그 옷)
+    var A = KOutfitAuto, ev = null;
+    aoRawSet(A.K.DAY, d);
+    try { ev = JSON.parse(aoRaw(A.K.EARLY) || 'null'); } catch (e) { ev = null; }
+    aoRawSet(A.K.EARLY, null);
+    var early = !!(ev && ev.id === id && ev.d === d);              // 시작 인사 전에 미리 맞춰 둔 경우 — 효과 없이 안내만
+    if (!early && !ghost) return;                                   // 이미 그 옷을 입고 있던 경우는 조용히
+    var inW = isOpen($('kWardrobeView')), inH = isOpen(homeView);
+    if (!early && !document.hidden) {
+      try { if (inW && window.KMotion && KMotion.outfitSwap) KMotion.outfitSwap($('kwHero'), ghost === true ? null : ghost); } catch (e) {}
+      try {
+        var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm())) ? $('kHero') : null;
+        if (hh) { KMotion.shine(hh, hh.querySelector('.kh-side')); KMotion.sparkle(hh, KMotion.cnt ? KMotion.cnt(10) : 10); }
+      } catch (e) {}
+    }
+    if (document.hidden) return;
+    var nm = ''; try { nm = KChar.outfit().name || ''; } catch (e) {}
+    toast(/[가-힣]/.test(nm) ? tw('오늘은 ' + nm + josaRo(nm) + ' 갈아입었습니다.') : '오늘은 새 옷으로 갈아입었습니다.', 3200, true);
+  }
+  function aoWear(id, src, at) {                      // KChar 가 실제로 갈아입혔을 때(ofWear 와 별개로 한 번 더 듣는다)
+    if (!aoUse()) return;
+    if (src === 'user') {                              // 이 기기에서 직접 고름 → 오늘은 이 옷 그대로
+      aoRawSet(KOutfitAuto.K.PICK, (typeof at === 'number' && at > 0) ? at : Date.now());
+      aoNow = null;
+      return;
+    }
+    if (aoNow && aoNow.id === id) { var n = aoNow; aoNow = null; aoFinish(id, n.ghost || true, n.d); try { if (isOpen($('kWardrobeView'))) renderKWardrobe(); } catch (e) {} }
+  }
+  if (window.KChar && KChar.onWear) KChar.onWear(aoWear);
+  if ($('kwAutoOutfit')) $('kwAutoOutfit').addEventListener('change', function () {
+    var el = this, want = el.checked;
+    if (!aoUse()) { el.checked = false; return; }
+    if (!getSyncPass()) { el.checked = false; toast('연동 암호를 넣은 기기에서만 켤 수 있습니다.', 2800); paintKwAuto(); return; }
+    if (!ofCan() || aoSetting) { el.checked = aoMirrorOn(); return; }
+    aoSetting = true; el.disabled = true;
+    OfficeBridge.setKAuto(want, getSyncPass(), readNative() ? 'phone' : 'pc').then(function (d) {
+      aoSetting = false; el.disabled = false;
+      var on = !!(d && d.auto === true), at = d ? Date.parse(d.auto_at) : NaN;
+      aoSetMirror(on, isNaN(at) ? Date.now() : at);
+      paintKwAuto();
+      toast(on ? '내일 새벽 4시부터 어제와 다른 옷으로 갈아입습니다. 모든 기기에 함께 적용됩니다.' : '껐습니다. 지금 입은 옷 그대로 두고, 직접 고르시면 됩니다.', 3400, true);
+    }).catch(function (e) {
+      aoSetting = false; el.disabled = false;
+      paintKwAuto();
+      toast(e && e.notready ? '서버 준비가 안 되어 지금은 바꿀 수 없습니다.' : (e && e.badpass ? '연동 암호를 확인해 주세요.' : '연결이 안 되어 바꾸지 못했습니다. 잠시 뒤 다시 눌러 주세요.'), 3000);
+    });
+  });
   /* 옷장에서 옷 한 벌을 입는다 — 옷장 칸을 누를 때와 패션쇼 「이 옷 입기」(O-0557)가 함께 쓰는 하나의 길(옷 맞추기 O-0487 도 KChar.setOutfit 의 onWear 로 그대로 따라간다) */
   function kwWear(id) {
     if (!window.KChar || !id) return;
@@ -9563,7 +9713,7 @@
   }
   function startLive() { if (liveTimer || !liveVisible()) return; liveTimer = setInterval(liveRefresh, LIVE_INTERVAL); }
   function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
-  function liveForeground() { startLive(); liveRefresh(); }
+  function liveForeground() { startLive(); try { aoCheckNewDay(); } catch (e) {} liveRefresh(); }   // (O-0616) 날이 바뀌었으면 옷 자동 바꾸기 확인
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopLive(); else liveForeground(); });
   if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
     try {

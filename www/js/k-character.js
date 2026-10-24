@@ -785,6 +785,7 @@
       if (alts.length) plan.alts = alts;
       var fb = ref(o.fullbody); if (fb) plan.still = fb;
       lsSet(KA_PLAN_KEY, JSON.stringify(plan));
+      try { var pm = JSON.parse(lsGet('smart_k_intro_plans') || 'null') || {}; pm[o.id] = plan; lsSet('smart_k_intro_plans', JSON.stringify(pm)); } catch (e) {}   // O-0616: 옷마다 인사 계획 사본 — 자동 바꾸기가 시작 인사 전에 오늘 옷으로 미리 맞출 때 쓴다
     } catch (e) {}
   }
 
