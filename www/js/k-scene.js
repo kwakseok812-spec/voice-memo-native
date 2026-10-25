@@ -95,6 +95,7 @@
   // 화면을 새로 열었다(app.js openScreen·showHome) → 다음에 맞추는 장면은 「처음 보이는 것」으로 친다
   function reset() {
     Array.prototype.forEach.call(document.querySelectorAll('.ksc'), function (el) { el._kShown = false; });
+    try { if (window.KClips) KClips.screenReset(); } catch (e) {}      // O-0616: 돌던 장면 영상을 멈춘다
   }
   // 빈 화면·오류 자리에 넣을 덩어리(케이가 크게 + 말풍선). 그 화면의 코드가 innerHTML 로 넣는다.
   function emptyHtml(pose, text) {

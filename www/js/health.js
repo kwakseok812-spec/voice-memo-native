@@ -1404,7 +1404,7 @@
   // 서버의 최근 30일을 한 번 받아: 지금 날짜의 값 맞추기 + ＋/− 시작값 + 기록 보기 사본
   function refreshFromServer() {
     var r = rec, ds = rec.log_date;
-    listRange(daysAgoStr(HIST_DAYS - 1), todayStr(), false).then(function (rows) {
+    return listRange(daysAgoStr(HIST_DAYS - 1), todayStr(), false).then(function (rows) {
       rangeRows = rows.slice().sort(function (a, b) { return a.log_date < b.log_date ? 1 : -1; });
       lastRemember();
       if (rec !== r) return;
@@ -1428,7 +1428,15 @@
     mode = 'today'; openMeals = {}; skipPrev = {};
     switchTab('today');
     renderToday();
-    refreshFromServer();
+    var fresh = refreshFromServer();
+    // O-0616: 건강을 열 때 케이 맞이 영상 한 번(2편 이상 받아 둔 기기 · 10분 안에 또 나오지 않음 · 끝나면 지금 그림).
+    //   서버 값을 받아 화면을 다시 그린 「뒤」에 튼다(그리는 중에 틀면 머리줄이 새로 그려지며 영상이 사라진다) — 서버가 느리면 1.2초만 기다린다.
+    try {
+      if (global.KClips) {
+        var go = function () { try { if (mode === 'today') global.KClips.play('health', $('kscHealth'), { delay: 350, key: 'open', find: function () { return $('kscHealth'); } }); } catch (e) {} };
+        Promise.race([Promise.resolve(fresh).catch(function () {}), new Promise(function (r) { setTimeout(r, 1200); })]).then(go);
+      }
+    } catch (e) {}
   }
   // 지난 날짜 고치기: 「기록 보기」의 날짜 줄에서 연다. 최근 30일 안 · 미래 불가. 오늘 날짜면 그냥 「오늘 기록」.
   function openDate(ds) {

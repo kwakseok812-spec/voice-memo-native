@@ -158,19 +158,23 @@
     // v9.5: 인사 영상의 자막 시점·길이(영상을 재서 넣은 값) · 자세 영상 자리(앞으로 — 있으면 재생, 없으면 그림)
     n.bowCue = (typeof o.bow_cue === 'number') ? o.bow_cue : null; n.bowLen = (typeof o.bow_len === 'number') ? o.bow_len : null;
     // v9.6: 인사 영상을 한 옷에 여러 개(깊은 인사 + 가벼운 목례 등) — bow 가 첫째, bow_alt[] 가 그다음. 포스터·자막 시점·길이는 같은 차례의 bow_alt_poster[] · bow_alt_cue[] · bow_alt_len[]
-    n.bowAlt = bowAltList(o.bow_alt, o.bow_alt_poster, o.bow_alt_cue, o.bow_alt_len, function (x) { return x || ''; });
+    n.bowAlt = bowAltList(o.bow_alt, o.bow_alt_poster, o.bow_alt_cue, o.bow_alt_len, function (x) { return x || ''; }, o.bow_alt_tag);
     n.poseVideos = (o.pose_videos && typeof o.pose_videos === 'object') ? o.pose_videos : {};
+    n.sceneClips = (o.scene_clips && typeof o.scene_clips === 'object') ? o.scene_clips : {};                    // O-0616: 장면 영상 {장면: [파일…]} · 길이(초)는 같은 차례 — k-clips.js 가 읽는다. (옛 앱이 pose_videos 에서 목록을 파일 이름으로 잘못 읽지 않게 새 열쇠를 쓴다)
+    n.sceneClipLen = (o.scene_clips_len && typeof o.scene_clips_len === 'object') ? o.scene_clips_len : {};
+    n.sceneClipShape = (o.scene_clips_shape && typeof o.scene_clips_shape === 'object') ? o.scene_clips_shape : {};      // 장면별 틀 모양: 'tall' = 전신 세로(9:16) · 없으면 정사각
     // v9.6: 음성 대화 전체 화면용 세로 영상(720×1280 · 소리 없음) — call: { listen, think, talk:[…], poster }. 없으면 빈 것(→ k-call.js 가 대체 그림)
     n.call = (o.call && typeof o.call === 'object') ? o.call : {};
     // v9.19(O-0557): 패션쇼 동작 영상(720×1280 · 8초 · 소리 없음)과 그 첫 장면 — 지금은 서버 묶음에만 있다(앱에 넣을 때를 위해 읽어 둔다)
     n.show = o.show || ''; n.showPoster = o.show_poster || o.showPoster || '';
     return n;
   }
-  function bowAltList(vs, ps, cues, lens, wrap) {
+  function bowAltList(vs, ps, cues, lens, wrap, tags) {
     return (Array.isArray(vs) ? vs : (vs ? [vs] : [])).map(function (v, i) {
       if (!v || typeof v !== 'string') return null;
       var po = Array.isArray(ps) ? ps[i] : (i === 0 ? ps : ''), c = Array.isArray(cues) ? cues[i] : null, l = Array.isArray(lens) ? lens[i] : null;
-      return { video: wrap(v), poster: (po && typeof po === 'string') ? wrap(po) : '', cue: (typeof c === 'number') ? c : null, len: (typeof l === 'number') ? l : null };
+      var tg = Array.isArray(tags) ? tags[i] : '';      // O-0616: 'day' = 낮 인사로만(밤 22~04시 시작 인사에서는 k-intro.js 가 뺀다)
+      return { video: wrap(v), poster: (po && typeof po === 'string') ? wrap(po) : '', cue: (typeof c === 'number') ? c : null, len: (typeof l === 'number') ? l : null, tag: (typeof tg === 'string') ? tg : '' };
     }).filter(Boolean);
   }
   function setData(d) {
@@ -224,6 +228,16 @@
     o = o || outfit();
     return (o.poses && o.poses[name]) ? url(o, o.poses[name]) : '';
   }
+  // O-0616 장면 영상: 그 장면(rec_prep · pc_recv · card_search · health …)에 쓸 수 있는(다 받아 둔) 영상 [{f: 파일, url, len: 초}]. 다른 머리 조합이 보이는 중이거나 그 옷에 영상이 없으면 [].
+  function clipList(scene, o) {
+    if (isCur(o) && activeCombo()) return [];
+    o = o || outfit();
+    var arr = (o.sceneClips || {})[scene]; if (typeof arr === 'string') arr = [arr];
+    if (!Array.isArray(arr)) return [];
+    var lens = ((o.sceneClipLen || {})[scene]) || [];
+    return arr.map(function (f, i) { return { f: f, url: url(o, f), len: (typeof lens[i] === 'number') ? lens[i] : 0 }; }).filter(function (c) { return c.f && c.url; });
+  }
+  function clipShape(scene) { var o = outfit(); return ((o.sceneClipShape || {})[scene] === 'tall') ? 'tall' : 'sq'; }       // O-0616 C안: 그 장면 영상의 틀 모양
   // 작은 원형 얼굴용: 얼굴 쪽으로 자른 사진(av_*). 없으면 전체 사진(CSS 로 확대)
   function avatarUrl(e, o, raw) {
     var cb = isCur(o) ? activeCombo() : null;
@@ -393,11 +407,11 @@
   function kaSave() { try { lsSet(KA_KEY, JSON.stringify({ m: ka.m, eff: ka.eff })); } catch (e) {} }
   function kaNames(e, kind) {              // 묶음 e 의 파일 이름들. kind: 'core'(옷장·표정·전신·1080) | 'thumb' | 'pose' | 'video' | 'bow' | 'show' | 없음=전부
     var f = (e && e.files) || {}, out = [];
-    function add(v) { if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (k) { if (v[k]) out.push(v[k]); }); }
+    function add(v) { if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (k) { add(v[k]); }); }     // O-0616: 안쪽에 목록이 또 있어도(pose_videos = {장면: [파일…]}) 이름만 모은다
     if (!kind || kind === 'core') { add(f.expr); add(f.avatar); add(f.thumb); add(f.fullbody); add(f.expr_hd); }
     if (kind === 'thumb') add(f.thumb);
     if (!kind || kind === 'pose') add(f.poses);
-    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.call_poster); add(f.call_listen); add(f.call_think); add(f.call_talk); }   // 받는 순서이기도 하다: 통화 포스터(작다)를 통화 영상보다 먼저 — 통화 중에 받게 되면 포스터부터 보이게
+    if (!kind || kind === 'video') { add(f.idle); add(f.talk); add(f.pose_videos); add(f.scene_clips); add(f.call_poster); add(f.call_listen); add(f.call_think); add(f.call_talk); }   // 받는 순서이기도 하다: 통화 포스터(작다)를 통화 영상보다 먼저 — 통화 중에 받게 되면 포스터부터 보이게
     if (!kind || kind === 'video' || kind === 'bow') { add(f.bow); add(f.bow_poster); add(f.bow_alt); add(f.bow_alt_poster); }
     // v9.19(O-0557) 패션쇼 영상: 「전부」(기기 정리 kaGc 가 남길 것)에는 넣고, 입을 때 받는 「영상」 묶음(video)에는 넣지 않는다 — 패션쇼를 열 때만 받는다(KChar.show.ensure)
     if (!kind || kind === 'show') { add(f.show); add(f.show_poster); }
@@ -406,7 +420,7 @@
   function kaHas(names) { var S = window.KStore; return !!S && names.every(function (n) { return S.has(n); }); }
   function kaReady(names) { var S = window.KStore; return !!S && names.every(function (n) { return !!S.url(n); }); }
   function ks(n) { return n ? 'ks:' + n : ''; }
-  function ksMap(m) { var o = {}; Object.keys(m || {}).forEach(function (k) { if (m[k]) o[k] = ks(m[k]); }); return o; }
+  function ksMap(m) { var o = {}; Object.keys(m || {}).forEach(function (k) { if (m[k]) o[k] = Array.isArray(m[k]) ? m[k].filter(Boolean).map(ks) : ks(m[k]); }); return o; }     // O-0616: 값이 목록이면(장면 영상) 목록째
   function ksCall(f) {                    // 서버 묶음의 세로 영상 자리 → 옷의 call
     var c = {};
     if (f.call_listen) c.listen = ks(f.call_listen);
@@ -426,9 +440,10 @@
       if (!n.idle && f.idle) n.idle = ks(f.idle);
       if (!n.talk && f.talk) n.talk = ks(f.talk);
       if (!n.bow && f.bow) { n.bow = ks(f.bow); n.bowPoster = ks(f.bow_poster); n.bowCue = e.bow_cue; n.bowLen = e.bow_len; }
-      if (!(n.bowAlt || []).length && f.bow_alt) n.bowAlt = bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks);
+      if (!(n.bowAlt || []).length && f.bow_alt) n.bowAlt = bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks, e.bow_alt_tag);
       if (!Object.keys(n.poses || {}).length && f.poses) n.poses = ksMap(f.poses);
       if (!Object.keys(n.poseVideos || {}).length && f.pose_videos) n.poseVideos = ksMap(f.pose_videos);
+      if (!Object.keys(n.sceneClips || {}).length && f.scene_clips) { n.sceneClips = ksMap(f.scene_clips); n.sceneClipLen = e.scene_clips_len || {}; n.sceneClipShape = e.scene_clips_shape || {}; }
       if (!Object.keys(n.exprHd || {}).length && f.expr_hd) n.exprHd = ksMap(f.expr_hd);
       if (!Object.keys(n.call || {}).length) n.call = ksCall(f);
       n.srv = true;
@@ -445,8 +460,8 @@
       var n = { id: id, name: e.name || id, desc: e.desc || '', category: e.category || '새 옷', crop: e.crop || null, base: '', remote: true, srv: true, server: true,
         expr: ksMap(f.expr), avatar: ksMap(f.avatar), thumb: ks(f.thumb), fullbody: ks(f.fullbody), exprHd: ksMap(f.expr_hd),
         idle: ks(f.idle), talk: ks(f.talk), bow: ks(f.bow), bowPoster: ks(f.bow_poster), bowCue: e.bow_cue, bowLen: e.bow_len,
-        bowAlt: bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks),
-        poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos), call: ksCall(f) };
+        bowAlt: bowAltList(f.bow_alt, f.bow_alt_poster, e.bow_alt_cue, e.bow_alt_len, ks, e.bow_alt_tag),
+        poses: ksMap(f.poses), poseVideos: ksMap(f.pose_videos), sceneClips: ksMap(f.scene_clips), sceneClipLen: e.scene_clips_len || {}, sceneClipShape: e.scene_clips_shape || {}, call: ksCall(f) };
       n.pending = !kaReady(kaNames(e, 'core'));
       outs.push(n);
     });
@@ -530,8 +545,9 @@
   var KA_NEXT_FIRST = 'on';
   // 함께 바뀌어야 하는 자리 묶음(files 의 열쇠 · 묶음 바깥 값). 여기에 없는 files 열쇠는 열쇠 하나가 한 자리다.
   var KA_SLOTS = [
-    { f: ['bow', 'bow_poster', 'bow_alt', 'bow_alt_poster'], meta: ['bow_cue', 'bow_len', 'bow_alt_cue', 'bow_alt_len'] },   // 인사 영상과 첫 장면 그림은 짝 — 따로 바뀌면 시작 인사가 다른 그림에서 시작한다
+    { f: ['bow', 'bow_poster', 'bow_alt', 'bow_alt_poster'], meta: ['bow_cue', 'bow_len', 'bow_alt_cue', 'bow_alt_len', 'bow_alt_tag'] },   // 인사 영상과 첫 장면 그림은 짝 — 따로 바뀌면 시작 인사가 다른 그림에서 시작한다
     { f: ['call_poster', 'call_listen', 'call_think', 'call_talk'], meta: [] },
+    { f: ['scene_clips'], meta: ['scene_clips_len', 'scene_clips_shape'] },                                  // O-0616 장면 영상 묶음(장면별 목록 + 길이) — 짝이 다 준비되면 한꺼번에 바뀐다
     { f: ['idle', 'talk'], meta: [] },                                                  // 평소 · 말하기 얼굴 영상 — 말할 때만 옛 얼굴로 바뀌어 보이지 않게
     { f: ['expr', 'avatar', 'fullbody', 'expr_hd'], meta: [] },                         // 서버 옷의 표정 · 작은 얼굴 · 전신 · 큰 사진(옷장 사진 thumb 은 꾸미기를 열 때 따로 바뀐다 — ensureThumbs)
     { f: ['show', 'show_poster'], meta: ['show_len'] }                                  // v9.19(O-0557) 패션쇼 영상과 첫 장면 그림은 짝(입을 때 받지 않으므로 늘 바로 새것으로 적힌다 · 쇼는 서버 목록(ka.m)을 직접 본다)
@@ -545,7 +561,8 @@
   }
   function kaSlotNames(e, g) {
     var f = (e && e.files) || {}, out = [];
-    g.f.forEach(function (k) { var v = f[k]; if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (j) { if (v[j]) out.push(v[j]); }); });
+    function add(v) { if (!v) return; if (typeof v === 'string') out.push(v); else Object.keys(v).forEach(function (j) { add(v[j]); }); }     // O-0616: 안쪽 목록까지
+    g.f.forEach(function (k) { add(f[k]); });
     return out;
   }
   function kaSlotVal(e, g) {
@@ -781,7 +798,7 @@
       if (vid && pos) { plan.video = vid; plan.poster = pos; if (typeof o.bowCue === 'number') plan.cue = o.bowCue; }
       // v9.6: 인사 영상이 더 있으면(다 받아 둔 것만) 함께 적는다 — 시작 인사가 번갈아 고른다
       var alts = [];
-      (o.bowAlt || []).forEach(function (b) { var v2 = ref(b.video), p2 = ref(b.poster); if (v2 && p2) { var a = { video: v2, poster: p2 }; if (typeof b.cue === 'number') a.cue = b.cue; alts.push(a); } });
+      (o.bowAlt || []).forEach(function (b) { var v2 = ref(b.video), p2 = ref(b.poster); if (v2 && p2) { var a = { video: v2, poster: p2 }; if (typeof b.cue === 'number') a.cue = b.cue; if (b.tag) a.tag = b.tag; alts.push(a); } });
       if (alts.length) plan.alts = alts;
       var fb = ref(o.fullbody); if (fb) plan.still = fb;
       lsSet(KA_PLAN_KEY, JSON.stringify(plan));
@@ -1143,6 +1160,7 @@
     avatarUrl: avatarUrl, exprUrl: exprUrl, thumbUrl: thumbUrl,
     fullbodyUrl: fullbodyUrl, bowUrl: bowUrl, bowPick: bowPick, bowList: bowList, bowPeek: bowPeek,        // (O-0116) · v9.6 인사 영상 여러 개 · (O-0464) 다음 인사 미리 보기
     poseUrl: poseUrl,                                // v9.4 일하는 자세 그림
+    clipList: clipList, clipShape: clipShape,                              // O-0616 장면 영상(k-clips.js)
     // v9.5 서버 자산
     assetsReady: assetsReady, bowState: bowState, callSet: callSet,
     show: { plan: showPlan, ensure: ensureShow, has: function (id) { var o = findOutfit(id); return !!(o && showRefs(o).show); } },   // v9.19(O-0557) 케이 패션쇼

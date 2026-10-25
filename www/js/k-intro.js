@@ -131,9 +131,13 @@
     if (plan.video && plan.poster) cands.push({ video: plan.video, poster: plan.poster, cue: plan.cue });
     (Array.isArray(plan.alts) ? plan.alts : []).forEach(function (a) { if (a && a.video && a.poster) cands.push(a); });
     var pick = cands[0] || null;
+    // O-0616: 목록에서 「낮 인사」(tag 'day' — 손 흔들기 같은 밝은 인사)로 표시된 영상은 밤(22~04시, 한국시간)에는 뺀다 — 「늦은 시간입니다」와 활짝 웃는 손 흔들기가 어긋나서. 첫 영상(허리 숙임)은 늘 남는다.
+    var nightNow = bandOf(kst().getUTCHours()) === 'night';
+    function dayOnly(i) { return nightNow && cands[i] && cands[i].tag === 'day' && i > 0; }
     if (cands.length > 1) {
       var lastI = parseInt(lsGet(BOW_I_KEY) || '-1', 10), pool = [];
-      cands.forEach(function (c, i) { if (i !== lastI) pool.push(i); });
+      cands.forEach(function (c, i) { if (i !== lastI && !dayOnly(i)) pool.push(i); });
+      if (!pool.length) cands.forEach(function (c, i) { if (!dayOnly(i)) pool.push(i); });
       var pi = pool[Math.floor(Math.random() * pool.length)];
       pick = cands[pi]; lsSet(BOW_I_KEY, String(pi));
     }

@@ -225,6 +225,11 @@
         <div class="orblabel">녹음 시작</div>
         <div class="orbhint">누르면 그때부터 녹음됩니다</div>
       </div>
+      <!-- O-0616 일할 때 케이 영상: 영상이 준비된 뒤에만 보이는 한 줄(app.js KClips). 영상이 없으면 이 화면은 지금 그대로 -->
+      <div class="ksc kclip-rec" id="kscRecPrep" data-pose="idle" style="display:none" role="status">
+        <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
+        <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
+      </div>
       <!-- v9.10(O-0449) 저장 공간이 모자라 보일 때만 한 줄(app.js recSpaceHint — 읽기만 하고, 녹음 시작을 막지 않는다) -->
       <div class="rec-space" id="recSpaceHint" style="display:none" aria-live="polite"></div>
       <!-- 회의자료 첨부(선택): 지금 붙여도 되고, 녹음 끝난 뒤에도 붙일 수 있어요 -->
@@ -518,6 +523,7 @@
       <div id="kwVoices" class="kw-voices"></div>
       <div class="kw-sec"><b>움직임</b><small id="kwMotionWhy"></small></div>
       <label class="card toggle kw-motion"><span><b>케이 얼굴 움직이기</b><small>끄면 정지 사진만 보입니다(배터리 절약)</small></span><input type="checkbox" id="kwMotion" hidden><span class="switch"></span></label>
+      <label class="card toggle kw-motion" id="kwClipsRow"><span><b>일할 때 케이 영상</b><small>녹음 준비·명함 찾기 같은 곳에서 짧은 영상이 한 번 나옵니다</small></span><input type="checkbox" id="kwClips" hidden><span class="switch"></span></label>
       <!-- O-0223: 음성 대화 효과음(안드로이드 받아쓰기의 삑·띠링) — 켬/작게(기본)/끔, 이 폰에만 저장 -->
       <div class="kw-sec"><b>음성 대화 효과음</b><small>듣기 시작·끝의 삑·띠링 소리</small></div>
       <div class="card kw-intro">
@@ -847,6 +853,7 @@
 <script src="js/k-fashion-show.js"></script><!-- O-0557 케이 패션쇼 — 화면 틀만 미리 정의해 둔다(app.js 가 켠다) -->
 <script src="js/k-character.js"></script>
 <script src="js/k-scene.js"></script><!-- v9.4 일하는 케이(장면·한마디) -->
+<script src="js/k-clips.js"></script><!-- O-0616 일할 때 케이 영상(녹음 준비·PC 받음·명함·건강) — k-scene.js 가 reset 때 부른다 -->
 <script src="js/k-call.js"></script><!-- v9.6 음성 대화 전체 화면의 케이 -->
 <script src="js/k-motion.js"></script><!-- v9.6 누른 뒤의 움직임 효과(지금은 옷 갈아입기 반짝임 하나) -->
 <script src="js/k-wardrobe-follow.js"></script><!-- O-0471 꾸미기: 옷 목록을 내려도 지금 모습이 따라온다 -->

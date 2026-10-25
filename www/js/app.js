@@ -162,6 +162,8 @@
     try { var pb = processingText && processingText.parentNode; if (pb) pb.classList.toggle('with-k', !!(d && window.KScene)); } catch (e) {}
     if (!d || !window.KScene) return;
     KScene.set('kscProc', d.pose, d[what === 'media' ? 'media' : 'memo']);
+    // O-0616: 서버에 저장된 뒤(got)에만 — 끄덕이며 「잘 받았습니다」 영상(2편 이상 받아 둔 기기에서만 · 이 화면에서 한 번 · 10분 안에 또 나오지 않음)
+    if (stage === 'got') { try { if (window.KClips) KClips.play('pc_recv', $('kscProc'), { delay: 450, key: 'got' }); } catch (e) {} }
   }
   function showBanner(m) { if (banner) { banner.style.display = 'block'; banner.innerHTML = m; } }
   function hideBanner() { if (banner && RecordingModule.isSupported()) banner.style.display = 'none'; }
@@ -918,7 +920,14 @@
     openScreen(recPrep);
     setStatus('녹음 준비 — 시작을 눌러 주세요', 'idle');
     try { recSpaceHint(); } catch (e) {}      // v9.10: 저장 공간이 모자라 보이면 한 줄(읽기만 — 시작을 막지 않는다)
+    try { recPrepClip(); } catch (e) {}       // O-0616: 영상이 준비되면 「받아 적을 준비」 케이 한 줄(준비 안 되면 이 화면은 지금 그대로)
   });
+  // O-0616 녹음 준비의 케이 영상: 처음부터 있던 자리가 아니라 영상이 준비된 뒤에만 나타난다(0.8초 안에 준비 안 되면 아무것도 바뀌지 않는다). 끝나면 그 자리에 케이 그림이 남는다.
+  function recPrepClip() {
+    var host = $('kscRecPrep'); if (!host || !window.KClips || !window.KScene) return;
+    KClips.play('rec_prep', host, { delay: 350, reveal: function () { KScene.set(host, 'idle', '받아 적을 준비가 됐습니다.', { quiet: true }); } })
+      .then(function (ok) { if (!ok && !host._kclip) host.style.display = 'none'; });
+  }
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
     if (isRecording) return;
@@ -3121,13 +3130,24 @@
     var q = (searchInput.value || '').trim();
     if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하세요.', 'err'); return; }
     setSearchMsg('🔎 검색 중…', 'work'); searchResults.innerHTML = '';
+    try { searchClip(); } catch (e) {}      // O-0616: 검색을 누른 순간에 찾아보는 케이 영상(준비되면 로딩 자리에 · 결과가 오면 바로 사라진다)
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     OfficeBridge.createSearch({ id: id, token: tok, note: q }).then(function () {
       pollSearch(id, tok, function (res) {
         var sj = res.summary_json || {};
         renderSearchResults(sj.matches || [], sj.count || 0, q);
       });
-    }).catch(function (e) { setSearchMsg('검색 요청 실패: ' + (e && e.message || e), 'err'); });
+    }).catch(function (e) { dropSearchClip(); setSearchMsg('검색 요청 실패: ' + (e && e.message || e), 'err'); });
+  }
+  function dropSearchClip() { try { if (window.KClips) KClips.stopAll(); var b = searchResults && searchResults.querySelector('.kclip-load'); if (b) searchResults.removeChild(b); } catch (e) {} }   // O-0616: 검색이 실패·시간 초과면 「찾고 있습니다」 케이도 치운다
+  function searchClip() {
+    if (!window.KClips || !window.KScene || !KClips.canPlay('card_search')) return;
+    var box = document.createElement('div'); box.className = 'kclip-load'; box.style.display = 'none';
+    box.innerHTML = KScene.emptyHtml('desk', '명함을 찾고 있습니다.');
+    searchResults.appendChild(box);
+    var host = box.querySelector('.kempty');
+    KClips.play('card_search', host, { delay: 200, reveal: function () { box.style.display = ''; } })
+      .then(function (ok) { if (!ok && box.parentNode === searchResults && box.style.display === 'none') searchResults.removeChild(box); });
   }
   if ($('searchGo')) $('searchGo').addEventListener('click', doSearch);
   if (searchInput) searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
@@ -3138,7 +3158,7 @@
     searchPollTimer = setInterval(function () {
       OfficeBridge.poll(id, tok).then(function (res) {
         if (res && res.status === 'done') { stopSearchPoll(); onDone(res); }
-        else if (Date.now() - started > 60000) { stopSearchPoll(); setSearchMsg('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
+        else if (Date.now() - started > 60000) { stopSearchPoll(); dropSearchClip(); setSearchMsg('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
       }).catch(function () {});
     }, 2000);
   }
@@ -3270,6 +3290,7 @@
   APP_VERSION = 'v9.37';        // v9.37(O-0616): 꾸미기 「옷」 탭에 「매일 새 옷으로 갈아입기」 — 새벽 4시마다 어제와 다른 옷(20벌 한 바퀴), 모든 기기 공유 스위치(기본 꺼짐).
   APP_VERSION = 'v9.38';        // v9.38(O-0617): 건강 탭 공복혈당·체중에 「측정 안 함」 칩(안 잰 날은 알림이 짚지 않음 · 그래프는 건너뜀) — 서버 skips 칸
   APP_VERSION = 'v9.39';        // v9.39(O-0623): 건강 탭 공복혈당에 잰 방식 칩(채혈 / 리브레2) — 기존 skips 칸에 이름표로 저장(서버 SQL 없음), 오늘 숫자를 처음 넣을 때 마지막 방식으로 자동
+  APP_VERSION = 'v9.40';        // v9.40(O-0616 영상): 일할 때 케이 영상 — 녹음 준비 · PC가 받음 · 명함 찾는 중 · 건강 맞이에서 서버에서 받아 둔 짧은 영상을 한 번 틀고 원래 그림으로 · 시작 인사에 손 흔들기 추가(밤에는 뺌) · 꾸미기 「일할 때 케이 영상」 스위치(js/k-clips.js)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -7154,6 +7175,8 @@
     var mo = $('kwMotion');
     if (mo) mo.checked = KChar.motionPref();
     if ($('kwMotionWhy')) $('kwMotionWhy').textContent = (KChar.motionPref() && KChar.motionBlockReason()) ? ('지금은 정지 사진: ' + KChar.motionBlockReason()) : '';
+    var kc = $('kwClips'); if (kc && window.KClips) kc.checked = KClips.switchOn();                    // O-0616 「일할 때 케이 영상」(얼굴 움직이기와 따로 끌 수 있다)
+    if ($('kwClipsRow')) $('kwClipsRow').style.display = (window.KClips && KClips.constants().K_SCENES === 'on') ? '' : 'none';
   }
   // (O-0116) 꾸미기 상단: 상반신 옆에 전신. 전신 사진이 없는 옷은 예전처럼 상반신 한 장.
   /* (O-0464) 전신을 눌러 인사를 볼 때 머리가 바뀌어 보이던 것 — 서 있는 그림(전신 사진)과 인사 영상의 머리가 달라,
@@ -8096,6 +8119,7 @@
     var r = ev.target; if (!r || !r.classList || !r.classList.contains('kw-voice') || r.tagName === 'BUTTON') return;
     ev.preventDefault(); r.click();
   });
+  if ($('kwClips')) $('kwClips').addEventListener('change', function () { if (window.KClips) KClips.setSwitch(this.checked); });
   if ($('kwMotion')) $('kwMotion').addEventListener('change', function () {
     if (!window.KChar) return;
     KChar.setMotionPref(this.checked);
