@@ -2222,43 +2222,80 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 /* 영상이 도는 동안 뒤의 정지 그림은 숨긴다(영상 틀 밖으로 어깨 끝이 삐져나오지 않게) — 끝나면 영상이 흐려지는 동안 같이 돌아온다 */
 .ksc .kfig,.kempty .kfig{transition:opacity .25s ease}
 .ksc.kclip-on .kfig,.kempty.kclip-on .kfig{opacity:0}
-/* 녹음 준비(v9.41): 영상이 있는 기기 = 왼쪽 칸(케이 전신 영상 9:16 + 말풍선) · 오른쪽 칸(녹음 시작부터 아래 전부). 영상이 없으면 두 칸이 없어 예전 화면 그대로.
-   칸은 화면을 열 때(영상이 받아져 있고 틀 수 있을 때) 처음부터 잡아 둔다 — 영상이 시작될 때 화면이 튀지 않는다. 영상이 끝나도 서 있는 장면으로 머문다. */
+/* 영상 틀 아래와 말풍선 윗선이 겹치지 않게 여백(PC 받음 · 명함 찾는 중) */
 .kclip-load{margin:6px 0 0}
-#recPrep .rp-left{display:none}
+.ksc.proc .kfigw,.kclip-load .kempty .kfigw{margin-bottom:5px}
+
+/* ===== 녹음 준비 배치(2026-10-26 「케이·녹음 버튼·첨부 붙이기의 밸런스」 → 케이 왼쪽 · 녹음 오른쪽 · 첨부는 맨 아래 긴 줄) =====
+ * 케이 영상이 있는 기기(#recPrep.has-clip — app.js recPrepClip 이 단다)에서만: 가운데 칸은 왼쪽 케이(상반신만 보이는 정사각 틀, 크기는 녹음 단추와 비슷하게) · 오른쪽 녹음 시작, 맨 아래 긴 줄 두 개 [회의자료 붙이기]·[스캔해서 붙이기](엄지 자리).
+ * 케이 말풍선은 눈에는 안 보이게 접고(스크린리더·상태 안내는 그대로 읽힘)  단추·ID·동작은 그대로(배치·크기·간격만). 영상이 없으면 이 묶음은 걸리지 않아 예전 화면(말풍선 포함) 그대로. */
+#recPrep.has-clip{--rp-in:var(--rp-inset,calc(env(safe-area-inset-top) + env(safe-area-inset-bottom)));--rpl:clamp(124px,36vw,148px);display:grid;grid-template-columns:var(--rpl) minmax(0,1fr);grid-template-rows:auto auto minmax(150px,1fr) auto auto auto auto;column-gap:14px;
+  min-height:calc(100vh - 86px - var(--rp-in));min-height:calc(100dvh - 86px - var(--rp-in))}
+#recPrep.has-clip > .subbar,#recPrep.has-clip > .recdone-badge{grid-column:1/3}
+#recPrep.has-clip .recdone-badge{margin:2px 0 0;padding:7px 12px;font-size:14px;border-radius:12px}
 #recPrep.has-clip .rp-dir{display:none}
-#recPrep.has-clip .rp-grid{display:grid;--rpl:clamp(112px,34vw,141px);grid-template-columns:var(--rpl) minmax(0,1fr);column-gap:14px;align-items:start}
-#recPrep.has-clip .rp-left{display:block;position:sticky;top:8px;margin-top:22px}
-#recPrep.has-clip .rp-main{min-width:0}
-#recPrep.has-clip .rp-main .orbwrap{margin-top:10px !important}
-#recPrep.has-clip .orbbtn{width:124px;height:124px}
-#recPrep.has-clip .orbbtn .core{width:100px;height:100px}
-#recPrep.has-clip .orbbtn .core svg{width:44px;height:44px}
+#recPrep.has-clip .ksc.kclip-rec{--kh:auto;grid-column:1;grid-row:3;align-self:center;min-height:0;margin:0 0 var(--rp-lbl,88px);align-items:flex-start;justify-content:flex-start}      /* 아래 여백 = 녹음 단추 밑 글자 높이만큼 — 케이 틀의 가운데가 녹음 단추(원)의 가운데와 같은 높이에 오도록 */
+#recPrep.has-clip .ksc.kclip-rec .ksc-l{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}   /* 말풍선: 눈에는 안 보이고 스크린리더에는 그대로 */
+#recPrep.has-clip .ksc.kclip-rec .kfigw{width:100%;height:auto;aspect-ratio:1/1;margin:0;border-radius:24px;background:rgba(255,255,255,.55);overflow:hidden}      /* 상반신(허리 위)만: 9:16 영상·그림을 정사각 틀에 위쪽 기준으로 잘라 보인다 */
+#recPrep.has-clip .ksc.kclip-rec .kfig{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 6%;filter:none}
+#recPrep.has-clip .ksc.kclip-rec .kclipv{border-radius:24px;object-fit:cover;object-position:50% 6%;box-shadow:none}
+#recPrep.has-clip .orbwrap{grid-column:2;grid-row:3;align-self:center;margin:0 !important;padding:0}
+#recPrep.has-clip .orbbtn{width:132px;height:132px}
+#recPrep.has-clip .orbbtn .core{width:108px;height:108px}
+#recPrep.has-clip .orbbtn .core svg{width:48px;height:48px}
 #recPrep.has-clip .orbbtn .ring.r2{inset:-10px}
 #recPrep.has-clip .orbbtn .ring.r3{inset:-20px}
-#recPrep.has-clip .orblabel{margin-top:20px;font-size:21px}
-#recPrep.has-clip .orbhint{font-size:13px;text-align:center}
-#recPrep.has-clip .rp-main .label{margin-top:16px !important;font-size:13px}
-#recPrep.has-clip .rp-main .label .hint{display:block;margin-top:2px}
-#recPrep.has-clip .rp-main .card.action{padding-left:10px;padding-right:8px;gap:8px}
-#recPrep.has-clip .rp-main .card.action .tx b{font-size:15px}
-#recPrep.has-clip .rp-main .card.action .tx small{font-size:12px;line-height:1.35}
-#recPrep.has-clip .rp-main .card.action .chev{display:none}
-#recPrep .ksc.kclip-rec{--kh:auto;display:flex;flex-direction:column-reverse;align-items:stretch;gap:8px;margin:0;min-height:0}
-#recPrep .ksc.kclip-rec .ksc-l{align-self:stretch;padding:0}
-#recPrep .ksc.kclip-rec .ksp{max-width:none;padding:8px 10px}
-#recPrep .ksc.kclip-rec .ksp p{font-size:13px;line-height:1.4}
-#recPrep .ksc.kclip-rec .ksp::after{right:auto;left:50%;top:-7px;margin:0 0 0 -7px;transform:rotate(-45deg)}
-#recPrep .ksc.kclip-rec .kfigw{width:var(--rpl);height:calc(var(--rpl) * 16 / 9);margin:0;border-radius:18px;background:rgba(255,255,255,.55);overflow:hidden}
-#recPrep .ksc.kclip-rec .kfig{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:none}
-#recPrep .ksc.kclip-rec .kclipv{border-radius:18px;object-position:50% 50%;box-shadow:none}
-/* 말풍선이 영상 위(2안) */
-#recPrep.rp-bub-top .ksc.kclip-rec{flex-direction:column}
-#recPrep.rp-bub-top .ksc.kclip-rec .ksp::after{top:auto;bottom:-7px;transform:rotate(135deg)}
-/* 영상 틀 아래와 말풍선 윗선이 겹치지 않게 여백(PC 받음 · 명함 찾는 중) */
-.ksc.proc .kfigw,.kclip-load .kempty .kfigw{margin-bottom:5px}
-#recPrep.has-clip .rp-main .card.action .tx b{word-break:keep-all;white-space:nowrap}
-@media (max-width:400px){
-  #recPrep.has-clip .rp-main .card.action .ic{display:none}      /* 접힌 폴더블(약 360폭): 오른쪽 칸이 좁아 아이콘을 줄여 글자가 줄바꿈으로 깨지지 않게 */
-  #recPrep.has-clip .rp-main .card.action .tx b{font-size:14px}
+#recPrep.has-clip .orblabel{margin-top:22px;font-size:21px}
+#recPrep.has-clip .orbhint{margin-top:2px;font-size:13px;text-align:center}
+#recPrep.has-clip .rec-space{grid-column:1/3;grid-row:4;margin-top:8px}
+#recPrep.has-clip .rp-mat,#recPrep.has-clip .rp-matbtns{display:contents}
+#recPrep.has-clip .rp-mat .label{grid-column:1/3;grid-row:5;margin:10px 2px 4px;font-size:13px;line-height:1.3}
+#recPrep.has-clip .rp-mat .label .hint{display:block;font-size:12px}
+#recPrep.has-clip #matListPrep{grid-column:1/3;grid-row:6;font-size:13px;color:var(--dim)}
+#recPrep.has-clip #matListPrep:empty{display:none}
+#recPrep.has-clip #matListPrep .empty{margin:4px 2px 0 !important}
+/* 맨 아래: 가로로 꽉 찬 긴 줄 두 개(위 [회의자료 붙이기] · 아래 [스캔해서 붙이기]) — 왼쪽 아이콘 · 글자 · 오른쪽 화살표 */
+#recPrep.has-clip .rp-matbtns{display:flex;flex-direction:column;grid-column:1/3;grid-row:7;gap:8px}
+#recPrep.has-clip .rp-matbtns .card.action{margin-top:0;width:100%;border-radius:18px;min-height:58px;padding:9px 14px;gap:12px}
+#recPrep.has-clip .rp-matbtns .card.action .ic{width:36px;height:36px;border-radius:11px}
+#recPrep.has-clip .rp-matbtns .card.action .tx b{font-size:15px;line-height:1.25}
+#recPrep.has-clip .rp-matbtns .card.action .tx small{font-size:12px;line-height:1.3;margin-top:1px}
+/* 자료를 붙인 뒤: 카드를 한 줄로 가로로 늘어놓고(카드 단위로 옆으로 넘김) 높이를 한 줄만 쓴다. 삭제(✕)·확인은 그대로 */
+#recPrep.has-clip #matListPrep .vfiles{display:flex;flex-direction:row;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+#recPrep.has-clip #matListPrep .filemeta{flex:none;width:min(220px,72%);scroll-snap-align:start;padding:6px 10px;font-size:13px;border-radius:10px}
+#recPrep.has-clip #matListPrep .draft-hint{font-size:11.5px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 안내 줄은 자료를 붙인 뒤 「나중에 붙여도 됩니다」 한 줄만 남기고 접는다 */
+#recPrep.has-clip .rp-mat:has(.vfiles) .label{font-size:0;margin:8px 2px 4px}
+#recPrep.has-clip .rp-mat:has(.vfiles) .label .hint{font-size:12px}
+/* 낮은 화면(폴드 덮개·작은 폰): 첨부·녹음이 화면 아래로 밀리지 않게 곁가지부터 줄인다 */
+@media (max-height:760px){
+  #recPrep.has-clip .recdone-badge{display:none}
+  #recPrep.has-clip .rp-matbtns .card.action .tx small{display:none}
+  #recPrep.has-clip .rp-matbtns .card.action{min-height:50px;padding-top:6px;padding-bottom:6px}
+  #recPrep.has-clip .rp-matbtns{gap:6px}
+  #recPrep.has-clip .rp-mat .label{margin-top:6px}
+}
+@media (max-height:700px){
+  #recPrep.has-clip{--rpl:112px;--rp-lbl:48px}
+  #recPrep.has-clip #matListPrep .draft-hint{display:none}      /* 아주 낮은 화면에서만 한도 안내 줄을 접는다(자료 카드·삭제는 그대로) */
+  #recPrep.has-clip .ksc.kclip-rec{margin-top:6px}
+  #recPrep.has-clip .orbbtn{width:104px;height:104px}
+  #recPrep.has-clip .orbbtn .core{width:84px;height:84px}
+  #recPrep.has-clip .orbbtn .core svg{width:38px;height:38px}
+  #recPrep.has-clip .orblabel{margin-top:16px;font-size:19px}
+  #recPrep.has-clip .orbhint{display:none}
+}
+/* 키가 큰 화면: 케이 틀과 녹음 단추를 함께 조금 키워 남는 세로 공간을 채운다 */
+@media (min-height:800px){
+  #recPrep.has-clip{--rpl:clamp(132px,40vw,160px);--rp-lbl:92px}
+  #recPrep.has-clip .orbbtn{width:148px;height:148px}
+  #recPrep.has-clip .orbbtn .core{width:122px;height:122px}
+  #recPrep.has-clip .orbbtn .core svg{width:54px;height:54px}
+  #recPrep.has-clip .orblabel{font-size:23px}
+}
+/* 자료 줄과 녹음 단추는 케이 다음에 아래에서 살짝 올라오며 나타난다(짧게 · 「움직임 줄이기」·케이 움직임 끔이면 없음) */
+@keyframes rpDock{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:no-preference){
+  #recPrep.has-clip:not(.rp-calm) .rp-matbtns,#recPrep.has-clip:not(.rp-calm) .orbwrap{animation:rpDock .32s cubic-bezier(.2,.8,.2,1) .12s backwards}
+  #recPrep.has-clip:not(.rp-calm) .orbwrap{animation-delay:.2s}
 }

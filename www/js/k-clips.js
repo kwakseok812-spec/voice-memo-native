@@ -157,7 +157,7 @@
     try {
       Array.prototype.forEach.call(document.querySelectorAll('.ksc,.kempty'), function (el) { el._kclipKey = ''; });
       var d = document.getElementById('kscRecPrep'); if (d) d.style.display = 'none';
-      var rp = document.getElementById('recPrep'); if (rp) rp.classList.remove('has-clip', 'rp-bub-top');       // 녹음 준비의 두 칸(왼쪽 영상 칸)도 화면을 새로 열 때 걷는다(필요하면 app.js recPrepClip 이 다시 잡는다)
+      var rp = document.getElementById('recPrep'); if (rp) rp.classList.remove('has-clip');       // 녹음 준비의 케이 배치도 화면을 새로 열 때 걷는다(필요하면 app.js recPrepClip 이 다시 잡는다)
     } catch (e) {}
   }
   // 아무 곳이나 누르면 멈춘다(누른 것은 그대로 동작한다 — 막지 않는다)
