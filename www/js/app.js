@@ -922,11 +922,17 @@
     try { recSpaceHint(); } catch (e) {}      // v9.10: 저장 공간이 모자라 보이면 한 줄(읽기만 — 시작을 막지 않는다)
     try { recPrepClip(); } catch (e) {}       // O-0616: 영상이 준비되면 「받아 적을 준비」 케이 한 줄(준비 안 되면 이 화면은 지금 그대로)
   });
-  // O-0616 녹음 준비의 케이 영상: 처음부터 있던 자리가 아니라 영상이 준비된 뒤에만 나타난다(0.8초 안에 준비 안 되면 아무것도 바뀌지 않는다). 끝나면 그 자리에 케이 그림이 남는다.
+  // O-0616(v9.41) 녹음 준비의 케이 영상: 영상이 받아져 있고 지금 틀 수 있으면(KClips.canPlay) 화면을 열자마자 왼쪽 칸(케이 전신 틀 + 말풍선)을 잡아 두고
+  //   오른쪽 칸에 녹음 시작부터 아래 전부를 둔다 — 영상이 시작될 때 화면이 튀지 않게 칸은 처음부터 있고, 영상이 늦으면 칸에는 서 있는 케이 그림이 있다.
+  //   영상을 못 틀면(없는 옷·꺼짐·미수신·10분 안 재열기·움직임 끔 …) 칸을 만들지 않아 예전 화면과 같다.
   function recPrepClip() {
-    var host = $('kscRecPrep'); if (!host || !window.KClips || !window.KScene) return;
-    KClips.play('rec_prep', host, { delay: 350, reveal: function () { KScene.set(host, 'idle', '받아 적을 준비가 됐습니다.', { quiet: true }); } })
-      .then(function (ok) { if (!ok && !host._kclip) host.style.display = 'none'; });
+    var host = $('kscRecPrep'), sec = $('recPrep'); if (!host || !sec || !window.KClips || !window.KScene) return;
+    sec.classList.remove('has-clip', 'rp-bub-top');
+    if (!KClips.canPlay('rec_prep')) { host.style.display = 'none'; return; }
+    host.classList.toggle('kclip-tall', KChar.clipShape && KChar.clipShape('rec_prep') === 'tall');
+    sec.classList.add('has-clip');
+    KScene.set(host, 'idle', '받아 적을 준비가 됐습니다.', { quiet: true });
+    KClips.play('rec_prep', host, { delay: 350 });
   }
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
@@ -1973,6 +1979,8 @@
     else if (mtgState === 'ok' && meetingsRows.length) { pose = 'report'; text = '「' + cutText(meetingsRows[0].title || '회의 요약', 18) + '」 정리본이 준비돼 있습니다.'; }
     else if (mtgState === 'ok') { pose = 'guide'; text = '아직 정리본이 없습니다. 녹음하시면 제가 정리해 두겠습니다.'; }
     KScene.set('kscMeetings', pose, text);
+    // O-0616(v9.41): 정리본이 준비돼 있는 회의록 화면 = 케이가 좋은 소식을 전하는 자리 → 반기는 영상 한 번(2편 이상 · 화면에서 한 번 · 10분 안에 또 나오지 않음)
+    if (pose === 'report') { try { if (window.KClips) KClips.play('goodnews', $('kscMeetings'), { delay: 450, key: 'report' }); } catch (e) {} }
   }
   function openMeetings() {
     openScreen($('meetingsView'));
@@ -3291,6 +3299,7 @@
   APP_VERSION = 'v9.38';        // v9.38(O-0617): 건강 탭 공복혈당·체중에 「측정 안 함」 칩(안 잰 날은 알림이 짚지 않음 · 그래프는 건너뜀) — 서버 skips 칸
   APP_VERSION = 'v9.39';        // v9.39(O-0623): 건강 탭 공복혈당에 잰 방식 칩(채혈 / 리브레2) — 기존 skips 칸에 이름표로 저장(서버 SQL 없음), 오늘 숫자를 처음 넣을 때 마지막 방식으로 자동
   APP_VERSION = 'v9.40';        // v9.40(O-0616 영상): 일할 때 케이 영상 — 녹음 준비 · PC가 받음 · 명함 찾는 중 · 건강 맞이에서 서버에서 받아 둔 짧은 영상을 한 번 틀고 원래 그림으로 · 시작 인사에 손 흔들기 추가(밤에는 뺌) · 꾸미기 「일할 때 케이 영상」 스위치(js/k-clips.js)
+  APP_VERSION = 'v9.41';        // v9.41(O-0616): 케이 영상 더하기 — 사과(오류·실패 장면) · 반김(회의록 정리본이 있을 때) · 시작 인사 한 손 인사(낮 전용) — 영상은 서버 목록에 더한 것만(2편부터 켜짐)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).

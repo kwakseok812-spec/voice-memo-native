@@ -216,35 +216,41 @@
     <!-- 회의자료는 「녹음 전(여기)」에도, 「녹음이 끝난 뒤(완료 화면)」에도 붙일 수 있다(2026-09-21). -->
     <section id="recPrep" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 준비</span><span class="spacer"></span></div>
-      <div class="recdone-badge">🎙️ 준비되면 아래 <b>녹음 시작</b>을 눌러 주세요</div>
-      <div class="orbwrap" style="margin-top:22px">
-        <button class="orbbtn" id="btnStartRec" aria-label="녹음 시작">
-          <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
-          <span class="core"><svg><use href="#i-mic"/></svg></span>
-        </button>
-        <div class="orblabel">녹음 시작</div>
-        <div class="orbhint">누르면 그때부터 녹음됩니다</div>
+      <div class="recdone-badge">🎙️ 준비되면 <span class="rp-dir">아래 </span><b>녹음 시작</b>을 눌러 주세요</div>
+      <!-- O-0616(v9.41) 녹음 준비 배치: 영상이 있는 기기에서는 왼쪽 칸(케이 전신 영상 + 말풍선)·오른쪽 칸(녹음 시작부터 아래 전부)의 두 칸, 영상이 없으면 왼쪽 칸이 없어 예전 화면 그대로(#recPrep.has-clip) -->
+      <div class="rp-grid" id="rpGrid">
+        <div class="rp-left" id="rpLeft">
+          <div class="ksc kclip-rec" id="kscRecPrep" data-pose="idle" style="display:none" role="status">
+            <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
+            <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
+          </div>
+        </div>
+        <div class="rp-main">
+          <div class="orbwrap" style="margin-top:22px">
+            <button class="orbbtn" id="btnStartRec" aria-label="녹음 시작">
+              <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
+              <span class="core"><svg><use href="#i-mic"/></svg></span>
+            </button>
+            <div class="orblabel">녹음 시작</div>
+            <div class="orbhint">누르면 그때부터 녹음됩니다</div>
+          </div>
+          <!-- v9.10(O-0449) 저장 공간이 모자라 보일 때만 한 줄(app.js recSpaceHint — 읽기만 하고, 녹음 시작을 막지 않는다) -->
+          <div class="rec-space" id="recSpaceHint" style="display:none" aria-live="polite"></div>
+          <!-- 회의자료 첨부(선택): 지금 붙여도 되고, 녹음 끝난 뒤에도 붙일 수 있어요 -->
+          <div class="label" style="margin-top:20px">회의자료 첨부 <span class="hint">(선택 · 지금 붙여도, 녹음 끝난 뒤 붙여도 됩니다)</span></div>
+          <button id="matAttachPrep" class="card action wide" type="button">
+            <span class="ic blue"><svg><use href="#i-plus"/></svg></span>
+            <span class="tx"><b>회의자료 붙이기</b><small>PPT·문서·PDF·한글 등, 여러 개 가능</small></span>
+            <svg class="chev"><use href="#i-chev-r"/></svg>
+          </button>
+          <button id="matScanPrep" class="card action wide" type="button" style="display:none"><!-- O-0576 문서 스캔: app.js DOC_SCAN 이 켜져 있을 때만 보인다 -->
+            <span class="ic blue"><svg><use href="#i-image"/></svg></span>
+            <span class="tx"><b>📷 스캔해서 붙이기</b><small>종이 자료를 찍어 PDF 한 파일로</small></span>
+            <svg class="chev"><use href="#i-chev-r"/></svg>
+          </button>
+          <div id="matListPrep"></div>
+        </div>
       </div>
-      <!-- O-0616 일할 때 케이 영상: 영상이 준비된 뒤에만 보이는 한 줄(app.js KClips). 영상이 없으면 이 화면은 지금 그대로 -->
-      <div class="ksc kclip-rec" id="kscRecPrep" data-pose="idle" style="display:none" role="status">
-        <div class="ksc-l"><div class="ksp"><b>케이</b><p></p></div></div>
-        <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
-      </div>
-      <!-- v9.10(O-0449) 저장 공간이 모자라 보일 때만 한 줄(app.js recSpaceHint — 읽기만 하고, 녹음 시작을 막지 않는다) -->
-      <div class="rec-space" id="recSpaceHint" style="display:none" aria-live="polite"></div>
-      <!-- 회의자료 첨부(선택): 지금 붙여도 되고, 녹음 끝난 뒤에도 붙일 수 있어요 -->
-      <div class="label" style="margin-top:20px">회의자료 첨부 <span class="hint">(선택 · 지금 붙여도, 녹음 끝난 뒤 붙여도 됩니다)</span></div>
-      <button id="matAttachPrep" class="card action wide" type="button">
-        <span class="ic blue"><svg><use href="#i-plus"/></svg></span>
-        <span class="tx"><b>회의자료 붙이기</b><small>PPT·문서·PDF·한글 등, 여러 개 가능</small></span>
-        <svg class="chev"><use href="#i-chev-r"/></svg>
-      </button>
-      <button id="matScanPrep" class="card action wide" type="button" style="display:none"><!-- O-0576 문서 스캔: app.js DOC_SCAN 이 켜져 있을 때만 보인다 -->
-        <span class="ic blue"><svg><use href="#i-image"/></svg></span>
-        <span class="tx"><b>📷 스캔해서 붙이기</b><small>종이 자료를 찍어 PDF 한 파일로</small></span>
-        <svg class="chev"><use href="#i-chev-r"/></svg>
-      </button>
-      <div id="matListPrep"></div>
     </section>
 
     <!-- ===================== 녹음 중 ===================== -->

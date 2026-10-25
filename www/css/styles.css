@@ -2216,20 +2216,49 @@ html[data-style="light"] .hspan.on{color:#fff}
 html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 /* 건강 머리줄(58px 작은 칸): 동그란 작은 얼굴로 — 얼굴이 가운데 오게 키워 오려 낸다 */
 .ksc.health .kclipv{left:auto;right:0;top:0;width:116px;height:116px;margin:-6px -29px 0 0;border-radius:0;box-shadow:none;object-position:50% 50%;clip-path:circle(29px at 58px 35px)}
-/* 녹음 준비: [녹음 시작] 아래 한 줄(영상이 준비됐을 때만 나타난다) */
-.ksc.kclip-rec{--kh:168px;margin:10px 0 0}
-.ksc.kclip-rec .ksp{max-width:none}
-.kclip-load{margin:6px 0 0}
 @media (prefers-reduced-motion:reduce){ .kclipv{transition:none} }
 .ksc.health .kfig{transition:opacity .25s ease}
 .ksc.health.kclip-on .kfig{opacity:0}          /* 영상이 도는 동안 뒤의 머리 그림은 숨겨 얼굴이 둘로 보이지 않게(끝나면 같이 맞섞여 돌아온다) */
 /* 영상이 도는 동안 뒤의 정지 그림은 숨긴다(영상 틀 밖으로 어깨 끝이 삐져나오지 않게) — 끝나면 영상이 흐려지는 동안 같이 돌아온다 */
 .ksc .kfig,.kempty .kfig{transition:opacity .25s ease}
 .ksc.kclip-on .kfig,.kempty.kclip-on .kfig{opacity:0}
-/* C안: 녹음 준비는 전신 세로 틀(9:16) — 영상이 있을 때만 이 한 줄이 나타나고(아래 줄이 260px 내려감), 끝난 뒤에도 서 있는 장면 그대로 머문다 */
-.ksc.kclip-rec.kclip-tall{--kh:250px;margin:10px 0 0}
-.ksc.kclip-rec.kclip-tall .kfigw{width:141px;height:250px;margin:0}
-.ksc.kclip-rec.kclip-tall .kfig{display:none}
-.ksc.kclip-rec.kclip-tall .kclipv{border-radius:18px;object-position:50% 50%}
+/* 녹음 준비(v9.41): 영상이 있는 기기 = 왼쪽 칸(케이 전신 영상 9:16 + 말풍선) · 오른쪽 칸(녹음 시작부터 아래 전부). 영상이 없으면 두 칸이 없어 예전 화면 그대로.
+   칸은 화면을 열 때(영상이 받아져 있고 틀 수 있을 때) 처음부터 잡아 둔다 — 영상이 시작될 때 화면이 튀지 않는다. 영상이 끝나도 서 있는 장면으로 머문다. */
+.kclip-load{margin:6px 0 0}
+#recPrep .rp-left{display:none}
+#recPrep.has-clip .rp-dir{display:none}
+#recPrep.has-clip .rp-grid{display:grid;--rpl:clamp(112px,34vw,141px);grid-template-columns:var(--rpl) minmax(0,1fr);column-gap:14px;align-items:start}
+#recPrep.has-clip .rp-left{display:block;position:sticky;top:8px;margin-top:22px}
+#recPrep.has-clip .rp-main{min-width:0}
+#recPrep.has-clip .rp-main .orbwrap{margin-top:10px !important}
+#recPrep.has-clip .orbbtn{width:124px;height:124px}
+#recPrep.has-clip .orbbtn .core{width:100px;height:100px}
+#recPrep.has-clip .orbbtn .core svg{width:44px;height:44px}
+#recPrep.has-clip .orbbtn .ring.r2{inset:-10px}
+#recPrep.has-clip .orbbtn .ring.r3{inset:-20px}
+#recPrep.has-clip .orblabel{margin-top:20px;font-size:21px}
+#recPrep.has-clip .orbhint{font-size:13px;text-align:center}
+#recPrep.has-clip .rp-main .label{margin-top:16px !important;font-size:13px}
+#recPrep.has-clip .rp-main .label .hint{display:block;margin-top:2px}
+#recPrep.has-clip .rp-main .card.action{padding-left:10px;padding-right:8px;gap:8px}
+#recPrep.has-clip .rp-main .card.action .tx b{font-size:15px}
+#recPrep.has-clip .rp-main .card.action .tx small{font-size:12px;line-height:1.35}
+#recPrep.has-clip .rp-main .card.action .chev{display:none}
+#recPrep .ksc.kclip-rec{--kh:auto;display:flex;flex-direction:column-reverse;align-items:stretch;gap:8px;margin:0;min-height:0}
+#recPrep .ksc.kclip-rec .ksc-l{align-self:stretch;padding:0}
+#recPrep .ksc.kclip-rec .ksp{max-width:none;padding:8px 10px}
+#recPrep .ksc.kclip-rec .ksp p{font-size:13px;line-height:1.4}
+#recPrep .ksc.kclip-rec .ksp::after{right:auto;left:50%;top:-7px;margin:0 0 0 -7px;transform:rotate(-45deg)}
+#recPrep .ksc.kclip-rec .kfigw{width:var(--rpl);height:calc(var(--rpl) * 16 / 9);margin:0;border-radius:18px;background:rgba(255,255,255,.55);overflow:hidden}
+#recPrep .ksc.kclip-rec .kfig{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:none}
+#recPrep .ksc.kclip-rec .kclipv{border-radius:18px;object-position:50% 50%;box-shadow:none}
+/* 말풍선이 영상 위(2안) */
+#recPrep.rp-bub-top .ksc.kclip-rec{flex-direction:column}
+#recPrep.rp-bub-top .ksc.kclip-rec .ksp::after{top:auto;bottom:-7px;transform:rotate(135deg)}
 /* 영상 틀 아래와 말풍선 윗선이 겹치지 않게 여백(PC 받음 · 명함 찾는 중) */
 .ksc.proc .kfigw,.kclip-load .kempty .kfigw{margin-bottom:5px}
+#recPrep.has-clip .rp-main .card.action .tx b{word-break:keep-all;white-space:nowrap}
+@media (max-width:400px){
+  #recPrep.has-clip .rp-main .card.action .ic{display:none}      /* 접힌 폴더블(약 360폭): 오른쪽 칸이 좁아 아이콘을 줄여 글자가 줄바꿈으로 깨지지 않게 */
+  #recPrep.has-clip .rp-main .card.action .tx b{font-size:14px}
+}

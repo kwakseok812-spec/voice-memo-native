@@ -85,6 +85,8 @@
     el.setAttribute('data-pose', pose);
     paintFig(el, pose, !fresh && !opt.quiet && oldPose !== pose);
     el._kShown = true;
+    // O-0616(v9.41): 사과 장면(「죄송합니다…」 — 보내기 문제 · 녹음 멈춤 · 회의록·작업 현황을 못 불러옴)에서 사과 영상 한 번(영상 2편 이상 받아 둔 기기만 · 화면에서 한 번 · 10분 안에 또 나오지 않음)
+    if (pose === 'sorry' && !opt.quiet && window.KClips) { try { KClips.play('sorry', el, { delay: 450, key: 'sorry' }); } catch (e) {} }
     if (calm() || opt.quiet) el.classList.remove('ksc-in');
     else if (fresh) restart(el, 'ksc-in');
     if (p && p.textContent !== text) {
