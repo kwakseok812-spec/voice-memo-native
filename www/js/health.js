@@ -35,6 +35,13 @@
  *   기록 보기 그래프는 숫자가 있는 날만 점을 찍는다(안 잰 날을 0 으로 그리지 않음). 날짜 줄에는 「혈당 측정 안 함」으로 보인다.
  *   스위치: MEASURE_SKIP_ON(false 면 칩만 숨김 · 이미 저장된 값의 읽기 규칙은 그대로). PC: health_reminder.py · health_read.py · chat_responder.py 가 같은 규칙(skips)으로 읽는다.
  *
+ * v9.39(O-0623) 공복혈당 「채혈 / 리브레2」 방식 표시
+ *   공복혈당 칸 제목 줄에 칩 두 개(채혈 · 리브레2). 서버 표는 그대로 — 기존 skips 글 칸에 이름표 glu:cgm / glu:blood 를 덧붙여 저장한다(SQL 없음).
+ *   skips 글은 하나의 읽기·쓰기 도우미(skipParts / skipJoin)로만 만진다 — 체중 「측정 안 함」을 눌러도 glu: 이름표는 지워지지 않고, 혈당 「측정 안 함」을 켜면 glu: 가 지워진다.
+ *   glu: 만 남은 skips 는 「일부러 안 잰」 뜻이 아니다(skipMark 는 칸 이름만 본다). 옛 기록(이름표 없음)은 구분 없이 둔다.
+ *   기본값: 오늘 숫자를 처음 넣을 때 칩이 안 켜져 있으면 [가장 가까운 지난 기록의 방식 → 폰이 기억한 마지막 선택 → 리브레2] 로 자동 저장(지난 날짜 고치기는 자동 없음).
+ *   스위치: GLUCOSE_SRC_ON(false 면 칩만 숨김 · 저장된 이름표는 그대로 두고 읽지 않음). PC: voice-memo-collector\glucose_src.OFF
+ *
  * app.js 연결: window 이벤트/버튼으로 화면을 열면 HealthTab.open() 이 렌더한다.
  *   HealthTab.init({toast}) 로 토스트만 주입받는다(결합 최소화). HealthTab.flush() = 밀린 칸 다시 올리기.
  * ==========================================================================*/
@@ -86,8 +93,26 @@
   var MEASURE_SKIP = '측정 안 함';
   var MEASURE_PH = '측정 안 함';           // 숫자 칸 안내 글(칩 이름과 같게)
   var SKIPPABLE = { fasting_glucose: 1, weight: 1 };
-  function skipList(v) { return (typeof v === 'string' ? v.split(',') : []).map(function (x) { return x.trim(); }).filter(function (x) { return SKIPPABLE[x] === 1; }); }
+  // v9.39(O-0623) skips 글은 이 파서 하나로만 읽고 쓴다. 칸 이름(fasting_glucose·weight) · 혈당 방식 이름표(glu:cgm · glu:blood) · 그 밖의 이름표(그대로 보존)
+  var GLUCOSE_SRC_ON = true;
+  var GLU_SRC = { cgm: '리브레2', blood: '채혈' };
+  var GLU_ORDER = ['blood', 'cgm'];            // 칩 순서
+  var GLU_LAST_KEY = 'smart_health_glu_src';   // 폰이 기억하는 마지막 선택
+  function skipParts(v) {
+    var o = { skip: [], src: null, other: [] };
+    (typeof v === 'string' ? v.split(',') : []).forEach(function (x) {
+      x = x.trim(); if (!x) return;
+      if (SKIPPABLE[x] === 1) { if (o.skip.indexOf(x) < 0) o.skip.push(x); }
+      else if (x.indexOf('glu:') === 0 && GLU_SRC[x.slice(4)]) o.src = x.slice(4);
+      else if (o.other.indexOf(x) < 0) o.other.push(x);
+    });
+    return o;
+  }
+  function skipJoin(o) { var a = o.skip.slice(); if (o.src) a.push('glu:' + o.src); a = a.concat(o.other); a.sort(); return a.join(',') || null; }
+  function skipList(v) { return skipParts(v).skip; }
   function skipMark(r, k) { return !!r && SKIPPABLE[k] === 1 && skipList(r.skips).indexOf(k) >= 0; }
+  function srcOf(r) { return (GLUCOSE_SRC_ON && r) ? skipParts(r.skips).src : null; }       // 'cgm' | 'blood' | null(구분 없음)
+  function setSrc(r, v) { var p = skipParts(r.skips); p.src = v || null; return setField(r, 'skips', skipJoin(p)); }
   // v9.25(O-0588) 운동 섹션 스위치 — 사람이 켜고 끄는 값. 서버 SQL(exercise_tab_step1.sql) 적용 전에는 앱을 배포하지 않는다. false 면 섹션만 숨김(v9.24 모양).
   var EXERCISE_TAB_ON = true;
   var EXERCISE_BASE = ['런닝머신 30분', '런닝머신 1시간', '슬로우러닝', '가슴운동', '등운동', '어깨운동', '하체운동'];
@@ -221,7 +246,7 @@
   function lastBefore(k, dateStr) {
     for (var i = 0; i < rangeRows.length; i++) {
       var r = rangeRows[i];
-      if (r && r.log_date < dateStr && isSet(r[k]) && !isNaN(+r[k])) return { v: +r[k], d: r.log_date };
+      if (r && r.log_date < dateStr && isSet(r[k]) && !isNaN(+r[k])) return { v: +r[k], d: r.log_date, s: k === 'fasting_glucose' ? srcOf(r) : null };
     }
     var m = lastGet()[k];
     if (m && m.d && m.d < dateStr && isSet(m.v) && !isNaN(+m.v)) return { v: +m.v, d: m.d };
@@ -245,7 +270,7 @@
   function startFor(k, dateStr) { var l = lastBefore(k, dateStr || rec.log_date); return l ? l.v : defaultFor(k); }
   function lastHint(k) {
     var l = lastBefore(k, rec.log_date); if (!l) return '';
-    return '지난 기록 ' + (k === 'fasting_glucose' ? Math.round(l.v) : Math.round(l.v * 10) / 10);
+    return '지난 기록 ' + (k === 'fasting_glucose' ? Math.round(l.v) + (l.s ? ' · ' + GLU_SRC[l.s] : '') : Math.round(l.v * 10) / 10);
   }
 
   /* ---------- 수면시간: 소수(시간) ↔ 시/분 변환 ---------- */
@@ -371,7 +396,12 @@
     return out;
   }
   function fmtVal(k, v) {
-    if (k === 'skips') return isSet(v) ? skipList(v).map(function (x) { return SHORT[x]; }).join('·') + ' 측정 안 함' : '비움';
+    if (k === 'skips') {
+      var p = skipParts(v), bits = [];
+      if (p.skip.length) bits.push(p.skip.map(function (x) { return SHORT[x]; }).join('·') + ' 측정 안 함');
+      if (p.src) bits.push('혈당 ' + GLU_SRC[p.src]);
+      return bits.length ? bits.join(' · ') : '비움';
+    }
     if (!isSet(v)) return '비움';
     if (k === 'sleep_hours') return fmtSleep(+v);
     if (typeof v === 'boolean') return v ? '복용함' : '미복용';
@@ -379,7 +409,7 @@
   }
   function tellLost(lost, dateStr) {
     if (!lost || !lost.length) return;
-    var s = lost.map(function (x) { return SHORT[x.k] + ' ' + fmtVal(x.k, x.theirs); }).join(' · ');
+    var s = lost.map(function (x) { return (x.k === 'skips' ? '' : SHORT[x.k] + ' ') + fmtVal(x.k, x.theirs); }).join(' · ');
     _toast('다른 기기에서 더 나중에 고친 값으로 맞췄습니다 (' + (dateStr === todayStr() ? '' : fmtMD(dateStr) + ' ') + s + ')');
   }
 
@@ -494,15 +524,33 @@
   }
   // v9.38 「측정 안 함」 켜고 끄기(skips 칸만 바꾼다 · 숫자 칸은 부르는 쪽이 정리)
   function setMeasSkip(r, k, on) {
-    var a = skipList(r.skips).filter(function (x) { return x !== k; });
-    if (on) a.push(k);
-    a.sort();
-    return setField(r, 'skips', a.join(',') || null);
+    var p = skipParts(r.skips);                     // 하나의 파서 — 다른 이름표(혈당 방식 등)는 그대로 둔다
+    p.skip = p.skip.filter(function (x) { return x !== k; });
+    if (on) { p.skip.push(k); if (k === 'fasting_glucose') p.src = null; }      // 혈당을 안 쟀다면 재는 방식도 없다
+    return setField(r, 'skips', skipJoin(p));
   }
+  // v9.39 오늘 숫자를 처음 넣을 때 쓸 방식: 가장 가까운 지난 기록의 방식 → 폰이 기억한 마지막 선택 → 리브레2
+  function defaultSrc(dateStr) {
+    for (var i = 0; i < rangeRows.length; i++) {
+      var r = rangeRows[i], s = r && r.log_date < dateStr ? skipParts(r.skips).src : null;
+      if (s) return s;
+    }
+    var m = ''; try { m = localStorage.getItem(GLU_LAST_KEY) || ''; } catch (e) {}
+    return GLU_SRC[m] ? m : 'cgm';
+  }
+  function rememberSrc(s) { try { if (s) localStorage.setItem(GLU_LAST_KEY, s); } catch (e) {} }
+  var srcNote = null;                              // 방식이 저장된 뒤 한 번 보이는 「저장됨 · 리브레2」 {d, s, until}
   // 숫자를 넣는 모든 길(직접 입력 · ＋/−)이 지나는 곳: 숫자가 들어가면 그 칸의 「측정 안 함」은 저절로 풀린다.
   function setNumber(r, k, nv) {
-    var ch = setField(r, k, nv);
+    var prev = r[k], ch = setField(r, k, nv);
     if (isSet(r[k]) && skipMark(r, k)) { setMeasSkip(r, k, false); ch = true; }
+    if (k === 'fasting_glucose' && GLUCOSE_SRC_ON) {
+      var had = skipParts(r.skips).src;
+      if (!isSet(r[k]) && isSet(prev) && had) { setSrc(r, null); ch = true; }                 // 숫자를 지우면 방식도 같이 비운다
+      else if (isSet(r[k]) && !isSet(prev) && !had && r.log_date === todayStr()) {              // 오늘 숫자를 처음 넣는 순간에만 기본 방식을 저장한다
+        var s = defaultSrc(r.log_date); setSrc(r, s); srcNote = { d: r.log_date, s: s, until: 0 }; ch = true;
+      }
+    }
     return ch;
   }
 
@@ -557,6 +605,21 @@
   /* ---------- 저장 상태 표시 ---------- */
   function isNative() { try { var C = global.Capacitor; return !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) { return false; } }
   function hereWord() { return isNative() ? '폰에만' : '이 기기에만'; }
+  function dirtyName(k) {                          // 「폰에만」 줄에 보이는 칸 이름 — skips 는 무엇이 바뀌었는지에 따라 말을 가른다
+    if (k !== 'skips') return SHORT[k];
+    var e = rec && rec._dirty && rec._dirty.skips, a = skipParts(e && e.base), b = skipParts(rec && rec.skips);
+    var s = a.skip.join() !== b.skip.join(), g = a.src !== b.src;
+    return s && g ? '측정 안 함 · 혈당 방식' : g ? '혈당 방식' : '측정 안 함';
+  }
+  // 방식이 저장된 직후 한 번만 「저장됨 · 리브레2」를 저장 표시 자리에 보인다(저장이 끝난 뒤 4.5초) — 채혈한 날 칩을 못 보고 잘못 기록되는 것을 막는다
+  function srcNoteText() {
+    if (!srcNote || !rec || srcNote.d !== rec.log_date) return '';
+    if (srcOf(rec) !== srcNote.s) { srcNote = null; return ''; }
+    var now = Date.now();
+    if (!srcNote.until) { srcNote.until = now + 4500; setTimeout(function () { paintState(); }, 4600); }
+    if (now > srcNote.until) { srcNote = null; return ''; }
+    return '저장됨 · ' + GLU_SRC[srcNote.s];
+  }
   function paintState(force) {
     var el = $('hSaveState'), box = $('hLocal'), host = $('hToday');
     if (!rec || !host) return;
@@ -571,7 +634,10 @@
       var wasWork = el.className.indexOf('work') >= 0;
       if (saving) { el.textContent = '적고 있습니다…'; el.className = 'hsave work'; }
       else if (dk.length) { el.textContent = hereWord() + ' 적어 둠'; el.className = 'hsave pend'; }
-      else { el.textContent = '적어 두었습니다'; el.className = 'hsave ok'; }
+      else {
+        var nt = srcNoteText();
+        el.textContent = nt || '적어 두었습니다'; el.className = 'hsave ok';
+      }
       // v9.6(O-0387 3번): 「적고 있습니다…」에서 「적어 두었습니다」로 바뀌는 순간에만 살짝 떠오른다
       try { if (wasWork && el.className === 'hsave ok' && global.KMotion) global.KMotion.saved(el); } catch (e) {}
     }
@@ -582,7 +648,7 @@
         var why = nopass ? '연동 암호가 없어 ' : (lastFail === 'net' && lastCut) ? '연결이 끊겨 ' : '';
         box.innerHTML = '<b>' + esc(why + hereWord()) + ' 적어 두었습니다.</b> ' +
           (nopass ? '암호를 넣어 주시면 올려 두겠습니다.' : '연결되면 제가 올려 두겠습니다.') +
-          '<span class="hlocal-k">' + esc(dk.map(function (k) { return SHORT[k]; }).join(' · ')) + '</span>';
+          '<span class="hlocal-k">' + esc(dk.map(dirtyName).join(' · ')) + '</span>';
         box.className = 'hlocal' + (nopass ? ' tap' : '');
         box.style.display = '';
       } else if (!dk.length) { box.style.display = 'none'; box.innerHTML = ''; }
@@ -595,8 +661,9 @@
     var v = isSet(rec[k]) ? rec[k] : '';
     var hint = lastHint(k);
     var sk = isMeasSkipped(rec, k);
-    return '<div class="hitem hnum' + (sk ? ' mskipped' : '') + '" data-k="' + k + '" data-step="' + step + '">' +
+    return '<div class="hitem hnum' + (k === 'fasting_glucose' && GLUCOSE_SRC_ON ? ' hasrc' : '') + (sk ? ' mskipped' : '') + '" data-k="' + k + '" data-step="' + step + '">' +
       '<div class="hitem-top"><span class="hlab">' + label + ' <small>' + unit + '</small>' + pendTag() + '</span>' +
+      (k === 'fasting_glucose' && GLUCOSE_SRC_ON ? srcChips(sk) : '') +
       '<span class="hitem-r"><span class="hlast">' + esc(hint) + '</span>' + chk(k) + '</span></div>' +
       '<div class="hstep">' +
       '<button type="button" class="hstepbtn" data-d="-1" aria-label="줄이기">−</button>' +
@@ -606,6 +673,47 @@
       (MEASURE_SKIP_ON ? '<button type="button" class="chip hchip hskip hmskip' + (sk ? ' on' : '') + '" data-k="' + k + '" aria-pressed="' + (sk ? 'true' : 'false') +
         '" aria-label="' + label + ' ' + MEASURE_SKIP + '">' + MEASURE_SKIP + '</button>' : '') +
       '</div></div>';
+  }
+  // v9.39 공복혈당 칸 제목 줄의 방식 칩 한 쌍 [채혈][리브레2] — 켜진 쪽에 파란 바탕이 150ms 동안 미끄러져 온다
+  function srcView() {                              // 지금 화면에 보일 칩 상태: {s: 'cgm'|'blood'|null, pre: 저장 전 기본값(연하게)}
+    if (!rec) return { s: null, pre: false };
+    var s = srcOf(rec);
+    if (s) return { s: s, pre: false };
+    if (!isMeasSkipped(rec, 'fasting_glucose') && !isSet(rec.fasting_glucose) && rec.log_date === todayStr() && mode === 'today') return { s: defaultSrc(rec.log_date), pre: true };
+    return { s: null, pre: false };
+  }
+  function calmNow() { try { return !!(global.KMotion && KMotion.calm && KMotion.calm()); } catch (e) { return false; } }    // 움직임 줄이기 · 케이 얼굴 움직이기 끔
+  function srcChips(sk) {
+    var v = srcView();
+    return '<span class="hsrc' + (v.s ? ' s-' + v.s : '') + (v.pre ? ' pre' : '') + (sk ? ' off' : '') + (calmNow() ? ' calm' : '') + '" role="group" aria-label="공복혈당 잰 방식"><i class="hsrc-th"></i>' +
+      GLU_ORDER.map(function (x) {
+        var on = v.s === x && !v.pre;
+        return '<button type="button" class="hsrcb' + (v.s === x ? ' on' : '') + '" data-src="' + x + '" aria-pressed="' + (on ? 'true' : 'false') + '"' + (sk ? ' disabled' : '') + '>' + GLU_SRC[x] + '</button>';
+      }).join('') + '</span>';
+  }
+  function paintSrc() {                             // 입력 화면의 칩 모양을 지금 기록에 맞춘다(화면을 다시 그리지 않아 미끄러짐이 보인다)
+    var host = $('hToday'); if (!host || !rec || !GLUCOSE_SRC_ON) return;
+    var box = host.querySelector('.hsrc'); if (!box) return;
+    var v = srcView(), sk = isMeasSkipped(rec, 'fasting_glucose');
+    box.className = 'hsrc' + (v.s ? ' s-' + v.s : '') + (v.pre ? ' pre' : '') + (sk ? ' off' : '') + (calmNow() ? ' calm' : '');
+    Array.prototype.forEach.call(box.querySelectorAll('.hsrcb'), function (b) {
+      var x = b.getAttribute('data-src'), on = v.s === x && !v.pre;
+      b.classList.toggle('on', v.s === x); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.disabled = sk;
+    });
+    var hl = host.querySelector('.hnum[data-k="fasting_glucose"] .hlast'); if (hl) hl.textContent = lastHint('fasting_glucose');
+    placeThumb(box);
+  }
+  // 켜진 칩 자리로 파란 바탕을 옮긴다. 처음 놓을 때는 미끄러지지 않게 transition 을 잠시 끈다.
+  function placeThumb(box, instant) {
+    var th = box && box.querySelector('.hsrc-th'), on = box && box.querySelector('.hsrcb.on');
+    if (!th) return;
+    if (!on) return;                                                             // 꺼지면 바탕은 사라질 뿐(opacity) 자리는 그대로
+    var first = instant || !th.getAttribute('data-p');
+    if (first) box.classList.add('thumb-init');
+    th.style.width = on.offsetWidth + 'px';
+    th.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+    th.setAttribute('data-p', '1');
+    if (first) { void th.offsetWidth; box.classList.remove('thumb-init'); }
   }
   function chk(k) {
     return '<i class="hchk' + (isDone(rec, k) ? ' on' : '') + '"><svg><use href="#i-check"/></svg></i>';
@@ -724,6 +832,8 @@
     paintSay(false);
     bindToday();
     paintState();
+    paintSrc();                                      // v9.39: 칩 바탕 자리 잡기
+    setTimeout(function () { var b = $('hToday') && $('hToday').querySelector('.hsrc'); if (b) placeThumb(b, true); }, 400);   // 글꼴이 다 불러와진 뒤 한 번 더(미끄러지지 않게)
   }
   // 서버 값이 들어와 다시 그릴 때: 글자를 치는 중이면 건드리지 않는다(값은 rec 에 이미 반영 — 다음에 그릴 때 보인다).
   function softRender() {
@@ -830,6 +940,21 @@
       btn.addEventListener('click', function () {
         if (moved(function (h) { var nb = h.querySelector('.hmskip[data-k="' + k + '"]'); if (nb) nb.click(); })) return;
         toggleMeasSkip(k, T());
+      });
+    });
+
+    // v9.39 공복혈당 방식 칩: 누르면 그 방식으로 켜짐 · 켜진 칩을 다시 누르면 꺼짐(구분 없음)
+    Array.prototype.forEach.call(host.querySelectorAll('.hsrcb'), function (btn) {
+      var x = btn.getAttribute('data-src');
+      btn.addEventListener('click', function () {
+        if (moved(function (h) { var nb = h.querySelector('.hsrcb[data-src="' + x + '"]'); if (nb) nb.click(); })) return;
+        var t = T();
+        if (isMeasSkipped(t, 'fasting_glucose')) return;
+        var cur = skipParts(t.skips).src, nv = (cur === x) ? null : x;
+        var ch = setSrc(t, nv);
+        if (nv) { rememberSrc(nv); srcNote = { d: t.log_date, s: nv, until: 0 }; } else srcNote = null;
+        if (t === rec) paintSrc();
+        if (ch) scheduleSave(t);
       });
     });
 
@@ -941,16 +1066,20 @@
     row.classList.toggle('mskipped', sk);
     if (b) { b.classList.toggle('on', sk); b.setAttribute('aria-pressed', sk ? 'true' : 'false'); }
     if (inp) { inp.placeholder = sk ? MEASURE_PH : '—'; if (document.activeElement !== inp) inp.value = isSet(rec[k]) ? rec[k] : ''; }
+    if (k === 'fasting_glucose') paintSrc();
   }
   function toggleMeasSkip(k, t) {
-    var on = !isMeasSkipped(t, k), pk = 'm|' + t.log_date + '|' + k;
+    var on = !isMeasSkipped(t, k), pk = 'm|' + t.log_date + '|' + k, sp = 's' + pk;
     var before = (t === rec) ? recordedCount() : -1, ch = false;
     if (on) {
       if (isSet(t[k])) skipPrev[pk] = t[k]; else delete skipPrev[pk];
+      if (k === 'fasting_glucose' && skipParts(t.skips).src) skipPrev[sp] = skipParts(t.skips).src; else delete skipPrev[sp];     // 잘못 눌렀다 풀면 방식도 돌아오게
       ch = setField(t, k, null) | setMeasSkip(t, k, true);
     } else {
       var back = isSet(skipPrev[pk]) ? skipPrev[pk] : null; delete skipPrev[pk];
       ch = setMeasSkip(t, k, false) | setField(t, k, back);
+      if (back !== null && skipPrev[sp] && !skipParts(t.skips).src) { setSrc(t, skipPrev[sp]); ch = true; }
+      delete skipPrev[sp];
     }
     if (t === rec) {
       paintMeas(k);
@@ -1044,7 +1173,7 @@
     var asc = all.slice().sort(function (a, b) { return a.log_date < b.log_date ? -1 : 1; });
     var cutD = (HIST_COMPACT && chartSpan) ? daysAgoStr(chartSpan - 1) : '';
     var inSpan = function (r) { return !cutD || r.log_date >= cutD; };
-    var gluc = asc.filter(function (r) { return inSpan(r) && isSet(r.fasting_glucose); }).map(function (r) { return { d: r.log_date, v: +r.fasting_glucose }; });
+    var gluc = asc.filter(function (r) { return inSpan(r) && isSet(r.fasting_glucose); }).map(function (r) { return { d: r.log_date, v: +r.fasting_glucose, s: srcOf(r) }; });
     var wt = asc.filter(function (r) { return inSpan(r) && isSet(r.weight); }).map(function (r) { return { d: r.log_date, v: +r.weight }; });
     if (!failed) {
       if (HIST_COMPACT) html += spanChips();
@@ -1132,7 +1261,7 @@
   }
   function dayRow(r, pend, isToday) {
     var bits = [];
-    if (isSet(r.fasting_glucose)) bits.push('<span class="hb glu">혈당 ' + esc(r.fasting_glucose) + '</span>');
+    if (isSet(r.fasting_glucose)) bits.push('<span class="hb glu">혈당 ' + esc(r.fasting_glucose) + (srcOf(r) ? ' <small class="hbsrc">· ' + GLU_SRC[srcOf(r)] + '</small>' : '') + '</span>');
     else if (isMeasSkipped(r, 'fasting_glucose')) bits.push('<span class="hb">혈당 ' + MEASURE_SKIP + '</span>');
     if (isSet(r.weight)) bits.push('<span class="hb wt">체중 ' + esc(r.weight) + '</span>');
     else if (isMeasSkipped(r, 'weight')) bits.push('<span class="hb">체중 ' + MEASURE_SKIP + '</span>');
@@ -1183,9 +1312,16 @@
     function X(i) { return PADL + (n === 1 ? (W - PADL - PADR) / 2 : (i * (W - PADL - PADR) / (n - 1))); }
     function Y(v) { return PADT + (mx - v) / (mx - mn) * (H - PADT - PADB); }
     var d = '', dots = '';
+    // v9.39: 채혈과 리브레2 값이 한 그래프에 섞여 있을 때만(평균으로 줄이지 않은 경우) 점 모양으로 가른다 — 리브레2 = 채운 점, 채혈 = 속 빈 점
+    var hasC = false, hasB = false;
+    if (GLUCOSE_SRC_ON && !cd.unit) pts.forEach(function (p) { if (p.s === 'cgm') hasC = true; else if (p.s === 'blood') hasB = true; });
+    var mixed = hasC && hasB;
     pts.forEach(function (p, i) {
       d += (i === 0 ? 'M' : 'L') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1) + ' ';
-      if (n <= 60) dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.6" fill="' + color + '"/>';
+      if (n <= 60) {
+        if (mixed && p.s === 'blood') dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="3.4" fill="' + color + '" fill-opacity=".14" stroke="' + color + '" stroke-width="2"/>';
+        else dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.6" fill="' + color + '"/>';
+      }
     });
     // y축 눈금 2개(최소/최대 근사)
     var yTop = Math.round(mx), yBot = Math.round(mn);
@@ -1203,7 +1339,8 @@
       '<path d="' + d.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
       dots + '</svg>';
     return '<div class="card hchart">' + head + svg +
-      '<div class="hchart-foot">' + (cd.unit ? '기록 ' + rawN + '일 · ' + cd.unit + ' 평균 · ' : '최근 ' + n + '일 · ') + footDay(pts[0].d) + ' → ' + footDay(last.d) + '</div></div>';
+      '<div class="hchart-foot">' + (cd.unit ? '기록 ' + rawN + '일 · ' + cd.unit + ' 평균 · ' : '최근 ' + n + '일 · ') + footDay(pts[0].d) + ' → ' + footDay(last.d) + '</div>' +
+      (mixed ? '<div class="hchart-key"><span style="color:' + color + '">●</span> 리브레2 <span style="color:' + color + '">○</span> 채혈 · 방식이 달라 견주기 어렵습니다</div>' : '') + '</div>';
   }
 
   /* ============================ 탭 전환 / 진입 ============================ */
