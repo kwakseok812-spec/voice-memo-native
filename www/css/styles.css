@@ -2233,13 +2233,13 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
   min-height:calc(100vh - 86px - var(--rp-in));min-height:calc(100dvh - 86px - var(--rp-in))}
 #recPrep.has-clip .recdone-badge{display:none}      /* 「준비되면 녹음 시작을…」 딱지는 접는다 — 단추 이름이 이미 「녹음 시작」이라 케이에게 높이를 준다 */
 #recPrep.has-clip .rp-dir{display:none}
-#recPrep.has-clip .ksc.kclip-rec{--kh:auto;grid-row:3;min-height:0;margin:10px 0 0;align-items:stretch;justify-content:stretch}
+#recPrep.has-clip .ksc.kclip-rec{--kh:auto;grid-row:3;min-height:0;margin:10px 0 0;align-self:stretch;align-items:center;justify-content:center}
 #recPrep.has-clip .ksc.kclip-rec .ksc-l{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}   /* 말풍선: 눈에는 안 보이고 스크린리더에는 그대로 */
-#recPrep.has-clip .ksc.kclip-rec .kfigw{flex:1 1 auto;width:100%;height:auto;margin:0;border-radius:26px;background:rgba(255,255,255,.55);overflow:hidden}
-#recPrep.has-clip .ksc.kclip-rec .kfig{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:50% 0%;filter:none}
-#recPrep.has-clip .ksc.kclip-rec.photo .kfig{object-position:50% 22%}      /* 정지 그림이 얼굴 사진일 때: 머리 위가 잘리지 않게 */
-#recPrep.has-clip .ksc.kclip-rec .kclipv{border-radius:26px;object-fit:cover;object-position:50% 0%;box-shadow:none}
-#recPrep.has-clip .orbwrap{grid-row:4;margin:26px 0 0 !important;padding:0}
+#recPrep.has-clip .ksc.kclip-rec .kfigw{flex:1 1 auto;position:relative;width:100%;max-width:calc(var(--ku-cap-rec) * var(--ku-wide));height:100%;max-height:var(--ku-cap-rec);margin:0 auto;border-radius:var(--ku-radius);background:rgba(255,255,255,.55);overflow:hidden}
+#recPrep.has-clip .ksc.kclip-rec .kfig{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:var(--ku-pos);filter:none}
+#recPrep.has-clip .ksc.kclip-rec.photo .kfig{object-position:var(--ku-pos-photo)}      /* 정지 그림이 얼굴 사진일 때: 머리 위가 잘리지 않게 */
+#recPrep.has-clip .ksc.kclip-rec .kclipv{border-radius:var(--ku-radius);object-fit:cover;object-position:var(--ku-pos);box-shadow:none}
+#recPrep.has-clip .orbwrap{grid-row:4;margin:14px 0 0 !important;padding:0}
 #recPrep.has-clip .orbbtn{width:var(--orb);height:var(--orb)}
 #recPrep.has-clip .orbbtn .core{width:calc(var(--orb) - 24px);height:calc(var(--orb) - 24px)}
 #recPrep.has-clip .orbbtn .core svg{width:44px;height:44px}
@@ -2269,7 +2269,10 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 #recPrep.has-clip .rp-mat:has(.vfiles) .label .hint{font-size:12px}
 /* 키 큰 화면: 녹음 단추를 조금 키운다 */
 @media (min-height:800px){ #recPrep.has-clip{--orb:128px} #recPrep.has-clip .orblabel{font-size:22px} }
-@media (max-height:899px){ #recPrep.has-clip .orbhint{display:none} }      /* 높이가 넉넉하지 않으면 단추 아래 안내 한 줄을 접어 케이에게 높이를 준다 */
+@media (max-height:899px){ #recPrep.has-clip .orbhint{display:none} #recPrep.has-clip{--orb:104px} #recPrep.has-clip .orblabel{margin-top:10px;font-size:19px} }
+#recPrep.has-clip .orbwrap{margin-top:14px !important}
+#recPrep.has-clip .rp-mat .label{display:none}
+#recPrep.has-clip .rp-matbtns .card.action{min-height:52px}      /* 케이 상반신 틀에 높이를 주려고: 단추를 조금 줄이고 「회의자료 첨부」 안내 줄은 접는다(단추 이름이 이미 같은 말) */      /* 높이가 넉넉하지 않으면 단추 아래 안내 한 줄을 접어 케이에게 높이를 준다 */
 /* 낮은 화면(폴드 덮개·작은 폰): 케이가 너무 작아지지 않게 곁가지부터 줄인다(안내 딱지·긴 줄 설명·단추 아래 안내) */
 @media (max-height:760px){
   #recPrep.has-clip .recdone-badge{display:none}
@@ -2278,7 +2281,7 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
   #recPrep.has-clip .rp-matbtns{gap:6px}
   #recPrep.has-clip .rp-mat .label{margin-top:6px}
   #recPrep.has-clip .orbhint{display:none}
-  #recPrep.has-clip .orbwrap{margin-top:22px !important}
+  #recPrep.has-clip .orbwrap{margin-top:14px !important}
 }
 @media (max-height:700px){
   #recPrep.has-clip{--orb:96px}
@@ -2298,3 +2301,30 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
   #recPrep.has-clip:not(.rp-calm) .rp-matbtns,#recPrep.has-clip:not(.rp-calm) .orbwrap{animation:rpDock .32s cubic-bezier(.2,.8,.2,1) .12s backwards}
   #recPrep.has-clip:not(.rp-calm) .orbwrap{animation-delay:.2s}
 }
+
+/* ===== 케이 상반신 틀 — 건강 탭 · 녹음 준비 화면이 같이 쓰는 한 벌의 크기·비율·크롭 (2026-10-26 「케이는 더 키워서 상반신은 보이게」) =====
+ * 여기 값 하나를 바꾸면 두 화면이 같이 바뀐다.
+ *   --ku-ar     틀의 가로÷세로(0.87 = 세로가 가로의 약 1.15배 — 어깨·팔·손 동작이 보이는 허리 위 상반신)
+ *   --ku-pos    그림·영상을 틀에 맞춰 자를 때 기준(위쪽 맞춤 → 머리 위가 안 잘리고 아래 쪽이 허리까지 들어온다) · --ku-pos-photo 정지 그림이 얼굴 사진일 때
+ *   --ku-cap-*  틀 높이의 상한(화면 높이의 몇 %) — 건강 40% · 녹음 준비 45%. 낮은 화면(높이 700px 이하)에서는 입력·단추가 첫 화면에 남도록 작아진다(얼굴+어깨까지는 유지).
+ *   --ku-wide   틀이 아주 넓어질 때(펼친 폴드) 가로 상한 = 높이 상한 × 이 값 */
+:root{--ku-ar:.87;--ku-pos:50% 0%;--ku-pos-photo:50% 12%;--ku-radius:26px;--ku-cap-health:40vh;--ku-cap-rec:45vh;--ku-wide:1.45}
+@media (max-height:700px){ :root{--ku-cap-health:30vh;--ku-cap-rec:34vh;--ku-wide:1.7} }
+/* ===== 건강 탭 케이 고정 칸 (2026-10-26 「건강 탭에서 케이 위치가 갑자기 바뀐다 → 탭 바로 아래 크게」 · 스위치 HEALTH_K_TOP, health.js) =====
+ * 「오늘 기록 · 기록 보기」 탭 바로 아래에 케이 그림 칸(폭을 채우는 상반신 틀) → 그 아래 날짜·저장 표시 한 줄 → 케이 한 줄 → 입력 칸.
+ * 칸 크기는 CSS(비율 + 높이 상한)로만 정해져 그림·영상이 늦게 와도 아래 칸이 밀리지 않고, 영상이 없어도 정지 그림이 항상 이 칸에 있다.
+ * 날짜·저장 표시 줄은 줄바꿈을 막고 높이를 미리 잡아 「적고 있습니다…」「폰에만 적어 둠」으로 글이 바뀌어도 아래가 움직이지 않는다. */
+.ksc.health.hk-top{display:block;min-height:0;margin:0 0 6px;align-items:initial;justify-content:initial}
+.ksc.health.hk-top .kfigw,.ksc.health.hk-top.photo .kfigw,.ksc.health.hk-top.cut .kfigw{position:relative;display:block;width:100%;max-width:calc(var(--ku-cap-health) * var(--ku-wide));height:auto;aspect-ratio:var(--ku-ar);max-height:var(--ku-cap-health);margin:0 auto;padding:0;overflow:hidden;
+  border:0;border-radius:var(--ku-radius);transform:none;background:rgba(255,255,255,.55);box-shadow:0 6px 18px rgba(30,41,99,.14)}
+.ksc.health.hk-top .kfig,.ksc.health.hk-top.cut .kfig,.ksc.health.hk-top.photo .kfig{position:absolute;left:0;top:0;display:block;width:100%;height:100%;object-fit:cover;object-position:var(--ku-pos);filter:none;border-radius:0}
+.ksc.health.hk-top.photo .kfig{object-position:var(--ku-pos-photo)}
+.ksc.health.hk-top .kclipv{left:0;right:auto;top:0;width:100%;height:100%;margin:0;border-radius:var(--ku-radius);box-shadow:none;clip-path:none;object-fit:cover;object-position:var(--ku-pos)}
+.ksc.health.hk-top .ksc-l{display:block;align-self:auto;gap:0;padding:8px 2px 0}
+.ksc.health.hk-top .hhead{display:flex;flex-wrap:nowrap;align-items:baseline;justify-content:space-between;gap:8px;min-height:26px;margin:0}
+.ksc.health.hk-top .hdate{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px}
+.ksc.health.hk-top .hsave{flex:none;min-height:18px;font-size:12.5px;white-space:nowrap}
+.ksc.health.hk-top .ksp{margin:1px 0 0}
+.ksc.health.hk-top .ksp p{min-height:19px;font-size:14px;line-height:19px}
+.ksc.health.hk-top.hk-cheer .kfigw{box-shadow:0 0 0 3px var(--ok),0 8px 22px rgba(4,120,87,.25);transition:box-shadow .25s ease}
+@media (prefers-reduced-motion:reduce){ .ksc.health.hk-top.hk-cheer .kfigw{transition:none} }

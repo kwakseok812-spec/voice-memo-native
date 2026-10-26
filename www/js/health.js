@@ -130,6 +130,11 @@
    *  - 30일보다 오래된 기록은 화면 표시용으로만 서버에서 받는다(읽기만 - 원본은 지우거나 합치지 않는다). 고칠 수 있는 범위는 그대로 30일.
    *  - 그래프 기간 칩(30일·3개월·1년·전체). 점이 많으면 주간(→월간) 평균으로 줄여 그린다. */
   var HIST_COMPACT = true;
+  /* 2026-10-26 (건강 탭 케이 고정 칸) 스위치 HEALTH_K_TOP. 'off' 면 예전 머리줄(날짜 줄 오른쪽의 작은 케이)로 돌아간다.
+   *  - 케이를 「오늘 기록 · 기록 보기」 탭 바로 아래 고정 칸에 크게(칸 높이는 CSS 만으로 잡혀 그림·영상이 늦어도 아래 칸이 밀리지 않는다).
+   *    그림(정지 이미지)은 영상 유무와 관계없이 항상 그 칸에 있고, 영상은 같은 칸 위에 얹혔다가 걷힌다.
+   *  - 그 칸은 화면을 다시 그려도(서버 값 맞춤 등) 다시 만들지 않는다 — 날짜·저장 표시·한 줄만 바뀐다. */
+  var HEALTH_K_TOP = 'on';
   var RECENT_OPEN_DAYS = 14;
   var CHART_SPANS = [{ k: 30, t: '30일' }, { k: 90, t: '3개월' }, { k: 365, t: '1년' }, { k: 0, t: '전체' }];
   var chartSpan = 30;         // 이번에 연 화면의 그래프 기간(0=전체)
@@ -561,7 +566,7 @@
    *   화면 아래쪽에 떠 있기만 한다(누르는 곳 아님 · 뒤 화면 누르기를 막지 않음 · 화면을 밀어내지 않음 — 누르던 칸이 움직이지 않게). */
   var SAY_ORDER = ['fasting_glucose', 'weight', 'sleep_hours', 'med_morning', 'med_evening', 'supplement', 'breakfast', 'lunch', 'dinner'];   // 화면에 놓인 순서
   var CHEER_KEY = 'smart_health_cheer', CHEER_MS = 4000;
-  var lastCount = -1, cheerT = null;
+  var lastCount = -1, cheerT = null, cheerOn = false;
   function sayText() {
     var N = REQUIRED.length;
     var miss = SAY_ORDER.filter(function (k) { return REQUIRED.indexOf(k) >= 0 && !isDone(rec, k); }).map(function (k) { return SHORT[k]; });
@@ -574,7 +579,7 @@
   function paintSay(user) {
     var sc = $('kscHealth'); if (!sc || !rec) return;
     var n = recordedCount(), t = sayText();
-    if (global.KScene) global.KScene.set(sc, 'clip', t, { quiet: true });      // 빨리 쓰는 화면 — 등장·글자 찍힘 없이 바로
+    if (global.KScene) global.KScene.set(sc, cheerOn ? 'idle' : 'clip', t, { quiet: true });      // 빨리 쓰는 화면 — 등장·글자 찍힘 없이 바로
     else { var pp = $('hSay'); if (pp) pp.textContent = t; }
     sc.setAttribute('data-n', String(n));
     // v9.6(O-0387 3번): 대표님이 방금 누른 변화로 칸 수가 바뀌었을 때만 숫자가 굴러 바뀐다(서버 값을 받아 맞출 때는 그대로)
@@ -586,6 +591,16 @@
     var done = ''; try { done = localStorage.getItem(CHEER_KEY) || ''; } catch (e) {}
     if (done === ds) return;                                   // 오늘 이미 한 번 했다
     var view = $('healthView'); if (!view || !global.KScene) return;   // 띄울 수 없으면 「했다」고 적지 않는다(다음 기회에 뜨게)
+    var top = HEALTH_K_TOP === 'on' ? $('kscHealth') : null;
+    if (top && top.classList.contains('hk-top')) {           // 고정 칸의 케이가 그 자리에서 웃는다(다른 케이가 갑자기 아래에 뜨지 않게)
+      cheerOn = true; paintSay(false);
+      try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}
+      top.classList.add('hk-cheer');
+      try { if (global.KMotion) global.KMotion.cheer(top.querySelector('.kfigw') || top); } catch (e) {}
+      clearTimeout(cheerT);
+      cheerT = setTimeout(function () { cheerOn = false; var t2 = $('kscHealth'); if (t2) t2.classList.remove('hk-cheer'); paintSay(false); }, CHEER_MS);
+      return;
+    }
     var old = $('kscHCheer'); if (old && old.parentNode) old.parentNode.removeChild(old);
     var el = document.createElement('div');
     el.id = 'kscHCheer'; el.className = 'ksc hcheer'; el.setAttribute('role', 'status');
@@ -788,18 +803,20 @@
     var past = mode === 'past';
     var md = esc(fmtMD(rec.log_date)), full = esc(fmtDayShort(rec.log_date));
     host.className = past ? 'hpastmode' : '';
-    host.innerHTML =
-      (past
-        ? '<div class="hpast" role="status"><span class="hpast-tx"><b>' + full + '</b> 기록을 고치는 중</span>' +
-          '<button type="button" class="hpast-btn" data-act="today">오늘로 돌아가기</button></div>'
-        : '') +
-      // v9.4: 머리줄 = 날짜·저장 상태 + 케이 한 줄(작게 접힌 모습 고정 — 예전 「N / 9 기록됨」 줄 자리, 화면 길이 그대로)
-      '<div class="ksc health" id="kscHealth" role="status">' +
+    var KT = HEALTH_K_TOP === 'on';
+    var pastBar = past
+      ? '<div class="hpast" role="status"><span class="hpast-tx"><b>' + full + '</b> 기록을 고치는 중</span>' +
+        '<button type="button" class="hpast-btn" data-act="today">오늘로 돌아가기</button></div>'
+      : '';
+    // v9.4: 머리줄 = 날짜·저장 상태 + 케이 한 줄. (2026-10-26) HEALTH_K_TOP: 케이 그림 칸이 맨 위(탭 바로 아래), 날짜·저장 표시·한 줄은 그 아래.
+    var headHtml = '<div class="ksc health' + (KT ? ' hk-top' : '') + '" id="kscHealth" role="status">' +
+        (KT ? '<span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>' : '') +
         '<div class="ksc-l"><div class="hhead"><div class="hdate">' + esc(fmtDayLabel(rec.log_date)) + '</div>' +
         '<span id="hSaveState" class="hsave"></span></div>' +
         '<div class="ksp"><b>케이</b><p id="hSay"></p></div></div>' +
-        '<span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>' +
-      '</div>' +
+        (KT ? '' : '<span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>') +
+      '</div>';
+    var bodyHtml =
       '<div id="hLocal" class="hlocal" style="display:none" role="status"></div>' +
 
       '<div class="hgroup">' +
@@ -826,6 +843,19 @@
       (past
         ? '<button type="button" class="hpast-foot" data-act="today"><span>' + md + ' 기록을 고치는 중</span><b>오늘로 돌아가기</b></button>'
         : '');
+    if (!KT) {
+      host.innerHTML = pastBar + headHtml + bodyHtml;
+    } else {
+      // 케이 칸(#kscHealth)은 한 번 만들면 다시 만들지 않는다 — 서버 값을 받아 다시 그려도 그림이 깜박이거나 영상이 끊기지 않는다.
+      var keep = host.querySelector('#kscHealth'), bd = host.querySelector('#hBody');
+      if (!keep || !bd || !keep.classList.contains('hk-top') || keep.parentNode !== host) {
+        host.innerHTML = headHtml + '<div id="hBody"></div>';
+        bd = host.querySelector('#hBody');
+      } else {
+        var hd = keep.querySelector('.hdate'); if (hd) hd.textContent = fmtDayLabel(rec.log_date);
+      }
+      bd.innerHTML = pastBar + bodyHtml;
+    }
 
     paintedDay = todayStr();
     lastCount = -1;                                  // 새로 그린 화면 — 「방금 다 채움」 판정은 여기서부터 다시
