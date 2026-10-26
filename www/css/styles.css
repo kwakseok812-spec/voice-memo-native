@@ -2237,6 +2237,7 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 #recPrep.has-clip .ksc.kclip-rec .ksc-l{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}   /* 말풍선: 눈에는 안 보이고 스크린리더에는 그대로 */
 #recPrep.has-clip .ksc.kclip-rec .kfigw{flex:1 1 auto;width:100%;height:auto;margin:0;border-radius:26px;background:rgba(255,255,255,.55);overflow:hidden}
 #recPrep.has-clip .ksc.kclip-rec .kfig{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:50% 0%;filter:none}
+#recPrep.has-clip .ksc.kclip-rec.photo .kfig{object-position:50% 22%}      /* 정지 그림이 얼굴 사진일 때: 머리 위가 잘리지 않게 */
 #recPrep.has-clip .ksc.kclip-rec .kclipv{border-radius:26px;object-fit:cover;object-position:50% 0%;box-shadow:none}
 #recPrep.has-clip .orbwrap{grid-row:4;margin:26px 0 0 !important;padding:0}
 #recPrep.has-clip .orbbtn{width:var(--orb);height:var(--orb)}

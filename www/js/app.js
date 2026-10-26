@@ -927,13 +927,15 @@
   //   칸은 처음부터 잡아 두어 영상이 시작될 때 화면이 튀지 않고, 영상이 늦으면 칸에는 서 있는 케이 그림이 있다.
   //   영상을 못 틀면(없는 옷·꺼짐·미수신·10분 안 재열기·움직임 끔 …) has-clip 을 달지 않아 예전 화면(녹음 시작 → 회의자료 붙이기) 그대로다.
   function recPrepClip() {
-    var host = $('kscRecPrep'), sec = $('recPrep'); if (!host || !sec || !window.KClips || !window.KScene) return;
-    sec.classList.remove('has-clip');
-    if (!KClips.canPlay('rec_prep')) { host.style.display = 'none'; return; }
-    host.classList.toggle('kclip-tall', KChar.clipShape && KChar.clipShape('rec_prep') === 'tall');
+    // v9.45: 케이는 영상이 있든 없든 항상 보인다 — 영상을 못 틀 때(10분 안에 다시 연 경우 · 영상 미수신 · 움직임 끔 · 시작 인사 중 · 스위치 꺼짐)에는 정지 그림 케이가 같은 틀에 있다.
+    //   (v9.44 까지는 canPlay 가 거짓이면 케이 칸이 통째로 없어 「녹음에서 케이 안 나와」가 됐다.) 영상이 준비되면 그 위에 한 번 재생.
+    var host = $('kscRecPrep'), sec = $('recPrep'); if (!host || !sec || !window.KScene) return;
+    var can = false; try { can = !!(window.KClips && KClips.canPlay('rec_prep')); } catch (e) {}
     sec.classList.add('has-clip'); sec.classList.toggle('rp-calm', !!(KScene.calm && KScene.calm()));      // 움직임 끔·「움직임 줄이기」면 아래 한 줄이 올라오는 움직임도 쉰다
+    host.style.display = '';
+    try { host.classList.toggle('kclip-tall', can && KChar.clipShape && KChar.clipShape('rec_prep') === 'tall'); } catch (e) {}
     KScene.set(host, 'idle', '받아 적을 준비가 됐습니다.', { quiet: true });
-    KClips.play('rec_prep', host, { delay: 350 });
+    if (can) KClips.play('rec_prep', host, { delay: 350 });
   }
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
   if (btnStartRec) btnStartRec.addEventListener('click', function () {
@@ -3304,6 +3306,7 @@
   APP_VERSION = 'v9.42';        // v9.42: 녹음 준비 화면 배치 개선 — 케이(큰 전신) 왼쪽 · 녹음 시작 오른쪽 · 맨 아래 긴 줄 두 개(회의자료 붙이기·스캔). 영상이 있는 기기에서만, 단추·동작 그대로
   APP_VERSION = 'v9.43';        // v9.43: 녹음 준비 화면 — 가운데 줄(케이 상반신 + 녹음 단추)을 첨부 줄 쪽으로 붙이고 키 큰 화면에서 조금 키워 빈 간격을 줄임
   APP_VERSION = 'v9.44';        // v9.44: 녹음 준비 화면 — 세로 한 줄(큰 케이 상반신 → 녹음 시작 → 긴 첨부 줄 두 개), 왼쪽/오른쪽 나란히 배치 폐기
+  APP_VERSION = 'v9.45';        // v9.45: 녹음 준비 화면 — 케이를 영상 유무와 상관없이 항상 보이게(영상을 못 틀 때는 정지 그림 케이)
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
