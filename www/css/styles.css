@@ -2235,7 +2235,7 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 #recPrep.has-clip .rp-dir{display:none}
 #recPrep.has-clip .ksc.kclip-rec{--kh:auto;grid-row:3;min-height:0;margin:10px 0 0;align-self:stretch;align-items:center;justify-content:center}
 #recPrep.has-clip .ksc.kclip-rec .ksc-l{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}   /* 말풍선: 눈에는 안 보이고 스크린리더에는 그대로 */
-#recPrep.has-clip .ksc.kclip-rec .kfigw{flex:1 1 auto;position:relative;width:100%;max-width:calc(var(--ku-cap-rec) * var(--ku-wide));height:100%;max-height:var(--ku-cap-rec);margin:0 auto;border-radius:var(--ku-radius);background:rgba(255,255,255,.55);overflow:hidden}
+#recPrep.has-clip .ksc.kclip-rec .kfigw{flex:none;position:relative;width:auto;max-width:100%;aspect-ratio:var(--ku-wide);height:100%;max-height:var(--ku-cap-rec);margin:0 auto;border-radius:var(--ku-radius);background:rgba(255,255,255,.55);overflow:hidden}
 #recPrep.has-clip .ksc.kclip-rec .kfig{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:var(--ku-pos);filter:none}
 #recPrep.has-clip .ksc.kclip-rec.photo .kfig{object-position:var(--ku-pos-photo)}      /* 정지 그림이 얼굴 사진일 때: 머리 위가 잘리지 않게 */
 #recPrep.has-clip .ksc.kclip-rec .kclipv{border-radius:var(--ku-radius);object-fit:cover;object-position:var(--ku-pos);box-shadow:none}
@@ -2284,9 +2284,17 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
   #recPrep.has-clip .orbwrap{margin-top:14px !important}
 }
 @media (max-height:700px){
-  #recPrep.has-clip{--orb:96px}
-  #recPrep.has-clip .orblabel{margin-top:10px;font-size:18px}
-  #recPrep.has-clip .orbwrap{margin-top:16px !important}
+  #recPrep.has-clip{--orb:88px}
+  #recPrep.has-clip .orblabel{margin-top:2px;font-size:15px;line-height:1.2}
+  #recPrep.has-clip .orbwrap{margin-top:4px !important}
+  #recPrep.has-clip .ksc.kclip-rec{margin-top:0}
+  #recPrep.has-clip .rp-mat .label{display:none}
+  /* 케이 우선: 긴 첨부 줄 두 개를 한 줄에 나란히 두 칸으로(아이콘·화살표를 접고 글자만) */
+  #recPrep.has-clip .rp-matbtns{flex-direction:row;gap:8px}
+  #recPrep.has-clip .rp-matbtns .card.action{flex:1 1 0;min-width:0;min-height:44px;padding:4px 8px;justify-content:center}
+  #recPrep.has-clip .rp-matbtns .card.action .ic,#recPrep.has-clip .rp-matbtns .card.action .chev{display:none}
+  #recPrep.has-clip .rp-matbtns .card.action .tx{min-width:0;text-align:center}
+  #recPrep.has-clip .rp-matbtns .card.action .tx b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   #recPrep.has-clip .rp-mat .label,#recPrep.has-clip .rp-mat:has(.vfiles) .label{margin:4px 2px 2px;font-size:12.5px}
   #recPrep.has-clip .rp-mat .label .hint,#recPrep.has-clip .rp-mat:has(.vfiles) .label .hint{display:none}
   #recPrep.has-clip .rp-mat:has(.vfiles) .label{display:none}      /* 자료를 붙인 뒤 아주 낮은 화면에서는 안내 줄을 통째로 접는다 */
@@ -2307,15 +2315,15 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
  *   --ku-ar     틀의 가로÷세로(0.87 = 세로가 가로의 약 1.15배 — 어깨·팔·손 동작이 보이는 허리 위 상반신)
  *   --ku-pos    그림·영상을 틀에 맞춰 자를 때 기준(위쪽 맞춤 → 머리 위가 안 잘리고 아래 쪽이 허리까지 들어온다) · --ku-pos-photo 정지 그림이 얼굴 사진일 때
  *   --ku-cap-*  틀 높이의 상한(화면 높이의 몇 %) — 건강 40% · 녹음 준비 45%. 낮은 화면(높이 700px 이하)에서는 입력·단추가 첫 화면에 남도록 작아진다(얼굴+어깨까지는 유지).
- *   --ku-wide   틀이 아주 넓어질 때(펼친 폴드) 가로 상한 = 높이 상한 × 이 값 */
-:root{--ku-ar:.87;--ku-pos:50% 0%;--ku-pos-photo:50% 12%;--ku-radius:26px;--ku-cap-health:40vh;--ku-cap-rec:45vh;--ku-wide:1.45}
-@media (max-height:700px){ :root{--ku-cap-health:30vh;--ku-cap-rec:34vh;--ku-wide:1.7} }
+ *   --ku-wide   틀의 가로÷세로 상한(1.15 = 가로:세로 1.15:1 이하 — 낮은 화면·넓은 화면에서도 가로로 납작해져 얼굴이 잘리지 않게). 높이가 정해지면 폭은 높이×이 값까지만 쓰고 가운데에 둔다 · --ku-wide-health 는 건강 탭 몫(v9.46 값 그대로: 1.45, 높이 700px 이하 1.7) */
+:root{--ku-ar:.87;--ku-pos:50% 0%;--ku-pos-photo:50% 12%;--ku-radius:26px;--ku-cap-health:40vh;--ku-cap-rec:45vh;--ku-wide:1.15;--ku-wide-health:1.45}
+@media (max-height:700px){ :root{--ku-cap-health:30vh;--ku-wide-health:1.7} }      /* 건강 탭 값은 v9.46 그대로 */
 /* ===== 건강 탭 케이 고정 칸 (2026-10-26 「건강 탭에서 케이 위치가 갑자기 바뀐다 → 탭 바로 아래 크게」 · 스위치 HEALTH_K_TOP, health.js) =====
  * 「오늘 기록 · 기록 보기」 탭 바로 아래에 케이 그림 칸(폭을 채우는 상반신 틀) → 그 아래 날짜·저장 표시 한 줄 → 케이 한 줄 → 입력 칸.
  * 칸 크기는 CSS(비율 + 높이 상한)로만 정해져 그림·영상이 늦게 와도 아래 칸이 밀리지 않고, 영상이 없어도 정지 그림이 항상 이 칸에 있다.
  * 날짜·저장 표시 줄은 줄바꿈을 막고 높이를 미리 잡아 「적고 있습니다…」「폰에만 적어 둠」으로 글이 바뀌어도 아래가 움직이지 않는다. */
 .ksc.health.hk-top{display:block;min-height:0;margin:0 0 6px;align-items:initial;justify-content:initial}
-.ksc.health.hk-top .kfigw,.ksc.health.hk-top.photo .kfigw,.ksc.health.hk-top.cut .kfigw{position:relative;display:block;width:100%;max-width:calc(var(--ku-cap-health) * var(--ku-wide));height:auto;aspect-ratio:var(--ku-ar);max-height:var(--ku-cap-health);margin:0 auto;padding:0;overflow:hidden;
+.ksc.health.hk-top .kfigw,.ksc.health.hk-top.photo .kfigw,.ksc.health.hk-top.cut .kfigw{position:relative;display:block;width:100%;max-width:calc(var(--ku-cap-health) * var(--ku-wide-health));height:auto;aspect-ratio:var(--ku-ar);max-height:var(--ku-cap-health);margin:0 auto;padding:0;overflow:hidden;
   border:0;border-radius:var(--ku-radius);transform:none;background:rgba(255,255,255,.55);box-shadow:0 6px 18px rgba(30,41,99,.14)}
 .ksc.health.hk-top .kfig,.ksc.health.hk-top.cut .kfig,.ksc.health.hk-top.photo .kfig{position:absolute;left:0;top:0;display:block;width:100%;height:100%;object-fit:cover;object-position:var(--ku-pos);filter:none;border-radius:0}
 .ksc.health.hk-top.photo .kfig{object-position:var(--ku-pos-photo)}
