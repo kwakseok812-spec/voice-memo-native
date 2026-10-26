@@ -2056,6 +2056,7 @@
     });
   }
   function showMeetingsList() {
+    try { if (window.MtgOut) MtgOut.unmount(); } catch (e) {}
     var l = $('meetingsList'), d = $('meetingsDetail');
     if (d) { d.style.display = 'none'; d.innerHTML = ''; }
     if (l) l.style.display = '';
@@ -2079,13 +2080,18 @@
       var dur = fmtDurKo(memoDurSec(r));
       html += '<button class="card action wide" data-mtg="' + idx + '">' +
               '<span class="ic blue"><svg><use href="#i-note"/></svg></span>' +
-              '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc(kb + (dur ? '  ·  ' + dur : '')) + '</small></span>' +
+              '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc(kb + (dur ? '  ·  ' + dur : '')) + moChip(r) + '</small></span>' +
               '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
     });
     host.innerHTML = html;
     Array.prototype.forEach.call(host.querySelectorAll('[data-mtg]'), function (b) {
       b.addEventListener('click', function () { openMeetingDetail(parseInt(b.getAttribute('data-mtg'), 10)); });
     });
+  }
+  // (O-0626) 목록 카드 「정리본 N」 칩 — 이 회의의 맞춤 정리본이 있을 때만(새 줄을 만들지 않고 「녹음 · 1시간」 줄 끝에).
+  function moRefreshList() { try { if (MTG_OUT_ON === 'on' && window.MtgOut && isOpen($('meetingsView')) && !meetingsDetailOpen) renderMeetingsList(); } catch (e) {} }
+  function moChip(r) {
+    try { if (MTG_OUT_ON !== 'on' || !window.MtgOut || !r || !r.id) return ''; var n = MtgOut.count(r.id); return n ? '<span class="mo-chip">정리본 ' + n + '</span>' : ''; } catch (e) { return ''; }
   }
   function openMeetingDetail(idx) {
     var r = meetingsRows[idx]; if (!r) return;
@@ -2107,6 +2113,8 @@
             '<button id="mtgRename" class="btn ghost sm"' + mcSty + '><svg><use href="#i-note"/></svg>이름 변경</button>' +
             '<button id="mtgDelete" class="btn ghost sm danger"' + mcSty + '><svg><use href="#i-trash"/></svg>삭제</button>' +
             '</div>';
+    var moOn = (MTG_OUT_ON === 'on' && window.MtgOut && r.id);       // (O-0626) [복사][이름 변경][삭제] 줄 바로 다음 = 맞춤 정리본 받기(접이식)
+    if (moOn) html += '<div id="mtgOutHost"></div>';
     if (sj.integrated && sj.minutes)   // 회의자료 함께 낸 경우: 통합 회의록
       html += rcard('i-note', '통합 회의록', '<div class="minutes" style="white-space:pre-wrap">' + esc(sj.minutes) + '</div>');
     html += renderCards(sj);           // 요약·할 일·결정·키워드 카드(기존 헬퍼 재사용)
@@ -2123,10 +2131,11 @@
     var lw = $('mtgLocalWrap'); if (lw) lw.style.display = 'none';
     d.style.display = 'block';
     meetingsDetailOpen = true;
-    var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', showMeetingsList);
+    var bk = $('mtgBackToList'); if (bk) bk.addEventListener('click', function () { showMeetingsList(); moRefreshList(); });   // (O-0626) 돌아오면 「정리본 N」 칩을 새로 센다
     var mcb = $('mtgCopy'); if (mcb) mcb.addEventListener('click', function () { copyToClipboard(meetingCopyText(r)); });
     var rn = $('mtgRename'); if (rn) rn.addEventListener('click', function () { renameMeetingPrompt(idx); });
     var dl = $('mtgDelete'); if (dl) dl.addEventListener('click', function () { confirmDeleteMeeting(idx); });
+    if (moOn) { try { MtgOut.mount($('mtgOutHost'), r); } catch (e) {} }
     scrollTop();
   }
   // v9.20: 회의록 상세 [복사] 글 — 화면과 같은 순서(제목·일시·길이 → 통합 회의록 → 요약 카드들). 원문(접힌 항목)은 넣지 않는다.
@@ -3355,6 +3364,7 @@
   APP_VERSION = 'v9.50';        // v9.50: 영수증 스캔에 «모서리 조정» — 영수증 미리보기에서 [✂ 모서리 조정]을 누르면 문서 스캔과 같은 자르기 화면(자동으로 찾은 모서리가 시작점, 네 점 끌기·확대경·전체·자동 찾기)이 열리고 [적용]하면 그 모서리로 다시 펴서 보정 · 스위치 doc-scan.js DSC_RCPT_EDIT 'on'/'off' · versionCode 94
   APP_VERSION = 'v9.51';        // v9.51: 영수증 보내기 전에 결제 카드(보직자 운영비 9801 / 교내 연구비 8837)와 메모 한 줄을 고른다 — 카드는 확인 카드 「어느 앱에」 기본값(PC 가 끝자리를 못 읽었을 때), 읽은 끝자리와 다르면 경고, 메모는 확인 카드 「설명」 기본값 · 앱 안에서만(PC·서버 변경 없음) · 스위치 RECEIPT_PICK · versionCode 95
   APP_VERSION = 'v9.52';        // v9.52: 모서리 조정 — 접은 폴드(좁고 긴 화면)에서 긴 영수증 사진 아랫부분이 손가락으로 닿지 않던 것 수리: 사진 위를 위아래로 밀면 화면이 움직이고(점 끌기는 그대로 화면을 안 밂), 영수증은 화면에 통째로 들어올 수 있으면 스크롤 없이 한눈에 · 하단 단추 네 개 한 줄 · versionCode 96
+  APP_VERSION = 'v9.53';        // v9.53(O-0626): 회의록 상세 「맞춤 정리본 받기」 — 스위치 MTG_OUT_ON(app.js), 코드 js/mtg-out.js · css/mtg-out.css · versionCode 97
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -3853,10 +3863,14 @@
       var chip = '<button type="button" class="attach' + (isUp ? ' up' : '') + '"' + attrs + '>' +
         '<svg><use href="#' + attachIcon(f) + '"/></svg><span class="an">' + esc(f.name || '파일') + '</span>' + sz + '</button>';
       // 케이가 보낸 문서(하향)면 [문서 보기] 버튼을 함께 — 폰에서 PC와 똑같이 열람
+      var moTag = (!isUp && MTG_OUT_ON === 'on' && window.MtgOut) ? MtgOut.tagFor(f.name) : '';   // (O-0626) 맞춤 정리본 이름표
+      if (moTag) chip = '<small class="mo-tag">' + esc(moTag) + '</small>' + chip;
       if (!isUp && isViewableDoc(f)) {
         chip += '<button type="button" class="attach-view" data-view-url="' + esc(f.url) +
           '" data-view-name="' + esc(f.name || '문서') + '" data-view-mime="' + esc(f.mime || '') + '">' +
           '<svg><use href="#i-doc"/></svg>문서 보기</button>';
+        if (moTag) chip += '<button type="button" class="attach-view mo-fix" data-mo-fix="1" data-view-name="' + esc(f.name || '문서') +
+          '" data-mo-url="' + esc(f.url) + '" data-view-mime="' + esc(f.mime || '') + '">✏️ 고치기</button>';   // (O-0626) 뷰어를 열고 곧바로 [✏️ 고치기](O-0544 수정 요청)
       }
       // 받은 파일(url 있음)이면 [다운로드] — 기기 다운로드 폴더로 저장(안드로이드·PC 공용, 2026-09-21)
       if (!isUp && f.url) {
@@ -5922,6 +5936,7 @@
       if (added) {
         sortChatByTime();
         saveChatMsgs();
+        try { if (MTG_OUT_ON === 'on' && window.MtgOut) { MtgOut.refresh(); moRefreshList(); } } catch (e) {}   // (O-0626) 정리본이 도착했으면 회의록 상세·목록 칩도 바로
         if (isOpen(chatView)) { renderChat(); if (!document.hidden) setSeenHW(maxTs); }   // 보고 있으면 방금 것까지 '본 것'으로 굳힘(재시작 후 재계산 방지) · v5.9: 앱이 뒤로 가 있을 땐 굳히지 않음(복귀 때 새 메시지 위치로)
         else if (unseenAdded > 0) { chatUnseen += unseenAdded; updateChatBadge(); toast('케이가 새 소식을 보냈습니다.'); }
       }
@@ -8360,9 +8375,13 @@
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openMsgActionSheet(bub.getAttribute('data-uid')); return; }
     var vp = ev.target.closest ? ev.target.closest('[data-lid]') : null;
     if (vp) { onListenBtn(vp.getAttribute('data-lid'), vp); return; }
+    var mof = ev.target.closest ? ev.target.closest('[data-mo-fix]') : null;
+    if (mof) { moOpenChecked({ url: mof.getAttribute('data-mo-url'), name: mof.getAttribute('data-view-name'), mime: mof.getAttribute('data-view-mime'), kind: 'document' }, true); return; }   // (O-0626)
     var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
     if (dv) {                                        // [뷰어로 보기] → 문서 뷰어로 표시
-      openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' });
+      var dva = { url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' };
+      if (MTG_OUT_ON === 'on' && window.MtgOut && MtgOut.isMtgName(dva.name)) { moOpenChecked(dva, false); return; }   // (O-0626) 맞춤 정리본은 주소(7일)부터 확인
+      openDocFromChat(dva);
       return;
     }
     var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
@@ -8459,6 +8478,7 @@
    *  24시간이 지난 말 · 음성 말풍선은 단추를 보이지 않는다. 시간 제한은 다시 보낸 시각부터 새로 센다. */
   var RESEND_UI = 'on', RESEND_MAX_MS = 24 * 3600 * 1000, RESEND_ATT_MAX = 100 * 1024 * 1024;
   var MTG_COPY = 'on';                               // (v9.20) 회의록 상세 [복사] — 'off' 면 단추 없음(v9.19 와 같은 화면)
+  var MTG_OUT_ON = 'on';                             // (O-0626) 회의록 상세 「맞춤 정리본 받기」 칸·목록 「정리본 N」 칩·채팅 정리본 이름표 — 'off' 면 전부 사라짐(v9.44 와 같은 화면). 코드: js/mtg-out.js
   var REPLY_TIP_KEY = 'smart_reply_tip_seen';        // 처음 한 번 「⋯에 답장이 생겼습니다」 안내
   var REPLY_SWIPE = true;                            // (O-0545 ②, v9.18) 말풍선을 왼쪽으로 밀어 답장 — false 면 ⋯ 시트만(v9.17 그대로). 아래 「밀어서 답장」
   var REPLY_SWIPE_TIP_KEY = 'smart_reply_swipe_tip_seen';
@@ -9012,7 +9032,7 @@
     }
     if (isOpen($('remindersView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }   // v8.3: 예약한 알림
     if (isOpen($('meetingsView'))) {   // v5.2: 상세 열려 있으면 목록으로, 아니면 홈으로
-      if (meetingsDetailOpen) { showMeetingsList(); return true; }
+      if (meetingsDetailOpen) { showMeetingsList(); moRefreshList(); return true; }
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     if (isOpen($('healthView')) && window.HealthTab && HealthTab.back && HealthTab.back()) return true;   // v9.4(O-0344): 지난 날짜 고치는 중 → 기록 보기 목록으로
@@ -9602,7 +9622,7 @@
     var pass = getSyncPass();
     if (!pass || !(window.OfficeBridge && OfficeBridge.listOfficeOrdersBySource)) return Promise.resolve({});
     return OfficeBridge.listOfficeOrdersBySource(rids, pass).then(function (rows) {
-      var m = {}; (rows || []).forEach(function (r) { if (r && r.source_id) m[r.source_id] = { status: r.status || '', job_status: r.job_status || '', job_seq: r.job_seq || 0 }; });
+      var m = {}; (rows || []).forEach(function (r) { if (r && r.source_id) m[r.source_id] = { status: r.status || '', job_status: r.job_status || '', job_seq: r.job_seq || 0, result: r.result || '' }; });
       return m;
     });
   }
@@ -9620,6 +9640,89 @@
       cb.checked = SmartMarkup.longPressOn();
       cb.addEventListener('change', function () { SmartMarkup.setLongPress(cb.checked); toast(cb.checked ? '문서를 길게 누르면 수정 요청이 켜집니다' : '길게 누르기로는 켜지지 않습니다. [✏️ 고치기]로 여십시오'); });
     })();
+  }
+
+  /* ---- O-0626 회의록 상세 「맞춤 정리본 받기」 — 보내기 · 취소 · 상태(화면은 mtg-out.js) ----
+   *   [PC로 보내 만들기] → 수정 요청과 같은 채팅 첨부 통로(sendChatDocAsk, 연동 암호 확인 submit_memo)로 첨부 0개 한 행:
+   *     note = 사람이 읽는 한 줄(채팅 말풍선은 이 글만) · meta.meeting_out = {v:1, action:'make'|'resend', memo_id, id8, fmt, out, ver, redo_of, note, name?}
+   *     (회의 내용은 들어가지 않는다 — PC 가 저장된 원문으로 만든다.)
+   *   [요청 취소] → meta.meeting_out_cancel = {rid} 한 행. 상태는 작업 카드와 같은 목록(list_office_orders_by_source).
+   *   결과 파일은 PC 가 평소 채팅 첨부로 보낸다(파일 이름 규칙은 mtg-out.js 머리말). */
+  function moSend(p) {
+    if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 되지 않았습니다'));
+    if (!getSyncPass()) {
+      try { window.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: true } })); } catch (x) {}
+      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
+    }
+    var ttl = cutText(p.memo_title || '회의', 30), lab = window.MtgOut ? MtgOut.label(p.fmt, p.out) : p.fmt;
+    var note = (p.action === 'resend')
+      ? '📄 「' + ttl + '」 ' + lab + ' v' + p.ver + ' 를 새 주소로 다시 받고 싶습니다'
+      : '📄 「' + ttl + '」 ' + lab + (p.ver > 1 ? ' (v' + p.ver + ')' : '') + ' 만들기를 PC로 보냈습니다' + (p.note ? '\n요청: ' + p.note : '');
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    var msg = { role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true, uploading: true };
+    chatMsgs.push(msg); saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+    var mo = { v: 1, action: p.action || 'make', memo_title: String(p.memo_title || '').slice(0, 120), memo_id: p.memo_id || '', id8: p.id8 || String(p.memo_id || '').replace(/-/g, '').slice(0, 8), fmt: p.fmt, out: p.out, ver: p.ver, redo_of: p.redo_of || null, note: p.note || '' };
+    if (p.name) mo.name = p.name;
+    var memo = { id: id, token: tok, thread: chatThread, title: ('정리본 요청 · ' + String(p.memo_title || '회의').replace(/\s+/g, ' ').trim()).slice(0, 100), note: note, extraMeta: { meeting_out: mo } };
+    return OfficeBridge.sendChatDocAsk(memo, []).then(function () {
+      msg.uploading = false; saveChatMsgs(); if (isOpen(chatView)) renderChat();
+      startChatReconcile(); kickOrderPoll();
+      return { rid: id };
+    }, function (e) {
+      msg.answered = true; msg.uploading = false;
+      chatMsgs.push({ role: 'k', text: '정리본 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 회의록 화면에서 다시 눌러 주세요.', ts: Date.now() });
+      saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
+      throw e;
+    });
+  }
+  function moCancel(rid) {
+    if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요합니다'));
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '📄 보낸 정리본 요청을 취소해 주세요';
+    chatMsgs.push({ role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true });
+    saveChatMsgs(); if (isOpen(chatView)) renderChat();
+    return OfficeBridge.sendChatDocAsk({ id: id, token: tok, thread: chatThread, title: '정리본 요청 취소', note: note, extraMeta: { meeting_out_cancel: { rid: rid } } }, [])
+      .then(function () { startChatReconcile(); kickOrderPoll(); return true; });
+  }
+  function moChatFiles() {
+    var out = [];
+    chatMsgs.forEach(function (m) { if (m && m.role === 'k' && m.files && m.files.length) m.files.forEach(function (f) { if (f && f.url && f.name) out.push({ name: f.name, url: f.url, mime: f.mime || '', size: f.size || 0, ts: m.ts || 0 }); }); });
+    return out;
+  }
+  // 정리본 파일 열기: 파일 주소(PC 보관함 7일)가 살아 있는지 1바이트로 먼저 본다. 죽었으면 오류 화면 대신 「다시 받기」를 권한다.
+  function moOpenChecked(att, andFix, memo) {
+    function go() {
+      openDocFromChat(att);
+      if (!andFix) return;
+      var tries = 0, t = setInterval(function () {                     // 뷰어가 문서를 다 연 뒤 [✏️ 고치기] 시트를 바로 띄운다(25초 안 열리면 포기 — 직접 누르시면 됨)
+        tries++;
+        var ready = false; try { ready = !!(window.SmartDocs && SmartDocs.askContext && SmartDocs.askContext()); } catch (e) {}
+        if (ready) { clearInterval(t); try { SmartDocs.openFix(); } catch (e) {} }
+        else if (tries > 50) clearInterval(t);
+      }, 500);
+    }
+    function dead() {
+      openSheet('파일 주소가 만료됐어요', '맞춤 정리본의 열람 주소는 7일 동안만 열려 있어요. PC에서 같은 파일을 새 주소로 다시 받아 올까요? (다시 만드는 것이 아니라 약 20초면 와요.)',
+        '다시 받기', function () {
+          MtgOut.resendFor(att, memo || null).then(function (r) { toast(r ? 'PC로 보냈습니다. 약 20초 뒤 채팅으로 와요.' : '다시 받기를 보내지 못했습니다.'); },
+            function () { toast('보내지 못했습니다. 인터넷 연결을 확인해 주세요.'); });
+        }, null, null, { positive: true, icon: 'i-refresh' });
+    }
+    var done = false;
+    try {
+      fetch(att.url, { headers: { Range: 'bytes=0-0' } }).then(function (r) {
+        if (done) return; done = true;
+        if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) dead(); else go();
+      }, function () { if (done) return; done = true; go(); });                       // 통신 오류는 평소처럼 열어 보고, 뷰어가 자기 오류를 보인다
+      setTimeout(function () { if (!done) { done = true; go(); } }, 6000);
+    } catch (e) { go(); }
+  }
+  if (window.MtgOut) {
+    MtgOut.setHost({ send: moSend, cancel: moCancel, status: mkStatus, chatFiles: moChatFiles, toast: toast,
+      pass: function () { return !!getSyncPass(); },
+      goChat: function () { openChat(); },
+      openFile: function (att, memo) { moOpenChecked(att, false, memo); },
+      pullPushes: function () { loadOfficePushes(); },
+      memoById: function (i8) { for (var i = 0; i < meetingsRows.length; i++) if (String(meetingsRows[i].id || '').replace(/-/g, '').slice(0, 8).toLowerCase() === i8) return meetingsRows[i]; return null; } });
   }
 
   /* ---- v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기] ----

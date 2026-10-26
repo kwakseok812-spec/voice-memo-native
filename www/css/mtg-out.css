@@ -1,0 +1,109 @@
+/* mtg-out.css — 회의록 상세 「맞춤 정리본 받기」(O-0626). 이 파일 안의 규칙은 전부 .mo / .mo-* 로 시작한다(녹음 준비 화면·styles.css 의 다른 블록을 건드리지 않는다). */
+.mo{margin-top:14px}
+.mo-head{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:9px 14px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.mo-head:active{transform:scale(.985)}
+.mo-head .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--ic-bg);border:1px solid var(--glass-b);flex:none}
+.mo-head .ic svg{width:21px;height:21px;color:var(--p1)}
+.mo-t{min-width:0;flex:1}
+.mo-t b{display:block;font-size:15.5px;font-weight:800;line-height:1.25;word-break:keep-all}
+.mo-t small{display:block;margin-top:2px;font-size:12.5px;font-weight:500;color:var(--dim);line-height:1.3;word-break:keep-all}
+.mo-n{flex:none;height:26px;padding:0 10px;border-radius:999px;display:inline-flex;align-items:center;font-size:12.5px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2))}
+.mo-head .chev{width:20px;height:20px;color:var(--dim);flex:none;transition:transform .22s}
+.mo[data-open="1"] .mo-head .chev{transform:rotate(90deg)}
+/* 접힘/펼침: 높이를 부드럽게(220ms) */
+.mo-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.mo[data-open="1"] .mo-body{grid-template-rows:1fr}
+.mo-in{overflow:hidden;min-height:0}
+.mo-in > *:first-child{margin-top:12px}
+.mo-sec{margin:16px 2px 8px;font-size:13.5px;font-weight:800;color:var(--muted)}
+.mo-sec span{margin-left:4px;color:var(--p1)}
+.mo-sm{margin:6px 2px 0;font-size:12.5px;line-height:1.5;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
+.mo-note{padding:11px 13px;border-radius:14px;background:var(--warn-bg);color:var(--warn-t);font-size:13.5px;font-weight:600;line-height:1.5;word-break:keep-all}
+.mo-link{background:none;border:0;padding:6px 4px;font-family:inherit;font-size:13px;font-weight:700;color:var(--p1);cursor:pointer;min-height:36px}
+.mo-btn{height:40px;padding:0 13px;border-radius:12px;font-family:inherit;font-size:13.5px;font-weight:800;color:var(--text);background:var(--ic-bg);border:1px solid var(--glass-b);cursor:pointer}
+.mo-btn.pri{color:#fff;background:linear-gradient(135deg,var(--p1),var(--p2));border-color:transparent}
+.mo-btn:disabled{opacity:.55}
+.mo-btn:active{transform:scale(.96)}
+
+/* 진행 */
+.mo-prog{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.mo-k{display:flex;align-items:flex-end;gap:10px}
+.mo-kimg{height:84px;width:auto;max-width:96px;object-fit:contain;flex:none}
+.mo-kb{padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--glass);border:1px solid var(--glass-b);font-size:14px;font-weight:600;line-height:1.5;margin-bottom:8px;animation:moSay .3s ease both}
+.mo-req{padding:11px 13px 10px;border-radius:16px;background:var(--glass);border:1px solid var(--glass-b)}
+.mo-req.fail{border-color:var(--warn)}
+.mo-rh{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.mo-rh b{font-size:14.5px;font-weight:800;min-width:0;word-break:keep-all}
+.mo-steps{display:flex;align-items:center;gap:4px;margin:9px 0 2px}
+.mo-st{display:inline-flex;flex-direction:column;align-items:center;gap:3px;min-width:56px}
+.mo-st i{width:12px;height:12px;border-radius:50%;background:var(--glass-b2);display:block}
+.mo-st em{font-style:normal;font-size:11.5px;font-weight:700;color:var(--dim)}
+.mo-st.ok i{background:var(--ok)} .mo-st.ok em{color:var(--ok)}
+.mo-st.on i{box-shadow:0 0 0 4px var(--ok-bg)} .mo-st.on em{color:var(--text)}
+.mo-st.on:not(.ok) i{background:var(--p1);box-shadow:0 0 0 4px rgba(59,130,246,.22);animation:moBreath 1.2s ease-in-out infinite}
+.mo-bar{flex:1;height:2px;background:var(--glass-b2);margin-bottom:15px;min-width:10px}
+.mo-req.pop{animation:moPop .35s ease both}
+
+/* 만든 정리본 */
+.mo-made{display:flex;flex-direction:column;gap:8px}
+.mo-file{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-b)}
+.mo-fi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--ic-bg);flex:none}
+.mo-fi svg{width:19px;height:19px;color:var(--p1)}
+.mo-ft{min-width:0;flex:1}
+.mo-ft b{display:block;font-size:14px;font-weight:800;word-break:keep-all}
+.mo-ft small{display:block;font-size:12px;color:var(--dim);margin-top:1px}
+.mo-fb{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+
+/* 타일 — 홈 「도구」 칸과 같은 .tools / .tool 부품을 쓴다 */
+.mo-tiles{margin-top:2px}
+.mo-tile{transition:transform .12s,box-shadow .2s,border-color .2s}
+.mo-tile.sel,.mo-freebtn.sel{border-color:var(--p1);box-shadow:0 0 0 2px rgba(59,130,246,.35),var(--card-sh)}
+.mo-tile.busy{opacity:.7}
+.mo-freebtn{margin-top:8px;width:100%}
+.mo-tile b{word-break:keep-all}
+
+/* 설명 패널 */
+.mo-panel{margin-top:10px;padding:14px 14px 12px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--card-sh);animation:moIn .22s ease both}
+.mo-ph{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.mo-ph b{font-size:16px;font-weight:800}
+.mo-ph small{font-size:12.5px;color:var(--dim);font-weight:600}
+.mo-d1{margin:8px 0 0;font-size:14.5px;font-weight:600;line-height:1.55;word-break:keep-all}
+.mo-d2{margin:5px 0 0;font-size:12.5px;line-height:1.5;color:var(--dim);word-break:keep-all}
+.mo-redo{color:var(--text)}
+.mo-outs{display:flex;gap:8px;margin-top:10px}
+.mo-out{flex:1;height:44px;border-radius:12px;font-family:inherit;font-size:14.5px;font-weight:800;color:var(--muted);background:var(--ic-bg);border:1.5px solid var(--glass-b);cursor:pointer}
+.mo-out small{font-size:11.5px;font-weight:600;opacity:.8}
+.mo-out.on{color:var(--text);border-color:var(--p1);background:rgba(59,130,246,.14)}
+.mo-nt{display:block;width:100%;box-sizing:border-box;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--glass-b2);background:var(--in-bg,var(--glass));color:var(--text);font-family:inherit;font-size:15px;line-height:1.45;resize:none}
+.mo-go{width:100%;margin-top:10px}
+.mo-go.sent{background:var(--ok);box-shadow:none;animation:moPress .3s ease both}
+.mo-go:disabled{opacity:.85}
+
+html[data-fs] .mo-t b{font-size:calc(15.5px * var(--fsx))}
+html[data-fs] .mo-t small,html[data-fs] .mo-sm,html[data-fs] .mo-d2{font-size:calc(12.5px * var(--fsx))}
+html[data-fs] .mo-d1{font-size:calc(14.5px * var(--fsx))}
+
+/* 목록 카드의 「정리본 N」 칩 · 채팅 첨부의 이름표 */
+.mo-chip{display:inline-flex;align-items:center;height:20px;margin-left:8px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:var(--p1);background:rgba(59,130,246,.14);border:1px solid rgba(59,130,246,.3);vertical-align:1px}
+.mo-tag{display:block;margin:2px 2px 4px;font-size:12px;font-weight:700;color:var(--p1);word-break:keep-all}
+
+@keyframes moPop{0%{transform:scale(.9);opacity:.6}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes moIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes moSay{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes moPress{0%{transform:scale(.97)}100%{transform:scale(1)}}
+@keyframes moBreath{0%,100%{opacity:1}50%{opacity:.35}}
+.mo-n.pop{animation:moPop .35s ease both}
+@media (max-width:360px){
+  .mo-head{padding:8px 11px;gap:9px}
+  .mo-t b{font-size:15px} .mo-t small{font-size:12px}
+  .mo-st{min-width:48px} .mo-st em{font-size:11px}
+  .mo-file{flex-wrap:wrap} .mo-fb{width:100%;justify-content:flex-end}
+}
+@media (min-width:700px){
+  .mo{max-width:620px}
+}
+@media (prefers-reduced-motion:reduce){
+  .mo-body,.mo-head .chev,.mo-tile{transition:none}
+  .mo-panel,.mo-kb,.mo-req.pop,.mo-n.pop,.mo-go.sent,.mo-st.on:not(.ok) i{animation:none}
+  .mo-head:active,.mo-btn:active{transform:none}
+}
