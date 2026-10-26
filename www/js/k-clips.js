@@ -54,6 +54,7 @@
   }
   // 이유(안 틀 이유가 없으면 ''). 시험·점검이 읽는다
   function blockWhy(scene) {
+    if (window.KScene && KScene.off && KScene.off()) return '장면 꺼짐(KSCENES_UI)';
     if (!switchOn()) return '스위치 꺼짐';
     if (calm()) return '움직임 끔';
     if (introOn()) return '시작 인사 중';

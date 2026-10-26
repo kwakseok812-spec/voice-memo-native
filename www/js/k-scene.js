@@ -22,6 +22,11 @@
   'use strict';
   // 자세 그림이 없을 때 대신 쓰는 표정(그 옷의 표정 사진)
   var POSE_EXPR = { note: 'neutral', report: 'smile', desk: 'thinking', guide: 'smile', clip: 'neutral', sorry: 'concern', idle: 'smile' };
+  /* v9.49 마스터 스위치 KSCENES_UI — 'off' 면 업무 화면(녹음 준비·녹음 중·건강·회의록·작업 현황·보내는 중·명함 찾는 중·오류 안내)의 케이 그림·영상을 전부 안 보이고,
+   *   그 자리의 안내 글만 보통 안내 글 상자로 남는다(글이 없어지지 않는다). 'on' 으로 바꾸면 v9.48 까지의 일하는 케이가 그대로 돌아온다(그림·영상 자산은 지우지 않았다).
+   *   홈 · 채팅(말풍선 아이콘 · 빈 대화) · 통화 · 시작 인사 · 꾸미기(옷장) · 알림은 이 스위치와 무관하다(KScene.figHtml 을 쓰는 채팅 빈 대화·케이 무대는 그대로). */
+  var KSCENES_UI = 'off';
+  function off() { return KSCENES_UI === 'off'; }
   var TYPE_STEP = 30, TYPE_MIN = 280, TYPE_MAX = 900;       // 글자 찍힘: 30ms 마다 · 전체 0.28~0.9초
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -79,6 +84,11 @@
     var p = el.querySelector('.ksp p');
     if (!text) { el.style.display = 'none'; el.removeAttribute('data-pose'); el._kShown = false; if (p) stopType(p); return; }
     pose = pose || 'idle';
+    if (off()) {                                      // 글만: 그림·영상·등장 움직임 없이 안내 글 상자(.ksc-off)로
+      el.classList.add('ksc-off'); el.classList.remove('ksc-in'); el.style.display = ''; el.setAttribute('data-pose', pose); el._kShown = true;
+      if (p) { stopType(p); if (p.textContent !== text) p.textContent = text; }
+      return;
+    }
     var fresh = !el._kShown || el.style.display === 'none';
     var oldPose = el.getAttribute('data-pose');
     el.style.display = '';
@@ -101,6 +111,7 @@
   }
   // 빈 화면·오류 자리에 넣을 덩어리(케이가 크게 + 말풍선). 그 화면의 코드가 innerHTML 로 넣는다.
   function emptyHtml(pose, text) {
+    if (off()) return '<div class="empty-note ksc-off-empty" role="status">' + esc(text) + '</div>';      // v9.49: 글만
     var f = fig(pose);
     return '<div class="kempty ' + (f.cut ? 'cut' : 'photo') + (calm() ? '' : ' ksc-in') + '" data-pose="' + esc(pose) + '" role="status">' +
       '<span class="kfigw"><img class="kfig" alt="케이" draggable="false" src="' + esc(f.src) + '"></span>' +
@@ -121,5 +132,5 @@
   if (window.KChar) {
     try { KChar.onChange(repaint); KChar.ready.then(repaint); if (KChar.catalogReady) KChar.catalogReady.then(repaint); } catch (e) {}
   }
-  window.KScene = { set: set, fig: fig, emptyHtml: emptyHtml, figHtml: figHtml, repaint: repaint, reset: reset, calm: calm };
+  window.KScene = { off: off, set: set, fig: fig, emptyHtml: emptyHtml, figHtml: figHtml, repaint: repaint, reset: reset, calm: calm };
 })();

@@ -596,7 +596,7 @@
       cheerOn = true; paintSay(false);
       try { localStorage.setItem(CHEER_KEY, ds); } catch (e) {}
       top.classList.add('hk-cheer');
-      try { if (global.KMotion) global.KMotion.cheer(top.querySelector('.kfigw') || top); } catch (e) {}
+      try { if (global.KMotion && !(global.KScene && global.KScene.off && global.KScene.off())) global.KMotion.cheer(top.querySelector('.kfigw') || top); } catch (e) {}
       clearTimeout(cheerT);
       cheerT = setTimeout(function () { cheerOn = false; var t2 = $('kscHealth'); if (t2) t2.classList.remove('hk-cheer'); paintSay(false); }, CHEER_MS);
       return;

@@ -2336,3 +2336,17 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 .ksc.health.hk-top .ksp p{min-height:19px;font-size:14px;line-height:19px}
 .ksc.health.hk-top.hk-cheer .kfigw{box-shadow:0 0 0 3px var(--ok),0 8px 22px rgba(4,120,87,.25);transition:box-shadow .25s ease}
 @media (prefers-reduced-motion:reduce){ .ksc.health.hk-top.hk-cheer .kfigw{transition:none} }
+
+/* v9.49 업무 화면의 케이 장면을 끔(KSCENES_UI='off', js/k-scene.js): 그림·영상 칸을 없애고 안내 글만 보통 글 상자로 — 빈 칸·고정 높이가 남지 않게 */
+.ksc.ksc-off{--kh:auto !important;display:block !important;min-height:0 !important;margin:8px 0 12px !important;gap:0;animation:none}
+.ksc.ksc-off .kfigw{display:none !important}
+.ksc.ksc-off .ksc-l{display:block !important;padding:0 !important;gap:0}
+.ksc.ksc-off .ksp{max-width:none;margin:0}
+.ksc.ksc-off .ksp::after{display:none !important}
+.ksc.ksc-off .ksp b{display:none}
+.ksc.ksc-off.rec .timer{margin:0 0 6px}
+.ksc.health.hk-top.ksc-off{margin:0 0 6px !important}
+.ksc.health.ksc-off .ksp{padding:2px 2px 0;background:transparent;border:0;box-shadow:none}
+.ksc.health.ksc-off .ksp p{white-space:normal}
+.ksc.hcheer.ksc-off{--kh:auto !important;position:fixed !important;display:block !important}
+.ksc-off-empty{margin:8px 0}

@@ -930,6 +930,7 @@
     // v9.45: 케이는 영상이 있든 없든 항상 보인다 — 영상을 못 틀 때(10분 안에 다시 연 경우 · 영상 미수신 · 움직임 끔 · 시작 인사 중 · 스위치 꺼짐)에는 정지 그림 케이가 같은 틀에 있다.
     //   (v9.44 까지는 canPlay 가 거짓이면 케이 칸이 통째로 없어 「녹음에서 케이 안 나와」가 됐다.) 영상이 준비되면 그 위에 한 번 재생.
     var host = $('kscRecPrep'), sec = $('recPrep'); if (!host || !sec || !window.KScene) return;
+    if (KScene.off && KScene.off()) { sec.classList.remove('has-clip', 'rp-calm'); host.style.display = 'none'; return; }      // v9.49: 케이 장면을 끔(KSCENES_UI) → 예전 순서(녹음 시작 → 회의자료)의 글만 화면
     var can = false; try { can = !!(window.KClips && KClips.canPlay('rec_prep')); } catch (e) {}
     sec.classList.add('has-clip'); sec.classList.toggle('rp-calm', !!(KScene.calm && KScene.calm()));      // 움직임 끔·「움직임 줄이기」면 아래 한 줄이 올라오는 움직임도 쉰다
     host.style.display = '';
@@ -3308,6 +3309,7 @@
   APP_VERSION = 'v9.44';        // v9.44: 녹음 준비 화면 — 세로 한 줄(큰 케이 상반신 → 녹음 시작 → 긴 첨부 줄 두 개), 왼쪽/오른쪽 나란히 배치 폐기
   APP_VERSION = 'v9.47';        // v9.47: 녹음 준비 케이 틀 — 폭을 꽉 채운 납작한 가로 틀 대신 가로:세로 1.15:1 이하로(낮은 화면에서도 얼굴이 안 잘림) · 낮은 화면은 첨부 줄 둘을 한 줄에 나란히
   APP_VERSION = 'v9.48';        // v9.48: 꾸미기 「옷」 탭의 [▶ 패션쇼] 단추를 숨김(스위치 KFS_UI='off' — 코드·자산은 그대로) · 옷 갈아입기·옷장·인사는 영향 없음
+  APP_VERSION = 'v9.49';        // v9.49: 업무 화면(녹음 준비·녹음 중·건강·회의록·작업 현황·보내는 중·명함 찾는 중·오류 안내)의 케이 그림·영상을 모두 숨기고 안내 글만 남김(스위치 KSCENES_UI='off' — js/k-scene.js · 되살리려면 'on')
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
