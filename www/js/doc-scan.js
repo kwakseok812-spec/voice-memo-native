@@ -585,14 +585,14 @@
     '.dsc-it{font-size:12px;font-weight:700}',
     '.dsc-skip{margin-top:10px;width:100%}',
     '.dsc-qrow{margin-top:6px}',
-    '.dsc-stage{position:relative;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;background:#222;border-radius:6px}',
+    '.dsc-stage{position:relative;margin:0 auto 28px;touch-action:pan-y;user-select:none;-webkit-user-select:none;background:#222;border-radius:6px}',
     '.dsc-stage-img{display:block;border-radius:6px}',
     '.dsc-svg{position:absolute;left:0;top:0;pointer-events:none}',
     '.dsc-hd{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;touch-action:none;cursor:grab;display:flex;align-items:center;justify-content:center}',
     '.dsc-hd i{display:block;width:24px;height:24px;border-radius:50%;background:#3B82F6;border:3px solid #fff;box-shadow:0 0 0 1.5px #1e3a8a,0 2px 6px rgba(0,0,0,.45)}',
     '.dsc-sph i{background:#F59E0B;border-radius:8px;width:20px;height:34px}',
     '.dsc-loupe{position:absolute;width:96px;height:96px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.55);pointer-events:none;z-index:5;background:#fff}',
-    '.dsc-foot4 .dsc-btn{padding:8px 4px;font-size:15px}',
+    '.dsc-foot4{gap:6px}','.dsc-foot4 .dsc-btn{padding:8px 2px;font-size:15px;white-space:nowrap;flex:1 1 0;min-width:0;justify-content:center}','@media (max-width:370px){.dsc-foot4 .dsc-btn{font-size:14px}}',
     '.dsc-spbtn{align-self:flex-start}',
     '.dsc-sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:var(--bg1,#fff);border-top:1px solid var(--glass-b2,#cbd2e6);border-radius:18px 18px 0 0;padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 14px);display:flex;flex-direction:column;gap:10px;box-shadow:0 -8px 28px rgba(0,0,0,.3);max-height:80%;overflow:auto}',
     '.dsc-sheet-t{font-size:18px}',
@@ -1188,7 +1188,11 @@
     var ed = S.ed;
     setTop(ed.rcpt ? '모서리 조정 · 영수증' : '자르기 · ' + (S.pages.map(function (q) { return q.id; }).indexOf(ed.id) + 1) + '쪽', function () { if (S.busy) return; leaveEdit(); });
     var availW = Math.min(S.body.clientWidth - 28 || 340, 560), availH = Math.max(240, (window.innerHeight || 700) - 330);
-    if (ed.rcpt) availH = Math.max(availH, Math.round((window.innerHeight || 700) * 1.4));   // v9.50: 길쭉한 영수증은 화면보다 길게 보여 주고 위아래로 밀어 가며 맞춘다(점 끌기는 화면을 밀지 않는다: touch-action none)
+    if (ed.rcpt) {                                       // v9.52: 사진이 화면에 통째로 들어오면(너무 작아지지 않는 한) 스크롤 없이 한눈에, 아니면 v9.50 처럼 길게 보여 주고 손가락으로 밀어 내린다
+      var bodyH = (S.body.clientHeight || ((window.innerHeight || 700) - 70)) - 260, wideH = Math.max(availH, Math.round((window.innerHeight || 700) * 1.4));
+      var scFit = Math.min(availW / ed.ow, bodyH / ed.oh), scWide = Math.min(availW / ed.ow, wideH / ed.oh);
+      availH = (scFit >= scWide * 0.6) ? Math.max(120, bodyH) : wideH;
+    }   // v9.50: 길쭉한 영수증은 화면보다 길게 보여 주고 위아래로 밀어 가며 맞춘다(점 끌기는 화면을 밀지 않는다: touch-action none)
     var sc = Math.min(availW / ed.ow, availH / ed.oh), dw = Math.round(ed.ow * sc), dh = Math.round(ed.oh * sc);
     if (ed.rec && ed.rec.rot) col.appendChild(h('div', 'dsc-sub', '돌리기 전 원본 방향으로 보여 드립니다.'));   // O-0586
     col.appendChild(h('div', 'dsc-sub', ed.rcpt ? '네 모서리의 둥근 점을 손가락으로 끌어 영수증 테두리에 맞춘 뒤 [적용]을 누르세요.' + (dh > (window.innerHeight || 700) - 330 ? ' 사진이 길면 점이 없는 곳을 밀어 위아래로 움직이세요.' : '') : '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르세요.'));
