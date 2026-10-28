@@ -262,6 +262,11 @@
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
   // v9.4: 홈이 보일 때만 html.home-on — 폴드 펼침(넓은 화면)에서 홈만 2단으로 넓힌다(다른 화면 폭은 그대로).
+  /* v9.54(O-0640) 홈 「소장 케이 채팅」 글자 줄 스위치 — 'on' = 홈 케이 카드의 사진을 걷고 가로 글자 줄로, 「케이 설정」은 맨 위 [글자 크기][낮/밤] 곁 단추로(홈에서만 보임)
+   *   'off' = v9.53 그대로(사진 카드 + 카드 오른쪽 위 「옷·설정」). 화면 규칙은 styles.css 끝 v9.54 묶음(<html data-homebar="off"> 이면 모두 빠진다). */
+  var HOME_CHAT_BAR = 'on';
+  var HOME_BAR_ON = (HOME_CHAT_BAR !== 'off');
+  try { if (!HOME_BAR_ON) document.documentElement.setAttribute('data-homebar', 'off'); } catch (e) {}
   function syncHomeOn() { try { document.documentElement.classList.toggle('home-on', isOpen(homeView)); } catch (e) {} }
   /* v9.4 홈 큰 카드의 인사 한 줄 — 때에 맞는 인사(k-intro.js 의 GREETINGS 목록을 그대로 쓴다).
    *   앱을 켠 뒤 한 번 정하고(시작 인사에 방금 나온 말은 뺀다), 그 뒤로는 시간대(아침 04~11 · 낮 11~17 · 저녁 17~04)가 바뀐 채
@@ -3365,6 +3370,7 @@
   APP_VERSION = 'v9.51';        // v9.51: 영수증 보내기 전에 결제 카드(보직자 운영비 9801 / 교내 연구비 8837)와 메모 한 줄을 고른다 — 카드는 확인 카드 「어느 앱에」 기본값(PC 가 끝자리를 못 읽었을 때), 읽은 끝자리와 다르면 경고, 메모는 확인 카드 「설명」 기본값 · 앱 안에서만(PC·서버 변경 없음) · 스위치 RECEIPT_PICK · versionCode 95
   APP_VERSION = 'v9.52';        // v9.52: 모서리 조정 — 접은 폴드(좁고 긴 화면)에서 긴 영수증 사진 아랫부분이 손가락으로 닿지 않던 것 수리: 사진 위를 위아래로 밀면 화면이 움직이고(점 끌기는 그대로 화면을 안 밂), 영수증은 화면에 통째로 들어올 수 있으면 스크롤 없이 한눈에 · 하단 단추 네 개 한 줄 · versionCode 96
   APP_VERSION = 'v9.53';        // v9.53(O-0626): 회의록 상세 「맞춤 정리본 받기」 — 스위치 MTG_OUT_ON(app.js), 코드 js/mtg-out.js · css/mtg-out.css · versionCode 97
+  APP_VERSION = 'v9.54';        // v9.54(O-0640): 홈 「소장 케이 채팅」 — 케이 사진 카드를 가로 글자 줄로, 「케이 설정」(옷·캐릭터)을 맨 위 글자 크기·낮/밤 곁으로 — 스위치 HOME_CHAT_BAR(app.js · 'off' 면 v9.53 모습) · 서버·SQL 변경 없음 · versionCode 98
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -4269,6 +4275,7 @@
     var wrap = $('kBubbleWrap'), btn = $('kBubble'); if (!wrap || !btn) return;
     var n = chatUnseen > 0 ? chatUnseen : 0;
     var vbtn = $('btnVoiceChat');
+    try { var bg = $('khBarBadge'); if (bg) { bg.hidden = !n; bg.textContent = n > 99 ? '99+' : String(n || ''); } } catch (e) {}   // v9.54: 글자 줄의 안 읽은 건수
     var side = wrap.parentNode;                                   // v9.4 .kh-side — 말풍선이 뜨면 그 위의 「오늘 보고 한 줄」은 내린다
     if (!n) {
       clearTimeout(kBubbleSettleT);
@@ -7149,6 +7156,11 @@
       KChar.ready.then(paintKwHomeRow); KChar.onChange(paintKwHomeRow);
     }
   }
+  /* v9.54(O-0640) 케이 설정 = 맨 위 [글자 크기][낮/밤] 곁 단추(홈에서만 보임). 같은 일을 하는 홈 카드의 「옷·설정」은 CSS 로 감춘다(진입점은 하나) */
+  if (HOME_BAR_ON) {
+    if ($('kSetBtn')) $('kSetBtn').addEventListener('click', function () { if (isOpen($('kWardrobeView'))) return; openKWardrobe(); });
+    try { var kph = $('kProfHint'); if (kph) kph.textContent = '옷·설정은 홈 화면 맨 위의 [케이 설정] 단추에서 바꿀 수 있습니다.'; } catch (e) {}
+  }
   /* (O-0471) 옷 목록을 내려도 「지금 모습」(상반신 + 전신)이 따라온다 — js/k-wardrobe-follow.js. 여기서는 켜기만 한다(화면이 열리고 닫히는 것 · 탭 · 옷 바뀜은 그 파일이 스스로 지켜본다).
    *   KW_FOLLOW       'dock' = 내리면 위 사진이 줄어들며 [뒤로] 줄 밑에 붙는다 · 'off' = 예전 그대로(아래 세 값도 함께 꺼진다)
    *   KW_FOLLOW_SIZE  붙은 사진의 높이 = 화면 높이 × 이 값(0.20 → 0.25 로 올리면 사진이 커지고 목록 자리가 그만큼 준다)
@@ -7176,7 +7188,7 @@
   function openKWardrobe() {
     kwFrom = isOpen(chatView) ? 'chat' : 'home';
     var kmFrom = null;                                // v9.9(O-0451): 홈에서 열 때 — 바꾸기 직전의 홈 카드 자리·모습을 떠 둔다(효과용 · 화면은 아래에서 바로 바뀐다)
-    try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab($('kHero')); } catch (e) {}
+    try { if (kwFrom === 'home' && window.KMotion && KMotion.wardrobeGrab) kmFrom = KMotion.wardrobeGrab(HOME_BAR_ON ? null : $('kHero')); } catch (e) {}
     try { kwOutfitAtOpen = window.KChar ? KChar.outfit().id : ''; } catch (e) { kwOutfitAtOpen = ''; }
     setKwTab('outfit');
     openScreen($('kWardrobeView'));
@@ -7204,7 +7216,7 @@
     try { if (REC_ROAM_V2 && isRecording && kmFrom && recIndicator && recIndicator.style.display !== 'none' && kmFrom.t < recIndicator.getBoundingClientRect().bottom) kmFrom = null; } catch (e) {}
     try { changed = !!(window.KChar && kwOutfitAtOpen && KChar.outfit().id !== kwOutfitAtOpen); } catch (e) {}
     showHome(); setStatus('대기 중', 'idle');
-    try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, $('kHero'), changed); } catch (e) {}
+    try { if (window.KMotion && KMotion.wardrobeClose) KMotion.wardrobeClose(kmFrom, HOME_BAR_ON ? null : $('kHero'), changed); } catch (e) {}
   }
   /* v9.5: 같은 묶음끼리 이어지게 모은다(묶음 순서 = 처음 나온 순서, 묶음 안 순서는 그대로) — 서버에서 온 새 옷도 자기 묶음 끝에 붙는다.
    *   v9.19(O-0557): 옷장 화면과 패션쇼가 같은 순서를 쓰도록 함수 하나로 뺐다(순서 규칙은 예전 그대로). cats = 묶음별 벌 수 · catOrder = 묶음 순서 */
@@ -7936,7 +7948,7 @@
     if (document.hidden || !(inW || inH)) return;     // 채팅 · 건강 · 녹음 등 다른 화면에서는 조용히 바뀐다
     try { if (inW && window.KMotion && KMotion.outfitSwap) KMotion.outfitSwap($('kwHero'), g); } catch (e) {}
     try {                                             // 홈: 꾸미기에서 새 옷으로 돌아왔을 때와 같은 반짝임 한 번(움직임을 쉬는 때는 없음)
-      var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm())) ? $('kHero') : null;
+      var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm()) && !HOME_BAR_ON) ? $('kHero') : null;
       if (hh) { KMotion.shine(hh, hh.querySelector('.kh-side')); KMotion.sparkle(hh, KMotion.cnt ? KMotion.cnt(10) : 10); }
     } catch (e) {}
     if (OUTFIT_SYNC_NOTE !== 'line' || readWithin(ofNoteAt, OF_NOTE_GAP_MS)) return;
@@ -8115,7 +8127,7 @@
     if (!early && !document.hidden) {
       try { if (inW && window.KMotion && KMotion.outfitSwap) KMotion.outfitSwap($('kwHero'), ghost === true ? null : ghost); } catch (e) {}
       try {
-        var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm())) ? $('kHero') : null;
+        var hh = (!inW && inH && window.KMotion && KMotion.shine && KMotion.sparkle && !(KMotion.calm && KMotion.calm()) && !HOME_BAR_ON) ? $('kHero') : null;
         if (hh) { KMotion.shine(hh, hh.querySelector('.kh-side')); KMotion.sparkle(hh, KMotion.cnt ? KMotion.cnt(10) : 10); }
       } catch (e) {}
     }

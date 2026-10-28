@@ -107,6 +107,8 @@
     <div class="top-right">
       <!-- 상단 "대기 중" 상태 표시는 2026-09-20 대표님 지시로 제거(무슨 뜻인지 알기 어렵고 화면만 복잡) -->
       <!-- v8.4(O-0162) 글자 크기 4단계(작게·보통·크게·아주 크게) — 누르면 고르기 창 -->
+      <!-- v9.54(O-0640): 케이 설정(옷·캐릭터 고르기) — 글자 크기·낮/밤 바로 옆 한 묶음(스위치 HOME_CHAT_BAR 가 'off' 면 숨고 홈 케이 카드의 「옷·설정」으로 돌아간다) -->
+      <button class="iconbtn kdressbtn" id="kSetBtn" aria-label="케이 설정 — 옷·캐릭터 고르기" title="케이 설정"><svg aria-hidden="true"><use href="#i-hanger"/></svg><span class="kdb-tx">케이 설정</span></button>
       <button class="iconbtn fsbtn" id="fontBtn" aria-label="글자 크기" title="글자 크기"><span class="fsbtn-a">가</span><span class="fsbtn-b">가</span></button>
       <button class="iconbtn" id="themeToggle" aria-label="화면 밝기 전환" title="다크/라이트 전환"><svg class="ic-moon"><use href="#i-moon"/></svg><svg class="ic-sun"><use href="#i-sun"/></svg></button>
     </div>
@@ -129,6 +131,8 @@
           <div class="orbwrap kh-k">
             <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
               <span class="core kcore"><span class="kface wide" data-kface="home" data-kstill data-khd aria-hidden="true"></span></span>
+              <!-- v9.54(O-0640): 사진 없는 글자 줄(스위치 HOME_CHAT_BAR). 켜져 있으면 위 사진(.core)은 숨고 이 줄만 보인다. 누르면 같은 단추(#btnVoiceChat)라 동작은 그대로, 안 읽은 건수는 app.js renderKBubble 이 배지에 적는다 -->
+              <span class="khbar" aria-hidden="true"><span class="khbar-ic"><svg><use href="#i-chat"/></svg></span><span class="khbar-tx"><b>소장 케이 채팅</b><small>무엇이든 편하게 말씀하세요</small></span><span class="khbar-badge" id="khBarBadge" hidden></span><svg class="khbar-go"><use href="#i-chev-r"/></svg></span>
             </button>
             <div class="orblabel">소장 K</div>
           </div>
