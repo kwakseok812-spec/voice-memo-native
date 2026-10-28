@@ -149,6 +149,7 @@
    * 쪽 하나 = 원본(orig, 긴 변 2400·JPEG 0.85) + 처리 결과(out, 긴 변 2000·0.80). 처리는 DocScanCV(vendor/opencv.js) 가 한다.
    * 이 구역은 «원본 그림(canvas) → 결과 그림» 순수 함수와 흑백·회색용 1채널 JPEG 만들기. 화면과 저장소는 모른다. */
   var DSC_ORIG_SIDE = 2400, DSC_OUT_SIDE = 2000, DSC_SPREAD_SIDE = 2400;
+  var DSC_RCPT_EDIT = 'on';   // v9.50: 영수증 미리보기에서 «모서리 조정»(문서 스캔의 자르기 화면 rEdit 재사용). 'off' 면 v9.49 와 같음
   var DSC_QUALITY = {                              // PDF 화질: side=긴 변, q=JPEG 품질. 예상 용량은 estBytes 가 쪽 크기로 어림한다
     normal: { side: 2000, q: 0.80, label: '보통(권장)' },
     high: { side: 2400, q: 0.88, label: '높음' },
@@ -859,7 +860,7 @@
     S.body.textContent = ''; clearFoot();
     var col = h('div', 'dsc-col'); S.body.appendChild(col);
     if (S.prog) { setTop(RCP() ? '영수증 스캔' : '사진 정리'); col.appendChild(progCard()); paintProgress(); return; }
-    if (RCP()) { (S.screen === 'rcptprev' && S.rcpt ? rRcptPrev : rRcptStart)(col); return; }   // v9.26: 영수증 한 장(쪽 저장소를 쓰지 않는다)
+    if (RCP()) { (S.screen === 'edit' && S.ed ? rEdit : S.screen === 'rcptprev' && S.rcpt ? rRcptPrev : rRcptStart)(col); return; }   // v9.26: 영수증 한 장(쪽 저장소를 쓰지 않는다)
     ({ start: rStart, list: rList, name: rName, result: rResult, edit: S.ed ? rEdit : rList, pv: S.pv ? rPv : rList }[S.screen] || rStart)(col);
   }
   function memNote(col) { if (S.mem) col.appendChild(h('div', 'dsc-warn', '이 기기에서는 임시 저장을 쓸 수 없어, 앱을 닫으면 사라집니다.')); }
@@ -889,7 +890,7 @@
       if (S !== mine || !pgs || !pgs.length) return;
       var pg = pgs[0], blob = pg.out || pg.blob;
       rcptFree();
-      S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, url: URL.createObjectURL(blob), extra: !!extra };
+      S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, cr: pg.corners || null, cand: pg.cand || null, orig: pg.orig || null, ow: pg.ow, oh: pg.oh, url: URL.createObjectURL(blob), extra: !!extra };
       relFile(file);
       S.busy = false; S.prog = null; S.screen = 'rcptprev'; render();
       if (extra) toast('고르신 사진 중 첫 장만 씁니다.', null, null, 4000);
@@ -913,6 +914,37 @@
     S.doneCalled = true; closeUi(false, false);
     if (cb) cb(file, info);
   }
+  /* v9.50 영수증 모서리 조정 — 문서 스캔의 자르기 화면(rEdit·editAuto·applyEdit 의 모서리 끌기·확대경·전체·자동 찾기)을 그대로 쓴다.
+   * 쪽 저장소는 쓰지 않고, 처음 자동으로 찾은 모서리(없으면 후보, 그것도 없으면 사진 전체)를 시작점으로 보여 준다. 적용하면 S.rcpt 만 새로 만든다. */
+  function rcptEditOk() { return DSC_RCPT_EDIT === 'on' && !!(S && S.rcpt && S.rcpt.orig && cvUsable()); }
+  function openRcptEdit() {
+    if (!S || S.busy || !rcptEditOk()) return;
+    var mine = S, r = S.rcpt; S.busy = true;
+    prepCanvas(r.orig, 100000).then(function (cvs) {
+      if (S !== mine || S.rcpt !== r) { freeCv(cvs); return; }
+      var ow = cvs.width, oh = cvs.height;
+      var cr = r.cr ? r.cr.map(cp) : (r.cand ? r.cand.map(cp) : fullQuad(ow, oh));
+      S.ed = { rcpt: true, id: 0, rec: null, cvs: cvs, ow: ow, oh: oh, corners: cr, hasSplit: false, newSplit: false, pos: 0.5, side: null };
+      S.busy = false; S.screen = 'edit'; render();
+    }).catch(function () { if (S === mine) { S.busy = false; toast('모서리 조정 화면을 열지 못했습니다.'); } });
+  }
+  function applyRcptEdit(ed, cr) {
+    var mine = S, r0 = S.rcpt; S.busy = true; toast('적용하는 중입니다…', null, null, 20000);
+    (async function () {
+      var corners = isFullQuad(cr, ed.ow, ed.oh) ? null : cr, flat = flatOf(ed.cvs, { corners: corners }, DSC_OUT_SIDE);
+      try {
+        if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주세요.');
+        var oc = finishOut(flat.flat, { split: null, rot: 0 }, 'doc', DSC_OUT_SIDE); await tick();
+        var w = oc.width, h2 = oc.height, blob = await encodeOut(oc, 'doc', 0.80); freeCv(oc);
+        if (S !== mine || S.rcpt !== r0) return;
+        rcptFree();
+        S.rcpt = { blob: blob, w: w, h: h2, how: 'manual', corners: !!corners, cr: corners, cand: r0.cand, orig: r0.orig, ow: ed.ow, oh: ed.oh, url: URL.createObjectURL(blob), extra: r0.extra };
+        hideToast(); leaveEdit(); toast('적용했습니다.');
+      } catch (e) {
+        if (S === mine) { S.busy = false; toast(storageMsg(e, '적용하지 못했습니다.')); }
+      } finally { if (flat.flat !== ed.cvs) freeCv(flat.flat); }
+    })();
+  }
   function rRcptStart(col) {
     setTop('영수증 스캔');
     col.appendChild(h('div', 'dsc-sub', '영수증을 평평한 곳에 놓고 한 장 찍으면 테두리를 찾아 반듯하게 펴 드립니다. 한 번에 한 장입니다.'));
@@ -925,8 +957,9 @@
     setTop('영수증 스캔', function () { rcptFree(); S.rcpt = null; S.screen = 'start'; render(); });
     var r = S.rcpt, c = h('div', 'dsc-card dsc-item');
     var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진'; c.appendChild(im);
-    c.appendChild(h('div', 'dsc-sub', (r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
+    c.appendChild(h('div', 'dsc-sub', (r.how === 'manual' ? '직접 맞춘 모서리로 펴고 보정했습니다' : r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
     col.appendChild(c);
+    if (rcptEditOk()) col.appendChild(h('button', 'dsc-btn dsc-big', '✂ 모서리 조정', openRcptEdit));
     col.appendChild(h('button', 'dsc-btn dsc-big', '📷 다시 찍기', function () { rcptShoot('camera'); }));
     col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 불러오기', rcptGallery));
     foot([h('button', 'dsc-btn dsc-pri', '이 사진 사용', rcptUse)]);
@@ -1130,9 +1163,10 @@
   function fullQuad(w, h) { return [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]; }
   function leaveEdit(toPv) {                        // v9.26: 미리보기에서 들어왔거나 적용을 마쳤으면 그 쪽의 미리보기로(스위치 on 일 때)
     if (!S) return;
-    var id = S.ed ? S.ed.id : null, via = !!(S.ed && S.ed.viaPv);
+    var id = S.ed ? S.ed.id : null, via = !!(S.ed && S.ed.viaPv), wasRc = !!(S.ed && S.ed.rcpt);
     if (S.ed) { freeCv(S.ed.cvs); S.ed = null; }
     S.busy = false;
+    if (wasRc) { S.screen = 'rcptprev'; render(); return; }   // v9.50: 영수증 모서리 조정 → 영수증 미리보기로
     if (pvOn() && id != null && (via || toPv) && pvIndex(id) >= 0) return openPv(id);
     S.screen = 'list'; render();
   }
@@ -1152,11 +1186,12 @@
   }
   function rEdit(col) {
     var ed = S.ed;
-    setTop('자르기 · ' + (S.pages.map(function (q) { return q.id; }).indexOf(ed.id) + 1) + '쪽', function () { if (S.busy) return; leaveEdit(); });
+    setTop(ed.rcpt ? '모서리 조정 · 영수증' : '자르기 · ' + (S.pages.map(function (q) { return q.id; }).indexOf(ed.id) + 1) + '쪽', function () { if (S.busy) return; leaveEdit(); });
     var availW = Math.min(S.body.clientWidth - 28 || 340, 560), availH = Math.max(240, (window.innerHeight || 700) - 330);
+    if (ed.rcpt) availH = Math.max(availH, Math.round((window.innerHeight || 700) * 1.4));   // v9.50: 길쭉한 영수증은 화면보다 길게 보여 주고 위아래로 밀어 가며 맞춘다(점 끌기는 화면을 밀지 않는다: touch-action none)
     var sc = Math.min(availW / ed.ow, availH / ed.oh), dw = Math.round(ed.ow * sc), dh = Math.round(ed.oh * sc);
     if (ed.rec && ed.rec.rot) col.appendChild(h('div', 'dsc-sub', '돌리기 전 원본 방향으로 보여 드립니다.'));   // O-0586
-    col.appendChild(h('div', 'dsc-sub', '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르세요.'));
+    col.appendChild(h('div', 'dsc-sub', ed.rcpt ? '네 모서리의 둥근 점을 손가락으로 끌어 영수증 테두리에 맞춘 뒤 [적용]을 누르세요.' + (dh > (window.innerHeight || 700) - 330 ? ' 사진이 길면 점이 없는 곳을 밀어 위아래로 움직이세요.' : '') : '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르세요.'));
     var stage = h('div', 'dsc-stage'); stage.style.width = dw + 'px'; stage.style.height = dh + 'px';
     ed.cvs.style.width = dw + 'px'; ed.cvs.style.height = dh + 'px'; ed.cvs.className = 'dsc-stage-img'; stage.appendChild(ed.cvs);
     var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
@@ -1232,7 +1267,7 @@
       ed.hasSplit = true; ed.newSplit = true; ed.side = S.set && S.set.rtl ? 'R' : 'L'; makeSplitHandle(); place(); paintInfo(); spBtn.style.display = 'none';
     });
     if (ed.hasSplit) spBtn.style.display = 'none';
-    col.appendChild(spBtn);
+    if (!ed.rcpt) col.appendChild(spBtn);   // v9.50: 영수증은 두 쪽 나누기 없음
     place();
     foot([
       h('button', 'dsc-btn', '자동 찾기', function () { editAuto(place); }),
@@ -1257,6 +1292,7 @@
     var ed = S && S.ed, mine = S; if (!ed || S.busy) return;
     var cr = ed.corners.map(function (q) { return { x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 }; });
     if (!quadValid(cr)) return toast('네 점이 꼬여 있습니다. 점을 다시 맞춰 주세요.');
+    if (ed.rcpt) return applyRcptEdit(ed, cr);
     if (ed.newSplit && S.pages.length >= DSC_MAX_PAGES) return toast('최대 ' + DSC_MAX_PAGES + '쪽까지입니다.');
     S.busy = true; toast('적용하는 중입니다…', null, null, 20000);
     (async function () {
