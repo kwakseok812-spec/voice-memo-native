@@ -2424,3 +2424,24 @@ html[data-homebar="off"] .kdressbtn{display:none}
 html:not([data-homebar="off"]) .kh-hero #btnVoiceChat{justify-content:center}
 html:not([data-homebar="off"]) .khbar-tx{flex:0 1 auto}
 html:not([data-homebar="off"]) .khbar-go{display:none}
+
+/* ============================================================================
+   v9.56 (O-0640) 홈 순서 — ① 오늘 한눈에 ② 회의 녹음 ③ 소장 케이 채팅(인사말·보고 한 줄·말풍선 포함 한 덩어리) ④ 도구·진행 중인 메모(예전 순서 그대로)
+   스위치 HOME_ORDER(app.js) 'off' 면 app.js 가 <html data-homeorder="off"> 를 달아 v9.55 순서 그대로. DOM 은 그대로이고 CSS order 로만 바꾼다(진입점 추가 없음).
+   · 좁은 화면(699px 이하): 홈을 한 줄 쌓기(flex)로, 왼쪽·오른쪽 묶음은 풀어 한 줄로 섞는다.
+   · 넓은 화면(폴드 펼침, 2단): 왼쪽 열 = 회의 녹음 → 소장 케이 채팅, 오른쪽 열 = 오늘 한눈에 → 도구(오른쪽 열 순서는 예전 그대로).
+   ============================================================================ */
+@media (max-width:699px){
+  html:not([data-homeorder="off"]) #homeView{display:flex;flex-direction:column}
+  html:not([data-homeorder="off"]) #homeView > #banner{order:0}
+  html:not([data-homeorder="off"]) #homeView > .kh-left,html:not([data-homeorder="off"]) #homeView > .kh-right{display:contents}
+  html:not([data-homeorder="off"]) .kh-right > *{order:4}
+  html:not([data-homeorder="off"]) .kh-right > #todayCard{order:1;margin-top:8px}
+  html:not([data-homeorder="off"]) .kh-left > .orbrow{order:2}
+  html:not([data-homeorder="off"]) .kh-left > .kh-hero{order:3;margin-top:14px}
+}
+@media (min-width:700px){
+  html.home-on:not([data-homeorder="off"]) .kh-left{display:flex;flex-direction:column}
+  html.home-on:not([data-homeorder="off"]) .kh-left > .orbrow{order:0;margin-top:0}
+  html.home-on:not([data-homeorder="off"]) .kh-left > .kh-hero{order:1;margin-top:16px}
+}

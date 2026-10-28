@@ -266,6 +266,8 @@
    *   'off' = v9.53 그대로(사진 카드 + 카드 오른쪽 위 「옷·설정」). 화면 규칙은 styles.css 끝 v9.54 묶음(<html data-homebar="off"> 이면 모두 빠진다). */
   var HOME_CHAT_BAR = 'on';
   var HOME_BAR_ON = (HOME_CHAT_BAR !== 'off');
+  var HOME_ORDER = 'on';      // v9.56(O-0640): 홈 순서 오늘 한눈에 → 회의 녹음 → 소장 케이 채팅 · 'off' = v9.55 순서(styles.css 끝 v9.56 묶음)
+  try { if (HOME_ORDER === 'off') document.documentElement.setAttribute('data-homeorder', 'off'); } catch (e) {}
   try { if (!HOME_BAR_ON) document.documentElement.setAttribute('data-homebar', 'off'); } catch (e) {}
   function syncHomeOn() { try { document.documentElement.classList.toggle('home-on', isOpen(homeView)); } catch (e) {} }
   /* v9.4 홈 큰 카드의 인사 한 줄 — 때에 맞는 인사(k-intro.js 의 GREETINGS 목록을 그대로 쓴다).
@@ -3372,6 +3374,7 @@
   APP_VERSION = 'v9.53';        // v9.53(O-0626): 회의록 상세 「맞춤 정리본 받기」 — 스위치 MTG_OUT_ON(app.js), 코드 js/mtg-out.js · css/mtg-out.css · versionCode 97
   APP_VERSION = 'v9.54';        // v9.54(O-0640): 홈 「소장 케이 채팅」 — 케이 사진 카드를 가로 글자 줄로, 「케이 설정」(옷·캐릭터)을 맨 위 글자 크기·낮/밤 곁으로 — 스위치 HOME_CHAT_BAR(app.js · 'off' 면 v9.53 모습) · 서버·SQL 변경 없음 · versionCode 98
   APP_VERSION = 'v9.55';        // v9.55(O-0640): 홈 「소장 케이 채팅」 줄도 아이콘+글자를 줄 가운데로(회의 녹음 줄처럼) · versionCode 99
+  APP_VERSION = 'v9.56';        // v9.56(O-0640): 홈 순서 — 오늘 한눈에 → 회의 녹음 → 소장 케이 채팅(인사말·말풍선 함께) → 도구 · 스위치 HOME_ORDER · versionCode 100
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
