@@ -2419,3 +2419,8 @@ html[data-homebar="off"] .kdressbtn{display:none}
   html:not([data-homebar="off"]) .brand{font-size:18px;gap:6px}
   html:not([data-homebar="off"]) .brand .mark{display:none}
 }
+
+/* v9.55(O-0640 추가): 홈 «소장 케이 채팅» 줄도 «회의 녹음» 줄처럼 아이콘+글자 묶음을 줄 가운데에 모은다. 안 읽은 건수 배지는 글자 바로 오른쪽(묶음 안), 오른쪽 화살표는 뺀다(녹음 줄에 없음) */
+html:not([data-homebar="off"]) .kh-hero #btnVoiceChat{justify-content:center}
+html:not([data-homebar="off"]) .khbar-tx{flex:0 1 auto}
+html:not([data-homebar="off"]) .khbar-go{display:none}
