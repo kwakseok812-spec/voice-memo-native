@@ -109,6 +109,36 @@
   /* v9.32 영수증 여러 장 · 「맞나요?」 확인 말풍선 — RECEIPT_MULTI 'off' 면 영수증은 한 장만(v9.31 과 같음), RECEIPT_ACK 'off' 면 PC 가 보낸 확인 단추를 그리지 않고 글만 보인다.
    *   RECEIPT_MULTI_MAX 는 한 번에 보내는 장수(PC 계약과 같은 값 10). */
   var RECEIPT_MULTI = 'on', RECEIPT_ACK = 'on', RECEIPT_MULTI_MAX = 10;
+  /* v9.51 영수증 보내기 전 «결제 카드»·«메모» — 앱 안에서만 쓴다(PC·서버 변경 없음). 고른 값은 이 기기의 기록(card_pick·memo_pick)에 붙여 두었다가,
+   * PC 가 읽은 뒤 열리는 확인 카드의 「어느 앱에」 기본값(카드 끝자리를 못 읽었을 때)과 「설명」 기본값으로만 쓴다. 'off' 면 v9.50 과 같음 */
+  var RECEIPT_PICK = 'on';
+  var RP_CARDS = [{ v: '9801', app: 'opex', t: '보직자 운영비 카드 9801' }, { v: '8837', app: 'research', t: '교내 연구비 카드 8837' }];
+  var RP = { card: '', memo: '' };
+  try { var _rc = localStorage.getItem('smart_rcpt_card'); if (_rc === '9801' || _rc === '8837') RP.card = _rc; } catch (e) {}
+  function rpOn() { return RECEIPT_PICK === 'on' && SCAN_HUB === 'on'; }
+  function rpApp(card) { for (var i = 0; i < RP_CARDS.length; i++) if (RP_CARDS[i].v === card) return RP_CARDS[i].app; return ''; }
+  function rpFields() { return rpOn() ? { card_pick: RP.card || '', memo_pick: String(RP.memo || '').trim() } : {}; }
+  function rpHtml() {
+    return '<div class="scan-pick"><div class="label">어느 카드로 결제하셨나요? <span class="hint">(선택 · 한 번 누르면 기억합니다)</span></div><div class="scan-chips" data-rp-chips>' +
+      RP_CARDS.map(function (c) { return '<button type="button" class="chip hchip scan-chip' + (RP.card === c.v ? ' on' : '') + '" data-rp-card="' + c.v + '" aria-pressed="' + (RP.card === c.v) + '">' + c.t + '</button>'; }).join('') + '</div>' +
+      '<div class="label">메모 <span class="hint">(선택 · 사용 목적 등 20자 이내 · 개인정보는 적지 마세요)</span></div>' +
+      '<div class="input filled"><input type="text" data-rp-memo maxlength="20" autocomplete="off" placeholder="예: 연구 회의 간식" value="' + esc(RP.memo) + '"></div></div>';
+  }
+  function rpBind(root) {          // root 안의 카드 칩·메모 칸을 묶는다(한 장 패널과 여러 장 화면이 같은 함수 하나)
+    if (!root) return;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rp-card]'), function (b) {
+      b.addEventListener('click', function () {
+        var v = b.getAttribute('data-rp-card'); RP.card = RP.card === v ? '' : v;
+        try { localStorage.setItem('smart_rcpt_card', RP.card); } catch (e) {}
+        Array.prototype.forEach.call(root.querySelectorAll('[data-rp-card]'), function (x) { var on = x.getAttribute('data-rp-card') === RP.card; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+      });
+    });
+    var m = root.querySelector('[data-rp-memo]');
+    if (m) {
+      m.addEventListener('input', function () { RP.memo = m.value; });
+      m.addEventListener('focus', function () { setTimeout(function () { try { m.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 350); });
+    }
+  }
   var rcb = null, rcbReturn = false, SA_KEY = 'smart_scanack', SA_INFO = 'smart_scanack_info', scanFixDraft = {};
   /* 확대·축소(줌): 'on' = 두 손가락 핀치·줌 막대·빠른 배율 단추 / 'off' = 줌 없이 예전 카메라 화면(v9.29)과 같음. 새 앱(줌이 든 버전)에서만 효과가 있다. */
   var SILENT_CAM_ZOOM = 'on';
@@ -1497,6 +1527,8 @@
     var pnote = '';
     if (pm.why === 'instr' || pd.why === 'instr' || pm.why === 'long' || pd.why === 'long') pnote = '읽은 글자를 사용처·설명에 쓸 수 없어 비워 두었습니다 · 직접 입력해 주십시오';
     else if (pm.why === 'chars' || pd.why === 'chars') pnote = '읽은 글자 중 쓸 수 없는 글자는 뺐습니다 · 내용을 확인해 주십시오';
+    if (rpOn() && e.card_pick && !app) app = rpApp(e.card_pick);                // v9.51: PC 가 카드 끝자리를 못 읽었으면 보내기 전에 고르신 카드가 기본
+    if (rpOn() && e.memo_pick) { var pk = scanPrefill(e.memo_pick); if (pk.v) { pd = { v: pk.v, why: '' }; } }   // v9.51: 보내기 전 메모 = 설명 기본값(기존 설명 칸 재사용)
     d = scanDraft[id] = {
       app: app, date: sc.date || '', amount: (sc.amount != null && sc.amount !== '') ? String(sc.amount) : '', merchant: pm.v, pnote: pnote,
       desc: pd.v,
@@ -1634,6 +1666,8 @@
       var why = scanLockWhy(sc, d), conf = sc.conf || {};
       var warns = (Array.isArray(sc.warnings) ? sc.warnings : []).map(function (w) { return '<div class="scan-warn">⚠ ' + esc(w) + '</div>'; }).join('');
       if (sc.dup_of) warns = '<div class="scan-warn">⚠ 이미 처리한 영수증과 같습니다</div>' + warns;
+      if (rpOn() && e.card_pick && /^\d{4}$/.test(String(sc.card_last4 || '')) && String(sc.card_last4) !== e.card_pick)      // v9.51: 고르신 카드와 영수증에서 읽은 끝자리가 다르면 분명히 알린다(앱 기본값은 영수증 쪽을 따른다)
+        warns = '<div class="scan-warn">⚠ 선택하신 카드(끝 ' + esc(e.card_pick) + ')와 영수증의 카드 끝자리(' + esc(String(sc.card_last4)) + ')가 다릅니다. 어느 앱에 넣을지 확인해 주십시오</div>' + warns;
       if (sc.last_error) warns = '<div class="scan-warn scan-reject">⚠ ' + esc(scanRejectWhy(sc.last_error)) + '</div>' + warns;
       var fields =
         scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date) || conf.date === 'low') +
@@ -2562,7 +2596,9 @@
     if (scan) {
       memo.scan = { type: 'receipt', v: 1 };
     }
-    HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind });
+    var hrec = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind };
+    if (scan) { var pf = rpFields(); if (pf.card_pick) hrec.card_pick = pf.card_pick; if (pf.memo_pick) hrec.memo_pick = pf.memo_pick; }
+    HistoryModule.add(hrec);
     renderHistory();
     openScreen(processing); setProcessing('⬆️ 올리는 중… (' + files.length + '개)', 'send', 'media');
     OfficeBridge.sendBatch(memo, files, function (done, total) {
@@ -2620,6 +2656,11 @@
       var t = now(); if ($('fileTitle')) $('fileTitle').value = '영수증 ' + t.date + ' ' + t.time;
       if ($('cardCheckWrap')) $('cardCheckWrap').style.display = 'none';
       if ($('isCard')) $('isCard').checked = false;
+    }
+    var rpx = $('rcptPick');                                  // v9.51: 보내기 전 카드·메모 (영수증 모드에서만)
+    if (rpx) {
+      if (pendingScan && rpOn()) { RP.memo = ''; rpx.innerHTML = rpHtml(); rpx.style.display = 'block'; rpBind(rpx); }
+      else { rpx.style.display = 'none'; rpx.innerHTML = ''; }
     }
   }
   // 영수증 등록 길(＋ 창 「영수증 등록」과 홈 「스캔」 창이 같이 쓴다) — 사진 한 장 고르기로 들어간다.
@@ -2827,6 +2868,7 @@
           return '<div class="rcb-th' + (calm ? '' : ' rcb-pop') + '"><img src="' + esc(x.url) + '" alt="' + (i + 1) + '번 영수증"><span class="rcb-no">' + (i + 1) + '</span>' +
             '<button type="button" class="rcb-x" data-rcb-x="' + i + '" aria-label="' + (i + 1) + '번 빼기">✕</button></div>';
         }).join('') + '</div>' +
+        (rpOn() ? '<div class="rcb-pick">' + rpHtml() + '<p class="rcb-sub">고른 카드와 메모는 이 장들에 모두 적용됩니다(메모는 확인 카드의 설명 기본값, 장마다 고칠 수 있습니다).</p></div>' : '') +
         '<div class="rcb-cnt">최대 ' + RECEIPT_MULTI_MAX + '장 · ' + n + '장 담김</div>' +
         '<div class="rcb-add">' + (n < RECEIPT_MULTI_MAX ? '<button type="button" class="btn ghost" data-rcb-more="pick">＋ 사진 더 고르기</button>' + (rcbCamOk() ? '<button type="button" class="btn ghost" data-rcb-more="cam">📷 더 찍기</button>' : '') : '') + '</div>' +
         '<div class="rcb-foot"><button type="button" class="btn primary rcb-send" data-rcb-send><svg><use href="#i-check"/></svg>' + n + '장 보내기</button></div>';
@@ -2844,7 +2886,7 @@
         }).join('') + '</div>' +
         '<p class="rcb-sub">읽은 줄을 누르면 확인 카드가 열립니다. 이 화면을 닫아도 읽기는 뒤에서 계속됩니다.</p>';
     }
-    body.innerHTML = h;
+    body.innerHTML = h; if (rcb.step === 'pick') rpBind(body.querySelector('.rcb-pick'));
     body.className = 'rcb-body' + (calm ? ' calm' : '');
   }
   function rcbSend() {
@@ -2860,7 +2902,7 @@
       var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
                    kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
       it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
-      HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }); renderHistory();
+      var hr2 = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }, pf2 = rpFields(); if (pf2.card_pick) hr2.card_pick = pf2.card_pick; if (pf2.memo_pick) hr2.memo_pick = pf2.memo_pick; HistoryModule.add(hr2); renderHistory();
       OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
         HistoryModule.update(memo.id, { status: 'processing' }); renderHistory();
         it.st = 'reading'; rcbRender(); next(k + 1);
@@ -2878,7 +2920,7 @@
     var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
                  kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
     it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
-    HistoryModule.add({ id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }); renderHistory();
+    var hr2 = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }, pf2 = rpFields(); if (pf2.card_pick) hr2.card_pick = pf2.card_pick; if (pf2.memo_pick) hr2.memo_pick = pf2.memo_pick; HistoryModule.add(hr2); renderHistory();
     OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
       HistoryModule.update(memo.id, { status: 'processing' }); renderHistory(); it.st = 'reading'; rcbRender(); rcbPollStart();
     }).catch(function (e) {
@@ -3311,6 +3353,7 @@
   APP_VERSION = 'v9.48';        // v9.48: 꾸미기 「옷」 탭의 [▶ 패션쇼] 단추를 숨김(스위치 KFS_UI='off' — 코드·자산은 그대로) · 옷 갈아입기·옷장·인사는 영향 없음
   APP_VERSION = 'v9.49';        // v9.49: 업무 화면(녹음 준비·녹음 중·건강·회의록·작업 현황·보내는 중·명함 찾는 중·오류 안내)의 케이 그림·영상을 모두 숨기고 안내 글만 남김(스위치 KSCENES_UI='off' — js/k-scene.js · 되살리려면 'on')
   APP_VERSION = 'v9.50';        // v9.50: 영수증 스캔에 «모서리 조정» — 영수증 미리보기에서 [✂ 모서리 조정]을 누르면 문서 스캔과 같은 자르기 화면(자동으로 찾은 모서리가 시작점, 네 점 끌기·확대경·전체·자동 찾기)이 열리고 [적용]하면 그 모서리로 다시 펴서 보정 · 스위치 doc-scan.js DSC_RCPT_EDIT 'on'/'off' · versionCode 94
+  APP_VERSION = 'v9.51';        // v9.51: 영수증 보내기 전에 결제 카드(보직자 운영비 9801 / 교내 연구비 8837)와 메모 한 줄을 고른다 — 카드는 확인 카드 「어느 앱에」 기본값(PC 가 끝자리를 못 읽었을 때), 읽은 끝자리와 다르면 경고, 메모는 확인 카드 「설명」 기본값 · 앱 안에서만(PC·서버 변경 없음) · 스위치 RECEIPT_PICK · versionCode 95
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).

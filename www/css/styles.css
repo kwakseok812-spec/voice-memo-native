@@ -2350,3 +2350,8 @@ html[data-style="light"] .kclipv{box-shadow:0 8px 16px rgba(30,41,99,.2)}
 .ksc.health.ksc-off .ksp p{white-space:normal}
 .ksc.hcheer.ksc-off{--kh:auto !important;position:fixed !important;display:block !important}
 .ksc-off-empty{margin:8px 0}
+
+/* v9.51 영수증 보내기 전 카드·메모 */
+#rcptPick .label,.rcb-pick .label{margin-top:12px}
+#rcptPick .scan-chips,.rcb-pick .scan-chips{margin:6px 0 4px}
+.rcb-pick{margin:10px 0;padding:2px 0 8px}
