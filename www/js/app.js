@@ -3192,6 +3192,7 @@
     if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하세요.<br>예: 홍길동, 셀트리온</div>';
     setSearchMsg('', '');
     if (searchInput) searchInput.value = '';
+    try { clReset(); } catch (e) {}   // O-0667 v9.58: 전체 명단·등록일별 상태도 함께 비움(연락처를 메모리에 남기지 않는다)
   }
   if ($('btnSearchToggle')) $('btnSearchToggle').addEventListener('click', function () {
     openScreen(searchPanel); clearSearch();
@@ -3201,6 +3202,7 @@
   function doSearch() {
     var q = (searchInput.value || '').trim();
     if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하세요.', 'err'); return; }
+    if (CL.mode !== 'search') clSetMode('search');   // O-0667: 명단 화면에서 글자를 넣고 [검색]을 누르면 「검색」 칸으로 넘어가 PC에 찾아 달라고 한다
     setSearchMsg('🔎 검색 중…', 'work'); searchResults.innerHTML = '';
     try { searchClip(); } catch (e) {}      // O-0616: 검색을 누른 순간에 찾아보는 케이 영상(준비되면 로딩 자리에 · 결과가 오면 바로 사라진다)
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
@@ -3224,13 +3226,13 @@
   if ($('searchGo')) $('searchGo').addEventListener('click', doSearch);
   if (searchInput) searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
 
-  function pollSearch(id, tok, onDone) {
+  function pollSearch(id, tok, onDone, onTimeout) {
     stopSearchPoll();   // 이전 검색 폴링이 남아 있으면 정리
     var started = Date.now();
     searchPollTimer = setInterval(function () {
       OfficeBridge.poll(id, tok).then(function (res) {
         if (res && res.status === 'done') { stopSearchPoll(); onDone(res); }
-        else if (Date.now() - started > 60000) { stopSearchPoll(); dropSearchClip(); setSearchMsg('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
+        else if (Date.now() - started > 60000) { stopSearchPoll(); dropSearchClip(); if (onTimeout) onTimeout(); else setSearchMsg('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
       }).catch(function () {});
     }, 2000);
   }
@@ -3273,21 +3275,341 @@
         var url = res.summary_json && res.summary_json.photo_url;
         btn.innerHTML = label; btn.disabled = false;
         if (url) showCardPhotoModal(url);
-        else setSearchMsg('사진을 찾지 못했습니다.', 'err');
+        else clMsg('사진을 찾지 못했습니다.');
       });
     }).catch(function () {
       btn.innerHTML = label; btn.disabled = false;
-      setSearchMsg('사진을 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.', 'err');
+      clMsg('사진을 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.');
     });
   }
   function showCardPhotoModal(url) {
     modalTitle.textContent = '명함 사진';
     modalBody.innerHTML = '<div class="cardphotowrap"><img src="' + esc(url) + '" alt="명함 사진" class="cardphotoimg"></div>' +
-      '<p class="savehint">닫으면 검색 결과로 돌아갑니다. 사진을 눌러 새 창에서 크게 볼 수 있습니다.</p>';
+      '<p class="savehint">닫으면 ' + (CL.mode !== 'search' ? '명단으로' : '검색 결과로') + ' 돌아갑니다. 사진을 눌러 새 창에서 크게 볼 수 있습니다.</p>';
     var im = modalBody.querySelector('.cardphotoimg');
     if (im) im.addEventListener('click', function () { window.open(url, '_blank'); });
     modal.style.display = 'flex';
   }
+
+  /* ===================== 명함 「전체 명단」 (v9.58, O-0667) =====================
+   * 이름도 기관도 생각이 안 날 때 명단을 훑어 찾는 길. 새 홈 단추 없이 「명함 검색」 화면 위쪽에 「검색 | 전체 명단」 스위치를 붙였다.
+   * 전체 명단은 «정렬» 한 줄로 여러 방식을 고른다: 기관 가나다순(기본) · 이름 가나다순 · 등록일 최신순 · 등록일 오래된순 · 분류별.
+   * 분류 칩(대학·업체·기타)과 입력창의 글자 걸러내기가 정렬과 함께 동작한다(「대학만 + 최신 등록순」, 「'바이오' + 기관순」).
+   * 자료 길: 검색과 같다 — 앱이 kind='search' 행(글자 = "list:all")을 넣으면 PC 폴러가 엑셀 대장을 읽어 결과 행에 적고(2분 뒤 서버에서 지움),
+   *   앱은 받은 명단을 이 화면이 열려 있는 동안 메모리에만 둔다(폰 저장소에 연락처를 남기지 않음). 서버(SQL) 변경 없음.
+   * 정렬·묶음·걸러내기는 전부 앱 메모리에서 한다(서버 왕복 없음). 대표님 본인 명함은 PC가 명단에서 뺀다.
+   * 두 가지 «찾기»: 명단 칸에서 입력하면 이 명단 안에서 바로 걸러진다(서버 안 감). [검색]을 누르면 «검색» 칸으로 넘어가 PC 대장에서 최대 25명을 찾는다(기존 동작 그대로).
+   * 스위치: 아래 CARD_LIST_VIEW 가 'off' 면 스위치가 숨겨져 v9.57 화면 그대로(홈 단추 글씨도 예전 그대로). */
+  var CARD_LIST_VIEW = 'on';
+  var CL_BIG_DAY = 20;                 // 한 날에 이만큼 이상 받은 것으로 적혀 있으면 「처음 대장을 만든 날」 안내를 붙인다
+  var CL_SORTS = [['org', '기관 가나다순', '기관순'], ['name', '이름 가나다순', '이름순'], ['dnew', '등록일 최신순', '최신 등록순'], ['dold', '등록일 오래된순', '오래된 등록순'], ['cat', '분류별', '분류별']];
+  var CL_CATS = { univ: '대학', biz: '업체', etc: '기타' };
+  var CL = clFresh();
+  function clFresh() { return { mode: 'search', data: null, state: 'idle', err: '', cat: 'all', sort: 'org', filter: '', open: {}, gen: 0, derived: null }; }
+  var clSegEl = $('clSeg'), clResEl = $('clResults'), clTopEl = $('clTop');
+  var CL_ON = (CARD_LIST_VIEW !== 'off');
+  if (CL_ON) {
+    if (clSegEl) clSegEl.style.display = 'flex';
+    try { var _t = $('btnSearchToggle'); var _s = _t && _t.querySelector('small'); if (_s) _s.textContent = '검색·전체 명단'; } catch (e) {}
+  }
+  function clReset() {
+    CL.gen++;                          // 진행 중이던 불러오기 응답은 버린다
+    CL = clFresh();
+    if (clResEl) { clResEl.innerHTML = ''; clResEl.style.display = 'none'; }
+    if (searchResults) searchResults.style.display = '';
+    clSyncSeg();
+    if (clTopEl) clTopEl.style.display = 'none';
+  }
+  function clMsg(t) { if (CL.mode !== 'search') { try { toast(t, 2600); } catch (e) {} } else setSearchMsg(t, 'err'); }
+
+  /* ---- 순수 계산(화면과 무관 — 시험에서 직접 부른다) ---- */
+  function clShort(org) {
+    // 머리줄 표시용: 뒤쪽 «영문만 든» 괄호만 줄인다. 한글이 든 괄호·앞쪽 (주)·(사)는 대장에 인쇄된 그대로 둔다.
+    var s = String(org || '').replace(/^\s+|\s+$/g, '');
+    var t = s.replace(/\s*\(([^()]*)\)\s*$/, function (m, inner) { return (/[가-힣]/.test(inner) || !/[A-Za-z]/.test(inner)) ? m : ''; });
+    t = t.replace(/^\s+|\s+$/g, '');
+    return t || s;
+  }
+  function clSortName(org) {
+    // 가나다 정렬용 이름: 법인격 말(주식회사·사단법인·특허법인 …, (주)·(사) …)과 뒤쪽 영문 괄호를 뗀다. 화면에는 쓰지 않는다.
+    var s = clShort(org).replace(/\((주|사|재|유|학)\)/g, '').replace(/(주식회사|사단법인|재단법인|특허법인|학교법인|유한책임회사|유한회사)/g, '').replace(/\s+/g, '');
+    return s || String(org || '');
+  }
+  function clZone(s) { var c = String(s).charAt(0); return /[가-힣ㄱ-ㅎ]/.test(c) ? 0 : (/[A-Za-z0-9]/.test(c) ? 1 : 2); }   // 한글 구역 → 영문·숫자 구역
+  function clCmp(a, b) {               // a, b = 정렬용 이름
+    var za = clZone(a), zb = clZone(b);
+    if (za !== zb) return za - zb;
+    var x = String(a).toLowerCase(), y = String(b).toLowerCase();
+    return x < y ? -1 : (x > y ? 1 : 0);
+  }
+  function clCatOf(c) { var k = String(c.cat || ''); if (k.indexOf('01') === 0) return 'univ'; if (k.indexOf('02') === 0 || k.indexOf('03') === 0) return 'biz'; return 'etc'; }
+  function clDateKey(c) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(c.date || '')); return m ? m[0] : ''; }
+  function clDateLabel(k) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k); return m ? (m[1] + '년 ' + parseInt(m[2], 10) + '월 ' + parseInt(m[3], 10) + '일') : '등록일 미상'; }
+  function clNorm(raw) {
+    var out = [];
+    (raw || []).forEach(function (c, i) {
+      if (!c || !c.name) return;
+      var o = { i: out.length, seq: (c.seq === 0 || c.seq) ? Number(c.seq) : (i + 1), name: String(c.name || ''), org: String(c.org || ''), abbr: String(c.abbr || ''),
+        dept: String(c.dept || ''), title: String(c.title || ''), mobile: String(c.mobile || ''), office: String(c.office || ''), email: String(c.email || ''),
+        cat: String(c.cat || ''), photo: String(c.photo_path || ''), date: String(c.date || ''), note: String(c.note || '') };
+      o.gk = o.abbr || o.org; o.dk = clDateKey(o); o.ck = clCatOf(o);
+      out.push(o);
+    });
+    return out;
+  }
+  // 기관 묶음(열쇠 = 기관약칭) — 화면에 보이는 이름은 그 묶음에서 연번이 가장 앞선 명함의 인쇄된 기관명
+  function clOrgGroups(list) {
+    var map = {}, arr = [];
+    list.slice().sort(function (a, b) { return a.seq - b.seq; }).forEach(function (c) {
+      var g = map[c.gk];
+      if (!g) { g = map[c.gk] = { key: c.gk, printed: c.org, short: clShort(c.org), sortName: clSortName(c.org), people: [] }; arr.push(g); }
+      g.people.push(c);
+    });
+    arr.sort(function (a, b) { return clCmp(a.sortName, b.sortName) || (a.key < b.key ? -1 : 1); });
+    return arr;
+  }
+  function clRanks(data) { var r = {}; clOrgGroups(data).forEach(function (g, i) { r[g.key] = i; }); return r; }
+  // 이름 가나다순: 성+이름 전체를 한글 가나다로(한글 이름이 먼저, 영문 이름은 뒤 구역) → 동명이인은 기관 가나다순 → 연번
+  function clNameSort(list, orgRank) {
+    return list.slice().sort(function (a, b) { return clCmp(a.name, b.name) || ((orgRank[a.gk] || 0) - (orgRank[b.gk] || 0)) || (a.seq - b.seq); });
+  }
+  // 등록일 묶음: desc=true 최신이 먼저, false 오래된 것이 먼저. 날짜 모르는 것은 어느 쪽이든 맨 끝. 날짜 안에서는 같은 기관이 연달아(기관 가나다 → 연번)
+  function clDateGroups(list, orgRank, desc) {
+    var map = {}, arr = [];
+    list.forEach(function (c) { var g = map[c.dk]; if (!g) { g = map[c.dk] = { key: c.dk, people: [] }; arr.push(g); } g.people.push(c); });
+    arr.sort(function (a, b) { if (!a.key) return 1; if (!b.key) return -1; return (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0)) * (desc === false ? 1 : -1); });
+    arr.forEach(function (g) {
+      g.people.sort(function (a, b) { return ((orgRank[a.gk] || 0) - (orgRank[b.gk] || 0)) || (a.seq - b.seq); });
+      var seen = {}; g.orgs = [];
+      g.people.forEach(function (c) { if (!seen[c.gk]) { seen[c.gk] = 1; g.orgs.push(clShort(c.org)); } });
+    });
+    return arr;
+  }
+  // 분류별: 대학 → 업체 → 기타, 안에서는 기관 가나다 → 연번
+  function clCatGroups(list, orgRank) {
+    var arr = [];
+    ['univ', 'biz', 'etc'].forEach(function (k) {
+      var p = list.filter(function (c) { return c.ck === k; });
+      if (p.length) { p.sort(function (a, b) { return ((orgRank[a.gk] || 0) - (orgRank[b.gk] || 0)) || (a.seq - b.seq); }); arr.push({ key: k, title: CL_CATS[k], people: p }); }
+    });
+    return arr;
+  }
+  function clFiltered() {
+    var all = CL.data || [], q = (CL.filter || '').toLowerCase(), base = all;
+    if (q) base = all.filter(function (c) { return (c.name + ' ' + c.org + ' ' + c.abbr + ' ' + c.dept + ' ' + c.title + ' ' + CL_CATS[c.ck] + ' ' + c.cat).toLowerCase().indexOf(q) >= 0; });
+    var cnt = { all: base.length, univ: 0, biz: 0, etc: 0 };
+    base.forEach(function (c) { cnt[c.ck]++; });
+    var list = CL.cat === 'all' ? base : base.filter(function (c) { return c.ck === CL.cat; });
+    return { list: list, cnt: cnt };
+  }
+  // 화면에 보이는 총원과 모든 묶음 방식의 합이 같은지 스스로 검산(다르면 화면에 경고 — 사람이 빠져 보이는 일을 막는다)
+  function clCheck(list, groupings) {
+    var sums = groupings.map(function (gs) { var n = 0; gs.forEach(function (g) { n += g.people.length; }); return n; });
+    return { ok: sums.every(function (n) { return n === list.length; }), total: list.length, sums: sums };
+  }
+  function clTel(s) { return String(s).replace(/\(0\)/g, '').replace(/[^\d+]/g, ''); }
+  function clLinks(v, kind) {
+    var parts = String(v || '').split(kind === 'tel' ? /[\/,;\n]/ : /[\s,;]+/), out = '';
+    parts.forEach(function (p) {
+      p = p.replace(/^\s+|\s+$/g, ''); if (!p) return;
+      if (kind === 'tel') { var h = clTel(p); if (!/\d{5,}/.test(h)) { out += '<div><svg><use href="#i-phone"/></svg><span>' + esc(p) + '</span></div>'; return; } out += '<div><svg><use href="#i-phone"/></svg><a href="tel:' + esc(h) + '">' + esc(p) + '</a></div>'; }
+      else out += '<div><svg><use href="#i-mail"/></svg><a href="mailto:' + esc(p) + '">' + esc(p) + '</a></div>';
+    });
+    return out;
+  }
+
+  /* ---- 화면 ---- */
+  function clSyncSeg() {
+    if (!clSegEl) return;
+    Array.prototype.forEach.call(clSegEl.querySelectorAll('button'), function (b) {
+      var on = (b.getAttribute('data-m') === CL.mode); b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (searchInput) searchInput.placeholder = CL.mode === 'search' ? '이름·기관을 한글로' : '명단에서 걸러내기';
+  }
+  function clSetMode(m) {
+    if (!CL_ON) m = 'search';
+    if (m === CL.mode) return;
+    if (m === 'search') {
+      CL.mode = 'search'; CL.gen++;     // 불러오는 중이던 응답은 버린다(다시 열면 새로 요청)
+      if (CL.state === 'loading') { CL.state = 'idle'; stopSearchPoll(); }
+      if (clResEl) clResEl.style.display = 'none';
+      if (searchResults) searchResults.style.display = '';
+      if (clTopEl) clTopEl.style.display = 'none';
+      clSyncSeg(); return;
+    }
+    CL.mode = 'list'; setSearchMsg('', '');
+    CL.filter = ((searchInput && searchInput.value) || '').replace(/^\s+|\s+$/g, '');
+    if (searchResults) searchResults.style.display = 'none';
+    if (clResEl) clResEl.style.display = '';
+    clSyncSeg();
+    if (CL.data) clRender(); else clLoad(false);
+  }
+  function clLoad(force) {
+    if (CL.state === 'loading') return;
+    if (CL.data && !force) { clRender(); return; }
+    CL.state = 'loading'; CL.err = ''; clRender();
+    var gen = ++CL.gen, id = OfficeBridge.uuid(), tok = OfficeBridge.token();
+    function fail(m) { if (gen !== CL.gen) return; CL.state = 'err'; CL.err = m; clRender(); }
+    OfficeBridge.createSearch({ id: id, token: tok, note: 'list:all', title: '명함 명단' }).then(function () {
+      pollSearch(id, tok, function (res) {
+        if (gen !== CL.gen) return;
+        var sj = (res && res.summary_json) || {};
+        if (sj.mode !== 'list' || !Array.isArray(sj.cards)) {
+          fail(res && res.error ? '명단을 못 불러왔습니다 — PC에서 대장을 읽지 못했습니다.' : '명단을 못 불러왔습니다 — PC 프로그램이 아직 이 기능을 모르거나 꺼져 있습니다. 소장에게 알려 주세요.'); return;
+        }
+        if (typeof sj.count === 'number' && sj.count !== sj.cards.length) { fail('명단을 못 불러왔습니다 — 받은 명단이 중간에 잘렸습니다. 다시 불러와 주세요.'); return; }
+        var data = clNorm(sj.cards);
+        if (!data.length) { fail('명단이 비어 있습니다. PC의 명함 대장을 확인해 주세요.'); return; }
+        CL.data = data; CL.state = 'ok'; clRender();
+      }, function () { fail('명단을 못 불러왔습니다 — PC가 켜져 있는지 확인 후 다시 불러오세요.'); });
+    }).catch(function (e) { fail('명단을 못 불러왔습니다 — 요청이 가지 않았습니다(' + (e && e.message || e) + ').'); });
+  }
+  function clPerson(c, ctx) {
+    // ctx: 'org' 기관 묶음 안(셋째 줄=등록일) · 'date' 날짜 묶음 안(셋째 줄=기관·부서) · 'flat' 이름순·분류별(이름 옆에 기관을 작게, 셋째 줄=부서·등록일)
+    var line3;
+    if (ctx === 'org') line3 = c.dk ? ('등록 ' + c.dk) : '등록일 미상';
+    else if (ctx === 'date') line3 = clShort(c.org) + (c.dept ? ' · ' + c.dept : '');
+    else line3 = (c.dept ? c.dept + ' · ' : '') + (c.dk ? ('등록 ' + c.dk) : '등록일 미상');
+    var h = '<div class="cl-pw" data-i="' + c.i + '"><button type="button" class="cl-p" aria-expanded="false"><span class="cl-pn"><b>' + esc(c.name) + '</b>' +
+      (ctx === 'flat' ? '<em class="cl-po">' + esc(clShort(c.org)) + '</em>' : '') + '</span>' +
+      (c.title ? '<span class="cl-pt">' + esc(c.title) + '</span>' : '') + '<span class="cl-ps">' + esc(line3) + '</span></button>';
+    h += '<div class="cl-det">';
+    var who = [c.org, c.dept].filter(Boolean).join(' · ');
+    if (who) h += '<div class="cl-who">' + esc(who) + '</div>';
+    var meta = clLinks(c.mobile, 'tel') + clLinks(c.office, 'tel') + clLinks(c.email, 'mail');
+    if (meta) h += '<div class="cl-meta">' + meta + '</div>';
+    if (c.note) h += '<div class="cl-note">' + esc(c.note) + '</div>';
+    h += '<div class="cl-reg">' + (c.dk ? ('등록 ' + c.dk) : '등록일 미상') + '</div>';
+    if (c.photo) h += '<button type="button" class="btn ghost sm cardphoto" data-photo="' + esc(c.photo) + '"><svg><use href="#i-card"/></svg>명함 사진 보기</button>';
+    return h + '</div></div>';
+  }
+  function clGroupHtml(key, title, sub, hint, n, bodyHtml, open, cls) {
+    return '<div class="cl-grp' + (open ? ' open' : '') + (cls ? ' ' + cls : '') + '" data-k="' + esc(key) + '"><button type="button" class="cl-gh" aria-expanded="' + (open ? 'true' : 'false') + '"><span class="cl-gt"><b>' + esc(title) + '</b>' +
+      (sub ? '<small class="cl-sub">' + esc(sub) + '</small>' : '') + (hint ? '<small class="cl-hint">' + esc(hint) + '</small>' : '') +
+      '</span><span class="cl-n">' + n + '명</span><span class="cl-ar" aria-hidden="true">›</span></button><div class="cl-body">' + bodyHtml + '</div></div>';
+  }
+  function clSortInfo(k) { for (var i = 0; i < CL_SORTS.length; i++) if (CL_SORTS[i][0] === k) return CL_SORTS[i]; return CL_SORTS[0]; }
+  function clRender() {
+    if (!clResEl || CL.mode === 'search') return;
+    if (CL.state === 'loading') { clResEl.innerHTML = '<div class="empty-note">명단을 불러오는 중…</div>'; return; }
+    if (CL.state === 'err') {
+      clResEl.innerHTML = '<div class="card cl-err"><p class="empty">' + esc(CL.err) + '</p><button type="button" class="btn ghost sm cl-retry">다시 불러오기</button></div>'; return;
+    }
+    if (!CL.data) { clResEl.innerHTML = ''; return; }
+    var f = clFiltered(), list = f.list, rank = clRanks(CL.data), sk = CL.sort;
+    var og = clOrgGroups(list), dn = clDateGroups(list, rank, true), dold = clDateGroups(list, rank, false), cg = clCatGroups(list, rank), byName = clNameSort(list, rank);
+    var chk = clCheck(list, [og, dn, dold, cg, [{ people: byName }]]), filtering = !!(CL.filter || CL.cat !== 'all');
+    var nd = dn.filter(function (g) { return g.key; }).length, unk = 0; dn.forEach(function (g) { if (!g.key) unk = g.people.length; });
+    CL.derived = { total: list.length, orgs: og.length, dates: nd, unknown: unk, check: chk, sort: sk, cat: CL.cat, filter: CL.filter };
+    var h = '<div class="cl-intro">대표님, 글자를 넣으면 이 명단 안에서 바로 걸러져요. PC 대장 전체에서 찾으시려면 [검색]을 눌러 주세요.</div>';
+    h += '<div class="cl-chips" role="group" aria-label="분류">';
+    [['all', '전체'], ['univ', '대학'], ['biz', '업체'], ['etc', '기타']].forEach(function (x) {
+      h += '<button type="button" class="chip cl-chip' + (CL.cat === x[0] ? ' on' : '') + '" data-cat="' + x[0] + '">' + x[1] + ' <b>' + f.cnt[x[0]] + '</b></button>';
+    });
+    h += '</div><div class="cl-sortrow"><label class="cl-sortlab">정렬<select class="cl-sortsel" aria-label="정렬 기준">';
+    CL_SORTS.forEach(function (s) { h += '<option value="' + s[0] + '"' + (s[0] === sk ? ' selected' : '') + '>' + s[1] + '</option>'; });
+    h += '</select></label>' + (sk !== 'name' ? '<button type="button" class="cl-fold">모두 접기</button>' : '') + '</div>';
+    // 현재 선택 한눈에 + 초기화
+    var parts = [clSortInfo(sk)[2]];
+    if (CL.cat !== 'all') parts.push(CL_CATS[CL.cat]);
+    if (CL.filter) parts.push('“' + CL.filter + '”');
+    parts.push(list.length + '명');
+    if (sk === 'org') parts.push(og.length + '개 기관');
+    if (sk === 'dnew' || sk === 'dold') parts.push('등록일 ' + nd + '일' + (unk ? ' · 날짜 미상 ' + unk + '명' : ''));
+    var sum = parts.join(' · ') + ((filtering && CL.data.length !== list.length) ? ' (전체 ' + CL.data.length + '명 중)' : '');
+    var dirty = (sk !== 'org' || CL.cat !== 'all' || !!CL.filter);
+    h += '<div class="cl-bar"><span class="cl-sum">' + esc(sum) + '</span>' + (dirty ? '<button type="button" class="cl-reset">초기화</button>' : '') + '</div>';
+    if (!chk.ok) h += '<div class="cl-warn">※ 명단 합계가 맞지 않습니다(전체 ' + chk.total + ' · 묶음별 ' + chk.sums.join('/') + '). 소장에게 알려 주세요.</div>';
+    if (!list.length) {
+      h += '<div class="card"><p class="empty">조건에 맞는 명함이 없습니다.' + (dirty ? '<br>[초기화]를 눌러 처음 모습으로 돌아가 보세요.' : '') + '</p></div>';
+    } else if (sk === 'name') {
+      var body = ''; byName.forEach(function (c) { body += clPerson(c, 'flat'); });
+      h += '<div class="cl-grp open cl-flat"><div class="cl-body">' + body + '</div></div>';
+    } else if (sk === 'org') {
+      og.forEach(function (g) {
+        var k = 'o:' + g.key, open = (k in CL.open) ? CL.open[k] : true, body = '';
+        var names = g.people.map(function (c) { return c.name; }), sub = names.slice(0, 4).join(', ') + (names.length > 4 ? ' 외 ' + (names.length - 4) + '명' : '');
+        g.people.slice().sort(function (a, b) { return a.seq - b.seq; }).forEach(function (c) { body += clPerson(c, 'org'); });
+        h += clGroupHtml(k, g.short, sub, '', g.people.length, body, open, '');
+      });
+    } else if (sk === 'cat') {
+      cg.forEach(function (g) {
+        var k = 'c:' + g.key, open = (k in CL.open) ? CL.open[k] : true, body = '';
+        g.people.forEach(function (c) { body += clPerson(c, 'flat'); });
+        h += clGroupHtml(k, g.title, '', '', g.people.length, body, open, '');
+      });
+    } else {
+      (sk === 'dnew' ? dn : dold).forEach(function (g, gi) {
+        var k = 'd:' + g.key, open = (k in CL.open) ? CL.open[k] : (filtering ? true : (sk === 'dnew' && gi === 0)), body = '';
+        var shown = g.orgs.slice(0, 3).join(', ') + (g.orgs.length > 3 ? ' 외 ' + (g.orgs.length - 3) + '곳' : '');
+        var sub = g.key ? (g.orgs.length + '개 기관 · ' + shown) : '날짜를 확인하지 못한 명함입니다.';
+        var hint = (g.key && g.people.length >= CL_BIG_DAY) ? '처음 대장을 만든 날 — 이전에 받은 명함 포함' : '';
+        g.people.forEach(function (c) { body += clPerson(c, 'date'); });
+        h += clGroupHtml(k, g.key ? clDateLabel(g.key) : '등록일 미상', sub, hint, g.people.length, body, open, g.key ? '' : 'cl-unk');
+      });
+    }
+    clResEl.innerHTML = h;
+    clFoldLabel();
+  }
+  function clFoldLabel() {
+    var b = clResEl && clResEl.querySelector('.cl-fold'); if (!b) return;
+    b.textContent = clResEl.querySelector('.cl-grp.open:not(.cl-flat)') ? '모두 접기' : '모두 펼치기';
+  }
+  function clToggleGroup(grp) {
+    var open = !grp.classList.contains('open'); grp.classList.toggle('open', open);
+    var b = grp.querySelector('.cl-gh'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    CL.open[grp.getAttribute('data-k')] = open; clFoldLabel();
+  }
+  function clResetPick() {
+    CL.cat = 'all'; CL.sort = 'org'; CL.filter = ''; CL.open = {};
+    if (searchInput) searchInput.value = '';
+    clRender();
+  }
+  if (clSegEl) clSegEl.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-m]') : null; if (!b) return;
+    clSetMode(b.getAttribute('data-m'));
+  });
+  if (clResEl) {
+    clResEl.addEventListener('click', function (e) {
+      var t = e.target; if (!t || !t.closest) return;
+      var ph = t.closest('[data-photo]'); if (ph) { openCardPhoto(ph.getAttribute('data-photo'), ph); return; }
+      if (t.closest('.cl-det a')) return;                       // 전화·메일 링크는 그대로 열리게
+      var gh = t.closest('.cl-gh'); if (gh) { clToggleGroup(gh.parentNode); return; }
+      var p = t.closest('.cl-p');
+      if (p) { var w = p.parentNode, o = !w.classList.contains('open'); w.classList.toggle('open', o); p.setAttribute('aria-expanded', o ? 'true' : 'false'); return; }
+      var chip = t.closest('.cl-chip'); if (chip) { CL.cat = chip.getAttribute('data-cat'); clRender(); return; }
+      if (t.closest('.cl-reset')) { clResetPick(); return; }
+      if (t.closest('.cl-fold')) {
+        var gs = clResEl.querySelectorAll('.cl-grp:not(.cl-flat)'), anyOpen = !!clResEl.querySelector('.cl-grp.open:not(.cl-flat)');
+        Array.prototype.forEach.call(gs, function (g) {
+          g.classList.toggle('open', !anyOpen); var gb = g.querySelector('.cl-gh'); if (gb) gb.setAttribute('aria-expanded', !anyOpen ? 'true' : 'false'); CL.open[g.getAttribute('data-k')] = !anyOpen;
+        });
+        clFoldLabel(); return;
+      }
+      if (t.closest('.cl-retry')) { clLoad(true); return; }
+    });
+    clResEl.addEventListener('change', function (e) {
+      var s = e.target && e.target.closest ? e.target.closest('.cl-sortsel') : null;
+      if (s) { CL.sort = s.value; clRender(); }
+    });
+  }
+  var clFilterTimer = null;
+  if (searchInput) searchInput.addEventListener('input', function () {
+    if (!CL_ON || CL.mode === 'search') return;
+    clearTimeout(clFilterTimer);
+    clFilterTimer = setTimeout(function () { CL.filter = (searchInput.value || '').replace(/^\s+|\s+$/g, ''); if (CL.state === 'ok') clRender(); }, 150);
+  });
+  if (clTopEl) {
+    clTopEl.addEventListener('click', function () {
+      var calm = false; try { calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      try { window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); } catch (e) { scrollTop(); }
+    });
+    window.addEventListener('scroll', function () {
+      var show = CL_ON && CL.mode !== 'search' && CL.state === 'ok' && (window.pageYOffset || document.documentElement.scrollTop || 0) > 700 && isOpen(searchPanel);
+      clTopEl.style.display = show ? '' : 'none';
+    }, { passive: true });
+  }
+  window.__clTest = { clShort: clShort, clSortName: clSortName, clCmp: clCmp, clNorm: clNorm, clOrgGroups: clOrgGroups, clDateGroups: clDateGroups, clNameSort: clNameSort, clCatGroups: clCatGroups, clRanks: clRanks, clCheck: clCheck, clTel: clTel, state: function () { return CL; } };   // 시험용(화면에 영향 없음)
 
   /* ===================== 케이와 대화 ===================== */
   // 메시지 저장 형식: 질문 {role:'me', text, ts, id, token, answered} · 답 {role:'k', text, ts}
@@ -3377,6 +3699,7 @@
   APP_VERSION = 'v9.54';        // v9.54(O-0640): 홈 「소장 케이 채팅」 — 케이 사진 카드를 가로 글자 줄로, 「케이 설정」(옷·캐릭터)을 맨 위 글자 크기·낮/밤 곁으로 — 스위치 HOME_CHAT_BAR(app.js · 'off' 면 v9.53 모습) · 서버·SQL 변경 없음 · versionCode 98
   APP_VERSION = 'v9.55';        // v9.55(O-0640): 홈 「소장 케이 채팅」 줄도 아이콘+글자를 줄 가운데로(회의 녹음 줄처럼) · versionCode 99
   APP_VERSION = 'v9.57';        // v9.57(O-0663): 홈 순서 — 인사말 → 오늘 한눈에 → [회의 녹음 | 소장 케이 채팅] 한 줄 → 도구 → PC 연결 · 스위치 HOME_ROW · versionCode 101
+  APP_VERSION = 'v9.58';        // v9.58(O-0667): 명함 검색 화면에 「검색 | 전체 명단 | 등록일별」 — 기관 가나다순 전체 명단(분류 칩·이름순·글자 걸러내기)과 등록일별 묶음 · 스위치 CARD_LIST_VIEW · PC collect.py 가 먼저 적용돼야 함(옛 PC면 안내) · versionCode 102
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).

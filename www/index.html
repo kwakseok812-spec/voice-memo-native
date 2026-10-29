@@ -339,8 +339,15 @@
         <div class="input filled"><svg class="lead"><use href="#i-search"/></svg><input id="searchInput" type="text" placeholder="이름·기관을 한글로"></div>
         <button id="searchGo" class="btn primary">검색</button>
       </div>
+      <!-- O-0667 v9.58: 「검색 | 전체 명단」 두 칸 스위치(정렬은 전체 명단 안의 한 줄에서 고른다) — 스위치 CARD_LIST_VIEW(app.js) 가 'off' 면 이 칸은 계속 숨겨져 예전 화면 그대로 -->
+      <div class="cl-seg" id="clSeg" role="tablist" aria-label="명함 보기 방식" style="display:none">
+        <button type="button" role="tab" data-m="search" class="on" aria-selected="true">검색</button>
+        <button type="button" role="tab" data-m="list" aria-selected="false">전체 명단</button>
+      </div>
       <div id="searchMsg" class="exportmsg"></div>
       <div id="searchResults"></div>
+      <div id="clResults" class="cl-wrap" style="display:none"></div>
+      <button type="button" id="clTop" class="cl-top" style="display:none" aria-label="맨 위로">↑ 맨 위로</button>
     </section>
 
     <!-- ===================== 케이와 대화 ===================== -->
