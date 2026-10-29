@@ -188,16 +188,6 @@
    *   케이 말풍선(안 읽은 말)이 떠 있으면 말풍선이 먼저 — 한 줄은 내린다(app.js renderKBubble 이 bub-on 을 붙이고 paintSay 를 부른다). */
   var NO_SAY = { text: '', cal: false, mail: false, task: false };
   var sayNow = NO_SAY;                              // 지금 케이가 말하고 있는 한 줄과, 그 안에서 말한 수(cal 일정 · mail 메일 · task 챙길 일)
-  function sayText(dg, showDigest, evs, mails, tasks) {
-    var parts = [], calOk = !!(showDigest && dg && dg.cal_ok !== false), mailOk = !!(showDigest && dg && dg.mail_ok !== false);
-    var o = { text: '', cal: false, mail: false, task: false };
-    if (calOk && evs.length) { parts.push('오늘 일정 ' + evs.length + '건'); o.cal = true; }
-    if (mailOk && mails.length) { parts.push('답하실 메일 ' + mails.length + '건'); o.mail = true; }
-    if (st.orders && tasks.length) { parts.push('챙기실 일 ' + tasks.length + '건'); o.task = true; }
-    if (parts.length) o.text = parts.join(', ') + '입니다.';
-    else if (calOk && mailOk && st.orders) { o.text = '오늘은 잡힌 일정도, 답하실 메일도 없습니다.'; o.cal = o.mail = true; }
-    return o;
-  }
   function bubbleOn() { var w = $('kBubbleWrap'); return !!(w && w.classList.contains('on')); }
   function paintSay(o) {
     if (o !== undefined) paintSay.last = o || NO_SAY;
@@ -505,7 +495,7 @@
     var tasks = openTasks();
     var evs = dg ? markEvents(dg.events || []) : [];
     var mails = dg ? (dg.mails || []) : [];
-    paintSay(sayText(dg, showDigest, evs, mails, tasks));          // v9.4: 케이의 오늘 보고 한 줄(접힌 줄보다 먼저 정해야 겹침을 뺄 수 있다)
+    paintSay(NO_SAY);          // v9.57(지시 10/29): 인사말 아래 「일정 N건, 챙기실 일 N건」 보고 문장은 없앴다 — 건수는 아래 「오늘 한눈에」 카드가 보여 준다(접힌 줄에도 그대로 나온다). PC 끊김·작업 중 안내(SmartHomeSay)는 그대로
 
     var hdrNote = '';
     if (showDigest && dg && dg.generated_at) {

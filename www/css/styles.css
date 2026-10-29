@@ -2445,3 +2445,65 @@ html:not([data-homebar="off"]) .khbar-go{display:none}
   html.home-on:not([data-homeorder="off"]) .kh-left > .orbrow{order:0;margin-top:0}
   html.home-on:not([data-homeorder="off"]) .kh-left > .kh-hero{order:1;margin-top:16px}
 }
+
+/* ============================================================================
+   v9.57 홈 순서 — ① 인사말(때에 맞는 인사 + 한 줄) ② 오늘 한눈에 ③ [회의 녹음 | 소장 케이 채팅] 좌우 한 줄 ④ 도구 ⑤ PC 연결
+   (지시 10/29: 「일정 N건, 챙기실 일 N건」 문장은 삭제 — today-card.js)
+   스위치 HOME_ROW(app.js) 'off' 면 <html data-homerow="off"> 가 붙어 이 묶음 규칙이 모두 빠진다(= v9.56 모습). HOME_CHAT_BAR 가 'off' 인 옛 사진 카드 모습에서도 빠진다.
+   DOM·단추 id 는 그대로(#btnRecord · #btnVoiceChat) — 진입 동작은 그대로이고 CSS 로 자리만 바꾼다(새 진입점 없음).
+   홈 전체를 한 칸 격자(2열)로 보고, 두 단추 이외의 모든 것은 두 열을 가로질러 한 줄씩 쌓는다. 케이 말풍선(안 읽은 말)은 두 단추 바로 아래 한 줄.
+   ============================================================================ */
+html:not([data-homerow="off"]):not([data-homebar="off"]) #homeView{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:10px;row-gap:0;align-items:stretch}
+html:not([data-homerow="off"]):not([data-homebar="off"]) #homeView > *{grid-column:1 / -1}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right > *{grid-column:1 / -1}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-side{display:contents}
+/* 순서: 배너 0 · 인사말 1 · 오늘 한눈에 2 · 녹음/케이 채팅 3 · 말풍선 4 · (옷 줄 5) · 도구 이하 6 */
+html:not([data-homerow="off"]):not([data-homebar="off"]) #homeView > #banner{order:0}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-side .greet{order:1;grid-column:1 / -1;margin:6px 2px 4px}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right > #todayCard{order:2;margin-top:10px}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left > .orbrow{order:3;grid-column:1;margin-top:12px;display:flex;align-items:stretch;min-width:0}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero .orbwrap.kh-k{order:4;grid-column:2;margin-top:12px;min-width:0;display:flex}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-side .kbub-wrap{order:5;grid-column:1 / -1}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-dress,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-dressrow{order:6}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right > *:not(#todayCard){order:7}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right > .tools-title{margin-top:18px}
+/* 두 단추를 같은 모양의 세로형 타일로 — 아이콘 위, 글자 아래. 두 타일 높이는 격자가 맞춘다 */
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left .orbrow .orbwrap,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero .orbwrap.kh-k{width:100%;max-width:none;display:flex;flex-direction:row;align-items:stretch}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero #btnVoiceChat{flex:1 1 auto;align-self:stretch}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord,
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero #btnVoiceChat{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;width:100%;height:auto;min-height:112px;box-sizing:border-box;padding:14px 10px 12px;border-radius:20px}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord .ring{display:none}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord .core{width:46px;height:46px;flex:none}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord .core svg{width:24px;height:24px}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-reclab{font-size:17px;white-space:nowrap}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;width:100%}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-ic{width:46px;height:46px}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx{flex:none;align-items:center;text-align:center;max-width:100%}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx b{font-size:17px;max-width:100%}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx small{white-space:normal;font-size:12px;line-height:1.3;margin-top:3px;overflow:visible;text-overflow:clip;word-break:keep-all}
+html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-badge{position:absolute;top:8px;right:8px}
+html[data-fs]:not([data-homerow="off"]):not([data-homebar="off"]) .kh-reclab{font-size:calc(17px * var(--fsx))}
+html[data-fs]:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx b{font-size:calc(17px * var(--fsx))}
+html[data-fs]:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx small{font-size:calc(12px * var(--fsx))}
+@media (max-width:360px){
+  html:not([data-homerow="off"]):not([data-homebar="off"]) .kh-reclab,
+  html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx b{font-size:15.5px}
+  html:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx small{font-size:11.5px}
+}
+/* 넓은 화면(폴드 펼침 700px↑): 예전엔 왼쪽·오른쪽 2단이었으나 이제 한 줄 쌓기. 앱 폭(760)은 그대로 */
+@media (min-width:700px){
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) #homeView{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left{display:contents}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left > .orbrow{order:3;margin-top:12px}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left > .kh-hero{margin-top:0}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right > #todayCard{margin-top:10px}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-right .tools-title{margin-top:18px}
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-left #btnRecord,
+  html.home-on:not([data-homerow="off"]):not([data-homebar="off"]) .kh-hero #btnVoiceChat{min-height:120px}
+}
