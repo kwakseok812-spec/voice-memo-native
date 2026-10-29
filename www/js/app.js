@@ -3192,7 +3192,7 @@
     if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하세요.<br>예: 홍길동, 셀트리온</div>';
     setSearchMsg('', '');
     if (searchInput) searchInput.value = '';
-    try { clReset(); } catch (e) {}   // O-0667 v9.58: 전체 명단·등록일별 상태도 함께 비움(연락처를 메모리에 남기지 않는다)
+    try { clReset(); } catch (e) {}   // O-0667 v9.58: 전체 명단 상태도 함께 비움(연락처를 메모리에 남기지 않는다)
   }
   if ($('btnSearchToggle')) $('btnSearchToggle').addEventListener('click', function () {
     openScreen(searchPanel); clearSearch();
@@ -3609,7 +3609,6 @@
       clTopEl.style.display = show ? '' : 'none';
     }, { passive: true });
   }
-  window.__clTest = { clShort: clShort, clSortName: clSortName, clCmp: clCmp, clNorm: clNorm, clOrgGroups: clOrgGroups, clDateGroups: clDateGroups, clNameSort: clNameSort, clCatGroups: clCatGroups, clRanks: clRanks, clCheck: clCheck, clTel: clTel, state: function () { return CL; } };   // 시험용(화면에 영향 없음)
 
   /* ===================== 케이와 대화 ===================== */
   // 메시지 저장 형식: 질문 {role:'me', text, ts, id, token, answered} · 답 {role:'k', text, ts}
@@ -3699,7 +3698,7 @@
   APP_VERSION = 'v9.54';        // v9.54(O-0640): 홈 「소장 케이 채팅」 — 케이 사진 카드를 가로 글자 줄로, 「케이 설정」(옷·캐릭터)을 맨 위 글자 크기·낮/밤 곁으로 — 스위치 HOME_CHAT_BAR(app.js · 'off' 면 v9.53 모습) · 서버·SQL 변경 없음 · versionCode 98
   APP_VERSION = 'v9.55';        // v9.55(O-0640): 홈 「소장 케이 채팅」 줄도 아이콘+글자를 줄 가운데로(회의 녹음 줄처럼) · versionCode 99
   APP_VERSION = 'v9.57';        // v9.57(O-0663): 홈 순서 — 인사말 → 오늘 한눈에 → [회의 녹음 | 소장 케이 채팅] 한 줄 → 도구 → PC 연결 · 스위치 HOME_ROW · versionCode 101
-  APP_VERSION = 'v9.58';        // v9.58(O-0667): 명함 검색 화면에 「검색 | 전체 명단 | 등록일별」 — 기관 가나다순 전체 명단(분류 칩·이름순·글자 걸러내기)과 등록일별 묶음 · 스위치 CARD_LIST_VIEW · PC collect.py 가 먼저 적용돼야 함(옛 PC면 안내) · versionCode 102
+  APP_VERSION = 'v9.58';        // v9.58(O-0667): 명함 검색 화면에 「검색 | 전체 명단」 두 칸 스위치 — 전체 명단은 정렬 한 줄(기관·이름 가나다순·등록일 최신/오래된순·분류별)+분류 칩+글자 걸러내기+현재 선택 줄·초기화 · 스위치 CARD_LIST_VIEW · PC collect.py 가 먼저 적용돼야 함(옛 PC면 안내) · versionCode 102
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
