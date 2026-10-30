@@ -426,7 +426,7 @@
     }
     var rec = live().slice().sort(function (a, b) { return String(b.updated_at || '') < String(a.updated_at || '') ? -1 : 1; }).slice(0, 3);
     if (rec.length) h += '<div class="ach-h3">최근 변경 <em>추가·고친 순</em></div>' + rec.map(function (x) { return rowHtml(x, (x.rev || 1) > 1 ? '고침' : '추가', false); }).join('');
-    else h += '<div class="ach-empty"><b>아직 기록이 없어요</b>아래 탭에서 논문을 추가해 보세요.</div>';
+    else h += '<div class="ach-empty"><b>아직 기록이 없어요</b>위의 「논문」 탭에서 첫 논문을 추가해 보세요.</div>';
     return h;
   }
 
@@ -487,7 +487,7 @@
     list = sortItems(list, S.sortKey);
     var sortLabel = ({ new: '연도 최신순', old: '연도 오래된순', upd: '최근 변경순' })[S.sortKey];
     var h = chipsHtml(k, all) + '<div class="ach-sortline"><span>' + list.length + '건</span><button type="button" data-act="sort">' + sortLabel + ' ▾</button></div>';
-    h += list.map(function (x) { return rowHtml(x, '', false); }).join('') || (all.length ? '<div class="ach-note">조건에 맞는 항목이 없습니다.</div>' : '<div class="ach-empty"><b>아직 기록이 없어요</b>' + (S.offline ? '' : '<button type="button" class="ach-btn" data-act="add">＋ ' + esc(k.name) + ' 추가</button>') + '</div>');
+    h += list.map(function (x) { return rowHtml(x, '', false); }).join('') || (all.length ? '<div class="ach-note">조건에 맞는 항목이 없습니다.</div>' : '<div class="ach-empty"><b>아직 기록이 없어요</b>' + (S.offline ? '' : '아래 「＋ ' + esc(k.name) + ' 추가」 단추로 첫 기록을 넣어 보세요.') + '</div>');
     return h;
   }
   function updateFab() {
