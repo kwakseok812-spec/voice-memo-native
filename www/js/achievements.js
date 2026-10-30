@@ -24,7 +24,7 @@
   var STATUS_LABEL = { published: '게재', accepted: '게재확정', under_review: '심사중', in_prep: '작성중', manuscript: '원고본 (게재 불명)' };
   var STATUS_ORDER = ['published', 'accepted', 'under_review', 'in_prep', 'manuscript'];
   var GRADES = ['SCI급', '그 밖의 국제학술지', '한국연구재단 등재', '등재후보', '기타 국내', '교내'];
-  var BN = { pure: '제1저자', cofirst: '공동제1', corr: '교신', both: '제1+교신', co: '공저', none: '역할 미입력' };
+  var BN = { pure: '제1저자', cofirst: '공동제1', corr: '교신', both: '겸임', co: '공저', none: '역할 미입력' };
   var IN_HOUSE_RE = /산업기술연구소\s*논문집|교수학습\s*연구지/;
   /* 화면이 아는 data 칸 — 저장할 때 이 칸만 화면 값으로 바꾸고 나머지(가져올 때 남긴 출처 메모·앞으로 생길 칸)는 건드리지 않는다 */
   var KNOWN_DATA = ['author_pos', 'author_total', 'co_first', 'corresponding', 'in_house', 'volume', 'issue', 'pages', 'article_no', 'doi', 'journal_grade'];
@@ -44,7 +44,7 @@
   /* 역할 자동 계산 (설계안 5-3절) — o.cofirst: 「공동 제1저자를 제1저자로 세기」 (기본 켬) */
   function derive(x, o) {
     var d = dataOf(x), pos = toInt(d.author_pos), cof = !(o && o.cofirst === false);
-    if (pos == null) return { b: 'none', text: '', resp: false, first: false, corr: false, co: false };
+    if (pos == null) return { b: 'none', text: '', resp: false, first: false, corr: false, co: false, corrUnk: false };
     var co = d.co_first === true, corr = d.corresponding === true;
     var first = (pos === 1 && !co) || (co && cof);
     var b = !first && !corr ? 'co' : (first && corr ? 'both' : (first && co ? 'cofirst' : (first ? 'pure' : 'corr')));
@@ -53,7 +53,8 @@
     if (corr) parts.push('교신');
     var text = parts.join('+');
     if (!text) text = co ? '공동제1(세지 않음)' : '공저';
-    return { b: b, text: text, resp: first || corr, first: first, corr: corr, co: co };
+    /* corrUnk = 공저로 읽히는데 교신 여부 칸이 비어 있음(모름) — 확정된 공저처럼 보이지 않게 따로 센다 */
+    return { b: b, text: text, resp: first || corr, first: first, corr: corr, co: co, corrUnk: b === 'co' && typeof d.corresponding !== 'boolean' };
   }
   function inReq(x, o) { return derive(x, o).resp && isPub(x) && ((o && o.inhouseReq === true) || !inHouse(x)); }
 
@@ -71,6 +72,7 @@
     return {
       total: papers.length, pub: pub.length, st: st, bk: bk, respAll: bk.resp,
       req: papers.filter(function (x) { return inReq(x, o); }).length,
+      coUnk: pub.filter(function (x) { return derive(x, o).corrUnk; }).length,   // 게재 공저 중 교신 여부 미확인 편수
       gradeDone: ext.filter(function (x) { return String(dataOf(x).journal_grade || '').trim(); }).length, gradeOf: ext.length,
       inhouse: papers.filter(inHouse).length
     };
@@ -120,7 +122,21 @@
   }
 
   /* 저자 칸 · 내 이름 찾기 */
-  function parseAuthors(text) { return String(text || '').split(/[,，;；\n]+/).map(function (s) { return s.trim(); }).filter(Boolean); }
+  /* known = 이미 저장된 저자 이름 중 쉼표가 든 것(예: 'Kwak, H.S.') — 글 안에 그 이름이 그대로 있으면 쪼개지 않는다 */
+  function parseAuthors(text, known) {
+    var t = String(text || ''), keep = [];
+    (known || []).forEach(function (n) {
+      n = String(n || ''); if (!/[,，;；\n]/.test(n)) return;
+      var at = t.indexOf(n);
+      if (at >= 0) { keep.push(n); t = t.slice(0, at) + '\u0001' + (keep.length - 1) + '\u0002' + t.slice(at + n.length); }
+    });
+    return t.split(/[,，;；\n]+/).map(function (s) { return s.trim().replace(/\u0001(\d+)\u0002/g, function (m, i) { return keep[+i]; }); }).filter(Boolean);
+  }
+  /* 선택칸에 서버 값이 보기에 없으면(철자 차이·모르는 값) 그 값을 보기에 더해 둔다 — 다른 칸만 고쳐 저장해도 값이 바뀌거나 지워지지 않게 */
+  function withKnown(list, cur) {
+    var c = cur == null ? '' : String(cur);
+    return c && list.indexOf(c) < 0 ? list.concat([c]) : list;
+  }
   function nameKey(s) { return String(s || '').toLowerCase().replace(/[^0-9a-z가-힣]/g, ''); }
   function isMe(name, aliases) {
     var s = String(name || '');
@@ -231,7 +247,7 @@
 
   global.AchPure = {
     derive: derive, inReq: inReq, countBuckets: countBuckets, summarize: summarize, yearBars: yearBars, norm: norm, matchItem: matchItem,
-    sim: sim, findDup: findDup, cleanDoi: cleanDoi, parseAuthors: parseAuthors, isMe: isMe, findMe: findMe, buildSaveRow: buildSaveRow,
+    sim: sim, findDup: findDup, cleanDoi: cleanDoi, parseAuthors: parseAuthors, isMe: isMe, findMe: findMe, withKnown: withKnown, BN: BN, buildSaveRow: buildSaveRow,
     applyRowToItem: applyRowToItem, classifyHttp: classifyHttp, makeRpc: makeRpc, sortItems: sortItems, rolePasses: rolePasses,
     KNOWN_DATA: KNOWN_DATA, GRADES: GRADES
   };
@@ -246,7 +262,7 @@
   var S = {
     loaded: false, loading: null, err: null, offline: false, stale: false, cachedAt: null,
     cats: [], items: [], settings: loadSettings(),
-    tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, fCat: 'all', sortKey: 'new', q: '',
+    tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, filt: false, fCat: 'all', sortKey: 'new', q: '',
     sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0
   };
   var _toast = function () {}, toastTimer = null, E = null, built = false;
@@ -405,6 +421,7 @@
           h += '<div class="ach-card"><div class="ach-big"><span class="n s" data-n="' + sm.respAll + '">' + sm.respAll + '</span><span class="u">편</span><span class="l">책임저자 (게재 기준)</span></div>' +
             '<div class="ach-split"><span>제1저자 ' + sm.bk.pure + '</span><span>공동제1 ' + sm.bk.cofirst + '</span><span>교신 ' + sm.bk.corr + '</span><span>겸임 ' + sm.bk.both + '</span><span class="dim">공저 ' + sm.bk.co + '</span>' + (sm.bk.none ? '<span class="dim">역할 미입력 ' + sm.bk.none + '</span>' : '') + '</div>' +
             '<div class="ach-pair"><div><div class="n2">' + sm.respAll + '</div><div class="t2">전체 (교내 논문집 포함)</div></div><div><div class="n2">' + sm.req + '</div><div class="t2">승진 요건용 (' + (o.inhouseReq ? '교외·교내' : '교외') + '만)</div></div></div>' +
+            (sm.coUnk ? '<div class="ach-small"><b>공저 중 교신 여부 미확인 ' + sm.coUnk + '편</b> — 확인되면 책임저자가 늘 수 있어요</div>' : '') +
             '<div class="ach-small">규정 판정이 아닌 참고 숫자예요. 승진 요건용은 등재·SCI급 등급이 확인돼야 정확해져요. 지금은 등급 입력 ' + sm.gradeDone + '/' + sm.gradeOf + '건이라 「교외·게재」 기준 근사값입니다.</div></div>';
         }
       } else {
@@ -434,8 +451,9 @@
   function tagsHtml(x) {
     var k = catById(x.kind_id), h = '';
     if (isPaperKind(k)) {
-      var d = derive(x, opts()), dd = dataOf(x);
-      if (d.text) h += '<span class="ach-tag' + (d.co ? ' co' : '') + '">' + esc(d.text) + (toInt(dd.author_pos) ? ' ' + toInt(dd.author_pos) + (toInt(dd.author_total) ? '/' + toInt(dd.author_total) : '') : '') + '</span>';
+      var d = derive(x, opts());
+      /* 목록 표식은 역할만 풀어 쓴다(「1/1」 같은 분수는 초보에게 낯설어서 뺐다 — 몇 번째인지는 상세의 「내 위치」에) */
+      if (d.text) h += '<span class="ach-tag' + (d.co ? ' co' : '') + '">' + esc(d.text.replace('공동제1', '공동제1저자').replace(/교신/g, '교신저자')) + '</span>';
       if (inHouse(x)) h += '<span class="ach-tag in">교내</span>';
       if (x.status === 'manuscript') h += '<span class="ach-tag wait">원고본·게재 불명</span>';
       else if (x.status && x.status !== 'published') h += '<span class="ach-tag wait">' + esc(STATUS_LABEL[x.status] || x.status) + '</span>';
@@ -452,20 +470,24 @@
     var res = sortItems(live().filter(function (x) { return matchItem(x, S.q); }), S.sortKey);
     return '<div class="ach-sortline"><span>검색 결과 ' + res.length + '건</span><span></span></div>' + (res.map(function (x) { return rowHtml(x, '', kindsList().length > 1); }).join('') || '<div class="ach-empty"><b>찾는 기록이 없어요</b>다른 낱말로 찾아 보세요.</div>');
   }
+  /* 합계 점검은 틀릴 때만 보인다(맞을 땐 화면을 차지하지 않는다) — 틀렸다는 건 계산 구멍이 생겼다는 뜻이라 눈에 띄게 */
   function chipsHtml(k, list) {
     var o = opts(), bk = countBuckets(list, o), tot = list.length, h = '';
     if (isPaperKind(k)) {
       var ok1 = (bk.resp + bk.co + bk.none === tot), ok2 = (bk.pure + bk.cofirst + bk.corr + bk.both === bk.resp);
-      h += '<div class="ach-chips"><button type="button" class="ach-chip' + (S.role === 'all' ? ' on' : '') + '" data-act="role" data-r="all">전체 ' + tot + '</button><button type="button" class="ach-chip' + (S.role === 'resp' ? ' on' : '') + '" data-act="role" data-r="resp">책임저자 ' + bk.resp + '</button><button type="button" class="ach-chip' + (S.role === 'co' ? ' on' : '') + '" data-act="role" data-r="co">공저 ' + bk.co + '</button>' +
+      var pubs = list.filter(isPub), nonPub = list.filter(function (x) { return !isPub(x); }), pb = countBuckets(pubs, o);
+      /* 이 목록 숫자는 원고본 같은 게재 아닌 논문까지 세어서 요약(게재 기준)과 다를 수 있다 — 칩 이름과 한 줄 안내로 밝힌다 */
+      var diff = nonPub.length > 0 && pb.resp !== bk.resp, ms = nonPub.every(function (x) { return x.status === 'manuscript'; }), inc = ms ? '원고본 포함' : '게재 전 포함';
+      h += '<div class="ach-chips"><button type="button" class="ach-chip' + (S.role === 'all' ? ' on' : '') + '" data-act="role" data-r="all">전체 ' + tot + '</button><button type="button" class="ach-chip' + (S.role === 'resp' ? ' on' : '') + '" data-act="role" data-r="resp">책임저자 ' + bk.resp + (diff ? ' <small>(' + inc + ')</small>' : '') + '</button><button type="button" class="ach-chip' + (S.role === 'co' ? ' on' : '') + '" data-act="role" data-r="co">공저 ' + bk.co + '</button>' +
         (bk.none ? '<button type="button" class="ach-chip' + (S.role === 'none' ? ' on' : '') + '" data-act="role" data-r="none">역할 미입력 ' + bk.none + '</button>' : '') + '</div>';
+      if (diff) h += '<div class="ach-chk">요약(게재 기준)은 ' + pb.resp + '편, 여기는 ' + (ms ? '원고본까지' : '게재 전 논문까지') + ' ' + bk.resp + '편</div>';
       if (S.role === 'resp') {
-        h += '<div class="ach-chips">';
-        ['all', 'pure', 'cofirst', 'corr', 'both'].forEach(function (b) { h += '<button type="button" class="ach-chip sm' + (S.sub === b ? ' on' : '') + '" data-act="sub" data-s="' + b + '">' + (b === 'all' ? '책임저자 전체' : BN[b]) + ' ' + (b === 'all' ? bk.resp : bk[b]) + '</button>'; });
+        h += '<div class="ach-chips subrow">';
+        ['all', 'pure', 'cofirst', 'corr', 'both'].forEach(function (b) { h += '<button type="button" class="ach-chip sm' + (S.sub === b ? ' on' : '') + '" data-act="sub" data-s="' + b + '">' + (b === 'all' ? '전체' : BN[b]) + ' ' + (b === 'all' ? bk.resp : bk[b]) + '</button>'; });
         h += '</div>';
       }
-      h += '<div class="ach-chips"><button type="button" class="ach-chip sm' + (S.fInh ? ' on' : '') + '" data-act="fil" data-f="inh">교내 ' + list.filter(inHouse).length + '</button><button type="button" class="ach-chip sm' + (S.fWait ? ' on' : '') + '" data-act="fil" data-f="wait">게재 아님 ' + list.filter(function (x) { return !isPub(x); }).length + '</button></div>';
-      h += '<div class="ach-chk">' + (ok1 ? '<i>✓</i> 책임저자 ' + bk.resp + ' + 공저 ' + bk.co + (bk.none ? ' + 미입력 ' + bk.none : '') + ' = 전체 ' + tot : '<span class="bad">합이 안 맞아요</span>') +
-        (bk.resp ? '<br>' + (ok2 ? '<i>✓</i> ' : '<span class="bad">합이 안 맞아요 </span>') + '제1저자 ' + bk.pure + ' + 공동제1 ' + bk.cofirst + ' + 교신 ' + bk.corr + ' + 겸임 ' + bk.both + ' = 책임저자 ' + bk.resp : '') + '</div>';
+      if (!ok1) h += '<div class="ach-chk"><span class="bad">합이 안 맞아요</span> 책임저자 ' + bk.resp + ' + 공저 ' + bk.co + (bk.none ? ' + 미입력 ' + bk.none : '') + ' ≠ 전체 ' + tot + '</div>';
+      if (bk.resp && !ok2) h += '<div class="ach-chk"><span class="bad">합이 안 맞아요</span> 제1저자 ' + bk.pure + ' + 공동제1 ' + bk.cofirst + ' + 교신 ' + bk.corr + ' + 겸임 ' + bk.both + ' ≠ 책임저자 ' + bk.resp + '</div>';
     }
     var cs = subCats(k.id);
     if (cs.length) {
@@ -473,9 +495,19 @@
       h += '<div class="ach-chips"><button type="button" class="ach-chip sm' + (S.fCat === 'all' ? ' on' : '') + '" data-act="cat" data-c="all">분류 전체 ' + tot + '</button>';
       cs.forEach(function (c) { var n = list.filter(function (x) { return x.cat_id === c.id; }).length; sum += n; h += '<button type="button" class="ach-chip sm' + (S.fCat === c.id ? ' on' : '') + '" data-act="cat" data-c="' + esc(c.id) + '">' + esc(c.name) + ' ' + n + '</button>'; });
       if (none) h += '<button type="button" class="ach-chip sm' + (S.fCat === 'none' ? ' on' : '') + '" data-act="cat" data-c="none">미분류 ' + none + '</button>';
-      h += '</div><div class="ach-chk">' + (sum + none === tot ? '<i>✓</i> 분류 ' + sum + ' + 미분류 ' + none + ' = 전체 ' + tot : '<span class="bad">합이 안 맞아요</span>') + '</div>';
+      h += '</div>' + (sum + none === tot ? '' : '<div class="ach-chk"><span class="bad">합이 안 맞아요</span> 분류 ' + sum + ' + 미분류 ' + none + ' ≠ 전체 ' + tot + '</div>');
     }
     return h;
+  }
+  /* 「필터 ▾」 안에 접어 둔 걸러내기(교내·게재 아님) — 접혀 있어도 켜진 것은 단추 글자에 보인다 */
+  function filterBtn(list) {
+    var on = [];
+    if (S.fInh) on.push('교내'); if (S.fWait) on.push('게재 아님');
+    return '<button type="button" class="ach-fbtn' + (on.length ? ' on' : '') + '" data-act="filt" aria-expanded="' + !!S.filt + '">필터' + (on.length ? ' · ' + on.join('·') : '') + (S.filt ? ' ▴' : ' ▾') + '</button>';
+  }
+  function filterPanel(list) {
+    if (!S.filt) return '';
+    return '<div class="ach-fpanel"><button type="button" class="ach-chip sm' + (S.fInh ? ' on' : '') + '" data-act="fil" data-f="inh">교내 ' + list.filter(inHouse).length + '</button><button type="button" class="ach-chip sm' + (S.fWait ? ' on' : '') + '" data-act="fil" data-f="wait">게재 아님 ' + list.filter(function (x) { return !isPub(x); }).length + '</button></div>';
   }
   function listHtml(k) {
     var all = ofKind(k.id), o = opts(), cs = subCats(k.id), paper = isPaperKind(k);
@@ -486,7 +518,7 @@
     });
     list = sortItems(list, S.sortKey);
     var sortLabel = ({ new: '연도 최신순', old: '연도 오래된순', upd: '최근 변경순' })[S.sortKey];
-    var h = chipsHtml(k, all) + '<div class="ach-sortline"><span>' + list.length + '건</span><button type="button" data-act="sort">' + sortLabel + ' ▾</button></div>';
+    var h = chipsHtml(k, all) + '<div class="ach-sortline"><span>' + list.length + '건</span><span class="rt">' + (paper ? filterBtn(all) : '') + '<button type="button" data-act="sort">' + sortLabel + ' ▾</button></span></div>' + (paper ? filterPanel(all) : '');
     h += list.map(function (x) { return rowHtml(x, '', false); }).join('') || (all.length ? '<div class="ach-note">조건에 맞는 항목이 없습니다.</div>' : '<div class="ach-empty"><b>아직 기록이 없어요</b>' + (S.offline ? '' : '아래 「＋ ' + esc(k.name) + ' 추가」 단추로 첫 기록을 넣어 보세요.') + '</div>');
     return h;
   }
@@ -508,15 +540,17 @@
   function closeSheet() { hideSheetNow(); renderAll(); }
   function hideSheetNow() { S.sheet = false; S.sheetBack = null; S.noScrim = false; E = null; var s = $('achSheet'); if (s) s.classList.remove('show'); }
   function sheetBackOrClose() { if (S.sheetBack) S.sheetBack(); else closeSheet(); }
-  function toast(msg) { try { _toast(msg); } catch (e) {} }
-  function undoToast(msg, ms, onUndo) {
+  function toast(msg, ms, wide) { try { _toast(msg, ms, wide); } catch (e) {} }   // 앱의 안내 띠(ms 길이 · wide 넓은 한 줄)를 그대로 쓴다
+  var undoLive = false;     // 되돌리기 토스트가 떠 있는 동안 true — 그 사이 또 지우면 앞 항목의 되돌리기 단추가 사라지므로 알려 준다
+  function undoToast(msg, ms, onUndo, extra) {
     var t = $('achToast'); ms = ms || 8000;
-    t.innerHTML = '<div class="tr"><span>' + esc(msg) + '</span><u id="achUndo" role="button" tabindex="0">되돌리기</u></div><div class="pg" id="achPg"></div>';
+    t.innerHTML = '<div class="tr"><span>' + esc(msg) + (extra ? '<small>' + esc(extra) + '</small>' : '') + '</span><u id="achUndo" role="button" tabindex="0">되돌리기</u></div><div class="pg" id="achPg"></div>';
+    undoLive = true;
     t.classList.add('show');
     var pg = $('achPg'); pg.style.transition = calm() ? 'none' : 'transform ' + ms + 'ms linear';
     setTimeout(function () { pg.style.transform = 'scaleX(0)'; }, 30);
-    $('achUndo').onclick = function () { clearTimeout(toastTimer); t.classList.remove('show'); onUndo(); };
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, ms);
+    $('achUndo').onclick = function () { clearTimeout(toastTimer); t.classList.remove('show'); undoLive = false; onUndo(); };
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); undoLive = false; }, ms);
   }
   function guardWrite() {
     if (S.offline) { toast('지금은 읽기만 돼요 — 연결된 뒤 다시 시도해 주세요.'); return false; }
@@ -538,7 +572,7 @@
     var vol = d.volume ? esc(d.volume) + (d.issue ? '(' + esc(d.issue) + ')' : '') : '', pg = d.pages ? esc(d.pages) + '쪽' : (d.article_no ? '논문번호 ' + esc(d.article_no) : '');
     var kv = '';
     if (paper) {
-      kv += '<span>내 위치</span><b>' + (pos ? pos + (toInt(d.author_total) ? '/' + toInt(d.author_total) : '') + '번째 · ' + esc(dv.text) + (dv.resp ? ' (책임저자)' : '') : '아직 입력 안 함') + '</b>';
+      kv += '<span>내 위치</span><b>' + (pos ? pos + (toInt(d.author_total) ? '/' + toInt(d.author_total) : '') + '번째 · ' + esc(dv.text) + (dv.resp ? ' (책임저자)' : '') + (dv.corrUnk ? ' · <i class="ach-unk">교신 여부 확인 전</i>' : '') : '아직 입력 안 함') + '</b>';
       kv += '<span>학술지</span><b>' + esc(x.venue || '-') + (inHouse(x) ? ' · 교내' : (x.venue ? ' · 교외' : '')) + '</b>';
       if (vol || pg) kv += '<span>권(호)·쪽</span><b>' + [vol, pg].filter(Boolean).join(' · ') + '</b>';
     } else { kv += '<span>기관</span><b>' + esc(x.venue || '-') + '</b>'; if (x.cat_id && catById(x.cat_id)) kv += '<span>분류</span><b>' + esc(catById(x.cat_id).name) + '</b>'; }
@@ -559,7 +593,7 @@
   function openEdit(base, kind) {
     if (!guardWrite()) return;
     var k = kind || catById(base.kind_id), paper = isPaperKind(k), d = base ? dataOf(base) : {}, names = base ? peopleNames(base) : [], cs = subCats(k.id);
-    E = { base: base, kind: k, id: base ? base.id : uuid(), busy: false, authText: names.join(', '), inTouched: false, coTouched: false, crTouched: false, dupAck: false };
+    E = { base: base, kind: k, id: base ? base.id : uuid(), busy: false, authText: names.join(', '), knownNames: names.filter(function (n) { return /[,，;；\n]/.test(n); }), sig: '', inTouched: false, coTouched: false, crTouched: false, dupAck: false };
     var status = base ? (base.status || '') : 'published', inH = base ? d.in_house === true : false;
     var more = '<label class="ach-lbl" for="achFV">' + (paper ? '학술지' : '학교·기관') + '</label><input class="ach-f" id="achFV" value="' + esc(base ? base.venue : '') + '" autocomplete="off">';
     if (paper) {
@@ -567,8 +601,8 @@
         '<div class="ach-two"><div><label class="ach-lbl" for="achFVo">권</label><input class="ach-f" id="achFVo" value="' + esc(d.volume || '') + '"></div><div><label class="ach-lbl" for="achFIs">호</label><input class="ach-f" id="achFIs" value="' + esc(d.issue || '') + '"></div></div>' +
         '<div class="ach-two"><div><label class="ach-lbl" for="achFPg">쪽</label><input class="ach-f" id="achFPg" value="' + esc(d.pages || '') + '" placeholder="예: 101-110"></div><div><label class="ach-lbl" for="achFAn">논문번호</label><input class="ach-f" id="achFAn" value="' + esc(d.article_no || '') + '"></div></div>' +
         '<label class="ach-lbl" for="achFD">DOI</label><input class="ach-f" id="achFD" value="' + esc(d.doi || '') + '" placeholder="10.xxxx/…" autocomplete="off">' +
-        '<label class="ach-lbl" for="achFG">등급 (모르면 비워 두세요)</label><select class="ach-f" id="achFG"><option value="">입력 안 함</option>' + GRADES.map(function (g) { return '<option' + (d.journal_grade === g ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('') + '</select>' +
-        '<label class="ach-lbl" for="achFS">상태</label><select class="ach-f" id="achFS">' + STATUS_ORDER.map(function (s) { return '<option value="' + s + '"' + (status === s ? ' selected' : '') + '>' + esc(STATUS_LABEL[s]) + '</option>'; }).join('') + '<option value=""' + (status === '' ? ' selected' : '') + '>입력 안 함</option></select>';
+        '<label class="ach-lbl" for="achFG">등급 (모르면 비워 두세요)</label><select class="ach-f" id="achFG"><option value="">입력 안 함</option>' + withKnown(GRADES, d.journal_grade).map(function (g) { return '<option value="' + esc(g) + '"' + (String(d.journal_grade == null ? '' : d.journal_grade) === g ? ' selected' : '') + '>' + esc(g) + (GRADES.indexOf(g) < 0 ? ' (기존 값)' : '') + '</option>'; }).join('') + '</select>' +
+        '<label class="ach-lbl" for="achFS">상태</label><select class="ach-f" id="achFS">' + withKnown(STATUS_ORDER, status).map(function (s) { return '<option value="' + esc(s) + '"' + (status === s ? ' selected' : '') + '>' + esc(STATUS_LABEL[s] || (s + ' (기존 값)')) + '</option>'; }).join('') + '<option value=""' + (status === '' ? ' selected' : '') + '>입력 안 함</option></select>';
     } else {
       if (cs.length) more += '<label class="ach-lbl" for="achFC">분류</label><select class="ach-f" id="achFC"><option value="">분류 없음</option>' + cs.map(function (c) { return '<option value="' + esc(c.id) + '"' + (base && base.cat_id === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
     }
@@ -582,13 +616,29 @@
       '<button type="button" class="ach-exp" id="achEx" data-act="more">▾ 더 입력 (' + (paper ? '학술지 · 교내 · 권/호/쪽 · DOI · 등급 · 상태 · ' : '') + '메모)' + (paper && !base ? ' — 지금 상태: 게재' : '') + '</button><div class="ach-more-in" id="achMi">' + more + '</div>' +
       '<div id="achErr"></div><div style="height:16px"></div><button type="button" class="ach-btn" id="achSave" data-act="save">저장</button>', null, true);
     wireEdit(paper);
+    editWarnAt = 0; E.sig = formSig();    // 연 직후의 입력 모습 — 닫을 때 달라졌는지 비교(제목뿐 아니라 모든 칸)
+  }
+  /* 입력 모습 한 줄 요약(모든 입력칸·선택칸·스위치) — 연 직후와 달라졌으면 「고친 상태」 */
+  function formSig() {
+    var box = $('achBox'); if (!box) return '';
+    var parts = [], els = box.querySelectorAll('input,textarea,select'), i;
+    for (i = 0; i < els.length; i++) parts.push(els[i].id + '=' + els[i].value);
+    els = box.querySelectorAll('.tg');
+    for (i = 0; i < els.length; i++) parts.push(els[i].id + '=' + els[i].classList.contains('on'));
+    return parts.join('\u0001');
+  }
+  function editDirty() { return !!E && !!E.sig && formSig() !== E.sig; }
+  /* 입력 중인 창을 닫기 전 한 번 물어본다(뒤로가기·「닫기」 똑같이). true = 닫아도 됨 */
+  function confirmEditClose() {
+    if (E && !E.busy && S.noScrim && editDirty() && Date.now() - editWarnAt > 3000) { editWarnAt = Date.now(); toast('한 번 더 누르면 닫혀요 (입력한 내용이 사라져요)', 2600, true); return false; }
+    return true;
   }
   function readSw(id) { var e = $(id); return !!(e && e.classList.contains('on')); }
   function updatePreview() {
     var pv = $('achPv'); if (!pv) return;
     var pos = toInt($('achFP').value), d = derive({ data: { author_pos: pos, co_first: readSw('achFCo'), corresponding: readSw('achFCr') } }, opts());
     pv.textContent = pos ? '→ ' + (d.text || '공저') + (d.resp ? ' · 책임저자로 셉니다' : ' · 책임저자 아님') : '순번을 넣으면 역할이 자동으로 계산돼요';
-    var tot = toInt($('achFTt').value), names = parseAuthors($('achFA').value), n = $('achCnt'), msg = '';
+    var tot = toInt($('achFTt').value), names = parseAuthors($('achFA').value, E.knownNames), n = $('achCnt'), msg = '';
     if (pos && tot && pos > tot) msg = '내 순번이 총 저자수보다 커요.';
     else if (names.length && tot && names.length !== tot) msg = '저자 이름은 ' + names.length + '명인데 총 저자수는 ' + tot + '명이에요. 맞는지 확인해 주세요.';
     n.textContent = msg;
@@ -615,7 +665,7 @@
       $('achFD').oninput = function () { E.dupAck = false; checkDup(); };
       $('achFP').oninput = updatePreview; $('achFTt').oninput = updatePreview;
       $('achFA').oninput = function () {
-        var names = parseAuthors(this.value); if (!names.length) { updatePreview(); return; }
+        var names = parseAuthors(this.value, E.knownNames); if (!names.length) { updatePreview(); return; }
         $('achFTt').value = names.length;
         var me = findMe(names, S.settings.names); if (me) $('achFP').value = me;
         updatePreview();
@@ -635,7 +685,7 @@
     if (paper) {
       var st = $('achFS').value; v.status = st === '' ? null : st;
       var text = $('achFA').value.trim();
-      if (text !== E.authText.trim() && (text || E.authText)) v.people = parseAuthors(text).map(function (n) { return { name: n }; });
+      if (text !== E.authText.trim() && (text || E.authText)) v.people = parseAuthors(text, E.knownNames).map(function (n) { return { name: n }; });
       var d = v.data, pos = toInt($('achFP').value), tot = toInt($('achFTt').value);
       d.author_pos = pos; d.author_total = tot;
       var bd = base ? dataOf(base) : {};
@@ -654,13 +704,23 @@
   function doSave(forceBaseRev) {
     if (!E || E.busy) return;
     var paper = isPaperKind(E.kind), v = readForm(), bad = false;
-    ['achFT', 'achFY'].forEach(function (id) { $(id).classList.remove('bad'); });
+    ['achFT', 'achFY', 'achFP'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('bad'); });
     if (!v.title) { $('achFT').classList.add('bad'); bad = true; }
     if (paper && !v.year) { $('achFY').classList.add('bad'); bad = true; }
     if (v.yearRaw !== '' && (!v.year || v.year < 1950 || v.year > 2100)) { $('achFY').classList.add('bad'); bad = true; }
     if (bad) { inlineErr(paper ? '제목과 연도(1950~2100)를 확인해 주세요.' : '제목을 확인해 주세요(연도를 적었다면 1950~2100).'); return; }
     var pp = v.data.author_pos, tt = v.data.author_total;
     if (paper && pp && tt && pp > tt) { inlineErr('내 순번이 총 저자수보다 커요. 확인해 주세요.'); return; }
+    /* 교신(또는 공동 제1) 스위치를 켰는데 내 순번이 비어 있으면 역할을 계산할 수 없다 — 저장 전에 순번부터. (순번이 원래 비어 있던 옛 항목을 건드리지 않고 다른 칸만 고칠 땐 막지 않는다) */
+    if (paper && !pp && (readSw('achFCr') || readSw('achFCo'))) {
+      var legacy = E.base && !toInt(dataOf(E.base).author_pos) && !E.crTouched && !E.coTouched;
+      if (!legacy) {
+        $('achFP').classList.add('bad');
+        inlineErr((readSw('achFCr') ? '교신저자' : '공동 제1저자') + '로 표시하려면 「내 순번」을 먼저 적어 주세요. 저자 칸에 이름을 붙여 넣으면 내 순번이 자동으로 채워져요.');
+        try { $('achFP').focus(); } catch (e) {}
+        return;
+      }
+    }
     if (!guardWrite()) return;
     delete v.yearRaw;
     var base = E.base; if (base && forceBaseRev) base = Object.assign({}, base, { rev: forceBaseRev });
@@ -707,12 +767,18 @@
     rpc('ach_trash_item', { p_id: id, p_restore: false }).then(function (ok) {
       if (ok === true || (isObj(ok) && ok.ok)) {
         x.deleted_at = nowIso(); x.rev = (x.rev || 1) + 1; saveCache({ cats: S.cats, items: S.items });
-        setTimeout(function () { renderAll(); undoToast('휴지통으로 옮겼습니다', 8000, function () { restoreItem(id, true); }); }, calm() ? 0 : 230);
+        setTimeout(function () {
+          renderAll();
+          undoToast('휴지통으로 옮겼습니다', 8000, function () { restoreItem(id, true); }, undoLive ? '앞에 옮긴 항목은 ⚙ 설정 › 휴지통에서 되살려요' : '');
+        }, calm() ? 0 : 230);
       } else { renderAll(); toast('옮기지 못했어요 — 이미 없는 항목이에요.'); load(true); }
     }).catch(function (e) { renderAll(); toast('휴지통으로 옮기지 못했어요 — ' + errText(e)); });
   }
   function restoreItem(id, fromUndo) {
-    rpc('ach_trash_item', { p_id: id, p_restore: true }).then(function () {
+    rpc('ach_trash_item', { p_id: id, p_restore: true }).then(function (ok) {
+      if (!(ok === true || (isObj(ok) && ok.ok === true))) {          // 서버가 「못 했다」고 답함 — 되살렸다고 보여 주지 않고 서버 내용을 다시 받는다
+        toast('되살리지 못했어요 — 이미 없는 항목이에요.'); load(true); return;
+      }
       var x = itemById(id); if (x) { x.deleted_at = null; x.rev = (x.rev || 1) + 1; saveCache({ cats: S.cats, items: S.items }); }
       renderAll(); if (S.sheet && !fromUndo) openTrash(); toast(fromUndo ? '되돌렸습니다' : '되살렸습니다');
     }).catch(function (e) { toast('되살리지 못했어요 — ' + errText(e)); });
@@ -725,6 +791,7 @@
     }).catch(function (e) { toast('영구 삭제하지 못했어요 — ' + errText(e)); });
   }
   function openTrash() {
+    Object.keys(purgeArm).forEach(function (k) { clearTimeout(purgeArm[k]); delete purgeArm[k]; });   // 목록을 새로 그리면 대기 표시도 처음으로
     var tr = trashed(), h = '<div class="ach-hd"><button type="button" class="ach-back" data-act="settings">‹ 설정</button><h2>휴지통</h2></div>';
     h += tr.length ? tr.map(function (x) { return '<div class="ach-card" style="padding:12px"><div style="font-weight:800;font-size:14.5px;line-height:1.4">' + esc(x.title) + '</div><div class="ach-two" style="margin-top:10px"><button type="button" class="ach-btn sm ghost" data-act="restore" data-id="' + esc(x.id) + '">되살리기</button><button type="button" class="ach-btn sm ghost danger" data-act="purge" data-id="' + esc(x.id) + '">영구 삭제…</button></div></div>'; }).join('') : '<div class="ach-note">휴지통이 비어 있어요. 지운 항목은 여기서 되살릴 수 있어요.</div>';
     openSheet(h + '<div class="ach-note">영구 삭제는 되돌릴 수 없어서 한 번 더 확인해요.</div>', openSettings, false);
@@ -761,7 +828,10 @@
     }
     try {
       var f = new File([payload], name, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { navigator.share({ files: [f], title: '실적 내보내기' }).catch(copyFallback); return; }
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        navigator.share({ files: [f], title: '실적 내보내기' }).catch(function (e) { if (e && e.name === 'AbortError') return; copyFallback(); });   // 공유 창을 그냥 닫은 건(AbortError) 복사하지 않고, 정말 실패했을 때만 복사
+        return;
+      }
     } catch (e) {}
     copyFallback();
   }
@@ -825,14 +895,15 @@
   /* =====================================================================
    * 6. 눌림 처리 (한 곳에서 받아 나눈다)
    * ===================================================================*/
-  var purgeArm = null;
+  var purgeArm = {};        // 항목마다 따로 「정말 영구 삭제」 대기(id → 타이머)
   function onClick(e) {
     var el = e.target.closest ? e.target.closest('[data-act]') : null; if (!el) return;
     var a = el.getAttribute('data-act'), id = el.getAttribute('data-id');
     switch (a) {
-      case 'tab': S.tab = el.getAttribute('data-t'); S.role = 'all'; S.sub = 'all'; S.fInh = false; S.fWait = false; S.fCat = 'all'; $('achQ').value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderAll(); break;
+      case 'tab': S.tab = el.getAttribute('data-t'); S.role = 'all'; S.sub = 'all'; S.fInh = false; S.fWait = false; S.filt = false; S.fCat = 'all'; $('achQ').value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderAll(); break;
       case 'role': S.role = el.getAttribute('data-r'); S.sub = 'all'; renderAll(); break;
       case 'sub': S.sub = el.getAttribute('data-s'); renderAll(); break;
+      case 'filt': S.filt = !S.filt; renderAll(); break;
       case 'fil': if (el.getAttribute('data-f') === 'inh') S.fInh = !S.fInh; else S.fWait = !S.fWait; renderAll(); break;
       case 'cat': S.fCat = el.getAttribute('data-c'); renderAll(); break;
       case 'sort': S.sortKey = S.sortKey === 'new' ? 'old' : (S.sortKey === 'old' ? 'upd' : 'new'); renderAll(); break;
@@ -842,7 +913,7 @@
       case 'menu': $('achMenu').classList.toggle('show'); break;
       case 'add': var kd = S.tab !== 'sum' ? catById(S.tab) : null; if (kd) openEdit(null, kd); break;
       case 'edit': openEdit(itemById(id)); break;
-      case 'editclose': hideSheetNow(); renderAll(); break;
+      case 'editclose': if (confirmEditClose()) { hideSheetNow(); renderAll(); } break;
       case 'more': $('achMi').classList.toggle('show'); break;
       case 'save': doSave(); break;
       case 'dupgo': E.dupAck = true; checkDup(); break;
@@ -854,7 +925,10 @@
       case 'settings': openSettings(); break;
       case 'trashlist': openTrash(); break;
       case 'restore': restoreItem(id, false); break;
-      case 'purge': if (purgeArm === id) { purgeArm = null; purgeItem(id); } else { purgeArm = id; el.textContent = '정말 영구 삭제'; setTimeout(function () { if (purgeArm === id) { purgeArm = null; if (el.isConnected) el.textContent = '영구 삭제…'; } }, 4000); } break;
+      case 'purge':
+        if (purgeArm[id]) { clearTimeout(purgeArm[id]); delete purgeArm[id]; purgeItem(id); }
+        else { el.textContent = '정말 영구 삭제'; purgeArm[id] = setTimeout(function () { delete purgeArm[id]; if (el.isConnected) el.textContent = '영구 삭제…'; }, 4000); }
+        break;
       case 'names': openNames(); break;
       case 'savenames': S.settings.names = ($('achFNm').value || '').split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean); saveSettings(); toast('저장했어요'); openSettings(); break;
       case 'export': exportJson(); break;
@@ -886,10 +960,7 @@
   var editWarnAt = 0;
   function back() {
     if (S.sheet) {
-      if (E && !E.busy && S.noScrim) {      // 입력 중인 창 — 실수로 닫아 내용이 사라지지 않게 한 번 더 누르면 닫는다
-        var t = $('achFT'); var dirty = t && (t.value.trim() !== String(E.base ? E.base.title : '') || (E.base == null && ($('achFA') && $('achFA').value.trim())));
-        if (dirty && Date.now() - editWarnAt > 3000) { editWarnAt = Date.now(); toast('한 번 더 누르면 닫혀요 (입력한 내용이 사라져요)'); return true; }
-      }
+      if (!confirmEditClose()) return true;     // 입력 중이면 한 번 더 누를 때 닫힘
       sheetBackOrClose(); return true;
     }
     if (S.q) { $('achQ').value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderAll(); return true; }
