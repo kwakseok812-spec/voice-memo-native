@@ -1,5 +1,5 @@
 /* ============================================================================
- * achievements.css — 「실적」 탭 (v9.59, O-0684)
+ * achievements.css — 「실적」 탭 (v9.59·v9.60, O-0684)
  * 모든 규칙은 #achView(화면) · #achLayer(창·토스트·추가 단추) 안에서만 먹는다 — 다른 화면에 영향 없음.
  * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 ...)를 그대로 쓴다(밝은·어두운 화면 자동).
  * ==========================================================================*/
@@ -159,6 +159,24 @@ html[data-style="dark"] .ach-preview { color: #93B8FF; }
 .ach-toast small { display: block; font-size: 12px; font-weight: 600; opacity: .85; margin-top: 2px; line-height: 1.4; word-break: keep-all; }
 .ach-unk { font-style: normal; color: var(--warn-t, var(--warn)); font-weight: 800; }
 .ach-toast .pg { position: absolute; left: 0; bottom: 0; height: 3px; background: #93c5fd; width: 100%; transform-origin: left; }
+
+/* ----- v9.60: 탭 8개를 가로로 밀 때 가려진 쪽 끝의 그늘 · 0건 카드 · 특허 서류 줄 ----- */
+.ach-tabs.fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
+.ach-tabs.fade-l { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 34px), transparent); }
+.ach-tabs.fade-l.fade-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 30px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 30px, #000 calc(100% - 34px), transparent); }
+.ach-card.zero .ach-big .n { opacity: .5; }
+.ach-two > div { min-width: 0; }
+.ach-f[type="date"], .ach-f[type="month"] { display: block; min-width: 0; -webkit-appearance: none; appearance: none; }
+.ach-f[type="date"]::-webkit-calendar-picker-indicator, .ach-f[type="month"]::-webkit-calendar-picker-indicator { opacity: .8; }
+html[data-style="dark"] .ach-f[type="date"]::-webkit-calendar-picker-indicator, html[data-style="dark"] .ach-f[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+.ach-fils { margin-top: 12px; }
+.ach-fils > .ach-lbl small { font-size: 12px; }
+.ach-fil { border-radius: 16px; border: 1px solid var(--glass-b); background: var(--in-bg); padding: 4px 12px 12px; margin-bottom: 8px; }
+.ach-filh { display: flex; align-items: center; justify-content: space-between; min-height: 44px; font-size: 14.5px; }
+.ach-mini.wide { display: block; width: 100%; height: 44px; font-size: 14.5px; border-style: dashed; }
+.ach-fild { border-radius: 14px; border: 1px solid var(--glass-b); background: var(--glass); padding: 9px 12px; margin-bottom: 6px; font-size: 14px; }
+.ach-fild b { font-weight: 800; margin-left: 4px; }
+.ach-fild .s { font-size: 12.5px; color: var(--ad); margin-top: 3px; line-height: 1.5; word-break: break-all; }
 
 @media (prefers-reduced-motion: reduce) {
   #achView *, #achLayer * { animation: none !important; transition: none !important; }

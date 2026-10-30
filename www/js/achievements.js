@@ -1,5 +1,6 @@
 /* ============================================================================
- * achievements.js — 「실적」 탭 (v9.59, O-0684)  교수님의 논문·학위논문 기록을 모아 보고 찾는 화면
+ * achievements.js — 「실적」 탭 (v9.59·v9.60, O-0684)  교수님의 논문·학위논문·특허·저서·연구과제·수상·학회활동 기록을 모아 보고 찾는 화면
+ * v9.60: 특허·저서·연구과제·수상·학회활동 종류 추가 — 칸 정의는 아래 PROFILES 표 한 곳. 서버에 그 종류 행(ach_cats)이 없으면 탭이 보이지 않는다(서버 시드가 곧 스위치).
  * ----------------------------------------------------------------------------
  * 화면: 요약(첫 화면) · 논문 목록(역할 칩·걸러내기·정렬) · 학위논문 목록 · 상세 · 추가/고치기 · 휴지통 · ⚙ 설정(내 이름 표기·내보내기·종류 관리·스위치 2개)
  * 저장: 스마트비서 서버(Supabase)의 ach_cats / ach_items 표. 표 직접 접근은 막혀 있고 ach_* 함수(RPC)로만 읽고 쓴다 —
@@ -27,7 +28,9 @@
   var BN = { pure: '제1저자', cofirst: '공동제1', corr: '교신', both: '겸임', co: '공저', none: '역할 미입력' };
   var IN_HOUSE_RE = /산업기술연구소\s*논문집|교수학습\s*연구지/;
   /* 화면이 아는 data 칸 — 저장할 때 이 칸만 화면 값으로 바꾸고 나머지(가져올 때 남긴 출처 메모·앞으로 생길 칸)는 건드리지 않는다 */
-  var KNOWN_DATA = ['author_pos', 'author_total', 'co_first', 'corresponding', 'in_house', 'volume', 'issue', 'pages', 'article_no', 'doi', 'journal_grade'];
+  var KNOWN_DATA = ['author_pos', 'author_total', 'co_first', 'corresponding', 'in_house', 'volume', 'issue', 'pages', 'article_no', 'doi', 'journal_grade',
+    /* v9.60 — 특허·저서·연구과제·수상·학회활동 (칸 목록 표 PROFILES 의 data 칸과 같아야 한다) */
+    'applicant_type', 'tech_field', 'filings', 'book_type', 'isbn', 'my_role', 'page_count', 'nl_checked', 'grant_kind', 'start_ym', 'end_ym', 'budget', 'scope', 'position'];
   /* 교수님 본인 이름을 찾는 기본 규칙(7-4절): 한글 이름(글자 사이 띄움 허용) · 영문은 성(Kwak)과 이름 쪽(Ho Seok / Hoseok / H.S. / HS)이 함께 있을 때만.
    *   성(Kwak)만으로는 찾지 않는다. 더 필요한 표기는 ⚙ 「내 이름 표기」에서 더한다(폰에 저장). */
   var ME_KO = '곽호석';
@@ -92,7 +95,7 @@
   function norm(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^0-9a-z가-힣]/g, ''); }
   function hayOf(x) {
     var d = dataOf(x), names = Array.isArray(x.people) ? x.people.map(function (p) { return p && p.name; }).join(' ') : '';
-    return norm([x.title, names, x.venue, x.year, d.doi].join(' '));
+    return norm([x.title, names, x.venue, x.year, d.doi, d.isbn, d.position, d.tech_field, filingsText(x)].join(' '));
   }
   function matchItem(x, q) {
     var terms = String(q || '').toLowerCase().split(/\s+/).map(norm).filter(Boolean);
@@ -110,12 +113,14 @@
     return u ? i / u : 0;
   }
   function cleanDoi(s) { return String(s || '').trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, ''); }
-  function findDup(all, title, doi, selfId, kindId) {
+  /* ids = [{v: 정리한 번호, why: '같은 ISBN'}, …] — v9.60: 저서의 ISBN·특허의 출원/등록번호도 같으면 같은 기록으로 본다 */
+  function findDup(all, title, doi, selfId, kindId, ids) {
     var d = norm(cleanDoi(doi)), t = String(title || '').trim();
     for (var i = 0; i < all.length; i++) {
       var x = all[i];
       if (!x || x.id === selfId || (kindId && x.kind_id !== kindId)) continue;
       if (d && norm(cleanDoi(dataOf(x).doi)) === d) return { x: x, why: '같은 DOI' };
+      if (ids && ids.length) { var xi = idsOf(x); for (var j = 0; j < ids.length; j++) if (ids[j].v && xi.indexOf(ids[j].v) >= 0) return { x: x, why: ids[j].why }; }
       if (norm(t).length > 6 && sim(t, x.title) >= 0.85) return { x: x, why: '비슷한 제목' };
     }
     return null;
@@ -245,11 +250,273 @@
     return true;
   }
 
+  /* =====================================================================
+   * 1-B. 종류별 칸 목록 (v9.60) — 특허·저서·연구과제·수상·학회활동
+   *   칸을 더하거나 바꿀 땐 아래 PROFILES 표 한 곳만 고친다. 같은 표로 입력 칸 · 상세 화면 · 저장이 움직인다.
+   *   종류와 표는 이름이 아니라 kind_type(patent·book)과 시드 종류 id(연구과제·수상·학회활동)로 잇는다 — 종류 이름을 바꿔도 칸은 그대로.
+   *   표에 없는 종류(⚙ 에서 새로 만든 것·학위논문·모르는 kind_type)는 profKey()='generic' → 기존 기본형 폼(학교·기관·분류·메모).
+   *   칸 정의: k=키 · col=서버의 일반 칸(title·year·item_date·venue·status) / 없으면 data[k] · t=종류(text·area·sel·sw·date·month·num·money·year·people·filings)
+   *            more=true 면 「더 입력」 안 · req=필수 · opts=선택칸 보기(문자열, 또는 [값, 글자]) · hint=작은 안내
+   * ===================================================================*/
+  var SEED = { grant: '11111111-0000-4000-8000-000000000005', award: '11111111-0000-4000-8000-000000000006', society: '11111111-0000-4000-8000-000000000007' };
+  var ID_PROFILE = {};
+  Object.keys(SEED).forEach(function (n) { ID_PROFILE[SEED[n]] = n; });
+  var BOOK_TYPES = ['저서', '공저', '교재', '역서', '편저', '기타'];
+  var FIL_STATUS = ['출원', '등록', '거절', '포기'];
+  var COUNTRIES = ['한국', '미국', '일본', '중국', '유럽(EP)', 'PCT(국제출원)', '독일', '영국', '기타'];
+  var PROFILES = {
+    patent: {
+      name: '특허', unit: '건', yearFrom: 'filings',
+      empty: '발명 한 건에 나라별 출원·등록을 줄로 넣어요. 서류 날짜를 넣으면 대표 연도가 자동으로 채워져요.',
+      fields: [
+        { k: 'title', col: 'title', t: 'text', label: '발명의 명칭', req: true },
+        { k: 'year', col: 'year', t: 'year', label: '대표 연도', req: true, hint: '아래 서류에 날짜를 넣으면 자동으로 채워져요 (등록이 있으면 첫 등록 연도, 없으면 첫 출원 연도). 손으로 고쳐도 돼요.' },
+        { k: 'people', t: 'people', noun: '발명자', total: '총 발명자수' },
+        { k: 'filings', t: 'filings' },
+        { k: 'applicant_type', t: 'sel', label: '출원인 구분', opts: ['대학', '산학협력단', '개인', '타 기관', '기타'], more: true, hint: '규정 점수는 출원인이 대학·산학협력단이고 내가 발명자인 특허만 대상이에요.' },
+        { k: 'venue', col: 'venue', t: 'text', label: '출원인 이름', more: true },
+        { k: 'tech_field', t: 'text', label: '기술 분야', more: true }
+      ]
+    },
+    book: {
+      name: '저서', unit: '권', yearFrom: null,
+      empty: '서명·출판 연도·유형만 넣어도 돼요. 출판사·ISBN·국립중앙도서관 확인은 「더 입력」에서 넣어요.',
+      fields: [
+        { k: 'title', col: 'title', t: 'text', label: '서명', req: true },
+        { k: 'year', col: 'year', t: 'year', label: '출판 연도', req: true },
+        { k: 'book_type', t: 'sel', label: '유형', opts: BOOK_TYPES, hint: '역서·편저는 승진 세부심사에서 저서로 보지 않는 관행이라 따로 세요.' },
+        { k: 'venue', col: 'venue', t: 'text', label: '출판사', more: true },
+        { k: 'isbn', t: 'text', label: 'ISBN', more: true, ph: '예: 978-89-…', live: 'isbn' },
+        { k: 'my_role', t: 'sel', label: '내 역할', opts: ['단독', '공저', '책임', '집필자'], more: true },
+        { k: 'people', t: 'people', noun: '저자', total: '총 저자수', more: true },
+        { k: 'page_count', t: 'num', label: '쪽수', more: true },
+        { k: 'nl_checked', t: 'sw', label: '국립중앙도서관에서 확인했어요', short: '도서관 확인', sub: 'ISBN 으로 검색되는지 본 경우', more: true }
+      ]
+    },
+    grant: {
+      name: '연구과제', unit: '건', yearFrom: 'start_ym',
+      empty: '과제명과 시작 연도만 넣어도 돼요. 교내외 지원사업·정책연구도 여기에 넣어요. 사업명·기간·연구비는 「더 입력」에서.',
+      fields: [
+        { k: 'title', col: 'title', t: 'text', label: '과제명', req: true },
+        { k: 'year', col: 'year', t: 'year', label: '시작 연도', req: true, hint: '시작 연월을 넣으면 자동으로 채워져요.' },
+        { k: 'venue', col: 'venue', t: 'text', label: '사업명·지원기관', more: true },
+        { k: 'grant_kind', t: 'sel', label: '주관 구분', opts: ['주관', '공동', '위탁'], more: true },
+        { k: 'my_role', t: 'sel', label: '내 역할', opts: ['책임', '공동'], more: true },
+        { k: 'start_ym', t: 'month', label: '시작 연월', more: true },
+        { k: 'end_ym', t: 'month', label: '종료 연월', more: true, hint: '진행 중이면 비워 두세요.' },
+        { k: 'budget', t: 'money', label: '총연구비 (원)', more: true, live: 'money' },
+        { k: 'status', col: 'status', t: 'sel', label: '상태', opts: [['ongoing', '진행'], ['done', '종료']], more: true }
+      ]
+    },
+    award: {
+      name: '수상', unit: '건', yearFrom: 'item_date',
+      empty: '수상명과 연도만 넣어도 돼요. 수상일·수여기관·구분은 「더 입력」에서.',
+      fields: [
+        { k: 'title', col: 'title', t: 'text', label: '수상명', req: true },
+        { k: 'year', col: 'year', t: 'year', label: '연도', req: true, hint: '수상일을 넣으면 자동으로 채워져요.' },
+        { k: 'item_date', col: 'item_date', t: 'date', label: '수상일', more: true },
+        { k: 'venue', col: 'venue', t: 'text', label: '수여기관', more: true },
+        { k: 'scope', t: 'sel', label: '구분', opts: ['교내', '교외', '국제'], more: true }
+      ]
+    },
+    society: {
+      name: '학회활동', unit: '건', yearFrom: 'start_ym',
+      empty: '학회·위원회 이름과 시작 연도만 넣어도 돼요. 직책·기간은 「더 입력」에서.',
+      fields: [
+        { k: 'title', col: 'title', t: 'text', label: '학회·위원회명', req: true },
+        { k: 'year', col: 'year', t: 'year', label: '시작 연도', req: true, hint: '시작 연월을 넣으면 자동으로 채워져요.' },
+        { k: 'position', t: 'text', label: '직책', more: true, ph: '예: 이사, 위원' },
+        { k: 'start_ym', t: 'month', label: '시작 연월', more: true },
+        { k: 'end_ym', t: 'month', label: '종료 연월', more: true, hint: '지금도 활동 중이면 비워 두세요.' }
+      ]
+    }
+  };
+  function profKey(k) {
+    if (!k) return 'generic';
+    if (k.kind_type === 'paper') return 'paper';
+    if (k.kind_type === 'patent' || k.kind_type === 'book') return k.kind_type;
+    return ID_PROFILE[k.id] || 'generic';
+  }
+  function profOf(k) { return PROFILES[profKey(k)] || null; }
+  function hasField(pf, t) { for (var i = 0; i < pf.fields.length; i++) if (pf.fields[i].t === t) return true; return false; }
+
+  /* ---- 날짜·연월·금액·ISBN 읽기 (빈 칸 → '', 모양이 틀림 → null) ---- */
+  function normYm(s) {
+    var t = String(s == null ? '' : s).trim(); if (!t) return '';
+    var m = /^(\d{4})\s*[-./]\s*(\d{1,2})$/.exec(t); if (!m) return null;
+    var y = +m[1], mo = +m[2]; if (mo < 1 || mo > 12 || y < 1950 || y > 2100) return null;
+    return m[1] + '-' + ('0' + mo).slice(-2);
+  }
+  function normDate(s) {
+    var t = String(s == null ? '' : s).trim(); if (!t) return '';
+    var m = /^(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})$/.exec(t); if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], dt = new Date(Date.UTC(y, mo - 1, d));
+    if (y < 1950 || y > 2100 || dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+    return m[1] + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+  function fmtYm(s) { var n = normYm(String(s == null ? '' : s).slice(0, 7)); return n ? n.replace('-', '.') : ''; }
+  function fmtDate(s) { var n = normDate(String(s == null ? '' : s).slice(0, 10)); return n ? n.replace(/-/g, '.') : ''; }
+  function ymYear(s) { var m = /^(\d{4})-\d{2}/.exec(String(s || '')); return m ? +m[1] : null; }
+  function parseMoney(s) {
+    var t = String(s == null ? '' : s).replace(/[,\s]/g, '').replace(/원$/, ''); if (!t) return '';
+    if (!/^\d{1,13}$/.test(t)) return null;
+    return +t;
+  }
+  function fmtWon(n) {
+    n = +n; if (!isFinite(n) || n < 0) return '';
+    var eok = Math.floor(n / 1e8), man = Math.floor((n % 1e8) / 1e4), rest = n % 1e4, out = [];
+    function c(v) { return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    if (eok) out.push(c(eok) + '억');
+    if (man) out.push(c(man) + '만');
+    if (rest || !out.length) out.push(c(rest));
+    return out.join(' ') + '원';
+  }
+  function normIsbn(s) { return String(s == null ? '' : s).toUpperCase().replace(/[^0-9X]/g, ''); }
+  function isbnOk(s) { var n = normIsbn(s); return /^\d{9}[\dX]$/.test(n) || /^\d{13}$/.test(n); }
+  function periodText(d, openEnd) {
+    var s = fmtYm(d.start_ym), e = fmtYm(d.end_ym);
+    if (s && e) return s + ' ~ ' + e;
+    if (s) return s + ' ~' + (openEnd ? ' ' + openEnd : '');
+    return e ? '~ ' + e : '';
+  }
+  function nowYm() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
+
+  /* ---- 특허: 나라별 서류(filings)에서 상태를 계산한다 — 상태는 저장하지 않는다(같은 값을 두 곳에 두지 않음) ---- */
+  var DOMESTIC_RE = /^(한국|대한민국|국내|kr|kor|korea|southkorea)$/i;
+  function isDomestic(c) { return DOMESTIC_RE.test(String(c == null ? '' : c).replace(/\s+/g, '')); }
+  function filingsOf(x) { var f = dataOf(x).filings; return Array.isArray(f) ? f.filter(isObj) : []; }
+  function filingsText(x) { return filingsOf(x).map(function (f) { return [f.country, f.app_no, f.reg_no].join(' '); }).join(' '); }
+  function idsOf(x) {
+    var out = [], d = dataOf(x);
+    if (d.isbn) out.push(norm(d.isbn));
+    filingsOf(x).forEach(function (f) { if (f.app_no) out.push(norm(f.app_no)); if (f.reg_no) out.push(norm(f.reg_no)); });
+    return out.filter(function (v) { return v.length >= 5; });
+  }
+  /* reg = 등록이 하나라도 / app = 출원만 / end = 전부 거절·포기 / none = 서류 없음 또는 상태 입력 전 */
+  function patentState(x) {
+    var fs = filingsOf(x), reg = false, app = false, end = 0;
+    fs.forEach(function (f) { if (f.status === '등록') reg = true; else if (f.status === '출원') app = true; else if (f.status === '거절' || f.status === '포기') end++; });
+    return reg ? 'reg' : (app ? 'app' : (fs.length && end === fs.length ? 'end' : 'none'));
+  }
+  function patentReg(x) {
+    var r = { kr: false, fo: false, unk: false };
+    filingsOf(x).forEach(function (f) { if (f.status !== '등록') return; if (!String(f.country || '').trim()) r.unk = true; else if (isDomestic(f.country)) r.kr = true; else r.fo = true; });
+    return r;
+  }
+  function patentCountries(x) {
+    var seen = {}, out = [];
+    filingsOf(x).forEach(function (f) { var c = String(f.country || '').trim(); if (c && !seen[c]) { seen[c] = 1; out.push(c); } });
+    return out;
+  }
+  function patentLabel(x) {
+    var st = patentState(x), r = patentReg(x), fs = filingsOf(x);
+    if (st === 'reg') return '등록' + (r.kr && r.fo ? ' · 한국·해외' : (r.kr ? ' · 한국' : (r.fo ? ' · 해외' : '')));
+    if (st === 'app') return '출원 (등록 전)';
+    if (st === 'end') return '거절·포기';
+    return fs.length ? '상태 입력 전' : '서류 없음';
+  }
+  /* 연도 자동 제안 — 특허: 등록이 있으면 첫 등록 연도, 없으면 첫 출원 연도 / 연구과제·학회활동: 시작 연월 / 수상: 수상일 */
+  function autoYear(pk, v) {
+    var d = (v && v.data) || {}, pf = PROFILES[pk];
+    if (!pf || !pf.yearFrom) return null;
+    if (pf.yearFrom === 'filings') {
+      var reg = [], app = [];
+      (Array.isArray(d.filings) ? d.filings : []).forEach(function (f) {
+        var ry = ymYear(f.reg_date), ay = ymYear(f.app_date);
+        if (f.status === '등록' && ry) reg.push(ry); if (ay) app.push(ay);
+      });
+      var pool = reg.length ? reg : app; return pool.length ? Math.min.apply(null, pool) : null;
+    }
+    if (pf.yearFrom === 'item_date') return ymYear(v && v.item_date);
+    return ymYear(d[pf.yearFrom]);
+  }
+
+  /* ---- 목록 칩 · 한 줄 요약 · 목록 줄 정보 ----
+   *   buckets: 항목이 속한 칸 이름들(한 발명이 한국·해외 모두 등록이면 두 칸에 들어가므로 칩 합은 전체와 다를 수 있다) */
+  function activeSoc(x, ny) {
+    var d = dataOf(x), e = normYm(d.end_ym), s = normYm(d.start_ym);
+    if (e) return e >= ny ? 'on' : 'past';
+    return s ? 'on' : 'unk';
+  }
+  function buckets(pk, x, ny) {
+    var d = dataOf(x), b = [];
+    if (pk === 'patent') {
+      var st = patentState(x), r = patentReg(x);
+      if (r.kr) b.push('kr'); if (r.fo) b.push('fo'); if (st === 'app') b.push('app'); if (st === 'end') b.push('end'); if (st === 'none') b.push('none');
+    } else if (pk === 'book') b.push('t:' + (d.book_type ? String(d.book_type) : ''));
+    else if (pk === 'grant') { b.push(x.status === 'ongoing' ? 'on' : (x.status === 'done' ? 'done' : 'nost')); if (d.my_role === '책임') b.push('lead'); }
+    else if (pk === 'award') b.push('s:' + (d.scope ? String(d.scope) : ''));
+    else if (pk === 'society') b.push(activeSoc(x, ny));
+    return b;
+  }
+  var CHIP_DEF = {
+    patent: [['kr', '한국 등록', 1], ['fo', '해외 등록', 1], ['app', '출원만', 1], ['end', '거절·포기', 0], ['none', '서류 입력 전', 0]],
+    grant: [['on', '진행', 1], ['done', '종료', 1], ['nost', '상태 미입력', 0], ['lead', '책임 과제', 0]],
+    society: [['on', '활동 중', 1], ['past', '지난 활동', 1], ['unk', '기간 입력 전', 0]]
+  };
+  /* 칩 목록 [{k, label, n}] — 0건인 칩은 숨긴다(「꼭 보이는」 칩은 0이어도 보임) */
+  function chipsOf(pk, list, ny) {
+    var out = [], cnt = {};
+    list.forEach(function (x) { buckets(pk, x, ny).forEach(function (b) { cnt[b] = (cnt[b] || 0) + 1; }); });
+    if (CHIP_DEF[pk]) {
+      CHIP_DEF[pk].forEach(function (c) { var n = cnt[c[0]] || 0; if (n || c[2]) out.push({ k: c[0], label: c[1], n: n }); });
+    } else if (pk === 'book' || pk === 'award') {
+      var pre = pk === 'book' ? 't:' : 's:', known = pk === 'book' ? BOOK_TYPES : ['교내', '교외', '국제'], seen = {};
+      known.forEach(function (t) { seen[pre + t] = 1; if (cnt[pre + t]) out.push({ k: pre + t, label: t, n: cnt[pre + t] }); });
+      Object.keys(cnt).sort().forEach(function (b) { if (seen[b] || b === pre) return; out.push({ k: b, label: b.slice(pre.length), n: cnt[b] }); });
+      if (cnt[pre]) out.push({ k: pre, label: pk === 'book' ? '유형 미입력' : '구분 미입력', n: cnt[pre] });
+    }
+    return out;
+  }
+  function oneLine(pk, list, ny) {
+    return chipsOf(pk, list, ny).filter(function (c) { return c.n > 0 || (CHIP_DEF[pk] || []).some(function (d) { return d[0] === c.k && d[2]; }); })
+      .map(function (c) { return c.label + ' ' + c.n; }).join(' · ');
+  }
+  /* 목록 줄 맨 앞 표식 [{t, c}] · 제목 아래 글자 */
+  function rowTags(pk, x) {
+    var d = dataOf(x), t = [];
+    if (pk === 'patent') {
+      var st = patentState(x), r = patentReg(x), fs = filingsOf(x);
+      if (st === 'reg') t.push({ t: r.kr && r.fo ? '한국·해외 등록' : (r.kr ? '한국 등록' : (r.fo ? '해외 등록' : '등록')), c: '' });
+      else if (st === 'app') t.push({ t: '출원', c: 'in' });
+      else if (st === 'end') t.push({ t: '거절·포기', c: 'gray' });
+      else t.push({ t: fs.length ? '상태 입력 전' : '서류 입력 전', c: 'wait' });
+    } else if (pk === 'book') t.push(d.book_type ? { t: String(d.book_type), c: '' } : { t: '유형 미입력', c: 'wait' });
+    else if (pk === 'grant') {
+      if (x.status === 'ongoing') t.push({ t: '진행', c: 'in' }); else if (x.status === 'done') t.push({ t: '종료', c: 'gray' });
+      if (d.my_role) t.push({ t: String(d.my_role), c: '' });
+    } else if (pk === 'award') { if (d.scope) t.push({ t: String(d.scope), c: '' }); }
+    else if (pk === 'society') { if (d.position) t.push({ t: String(d.position), c: '' }); }
+    return t;
+  }
+  function rowLine(pk, x, ny) {
+    var d = dataOf(x), yr = toInt(x.year) ? String(toInt(x.year)) : '연도 없음', parts = [];
+    if (pk === 'patent') { var cs = patentCountries(x); parts.push(cs.length > 3 ? cs.slice(0, 3).join('·') + ' 외 ' + (cs.length - 3) : cs.join('·')); parts.push(yr); }
+    else if (pk === 'book') { parts.push(x.venue); parts.push(yr); }
+    else if (pk === 'grant') { parts.push(x.venue); parts.push(periodText(d, x.status === 'done' ? '' : '진행 중') || yr); }
+    else if (pk === 'award') { parts.push(x.venue); parts.push(fmtDate(x.item_date) || yr); }
+    else if (pk === 'society') { parts.push(periodText(d, '현재') || yr); }
+    return parts.filter(Boolean).join(' · ');
+  }
+  /* 요약 카드 아래 덧붙이는 한 줄 (참고 안내) */
+  function cardNote(pk, list) {
+    if (pk === 'patent') return '승진은 등록된 특허만 인정하는 것으로 읽혀요 · 규정 판정이 아닌 참고 숫자예요.';
+    if (pk === 'book') {
+      var n = list.filter(function (x) { var t = dataOf(x).book_type; return t === '역서' || t === '편저'; }).length;
+      return n ? '역서·편저 ' + n + '권은 승진 세부심사에서 저서로 보지 않는 관행이라 따로 세요.' : '';
+    }
+    return '';
+  }
+
   global.AchPure = {
     derive: derive, inReq: inReq, countBuckets: countBuckets, summarize: summarize, yearBars: yearBars, norm: norm, matchItem: matchItem,
     sim: sim, findDup: findDup, cleanDoi: cleanDoi, parseAuthors: parseAuthors, isMe: isMe, findMe: findMe, withKnown: withKnown, BN: BN, buildSaveRow: buildSaveRow,
     applyRowToItem: applyRowToItem, classifyHttp: classifyHttp, makeRpc: makeRpc, sortItems: sortItems, rolePasses: rolePasses,
-    KNOWN_DATA: KNOWN_DATA, GRADES: GRADES
+    KNOWN_DATA: KNOWN_DATA, GRADES: GRADES,
+    /* v9.60 */
+    PROFILES: PROFILES, profKey: profKey, normYm: normYm, normDate: normDate, fmtYm: fmtYm, fmtDate: fmtDate, parseMoney: parseMoney, fmtWon: fmtWon, normIsbn: normIsbn, isbnOk: isbnOk,
+    periodText: periodText, isDomestic: isDomestic, filingsOf: filingsOf, idsOf: idsOf, patentState: patentState, patentReg: patentReg, patentLabel: patentLabel, autoYear: autoYear,
+    activeSoc: activeSoc, buckets: buckets, chipsOf: chipsOf, oneLine: oneLine, rowTags: rowTags, rowLine: rowLine, cardNote: cardNote, BOOK_TYPES: BOOK_TYPES
   };
 
   if (typeof document === 'undefined') return;   // 시험(node)에서는 화면 부분을 만들지 않는다
@@ -262,7 +529,7 @@
   var S = {
     loaded: false, loading: null, err: null, offline: false, stale: false, cachedAt: null,
     cats: [], items: [], settings: loadSettings(),
-    tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, filt: false, fCat: 'all', sortKey: 'new', q: '',
+    tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, filt: false, fCat: 'all', pchip: 'all', sortKey: 'new', q: '',
     sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0
   };
   var _toast = function () {}, toastTimer = null, E = null, built = false;
@@ -353,6 +620,7 @@
     q.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { S.q = q.value.trim(); $('achSearch').classList.toggle('has', !!q.value); renderMain(); updateFab(); }, 120); });
     $('achQx').addEventListener('click', function () { q.value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderMain(); updateFab(); q.focus(); });
     $('achView').addEventListener('click', onClick);
+    $('achTabs').addEventListener('scroll', tabFade, { passive: true });
     layer.addEventListener('click', onClick);
     $('achSheet').addEventListener('click', function (e) { if (e.target === this && !S.noScrim) sheetBackOrClose(); });
     var gear = $('achGear'); if (gear) gear.addEventListener('click', openSettings);
@@ -362,10 +630,24 @@
   }
   function renderAll() { if (!built) return; renderTabs(); renderMain(); updateFab(); }
 
+  var tabShown = null;   // 마지막으로 가운데에 맞춘 탭 — 같은 탭이면 다시 그려도 밀어 둔 자리를 지킨다
   function renderTabs() {
-    var ks = kindsList(), h = '<button type="button" class="ach-tab' + (S.tab === 'sum' ? ' on' : '') + '" data-act="tab" data-t="sum" role="tab">요약</button>';
+    var ks = kindsList(), h = '<button type="button" class="ach-tab' + (S.tab === 'sum' ? ' on' : '') + '" data-act="tab" data-t="sum" role="tab">요약</button>', box = $('achTabs'), left = box.scrollLeft;
     ks.forEach(function (k) { h += '<button type="button" class="ach-tab' + (S.tab === k.id ? ' on' : '') + '" data-act="tab" data-t="' + esc(k.id) + '" role="tab">' + esc(k.name) + (S.loaded ? ' ' + ofKind(k.id).length : '') + '</button>'; });
-    $('achTabs').innerHTML = h;
+    box.innerHTML = h;
+    box.scrollLeft = left;
+    if (tabShown !== S.tab) {                 // 다른 탭을 눌렀거나 처음 열 때: 눌린 탭이 화면 가운데로 오게
+      tabShown = S.tab;
+      var on = box.querySelector('.ach-tab.on');
+      if (on) { var want = on.offsetLeft - (box.clientWidth - on.offsetWidth) / 2; box.scrollLeft = Math.max(0, want); }
+    }
+    tabFade();
+  }
+  /* 탭이 칸보다 많아 가로로 밀어야 할 때, 가려진 쪽 끝에 옅은 그늘을 둔다 */
+  function tabFade() {
+    var b = $('achTabs'); if (!b) return;
+    b.classList.toggle('fade-l', b.scrollLeft > 4);
+    b.classList.toggle('fade-r', b.scrollWidth - b.clientWidth - b.scrollLeft > 4);
   }
   function banner() {
     var h = '';
@@ -424,6 +706,12 @@
             (sm.coUnk ? '<div class="ach-small"><b>공저 중 교신 여부 미확인 ' + sm.coUnk + '편</b> — 확인되면 책임저자가 늘 수 있어요</div>' : '') +
             '<div class="ach-small">규정 판정이 아닌 참고 숫자예요. 승진 요건용은 등재·SCI급 등급이 확인돼야 정확해져요. 지금은 등급 입력 ' + sm.gradeDone + '/' + sm.gradeOf + '건이라 「교외·게재」 기준 근사값입니다.</div></div>';
         }
+      } else if (profOf(k)) {
+        /* v9.60: 특허·저서·연구과제·수상·학회활동 — 개수 + 한 줄 요약, 0건이면 「아직 없어요」 */
+        any = true;
+        var pk = profKey(k), pf = PROFILES[pk], ny = nowYm(), nt = list.length ? cardNote(pk, list) : '';
+        h += '<div class="ach-card click' + (list.length ? '' : ' zero') + '" data-act="tab" data-t="' + esc(k.id) + '"><div class="ach-big"><span class="n s" data-n="' + list.length + '">' + list.length + '</span><span class="u">' + pf.unit + '</span><span class="l">' + esc(k.name) + '</span></div>' +
+          '<div class="ach-small">' + (list.length ? esc(oneLine(pk, list, ny)) + (nt ? '<br>' + esc(nt) : '') : '아직 없어요') + '</div></div>';
       } else {
         any = true;
         var cs = subCats(k.id), split = cs.map(function (c) { return esc(c.name) + ' ' + list.filter(function (x) { return x.cat_id === c.id; }).length; }).join(' · ');
@@ -442,7 +730,7 @@
       }
     }
     var rec = live().slice().sort(function (a, b) { return String(b.updated_at || '') < String(a.updated_at || '') ? -1 : 1; }).slice(0, 3);
-    if (rec.length) h += '<div class="ach-h3">최근 변경 <em>추가·고친 순</em></div>' + rec.map(function (x) { return rowHtml(x, (x.rev || 1) > 1 ? '고침' : '추가', false); }).join('');
+    if (rec.length) h += '<div class="ach-h3">최근 변경 <em>추가·고친 순</em></div>' + rec.map(function (x) { return rowHtml(x, (x.rev || 1) > 1 ? '고침' : '추가', ks.length > 2); }).join('');
     else h += '<div class="ach-empty"><b>아직 기록이 없어요</b>위의 「논문」 탭에서 첫 논문을 추가해 보세요.</div>';
     return h;
   }
@@ -458,13 +746,18 @@
       if (x.status === 'manuscript') h += '<span class="ach-tag wait">원고본·게재 불명</span>';
       else if (x.status && x.status !== 'published') h += '<span class="ach-tag wait">' + esc(STATUS_LABEL[x.status] || x.status) + '</span>';
       else if (!x.status) h += '<span class="ach-tag wait">상태 미입력</span>';
-    } else if (x.cat_id) { var c = catById(x.cat_id); if (c) h += '<span class="ach-tag">' + esc(c.name) + '</span>'; }
+    } else {
+      var pk0 = profKey(k);
+      if (PROFILES[pk0]) rowTags(pk0, x).forEach(function (t) { h += '<span class="ach-tag' + (t.c ? ' ' + t.c : '') + '">' + esc(t.t) + '</span>'; });
+      if (x.cat_id) { var c = catById(x.cat_id); if (c) h += '<span class="ach-tag">' + esc(c.name) + '</span>'; }
+    }
     return h;
   }
   function rowHtml(x, mark, showKind) {
     var unc = dataOf(x).uncertain === true, dot = x.verified ? '' : '<span class="ach-dot' + (unc ? ' warn' : '') + '" title="' + (unc ? '확인 필요' : '확인 전') + '"></span>', k = catById(x.kind_id);
+    var pk = profKey(k), info = PROFILES[pk] ? esc(rowLine(pk, x, nowYm())) : esc(x.venue || '') + (x.venue ? ' · ' : '') + (toInt(x.year) || '연도 없음');   // v9.60: 새 종류는 종류에 맞는 한 줄
     return '<button type="button" class="ach-row" data-act="open" data-id="' + esc(x.id) + '"><div class="a">' + esc(x.title) + '</div><div class="b">' +
-      (mark ? '<span class="ach-tag gray">' + mark + '</span>' : '') + (showKind && k ? '<span class="ach-tag gray">' + esc(k.name) + '</span>' : '') + tagsHtml(x) + esc(x.venue || '') + (x.venue ? ' · ' : '') + (toInt(x.year) || '연도 없음') + dot + '</div></button>';
+      (mark ? '<span class="ach-tag gray">' + mark + '</span>' : '') + (showKind && k ? '<span class="ach-tag gray">' + esc(k.name) + '</span>' : '') + tagsHtml(x) + info + dot + '</div></button>';
   }
   function searchHtml() {
     var res = sortItems(live().filter(function (x) { return matchItem(x, S.q); }), S.sortKey);
@@ -489,6 +782,12 @@
       if (!ok1) h += '<div class="ach-chk"><span class="bad">합이 안 맞아요</span> 책임저자 ' + bk.resp + ' + 공저 ' + bk.co + (bk.none ? ' + 미입력 ' + bk.none : '') + ' ≠ 전체 ' + tot + '</div>';
       if (bk.resp && !ok2) h += '<div class="ach-chk"><span class="bad">합이 안 맞아요</span> 제1저자 ' + bk.pure + ' + 공동제1 ' + bk.cofirst + ' + 교신 ' + bk.corr + ' + 겸임 ' + bk.both + ' ≠ 책임저자 ' + bk.resp + '</div>';
     }
+    var pk = profKey(k);
+    if (PROFILES[pk] && tot) {
+      var pc = chipsOf(pk, list, nowYm());
+      h += '<div class="ach-chips"><button type="button" class="ach-chip' + (S.pchip === 'all' ? ' on' : '') + '" data-act="pchip" data-c="all">전체 ' + tot + '</button>' +
+        pc.map(function (c) { return '<button type="button" class="ach-chip' + (S.pchip === c.k ? ' on' : '') + '" data-act="pchip" data-c="' + esc(c.k) + '">' + esc(c.label) + ' ' + c.n + '</button>'; }).join('') + '</div>';
+    }
     var cs = subCats(k.id);
     if (cs.length) {
       var sum = 0, none = list.filter(function (x) { return !x.cat_id || !cs.some(function (c) { return c.id === x.cat_id; }); }).length;
@@ -510,16 +809,18 @@
     return '<div class="ach-fpanel"><button type="button" class="ach-chip sm' + (S.fInh ? ' on' : '') + '" data-act="fil" data-f="inh">교내 ' + list.filter(inHouse).length + '</button><button type="button" class="ach-chip sm' + (S.fWait ? ' on' : '') + '" data-act="fil" data-f="wait">게재 아님 ' + list.filter(function (x) { return !isPub(x); }).length + '</button></div>';
   }
   function listHtml(k) {
-    var all = ofKind(k.id), o = opts(), cs = subCats(k.id), paper = isPaperKind(k);
+    var all = ofKind(k.id), o = opts(), cs = subCats(k.id), paper = isPaperKind(k), pk = profKey(k), ny = nowYm();
+    if (S.pchip !== 'all' && !(PROFILES[pk] && chipsOf(pk, all, ny).some(function (c) { return c.k === S.pchip; }))) S.pchip = 'all';
     var list = all.filter(function (x) {
       if (paper && !rolePasses(x, S, o)) return false;
+      if (S.pchip !== 'all' && buckets(pk, x, ny).indexOf(S.pchip) < 0) return false;
       if (S.fCat !== 'all') { var inCat = x.cat_id && cs.some(function (c) { return c.id === x.cat_id; }); if (S.fCat === 'none' ? inCat : x.cat_id !== S.fCat) return false; }
       return true;
     });
     list = sortItems(list, S.sortKey);
     var sortLabel = ({ new: '연도 최신순', old: '연도 오래된순', upd: '최근 변경순' })[S.sortKey];
     var h = chipsHtml(k, all) + '<div class="ach-sortline"><span>' + list.length + '건</span><span class="rt">' + (paper ? filterBtn(all) : '') + '<button type="button" data-act="sort">' + sortLabel + ' ▾</button></span></div>' + (paper ? filterPanel(all) : '');
-    h += list.map(function (x) { return rowHtml(x, '', false); }).join('') || (all.length ? '<div class="ach-note">조건에 맞는 항목이 없습니다.</div>' : '<div class="ach-empty"><b>아직 기록이 없어요</b>' + (S.offline ? '' : '아래 「＋ ' + esc(k.name) + ' 추가」 단추로 첫 기록을 넣어 보세요.') + '</div>');
+    h += list.map(function (x) { return rowHtml(x, '', false); }).join('') || (all.length ? '<div class="ach-note">조건에 맞는 항목이 없습니다.</div>' : '<div class="ach-empty"><b>아직 기록이 없어요</b>' + (S.offline ? '' : '아래 「＋ ' + esc(k.name) + ' 추가」 단추로 첫 기록을 넣어 보세요.') + (PROFILES[pk] ? '<br><span class="ach-note">' + esc(PROFILES[pk].empty) + '</span>' : '') + '</div>');
     return h;
   }
   function updateFab() {
@@ -533,12 +834,12 @@
    * 5. 창(바닥 시트) · 토스트
    * ===================================================================*/
   function openSheet(html, back, noScrim) {
-    var box = $('achBox'); box.innerHTML = html; box.scrollTop = 0;
+    var box = $('achBox'); box.oninput = box.onchange = null; box.innerHTML = html; box.scrollTop = 0;
     S.sheet = true; S.sheetBack = back || null; S.noScrim = !!noScrim;
     $('achSheet').classList.add('show'); updateFab();
   }
   function closeSheet() { hideSheetNow(); renderAll(); }
-  function hideSheetNow() { S.sheet = false; S.sheetBack = null; S.noScrim = false; E = null; var s = $('achSheet'); if (s) s.classList.remove('show'); }
+  function hideSheetNow() { S.sheet = false; S.sheetBack = null; S.noScrim = false; E = null; var s = $('achSheet'); if (s) s.classList.remove('show'); var bx = $('achBox'); if (bx) bx.oninput = bx.onchange = null; }
   function sheetBackOrClose() { if (S.sheetBack) S.sheetBack(); else closeSheet(); }
   function toast(msg, ms, wide) { try { _toast(msg, ms, wide); } catch (e) {} }   // 앱의 안내 띠(ms 길이 · wide 넓은 한 줄)를 그대로 쓴다
   var undoLive = false;     // 되돌리기 토스트가 떠 있는 동안 true — 그 사이 또 지우면 앞 항목의 되돌리기 단추가 사라지므로 알려 준다
@@ -561,10 +862,43 @@
   function swHtml(id, label, sub, on) {
     return '<div class="ach-sw"><div>' + label + (sub ? '<small>' + sub + '</small>' : '') + '</div><button type="button" class="tg' + (on ? ' on' : '') + '" id="' + id + '" role="switch" aria-checked="' + (!!on) + '" aria-label="' + esc(label.replace(/<[^>]+>/g, '')) + '"></button></div>';
   }
+  /* 새 종류의 상세 줄: 칸 목록 표를 그대로 훑어 보여 준다(비어 있는 칸은 「-」) */
+  function fieldShow(f, x) {
+    var d = dataOf(x), v = f.t === 'year' ? (toInt(x.year) || '') : (f.col ? x[f.col] : d[f.k]);
+    if (v == null || v === '') return '';
+    if (f.t === 'sw') return typeof v === 'boolean' ? (v ? '예' : '아니오') : '';
+    if (f.t === 'month') return fmtYm(v) || String(v);
+    if (f.t === 'date') return fmtDate(v) || String(v);
+    if (f.t === 'money') return isFinite(+v) ? fmtWon(+v) : String(v);
+    if (f.t === 'num') return String(v) + (f.k === 'page_count' ? '쪽' : '');
+    if (f.t === 'sel') { var hit = (f.opts || []).filter(function (o) { return Array.isArray(o) && o[0] === v; })[0]; return hit ? hit[1] : String(v); }
+    return String(v);
+  }
+  function detailRows(pk, x, pos) {
+    var pf = PROFILES[pk], d = dataOf(x), h = '';
+    function row(l, v) { h += '<span>' + esc(l) + '</span><b>' + (v === '' || v == null ? '-' : v) + '</b>'; }
+    if (pk === 'patent') row('현재 상태', esc(patentLabel(x)));
+    pf.fields.forEach(function (f) {
+      if (f.t === 'filings' || f.k === 'title' || f.k === 'end_ym') return;
+      if (f.t === 'people') { var tot = toInt(d.author_total); row('내 순번', pos ? pos + (tot ? '/' + tot : '') + '번째' : '아직 입력 안 함'); return; }
+      if (f.k === 'start_ym') { row('기간', esc(periodText(d, pk === 'society' ? '현재' : (x.status === 'done' ? '' : '진행 중')))); return; }
+      row((f.short || f.label).replace(/ \(원\)$/, ''), esc(fieldShow(f, x)));
+    });
+    return h;
+  }
+  function filingsDetail(x) {
+    var fs = filingsOf(x);
+    if (!fs.length) return '<div class="ach-note">나라별 서류가 아직 없어요. 「고치기」에서 줄을 더할 수 있어요.</div>';
+    return '<div class="ach-h3" style="margin:6px 2px">나라별 서류 <em>' + fs.length + '줄</em></div>' + fs.map(function (f) {
+      var a = [f.app_no ? '출원 ' + esc(f.app_no) : '', fmtDate(f.app_date) ? '(' + fmtDate(f.app_date) + ')' : ''].filter(Boolean).join(' '),
+          r = [f.reg_no ? '등록 ' + esc(f.reg_no) : '', fmtDate(f.reg_date) ? '(' + fmtDate(f.reg_date) + ')' : ''].filter(Boolean).join(' ');
+      return '<div class="ach-fild"><div><span class="ach-tag' + (f.status === '등록' ? '' : (f.status === '출원' ? ' in' : ' gray')) + '">' + esc(f.status || '상태 입력 전') + '</span><b>' + esc(f.country || '나라 미입력') + '</b></div>' + (a || r ? '<div class="s">' + [a, r].filter(Boolean).join(' · ') + '</div>' : '') + '</div>';
+    }).join('');
+  }
   function openDetail(id) {
     var x = itemById(id); if (!x) return;
-    var k = catById(x.kind_id), paper = isPaperKind(k), d = dataOf(x), dv = derive(x, opts()), names = peopleNames(x), pos = toInt(d.author_pos), au = '';
-    if (paper && names.length) {
+    var k = catById(x.kind_id), paper = isPaperKind(k), pk = profKey(k), pf = PROFILES[pk] || null, d = dataOf(x), dv = derive(x, opts()), names = peopleNames(x), pos = toInt(d.author_pos), au = '';
+    if ((paper || (pf && hasField(pf, 'people'))) && names.length) {
       var meIdx = pos || findMe(names, S.settings.names), max = 8;
       names.forEach(function (n, i) { if (i < max || S.expand === x.id) au += '<b class="' + (i + 1 === meIdx ? 'me' : '') + '">' + esc(n) + (i + 1 === meIdx ? ' (나)' : '') + '</b>'; });
       if (names.length > max && S.expand !== x.id) au += '<button type="button" data-act="expand" data-id="' + esc(x.id) + '">…외 ' + (names.length - max) + '명 보기</button>';
@@ -575,8 +909,10 @@
       kv += '<span>내 위치</span><b>' + (pos ? pos + (toInt(d.author_total) ? '/' + toInt(d.author_total) : '') + '번째 · ' + esc(dv.text) + (dv.resp ? ' (책임저자)' : '') + (dv.corrUnk ? ' · <i class="ach-unk">교신 여부 확인 전</i>' : '') : '아직 입력 안 함') + '</b>';
       kv += '<span>학술지</span><b>' + esc(x.venue || '-') + (inHouse(x) ? ' · 교내' : (x.venue ? ' · 교외' : '')) + '</b>';
       if (vol || pg) kv += '<span>권(호)·쪽</span><b>' + [vol, pg].filter(Boolean).join(' · ') + '</b>';
+    } else if (pf) {
+      kv += detailRows(pk, x, pos); if (x.cat_id && catById(x.cat_id)) kv += '<span>분류</span><b>' + esc(catById(x.cat_id).name) + '</b>';
     } else { kv += '<span>기관</span><b>' + esc(x.venue || '-') + '</b>'; if (x.cat_id && catById(x.cat_id)) kv += '<span>분류</span><b>' + esc(catById(x.cat_id).name) + '</b>'; }
-    kv += '<span>연도</span><b>' + (toInt(x.year) || '-') + '</b>';
+    if (!pf) kv += '<span>연도</span><b>' + (toInt(x.year) || '-') + '</b>';
     if (paper) kv += '<span>상태</span><b>' + esc(x.status ? (STATUS_LABEL[x.status] || x.status) : '아직 입력 안 함') + '</b><span>DOI</span><b>' + esc(d.doi || '-') + '</b><span>등급</span><b>' + esc(d.journal_grade || '아직 입력 안 함') + '</b>';
     kv += '<span>확인</span><b>' + (x.verified ? '맞게 확인함' : (d.uncertain === true ? '확인 필요 (추정 값 있음)' : '확인 전 (정리한 값)')) + '</b><span>원본</span><b>' + (x.has_source ? 'PC 자료 폴더에 있음' : '-') + '</b>';
     var memo = [];
@@ -585,13 +921,15 @@
     if (imp.length) memo.push('<details class="ach-note"><summary>정리 메모 (가져올 때)</summary>' + imp.map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') + '</details>');
     openSheet('<div class="ach-bh"><h2>' + esc(x.title) + '</h2><button type="button" class="ach-more" data-act="menu" aria-label="더보기">⋯</button></div>' +
       '<div class="ach-menu" id="achMenu">' + (x.verified ? '' : '<button type="button" data-act="verify" data-id="' + esc(x.id) + '" style="color:var(--text)">맞게 확인했어요로 표시</button>') + '<button type="button" data-act="trash" data-id="' + esc(x.id) + '">휴지통으로 옮기기</button></div>' +
-      (au ? '<div class="ach-auth">' + au + '</div>' : '') + '<div class="ach-kv">' + kv + '</div>' + memo.join('') +
+      (au ? '<div class="ach-auth">' + au + '</div>' : '') + '<div class="ach-kv">' + kv + '</div>' + (pk === 'patent' ? filingsDetail(x) : '') + memo.join('') +
       (S.offline ? '<div class="ach-note">오프라인 사본이라 지금은 고칠 수 없어요.</div>' : '<button type="button" class="ach-btn" data-act="edit" data-id="' + esc(x.id) + '">고치기</button>'), null, false);
   }
 
   /* ---------- 추가 / 고치기 ---------- */
   function openEdit(base, kind) {
     if (!guardWrite()) return;
+    var k0 = kind || catById(base.kind_id), pk0 = profKey(k0);
+    if (PROFILES[pk0]) { openEditProf(base, k0, pk0); return; }        // v9.60: 특허·저서·연구과제·수상·학회활동은 칸 목록 표로
     var k = kind || catById(base.kind_id), paper = isPaperKind(k), d = base ? dataOf(base) : {}, names = base ? peopleNames(base) : [], cs = subCats(k.id);
     E = { base: base, kind: k, id: base ? base.id : uuid(), busy: false, authText: names.join(', '), knownNames: names.filter(function (n) { return /[,，;；\n]/.test(n); }), sig: '', inTouched: false, coTouched: false, crTouched: false, dupAck: false };
     var status = base ? (base.status || '') : 'published', inH = base ? d.in_house === true : false;
@@ -618,6 +956,220 @@
     wireEdit(paper);
     editWarnAt = 0; E.sig = formSig();    // 연 직후의 입력 모습 — 닫을 때 달라졌는지 비교(제목뿐 아니라 모든 칸)
   }
+  /* ---------- 새 종류(특허·저서·연구과제·수상·학회활동)의 추가 / 고치기 — 칸 목록 표(PROFILES)로 그린다 ---------- */
+  function fid(f) { return ({ title: 'achFT', year: 'achFY', venue: 'achFV', item_date: 'achFDt', status: 'achFS' })[f.col] || ('achF_' + f.k); }
+  function optPairs(f, cur) {
+    var pairs = (f.opts || []).map(function (o) { return Array.isArray(o) ? o : [o, o]; }), c = cur == null ? '' : String(cur);
+    if (c && !pairs.some(function (p) { return p[0] === c; })) pairs = pairs.concat([[c, c + ' (기존 값)']]);   // 서버 값이 보기에 없어도 지우지 않고 보여 준다
+    return pairs;
+  }
+  /* 날짜·연월 칸: 서버 값이 표준 모양일 때만 고르는 창(date/month)을 쓰고, 아니면 글자 칸으로 보여 원래 값을 잃지 않는다 */
+  function isoOr(type, val) {
+    var s = String(val == null ? '' : val), n = type === 'month' ? normYm(s.slice(0, 7)) : normDate(s.slice(0, 10)), iso = type === 'month' ? /^\d{4}-\d{2}/.test(s) : /^\d{4}-\d{2}-\d{2}/.test(s);
+    return !s || (n && iso) ? { type: type, val: n || '' } : { type: 'text', val: s };
+  }
+  function dateInput(id, type, val, extra) {
+    var it = isoOr(type, val);
+    return '<input class="ach-f" type="' + it.type + '" id="' + id + '" value="' + esc(it.val) + '"' + (it.type === 'text' ? ' placeholder="' + (type === 'month' ? '2024-03' : '2024-03-05') + '"' : '') + (extra || '') + '>';
+  }
+  function peopleField() { var l = E && E.prof ? E.prof.fields.filter(function (f) { return f.t === 'people'; }) : []; return l[0] || { noun: '저자', total: '총 저자수' }; }
+  function peopleHtml(f, d) {
+    return '<label class="ach-lbl" for="achFA">' + esc(f.noun) + ' (쉼표로 붙여넣기 → 순서대로 나뉘고, 내 이름을 찾아 순번을 미리 채워요)</label><textarea class="ach-f" id="achFA" rows="2" placeholder="예: 홍길동, 김철수, …">' + esc(E.authText) + '</textarea>' +
+      '<div class="ach-me"><div class="ach-two"><div><label class="ach-lbl" for="achFP">내 순번</label><input class="ach-f" id="achFP" inputmode="numeric" value="' + esc(d.author_pos || '') + '"></div><div><label class="ach-lbl" for="achFTt">' + esc(f.total) + '</label><input class="ach-f" id="achFTt" inputmode="numeric" value="' + esc(d.author_total || '') + '"></div></div><div class="ach-preview" id="achPv"></div><div class="ach-note" id="achCnt"></div></div>';
+  }
+  function fieldHtml(f, x, d) {
+    if (f.t === 'people') return peopleHtml(f, d);
+    if (f.t === 'filings') return filingsHtml();
+    var id = fid(f), val = f.t === 'year' ? ((x && toInt(x.year)) || '') : (!x ? '' : (f.col ? x[f.col] : d[f.k]));
+    if (val == null) val = '';
+    var lbl = '<label class="ach-lbl" for="' + id + '">' + esc(f.label) + (f.req ? ' *' : '') + '</label>', hint = f.hint ? '<div class="ach-note">' + esc(f.hint) + '</div>' : '', ph = f.ph ? ' placeholder="' + esc(f.ph) + '"' : '';
+    if (f.t === 'sw') return swHtml(id, esc(f.label), f.sub ? esc(f.sub) : '', val === true);
+    if (f.t === 'sel') {
+      return lbl + '<select class="ach-f" id="' + id + '"><option value="">입력 안 함</option>' + optPairs(f, val).map(function (p) { return '<option value="' + esc(p[0]) + '"' + (String(val) === p[0] ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join('') + '</select>' + hint;
+    }
+    if (f.t === 'date' || f.t === 'month') return lbl + dateInput(id, f.t, val) + hint;
+    var num = f.t === 'num' || f.t === 'money' || f.t === 'year';
+    return lbl + '<input class="ach-f" id="' + id + '"' + (num ? ' inputmode="numeric"' : '') + ' value="' + esc(val) + '" autocomplete="off"' + ph + '>' + hint +
+      (f.live === 'money' ? '<div class="ach-preview" id="achPvMoney"></div>' : '') + (f.live === 'isbn' ? '<div class="ach-note" id="achPvIsbn"></div>' : '');
+  }
+
+  /* 특허: 나라별 서류 줄. 줄마다 처음 받은 원본(_o)을 들고 있다가 저장할 때 화면이 아는 칸만 덮는다 — 화면이 모르는 칸(예: stage)은 지워지지 않는다 */
+  var FIL_KEYS = [['country', 'c'], ['status', 's'], ['app_no', 'an'], ['app_date', 'ad'], ['reg_no', 'rn'], ['reg_date', 'rd']];
+  function filFrom(o) { return { _o: o, country: o.country || '', status: o.status || '', app_no: o.app_no || '', app_date: o.app_date || '', reg_no: o.reg_no || '', reg_date: o.reg_date || '' }; }
+  function filNew() { return { _o: {}, country: '', status: '출원', app_no: '', app_date: '', reg_no: '', reg_date: '' }; }
+  function filingsHtml() {
+    return '<div class="ach-fils"><div class="ach-lbl">나라별 출원·등록 <small>(발명 하나에 나라마다 한 줄)</small></div><div id="achFils">' + E.fil.map(filRowHtml).join('') + '</div>' +
+      '<button type="button" class="ach-mini wide" data-act="filadd">＋ 나라 추가</button><div class="ach-preview" id="achFilPv"></div>' +
+      '<datalist id="achCountries">' + COUNTRIES.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>';
+  }
+  function filRowHtml(r, i) {
+    var n = i + 1, p = 'achFil' + n + '_', sts = FIL_STATUS.slice();
+    if (r.status && sts.indexOf(r.status) < 0) sts.push(r.status);
+    return '<div class="ach-fil" data-i="' + i + '"><div class="ach-filh"><b>서류 ' + n + '</b><button type="button" class="ach-mini danger" data-act="fildel" data-i="' + i + '" aria-label="서류 ' + n + ' 지우기">지우기</button></div>' +
+      '<div class="ach-two"><div><label class="ach-lbl" for="' + p + 'c">나라</label><input class="ach-f" id="' + p + 'c" list="achCountries" value="' + esc(r.country) + '" placeholder="예: 한국" autocomplete="off"></div>' +
+      '<div><label class="ach-lbl" for="' + p + 's">상태</label><select class="ach-f" id="' + p + 's"><option value="">입력 안 함</option>' + sts.map(function (s) { return '<option value="' + esc(s) + '"' + (r.status === s ? ' selected' : '') + '>' + esc(s) + (FIL_STATUS.indexOf(s) < 0 ? ' (기존 값)' : '') + '</option>'; }).join('') + '</select></div></div>' +
+      '<label class="ach-lbl" for="' + p + 'an">출원번호</label><input class="ach-f" id="' + p + 'an" value="' + esc(r.app_no) + '" autocomplete="off">' +
+      '<div class="ach-two"><div><label class="ach-lbl" for="' + p + 'ad">출원일</label>' + dateInput(p + 'ad', 'date', r.app_date) + '</div><div><label class="ach-lbl" for="' + p + 'rd">등록일</label>' + dateInput(p + 'rd', 'date', r.reg_date) + '</div></div>' +
+      '<label class="ach-lbl" for="' + p + 'rn">등록번호</label><input class="ach-f" id="' + p + 'rn" value="' + esc(r.reg_no) + '" autocomplete="off"></div>';
+  }
+  function syncFil() {          // 화면의 서류 줄 입력을 E.fil 에 옮겨 담는다(줄을 더하거나 지워 다시 그려도 입력이 남도록)
+    if (!E || !E.prof) return;
+    E.fil.forEach(function (r, i) {
+      FIL_KEYS.forEach(function (kk) { var el = $('achFil' + (i + 1) + '_' + kk[1]); if (el) r[kk[0]] = el.value; });
+    });
+  }
+  function filHasContent(r) { return !!(String(r.country).trim() || String(r.app_no).trim() || String(r.app_date).trim() || String(r.reg_no).trim() || String(r.reg_date).trim()); }
+  function renderFils() { var c = $('achFils'); if (c) c.innerHTML = E.fil.map(filRowHtml).join(''); updateFilPv(); autoFill(); checkDup(); }
+  function liveFilings() {      // 지금 화면에 적힌 서류 줄(내용이 있는 줄만)을 계산용 모양으로
+    syncFil();
+    return E.fil.filter(filHasContent).map(function (r) { return { country: String(r.country).trim(), status: r.status, app_no: String(r.app_no).trim(), reg_no: String(r.reg_no).trim(), app_date: normDate(r.app_date) || '', reg_date: normDate(r.reg_date) || '' }; });
+  }
+  function updateFilPv() {
+    var pv = $('achFilPv'); if (!pv) return;
+    var fl = liveFilings();
+    pv.textContent = fl.length ? '→ 지금 상태: ' + patentLabel({ data: { filings: fl } }) : '→ 줄을 더하면 상태(등록·출원)가 자동으로 계산돼요';
+  }
+  function readFilings(errs) {
+    syncFil(); var out = [];
+    E.fil.forEach(function (r, i) {
+      var o = Object.assign({}, r._o);
+      FIL_KEYS.forEach(function (kk) {
+        var key = kk[0], raw = String(r[key] == null ? '' : r[key]).trim(), orig = o[key] == null ? '' : String(o[key]);
+        if (raw === orig) return;                      // 안 건드린 칸은 원래 값 그대로
+        if (key === 'app_date' || key === 'reg_date') { var nd = normDate(raw); if (nd === null) { errs.push('서류 ' + (i + 1) + '의 ' + (key === 'app_date' ? '출원일' : '등록일') + '은 2024-03-05 모양으로 적어 주세요.'); return; } raw = nd; }
+        if (raw === '') delete o[key]; else o[key] = raw;
+      });
+      if (Object.keys(o).every(function (kk) { return kk === 'status'; })) return;     // 아무 내용도 없는 줄은 버린다
+      if (/^\d{4}-\d{2}-\d{2}$/.test(o.app_date || '') && /^\d{4}-\d{2}-\d{2}$/.test(o.reg_date || '') && o.reg_date < o.app_date) errs.push('서류 ' + (i + 1) + '의 등록일이 출원일보다 빨라요. 확인해 주세요.');
+      out.push(o);
+    });
+    return out;
+  }
+  var filArm = { i: -1, at: 0 };
+  function delFil(i) {
+    syncFil(); var r = E.fil[i]; if (!r) return;
+    if (filHasContent(r) && !(filArm.i === i && Date.now() - filArm.at < 3500)) {       // 내용이 든 줄은 한 번 더 눌러야 지워진다
+      filArm = { i: i, at: Date.now() }; var b = document.querySelector('.ach-fil[data-i="' + i + '"] [data-act="fildel"]'); if (b) b.textContent = '정말 지우기';
+      setTimeout(function () { var bb = document.querySelector('.ach-fil[data-i="' + i + '"] [data-act="fildel"]'); if (bb && filArm.i === i) bb.textContent = '지우기'; }, 3500);
+      return;
+    }
+    E.fil.splice(i, 1); filArm = { i: -1, at: 0 }; renderFils();
+  }
+  function addFil() {
+    syncFil(); E.fil.push(filNew()); renderFils();
+    var el = $('achFil' + E.fil.length + '_c'); if (el) { try { el.focus({ preventScroll: false }); } catch (e) {} }
+  }
+
+  /* 입력 중 따라 움직이는 것들: 발명자/저자 → 순번, 서류 날짜/시작 연월/수상일 → 연도 제안, 금액 읽기, ISBN 점검, 중복 경고 */
+  function updatePeoplePv() {
+    var pv = $('achPv'); if (!pv || !E) return;
+    var pos = toInt($('achFP').value), tot = toInt($('achFTt').value), names = parseAuthors($('achFA').value, E.knownNames), n = $('achCnt'), noun = peopleField().noun, msg = '';
+    pv.textContent = pos ? '→ ' + noun + ' ' + (tot ? tot + '명 중 ' : '') + pos + '번째' : '순번을 넣으면 몇 번째 ' + noun + '인지 보여 드려요';
+    if (pos && tot && pos > tot) msg = '내 순번이 총 ' + noun + '수보다 커요.';
+    else if (names.length && tot && names.length !== tot) msg = noun + ' 이름은 ' + names.length + '명인데 총 ' + noun + '수는 ' + tot + '명이에요. 맞는지 확인해 주세요.';
+    n.textContent = msg;
+  }
+  function moneyPv() {
+    var pv = $('achPvMoney'), el = $('achF_budget'); if (!pv || !el) return;
+    var m = parseMoney(el.value); pv.textContent = m === '' ? '' : (m === null ? '숫자만 적어 주세요 (쉼표는 괜찮아요)' : '→ ' + fmtWon(m));
+  }
+  function isbnPv() {
+    var pv = $('achPvIsbn'), el = $('achF_isbn'); if (!pv || !el) return;
+    pv.textContent = el.value.trim() && !isbnOk(el.value) ? 'ISBN 은 보통 숫자 10자리 또는 13자리예요. 맞는지 확인해 주세요 (그대로 저장은 돼요).' : '';
+  }
+  function autoFill() {
+    if (!E || !E.prof || !E.yAuto || !$('achFY')) return;
+    var dt = $('achFDt'), st = $('achF_start_ym'), v = { item_date: dt ? normDate(dt.value) : '', data: { start_ym: st ? normYm(st.value) : '', filings: $('achFils') ? liveFilings() : [] } };
+    var y = autoYear(E.pk, v); if (y) $('achFY').value = y;
+  }
+  function dupIds() {
+    var out = [], is = $('achF_isbn');
+    if (is && norm(is.value).length >= 5) out.push({ v: norm(is.value), why: '같은 ISBN' });
+    if ($('achFils')) liveFilings().forEach(function (r) { [r.app_no, r.reg_no].forEach(function (n) { if (norm(n).length >= 5) out.push({ v: norm(n), why: '같은 출원·등록번호' }); }); });
+    return out;
+  }
+  function onProfInput(ev) {
+    if (!E || !E.prof) return;
+    var tg = ev.target || {}, id = tg.id || '';
+    /* 글자 칸은 「input」 으로 이미 처리했다 — 칸을 떠날 때 오는 「change」 까지 받으면 경고 창이 다시 그려져, 그 순간 누르던 「그래도 추가」 단추가 사라진다. 고르는 칸(선택·날짜·연월)만 change 도 받는다 */
+    if (ev.type === 'change' && !(tg.tagName === 'SELECT' || tg.type === 'date' || tg.type === 'month')) return;
+    if (id === 'achFT') { E.dupAck = false; checkDup(); }
+    else if (id === 'achFY') { E.yAuto = false; }
+    else if (id === 'achFA') {
+      var names = parseAuthors(ev.target.value, E.knownNames);
+      if (names.length) { $('achFTt').value = names.length; var me = findMe(names, S.settings.names); if (me) $('achFP').value = me; }
+      updatePeoplePv();
+    }
+    else if (id === 'achFP' || id === 'achFTt') updatePeoplePv();
+    else if (id === 'achF_isbn') { isbnPv(); E.dupAck = false; checkDup(); }
+    else if (id === 'achF_budget') moneyPv();
+    else if (id === 'achFDt' || id === 'achF_start_ym') autoFill();
+    else if (/^achFil\d+_/.test(id)) { updateFilPv(); autoFill(); if (/_(an|rn)$/.test(id)) { E.dupAck = false; checkDup(); } }
+  }
+  function initVals() { var o = {}, els = $('achBox').querySelectorAll('input,textarea,select'), i; for (i = 0; i < els.length; i++) if (els[i].id) o[els[i].id] = els[i].value; return o; }
+  function wireProf() {
+    var box = $('achBox'), tg = box.querySelectorAll('.tg'), i;
+    box.oninput = box.onchange = onProfInput;
+    for (i = 0; i < tg.length; i++) tg[i].onclick = function () { this.classList.toggle('on'); this.setAttribute('aria-checked', this.classList.contains('on')); };
+    updatePeoplePv(); updateFilPv(); moneyPv(); isbnPv();
+    box.scrollTop = 0;
+  }
+  function openEditProf(base, k, pk) {
+    var pf = PROFILES[pk], d = base ? dataOf(base) : {}, names = base ? peopleNames(base) : [], cs = subCats(k.id);
+    E = { base: base, kind: k, prof: pf, pk: pk, id: base ? base.id : uuid(), busy: false, authText: names.join(', '), knownNames: names.filter(function (n) { return /[,，;；\n]/.test(n); }), sig: '', init: {}, dupAck: false, force: false,
+      yAuto: !(base && toInt(base.year)), fil: pk === 'patent' ? filingsOf(base).map(filFrom) : [] };
+    var head = '', vis = '', more = '', labels = [];
+    pf.fields.forEach(function (f) {
+      var s = fieldHtml(f, base, d);
+      if (f.k === 'title') head += s + '<div id="achDup"></div>';
+      else if (f.k === 'year') head += s;
+      else if (f.more) { more += s; labels.push(f.short || f.label || f.noun); }
+      else vis += s;
+    });
+    if (cs.length) { more += '<label class="ach-lbl" for="achFC">분류</label><select class="ach-f" id="achFC"><option value="">분류 없음</option>' + cs.map(function (c) { return '<option value="' + esc(c.id) + '"' + (base && base.cat_id === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>'; labels.push('분류'); }
+    more += '<label class="ach-lbl" for="achFN">메모</label><textarea class="ach-f" id="achFN" rows="2">' + esc(base ? base.note : '') + '</textarea>' + swHtml('achFVf', '맞게 확인했어요', '직접 확인한 항목에 켜 두세요', base ? base.verified === true : false);
+    labels.push('메모');
+    openSheet('<div class="ach-hd"><h2>' + (base ? '고치기' : '새로 추가') + ' · ' + esc(k.name) + '</h2><button type="button" class="ach-back" data-act="editclose">닫기</button></div>' + head + vis +
+      '<button type="button" class="ach-exp" id="achEx" data-act="more">▾ 더 입력 (' + esc(labels.join(' · ')) + ')</button><div class="ach-more-in" id="achMi">' + more + '</div>' +
+      '<div id="achErr"></div><div style="height:16px"></div><button type="button" class="ach-btn" id="achSave" data-act="save">저장</button>', null, true);
+    wireProf();
+    editWarnAt = 0; E.sig = formSig(); E.init = initVals();
+  }
+  function markBad(id) { var e = $(id); if (e) e.classList.add('bad'); }
+  function readFormProf() {
+    var k = E.kind, pf = E.prof, base = E.base, v = { id: E.id, kind_id: k.id, data: {}, errs: [] }, bd = base ? dataOf(base) : {};
+    pf.fields.forEach(function (f) {
+      var id = fid(f), el = $(id), raw, val;
+      if (f.t === 'people') {
+        var text = $('achFA').value.trim();
+        if (text !== E.authText.trim() && (text || E.authText)) v.people = parseAuthors(text, E.knownNames).map(function (n) { return { name: n }; });
+        v.data.author_pos = toInt($('achFP').value); v.data.author_total = toInt($('achFTt').value);
+        return;
+      }
+      if (f.t === 'filings') { var fl = readFilings(v.errs); v.data.filings = fl.length ? fl : (Array.isArray(bd.filings) && bd.filings.length ? null : undefined); return; }
+      if (!el) return;
+      if (f.t === 'sw') { var on = readSw(id); if (on || bd[f.k] !== undefined) v.data[f.k] = on; return; }
+      raw = el.value.trim();
+      if (f.t === 'year') { v.yearRaw = raw; v.year = raw === '' ? null : toInt(raw); return; }
+      if (f.t === 'month' || f.t === 'date' || f.t === 'money' || f.t === 'num') {
+        /* 안 건드린 칸은 그대로 둔다 — 원래 값이 표준 모양이 아니어도 다른 칸만 고쳐 저장할 때 지워지거나 막히지 않게 (「내 값으로 덮어쓰기」는 모두 보낸다) */
+        if (!E.force && raw === (E.init[id] == null ? '' : E.init[id])) return;
+        if (raw === '') val = null;
+        else if (f.t === 'month') { val = normYm(raw); if (val === null) { v.errs.push('「' + f.label + '」는 2024-03 모양으로 적어 주세요.'); markBad(id); return; } }
+        else if (f.t === 'date') { val = normDate(raw); if (val === null) { v.errs.push('「' + f.label + '」는 2024-03-05 모양으로 적어 주세요.'); markBad(id); return; } }
+        else if (f.t === 'money') { val = parseMoney(raw); if (val === null) { v.errs.push('「' + f.label.replace(/ \(원\)$/, '') + '」는 숫자로 적어 주세요.'); markBad(id); return; } }
+        else { val = /^\d{1,7}$/.test(raw.replace(/,/g, '')) ? toInt(raw.replace(/,/g, '')) : undefined; if (val === undefined) { v.errs.push('「' + f.label + '」는 숫자로 적어 주세요.'); markBad(id); return; } }
+        if (val === '') val = null;
+      } else val = raw;
+      if (f.col) v[f.col] = val; else v.data[f.k] = val;
+    });
+    v.note = $('achFN').value.trim(); v.verified = readSw('achFVf');
+    var c = $('achFC'); if (c) v.cat_id = c.value || null;
+    var s0 = v.data.start_ym !== undefined ? v.data.start_ym : bd.start_ym, e0 = v.data.end_ym !== undefined ? v.data.end_ym : bd.end_ym;
+    if (s0 && e0 && normYm(s0) && normYm(e0) && normYm(e0) < normYm(s0)) { v.errs.push('종료 연월이 시작 연월보다 빨라요. 확인해 주세요.'); markBad('achF_end_ym'); }
+    return v;
+  }
+
   /* 입력 모습 한 줄 요약(모든 입력칸·선택칸·스위치) — 연 직후와 달라졌으면 「고친 상태」 */
   function formSig() {
     var box = $('achBox'); if (!box) return '';
@@ -646,9 +1198,9 @@
   function checkDup() {
     var out = $('achDup'); if (!out || !E) return;
     var title = $('achFT').value.trim(), doi = $('achFD') ? $('achFD').value : '';
-    var dp = isPaperKind(E.kind) ? findDup(S.items, title, doi, E.id, E.kind.id) : null;
+    var dp = E.prof ? findDup(S.items, title, '', E.id, E.kind.id, dupIds()) : (isPaperKind(E.kind) ? findDup(S.items, title, doi, E.id, E.kind.id) : null);
     if (!dp || E.dupAck) { out.innerHTML = E.dupAck ? '<div class="ach-note">그래도 추가하기로 했어요.</div>' : ''; return; }
-    out.innerHTML = '<div class="ach-warn">이미 있는 논문과 같아 보여요 (' + dp.why + ')<br>「' + esc(dp.x.title) + '」' + (dp.x.deleted_at ? ' — 휴지통에 있어요' : '') + '<div class="acts"><button type="button" data-act="dupgo">그래도 추가</button><button type="button" data-act="dupopen" data-id="' + esc(dp.x.id) + '">열어 보기</button></div></div>';
+    out.innerHTML = '<div class="ach-warn">이미 있는 ' + (E.prof ? '기록' : '논문') + '과 같아 보여요 (' + dp.why + ')<br>「' + esc(dp.x.title) + '」' + (dp.x.deleted_at ? ' — 휴지통에 있어요' : '') + '<div class="acts"><button type="button" data-act="dupgo">그래도 추가</button><button type="button" data-act="dupopen" data-id="' + esc(dp.x.id) + '">열어 보기</button></div></div>';
   }
   function wireEdit(paper) {
     var box = $('achBox');
@@ -676,6 +1228,7 @@
     box.scrollTop = 0;
   }
   function readForm() {
+    if (E.prof) return readFormProf();
     var k = E.kind, paper = isPaperKind(k), base = E.base, v = { id: E.id, kind_id: k.id, data: {} };
     v.title = $('achFT').value.trim();
     var ys = $('achFY').value.trim(); v.year = ys === '' ? null : toInt(ys);
@@ -703,14 +1256,17 @@
   function inlineErr(msg) { $('achErr').innerHTML = msg ? '<div class="ach-err">' + esc(msg) + '</div>' : ''; }
   function doSave(forceBaseRev) {
     if (!E || E.busy) return;
-    var paper = isPaperKind(E.kind), v = readForm(), bad = false;
-    ['achFT', 'achFY', 'achFP'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('bad'); });
+    var paper = isPaperKind(E.kind), prof = !!E.prof, v, bad = false;
+    E.force = !!forceBaseRev;
+    Array.prototype.forEach.call($('achBox').querySelectorAll('.bad'), function (e) { e.classList.remove('bad'); });
+    v = readForm();
     if (!v.title) { $('achFT').classList.add('bad'); bad = true; }
-    if (paper && !v.year) { $('achFY').classList.add('bad'); bad = true; }
+    if ((paper || prof) && !v.year) { $('achFY').classList.add('bad'); bad = true; }
     if (v.yearRaw !== '' && (!v.year || v.year < 1950 || v.year > 2100)) { $('achFY').classList.add('bad'); bad = true; }
-    if (bad) { inlineErr(paper ? '제목과 연도(1950~2100)를 확인해 주세요.' : '제목을 확인해 주세요(연도를 적었다면 1950~2100).'); return; }
+    if (bad) { inlineErr(paper || prof ? '제목과 연도(1950~2100)를 확인해 주세요.' : '제목을 확인해 주세요(연도를 적었다면 1950~2100).'); return; }
     var pp = v.data.author_pos, tt = v.data.author_total;
-    if (paper && pp && tt && pp > tt) { inlineErr('내 순번이 총 저자수보다 커요. 확인해 주세요.'); return; }
+    if ((paper || prof) && pp && tt && pp > tt) { inlineErr('내 순번이 총 ' + (prof ? peopleField().noun : '저자') + '수보다 커요. 확인해 주세요.'); return; }
+    if (prof && v.errs.length) { inlineErr(v.errs[0]); return; }
     /* 교신(또는 공동 제1) 스위치를 켰는데 내 순번이 비어 있으면 역할을 계산할 수 없다 — 저장 전에 순번부터. (순번이 원래 비어 있던 옛 항목을 건드리지 않고 다른 칸만 고칠 땐 막지 않는다) */
     if (paper && !pp && (readSw('achFCr') || readSw('achFCo'))) {
       var legacy = E.base && !toInt(dataOf(E.base).author_pos) && !E.crTouched && !E.coTouched;
@@ -900,12 +1456,13 @@
     var el = e.target.closest ? e.target.closest('[data-act]') : null; if (!el) return;
     var a = el.getAttribute('data-act'), id = el.getAttribute('data-id');
     switch (a) {
-      case 'tab': S.tab = el.getAttribute('data-t'); S.role = 'all'; S.sub = 'all'; S.fInh = false; S.fWait = false; S.filt = false; S.fCat = 'all'; $('achQ').value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderAll(); break;
+      case 'tab': S.tab = el.getAttribute('data-t'); S.pchip = 'all'; S.role = 'all'; S.sub = 'all'; S.fInh = false; S.fWait = false; S.filt = false; S.fCat = 'all'; $('achQ').value = ''; S.q = ''; $('achSearch').classList.remove('has'); renderAll(); break;
       case 'role': S.role = el.getAttribute('data-r'); S.sub = 'all'; renderAll(); break;
       case 'sub': S.sub = el.getAttribute('data-s'); renderAll(); break;
       case 'filt': S.filt = !S.filt; renderAll(); break;
       case 'fil': if (el.getAttribute('data-f') === 'inh') S.fInh = !S.fInh; else S.fWait = !S.fWait; renderAll(); break;
       case 'cat': S.fCat = el.getAttribute('data-c'); renderAll(); break;
+      case 'pchip': S.pchip = el.getAttribute('data-c'); renderAll(); break;
       case 'sort': S.sortKey = S.sortKey === 'new' ? 'old' : (S.sortKey === 'old' ? 'upd' : 'new'); renderAll(); break;
       case 'reload': load(false); break;
       case 'open': openDetail(id); break;
@@ -915,6 +1472,8 @@
       case 'edit': openEdit(itemById(id)); break;
       case 'editclose': if (confirmEditClose()) { hideSheetNow(); renderAll(); } break;
       case 'more': $('achMi').classList.toggle('show'); break;
+      case 'filadd': if (E && E.prof) addFil(); break;
+      case 'fildel': if (E && E.prof) delFil(+el.getAttribute('data-i')); break;
       case 'save': doSave(); break;
       case 'dupgo': E.dupAck = true; checkDup(); break;
       case 'dupopen': var dx = itemById(id); if (dx) { hideSheetNow(); openDetail(dx.id); } break;
@@ -953,7 +1512,7 @@
    * ===================================================================*/
   function init(o) { if (o && o.toast) _toast = o.toast; build(); }
   function open() {
-    build(); S.q = ''; var q = $('achQ'); if (q) q.value = ''; var sb = $('achSearch'); if (sb) sb.classList.remove('has');
+    build(); tabShown = null; S.q = ''; var q = $('achQ'); if (q) q.value = ''; var sb = $('achSearch'); if (sb) sb.classList.remove('has');
     renderAll(); load(S.loaded);
   }
   /* 뒤로 가기: 창이 열려 있으면 창부터 닫는다. true = 여기서 처리함 */
