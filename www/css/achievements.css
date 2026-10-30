@@ -174,6 +174,8 @@ html[data-style="dark"] .ach-f[type="date"]::-webkit-calendar-picker-indicator, 
 .ach-fil { border-radius: 16px; border: 1px solid var(--glass-b); background: var(--in-bg); padding: 4px 12px 12px; margin-bottom: 8px; }
 .ach-filh { display: flex; align-items: center; justify-content: space-between; min-height: 44px; font-size: 14.5px; }
 .ach-mini.wide { display: block; width: 100%; height: 44px; font-size: 14.5px; border-style: dashed; }
+.ach-filnote { margin: 8px 2px 0; color: var(--warn-t, var(--warn)); font-weight: 700; line-height: 1.5; }
+.ach-filnote:empty { display: none; }
 .ach-fild { border-radius: 14px; border: 1px solid var(--glass-b); background: var(--glass); padding: 9px 12px; margin-bottom: 6px; font-size: 14px; }
 .ach-fild b { font-weight: 800; margin-left: 4px; }
 .ach-fild .s { font-size: 12.5px; color: var(--ad); margin-top: 3px; line-height: 1.5; word-break: break-all; }

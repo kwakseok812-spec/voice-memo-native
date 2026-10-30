@@ -30,7 +30,7 @@
   /* 화면이 아는 data 칸 — 저장할 때 이 칸만 화면 값으로 바꾸고 나머지(가져올 때 남긴 출처 메모·앞으로 생길 칸)는 건드리지 않는다 */
   var KNOWN_DATA = ['author_pos', 'author_total', 'co_first', 'corresponding', 'in_house', 'volume', 'issue', 'pages', 'article_no', 'doi', 'journal_grade',
     /* v9.60 — 특허·저서·연구과제·수상·학회활동 (칸 목록 표 PROFILES 의 data 칸과 같아야 한다) */
-    'applicant_type', 'tech_field', 'filings', 'book_type', 'isbn', 'my_role', 'page_count', 'nl_checked', 'grant_kind', 'start_ym', 'end_ym', 'budget', 'scope', 'position'];
+    'applicant_type', 'tech_field', 'filings', 'book_type', 'isbn', 'my_role', 'page_count', 'nl_checked', 'grant_kind', 'start_ym', 'end_ym', 'budget', 'scope', 'position', 'right_type', 'grant_type'];
   /* 교수님 본인 이름을 찾는 기본 규칙(7-4절): 한글 이름(글자 사이 띄움 허용) · 영문은 성(Kwak)과 이름 쪽(Ho Seok / Hoseok / H.S. / HS)이 함께 있을 때만.
    *   성(Kwak)만으로는 찾지 않는다. 더 필요한 표기는 ⚙ 「내 이름 표기」에서 더한다(폰에 저장). */
   var ME_KO = '곽호석';
@@ -122,6 +122,18 @@
       if (d && norm(cleanDoi(dataOf(x).doi)) === d) return { x: x, why: '같은 DOI' };
       if (ids && ids.length) { var xi = idsOf(x); for (var j = 0; j < ids.length; j++) if (ids[j].v && xi.indexOf(ids[j].v) >= 0) return { x: x, why: ids[j].why }; }
       if (norm(t).length > 6 && sim(t, x.title) >= 0.85) return { x: x, why: '비슷한 제목' };
+    }
+    return null;
+  }
+
+  /* 같은 제목 + 같은 연도일 때만 같은 기록으로 본다 — 학회·위원회 임기나 수상처럼 같은 이름을 해마다 입력하는 종류용 */
+  function findDupSameYear(all, title, year, selfId, kindId) {
+    var t = norm(title), y = toInt(year);
+    if (!t || !y) return null;
+    for (var i = 0; i < all.length; i++) {
+      var x = all[i];
+      if (!x || x.id === selfId || (kindId && x.kind_id !== kindId)) continue;
+      if (norm(x.title) === t && toInt(x.year) === y) return { x: x, why: '같은 제목·같은 연도' };
     }
     return null;
   }
@@ -262,7 +274,8 @@
   var ID_PROFILE = {};
   Object.keys(SEED).forEach(function (n) { ID_PROFILE[SEED[n]] = n; });
   var BOOK_TYPES = ['저서', '공저', '교재', '역서', '편저', '기타'];
-  var FIL_STATUS = ['출원', '등록', '거절', '포기'];
+  var FIL_STATUS = ['출원', '등록', '소멸', '거절', '포기'];           // 소멸 = 등록된 뒤 연차료 미납 등으로 권리가 사라짐(등록으로 세되 따로 표시)
+  var FIL_LABEL = { '소멸': '소멸(등록 후)' };
   var COUNTRIES = ['한국', '미국', '일본', '중국', '유럽(EP)', 'PCT(국제출원)', '독일', '영국', '기타'];
   var PROFILES = {
     patent: {
@@ -273,8 +286,9 @@
         { k: 'year', col: 'year', t: 'year', label: '대표 연도', req: true, hint: '아래 서류에 날짜를 넣으면 자동으로 채워져요 (등록이 있으면 첫 등록 연도, 없으면 첫 출원 연도). 손으로 고쳐도 돼요.' },
         { k: 'people', t: 'people', noun: '발명자', total: '총 발명자수' },
         { k: 'filings', t: 'filings' },
-        { k: 'applicant_type', t: 'sel', label: '출원인 구분', opts: ['대학', '산학협력단', '개인', '타 기관', '기타'], more: true, hint: '규정 점수는 출원인이 대학·산학협력단이고 내가 발명자인 특허만 대상이에요.' },
+        { k: 'applicant_type', t: 'sel', label: '출원인 구분', opts: ['대학', '산학협력단', '개인', '타 기관', '기타'], more: true, hint: '규정 점수는 출원인이 대학·산학협력단이고 내가 발명자인 특허만 대상으로 읽혀요.' },
         { k: 'venue', col: 'venue', t: 'text', label: '출원인 이름', more: true },
+        { k: 'right_type', t: 'sel', label: '권리 구분', opts: ['특허', '실용신안', '디자인'], more: true },
         { k: 'tech_field', t: 'text', label: '기술 분야', more: true }
       ]
     },
@@ -300,8 +314,9 @@
         { k: 'title', col: 'title', t: 'text', label: '과제명', req: true },
         { k: 'year', col: 'year', t: 'year', label: '시작 연도', req: true, hint: '시작 연월을 넣으면 자동으로 채워져요.' },
         { k: 'venue', col: 'venue', t: 'text', label: '사업명·지원기관', more: true },
+        { k: 'grant_type', t: 'sel', label: '구분', opts: ['교내', '교외', '정책연구', '기타'], more: true },
         { k: 'grant_kind', t: 'sel', label: '주관 구분', opts: ['주관', '공동', '위탁'], more: true },
-        { k: 'my_role', t: 'sel', label: '내 역할', opts: ['책임', '공동'], more: true },
+        { k: 'my_role', t: 'sel', label: '내 역할', opts: ['책임', '공동', '참여'], more: true },
         { k: 'start_ym', t: 'month', label: '시작 연월', more: true },
         { k: 'end_ym', t: 'month', label: '종료 연월', more: true, hint: '진행 중이면 비워 두세요.' },
         { k: 'budget', t: 'money', label: '총연구비 (원)', more: true, live: 'money' },
@@ -309,7 +324,7 @@
       ]
     },
     award: {
-      name: '수상', unit: '건', yearFrom: 'item_date',
+      name: '수상', unit: '건', yearFrom: 'item_date', dup: 'sameYear',
       empty: '수상명과 연도만 넣어도 돼요. 수상일·수여기관·구분은 「더 입력」에서.',
       fields: [
         { k: 'title', col: 'title', t: 'text', label: '수상명', req: true },
@@ -320,12 +335,12 @@
       ]
     },
     society: {
-      name: '학회활동', unit: '건', yearFrom: 'start_ym',
+      name: '학회활동', unit: '건', yearFrom: 'start_ym', dup: 'sameYear',
       empty: '학회·위원회 이름과 시작 연도만 넣어도 돼요. 직책·기간은 「더 입력」에서.',
       fields: [
         { k: 'title', col: 'title', t: 'text', label: '학회·위원회명', req: true },
         { k: 'year', col: 'year', t: 'year', label: '시작 연도', req: true, hint: '시작 연월을 넣으면 자동으로 채워져요.' },
-        { k: 'position', t: 'text', label: '직책', more: true, ph: '예: 이사, 위원' },
+        { k: 'position', t: 'text', label: '직책', more: true, ph: '예: 이사, 위원, 평가위원' },
         { k: 'start_ym', t: 'month', label: '시작 연월', more: true },
         { k: 'end_ym', t: 'month', label: '종료 연월', more: true, hint: '지금도 활동 중이면 비워 두세요.' }
       ]
@@ -382,8 +397,16 @@
   function nowYm() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
 
   /* ---- 특허: 나라별 서류(filings)에서 상태를 계산한다 — 상태는 저장하지 않는다(같은 값을 두 곳에 두지 않음) ---- */
-  var DOMESTIC_RE = /^(한국|대한민국|국내|kr|kor|korea|southkorea)$/i;
-  function isDomestic(c) { return DOMESTIC_RE.test(String(c == null ? '' : c).replace(/\s+/g, '')); }
+  /* 한국으로 읽는 표기: 「한국」「한국(KR)」「KR」「대한민국」「Korea」「한국특허청」 … — 글자·숫자 덩어리로 쪼개 하나라도 아래 낱말이면 한국 */
+  var DOM_TOK = { '한국': 1, '대한민국': 1, '국내': 1, 'kr': 1, 'kor': 1, 'korea': 1, '한국특허청': 1, '대한민국특허청': 1, 'kipo': 1 };
+  function isDomestic(c) { return String(c == null ? '' : c).toLowerCase().split(/[^0-9a-z가-힣]+/).some(function (t) { return !!DOM_TOK[t]; }); }
+  /* 목록(datalist)에 있는 표기이거나 한국으로 읽히면 「아는 나라」 — 아니면 입력 칸에서 목록에서 고르라고 안내한다(그래도 해외로 센다) */
+  function isKnownCountry(c) {
+    var t = String(c == null ? '' : c).trim().toLowerCase();
+    if (!t) return true;
+    if (isDomestic(t)) return true;
+    return COUNTRIES.some(function (k) { k = k.toLowerCase(); return k === t || k.split(/[()]/).filter(Boolean).indexOf(t) >= 0; });
+  }
   function filingsOf(x) { var f = dataOf(x).filings; return Array.isArray(f) ? f.filter(isObj) : []; }
   function filingsText(x) { return filingsOf(x).map(function (f) { return [f.country, f.app_no, f.reg_no].join(' '); }).join(' '); }
   function idsOf(x) {
@@ -392,15 +415,30 @@
     filingsOf(x).forEach(function (f) { if (f.app_no) out.push(norm(f.app_no)); if (f.reg_no) out.push(norm(f.reg_no)); });
     return out.filter(function (v) { return v.length >= 5; });
   }
-  /* reg = 등록이 하나라도 / app = 출원만 / end = 전부 거절·포기 / none = 서류 없음 또는 상태 입력 전 */
+  /* 서류 한 줄이 「등록」인가: 상태가 등록·소멸이거나, 등록번호·등록일이 적혀 있고 거절이 아니면 등록으로 센다(상태를 안 바꿔도 숫자가 틀리지 않게) */
+  function hasRegInfo(f) { return !!(String(f.reg_no == null ? '' : f.reg_no).trim() || String(f.reg_date == null ? '' : f.reg_date).trim()); }
+  function isRegF(f) { return f.status === '등록' || f.status === '소멸' || (f.status !== '거절' && hasRegInfo(f)); }
+  function isLapsedF(f) { return isRegF(f) && (f.status === '소멸' || f.status === '포기'); }
+  function filStatusLabel(f) {
+    if (f.status === '소멸') return '소멸(등록 후)';
+    if (f.status === '포기' && hasRegInfo(f)) return '포기(등록 후)';
+    if (isRegF(f) && f.status !== '등록') return '등록';
+    return f.status || '상태 입력 전';
+  }
+  /* reg = 등록이 하나라도(소멸 포함) / app = 출원만 / end = 전부 거절·포기 / none = 서류 없음 또는 상태 입력 전 */
   function patentState(x) {
     var fs = filingsOf(x), reg = false, app = false, end = 0;
-    fs.forEach(function (f) { if (f.status === '등록') reg = true; else if (f.status === '출원') app = true; else if (f.status === '거절' || f.status === '포기') end++; });
+    fs.forEach(function (f) { if (isRegF(f)) reg = true; else if (f.status === '출원') app = true; else if (f.status === '거절' || f.status === '포기') end++; });
     return reg ? 'reg' : (app ? 'app' : (fs.length && end === fs.length ? 'end' : 'none'));
   }
+  /* kr·fo·unk = 등록이 있는 나라 구분(unk = 나라 비어 있음) · regN = 등록 줄 수 · lapsed = 그 중 소멸·포기 줄 수 */
   function patentReg(x) {
-    var r = { kr: false, fo: false, unk: false };
-    filingsOf(x).forEach(function (f) { if (f.status !== '등록') return; if (!String(f.country || '').trim()) r.unk = true; else if (isDomestic(f.country)) r.kr = true; else r.fo = true; });
+    var r = { kr: false, fo: false, unk: false, regN: 0, lapsed: 0 };
+    filingsOf(x).forEach(function (f) {
+      if (!isRegF(f)) return;
+      r.regN++; if (isLapsedF(f)) r.lapsed++;
+      if (!String(f.country || '').trim()) r.unk = true; else if (isDomestic(f.country)) r.kr = true; else r.fo = true;
+    });
     return r;
   }
   function patentCountries(x) {
@@ -408,12 +446,26 @@
     filingsOf(x).forEach(function (f) { var c = String(f.country || '').trim(); if (c && !seen[c]) { seen[c] = 1; out.push(c); } });
     return out;
   }
+  function lapseText(r) { return r.lapsed ? (r.lapsed === r.regN ? '전부 소멸' : '일부 소멸') : ''; }
   function patentLabel(x) {
     var st = patentState(x), r = patentReg(x), fs = filingsOf(x);
-    if (st === 'reg') return '등록' + (r.kr && r.fo ? ' · 한국·해외' : (r.kr ? ' · 한국' : (r.fo ? ' · 해외' : '')));
+    if (st === 'reg') {
+      var reg = [r.kr ? '한국' : '', r.fo ? '해외' : '', r.unk ? '나라 미입력' : ''].filter(Boolean).join('·');
+      return '등록 · ' + reg + (r.lapsed ? ' · ' + lapseText(r) : '');
+    }
     if (st === 'app') return '출원 (등록 전)';
     if (st === 'end') return '거절·포기';
-    return fs.length ? '상태 입력 전' : '서류 없음';
+    return fs.length ? '상태 입력 전' : '서류 입력 전';
+  }
+  /* 서류 줄 입력 중 보여 주는 한 줄 안내들 (r = 화면에 적힌 줄, auto = 방금 등록번호를 적어서 상태를 자동으로 등록으로 바꿨는가) */
+  function filNotes(r, auto) {
+    var st = String(r.status || ''), reg = hasRegInfo(r), c = String(r.country || '').trim(), out = [];
+    if (auto) out.push('등록번호·등록일을 적어서 등록으로 바꿨어요 (바꿀 수 있어요)');
+    else if (reg && (st === '' || st === '출원')) out.push('등록번호·등록일이 있어 등록으로 세고 있어요. 상태도 「등록」으로 바꿔 두면 확실해요');
+    if ((st === '등록' || st === '소멸') && !reg) out.push('등록인데 등록번호·등록일이 비어 있어요 (그대로 저장은 돼요)');
+    if (!c && (st === '등록' || st === '소멸' || reg)) out.push('나라가 비어 있어 「등록 (나라 미입력)」으로 세요. 나라를 넣으면 한국·해외로 나뉘어요');
+    else if (c && !isKnownCountry(c)) out.push('목록에서 고르면 한국·해외가 정확히 나뉘어요');
+    return out;
   }
   /* 연도 자동 제안 — 특허: 등록이 있으면 첫 등록 연도, 없으면 첫 출원 연도 / 연구과제·학회활동: 시작 연월 / 수상: 수상일 */
   function autoYear(pk, v) {
@@ -423,7 +475,7 @@
       var reg = [], app = [];
       (Array.isArray(d.filings) ? d.filings : []).forEach(function (f) {
         var ry = ymYear(f.reg_date), ay = ymYear(f.app_date);
-        if (f.status === '등록' && ry) reg.push(ry); if (ay) app.push(ay);
+        if (isRegF(f) && ry) reg.push(ry); if (ay) app.push(ay);
       });
       var pool = reg.length ? reg : app; return pool.length ? Math.min.apply(null, pool) : null;
     }
@@ -442,7 +494,7 @@
     var d = dataOf(x), b = [];
     if (pk === 'patent') {
       var st = patentState(x), r = patentReg(x);
-      if (r.kr) b.push('kr'); if (r.fo) b.push('fo'); if (st === 'app') b.push('app'); if (st === 'end') b.push('end'); if (st === 'none') b.push('none');
+      if (r.kr) b.push('kr'); if (r.fo) b.push('fo'); if (r.unk) b.push('regunk'); if (r.lapsed) b.push('lapse'); if (st === 'app') b.push('app'); if (st === 'end') b.push('end'); if (st === 'none') b.push('none');
     } else if (pk === 'book') b.push('t:' + (d.book_type ? String(d.book_type) : ''));
     else if (pk === 'grant') { b.push(x.status === 'ongoing' ? 'on' : (x.status === 'done' ? 'done' : 'nost')); if (d.my_role === '책임') b.push('lead'); }
     else if (pk === 'award') b.push('s:' + (d.scope ? String(d.scope) : ''));
@@ -450,7 +502,7 @@
     return b;
   }
   var CHIP_DEF = {
-    patent: [['kr', '한국 등록', 1], ['fo', '해외 등록', 1], ['app', '출원만', 1], ['end', '거절·포기', 0], ['none', '서류 입력 전', 0]],
+    patent: [['kr', '한국 등록', 1], ['fo', '해외 등록', 1], ['regunk', '등록 (나라 미입력)', 0], ['lapse', '등록 후 소멸 있음', 0], ['app', '출원만', 1], ['end', '거절·포기', 0], ['none', '서류 입력 전', 0]],
     grant: [['on', '진행', 1], ['done', '종료', 1], ['nost', '상태 미입력', 0], ['lead', '책임 과제', 0]],
     society: [['on', '활동 중', 1], ['past', '지난 활동', 1], ['unk', '기간 입력 전', 0]]
   };
@@ -477,7 +529,7 @@
     var d = dataOf(x), t = [];
     if (pk === 'patent') {
       var st = patentState(x), r = patentReg(x), fs = filingsOf(x);
-      if (st === 'reg') t.push({ t: r.kr && r.fo ? '한국·해외 등록' : (r.kr ? '한국 등록' : (r.fo ? '해외 등록' : '등록')), c: '' });
+      if (st === 'reg') { t.push({ t: r.kr && r.fo ? '한국·해외 등록' : (r.kr ? '한국 등록' : (r.fo ? '해외 등록' : '등록 (나라 미입력)')), c: '' }); if (r.lapsed) t.push({ t: lapseText(r), c: 'gray' }); }
       else if (st === 'app') t.push({ t: '출원', c: 'in' });
       else if (st === 'end') t.push({ t: '거절·포기', c: 'gray' });
       else t.push({ t: fs.length ? '상태 입력 전' : '서류 입력 전', c: 'wait' });
@@ -493,14 +545,14 @@
     var d = dataOf(x), yr = toInt(x.year) ? String(toInt(x.year)) : '연도 없음', parts = [];
     if (pk === 'patent') { var cs = patentCountries(x); parts.push(cs.length > 3 ? cs.slice(0, 3).join('·') + ' 외 ' + (cs.length - 3) : cs.join('·')); parts.push(yr); }
     else if (pk === 'book') { parts.push(x.venue); parts.push(yr); }
-    else if (pk === 'grant') { parts.push(x.venue); parts.push(periodText(d, x.status === 'done' ? '' : '진행 중') || yr); }
+    else if (pk === 'grant') { parts.push(x.venue); parts.push(periodText(d, x.status === 'ongoing' ? '진행 중' : '') || yr); }
     else if (pk === 'award') { parts.push(x.venue); parts.push(fmtDate(x.item_date) || yr); }
     else if (pk === 'society') { parts.push(periodText(d, '현재') || yr); }
     return parts.filter(Boolean).join(' · ');
   }
   /* 요약 카드 아래 덧붙이는 한 줄 (참고 안내) */
   function cardNote(pk, list) {
-    if (pk === 'patent') return '승진은 등록된 특허만 인정하는 것으로 읽혀요 · 규정 판정이 아닌 참고 숫자예요.';
+    if (pk === 'patent') return '승진은 등록된 특허만 인정하는 것으로 읽혀요 · 매년 업적평가는 출원도 점수가 있어요.';
     if (pk === 'book') {
       var n = list.filter(function (x) { var t = dataOf(x).book_type; return t === '역서' || t === '편저'; }).length;
       return n ? '역서·편저 ' + n + '권은 승진 세부심사에서 저서로 보지 않는 관행이라 따로 세요.' : '';
@@ -516,7 +568,7 @@
     /* v9.60 */
     PROFILES: PROFILES, profKey: profKey, normYm: normYm, normDate: normDate, fmtYm: fmtYm, fmtDate: fmtDate, parseMoney: parseMoney, fmtWon: fmtWon, normIsbn: normIsbn, isbnOk: isbnOk,
     periodText: periodText, isDomestic: isDomestic, filingsOf: filingsOf, idsOf: idsOf, patentState: patentState, patentReg: patentReg, patentLabel: patentLabel, autoYear: autoYear,
-    activeSoc: activeSoc, buckets: buckets, chipsOf: chipsOf, oneLine: oneLine, rowTags: rowTags, rowLine: rowLine, cardNote: cardNote, BOOK_TYPES: BOOK_TYPES
+    activeSoc: activeSoc, buckets: buckets, isKnownCountry: isKnownCountry, filNotes: filNotes, filStatusLabel: filStatusLabel, isRegF: isRegF, findDupSameYear: findDupSameYear, lapseText: lapseText, chipsOf: chipsOf, oneLine: oneLine, rowTags: rowTags, rowLine: rowLine, cardNote: cardNote, BOOK_TYPES: BOOK_TYPES
   };
 
   if (typeof document === 'undefined') return;   // 시험(node)에서는 화면 부분을 만들지 않는다
@@ -609,7 +661,7 @@
   function build() {
     if (built) return; built = true;
     var b = view(); if (!b) return;
-    b.innerHTML = '<div class="ach-search" id="achSearch"><span aria-hidden="true">🔍</span><input id="achQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="제목·저자·학술지·연도로 찾기"><button type="button" class="ach-x" id="achQx" aria-label="검색어 지우기">✕</button></div>' +
+    b.innerHTML = '<div class="ach-search" id="achSearch"><span aria-hidden="true">🔍</span><input id="achQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="제목·저자·번호·연도로 찾기"><button type="button" class="ach-x" id="achQx" aria-label="검색어 지우기">✕</button></div>' +
       '<div class="ach-tabs" id="achTabs" role="tablist"></div><div id="achMain"></div>';
     var layer = document.createElement('div');
     layer.id = 'achLayer';
@@ -881,7 +933,7 @@
     pf.fields.forEach(function (f) {
       if (f.t === 'filings' || f.k === 'title' || f.k === 'end_ym') return;
       if (f.t === 'people') { var tot = toInt(d.author_total); row('내 순번', pos ? pos + (tot ? '/' + tot : '') + '번째' : '아직 입력 안 함'); return; }
-      if (f.k === 'start_ym') { row('기간', esc(periodText(d, pk === 'society' ? '현재' : (x.status === 'done' ? '' : '진행 중')))); return; }
+      if (f.k === 'start_ym') { row('기간', esc(periodText(d, pk === 'society' ? '현재' : (x.status === 'ongoing' ? '진행 중' : '')))); return; }
       row((f.short || f.label).replace(/ \(원\)$/, ''), esc(fieldShow(f, x)));
     });
     return h;
@@ -892,7 +944,7 @@
     return '<div class="ach-h3" style="margin:6px 2px">나라별 서류 <em>' + fs.length + '줄</em></div>' + fs.map(function (f) {
       var a = [f.app_no ? '출원 ' + esc(f.app_no) : '', fmtDate(f.app_date) ? '(' + fmtDate(f.app_date) + ')' : ''].filter(Boolean).join(' '),
           r = [f.reg_no ? '등록 ' + esc(f.reg_no) : '', fmtDate(f.reg_date) ? '(' + fmtDate(f.reg_date) + ')' : ''].filter(Boolean).join(' ');
-      return '<div class="ach-fild"><div><span class="ach-tag' + (f.status === '등록' ? '' : (f.status === '출원' ? ' in' : ' gray')) + '">' + esc(f.status || '상태 입력 전') + '</span><b>' + esc(f.country || '나라 미입력') + '</b></div>' + (a || r ? '<div class="s">' + [a, r].filter(Boolean).join(' · ') + '</div>' : '') + '</div>';
+      return '<div class="ach-fild"><div><span class="ach-tag' + (isRegF(f) && !isLapsedF(f) ? '' : (f.status === '출원' ? ' in' : ' gray')) + '">' + esc(filStatusLabel(f)) + '</span><b>' + esc(f.country || '나라 미입력') + '</b></div>' + (a || r ? '<div class="s">' + [a, r].filter(Boolean).join(' · ') + '</div>' : '') + '</div>';
     }).join('');
   }
   function openDetail(id) {
@@ -914,7 +966,7 @@
     } else { kv += '<span>기관</span><b>' + esc(x.venue || '-') + '</b>'; if (x.cat_id && catById(x.cat_id)) kv += '<span>분류</span><b>' + esc(catById(x.cat_id).name) + '</b>'; }
     if (!pf) kv += '<span>연도</span><b>' + (toInt(x.year) || '-') + '</b>';
     if (paper) kv += '<span>상태</span><b>' + esc(x.status ? (STATUS_LABEL[x.status] || x.status) : '아직 입력 안 함') + '</b><span>DOI</span><b>' + esc(d.doi || '-') + '</b><span>등급</span><b>' + esc(d.journal_grade || '아직 입력 안 함') + '</b>';
-    kv += '<span>확인</span><b>' + (x.verified ? '맞게 확인함' : (d.uncertain === true ? '확인 필요 (추정 값 있음)' : '확인 전 (정리한 값)')) + '</b><span>원본</span><b>' + (x.has_source ? 'PC 자료 폴더에 있음' : '-') + '</b>';
+    kv += '<span>확인</span><b>' + (x.verified ? '맞게 확인함' : (d.uncertain === true ? '확인 필요 (추정 값 있음)' : '확인 전 (정리한 값)')) + '</b>' + (pf && !x.has_source ? '' : '<span>원본</span><b>' + (x.has_source ? 'PC 자료 폴더에 있음' : '-') + '</b>');
     var memo = [];
     if (x.note) memo.push('<div class="ach-note"><b>메모</b> ' + esc(x.note) + '</div>');
     var imp = [d.role_note, d.ledger_note].filter(Boolean);
@@ -1007,10 +1059,10 @@
     if (r.status && sts.indexOf(r.status) < 0) sts.push(r.status);
     return '<div class="ach-fil" data-i="' + i + '"><div class="ach-filh"><b>서류 ' + n + '</b><button type="button" class="ach-mini danger" data-act="fildel" data-i="' + i + '" aria-label="서류 ' + n + ' 지우기">지우기</button></div>' +
       '<div class="ach-two"><div><label class="ach-lbl" for="' + p + 'c">나라</label><input class="ach-f" id="' + p + 'c" list="achCountries" value="' + esc(r.country) + '" placeholder="예: 한국" autocomplete="off"></div>' +
-      '<div><label class="ach-lbl" for="' + p + 's">상태</label><select class="ach-f" id="' + p + 's"><option value="">입력 안 함</option>' + sts.map(function (s) { return '<option value="' + esc(s) + '"' + (r.status === s ? ' selected' : '') + '>' + esc(s) + (FIL_STATUS.indexOf(s) < 0 ? ' (기존 값)' : '') + '</option>'; }).join('') + '</select></div></div>' +
+      '<div><label class="ach-lbl" for="' + p + 's">상태</label><select class="ach-f" id="' + p + 's"><option value="">입력 안 함</option>' + sts.map(function (s) { return '<option value="' + esc(s) + '"' + (r.status === s ? ' selected' : '') + '>' + esc(FIL_LABEL[s] || s) + (FIL_STATUS.indexOf(s) < 0 ? ' (기존 값)' : '') + '</option>'; }).join('') + '</select></div></div>' +
       '<label class="ach-lbl" for="' + p + 'an">출원번호</label><input class="ach-f" id="' + p + 'an" value="' + esc(r.app_no) + '" autocomplete="off">' +
       '<div class="ach-two"><div><label class="ach-lbl" for="' + p + 'ad">출원일</label>' + dateInput(p + 'ad', 'date', r.app_date) + '</div><div><label class="ach-lbl" for="' + p + 'rd">등록일</label>' + dateInput(p + 'rd', 'date', r.reg_date) + '</div></div>' +
-      '<label class="ach-lbl" for="' + p + 'rn">등록번호</label><input class="ach-f" id="' + p + 'rn" value="' + esc(r.reg_no) + '" autocomplete="off"></div>';
+      '<label class="ach-lbl" for="' + p + 'rn">등록번호</label><input class="ach-f" id="' + p + 'rn" value="' + esc(r.reg_no) + '" autocomplete="off"><div class="ach-note ach-filnote" id="achFilN' + n + '">' + filNotes(r, r.auto).map(function (m) { return '<div>· ' + esc(m) + '</div>'; }).join('') + '</div></div>';
   }
   function syncFil() {          // 화면의 서류 줄 입력을 E.fil 에 옮겨 담는다(줄을 더하거나 지워 다시 그려도 입력이 남도록)
     if (!E || !E.prof) return;
@@ -1024,9 +1076,12 @@
     syncFil();
     return E.fil.filter(filHasContent).map(function (r) { return { country: String(r.country).trim(), status: r.status, app_no: String(r.app_no).trim(), reg_no: String(r.reg_no).trim(), app_date: normDate(r.app_date) || '', reg_date: normDate(r.reg_date) || '' }; });
   }
+  function updateFilNotes() {
+    E.fil.forEach(function (r, i) { var el = $('achFilN' + (i + 1)); if (el) el.innerHTML = filNotes(r, r.auto).map(function (m) { return '<div>· ' + esc(m) + '</div>'; }).join(''); });
+  }
   function updateFilPv() {
     var pv = $('achFilPv'); if (!pv) return;
-    var fl = liveFilings();
+    var fl = liveFilings(); updateFilNotes();
     pv.textContent = fl.length ? '→ 지금 상태: ' + patentLabel({ data: { filings: fl } }) : '→ 줄을 더하면 상태(등록·출원)가 자동으로 계산돼요';
   }
   function readFilings(errs) {
@@ -1077,10 +1132,14 @@
     var pv = $('achPvIsbn'), el = $('achF_isbn'); if (!pv || !el) return;
     pv.textContent = el.value.trim() && !isbnOk(el.value) ? 'ISBN 은 보통 숫자 10자리 또는 13자리예요. 맞는지 확인해 주세요 (그대로 저장은 돼요).' : '';
   }
+  /* 연도 칸은 「직전 자동 제안값과 같을 때만」 계속 따라간다 — 손으로 바꾼 값(제안값과 다른 값)은 유지하고, 비어 있으면 채운다 */
   function autoFill() {
-    if (!E || !E.prof || !E.yAuto || !$('achFY')) return;
+    if (!E || !E.prof || !$('achFY')) return;
     var dt = $('achFDt'), st = $('achF_start_ym'), v = { item_date: dt ? normDate(dt.value) : '', data: { start_ym: st ? normYm(st.value) : '', filings: $('achFils') ? liveFilings() : [] } };
-    var y = autoYear(E.pk, v); if (y) $('achFY').value = y;
+    var y = autoYear(E.pk, v); if (!y) return;
+    var el = $('achFY'), cur = toInt(el.value);
+    if ((!cur || cur === E.yAutoVal) && cur !== y) { el.value = y; if (E.prof.dup === 'sameYear') { E.dupAck = false; checkDup(); } }
+    E.yAutoVal = y;
   }
   function dupIds() {
     var out = [], is = $('achF_isbn');
@@ -1094,7 +1153,7 @@
     /* 글자 칸은 「input」 으로 이미 처리했다 — 칸을 떠날 때 오는 「change」 까지 받으면 경고 창이 다시 그려져, 그 순간 누르던 「그래도 추가」 단추가 사라진다. 고르는 칸(선택·날짜·연월)만 change 도 받는다 */
     if (ev.type === 'change' && !(tg.tagName === 'SELECT' || tg.type === 'date' || tg.type === 'month')) return;
     if (id === 'achFT') { E.dupAck = false; checkDup(); }
-    else if (id === 'achFY') { E.yAuto = false; }
+    else if (id === 'achFY') { if (E.prof.dup === 'sameYear') { E.dupAck = false; checkDup(); } }
     else if (id === 'achFA') {
       var names = parseAuthors(ev.target.value, E.knownNames);
       if (names.length) { $('achFTt').value = names.length; var me = findMe(names, S.settings.names); if (me) $('achFP').value = me; }
@@ -1104,7 +1163,15 @@
     else if (id === 'achF_isbn') { isbnPv(); E.dupAck = false; checkDup(); }
     else if (id === 'achF_budget') moneyPv();
     else if (id === 'achFDt' || id === 'achF_start_ym') autoFill();
-    else if (/^achFil\d+_/.test(id)) { updateFilPv(); autoFill(); if (/_(an|rn)$/.test(id)) { E.dupAck = false; checkDup(); } }
+    else if (/^achFil\d+_/.test(id)) {
+      var m = /^achFil(\d+)_(\w+)$/.exec(id), row = (syncFil(), E.fil[+m[1] - 1]), sel = $('achFil' + m[1] + '_s');
+      if (row && sel) {
+        if (m[2] === 's') row.auto = false;                                   // 상태를 직접 고르면 자동 전환 안내는 거둔다
+        else if ((m[2] === 'rn' || m[2] === 'rd') && hasRegInfo(row) && (row.status === '' || row.status === '출원')) { row.prev = row.status; sel.value = '등록'; row.status = '등록'; row.auto = true; }   // 등록번호·등록일을 적으면 등록으로 제안·전환
+        else if ((m[2] === 'rn' || m[2] === 'rd') && row.auto && !hasRegInfo(row)) { sel.value = row.prev || '출원'; row.status = sel.value; row.auto = false; }   // 도로 비우면 원래 상태로
+      }
+      updateFilPv(); autoFill(); if (/_(an|rn)$/.test(id)) { E.dupAck = false; checkDup(); }
+    }
   }
   function initVals() { var o = {}, els = $('achBox').querySelectorAll('input,textarea,select'), i; for (i = 0; i < els.length; i++) if (els[i].id) o[els[i].id] = els[i].value; return o; }
   function wireProf() {
@@ -1117,7 +1184,7 @@
   function openEditProf(base, k, pk) {
     var pf = PROFILES[pk], d = base ? dataOf(base) : {}, names = base ? peopleNames(base) : [], cs = subCats(k.id);
     E = { base: base, kind: k, prof: pf, pk: pk, id: base ? base.id : uuid(), busy: false, authText: names.join(', '), knownNames: names.filter(function (n) { return /[,，;；\n]/.test(n); }), sig: '', init: {}, dupAck: false, force: false,
-      yAuto: !(base && toInt(base.year)), fil: pk === 'patent' ? filingsOf(base).map(filFrom) : [] };
+      yAutoVal: autoYear(pk, { item_date: base ? base.item_date : '', data: d }), fil: pk === 'patent' ? filingsOf(base).map(filFrom) : [] };
     var head = '', vis = '', more = '', labels = [];
     pf.fields.forEach(function (f) {
       var s = fieldHtml(f, base, d);
@@ -1198,7 +1265,7 @@
   function checkDup() {
     var out = $('achDup'); if (!out || !E) return;
     var title = $('achFT').value.trim(), doi = $('achFD') ? $('achFD').value : '';
-    var dp = E.prof ? findDup(S.items, title, '', E.id, E.kind.id, dupIds()) : (isPaperKind(E.kind) ? findDup(S.items, title, doi, E.id, E.kind.id) : null);
+    var dp = E.prof ? (E.prof.dup === 'sameYear' ? findDupSameYear(S.items, title, $('achFY').value, E.id, E.kind.id) : findDup(S.items, title, '', E.id, E.kind.id, dupIds())) : (isPaperKind(E.kind) ? findDup(S.items, title, doi, E.id, E.kind.id) : null);
     if (!dp || E.dupAck) { out.innerHTML = E.dupAck ? '<div class="ach-note">그래도 추가하기로 했어요.</div>' : ''; return; }
     out.innerHTML = '<div class="ach-warn">이미 있는 ' + (E.prof ? '기록' : '논문') + '과 같아 보여요 (' + dp.why + ')<br>「' + esc(dp.x.title) + '」' + (dp.x.deleted_at ? ' — 휴지통에 있어요' : '') + '<div class="acts"><button type="button" data-act="dupgo">그래도 추가</button><button type="button" data-act="dupopen" data-id="' + esc(dp.x.id) + '">열어 보기</button></div></div>';
   }
