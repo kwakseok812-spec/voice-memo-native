@@ -257,7 +257,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -3698,7 +3698,8 @@
   APP_VERSION = 'v9.54';        // v9.54(O-0640): 홈 「소장 케이 채팅」 — 케이 사진 카드를 가로 글자 줄로, 「케이 설정」(옷·캐릭터)을 맨 위 글자 크기·낮/밤 곁으로 — 스위치 HOME_CHAT_BAR(app.js · 'off' 면 v9.53 모습) · 서버·SQL 변경 없음 · versionCode 98
   APP_VERSION = 'v9.55';        // v9.55(O-0640): 홈 「소장 케이 채팅」 줄도 아이콘+글자를 줄 가운데로(회의 녹음 줄처럼) · versionCode 99
   APP_VERSION = 'v9.57';        // v9.57(O-0663): 홈 순서 — 인사말 → 오늘 한눈에 → [회의 녹음 | 소장 케이 채팅] 한 줄 → 도구 → PC 연결 · 스위치 HOME_ROW · versionCode 101
-  APP_VERSION = 'v9.58';        // v9.58(O-0667): 명함 검색 화면에 「검색 | 전체 명단」 두 칸 스위치 — 전체 명단은 정렬 한 줄(기관·이름 가나다순·등록일 최신/오래된순·분류별)+분류 칩+글자 걸러내기+현재 선택 줄·초기화 · 스위치 CARD_LIST_VIEW · PC collect.py 가 먼저 적용돼야 함(옛 PC면 안내) · versionCode 102
+  APP_VERSION = 'v9.59';        // v9.59(O-0684): 홈 도구 맨 끝에 「실적」 탭 — 요약·논문 목록(역할 칩·걸러내기)·학위논문·검색·상세·추가/고치기·휴지통·설정 · 스위치 ACHIEVE_TAB · 서버 ach_* 표/함수(SQL) 필요 · versionCode 103
+  // (직전) v9.58(O-0667): 명함 검색 화면에 「검색 | 전체 명단」 두 칸 스위치 — 전체 명단은 정렬 한 줄(기관·이름 가나다순·등록일 최신/오래된순·분류별)+분류 칩+글자 걸러내기+현재 선택 줄·초기화 · 스위치 CARD_LIST_VIEW · PC collect.py 가 먼저 적용돼야 함(옛 PC면 안내) · versionCode 102
   // ── 음성 대화(핸즈프리) + 카메라 상태 ──
   //  기본은 "조용한 텍스트": 말/글로 물어도 답은 글로만. 음성 답은 (1) 각 답의 [듣기](온디맨드)
   //  또는 (2) 「음성 대화 모드」를 켰을 때만 → 그때만 speak 요청(평소 mp3 미생성 = 낭비 없음).
@@ -9376,6 +9377,10 @@
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
     if (isOpen($('healthView')) && window.HealthTab && HealthTab.back && HealthTab.back()) return true;   // v9.4(O-0344): 지난 날짜 고치는 중 → 기록 보기 목록으로
+    if (isOpen($('achView'))) {        // O-0684 v9.59: 실적 — 열린 창·검색어부터 닫고, 더 닫을 게 없으면 홈으로
+      if (window.AchTab && AchTab.back && AchTab.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen(filePanel) && filePanelFromChat) { filePanelFromChat = false; pendingFiles = []; pendingKind = null; openChat(); return true; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
     if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
       // v9.8: 녹음 중(또는 보내지 않은 녹음이 남아 있는 동안)에는 붙여 둔 회의자료를 지우지 않는다 — 다른 화면을 보고 돌아와도 완료 화면까지 이어진다
@@ -9839,6 +9844,23 @@
   }
   if (window.HealthTab && HealthTab.init) { try { HealthTab.init({ toast: toast }); } catch (e) {} }
   if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
+
+  /* ---- 실적 탭(O-0684 v9.59): 화면 열기/연결(로직은 achievements.js) ----
+   *   스위치 ACHIEVE_TAB: 'on' = 홈 도구 맨 끝에 「실적」 칸 · 'off' = 칸이 보이지 않아 v9.58 과 같다(서버·SQL 무관). */
+  var ACHIEVE_TAB = 'on';
+  var achView = $('achView');
+  function openAch() {
+    openScreen(achView);
+    if (window.AchTab && AchTab.open) { try { AchTab.open(); } catch (e) {} }
+  }
+  if (ACHIEVE_TAB !== 'off' && window.AchTab && $('btnAch')) {
+    try {
+      AchTab.init({ toast: toast });
+      var achGrid = $('homeTools'), achSub = achGrid && achGrid.querySelector('.tools-sub');
+      if (achGrid && achSub) achGrid.insertBefore($('btnAch'), achSub);   // 홈 도구 맨 끝(위 도구 순서 정리 뒤) — 기존 칸 자리는 그대로
+      $('btnAch').style.display = ''; $('btnAch').addEventListener('click', openAch);
+    } catch (e) {}
+  }
 
   /* ---- 문서 뷰어: 화면 열기/연결(로직은 docviewer.js) ---- */
   var docsView = $('docsView');
