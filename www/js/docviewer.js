@@ -2328,6 +2328,7 @@
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },
     editState: function () { return { ctx: editCtx ? { name: editCtx.name, ext: editCtx.ext, step: editCtx.step || 0 } : null, sessions: editsLoad() }; },   // O-0171 점검용
     mediaState: function () { return { media: curMedia ? curMedia.media : null, job: curMedia ? curMedia.job : null, stale: mediaStale, noteOpen: noteOpen }; },   // v9.30 점검용
+    maxTabs: MAX_TABS,                     // v9.61: 탭 한도(실적 화면이 [열기] 전에 미리 알려 줄 때 읽음)
     openTabs: function () { return tabs.map(function (t) { return { name: t.name, kind: t.kind, active: t === activeTab(), live: t.id === liveTabId }; }); },   // v8.0 점검용
     recordSOffice: recordSOffice,          // S-Office(so-core.js)가 문서를 연 뒤 부른다 — 최근 연 문서에 원본을 보관
     renderRecent: renderRecent,            // v6.9: 최근 연 문서 목록 다시 그리기

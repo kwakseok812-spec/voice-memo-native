@@ -9853,12 +9853,12 @@
   /* v9.61(O-0684) 스위치 2개 — ACH_SIMPLE_AUTHORS: 'on' = 저자는 순서대로 + 「총 N명」만(순번·책임저자 숫자·역할 칩·스위치는 숨김, 값은 서버에 그대로) · 'off' = v9.60 화면.
    *   ACH_FILES: 'on' = 논문 PDF 열기·내려받기·첫 페이지 그림(서버 함수 ach-file + 비공개 저장소 ach-files 가 있어야 함) · 'off' = 파일 화면 없음. */
   var ACH_SIMPLE_AUTHORS = 'on', ACH_FILES = 'on';
-  var ACH_VIEWER_TAB_MAX = 5;   // 문서 뷰어의 탭 한도(docviewer.js MAX_TABS 와 같게) — 가득 차면 내려받기·화면 전환 전에 실적 화면에서 먼저 쉬운 말로 알린다
+  var ACH_VIEWER_TAB_MAX = 5;   // 뷰어가 값을 안 주는 옛 상황의 예비 값. 평소에는 뷰어의 한도(docviewer.js MAX_TABS → SmartDocs.maxTabs)를 읽어 쓴다
   /* 뷰어 탭이 가득 찼으면 서버에 주소를 묻기 전에 실적 화면에서 먼저 알린다(같은 문서가 이미 탭에 있으면 괜찮다). 빈 글자 = 열어도 됨 */
   function achViewerFull(name) {
     try {
-      var tabsNow = window.SmartDocs && SmartDocs.openTabs ? SmartDocs.openTabs() : [];
-      if (tabsNow.length >= ACH_VIEWER_TAB_MAX && !tabsNow.some(function (t) { return t.name === name; })) return '문서 뷰어에 문서가 ' + ACH_VIEWER_TAB_MAX + '개 열려 있어요. 뷰어 위쪽 탭의 ✕로 하나를 닫은 뒤 다시 눌러 주세요.';
+      var tabsNow = window.SmartDocs && SmartDocs.openTabs ? SmartDocs.openTabs() : [], mx = (window.SmartDocs && SmartDocs.maxTabs) || ACH_VIEWER_TAB_MAX;
+      if (tabsNow.length >= mx && !tabsNow.some(function (t) { return t.name === name; })) return '문서 뷰어에 문서가 ' + mx + '개 열려 있어요. 뷰어 위쪽 탭의 ✕로 하나를 닫은 뒤 다시 눌러 주세요.';
     } catch (e) {}
     return '';
   }

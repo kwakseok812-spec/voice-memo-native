@@ -66,7 +66,7 @@ html[data-style="dark"] .ach-sortline .ach-fbtn.on { color: #93B8FF; border-colo
 .ach-fpanel { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 10px; margin: 0 0 8px; border-radius: 14px; background: var(--in-bg); border: 1px solid var(--glass-b); }
 
 .ach-row { display: block; width: 100%; text-align: left; border-radius: 16px; padding: 13px 14px; margin-bottom: 8px; background: var(--glass); border: 1px solid var(--glass-b); color: var(--text); cursor: pointer; transition: transform .12s, opacity .22s, max-height .22s, margin .22s, padding .22s; max-height: 190px; overflow: hidden; animation: ach-rise .22s both; }
-.ach-row .a { font-size: 15.5px; font-weight: 800; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+.ach-row .a { font-size: 15.5px; font-weight: 800; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }   /* v9.61: 목록 제목은 3줄까지(말줄임) — 상세에서는 전부 */
 .ach-row .b { font-size: 12.5px; color: var(--ad); margin-top: 5px; line-height: 1.7; }
 .ach-tag { display: inline-block; font-size: 12.5px; font-weight: 800; padding: 1px 8px; border-radius: 8px; background: rgba(59,130,246,.2); color: var(--p1); margin-right: 4px; white-space: nowrap; line-height: 1.6; }
 html[data-style="dark"] .ach-tag { color: #93B8FF; }
@@ -180,6 +180,8 @@ html[data-style="dark"] .ach-f[type="date"]::-webkit-calendar-picker-indicator, 
 .ach-fild b { font-weight: 800; margin-left: 4px; }
 .ach-fild .s { font-size: 12.5px; color: var(--ad); margin-top: 3px; line-height: 1.5; word-break: break-all; }
 
+.ach-setrow { white-space: nowrap; }
+.ach-setrow small { white-space: normal; flex: 1; min-width: 0; overflow-wrap: anywhere; }   /* v9.61: 「종류 관리」가 「종류 관/리」로 부서지던 것 — 이름은 한 줄, 오른쪽 글이 줄을 바꿈 */
 /* ----- v9.61: 저자 단순화 · 논문 파일(PDF) · 첫 페이지 그림 ----- */
 .ach-me.ach-off { display: none; }
 .ach-ic { width: 20px; height: 20px; margin-right: 6px; flex: none; }
@@ -216,10 +218,14 @@ html[data-style="dark"] .ach-f[type="date"]::-webkit-calendar-picker-indicator, 
 .ach-auth2 .l { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; line-height: 1.5; }
 .ach-auth2 .n { display: inline-flex; align-items: baseline; gap: 4px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .ach-auth2 .n i { font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--ad); }
-#achLayer .ach-lb { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: 14px; background: rgba(3,6,18,.92); touch-action: pinch-zoom; cursor: zoom-out; }
+#achLayer .ach-lb { position: fixed; inset: 0; z-index: 80; display: none; flex-direction: column; background: rgba(3,6,18,.94); }
 #achLayer .ach-lb.show { display: flex; animation: ach-fade .2s; }
-#achLayer .ach-lb img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
-#achLayer .ach-lbx { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 10px; width: 48px; height: 48px; border-radius: 16px; border: 0; background: rgba(255,255,255,.16); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+#achLayer .ach-lbs { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 14px 14px 80px; -webkit-overflow-scrolling: touch; }
+#achLayer .ach-lb img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; background: #fff; cursor: zoom-in; }
+#achLayer .ach-lb.zoom .ach-lbs { display: block; }
+#achLayer .ach-lb.zoom img { max-width: none; max-height: none; width: auto; height: auto; cursor: zoom-out; }   /* 원본 크기(그림 원래 폭) — 가로·세로로 밀어 본다 */
+#achLayer .ach-lbz { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); height: 50px; padding: 0 22px; border-radius: 16px; border: 0; background: rgba(255,255,255,.2); color: #fff; font-size: 16px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+#achLayer .ach-lbx { z-index: 2; position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 10px; width: 48px; height: 48px; border-radius: 16px; border: 0; background: rgba(255,255,255,.16); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 #achLayer .ach-lbx svg { width: 24px; height: 24px; }
 @media (min-width: 600px) {
   .ach-fig { flex-direction: row; align-items: flex-start; }

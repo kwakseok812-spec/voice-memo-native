@@ -730,7 +730,7 @@
     layer.id = 'achLayer';
     layer.innerHTML = '<div class="ach-fab" id="achFab"><button type="button" class="ach-btn" data-act="add" id="achAdd"></button></div>' +
       '<div class="ach-sheet" id="achSheet"><div class="ach-box" id="achBox" role="dialog" aria-modal="true"></div></div><div class="ach-toast" id="achToast" role="status" aria-live="polite"></div>' +
-      '<div class="ach-lb" id="achLb" data-act="lbclose" role="dialog" aria-label="첫 페이지 크게 보기"><button type="button" class="ach-lbx" data-act="lbclose" aria-label="닫기"><svg aria-hidden="true"><use href="#i-x"/></svg></button><img id="achLbImg" alt="논문 첫 페이지"></div>';
+      '<div class="ach-lb" id="achLb" role="dialog" aria-label="첫 페이지 크게 보기"><button type="button" class="ach-lbx" data-act="lbclose" aria-label="닫기"><svg aria-hidden="true"><use href="#i-x"/></svg></button><div class="ach-lbs" id="achLbS"><img id="achLbImg" data-act="lbzoom" alt="논문 첫 페이지"></div><button type="button" class="ach-lbz" id="achLbZ" data-act="lbzoom">원본 크기로 보기</button></div>';
     document.body.appendChild(layer);
     var q = $('achQ'), tmr = null;
     q.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { S.q = q.value.trim(); $('achSearch').classList.toggle('has', !!q.value); renderMain(); updateFab(); }, 120); });
@@ -1664,6 +1664,7 @@
       case 'fdl': fileAct('dl', id, el.getAttribute('data-f'), el); break;
       case 'zoom': openLb(id); break;
       case 'lbclose': closeLb(); break;
+      case 'lbzoom': zoomLb(); break;
       case 'trash': trashItem(id); break;
       case 'settings': openSettings(); break;
       case 'trashlist': openTrash(); break;
@@ -1689,7 +1690,7 @@
    *   서버 함수 ach-file 이 연동 암호를 확인하고 짧게 유효한 주소를 준다. 앱은 파일 경로를 모르고 항목 번호만 보낸다.
    *   PDF 는 기존 문서 뷰어(S.host.view)·내려받기(S.host.download)를 그대로 쓴다. 인터넷이 없으면 PDF 는 열 수 없다(그림은 폰에 저장돼 보인다).
    * ===================================================================*/
-  var TH = { mem: {}, fly: {} }, TH_CACHE = 'ach-thumbs-v1', TH_BASE = 'https://ach-thumb.invalid/';
+  var THUMB_BATCH = 50, TH = { mem: {}, fly: {} }, TH_CACHE = 'ach-thumbs-v1', TH_BASE = 'https://ach-thumb.invalid/';
   function thGet(p) {
     if (TH.mem[p]) return Promise.resolve(TH.mem[p]);
     try {
@@ -1735,9 +1736,12 @@
         return TH.fly[m.p].then(function (u) { thShow(m.el, u); }, function (e) { if (m.sz !== 's') thFail(m.el, e); });
       }
       if (small.length) {
-        var ids = []; small.forEach(function (m) { if (ids.indexOf(m.id) < 0) ids.push(m.id); });
-        var batch = fileApi({ a: 'sign_thumbs', ids: ids.slice(0, 60), size: 's' });
-        small.forEach(function (m) { fly(m, batch.then(function (r) { var u = r && r.urls && r.urls[m.id]; if (!u) throw mkErr('NO_THUMB', 'nofile'); return thFetch(u, m.p); })); });
+        var ids = [], chunkOf = {}; small.forEach(function (m) { if (ids.indexOf(m.id) < 0) ids.push(m.id); });
+        for (var ci = 0; ci < ids.length; ci += THUMB_BATCH) {          /* 서버 함수는 한 번에 60개까지 — 50개씩 나눠 물어 빠지는 항목이 없게 */
+          var part = ids.slice(ci, ci + THUMB_BATCH), pr = fileApi({ a: 'sign_thumbs', ids: part, size: 's' });
+          part.forEach(function (id) { chunkOf[id] = pr; });
+        }
+        small.forEach(function (m) { fly(m, chunkOf[m.id].then(function (r) { var u = r && r.urls && r.urls[m.id]; if (!u) throw mkErr('NO_THUMB', 'nofile'); return thFetch(u, m.p); })); });
       }
       big.forEach(function (m) { fly(m, fileApi({ a: 'sign', id: m.id, want: 'thumb_p' }).then(function (r) { return thFetch(r.url, m.p); })); });
     });
@@ -1753,9 +1757,15 @@
   function openLb(id) {
     var x = itemById(id), f = x && mainFile(x), p = f && thumbPath(f, 'p'), u = p && TH.mem[p];
     if (!u) { toast('그림을 아직 못 받았어요. 잠시 뒤 다시 눌러 주세요.'); return; }
-    $('achLbImg').src = u; $('achLb').classList.add('show');
+    var lb = $('achLb'); lb.classList.remove('zoom'); $('achLbZ').textContent = '원본 크기로 보기'; $('achLbS').scrollTop = 0; $('achLbS').scrollLeft = 0;
+    $('achLbImg').src = u; lb.classList.add('show');
   }
-  function closeLb() { var l = $('achLb'); if (l) l.classList.remove('show'); }
+  /* 손가락 확대는 앱 화면 설정에 따라 안 먹을 수 있어, 「원본 크기로 보기」(그림 원래 크기로 키워 가로·세로로 밀어 보기)를 단추·그림 누르기로 직접 제공한다 */
+  function zoomLb() {
+    var lb = $('achLb'), on = !lb.classList.contains('zoom'); lb.classList.toggle('zoom', on);
+    $('achLbZ').textContent = on ? '화면에 맞추기' : '원본 크기로 보기'; $('achLbS').scrollTop = 0; $('achLbS').scrollLeft = 0;
+  }
+  function closeLb() { var l = $('achLb'); if (l) { l.classList.remove('show'); l.classList.remove('zoom'); } }
   function lbOpen() { var l = $('achLb'); return !!l && l.classList.contains('show'); }
   function fileAct(kind, id, fid, el) {
     var x = itemById(id), f = x && mainFile(x, fid); if (!f || !S.host) return;
