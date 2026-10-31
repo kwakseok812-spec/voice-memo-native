@@ -9849,6 +9849,22 @@
   /* ---- 실적 탭(O-0684 v9.59): 화면 열기/연결(로직은 achievements.js) ----
    *   스위치 ACHIEVE_TAB: 'on' = 홈 도구 맨 끝에 「실적」 칸 · 'off' = 칸이 보이지 않아 v9.58 과 같다(서버·SQL 무관). */
   var ACHIEVE_TAB = 'on';
+  /* v9.61(O-0684) 스위치 2개 — ACH_SIMPLE_AUTHORS: 'on' = 저자는 순서대로 + 「총 N명」만(순번·책임저자 숫자·역할 칩·스위치는 숨김, 값은 서버에 그대로) · 'off' = v9.60 화면.
+   *   ACH_FILES: 'on' = 논문 PDF 열기·내려받기·첫 페이지 그림(서버 함수 ach-file + 비공개 저장소 ach-files 가 있어야 함) · 'off' = 파일 화면 없음. */
+  var ACH_SIMPLE_AUTHORS = 'on', ACH_FILES = 'on';
+  var ACH_VIEWER_TAB_MAX = 5;   // 문서 뷰어의 탭 한도(docviewer.js MAX_TABS 와 같게) — 가득 차면 내려받기·화면 전환 전에 실적 화면에서 먼저 쉬운 말로 알린다
+  /* 뷰어 탭이 가득 찼으면 서버에 주소를 묻기 전에 실적 화면에서 먼저 알린다(같은 문서가 이미 탭에 있으면 괜찮다). 빈 글자 = 열어도 됨 */
+  function achViewerFull(name) {
+    try {
+      var tabsNow = window.SmartDocs && SmartDocs.openTabs ? SmartDocs.openTabs() : [];
+      if (tabsNow.length >= ACH_VIEWER_TAB_MAX && !tabsNow.some(function (t) { return t.name === name; })) return '문서 뷰어에 문서가 ' + ACH_VIEWER_TAB_MAX + '개 열려 있어요. 뷰어 위쪽 탭의 ✕로 하나를 닫은 뒤 다시 눌러 주세요.';
+    } catch (e) {}
+    return '';
+  }
+  function openPdfFromAch(att) {
+    var full = achViewerFull(att.name); if (full) { toast(full, 4200); return; }
+    openDocFromChat(att);
+  }
   var achView = $('achView');
   function openAch() {
     openScreen(achView);
@@ -9856,7 +9872,7 @@
   }
   if (ACHIEVE_TAB !== 'off' && window.AchTab && $('btnAch')) {
     try {
-      AchTab.init({ toast: toast });
+      AchTab.init({ toast: toast, simpleAuthors: ACH_SIMPLE_AUTHORS !== 'off', files: ACH_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null });
       var achGrid = $('homeTools'), achSub = achGrid && achGrid.querySelector('.tools-sub');
       if (achGrid && achSub) achGrid.insertBefore($('btnAch'), achSub);   // 홈 도구 맨 끝(위 도구 순서 정리 뒤) — 기존 칸 자리는 그대로
       $('btnAch').style.display = ''; $('btnAch').addEventListener('click', openAch);

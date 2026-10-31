@@ -177,8 +177,8 @@
    *   v 의 각 칸은 undefined 면 「건드리지 않음」, null/빈 값이면 「비움」. data 는 화면이 아는 칸(KNOWN_DATA)만 바꾸고, 모르는 칸은 기준 행 그대로 실어 보낸다. */
   var GENERAL = ['title', 'year', 'item_date', 'status', 'venue', 'note', 'cat_id', 'verified', 'people'];
   function blankToNull(v) { return v === undefined ? undefined : (v === null || v === '' ? null : v); }
-  function buildSaveRow(base, v) {
-    var row = {}, i, k;
+  function buildSaveRow(base, v, known) {
+    var row = {}, i, k, KL = known || KNOWN_DATA;
     if (base) { row.id = base.id; row.base_rev = base.rev; row.kind_id = base.kind_id; }
     else { row.id = v.id; row.kind_id = v.kind_id; }
     for (i = 0; i < GENERAL.length; i++) {
@@ -187,8 +187,8 @@
       row[k] = (k === 'people' || k === 'verified') ? v[k] : blankToNull(v[k]);
     }
     var data = base && isObj(base.data) ? clone(base.data) : {}, vd = v.data || {};
-    for (i = 0; i < KNOWN_DATA.length; i++) {
-      k = KNOWN_DATA[i];
+    for (i = 0; i < KL.length; i++) {
+      k = KL[i];
       if (vd[k] === undefined) continue;
       var val = blankToNull(vd[k]);
       if (val === null) { if (Object.prototype.hasOwnProperty.call(data, k)) data[k] = null; }   // 비운 칸만 null(서버가 지움)
@@ -239,6 +239,63 @@
     };
   }
   function mkErr(msg, kind) { var e = new Error(msg); e.ach = true; e.kind = kind; return e; }
+
+
+  /* =====================================================================
+   * v9.61 — 저자 단순화(스위치 ACH_SIMPLE_AUTHORS) · 논문 파일(PDF)·첫 페이지(스위치 ACH_FILES)
+   * ===================================================================*/
+  /* 단순화가 켜져 있으면 순번·공동제1·교신 값은 「화면이 모르는 칸」으로 취급 → 저장해도 지워지거나 바뀌지 않는다(스위치를 다시 켜면 그대로 살아난다 —
+   * 단, 단순화 동안 새로 넣은 논문은 순번이 비어 있으니 그때 순번을 다시 계산해야 한다) */
+  var ROLE_KEYS = ['author_pos', 'co_first', 'corresponding'];
+  function knownList(simple) { return simple ? KNOWN_DATA.filter(function (k) { return ROLE_KEYS.indexOf(k) < 0; }) : KNOWN_DATA; }
+  function namesOf(x) { return x && Array.isArray(x.people) ? x.people.map(function (p) { return p && p.name ? String(p.name) : ''; }).filter(Boolean) : []; }
+  /* 총 저자수 = 이름 목록의 개수(이름이 비었으면 예전에 적어 둔 총 저자수) */
+  function authorTotal(x) { return namesOf(x).length || toInt(dataOf(x).author_total) || 0; }
+  /* 목록 줄: 앞 max명 + 「외 N명」 */
+  function authorBrief(names, max) { var m = (names || []).slice(0, max || 3); return { head: m.join(', '), more: Math.max(0, (names || []).length - m.length) }; }
+  function filesOf(x) {
+    var f = dataOf(x).files;
+    return Array.isArray(f) ? f.filter(function (o) { return isObj(o) && typeof o.path === 'string' && o.path; }) : [];
+  }
+  function mainFile(x, fid) {
+    var l = filesOf(x), i;
+    if (fid) for (i = 0; i < l.length; i++) if (l[i].fid === fid) return l[i];
+    for (i = 0; i < l.length; i++) if ((l[i].kind || 'main') === 'main') return l[i];
+    return l[0] || null;
+  }
+  function thumbPath(f, size) { var t = f && isObj(f.thumb) ? f.thumb : null; return t && typeof t[size] === 'string' && t[size] ? t[size] : ''; }
+  /* 파일이 지워진 항목(영구 삭제 도중 멈췄다가 휴지통에 남은 경우) — 서버 함수가 files_purged 시각을 남긴다 */
+  function filesPurged(x) { return !filesOf(x).length && !!dataOf(x).files_purged; }
+  function fmtSize(n) {
+    n = +n; if (!isFinite(n) || n <= 0) return '';
+    return n >= 1048576 ? (Math.round(n / 104857.6) / 10) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
+  }
+  /* 파일 주소 받기 — 서버 함수 ach-file (연동 암호 확인 뒤 짧게 유효한 주소). 응답은 항상 HTTP 200 + {ok, error?} — 오류를 구분해 돌려준다 */
+  var FILE_ERR = { bad_pass: 'badpass', no_file: 'nofile', gone: 'gone', bad_request: 'server', server: 'server' };
+  function makeFileApi(dep) {
+    return function fileApi(body) {
+      var c = dep.cfg();
+      if (!c) return Promise.reject(mkErr('NO_CONFIG', 'server'));
+      var pass = dep.pass();
+      if (!pass) { dep.needPass('PC 연동 암호를 입력해 주세요.'); return Promise.reject(mkErr('NO_PASS', 'badpass')); }
+      var b = {}, k; for (k in (body || {})) b[k] = body[k]; b.pass = pass;
+      var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, dep.timeout || 20000) : null;
+      var f = dep.fetch || global.fetch;
+      return f(c.url + '/functions/v1/ach-file', {
+        method: 'POST', headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(b), signal: ctl ? ctl.signal : undefined
+      }).then(function (r) {
+        if (tm) clearTimeout(tm);
+        if (!r.ok) throw mkErr('HTTP_' + r.status, 'server');
+        return r.json().then(function (j) {
+          if (j && j.ok === true) return j;
+          var kind = FILE_ERR[j && j.error] || 'server';
+          if (kind === 'badpass') dep.needPass('연동 암호가 맞지 않아요. 다시 입력해 주세요.');
+          throw mkErr('FILE_' + (j && j.error), kind);
+        }, function () { throw mkErr('BAD_JSON', 'server'); });
+      }, function () { if (tm) clearTimeout(tm); throw mkErr('NETWORK', 'net'); });
+    };
+  }
 
   function sortItems(list, key) {
     var l = list.slice();
@@ -565,6 +622,8 @@
     sim: sim, findDup: findDup, cleanDoi: cleanDoi, parseAuthors: parseAuthors, isMe: isMe, findMe: findMe, withKnown: withKnown, BN: BN, buildSaveRow: buildSaveRow,
     applyRowToItem: applyRowToItem, classifyHttp: classifyHttp, makeRpc: makeRpc, sortItems: sortItems, rolePasses: rolePasses,
     KNOWN_DATA: KNOWN_DATA, GRADES: GRADES,
+    /* v9.61 */
+    ROLE_KEYS: ROLE_KEYS, knownList: knownList, namesOf: namesOf, authorTotal: authorTotal, authorBrief: authorBrief, filesOf: filesOf, mainFile: mainFile, thumbPath: thumbPath, filesPurged: filesPurged, fmtSize: fmtSize, makeFileApi: makeFileApi,
     /* v9.60 */
     PROFILES: PROFILES, profKey: profKey, normYm: normYm, normDate: normDate, fmtYm: fmtYm, fmtDate: fmtDate, parseMoney: parseMoney, fmtWon: fmtWon, normIsbn: normIsbn, isbnOk: isbnOk,
     periodText: periodText, isDomestic: isDomestic, filingsOf: filingsOf, idsOf: idsOf, patentState: patentState, patentReg: patentReg, patentLabel: patentLabel, autoYear: autoYear,
@@ -582,7 +641,8 @@
     loaded: false, loading: null, err: null, offline: false, stale: false, cachedAt: null,
     cats: [], items: [], settings: loadSettings(),
     tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, filt: false, fCat: 'all', pchip: 'all', sortKey: 'new', q: '',
-    sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0
+    sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0,
+    simple: true, host: null, fbusy: false      /* v9.61: 저자 단순화(app.js ACH_SIMPLE_AUTHORS) · 파일 기능 부품(app.js ACH_FILES — 없으면 파일 화면 없음) */
   };
   var _toast = function () {}, toastTimer = null, E = null, built = false;
 
@@ -599,6 +659,7 @@
   function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
   function needPass(msg) { try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {} }
   var rpc = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  var fileApi = makeFileApi({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
   function calm() { try { if (global.KScene && KScene.calm) return !!KScene.calm(); return !!(global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function uuid() {
     try { if (global.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
@@ -634,7 +695,7 @@
     var p = rpc('ach_list', {}).then(function (d) {
       if (!isObj(d) || !Array.isArray(d.cats) || !Array.isArray(d.items)) throw mkErr('BAD_SHAPE', 'server');
       S.cats = d.cats; S.items = d.items; S.loaded = true; S.offline = false; S.stale = false; S.err = null; S.lastLoadAt = Date.now();
-      saveCache(d);
+      saveCache(d); thPrune();
     }).catch(function (e) {
       S.err = e;
       if (S.loaded && !S.offline) { S.stale = true; }                       // 한 번 잘 불러온 뒤의 새로고침 실패 — 가진 내용은 그대로, 안내만
@@ -652,6 +713,8 @@
     if (e.kind === 'badpass') return '연동 암호가 맞지 않아요. 암호를 다시 입력해 주세요.';
     if (e.kind === 'notready') return '서버에 실적 표가 아직 준비되지 않았어요.';
     if (e.kind === 'net') return '인터넷에 연결되지 않았어요.';
+    if (e.kind === 'nofile') return 'PDF 파일이 서버에 없어요.';
+    if (e.kind === 'gone') return '이 항목은 휴지통에 있거나 지워졌어요.';
     return '서버가 응답하지 않았어요. 잠시 뒤 다시 시도해 주세요.';
   }
 
@@ -666,7 +729,8 @@
     var layer = document.createElement('div');
     layer.id = 'achLayer';
     layer.innerHTML = '<div class="ach-fab" id="achFab"><button type="button" class="ach-btn" data-act="add" id="achAdd"></button></div>' +
-      '<div class="ach-sheet" id="achSheet"><div class="ach-box" id="achBox" role="dialog" aria-modal="true"></div></div><div class="ach-toast" id="achToast" role="status" aria-live="polite"></div>';
+      '<div class="ach-sheet" id="achSheet"><div class="ach-box" id="achBox" role="dialog" aria-modal="true"></div></div><div class="ach-toast" id="achToast" role="status" aria-live="polite"></div>' +
+      '<div class="ach-lb" id="achLb" data-act="lbclose" role="dialog" aria-label="첫 페이지 크게 보기"><button type="button" class="ach-lbx" data-act="lbclose" aria-label="닫기"><svg aria-hidden="true"><use href="#i-x"/></svg></button><img id="achLbImg" alt="논문 첫 페이지"></div>';
     document.body.appendChild(layer);
     var q = $('achQ'), tmr = null;
     q.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { S.q = q.value.trim(); $('achSearch').classList.toggle('has', !!q.value); renderMain(); updateFab(); }, 120); });
@@ -677,7 +741,7 @@
     $('achSheet').addEventListener('click', function (e) { if (e.target === this && !S.noScrim) sheetBackOrClose(); });
     var gear = $('achGear'); if (gear) gear.addEventListener('click', openSettings);
     // 화면이 다른 길(알림·홈 단추)로 닫히면 열려 있던 창·추가 단추도 함께 치운다
-    try { new MutationObserver(function () { if (!shown()) { hideSheetNow(); updateFab(); } }).observe($('achView'), { attributes: true, attributeFilter: ['style'] }); } catch (e) {}
+    try { new MutationObserver(function () { if (!shown()) { hideSheetNow(); closeLb(); updateFab(); } }).observe($('achView'), { attributes: true, attributeFilter: ['style'] }); } catch (e) {}
     document.addEventListener('visibilitychange', function () { if (!document.hidden && shown() && Date.now() - S.lastLoadAt > 20000 && !S.sheet) load(true); });
   }
   function renderAll() { if (!built) return; renderTabs(); renderMain(); updateFab(); }
@@ -729,6 +793,7 @@
       if (cm) { ns[i].textContent = ns[i].getAttribute('data-n'); continue; }
       (function (el) { var n = +el.getAttribute('data-n'), s = performance.now(); (function f(t) { var p = Math.min(1, (t - s) / 450); el.textContent = Math.round(n * p); if (p < 1) requestAnimationFrame(f); })(s); })(ns[i]);
     }
+    hydrateThumbs(m);
     var bs = m.querySelectorAll('.ach-bar i');
     for (i = 0; i < bs.length; i++) {
       if (cm) { bs[i].style.height = bs[i].getAttribute('data-h') + 'px'; continue; }
@@ -751,7 +816,7 @@
         var small = (parts.length ? parts.join(' · ') + (sm.st.manuscript ? ' · ' : '') : '') + (sm.st.manuscript ? '<b>원고본 ' + sm.st.manuscript + '</b> (게재 불명)' : '');
         h += '<div class="ach-card click" data-act="tab" data-t="' + esc(k.id) + '"><div class="ach-big"><span class="n" data-n="' + sm.pub + '">' + sm.pub + '</span><span class="u">편</span><span class="l">' + esc(k.name) + ' · 게재</span></div>' +
           '<div class="ach-small">전체 ' + sm.total + '편 중 게재된 것만 큰 숫자로 셉니다' + (small ? '<br>' + small : '') + '</div></div>';
-        if (sm.pub) {
+        if (sm.pub && !S.simple) {          /* v9.61: 단순화가 켜져 있으면 책임저자 카드를 보이지 않는다(값·계산은 그대로) */
           h += '<div class="ach-card"><div class="ach-big"><span class="n s" data-n="' + sm.respAll + '">' + sm.respAll + '</span><span class="u">편</span><span class="l">책임저자 (게재 기준)</span></div>' +
             '<div class="ach-split"><span>제1저자 ' + sm.bk.pure + '</span><span>공동제1 ' + sm.bk.cofirst + '</span><span>교신 ' + sm.bk.corr + '</span><span>겸임 ' + sm.bk.both + '</span><span class="dim">공저 ' + sm.bk.co + '</span>' + (sm.bk.none ? '<span class="dim">역할 미입력 ' + sm.bk.none + '</span>' : '') + '</div>' +
             '<div class="ach-pair"><div><div class="n2">' + sm.respAll + '</div><div class="t2">전체 (교내 논문집 포함)</div></div><div><div class="n2">' + sm.req + '</div><div class="t2">승진 요건용 (' + (o.inhouseReq ? '교외·교내' : '교외') + '만)</div></div></div>' +
@@ -793,7 +858,7 @@
     if (isPaperKind(k)) {
       var d = derive(x, opts());
       /* 목록 표식은 역할만 풀어 쓴다(「1/1」 같은 분수는 초보에게 낯설어서 뺐다 — 몇 번째인지는 상세의 「내 위치」에) */
-      if (d.text) h += '<span class="ach-tag' + (d.co ? ' co' : '') + '">' + esc(d.text.replace('공동제1', '공동제1저자').replace(/교신/g, '교신저자')) + '</span>';
+      if (d.text && !S.simple) h += '<span class="ach-tag' + (d.co ? ' co' : '') + '">' + esc(d.text.replace('공동제1', '공동제1저자').replace(/교신/g, '교신저자')) + '</span>';
       if (inHouse(x)) h += '<span class="ach-tag in">교내</span>';
       if (x.status === 'manuscript') h += '<span class="ach-tag wait">원고본·게재 불명</span>';
       else if (x.status && x.status !== 'published') h += '<span class="ach-tag wait">' + esc(STATUS_LABEL[x.status] || x.status) + '</span>';
@@ -805,11 +870,18 @@
     }
     return h;
   }
+  var ICON_DOC = '<svg class="ach-ic" aria-hidden="true"><use href="#i-doc"/></svg>';
+  function peopleKind(k) { var pf = PROFILES[profKey(k)]; return !!(pf && hasField(pf, 'people')); }
   function rowHtml(x, mark, showKind) {
     var unc = dataOf(x).uncertain === true, dot = x.verified ? '' : '<span class="ach-dot' + (unc ? ' warn' : '') + '" title="' + (unc ? '확인 필요' : '확인 전') + '"></span>', k = catById(x.kind_id);
     var pk = profKey(k), info = PROFILES[pk] ? esc(rowLine(pk, x, nowYm())) : esc(x.venue || '') + (x.venue ? ' · ' : '') + (toInt(x.year) || '연도 없음');   // v9.60: 새 종류는 종류에 맞는 한 줄
-    return '<button type="button" class="ach-row" data-act="open" data-id="' + esc(x.id) + '"><div class="a">' + esc(x.title) + '</div><div class="b">' +
-      (mark ? '<span class="ach-tag gray">' + mark + '</span>' : '') + (showKind && k ? '<span class="ach-tag gray">' + esc(k.name) + '</span>' : '') + tagsHtml(x) + info + dot + '</div></button>';
+    /* v9.61: 제목 아래 저자 앞 3명 + 「외 N명」(작은 글씨) · 첫 페이지 그림이 있으면 왼쪽에 작게 */
+    var names = S.simple && k && (isPaperKind(k) || peopleKind(k)) ? namesOf(x) : [], au = '';
+    if (names.length) { var ab = authorBrief(names, 3); au = '<div class="c">' + esc(ab.head) + (ab.more ? ' <small>외 ' + ab.more + '명</small>' : '') + '</div>'; }
+    var th = S.host && thumbPath(mainFile(x), 's') ? '<span class="ach-th" data-th="' + esc(x.id) + '" data-sz="s">' + ICON_DOC + '</span>' : '';
+    var body = '<div class="a">' + esc(x.title) + '</div>' + au + '<div class="b">' +
+      (mark ? '<span class="ach-tag gray">' + mark + '</span>' : '') + (showKind && k ? '<span class="ach-tag gray">' + esc(k.name) + '</span>' : '') + tagsHtml(x) + info + dot + '</div>';
+    return '<button type="button" class="ach-row' + (th ? ' has-th' : '') + '" data-act="open" data-id="' + esc(x.id) + '">' + (th ? th + '<div class="ach-rb">' + body + '</div>' : body) + '</button>';
   }
   function searchHtml() {
     var res = sortItems(live().filter(function (x) { return matchItem(x, S.q); }), S.sortKey);
@@ -818,7 +890,7 @@
   /* 합계 점검은 틀릴 때만 보인다(맞을 땐 화면을 차지하지 않는다) — 틀렸다는 건 계산 구멍이 생겼다는 뜻이라 눈에 띄게 */
   function chipsHtml(k, list) {
     var o = opts(), bk = countBuckets(list, o), tot = list.length, h = '';
-    if (isPaperKind(k)) {
+    if (isPaperKind(k) && !S.simple) {
       var ok1 = (bk.resp + bk.co + bk.none === tot), ok2 = (bk.pure + bk.cofirst + bk.corr + bk.both === bk.resp);
       var pubs = list.filter(isPub), nonPub = list.filter(function (x) { return !isPub(x); }), pb = countBuckets(pubs, o);
       /* 이 목록 숫자는 원고본 같은 게재 아닌 논문까지 세어서 요약(게재 기준)과 다를 수 있다 — 칩 이름과 한 줄 안내로 밝힌다 */
@@ -864,7 +936,7 @@
     var all = ofKind(k.id), o = opts(), cs = subCats(k.id), paper = isPaperKind(k), pk = profKey(k), ny = nowYm();
     if (S.pchip !== 'all' && !(PROFILES[pk] && chipsOf(pk, all, ny).some(function (c) { return c.k === S.pchip; }))) S.pchip = 'all';
     var list = all.filter(function (x) {
-      if (paper && !rolePasses(x, S, o)) return false;
+      if (paper && !S.simple && !rolePasses(x, S, o)) return false;
       if (S.pchip !== 'all' && buckets(pk, x, ny).indexOf(S.pchip) < 0) return false;
       if (S.fCat !== 'all') { var inCat = x.cat_id && cs.some(function (c) { return c.id === x.cat_id; }); if (S.fCat === 'none' ? inCat : x.cat_id !== S.fCat) return false; }
       return true;
@@ -932,7 +1004,7 @@
     if (pk === 'patent') row('현재 상태', esc(patentLabel(x)));
     pf.fields.forEach(function (f) {
       if (f.t === 'filings' || f.k === 'title' || f.k === 'end_ym') return;
-      if (f.t === 'people') { var tot = toInt(d.author_total); row('내 순번', pos ? pos + (tot ? '/' + tot : '') + '번째' : '아직 입력 안 함'); return; }
+      if (f.t === 'people') { if (S.simple) return; var tot = toInt(d.author_total); row('내 순번', pos ? pos + (tot ? '/' + tot : '') + '번째' : '아직 입력 안 함'); return; }
       if (f.k === 'start_ym') { row('기간', esc(periodText(d, pk === 'society' ? '현재' : (x.status === 'ongoing' ? '진행 중' : '')))); return; }
       row((f.short || f.label).replace(/ \(원\)$/, ''), esc(fieldShow(f, x)));
     });
@@ -947,18 +1019,45 @@
       return '<div class="ach-fild"><div><span class="ach-tag' + (isRegF(f) && !isLapsedF(f) ? '' : (f.status === '출원' ? ' in' : ' gray')) + '">' + esc(filStatusLabel(f)) + '</span><b>' + esc(f.country || '나라 미입력') + '</b></div>' + (a || r ? '<div class="s">' + [a, r].filter(Boolean).join(' · ') + '</div>' : '') + '</div>';
     }).join('');
   }
+  /* v9.61: 저자 전체를 순서대로(전체 폭) + 「총 N명」 */
+  function authorsFullHtml(x, noun) {
+    var names = namesOf(x), tot = authorTotal(x);
+    if (!names.length) return tot ? '<div class="ach-auth2"><div class="h">' + esc(noun) + ' <em>총 ' + tot + '명</em></div></div>' : '';
+    return '<div class="ach-auth2"><div class="h">' + esc(noun) + ' <em>총 ' + names.length + '명 · 순서대로</em></div><div class="l">' +
+      names.map(function (n, i) { return '<span class="n"><i>' + (i + 1) + '</i>' + esc(n) + '</span>'; }).join('') + '</div></div>';
+  }
+  /* v9.61: 첫 페이지 그림 + [열기] [내려받기] (파일이 없으면 한 줄 안내 — 논문만) */
+  function fileBlockHtml(x, paper) {
+    if (!S.host) return '';
+    var fs = filesOf(x), f = mainFile(x), off = S.offline;
+    if (!f) return paper ? '<div class="ach-note ach-nofile">' + (filesPurged(x) ? 'PDF가 지워진 상태예요' : 'PDF가 아직 없어요') + '</div>' : '';
+    var meta = ['PDF', f.pages ? f.pages + '쪽' : '', fmtSize(f.size)].filter(Boolean).join(' · '), id = esc(x.id);
+    function btns(fid, small) {
+      return '<button type="button" class="ach-btn' + (small ? ' sm' : '') + '" data-act="fopen" data-id="' + id + '" data-f="' + esc(fid || '') + '"' + (off ? ' disabled' : '') + '><svg class="ach-ic" aria-hidden="true"><use href="#i-doc"/></svg>열기</button>' +
+        '<button type="button" class="ach-btn ghost' + (small ? ' sm' : '') + '" data-act="fdl" data-id="' + id + '" data-f="' + esc(fid || '') + '"' + (off ? ' disabled' : '') + '><svg class="ach-ic" aria-hidden="true"><use href="#i-download"/></svg>내려받기</button>';
+    }
+    var h = '<div class="ach-fig"><button type="button" class="ach-figimg" data-act="zoom" data-id="' + id + '" aria-label="첫 페이지 크게 보기"><span class="ach-th big" data-th="' + id + '" data-sz="p">' + ICON_DOC + '</span></button>' +
+      '<div class="ach-figr"><div class="ach-fname">' + esc(f.name || 'paper.pdf') + '<small>' + esc(meta) + '</small></div><div class="ach-fbtns">' + btns(f.fid, false) + '</div>' +
+      (off ? '<div class="ach-note">인터넷에 연결되면 열고 내려받을 수 있어요.</div>' : '') + '</div></div>';
+    var ex = fs.filter(function (o) { return o !== f; });
+    if (ex.length) h += '<div class="ach-fex"><div class="ach-lbl2">첨부 ' + ex.length + '개 더</div>' + ex.map(function (o) {
+      return '<div class="ach-fexr"><div class="t">' + esc(o.name || 'file.pdf') + '<small>' + esc([o.pages ? o.pages + '쪽' : '', fmtSize(o.size)].filter(Boolean).join(' · ')) + '</small></div><div class="bs">' + btns(o.fid, true) + '</div></div>';
+    }).join('') + '</div>';
+    return h;
+  }
   function openDetail(id) {
     var x = itemById(id); if (!x) return;
     var k = catById(x.kind_id), paper = isPaperKind(k), pk = profKey(k), pf = PROFILES[pk] || null, d = dataOf(x), dv = derive(x, opts()), names = peopleNames(x), pos = toInt(d.author_pos), au = '';
-    if ((paper || (pf && hasField(pf, 'people'))) && names.length) {
+    var ppl = paper || (pf && hasField(pf, 'people')), pnoun = paper ? '저자' : ((pf && pf.fields.filter(function (f) { return f.t === 'people'; })[0]) || {}).noun || '저자';
+    if (!S.simple && ppl && names.length) {
       var meIdx = pos || findMe(names, S.settings.names), max = 8;
       names.forEach(function (n, i) { if (i < max || S.expand === x.id) au += '<b class="' + (i + 1 === meIdx ? 'me' : '') + '">' + esc(n) + (i + 1 === meIdx ? ' (나)' : '') + '</b>'; });
       if (names.length > max && S.expand !== x.id) au += '<button type="button" data-act="expand" data-id="' + esc(x.id) + '">…외 ' + (names.length - max) + '명 보기</button>';
     }
     var vol = d.volume ? esc(d.volume) + (d.issue ? '(' + esc(d.issue) + ')' : '') : '', pg = d.pages ? esc(d.pages) + '쪽' : (d.article_no ? '논문번호 ' + esc(d.article_no) : '');
-    var kv = '';
+    var kv = '', hasFile = !!(S.host && mainFile(x));
     if (paper) {
-      kv += '<span>내 위치</span><b>' + (pos ? pos + (toInt(d.author_total) ? '/' + toInt(d.author_total) : '') + '번째 · ' + esc(dv.text) + (dv.resp ? ' (책임저자)' : '') + (dv.corrUnk ? ' · <i class="ach-unk">교신 여부 확인 전</i>' : '') : '아직 입력 안 함') + '</b>';
+      if (!S.simple) kv += '<span>내 위치</span><b>' + (pos ? pos + (toInt(d.author_total) ? '/' + toInt(d.author_total) : '') + '번째 · ' + esc(dv.text) + (dv.resp ? ' (책임저자)' : '') + (dv.corrUnk ? ' · <i class="ach-unk">교신 여부 확인 전</i>' : '') : '아직 입력 안 함') + '</b>';
       kv += '<span>학술지</span><b>' + esc(x.venue || '-') + (inHouse(x) ? ' · 교내' : (x.venue ? ' · 교외' : '')) + '</b>';
       if (vol || pg) kv += '<span>권(호)·쪽</span><b>' + [vol, pg].filter(Boolean).join(' · ') + '</b>';
     } else if (pf) {
@@ -966,15 +1065,16 @@
     } else { kv += '<span>기관</span><b>' + esc(x.venue || '-') + '</b>'; if (x.cat_id && catById(x.cat_id)) kv += '<span>분류</span><b>' + esc(catById(x.cat_id).name) + '</b>'; }
     if (!pf) kv += '<span>연도</span><b>' + (toInt(x.year) || '-') + '</b>';
     if (paper) kv += '<span>상태</span><b>' + esc(x.status ? (STATUS_LABEL[x.status] || x.status) : '아직 입력 안 함') + '</b><span>DOI</span><b>' + esc(d.doi || '-') + '</b><span>등급</span><b>' + esc(d.journal_grade || '아직 입력 안 함') + '</b>';
-    kv += '<span>확인</span><b>' + (x.verified ? '맞게 확인함' : (d.uncertain === true ? '확인 필요 (추정 값 있음)' : '확인 전 (정리한 값)')) + '</b>' + (pf && !x.has_source ? '' : '<span>원본</span><b>' + (x.has_source ? 'PC 자료 폴더에 있음' : '-') + '</b>');
+    kv += '<span>확인</span><b>' + (x.verified ? '맞게 확인함' : (d.uncertain === true ? '확인 필요 (추정 값 있음)' : '확인 전 (정리한 값)')) + '</b>' + ((pf && !x.has_source) || hasFile ? '' : '<span>원본</span><b>' + (x.has_source ? 'PC 자료 폴더에 있음' : '-') + '</b>');
     var memo = [];
     if (x.note) memo.push('<div class="ach-note"><b>메모</b> ' + esc(x.note) + '</div>');
     var imp = [d.role_note, d.ledger_note].filter(Boolean);
     if (imp.length) memo.push('<details class="ach-note"><summary>정리 메모 (가져올 때)</summary>' + imp.map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') + '</details>');
     openSheet('<div class="ach-bh"><h2>' + esc(x.title) + '</h2><button type="button" class="ach-more" data-act="menu" aria-label="더보기">⋯</button></div>' +
       '<div class="ach-menu" id="achMenu">' + (x.verified ? '' : '<button type="button" data-act="verify" data-id="' + esc(x.id) + '" style="color:var(--text)">맞게 확인했어요로 표시</button>') + '<button type="button" data-act="trash" data-id="' + esc(x.id) + '">휴지통으로 옮기기</button></div>' +
-      (au ? '<div class="ach-auth">' + au + '</div>' : '') + '<div class="ach-kv">' + kv + '</div>' + (pk === 'patent' ? filingsDetail(x) : '') + memo.join('') +
+      fileBlockHtml(x, paper) + (S.simple ? (ppl ? authorsFullHtml(x, pnoun) : '') : (au ? '<div class="ach-auth">' + au + '</div>' : '')) + '<div class="ach-kv">' + kv + '</div>' + (pk === 'patent' ? filingsDetail(x) : '') + memo.join('') +
       (S.offline ? '<div class="ach-note">오프라인 사본이라 지금은 고칠 수 없어요.</div>' : '<button type="button" class="ach-btn" data-act="edit" data-id="' + esc(x.id) + '">고치기</button>'), null, false);
+    hydrateThumbs($('achBox'));
   }
 
   /* ---------- 추가 / 고치기 ---------- */
@@ -1000,8 +1100,8 @@
     openSheet('<div class="ach-hd"><h2>' + (base ? '고치기' : '새로 추가') + ' · ' + esc(k.name) + '</h2><button type="button" class="ach-back" data-act="editclose">닫기</button></div>' +
       '<label class="ach-lbl" for="achFT">제목 *</label><input class="ach-f" id="achFT" value="' + esc(base ? base.title : '') + '" autocomplete="off"><div id="achDup"></div>' +
       '<label class="ach-lbl" for="achFY">연도' + (paper ? ' *' : '') + '</label><input class="ach-f" id="achFY" inputmode="numeric" value="' + esc(base ? (toInt(base.year) || '') : (paper ? new Date().getFullYear() : '')) + '">' +
-      (paper ? '<label class="ach-lbl" for="achFA">저자 (쉼표로 붙여넣기 → 순서대로 나뉘고, 내 이름을 찾아 순번을 미리 채워요)</label><textarea class="ach-f" id="achFA" rows="2" placeholder="예: 홍길동, 김철수, …">' + esc(E.authText) + '</textarea>' +
-        '<div class="ach-me"><div class="ach-two"><div><label class="ach-lbl" for="achFP">내 순번</label><input class="ach-f" id="achFP" inputmode="numeric" value="' + esc(d.author_pos || '') + '"></div><div><label class="ach-lbl" for="achFTt">총 저자수</label><input class="ach-f" id="achFTt" inputmode="numeric" value="' + esc(d.author_total || '') + '"></div></div>' +
+      (paper ? '<label class="ach-lbl" for="achFA">' + authLabel('저자') + '</label><textarea class="ach-f" id="achFA" rows="2" placeholder="예: 홍길동, 김철수, …">' + esc(E.authText) + '</textarea>' + totNote() +
+        '<div class="ach-me' + meOff() + '"><div class="ach-two"><div><label class="ach-lbl" for="achFP">내 순번</label><input class="ach-f" id="achFP" inputmode="numeric" value="' + esc(d.author_pos || '') + '"></div><div><label class="ach-lbl" for="achFTt">총 저자수</label><input class="ach-f" id="achFTt" inputmode="numeric" value="' + esc(d.author_total || '') + '"></div></div>' +
         swHtml('achFCo', '공동 제1저자 표시가 있어요', '논문에 * † 로 같이 기여했다고 적힌 경우', d.co_first === true) + swHtml('achFCr', '교신저자예요', '논문에 교신저자(*) 표시가 내 이름에 있는 경우', d.corresponding === true) + '<div class="ach-preview" id="achPv"></div><div class="ach-note" id="achCnt"></div></div>' : '') +
       '<button type="button" class="ach-exp" id="achEx" data-act="more">▾ 더 입력 (' + (paper ? '학술지 · 교내 · 권/호/쪽 · DOI · 등급 · 상태 · ' : '') + '메모)' + (paper && !base ? ' — 지금 상태: 게재' : '') + '</button><div class="ach-more-in" id="achMi">' + more + '</div>' +
       '<div id="achErr"></div><div style="height:16px"></div><button type="button" class="ach-btn" id="achSave" data-act="save">저장</button>', null, true);
@@ -1024,10 +1124,16 @@
     var it = isoOr(type, val);
     return '<input class="ach-f" type="' + it.type + '" id="' + id + '" value="' + esc(it.val) + '"' + (it.type === 'text' ? ' placeholder="' + (type === 'month' ? '2024-03' : '2024-03-05') + '"' : '') + (extra || '') + '>';
   }
+  /* v9.61: 단순화가 켜져 있으면 「내 순번·공동제1·교신」 상자는 화면 구조에만 남기고 숨긴다(칸을 지우지 않아 입력 연결 코드가 그대로 돈다) */
+  function authLabel(noun) { return S.simple ? esc(noun) + ' (쉼표로 붙여넣으면 순서대로 나뉘어요 · 이름 뒤의 * 표시도 그대로 둬요)' : esc(noun) + ' (쉼표로 붙여넣기 → 순서대로 나뉘고, 내 이름을 찾아 순번을 미리 채워요)'; }
+  function totNote() { return S.simple ? '<div class="ach-note" id="achTot"></div>' : ''; }
+  function meOff() { return S.simple ? ' ach-off' : ''; }
+  function formNames() { var a = $('achFA'); return a && E ? parseAuthors(a.value, E.knownNames) : []; }
+  function updTot() { var t = $('achTot'); if (!t) return; var n = formNames().length; t.textContent = n ? '총 ' + n + '명' : ''; }
   function peopleField() { var l = E && E.prof ? E.prof.fields.filter(function (f) { return f.t === 'people'; }) : []; return l[0] || { noun: '저자', total: '총 저자수' }; }
   function peopleHtml(f, d) {
-    return '<label class="ach-lbl" for="achFA">' + esc(f.noun) + ' (쉼표로 붙여넣기 → 순서대로 나뉘고, 내 이름을 찾아 순번을 미리 채워요)</label><textarea class="ach-f" id="achFA" rows="2" placeholder="예: 홍길동, 김철수, …">' + esc(E.authText) + '</textarea>' +
-      '<div class="ach-me"><div class="ach-two"><div><label class="ach-lbl" for="achFP">내 순번</label><input class="ach-f" id="achFP" inputmode="numeric" value="' + esc(d.author_pos || '') + '"></div><div><label class="ach-lbl" for="achFTt">' + esc(f.total) + '</label><input class="ach-f" id="achFTt" inputmode="numeric" value="' + esc(d.author_total || '') + '"></div></div><div class="ach-preview" id="achPv"></div><div class="ach-note" id="achCnt"></div></div>';
+    return '<label class="ach-lbl" for="achFA">' + authLabel(f.noun) + '</label><textarea class="ach-f" id="achFA" rows="2" placeholder="예: 홍길동, 김철수, …">' + esc(E.authText) + '</textarea>' + totNote() +
+      '<div class="ach-me' + meOff() + '"><div class="ach-two"><div><label class="ach-lbl" for="achFP">내 순번</label><input class="ach-f" id="achFP" inputmode="numeric" value="' + esc(d.author_pos || '') + '"></div><div><label class="ach-lbl" for="achFTt">' + esc(f.total) + '</label><input class="ach-f" id="achFTt" inputmode="numeric" value="' + esc(d.author_total || '') + '"></div></div><div class="ach-preview" id="achPv"></div><div class="ach-note" id="achCnt"></div></div>';
   }
   function fieldHtml(f, x, d) {
     if (f.t === 'people') return peopleHtml(f, d);
@@ -1122,7 +1228,7 @@
     pv.textContent = pos ? '→ ' + noun + ' ' + (tot ? tot + '명 중 ' : '') + pos + '번째' : '순번을 넣으면 몇 번째 ' + noun + '인지 보여 드려요';
     if (pos && tot && pos > tot) msg = '내 순번이 총 ' + noun + '수보다 커요.';
     else if (names.length && tot && names.length !== tot) msg = noun + ' 이름은 ' + names.length + '명인데 총 ' + noun + '수는 ' + tot + '명이에요. 맞는지 확인해 주세요.';
-    n.textContent = msg;
+    n.textContent = msg; updTot();
   }
   function moneyPv() {
     var pv = $('achPvMoney'), el = $('achF_budget'); if (!pv || !el) return;
@@ -1210,7 +1316,7 @@
       if (f.t === 'people') {
         var text = $('achFA').value.trim();
         if (text !== E.authText.trim() && (text || E.authText)) v.people = parseAuthors(text, E.knownNames).map(function (n) { return { name: n }; });
-        v.data.author_pos = toInt($('achFP').value); v.data.author_total = toInt($('achFTt').value);
+        v.data.author_pos = toInt($('achFP').value); v.data.author_total = S.simple ? (formNames().length || toInt($('achFTt').value)) : toInt($('achFTt').value);
         return;
       }
       if (f.t === 'filings') { var fl = readFilings(v.errs); v.data.filings = fl.length ? fl : (Array.isArray(bd.filings) && bd.filings.length ? null : undefined); return; }
@@ -1260,7 +1366,7 @@
     var tot = toInt($('achFTt').value), names = parseAuthors($('achFA').value, E.knownNames), n = $('achCnt'), msg = '';
     if (pos && tot && pos > tot) msg = '내 순번이 총 저자수보다 커요.';
     else if (names.length && tot && names.length !== tot) msg = '저자 이름은 ' + names.length + '명인데 총 저자수는 ' + tot + '명이에요. 맞는지 확인해 주세요.';
-    n.textContent = msg;
+    n.textContent = msg; updTot();
   }
   function checkDup() {
     var out = $('achDup'); if (!out || !E) return;
@@ -1307,7 +1413,7 @@
       var text = $('achFA').value.trim();
       if (text !== E.authText.trim() && (text || E.authText)) v.people = parseAuthors(text, E.knownNames).map(function (n) { return { name: n }; });
       var d = v.data, pos = toInt($('achFP').value), tot = toInt($('achFTt').value);
-      d.author_pos = pos; d.author_total = tot;
+      d.author_pos = pos; d.author_total = S.simple ? (formNames().length || tot) : tot;   /* v9.61: 단순화 중에는 총 저자수 = 이름 개수 */
       var bd = base ? dataOf(base) : {};
       if (E.coTouched || !base) { if (readSw('achFCo') || pos) d.co_first = readSw('achFCo'); }
       if (E.crTouched || !base) { if (readSw('achFCr') || pos) d.corresponding = readSw('achFCr'); }
@@ -1332,10 +1438,10 @@
     if (v.yearRaw !== '' && (!v.year || v.year < 1950 || v.year > 2100)) { $('achFY').classList.add('bad'); bad = true; }
     if (bad) { inlineErr(paper || prof ? '제목과 연도(1950~2100)를 확인해 주세요.' : '제목을 확인해 주세요(연도를 적었다면 1950~2100).'); return; }
     var pp = v.data.author_pos, tt = v.data.author_total;
-    if ((paper || prof) && pp && tt && pp > tt) { inlineErr('내 순번이 총 ' + (prof ? peopleField().noun : '저자') + '수보다 커요. 확인해 주세요.'); return; }
+    if (!S.simple && (paper || prof) && pp && tt && pp > tt) { inlineErr('내 순번이 총 ' + (prof ? peopleField().noun : '저자') + '수보다 커요. 확인해 주세요.'); return; }
     if (prof && v.errs.length) { inlineErr(v.errs[0]); return; }
     /* 교신(또는 공동 제1) 스위치를 켰는데 내 순번이 비어 있으면 역할을 계산할 수 없다 — 저장 전에 순번부터. (순번이 원래 비어 있던 옛 항목을 건드리지 않고 다른 칸만 고칠 땐 막지 않는다) */
-    if (paper && !pp && (readSw('achFCr') || readSw('achFCo'))) {
+    if (!S.simple && paper && !pp && (readSw('achFCr') || readSw('achFCo'))) {
       var legacy = E.base && !toInt(dataOf(E.base).author_pos) && !E.crTouched && !E.coTouched;
       if (!legacy) {
         $('achFP').classList.add('bad');
@@ -1347,7 +1453,7 @@
     if (!guardWrite()) return;
     delete v.yearRaw;
     var base = E.base; if (base && forceBaseRev) base = Object.assign({}, base, { rev: forceBaseRev });
-    var row = buildSaveRow(base, v);
+    var row = buildSaveRow(base, v, knownList(S.simple));   /* v9.61: 단순화 중에는 순번·공동제1·교신을 모르는 칸처럼 그대로 둔다 */
     E.busy = true; inlineErr('');
     var btn = $('achSave'); btn.disabled = true; btn.textContent = '저장 중…';
     rpc('ach_save_item', { p_row: row }).then(function (res) {
@@ -1403,15 +1509,20 @@
         toast('되살리지 못했어요 — 이미 없는 항목이에요.'); load(true); return;
       }
       var x = itemById(id); if (x) { x.deleted_at = null; x.rev = (x.rev || 1) + 1; saveCache({ cats: S.cats, items: S.items }); }
-      renderAll(); if (S.sheet && !fromUndo) openTrash(); toast(fromUndo ? '되돌렸습니다' : '되살렸습니다');
+      renderAll(); if (S.sheet && !fromUndo) openTrash(); toast((fromUndo ? '되돌렸습니다' : '되살렸습니다') + (x && filesPurged(x) ? ' · PDF가 지워진 상태예요' : ''), x && filesPurged(x) ? 4200 : undefined);
     }).catch(function (e) { toast('되살리지 못했어요 — ' + errText(e)); });
   }
+  /* 영구 삭제: 파일이 있으면 파일부터 지운다(서버 함수 purge) → 성공해야 항목을 지운다. 파일을 못 지우면 영구 삭제를 멈춘다(항목은 휴지통에 그대로) */
   function purgeItem(id) {
-    rpc('ach_purge_item', { p_id: id }).then(function (ok) {
-      if (ok !== true && !(isObj(ok) && ok.ok)) { toast('영구 삭제하지 못했어요.'); return; }
-      S.items = S.items.filter(function (x) { return x.id !== id; }); saveCache({ cats: S.cats, items: S.items });
-      renderAll(); openTrash(); toast('영구 삭제했습니다');
-    }).catch(function (e) { toast('영구 삭제하지 못했어요 — ' + errText(e)); });
+    var x = itemById(id), step = (S.host && x && filesOf(x).length) ? fileApi({ a: 'purge', id: id }) : Promise.resolve(null);
+    step.then(function (r) {
+      if (r && x) { if (isObj(x.data)) { delete x.data.files; x.data.files_purged = nowIso(); } }
+      return rpc('ach_purge_item', { p_id: id }).then(function (ok) {
+        if (ok !== true && !(isObj(ok) && ok.ok)) { toast('영구 삭제하지 못했어요.'); return; }
+        S.items = S.items.filter(function (y) { return y.id !== id; }); saveCache({ cats: S.cats, items: S.items });
+        renderAll(); openTrash(); toast('영구 삭제했습니다');
+      }).catch(function (e) { toast('영구 삭제하지 못했어요 — ' + errText(e)); });
+    }, function (e) { toast('PDF를 지우지 못해서 영구 삭제를 멈췄어요 — ' + errText(e), 4200); });
   }
   function openTrash() {
     Object.keys(purgeArm).forEach(function (k) { clearTimeout(purgeArm[k]); delete purgeArm[k]; });   // 목록을 새로 그리면 대기 표시도 처음으로
@@ -1426,14 +1537,16 @@
     var tr = trashed().length;
     openSheet('<h2>실적 설정</h2>' +
       '<button type="button" class="ach-setrow" data-act="trashlist">휴지통 <small>' + tr + '건 ›</small></button>' +
-      '<button type="button" class="ach-setrow" data-act="names">내 이름 표기 <small>' + (S.settings.names.length ? '내가 더한 ' + S.settings.names.length + '개 ›' : '자동 찾기 ›') + '</small></button>' +
+      (S.simple ? '' : '<button type="button" class="ach-setrow" data-act="names">내 이름 표기 <small>' + (S.settings.names.length ? '내가 더한 ' + S.settings.names.length + '개 ›' : '자동 찾기 ›') + '</small></button>') +
       '<button type="button" class="ach-setrow" data-act="export">내보내기 <small>JSON ›</small></button>' +
       '<button type="button" class="ach-setrow" data-act="kinds">종류 관리 <small>' + kindsList().map(function (k) { return esc(k.name); }).join(' · ') + ' ›</small></button>' +
-      '<div style="height:10px"></div>' + swHtml('achSwCf', '공동 제1저자를 제1저자로 세기', '끄면 책임저자 숫자가 줄어요 (규정에 문구가 없어 확인 전까지 바꿔 볼 수 있게)', S.settings.cofirst) +
+      (S.simple ? '' : '<div style="height:10px"></div>' + swHtml('achSwCf', '공동 제1저자를 제1저자로 세기', '끄면 책임저자 숫자가 줄어요 (규정에 문구가 없어 확인 전까지 바꿔 볼 수 있게)', S.settings.cofirst) +
       swHtml('achSwIh', '교내 논문집도 승진 요건용에 넣기', '기본은 끔 — 규정이 SCI·등재급 이상으로 읽히기 때문', S.settings.inhouseReq) +
-      '<div class="ach-note">스위치를 바꾼 뒤 창을 닫으면 숫자가 바로 바뀌어요.</div>', closeSheet, false);
+      '<div class="ach-note">스위치를 바꾼 뒤 창을 닫으면 숫자가 바로 바뀌어요.</div>'), closeSheet, false);
+    if (!S.simple) {
     $('achSwCf').onclick = function () { S.settings.cofirst = !S.settings.cofirst; saveSettings(); this.classList.toggle('on', S.settings.cofirst); this.setAttribute('aria-checked', S.settings.cofirst); renderAll(); };
     $('achSwIh').onclick = function () { S.settings.inhouseReq = !S.settings.inhouseReq; saveSettings(); this.classList.toggle('on', S.settings.inhouseReq); this.setAttribute('aria-checked', S.settings.inhouseReq); renderAll(); };
+    }
   }
   function openNames() {
     openSheet('<div class="ach-hd"><button type="button" class="ach-back" data-act="settings">‹ 설정</button><h2>내 이름 표기</h2></div>' +
@@ -1547,6 +1660,10 @@
       case 'useserver': { var sr = E && E.conflict && E.conflict.row; if (sr) { var at = -1; S.items.forEach(function (x, i) { if (x.id === sr.id) at = i; }); if (at >= 0) S.items[at] = sr; hideSheetNow(); renderAll(); toast('서버 값으로 바꿨어요'); } break; }
       case 'usemine': { var cr = E && E.conflict && E.conflict.row; if (cr) { E.base = cr; $('achErr').innerHTML = ''; doSave(cr.rev); } break; }
       case 'verify': verifyItem(id); break;
+      case 'fopen': fileAct('view', id, el.getAttribute('data-f'), el); break;
+      case 'fdl': fileAct('dl', id, el.getAttribute('data-f'), el); break;
+      case 'zoom': openLb(id); break;
+      case 'lbclose': closeLb(); break;
       case 'trash': trashItem(id); break;
       case 'settings': openSettings(); break;
       case 'trashlist': openTrash(); break;
@@ -1566,6 +1683,96 @@
       case 'catdel': delCat(id); break;
     }
   }
+
+  /* =====================================================================
+   * 6-1. 논문 파일(PDF) · 첫 페이지 그림 (v9.61)
+   *   서버 함수 ach-file 이 연동 암호를 확인하고 짧게 유효한 주소를 준다. 앱은 파일 경로를 모르고 항목 번호만 보낸다.
+   *   PDF 는 기존 문서 뷰어(S.host.view)·내려받기(S.host.download)를 그대로 쓴다. 인터넷이 없으면 PDF 는 열 수 없다(그림은 폰에 저장돼 보인다).
+   * ===================================================================*/
+  var TH = { mem: {}, fly: {} }, TH_CACHE = 'ach-thumbs-v1', TH_BASE = 'https://ach-thumb.invalid/';
+  function thGet(p) {
+    if (TH.mem[p]) return Promise.resolve(TH.mem[p]);
+    try {
+      if (!global.caches) return Promise.resolve(null);
+      return caches.open(TH_CACHE).then(function (c) { return c.match(TH_BASE + p); }).then(function (r) { return r ? r.blob() : null; })
+        .then(function (b) { return b && b.size ? (TH.mem[p] = URL.createObjectURL(b)) : null; }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  function thPut(p, blob) {
+    TH.mem[p] = URL.createObjectURL(blob);
+    try { if (global.caches) caches.open(TH_CACHE).then(function (c) { return c.put(TH_BASE + p, new Response(blob, { headers: { 'Content-Type': 'image/jpeg' } })); }).catch(function () {}); } catch (e) {}
+    return TH.mem[p];
+  }
+  function thShow(el, url) {
+    if (!el || !el.isConnected) return;
+    el.innerHTML = '<img alt="" src="' + url + '">'; el.classList.add('ok'); el.classList.remove('fail');
+  }
+  function thFail(el, e) {
+    if (!el || !el.isConnected) return;
+    el.classList.add('fail'); el.setAttribute('data-err', e && e.kind === 'net' ? '인터넷이 끊겨 그림을 못 받았어요' : '그림을 불러오지 못했어요');
+  }
+  function thFetch(url, p) {
+    return global.fetch(url).then(function (r) { if (!r.ok) throw mkErr('IMG_' + r.status, 'server'); return r.blob(); })
+      .then(function (b) { if (!b || !b.size) throw mkErr('IMG_EMPTY', 'server'); return thPut(p, b); }, function (e) { throw e && e.ach ? e : mkErr('NETWORK', 'net'); });
+  }
+  function hydrateThumbs(root) {
+    if (!S.host || !root) return;
+    var els = [].slice.call(root.querySelectorAll('[data-th]'));
+    var jobs = els.map(function (el) {
+      var it = itemById(el.getAttribute('data-th')), f = it && mainFile(it), sz = el.getAttribute('data-sz') || 's', p = f && thumbPath(f, sz);
+      if (!p) return Promise.resolve(null);
+      return thGet(p).then(function (u) {
+        if (u) { thShow(el, u); return null; }
+        if (TH.fly[p]) { TH.fly[p].then(function (u2) { thShow(el, u2); }, function (e) { if (sz !== 's') thFail(el, e); }); return null; }
+        return { el: el, id: it.id, p: p, sz: sz };
+      });
+    });
+    Promise.all(jobs).then(function (miss) {
+      miss = miss.filter(Boolean); if (!miss.length || S.offline) return;
+      var small = miss.filter(function (m) { return m.sz === 's'; }), big = miss.filter(function (m) { return m.sz !== 's'; });
+      function fly(m, pr) {
+        if (!TH.fly[m.p]) { TH.fly[m.p] = pr; var done = function () { delete TH.fly[m.p]; }; pr.then(done, done); }
+        return TH.fly[m.p].then(function (u) { thShow(m.el, u); }, function (e) { if (m.sz !== 's') thFail(m.el, e); });
+      }
+      if (small.length) {
+        var ids = []; small.forEach(function (m) { if (ids.indexOf(m.id) < 0) ids.push(m.id); });
+        var batch = fileApi({ a: 'sign_thumbs', ids: ids.slice(0, 60), size: 's' });
+        small.forEach(function (m) { fly(m, batch.then(function (r) { var u = r && r.urls && r.urls[m.id]; if (!u) throw mkErr('NO_THUMB', 'nofile'); return thFetch(u, m.p); })); });
+      }
+      big.forEach(function (m) { fly(m, fileApi({ a: 'sign', id: m.id, want: 'thumb_p' }).then(function (r) { return thFetch(r.url, m.p); })); });
+    });
+  }
+  /* 서버에서 지워진 항목의 그림이 폰에 계속 쌓이지 않게 — 지금 항목들이 가리키지 않는 그림은 폰 저장소에서 지운다 */
+  function thPrune() {
+    try {
+      if (!global.caches || !S.host) return;
+      var keep = {}; S.items.forEach(function (x) { filesOf(x).forEach(function (f) { ['s', 'p'].forEach(function (z) { var p = thumbPath(f, z); if (p) keep[TH_BASE + p] = 1; }); }); });
+      caches.open(TH_CACHE).then(function (c) { return c.keys().then(function (ks) { return Promise.all(ks.filter(function (r) { return !keep[r.url]; }).map(function (r) { return c.delete(r); })); }); }).catch(function () {});
+    } catch (e) {}
+  }
+  function openLb(id) {
+    var x = itemById(id), f = x && mainFile(x), p = f && thumbPath(f, 'p'), u = p && TH.mem[p];
+    if (!u) { toast('그림을 아직 못 받았어요. 잠시 뒤 다시 눌러 주세요.'); return; }
+    $('achLbImg').src = u; $('achLb').classList.add('show');
+  }
+  function closeLb() { var l = $('achLb'); if (l) l.classList.remove('show'); }
+  function lbOpen() { var l = $('achLb'); return !!l && l.classList.contains('show'); }
+  function fileAct(kind, id, fid, el) {
+    var x = itemById(id), f = x && mainFile(x, fid); if (!f || !S.host) return;
+    if (S.offline) { toast('인터넷에 연결되면 PDF를 열 수 있어요.'); return; }
+    if (S.fbusy) return;
+    if (kind !== 'dl' && typeof S.host.guard === 'function') { var gm = S.host.guard(f.name || ''); if (gm) { toast(gm, 4200); return; } }   // 뷰어 탭이 가득 찼으면 서버에 묻기 전에 먼저 알린다
+    S.fbusy = true; if (el) el.classList.add('busy');
+    function done() { S.fbusy = false; if (el) el.classList.remove('busy'); }
+    fileApi({ a: 'sign', id: id, fid: f.fid, want: kind === 'dl' ? 'download' : 'view' }).then(function (r) {
+      done();
+      if (!r.url) throw mkErr('NO_URL', 'server');
+      try {
+        if (kind === 'dl') S.host.download(r.url, r.name || f.name || 'paper.pdf');
+        else S.host.view({ url: r.url, name: r.name || f.name || 'paper.pdf', mime: 'application/pdf' });
+      } catch (e) { toast('PDF를 ' + (kind === 'dl' ? '내려받지' : '열지') + ' 못했어요 — 다시 눌러 주세요.'); }
+    }).catch(function (e) { done(); toast(errText(e), 3600); });
+  }
   function verifyItem(id) {
     var x = itemById(id); if (!x || !guardWrite()) return;
     rpc('ach_save_item', { p_row: { id: x.id, base_rev: x.rev, verified: true } }).then(function (res) {
@@ -1577,7 +1784,12 @@
   /* =====================================================================
    * 7. app.js 와 만나는 곳
    * ===================================================================*/
-  function init(o) { if (o && o.toast) _toast = o.toast; build(); }
+  function init(o) {
+    if (o && o.toast) _toast = o.toast;
+    S.simple = !(o && o.simpleAuthors === false);
+    S.host = o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function' ? o.files : null;   // { view, download, guard? }
+    build();
+  }
   function open() {
     build(); tabShown = null; S.q = ''; var q = $('achQ'); if (q) q.value = ''; var sb = $('achSearch'); if (sb) sb.classList.remove('has');
     renderAll(); load(S.loaded);
@@ -1585,6 +1797,7 @@
   /* 뒤로 가기: 창이 열려 있으면 창부터 닫는다. true = 여기서 처리함 */
   var editWarnAt = 0;
   function back() {
+    if (lbOpen()) { closeLb(); return true; }
     if (S.sheet) {
       if (!confirmEditClose()) return true;     // 입력 중이면 한 번 더 누를 때 닫힘
       sheetBackOrClose(); return true;
