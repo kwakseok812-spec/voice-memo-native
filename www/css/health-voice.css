@@ -1,0 +1,130 @@
+/* ============================================================================
+   health-voice.css — 건강 탭 「🎤 말로 기록」 (O-0693, v9.64)
+   알약(오른쪽 아래) · 듣는/확인 시트(아래에서 올라옴) · 8초 되돌리기 줄.  색은 앱의 변수(--glass·--p1 …)만 써서 밝은/어두운 화면이 같이 맞는다.
+   움직임은 짧게(알약 눌림 120ms · 시트 200ms · 행 등장 40ms 간격 합 300ms 이내) · 「움직임 줄이기」(prefers-reduced-motion · .hv-calm)면 전부 즉시.
+   ========================================================================== */
+
+/* 입력 화면 맨 아래가 알약에 가리지 않게 여백 (스위치가 꺼져 build() 가 안 돌면 이 클래스가 안 붙어 예전 모습 그대로) */
+#healthView.hv-on #hToday{padding-bottom:84px}
+
+/* ---------- 알약 ---------- */
+.hv-pill{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:40;height:48px;padding:0 20px 0 16px;border:0;border-radius:999px;
+  display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:16px;font-weight:800;letter-spacing:-.2px;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,var(--p1),var(--p2));box-shadow:0 8px 22px rgba(79,70,229,.45),0 2px 6px rgba(0,0,0,.25);
+  transition:transform .12s ease,opacity .15s ease}
+.hv-pill[hidden]{display:none}
+.hv-pill:active{transform:scale(.96)}
+.hv-pill-ic{font-size:19px;line-height:1}
+html[data-style="light"] .hv-pill{box-shadow:0 8px 20px rgba(79,70,229,.35),0 2px 5px rgba(30,41,99,.18)}
+
+/* ---------- 시트 ---------- */
+.hv-sheet{position:fixed;inset:0;z-index:70}
+.hv-sheet[hidden]{display:none}
+.hv-back{position:absolute;inset:0;background:rgba(3,6,18,0);transition:background .2s ease}     /* 위쪽 케이 칸이 그대로 보이게 거의 어둡히지 않는다 */
+.hv-sheet.on .hv-back{background:rgba(3,6,18,.22)}
+.hv-panel{position:absolute;left:50%;bottom:0;width:100%;max-width:520px;transform:translate(-50%,102%);max-height:80vh;overflow-y:auto;overscroll-behavior:contain;
+  padding:8px 18px calc(16px + env(safe-area-inset-bottom,0px));border-radius:24px 24px 0 0;background:var(--page-bg);border:1px solid var(--glass-b2);border-bottom:0;
+  box-shadow:0 -14px 40px rgba(0,0,0,.38);transition:transform .2s cubic-bezier(.2,.8,.25,1);-webkit-overflow-scrolling:touch}
+.hv-sheet.on .hv-panel{transform:translate(-50%,0)}
+.hv-sheet[data-phase="listen"] .hv-panel{min-height:34vh}
+.hv-grab{width:42px;height:4px;border-radius:2px;background:var(--glass-b2);margin:2px auto 8px}
+.hv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.hv-head b{font-size:18px;font-weight:800;color:var(--text)}
+.hv-x{height:44px;min-width:56px;padding:0 10px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:15px;font-weight:700;cursor:pointer}
+
+/* ---------- 듣는 중 ---------- */
+.hv-listen{display:flex;flex-direction:column;align-items:center;gap:12px;padding:6px 0 4px}
+.hv-listen[hidden],.hv-msg[hidden],.hv-card[hidden]{display:none}
+.hv-bars{--lv:0;display:flex;align-items:center;justify-content:center;gap:7px;height:46px}
+.hv-bars i{display:block;width:8px;border-radius:4px;background:linear-gradient(180deg,var(--cyan),var(--p2));
+  height:calc(8px + var(--lv) * 38px * var(--m,1));transition:height .09s linear}
+.hv-bars i:nth-child(1){--m:.55}.hv-bars i:nth-child(2){--m:.85}.hv-bars i:nth-child(3){--m:1}.hv-bars i:nth-child(4){--m:.8}.hv-bars i:nth-child(5){--m:.5}
+.hv-live{width:100%;min-height:52px;padding:11px 14px;border-radius:16px;background:var(--in-bg);border:1.5px solid var(--glass-b);color:var(--text);font-size:17px;font-weight:700;line-height:1.55;text-align:center;word-break:keep-all;overflow-wrap:anywhere}
+.hv-hint{width:100%;color:var(--muted);font-size:14px;font-weight:600;line-height:1.6;text-align:center;word-break:keep-all}
+.hv-hint b{color:var(--text);font-weight:800}
+
+/* ---------- 단추 ---------- */
+.hv-acts{display:flex;gap:10px;width:100%;margin-top:6px}
+.hv-btn{flex:1;min-height:50px;padding:0 14px;border-radius:16px;border:1.5px solid var(--glass-b2);background:var(--glass);color:var(--text);font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;transition:transform .12s ease}
+.hv-btn:active{transform:scale(.97)}
+.hv-btn.pri{border-color:transparent;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
+.hv-btn:disabled{opacity:.45;cursor:default}
+.hv-btn:disabled:active{transform:none}
+
+/* ---------- 안내 · 실패 ---------- */
+.hv-msg{padding:6px 0 4px}
+.hv-msg-tx{padding:12px 14px;border-radius:16px;background:var(--warn-bg);border:1px solid var(--warn);color:var(--text);font-size:15.5px;font-weight:600;line-height:1.6;word-break:keep-all}
+
+/* ---------- 확인 카드 ---------- */
+.hv-card{display:flex;flex-direction:column;gap:8px;padding-top:2px}
+.hv-lab{font-size:14px;font-weight:800;color:var(--text)}
+.hv-lab small{font-size:12.5px;font-weight:600;color:var(--muted)}
+.hv-heard{width:100%;min-height:62px;padding:10px 12px;border-radius:14px;border:1.5px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:16px;font-weight:600;line-height:1.55;resize:vertical}
+.hv-heard:focus{outline:2px solid var(--focus);border-color:var(--p1)}
+.hv-rows{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+.hv-note{padding:9px 12px;border-radius:12px;font-size:13.5px;font-weight:700;line-height:1.5}
+.hv-note.warn{background:var(--warn-bg);color:var(--warn-t);border:1px solid var(--warn)}
+.hv-date{margin:4px 2px 0;font-size:13.5px;font-weight:800;color:var(--warn-t)}
+.hv-wait{padding:8px 4px;color:var(--muted);font-size:14px;font-weight:700}
+.hv-empty{padding:14px;border-radius:16px;border:1px dashed var(--glass-b2);color:var(--muted);font-size:14.5px;font-weight:600;line-height:1.65;word-break:keep-all}
+.hv-empty b{color:var(--text);font-weight:800}
+
+.hv-row{display:flex;align-items:flex-start;gap:10px;padding:9px 10px 9px 6px;border-radius:16px;background:var(--glass);border:1px solid var(--glass-b);}
+.hv-rows.anim .hv-row{animation:hvIn .18s ease both;animation-delay:calc(var(--i,0) * 40ms)}
+.hv-row.on{border-color:var(--p1);background:var(--glass2)}
+.hv-row.same{opacity:.62}
+.hv-row.diff:not(.on){border-style:dashed}
+.hv-row.warn{border-color:var(--warn)}
+.hv-row.block,.hv-row.locked{border-color:var(--rec)}
+@keyframes hvIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.hv-ck{position:relative;flex:none;width:36px;height:36px;margin:0;padding:0;border:0;background:transparent;cursor:pointer;display:grid;place-items:center}
+.hv-ck::after{content:"";position:absolute;inset:-6px}
+.hv-ck svg{width:24px;height:24px;padding:3px;border-radius:8px;border:2px solid var(--glass-b2);background:var(--in-bg);color:transparent;box-sizing:border-box}
+.hv-ck[aria-checked="true"] svg{background:var(--p1);border-color:var(--p1);color:#fff}
+.hv-ck:disabled{cursor:default;opacity:.5}
+.hv-main{flex:1;min-width:0}
+.hv-l1{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.hv-l1 > b{flex:none;font-size:15px;font-weight:800;color:var(--text)}
+.hv-val{min-width:0;font-size:17px;font-weight:800;color:var(--text);word-break:keep-all;overflow-wrap:anywhere}
+.hv-tks{display:inline-flex;flex-wrap:wrap;gap:5px}
+.hv-tk{display:inline-flex;align-items:center;gap:2px;height:32px;padding:0 4px 0 11px;border-radius:999px;background:var(--in-bg);border:1px solid var(--glass-b2);font-size:15px;font-weight:700;color:var(--text)}
+.hv-tk button{position:relative;width:28px;height:28px;border:0;background:transparent;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+.hv-tk button::after{content:"";position:absolute;inset:-4px}
+.hv-nt{margin-top:3px;font-size:13px;font-weight:600;line-height:1.5;color:var(--muted);word-break:keep-all}
+.hv-nt.bad{color:var(--rec)}
+.hv-row.warn .hv-nt,.hv-row.block .hv-nt{color:var(--warn-t)}
+.hv-cs{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.hv-c{min-height:36px;padding:0 13px;border-radius:999px;border:1.5px solid var(--glass-b2);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer}
+.hv-c.on{border-color:var(--p1);background:var(--p1);color:#fff}
+.hv-c.fix{border-style:dashed}
+.hv-unread{display:flex;flex-direction:column;gap:6px}
+.hv-un{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 8px 12px;border-radius:12px;background:var(--warn-bg);border:1px solid var(--warn);color:var(--text);font-size:13.5px;font-weight:700;line-height:1.5;word-break:keep-all}
+.hv-un span::before{content:"⚠ ";color:var(--warn-t)}
+.hv-un button{flex:none;min-height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--warn);background:transparent;color:var(--warn-t);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+
+/* ---------- 저장 뒤 되돌리기 줄 ---------- */
+.hv-undo{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:60;width:min(420px,calc(100vw - 24px));transform:translate(-50%,12px);opacity:0;pointer-events:none;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 16px;border-radius:16px;background:rgba(10,14,30,.95);border:1px solid var(--glass-b2);box-shadow:0 10px 28px rgba(0,0,0,.4);
+  color:#fff;font-size:14.5px;font-weight:700;line-height:1.45;transition:opacity .2s ease,transform .2s ease}
+.hv-undo[hidden]{display:none}
+.hv-undo.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.hv-undo span{min-width:0;word-break:keep-all}
+.hv-undo button{flex:none;min-height:40px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer}
+.hv-undo button[hidden]{display:none}
+
+/* ---------- 좁은 폭(접은 화면 360px 안팎) ---------- */
+@media (max-width:374px){
+  .hv-panel{padding-left:14px;padding-right:14px}
+  .hv-pill{padding:0 16px 0 13px;font-size:15px}
+  .hv-val{font-size:16px}
+  .hv-btn{font-size:15px}
+}
+
+/* ---------- 움직임 줄이기 ---------- */
+.hv-calm .hv-panel,.hv-calm .hv-back,.hv-calm .hv-btn{transition:none}
+.hv-calm .hv-rows.anim .hv-row{animation:none}
+@media (prefers-reduced-motion:reduce){
+  .hv-pill,.hv-btn,.hv-panel,.hv-back,.hv-undo,.hv-bars i{transition:none}
+  .hv-rows.anim .hv-row{animation:none}
+  .hv-pill:active,.hv-btn:active{transform:none}
+}

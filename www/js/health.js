@@ -42,6 +42,13 @@
  *   기본값: 오늘 숫자를 처음 넣을 때 칩이 안 켜져 있으면 [가장 가까운 지난 기록의 방식 → 폰이 기억한 마지막 선택 → 리브레2] 로 자동 저장(지난 날짜 고치기는 자동 없음).
  *   스위치: GLUCOSE_SRC_ON(false 면 칩만 숨김 · 저장된 이름표는 그대로 두고 읽지 않음). PC: voice-memo-collector\glucose_src.OFF
  *
+ * v9.64(O-0693) 「🎤 말로 기록」 — 입력 방법이 하나 더 생겼을 뿐, 저장 길은 이 파일의 setField → 저장 → 서버 한 길 그대로다.
+ *   화면·말 해석은 health-voice.js. 이 파일에는 작은 「문」(HealthTab.voice: ctx · peek · apply · say · lastWeight)만 열었다.
+ *   · peek(날짜): 그날 서버 행을 먼저 읽어 카드가 「이미 같음 / 다른 값 있음」을 가리게 한다(못 읽으면 오늘 것은 폰 기록과 견주고 이유를 밝힘, 지난 날짜는 막음).
+ *   · apply(ops): 체크된 칸만 setNumber/setField/setMeasSkip 으로 적는다(숫자는 기존 규칙 그대로 — 처음 넣으면 혈당 방식 기본값 · 측정 안 함 풀림). 식단은 덧붙임이 기본.
+ *     적기 전 값을 기억해 두어 8초 되돌리기를 준다. 새 음식은 foodBump 로 칩에 배운다(손으로 적을 때와 같음).
+ *   스위치는 health-voice.js 맨 위 VOICE_ENTRY_ON — false 면 이 문을 아무도 부르지 않아 v9.63 과 똑같이 동작한다.
+ *
  * app.js 연결: window 이벤트/버튼으로 화면을 열면 HealthTab.open() 이 렌더한다.
  *   HealthTab.init({toast}) 로 토스트만 주입받는다(결합 최소화). HealthTab.flush() = 밀린 칸 다시 올리기.
  * ==========================================================================*/
@@ -1383,6 +1390,7 @@
     if (pT) pT.style.display = listOn ? 'none' : '';
     if (pH) pH.style.display = listOn ? '' : 'none';
     if (listOn) renderHistory();
+    try { if (global.HealthVoice && global.HealthVoice.onTab) global.HealthVoice.onTab(which); } catch (e) {}      // v9.64: 「말로 기록」 알약은 입력 화면에서만
   }
 
   function init(opts) {
@@ -1501,6 +1509,7 @@
   }
   // [뒤로](화면 단추·폰 뒤로가기): 지난 날짜를 고치던 중이면 「기록 보기」 목록으로 한 단계만 돌아간다(true). 그 밖에는 app.js 가 홈으로 보낸다(false).
   function back() {
+    try { if (global.HealthVoice && global.HealthVoice.back && global.HealthVoice.back()) return true; } catch (e) {}      // v9.64: 「말로 기록」 시트가 열려 있으면 그것부터 닫는다
     var pT = $('hToday');
     if (mode === 'past' && rec && pT && pT.style.display !== 'none') {
       flushSaveTimer(); switchTab('history');
@@ -1509,5 +1518,132 @@
     return false;
   }
 
-  global.HealthTab = { init: init, open: open, openDate: openDate, flush: wake, resume: resume, back: back };
+  /* ============================ v9.64(O-0693) 말로 기록 — health-voice.js 가 쓰는 작은 문 ============================ */
+  var voicePeeked = {};                           // 날짜 → {row}: 방금 서버에서 읽은 그날 행(못 읽은 날짜는 없다)
+  function kstHour() { var n = Date.now(); return new Date(n + tzMs(n)).getUTCHours(); }
+  function voiceCtx() {
+    if (!rec) return null;
+    var learned = Object.keys(foodsGet('meal')).filter(function (f) { return !isSkip(f); });
+    return { screen: rec.log_date, mode: mode, today: todayStr(), hour: kstHour(), chips: BASE_FOODS.slice(), learned: learned };
+  }
+  function withTimeout(p, ms) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error('TIMEOUT')); }, ms);
+      p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+  // 그날 기록을 읽어 카드가 견줄 값을 만든다: {ok, vals:{칸:값}, meas:{혈당·체중 「측정 안 함」 여부}, note}
+  //   서버 값 + 아직 안 올라간(폰에만 있는) 칸은 폰 값이 이긴다. 서버를 못 읽으면: 오늘 것은 폰 기록과 견주고 이유를 밝히며, 그 밖의 날짜는 ok:false(저장을 막는다).
+  function voicePeek(ds) {
+    var l = (rec && rec.log_date === ds) ? rec : loadLocal(ds, ds === todayStr());
+    function mk(vals, note) {
+      var ms = {};
+      Object.keys(SKIPPABLE).forEach(function (k) { ms[k] = isMeasSkipped({ skips: vals.skips, fasting_glucose: vals.fasting_glucose, weight: vals.weight }, k); });
+      return { ok: true, vals: vals, meas: ms, note: note || '' };
+    }
+    return withTimeout(listOne(ds, true), 9000).then(function (row) {
+      voicePeeked[ds] = { row: row || null };
+      if (row) putRow(row);
+      var vals = {};
+      FIELDS.forEach(function (k) { vals[k] = row ? norm(row[k]) : null; });
+      if (l) dirtyKeys(l, true).forEach(function (k) { vals[k] = norm(l[k]); });
+      return mk(vals, '');
+    }, function (e) {
+      delete voicePeeked[ds];
+      if (ds !== todayStr()) return { ok: false };
+      var vals = {};
+      FIELDS.forEach(function (k) { vals[k] = l ? norm(l[k]) : null; });
+      return mk(vals, (e && e.badpass ? '연동 암호가 없어 ' : '') + '서버 값은 확인하지 못했습니다. 이 폰의 기록과 견주었습니다');
+    });
+  }
+  function voiceLastWeight(ds) { var l = lastBefore('weight', ds); return l ? l.v : null; }
+  function voiceSay(text) {
+    var sc = $('kscHealth'); if (!sc) return;
+    if (global.KScene) global.KScene.set(sc, 'idle', text, { quiet: true });
+    else { var p = $('hSay'); if (p) p.textContent = text; }
+  }
+  function voiceUnsay() { if (rec) paintSay(false); }
+  // 적을 기록 객체: 화면에 떠 있는 날짜면 그것, 아니면 폰에 적어 둔 것(없으면 빈 기록). 방금 읽은 서버 행과 칸 단위로 맞춘 뒤 쓴다.
+  function voiceTarget(ds) {
+    var r = (rec && rec.log_date === ds) ? rec : (loadLocal(ds, ds === todayStr()) || blankRecord(ds));
+    var pk = voicePeeked[ds];
+    if (pk) { var res = applyServer(r, pk.row); tellLost(res.lost, ds); }
+    return r;
+  }
+  function voiceNone(k) { return k === 'snack' ? '없음' : k === 'exercise' ? EXERCISE_NONE : SKIP; }
+  function voiceIsNone(k, v) { return k === 'snack' ? (typeof v === 'string' && v.replace(/\s+/g, '') === '없음') : k === 'exercise' ? (typeof v === 'string' && v.replace(/\s+/g, '') === '안함') : skipOn(k, v); }
+  function voiceOne(r, o, learned) {
+    var k = o.k;
+    if (k === 'exercise' && !EXERCISE_TAB_ON) return;
+    if (o.skip) {                                 // 「측정 안 함」 — 칩을 누른 것과 같다(숫자는 비우고 이름표만)
+      if (!SKIPPABLE[k]) return;
+      if (isSet(r[k])) skipPrev['m|' + r.log_date + '|' + k] = r[k];
+      setField(r, k, null); setMeasSkip(r, k, true);
+    } else if (o.type === 'num') {
+      var nv = (k === 'fasting_glucose') ? Math.round(o.v) : Math.round(o.v * 10) / 10;
+      setNumber(r, k, nv);                        // 숫자를 넣는 기존 길: 「측정 안 함」 풀림 · 오늘 처음이면 혈당 방식 기본값 저장
+      if (k === 'fasting_glucose' && o.glu && GLUCOSE_SRC_ON && GLU_SRC[o.glu]) { setSrc(r, o.glu); rememberSrc(o.glu); srcNote = { d: r.log_date, s: o.glu, until: 0 }; }
+    } else if (o.type === 'sleep') {
+      setField(r, 'sleep_hours', o.v);
+    } else if (o.type === 'bool') {
+      setField(r, k, o.v === true);
+    } else if (o.type === 'meal') {
+      var cur = r[k], nw;
+      if (o.none) nw = voiceNone(k);
+      else {
+        var tk = (o.tokens || []).slice();
+        if (o.mode === 'append' && isSet(cur) && !voiceIsNone(k, cur)) {          // 덧붙이기: 이미 적힌 낱말 뒤에 새 낱말만
+          var ct = mealTokens(cur);
+          tk.forEach(function (x) { if (ct.indexOf(x) < 0) ct.push(x); });
+          tk = ct;
+        }
+        nw = tk.join(', ') || null;
+        (o.learn || []).forEach(function (x) { foodBump('meal', x); learned.push(x); });      // 새 음식은 저장하면 칩으로 배운다(손으로 적을 때와 같음)
+      }
+      setField(r, k, nw);
+    }
+  }
+  // ops = [{date, k, type, v | skip | none/tokens/mode/learn, glu}] → {n, saved: Promise('ok'|'pending'|'nopass'), left(), undo()}
+  function voiceApply(ops) {
+    var by = {}, order = [], before = rec ? recordedCount() : -1, jobs = [], learned = [];
+    ops.forEach(function (o) { if (!by[o.date]) { by[o.date] = []; order.push(o.date); } by[o.date].push(o); });
+    order.forEach(function (ds) {
+      var r = voiceTarget(ds), prev = {};
+      FIELDS.forEach(function (k) { prev[k] = r[k]; });
+      by[ds].forEach(function (o) { voiceOne(r, o, learned); });
+      var chg = [], after = {};
+      FIELDS.forEach(function (k) { after[k] = r[k]; if (!eq(prev[k], r[k])) chg.push(k); });
+      jobs.push({ ds: ds, r: r, prev: prev, after: after, chg: chg });
+    });
+    var onScreen = jobs.some(function (j) { return j.r === rec; });
+    jobs.forEach(function (j) { persist(j.r); });
+    if (onScreen) { openMeals = {}; renderToday(); lastCount = before; paintSay(true); }      // 9칸이 이 저장으로 막 찼으면 평소처럼 케이가 한마디(기존 반응 그대로)
+    function worst(sts) { return sts.indexOf('nopass') >= 0 ? 'nopass' : sts.indexOf('pending') >= 0 ? 'pending' : 'ok'; }
+    var saved = Promise.all(jobs.map(function (j) { return syncDate(j.ds); })).then(function (sts) {
+      var w = worst(sts); if (w === 'pending') flush(); return w;
+    });
+    var undone = false;
+    return {
+      n: ops.length,
+      saved: saved,
+      left: function () { return (rec && jobs.some(function (j) { return j.ds === rec.log_date; })) ? REQUIRED.length - recordedCount() : -1; },      // 화면에 떠 있는 날짜에 적었을 때만(그 날의 남은 9칸 수) · 아니면 -1
+      undo: function () {
+        if (undone) return Promise.resolve('ok');
+        undone = true;
+        var ps = [];
+        jobs.forEach(function (j) {
+          var r = (rec && rec.log_date === j.ds) ? rec : (loadLocal(j.ds, j.ds === todayStr()) || j.r);
+          j.chg.forEach(function (k) { if (eq(r[k], j.after[k])) setField(r, k, j.prev[k]); });      // 그 사이 또 고친 칸은 건드리지 않는다
+          persist(r);
+          ps.push(syncDate(j.ds));
+        });
+        learned.forEach(function (x) { var m = foodsGet('meal'); if (m[x] > 1) m[x]--; else delete m[x]; foodsPut('meal', m); });
+        if (rec && jobs.some(function (j) { return j.ds === rec.log_date; })) renderToday();
+        return Promise.all(ps).then(function (sts) { var w = worst(sts); if (w === 'pending') flush(); return w; });
+      }
+    };
+  }
+
+  global.HealthTab = { init: init, open: open, openDate: openDate, flush: wake, resume: resume, back: back,
+                       voice: { ctx: voiceCtx, peek: voicePeek, apply: voiceApply, say: voiceSay, unsay: voiceUnsay, lastWeight: voiceLastWeight } };
 })(window);

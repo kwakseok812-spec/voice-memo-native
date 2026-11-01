@@ -5414,7 +5414,7 @@
   var ks = { checked: false, ok: false, onDevice: false, fails: 0, off: false, p: null };
   // O-0189: stt.s = 말 끝 판정 상태(vad.js KVad.stt*) — 이어 붙인 글(acc)·지금 토막(cur)·마지막으로 말한 때·큰 소리 난 때
   var stt = { on: false, s: null, timer: null, finishing: false, finWait: null, why: '' };
-  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off && window.KVad && KVad.sttNew) && !(window.SmartMarkup && SmartMarkup.micOn && SmartMarkup.micOn()); }   // O-0544: 수정 요청 메모 받아쓰기 중이면 채팅 받아쓰기를 켜지 않는다(녹음 경로로)
+  function sttUsable() { return !!(VC.DEVICE_STT && KS && ks.ok && !ks.off && window.KVad && KVad.sttNew) && !(window.SmartMarkup && SmartMarkup.micOn && SmartMarkup.micOn()) && !(window.HealthVoice && HealthVoice.micOn && HealthVoice.micOn()); }   // O-0544: 수정 요청 메모 받아쓰기 중이면 채팅 받아쓰기를 켜지 않는다(녹음 경로로)
   function ksInit() {
     if (!VC.DEVICE_STT || !KS) return Promise.resolve(false);
     if (ks.p) return ks.p;
@@ -9852,6 +9852,8 @@
     if (window.HealthTab && HealthTab.open) { try { HealthTab.open(); } catch (e) {} }
   }
   if (window.HealthTab && HealthTab.init) { try { HealthTab.init({ toast: toast }); } catch (e) {} }
+  // O-0693 건강 탭 「말로 기록」 — 음성 대화·채팅 받아쓰기 중이면 켜지 않고, 효과음 설정은 채팅과 같은 값
+  if (window.HealthVoice && HealthVoice.setHost) { try { HealthVoice.setHost({ toast: toast, sttBusy: function () { return !!(convoOn || (stt && stt.on)); }, sfx: function () { return sfxMode; } }); } catch (e) {} }
   if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
 
   /* ---- 실적 탭(O-0684 v9.59): 화면 열기/연결(로직은 achievements.js) ----
