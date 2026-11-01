@@ -3702,6 +3702,7 @@
   // (직전) v9.60(O-0684): 실적 탭에 특허·저서·연구과제·수상·학회활동 탭 — 자료 없이도 바로 쓰는 빈 탭 · 서버에 종류 시드(ach_seed_kinds_v960.sql) · versionCode 104
   // (직전) v9.61(O-0684): 실적 탭 — 저자는 순서대로+「총 N명」만 · 논문 PDF 열기/내려받기+첫 페이지 그림(스위치 ACH_SIMPLE_AUTHORS·ACH_FILES) · versionCode 105
   APP_VERSION = 'v9.66';        // v9.66(O-0693): 건강 탭 「🎤 말로 기록」 — 오른쪽 아래 알약을 누르고 "공복혈당 98, 체중 71.2, 아침은 계란"처럼 말하면 확인 카드로 정리해 [저장] 한 번으로 적음(이미 적힌 칸은 덮어쓰지 않고 식단은 덧붙임 · 읽지 못한 말은 숨기지 않고 보여 줌 · 8초 되돌리기) · 폰 안 규칙 해석(서버·PC 변경 없음 · 말 원문 저장 안 함) · 스위치 health-voice.js VOICE_ENTRY_ON(끄면 이전 판과 같음) · versionCode 110
+  APP_VERSION = 'v9.67';        // v9.67(O-0696): 「승진」 백업 내려받기가 폰에서 실제 파일로 저장되게 — 폰(웹뷰)에는 공유 창 · blob 다운로드가 없어 늘 복사 상자로 떨어지던 것을, 문서 사본 저장과 같은 폰 저장 길(공유함 → 다운로드 폴더)로 · 저장 중/성공/실패(이유)를 창에 표시 · 서버·SQL 변경 없음 · versionCode 111
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -7172,7 +7173,7 @@
    *   반환: Promise(공개 주소가 채워진 파일 정보 배열). 실패하면 reject(안내 토스트는 이 함수가 띄움). */
   var docScanUrls = {};            // matKey(file) → 공유함 공개 주소(폰 저장에 쓴다)
   var docScanUp = {};              // 같은 파일을 두 번 올리지 않게 진행 중 Promise
-  function docScanShare(file) {
+  function docScanShare(file, quiet) {      // v9.66: quiet=true 면 실패 안내 토스트를 띄우지 않고 실패한 줄을 공유함 화면에서 빼며 보낼 칸에도 되돌려 넣지 않는다(승진 백업 — 실패는 호출한 창이 직접 보여 준다)
     var k = matKey(file);
     if (docScanUp[k]) return docScanUp[k];
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
@@ -7193,6 +7194,7 @@
       delete docScanUp[k];
       var why = (e && (e.friendly || e.message)) || String(e || '알 수 없는 오류'), restored = false;
       item.uploading = false; item.error = true; item.errorMsg = why; delete item.progress; delete item._lastRender;
+      if (quiet) { lockerMsgs = lockerMsgs.filter(function (m) { return m !== item; }); saveLockerMsgs(); if (isOpen(lockerView)) renderLocker(); throw e; }
       if (e && e.reason !== 'too_big' && e.reason !== 'unreadable') {
         lockerPendingFiles = [file].concat(lockerPendingFiles); lockerRestored[item.uid] = true; restored = true; renderLockerPending();
       }
@@ -9902,7 +9904,7 @@
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
-      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off' });
+      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
       $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);
@@ -9920,6 +9922,39 @@
     ask: askKFromDoc,
     edit: { download: downloadAttachment },                      // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
     chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0548 뷰어 [💬] → 채팅(뒤로 가면 보던 문서로)
+  /* v9.66(O-0696): 폰(네이티브)에 파일 한 개를 저장하는 공용 길 — S-Office 「사본 저장」이 쓰던 것을 이름 붙여 꺼냈다(동작 그대로).
+   *   폰은 blob 다운로드가 파일을 못 만든다(v6.7) → 공유함에 올린 공개 주소를 네이티브 FileDownload 로 받는다. PC판은 blob + <a download>.
+   *   승진 「백업 내려받기」도 이 함수를 쓴다(PromoTab.init 의 saveFile). */
+  // 사본 저장 → Promise({ok, name, open?, quiet?}) — 저장 직후 안내 시트는 틀(so-core.js)이 띄운다. 실패하면 reject(틀이 앱 안 보관·다시 시도를 안내)
+  function savePhoneFile(file, opt) {        // opt.quiet = 올리기 실패 안내를 이 함수가 띄우지 않음(호출한 쪽이 보여 준다 — 승진 백업)
+    var fname = safeDownloadName(file.name || '문서');
+    if (!isNativeApp()) {
+      var bu = URL.createObjectURL(file), a = document.createElement('a');
+      a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+      setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
+      toast('다운로드 폴더에 저장했습니다.'); return Promise.resolve({ ok: true, quiet: true, name: fname });
+    }
+    var FD = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
+    function dl(url) {
+      if (!FD || !FD.download) { nativeDownload(url, fname); return Promise.resolve({ ok: true, quiet: true, name: fname }); }   // 옛 빌드: 예전 길(웹페이지로 받기)
+      return FD.download({ url: url, name: fname, open: false }).then(function (r) {
+        var saved = (r && r.name) || fname, id = r && r.id;
+        return { ok: true, name: saved, open: (id != null && FD.open) ? function () { return FD.open({ id: String(id), mime: (r && r.mime) || file.type || '', askPermission: true }); } : null };
+      }, function (e) {
+        if (e && e.code === 'CANCELLED') { var ce = new Error('다운로드를 취소했어요'); ce.friendly = '다운로드를 취소했어요'; throw ce; }   // 취소는 저장 성공이 아니다: 틀이 실패 흐름(앱 안 보관·다시 시도)으로 처리
+        nativeDownload(url, fname); return { ok: true, quiet: true, name: fname };   // 앱 저장이 안 되면 웹페이지로 받기로 넘어간다(예전과 같음)
+      });
+    }
+    var url = docScanUrls[matKey(file)];
+    if (url) return dl(url);
+    if (!(opt && opt.quiet)) toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
+    return docScanShare(file, !!(opt && opt.quiet)).then(function (saved) {
+      var u = saved && saved[0] && saved[0].url;
+      if (!u) throw new Error('저장 주소를 받지 못했어요');
+      return dl(u);
+    });
+  }
+
   /* S-Office(js/smartoffice/so-core.js) 연결: 토스트·확인 시트·「사본 저장」(폰은 공유함 공개 주소로 받는다 — 문서 스캔 [폰에 저장]과 같은 길) */
   if (window.SOffice && SOffice.configure) {
     try {
@@ -9932,35 +9967,7 @@
           var danger = !!o.danger || /그래도|삭제|지우/.test(label || '');
           openSheet(t, m, label, fn, null, o.extra || null, { positive: !danger, cancelLabel: o.cancelLabel });
         },
-        // 사본 저장 → Promise({ok, name, open?, quiet?}) — 저장 직후 안내 시트는 틀(so-core.js)이 띄운다. 실패하면 reject(틀이 앱 안 보관·다시 시도를 안내)
-        save: function (file) {
-          var fname = safeDownloadName(file.name || '문서');
-          if (!isNativeApp()) {
-            var bu = URL.createObjectURL(file), a = document.createElement('a');
-            a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
-            setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
-            toast('다운로드 폴더에 저장했습니다.'); return Promise.resolve({ ok: true, quiet: true, name: fname });
-          }
-          var FD = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
-          function dl(url) {
-            if (!FD || !FD.download) { nativeDownload(url, fname); return Promise.resolve({ ok: true, quiet: true, name: fname }); }   // 옛 빌드: 예전 길(웹페이지로 받기)
-            return FD.download({ url: url, name: fname, open: false }).then(function (r) {
-              var saved = (r && r.name) || fname, id = r && r.id;
-              return { ok: true, name: saved, open: (id != null && FD.open) ? function () { return FD.open({ id: String(id), mime: (r && r.mime) || file.type || '', askPermission: true }); } : null };
-            }, function (e) {
-              if (e && e.code === 'CANCELLED') { var ce = new Error('다운로드를 취소했어요'); ce.friendly = '다운로드를 취소했어요'; throw ce; }   // 취소는 저장 성공이 아니다: 틀이 실패 흐름(앱 안 보관·다시 시도)으로 처리
-              nativeDownload(url, fname); return { ok: true, quiet: true, name: fname };   // 앱 저장이 안 되면 웹페이지로 받기로 넘어간다(예전과 같음)
-            });
-          }
-          var url = docScanUrls[matKey(file)];
-          if (url) return dl(url);
-          toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
-          return docScanShare(file).then(function (saved) {
-            var u = saved && saved[0] && saved[0].url;
-            if (!u) throw new Error('저장 주소를 받지 못했어요');
-            return dl(u);
-          });
-        }
+        save: savePhoneFile
       });
     } catch (e) {}
   }

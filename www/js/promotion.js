@@ -55,7 +55,7 @@
 
   /* ---------- 상태 ---------- */
   var S = { edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
-  var _toast = function () {}, built = false, animTimer = null;
+  var _toast = function () {}, _saveFile = null, built = false, animTimer = null;
   function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ at: Date.now(), profile: S.profile, items: S.items, rules: S.rules, rulesVer: S.rulesVer })); } catch (e) {} }
   function readCache() { try { var c = JSON.parse(localStorage.getItem(CKEY) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) {} return null; }
   function view() { return $('promoBody'); }
@@ -388,11 +388,13 @@
   }
   function makeCtx() {
     return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+      saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없어요')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
   }
   function init(o) {
     if (o && o.toast) _toast = o.toast;
+    if (o && typeof o.saveFile === 'function') _saveFile = o.saveFile;         // v9.66: 폰 저장 길(app.js savePhoneFile) — 백업 내려받기가 쓴다
     S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link);
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();

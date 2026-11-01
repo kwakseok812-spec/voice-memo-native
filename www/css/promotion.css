@@ -205,6 +205,10 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoLayer .pwarn2 { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--warn); }
 #promoLayer .pwarn2:empty { display: none; }
 #promoLayer .psmsg.ok { color: var(--p-ok); }
+#promoLayer .psmsg.neutral { color: var(--text); }
+#promoLayer .pbtns.pbk { flex-wrap: wrap; }
+#promoLayer .pbtns.pbk .pbtn { flex: 1 1 auto; padding: 0 14px; }
+#promoLayer .pbtns.pbk .pbtn.first { order: -1; flex: 1 1 100%; }
 #promoLayer .pbtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); }
 #promoLayer .pbtn.warn { background: var(--p-bad); }
 #promoLayer .pbtn.danger { color: var(--p-bad); }
