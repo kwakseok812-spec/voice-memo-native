@@ -123,17 +123,6 @@
     return out.join(', ');
   }
 
-  /* ---------- 그림: 케이는 상태에 맞는 표정으로, 그 화면의 일을 하는 모습으로 크게 ---------- */
-  function kPhoto(A) {
-    var ex = 'smile', c = A.checks;
-    if (c.total.s === 'fail' || c.sec3.s === 'fail' || c.lead.s === 'fail' || c.eval.s === 'fail') ex = 'concern';
-    else if (c.eval.s === 'unknown' || c.tenure.s === 'unknown') ex = 'thinking';
-    else if (c.tenure.s === 'wait') ex = 'smile';
-    var u = '';
-    try { var K = global.KChar; if (K) u = (K.poseUrl && K.poseUrl('note')) || (K.exprUrl && K.exprUrl(ex)) || ''; } catch (e) {}
-    return u;
-  }
-
   /* ---------- 화면 ---------- */
   function detailHtml(k, A) {
     var T = A.T, c = A.checks, h = '', ten = A.tenure;
@@ -195,10 +184,9 @@
     var A = compute();
     if (A.error) { v.innerHTML = banner() + emptyHtml('rules'); wireRetry(); return; }
     var T = A.T, ten = A.tenure, c = A.checks, ph = '', i, k;
-    var photo = kPhoto(A);
     /* hero */
     ph += banner();
-    ph += '<section class="pcard phero" aria-label="승진 점수 요약"><div class="pkimg">' + (photo ? '<img alt="" src="' + esc(photo) + '">' : '<span class="pkfb">K</span>') + '</div>';
+    ph += '<section class="pcard phero" aria-label="승진 점수 요약">';
     ph += '<p class="psay" id="promoSay">' + esc(A.say) + '</p>';
     ph += '<div class="ppair"><div><div class="plab">오늘 기준 <span class="pfloor">바닥값</span></div><div class="pbig"><span id="pTotal">0</span><small>/ ' + T.total + '</small></div></div>';
     ph += '<div><div class="plab">' + (A.expCut ? '신청 마감(' + ymText(A.expCut) + ')까지 예상' : '임기 끝까지 예상') + '</div><div class="pmid" id="pExp">0</div></div></div>';
