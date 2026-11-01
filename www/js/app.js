@@ -9888,6 +9888,8 @@
   /* ---- 승진 점수판(O-0684 v9.62): 화면 열기/연결(로직은 promotion.js · 계산은 promotion-calc.js) ----
    *   스위치 PROMO_TAB: 'on' = 홈 도구 끝 칸(실적 다음)에 「승진」 · 'off' = 칸이 보이지 않아 v9.61 과 같다(서버·SQL 무관). 입구는 이 칸 하나뿐(실적 탭 안에 두 번째 입구 없음). */
   var PROMO_TAB = 'on';
+  /* v9.63: 입력·수정(PROMO_EDIT)과 실적 탭 연결(PROMO_LINK). 'off' 면 각각 꺼져 v9.62 와 같다(서버·SQL 무관). 둘 다 PROMO_TAB 이 켜져 있을 때만 뜻이 있다. */
+  var PROMO_EDIT = 'on', PROMO_LINK = 'on';
   var promoView = $('promoView');
   function openPromo() {
     openScreen(promoView);
@@ -9895,7 +9897,7 @@
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
-      PromoTab.init({ toast: toast });
+      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off' });
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
       $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);

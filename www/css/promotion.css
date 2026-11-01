@@ -1,5 +1,5 @@
 /* ============================================================================
- * promotion.css — 「승진」 점수판 (v9.62, O-0684 후속)
+ * promotion.css — 「승진」 점수판 (v9.62 + v9.63 입력 창)
  * 모든 규칙은 #promoView(화면) · #promoLayer(날짜 창) 안에서만 먹는다 — 다른 화면에 영향 없음.
  * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 --in-bg --ok --warn --rec ...)를 그대로 쓴다(밝은·어두운 화면 자동).
  * ==========================================================================*/
@@ -90,6 +90,8 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoView .prow { width: 100%; display: grid; grid-template-columns: 96px 1fr 58px; gap: 8px; align-items: center; margin: 10px 0; padding: 0; border: 0; background: none; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; transition: transform .12s; }
 #promoView .prow b { text-align: right; font-variant-numeric: tabular-nums; }
 #promoView .prow.na { cursor: default; grid-template-columns: 96px 1fr; }
+#promoView button.prow.na { cursor: pointer; }
+#promoView .pnaAdd { text-decoration: none; color: var(--p1); font-weight: 800; margin-left: 6px; }
 #promoView .pnaTxt { font-size: 12.5px; color: var(--pd); }
 #promoView .ptrack { position: relative; height: 14px; border-radius: 7px; background: var(--in-bg); overflow: hidden; }
 #promoView .pfill, #promoView .pghost { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width .35s ease-out; }
@@ -132,3 +134,138 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 
 /* ----- 움직임 줄이기 ----- */
 @media (prefers-reduced-motion: reduce) { #promoView *, #promoLayer * { animation: none !important; transition: none !important; } }
+
+/* ============ v9.63 — 입력·수정 창, 관리 카드, 폴드(750px) 배치 ============ */
+#promoView .pcard h3 > span:first-child { min-width: 0; }
+#promoView .pref .prefbtn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); font-size: 15px; font-weight: 800; text-align: left; cursor: pointer; }
+#promoView .pref .prefbtn small { font-weight: 500; color: var(--pd); }
+#promoView .pref .prefbtn i { font-style: normal; }
+#promoView .pref h3 { display: block; margin: 0 0 4px; }
+#promoView .pref .psb { margin: 0 0 4px; font-size: 12px; color: var(--pd); }
+#promoView .pwarn li.ref { opacity: .95; }
+#promoView .pwarn li .pbtn { margin-top: 8px; }
+#promoView .plrow { display: block; width: 100%; padding: 0; margin: 0; border: 0; background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; border-radius: 10px; transition: transform .12s, background .12s; }
+#promoView .plrow:active { transform: scale(.985); background: var(--in-bg); }
+#promoView .plrow:focus-visible, #promoView .pmbtn:focus-visible, #promoView .ptile:focus-visible, #promoView .prow:focus-visible, #promoView .pbtn:focus-visible, #promoView .prefbtn:focus-visible { outline: 2px solid var(--p1); outline-offset: 2px; }
+#promoView .plist li.flash { animation: promoFlash 1.6s ease-out; border-radius: 10px; }
+#promoView .plist .pnone { padding: 6px 0 2px; }
+#promoView .ptag.t-link { color: var(--p1); border-color: var(--p1); }
+@keyframes promoFlash { 0% { background: var(--in-bg); box-shadow: 0 0 0 3px var(--p1); } 100% { background: transparent; box-shadow: 0 0 0 0 transparent; } }
+#promoView .pmgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#promoView .pmbtn { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 11px 12px; min-height: 62px; border-radius: 14px; border: 1px solid var(--glass-b); background: var(--in-bg); color: var(--text); cursor: pointer; transition: transform .12s; }
+#promoView .pmbtn:active:not(:disabled) { transform: scale(.97); }
+#promoView .pmbtn:disabled { opacity: .5; cursor: default; }
+#promoView .pmbtn b { font-size: 13.5px; line-height: 1.3; }
+#promoView .pmbtn small { font-size: 11.5px; color: var(--pd); line-height: 1.35; }
+#promoView .psnack { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: 520px; margin: 0 auto; display: none; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--p-sheet); color: var(--text); border: 1px solid var(--glass-b); box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 61; font-size: 14px; }
+#promoView .psnack.show { display: flex; animation: promoUp .18s ease-out; }
+#promoView .psnack button { height: 36px; padding: 0 14px; border-radius: 11px; border: 0; background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; }
+
+#promoLayer .psheet { max-width: 600px; margin: 0 auto; }
+#promoLayer .psh-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+#promoLayer .psh-hd h4 { margin: 0; font-size: 17px; line-height: 1.35; outline: none; }
+#promoLayer .psh-x { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--muted); font-size: 16px; cursor: pointer; }
+#promoLayer .psnote { font-size: 12.5px; color: var(--pd); line-height: 1.55; margin: 0 0 6px; }
+#promoLayer .pfld { display: block; margin: 12px 0; font-size: 13.5px; }
+#promoLayer .plab2 { display: block; font-weight: 700; margin-bottom: 5px; font-size: 13.5px; }
+#promoLayer .plab2 small, #promoLayer .pfld small { color: var(--pd); font-weight: 500; font-size: 11.5px; }
+#promoLayer .preq { color: var(--warn); }
+#promoLayer .pfld input[type=text], #promoLayer .pfld input[type=search], #promoLayer .pfld input[type=date], #promoLayer .pfld select, #promoLayer .pfld textarea { display: block; width: 100%; box-sizing: border-box; min-height: 46px; border-radius: 13px; border: 1.5px solid var(--glass-b); background: var(--in-bg); color: var(--text); font-size: 16px; padding: 0 12px; font-family: inherit; }
+#promoLayer .pfld textarea { padding: 10px 12px; min-height: 64px; resize: vertical; line-height: 1.45; }
+#promoLayer .pfld input:focus, #promoLayer .pfld select:focus, #promoLayer .pfld textarea:focus { outline: 2px solid var(--p1); outline-offset: 1px; border-color: transparent; }
+#promoLayer [aria-invalid=true] { border-color: var(--p-bad) !important; }
+#promoLayer .perr { font-size: 12.5px; color: var(--p-bad); margin-top: 4px; line-height: 1.4; }
+#promoLayer .perr:empty { display: none; }
+#promoLayer .pdate { display: flex; gap: 8px; }
+#promoLayer .pdc { display: flex; align-items: center; gap: 4px; flex: 1; margin: 0; }
+#promoLayer .pdc:first-child { flex: 1.5; }
+#promoLayer .pdc input { width: 100%; text-align: center; padding: 0 4px !important; }
+#promoLayer .pdc i { font-style: normal; font-size: 12px; color: var(--pd); }
+#promoLayer .pseg { display: flex; gap: 6px; }
+#promoLayer .pseg button { flex: 1; min-height: 46px; border-radius: 13px; border: 1.5px solid var(--glass-b); background: var(--in-bg); color: var(--text); font-size: 14.5px; font-weight: 700; cursor: pointer; font-family: inherit; transition: transform .12s; }
+#promoLayer .pseg button:active { transform: scale(.97); }
+#promoLayer .pseg button.on { border-color: var(--p1); background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; }
+#promoLayer .pchk { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 13px; background: var(--in-bg); border: 1px solid var(--glass-b); }
+#promoLayer .pchk input { flex: none; width: 22px; height: 22px; margin-top: 1px; }
+#promoLayer .pchk small { display: block; color: var(--pd); font-size: 11.5px; }
+#promoLayer .plinkbox { border-radius: 14px; padding: 11px 12px; margin: 8px 0 4px; background: var(--in-bg); border: 1px dashed var(--glass-b); font-size: 13.5px; }
+#promoLayer .plinkbox.on { border-style: solid; border-color: var(--p1); }
+#promoLayer .plinkbox .plt, #promoLayer .ppick .plt { display: block; font-weight: 700; line-height: 1.4; margin: 3px 0; }
+#promoLayer .psb { font-size: 12px; color: var(--pd); line-height: 1.5; margin: 2px 0 6px; }
+#promoLayer .psb.pfenote { margin: -2px 0 8px 4px; color: var(--warn); }
+#promoLayer .psprev { margin: 12px 0 4px; padding: 11px 13px; border-radius: 14px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 13px; line-height: 1.5; }
+#promoLayer .psprev:empty { display: none; }
+#promoLayer .psprev .pdl { font-size: 11.5px; color: var(--pd); }
+#promoLayer .psprev .pdn { font-size: 18px; font-variant-numeric: tabular-nums; }
+#promoLayer .psprev .pdn.up { color: var(--p-ok); }
+#promoLayer .psprev .pdn.down { color: var(--p-bad); }
+#promoLayer .pwarn2 { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--warn); }
+#promoLayer .pwarn2:empty { display: none; }
+#promoLayer .psmsg.ok { color: var(--p-ok); }
+#promoLayer .pbtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); }
+#promoLayer .pbtn.warn { background: var(--p-bad); }
+#promoLayer .pbtn.danger { color: var(--p-bad); }
+#promoLayer .pbtn.sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 11px; white-space: nowrap; }
+#promoLayer .pbtns { flex-wrap: wrap; }
+#promoLayer .pbtns #pDel { margin-right: auto; }
+#promoLayer .pconf { width: 100%; border-radius: 14px; padding: 12px; background: var(--in-bg); border: 1px solid var(--p-bad); }
+#promoLayer .pconf p { margin: 0 0 10px; font-size: 14px; font-weight: 700; line-height: 1.45; }
+#promoLayer .pconfl .pcmp { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 8px 0; }
+#promoLayer .pcmp > div { border-radius: 12px; padding: 9px 11px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 13px; line-height: 1.45; }
+#promoLayer .pcmp small { display: block; color: var(--pd); }
+#promoLayer .ptrash, #promoLayer .psug, #promoLayer .ppick { list-style: none; margin: 8px 0; padding: 0; }
+#promoLayer .ptrash li { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--glass-b); flex-wrap: wrap; }
+#promoLayer .ptrash li:first-child { border-top: 0; }
+#promoLayer .ptl { flex: 1; min-width: 150px; font-size: 13.5px; line-height: 1.4; }
+#promoLayer .ptl small { display: block; color: var(--pd); }
+#promoLayer .ptb { display: flex; gap: 6px; }
+#promoLayer .ppick li { border-top: 1px solid var(--glass-b); }
+#promoLayer .ppick li:first-child { border-top: 0; }
+#promoLayer .ppick button { display: block; width: 100%; text-align: left; padding: 11px 4px; min-height: 48px; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; border-radius: 10px; }
+#promoLayer .ppick button:active { background: var(--in-bg); }
+#promoLayer .ppick small { display: block; color: var(--pd); font-size: 12px; line-height: 1.4; }
+#promoLayer .warnt { color: var(--warn); }
+#promoLayer .psug li { padding: 10px 0; border-top: 1px solid var(--glass-b); font-size: 13px; line-height: 1.45; }
+#promoLayer .psug li:first-child { border-top: 0; }
+#promoLayer .psug .pchk { margin: 0 0 4px; }
+#promoLayer .psug small { display: block; color: var(--pd); font-size: 11.5px; }
+#promoLayer .psarrow { text-align: center; font-size: 11.5px; color: var(--pd); }
+#promoLayer .psa { padding: 6px 10px; border-radius: 10px; background: var(--in-bg); border: 1px solid var(--glass-b); }
+#promoLayer .psug li.done .psa { border-color: var(--p-ok); }
+#promoLayer .psres { font-size: 12.5px; color: var(--p-ok); margin-top: 4px; }
+#promoLayer .psres:empty { display: none; }
+#promoLayer .psimg .psgrp { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#promoLayer .psimg .psgrp b { width: 100%; font-size: 13px; color: var(--pd); }
+#promoLayer .pferow { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+#promoLayer .pferow label { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 12px; color: var(--pd); }
+#promoLayer .pferow input { width: 84px !important; text-align: center; padding: 0 6px !important; }
+#promoLayer .pferow i { font-style: normal; }
+#promoLayer .pfedel { width: 40px; height: 40px; border-radius: 11px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--muted); cursor: pointer; }
+#promoLayer .pbox { width: 100%; box-sizing: border-box; font-size: 12px; border-radius: 12px; border: 1px solid var(--glass-b); background: var(--in-bg); color: var(--text); padding: 10px; font-family: monospace; }
+#promoLayer button:focus-visible, #promoLayer .psheet h4:focus-visible { outline: 2px solid var(--p1); outline-offset: 2px; }
+
+/* ----- 접은 폰은 그대로, 펼친 화면(750px)에서는 가운데 정렬 + 넓은 배치 ----- */
+@media (max-width: 360px) { #promoView .pmgrid { grid-template-columns: 1fr; } #promoView .ptile .pt { font-size: 10.5px; } }
+@media (min-width: 700px) {
+  #promoView #promoBody { max-width: 700px; margin: 0 auto; }
+  #promoView .pkimg { height: 220px; }
+  #promoView .pbig > span { font-size: 44px; }
+  #promoView .pmid { font-size: 28px; }
+  #promoView .ptile { min-height: 92px; }
+  #promoView .ptile .pt { font-size: 12.5px; }
+  #promoView .ptile .ps { font-size: 13px; }
+  #promoView .prow { grid-template-columns: 180px 1fr 70px; font-size: 14px; }
+  #promoView .pcap, #promoView .pticks { margin-left: 188px; }
+  #promoView .pmgrid { grid-template-columns: repeat(3, 1fr); }
+  #promoLayer .psheet { left: 50%; right: auto; width: 600px; transform: translateX(-50%); }
+  #promoLayer .pconfl .pcmp { grid-template-columns: 1fr 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { #promoView .psnack.show, #promoView .plist li.flash { animation: none !important; } }
+
+/* 저장·닫기 단추는 창 아래에 붙여 두어, 긴 입력 창에서도 스크롤 없이 눌러지게 한다 */
+#promoLayer .psheet { padding-bottom: 0; }
+#promoLayer .psheet > .pbtns#promoActs { position: sticky; bottom: 0; margin: 12px -18px 0; padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--p-sheet); border-top: 1px solid var(--glass-b); z-index: 2; }
+#promoLayer .pdiffs { list-style: none; margin: 8px 0; padding: 0; }
+#promoLayer .pdiffs li { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 9px 11px; margin: 6px 0; border-radius: 12px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 13px; line-height: 1.45; }
+#promoLayer .pdiffs li b { font-size: 12px; color: var(--pd); }
+#promoLayer .pdiffs li span:last-child { font-weight: 800; }
