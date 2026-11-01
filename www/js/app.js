@@ -3702,7 +3702,8 @@
   // (직전) v9.60(O-0684): 실적 탭에 특허·저서·연구과제·수상·학회활동 탭 — 자료 없이도 바로 쓰는 빈 탭 · 서버에 종류 시드(ach_seed_kinds_v960.sql) · versionCode 104
   // (직전) v9.61(O-0684): 실적 탭 — 저자는 순서대로+「총 N명」만 · 논문 PDF 열기/내려받기+첫 페이지 그림(스위치 ACH_SIMPLE_AUTHORS·ACH_FILES) · versionCode 105
   APP_VERSION = 'v9.66';        // v9.66(O-0693): 건강 탭 「🎤 말로 기록」 — 오른쪽 아래 알약을 누르고 "공복혈당 98, 체중 71.2, 아침은 계란"처럼 말하면 확인 카드로 정리해 [저장] 한 번으로 적음(이미 적힌 칸은 덮어쓰지 않고 식단은 덧붙임 · 읽지 못한 말은 숨기지 않고 보여 줌 · 8초 되돌리기) · 폰 안 규칙 해석(서버·PC 변경 없음 · 말 원문 저장 안 함) · 스위치 health-voice.js VOICE_ENTRY_ON(끄면 이전 판과 같음) · versionCode 110
-  APP_VERSION = 'v9.67';        // v9.67(O-0696): 「승진」 백업 내려받기가 폰에서 실제 파일로 저장되게 — 폰(웹뷰)에는 공유 창 · blob 다운로드가 없어 늘 복사 상자로 떨어지던 것을, 문서 사본 저장과 같은 폰 저장 길(공유함 → 다운로드 폴더)로 · 저장 중/성공/실패(이유)를 창에 표시 · 서버·SQL 변경 없음 · versionCode 111
+  // (직전) v9.67(O-0696): 「승진」 백업 내려받기가 폰에서 실제 파일로 저장되게 — 폰(웹뷰)에는 공유 창 · blob 다운로드가 없어 늘 복사 상자로 떨어지던 것을, 문서 사본 저장과 같은 폰 저장 길(공유함 → 다운로드 폴더)로 · 저장 중/성공/실패(이유)를 창에 표시 · 서버·SQL 변경 없음 · versionCode 111
+  APP_VERSION = 'v9.68';        // v9.68(O-0696): 「승진」 백업 내려받기의 기본 결과물을 엑셀(.xlsx)로 — JSON 은 컴퓨터용이라 폰에서 열어도 읽을 수 없었다 · 첫 단추 「엑셀로 내려받기」(점수 요약·항목 목록·안내 세 시트, 앱에 든 SheetJS 만 사용) · 둘째 단추 「복원용 백업(JSON)」은 그대로 남김 · 창을 열자마자 저장하지 않고 단추로 고름 · 서버·SQL 변경 없음 · versionCode 112
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9896,7 +9897,8 @@
    *   스위치 PROMO_TAB: 'on' = 홈 도구 끝 칸(실적 다음)에 「승진」 · 'off' = 칸이 보이지 않아 v9.61 과 같다(서버·SQL 무관). 입구는 이 칸 하나뿐(실적 탭 안에 두 번째 입구 없음). */
   var PROMO_TAB = 'on';
   /* v9.63: 입력·수정(PROMO_EDIT)과 실적 탭 연결(PROMO_LINK). 'off' 면 각각 꺼져 v9.62 와 같다(서버·SQL 무관). 둘 다 PROMO_TAB 이 켜져 있을 때만 뜻이 있다. */
-  var PROMO_EDIT = 'on', PROMO_LINK = 'on';
+  /* v9.68: 백업 내려받기의 엑셀(PROMO_XLSX). 'off' 면 창을 열자마자 JSON 백업을 저장하던 v9.67 모양으로 돌아간다(서버·SQL 무관). */
+  var PROMO_EDIT = 'on', PROMO_LINK = 'on', PROMO_XLSX = 'on';
   var promoView = $('promoView');
   function openPromo() {
     openScreen(promoView);
@@ -9904,7 +9906,7 @@
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
-      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
+      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
       $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);

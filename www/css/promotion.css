@@ -209,6 +209,9 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoLayer .pbtns.pbk { flex-wrap: wrap; }
 #promoLayer .pbtns.pbk .pbtn { flex: 1 1 auto; padding: 0 14px; }
 #promoLayer .pbtns.pbk .pbtn.first { order: -1; flex: 1 1 100%; }
+#promoLayer .pbtns.pbk .pbkjson { flex: 1 1 100%; display: flex; flex-direction: column; gap: 5px; }   /* v9.68: 「복원용 백업(JSON)」 단추와 그 아래 안내 */
+#promoLayer .pbtns.pbk .pbkjson .pbtn { width: 100%; flex: none; }
+#promoLayer .pbknote { margin: 0; padding: 0 4px; font-size: 12px; line-height: 1.5; color: var(--pd); text-align: center; overflow-wrap: anywhere; }
 #promoLayer .pbtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); }
 #promoLayer .pbtn.warn { background: var(--p-bad); }
 #promoLayer .pbtn.danger { color: var(--p-bad); }

@@ -247,7 +247,7 @@
         + '<button type="button" class="pmbtn" data-go="profile"><b>승진 설정</b><small>날짜·가점·교수업적 순위</small></button>'
         + (S.link ? '<button type="button" class="pmbtn" data-go="suggest"' + (sugN ? '' : ' disabled') + '><b>실적 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '</b><small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '실적 탭 자료를 못 불러왔어요') + '</small></button>' : '')
         + '<button type="button" class="pmbtn" data-go="trash"><b>휴지통' + (trashN ? ' ' + trashN + '건' : '') + '</b><small>지운 항목 복원</small></button>'
-        + '<button type="button" class="pmbtn" data-go="backup"><b>백업 내려받기</b><small>파일로 저장·공유해요</small></button></div></section>';
+        + '<button type="button" class="pmbtn" data-go="backup"><b>백업 내려받기</b><small>' + (S.xlsx ? '엑셀 파일로 저장해요' : '파일로 저장·공유해요') + '</small></button></div></section>';
     }
     ph += '<p class="pfoot">참고 계산이며 공식 판정이 아닙니다 · 규정판 ' + esc(S.rulesVer || '') + ' · 규정 방식(반올림, 보직은 재임 개월 비율을 내림)</p>';
     v.innerHTML = ph;
@@ -387,7 +387,7 @@
     var rb = $('promoReload'); if (rb) rb.onclick = function () { S.err = null; load(false); };
   }
   function makeCtx() {
-    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, xlsx: S.xlsx, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없어요')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
@@ -395,7 +395,7 @@
   function init(o) {
     if (o && o.toast) _toast = o.toast;
     if (o && typeof o.saveFile === 'function') _saveFile = o.saveFile;         // v9.66: 폰 저장 길(app.js savePhoneFile) — 백업 내려받기가 쓴다
-    S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link);
+    S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx);      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();
   }

@@ -754,16 +754,20 @@
   }
 
   /* ---------- 백업 내려받기 ---------- */
-  /* v9.66(O-0696) 고침 — 왜 안 됐나: v9.63~65 는 `navigator.share({files})` 로 파일을 넘기고 안 되면 클립보드, 그것도 안 되면 「길게 눌러 복사」 상자였다.
+  /* v9.68(O-0696 후속) — 기본 결과물을 엑셀로: 대표님이 JSON 백업을 받아 보시고 「읽을 수도 없는 이상한 파일」이라고 하셨다. JSON 은 컴퓨터용 형식이라 폰에서 열어도 읽을 수 없다
+   *   (파일 이름 · 바이트는 서버 원본과 같다 — 진단은 보고서). 그래서 첫 단추는 「엑셀로 내려받기」(점수 요약 · 항목 목록 · 안내, js/promotion-xlsx.js), JSON 은 둘째 단추 「복원용 백업(JSON)」으로 남겼다.
+   *   창을 열자마자 저장하지 않는다 — 어느 파일을 받을지 단추로 고른다.
+   * v9.66 고침(그대로) — 왜 안 됐나: v9.63~65 는 `navigator.share({files})` 로 파일을 넘기고 안 되면 클립보드, 그것도 안 되면 「길게 눌러 복사」 상자였다.
    *   폰 앱(안드로이드 웹뷰)에서 blob 파일 만들기가 안 되는 것은 코드 주석이 근거다(FileDownloadPlugin.java 24행 · app.js v6.7). 공유 창(navigator.share)이 웹뷰에 없다는 것은 코드 근거가 없는 추정이며 실기기 확인 전이다.
-   *   시험은 브라우저에 공유 창을 가짜로 달아 놓고 통과했기 때문에 폰에서 어떻게 보였는지는 잡지 못했다. 대표님이 「다운받는 기능이 잘 안 된다」고 하신 것이 증상이다.
    *   고친 길: 앱 다른 곳(문서 사본 저장 · 스캔 [폰에 저장])이 쓰는 폰 저장 — 공유함에 올린 주소를 네이티브 FileDownload 로 받아 「다운로드」 폴더에 둔다(app.js savePhoneFile → X.saveFile).
-   *   저장 중/성공/실패를 창 안에 보여 주고(실패하면 이유), [다시 해 보기] · [복사해서 붙여 두기]를 남긴다. 개인정보 규칙은 그대로(저자 이름·연동 암호 없음). */
+   *   저장 중/성공/실패를 창 안에 보여 주고(실패하면 이유), [다시 해 보기] · [복사해서 붙여 두기]를 남긴다. 개인정보 규칙은 그대로(저자 이름 · 연동 암호 없음). */
+  function localDay() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function openBackup() {
     var p = S().profile, items = S().items, count = items.length;
     var payload = JSON.stringify({ meta: { kind: 'promo_backup', exported_at: nowIso(), rules_ver: S().rulesVer || null, items: items.length, trashed: items.filter(function (x) { return x.deleted_at; }).length }, profile: p, items: items }, null, 1);
-    var name = 'promo_backup_' + nowIso().slice(0, 10) + '.json';
-    var my = { view: 'backup', busy: false };
+    var jsonName = 'promo_backup_' + localDay() + '.json';
+    var XL_ON = !!X.xlsx;          // 스위치 PROMO_XLSX(app.js) — 꺼지면 v9.67 처럼 창을 열자마자 JSON 백업을 저장한다
+    var my = { view: 'backup', busy: false, kind: XL_ON ? 'xlsx' : 'json' };
     function live() { return I === my && layer() && layer().classList.contains('show'); }
     function why(e) {      // 이유는 쉬운 말만: (HTTP 500) · (FAILED_1006) 같은 기술 표기는 빼고, 「다시 보내 주세요」는 이 창에 맞게 「다시 해 보세요」로
       return String((e && (e.friendly || e.message)) || e || '알 수 없는 오류').replace(/\s+/g, ' ').replace(/\s*[(（][^)）]*(?:HTTP|FAILED|WAITING|[A-Z_]{5,})[^)）]*[)）]/g, '').replace(/다시 보내 주세요/g, '다시 해 보세요').replace(/\s+([.,])/g, '$1').slice(0, 160).replace(/[.。\s]+$/, '');
@@ -774,35 +778,66 @@
       $('promoCancel').onclick = hide; var t = $('pBackupBox'); if (t) { t.focus(); t.select(); }
     }
     function copyText() {
-      try { navigator.clipboard.writeText(payload).then(function () { if (live()) state('ok', '백업 내용을 복사했어요 (' + count + '건). 메모 앱 등에 붙여 두세요.', false); else X.toast('백업 내용을 복사했어요 (' + count + '건)'); }, showBox); } catch (e) { showBox(); }
+      try { navigator.clipboard.writeText(payload).then(function () { if (live()) state('ok', '백업 내용을 복사했어요 (' + count + '건). 메모 앱 등에 붙여 두세요.', { kind: 'json' }); else X.toast('백업 내용을 복사했어요 (' + count + '건)'); }, showBox); } catch (e) { showBox(); }
     }
-    function state(kind, text, again) {            // kind: busy | ok | fail
+    var JSON_NOTE = '컴퓨터용 파일이라 열어 봐도 읽을 수 없어요 — 나중에 복원할 때만 쓰는 파일이에요';
+    function jsonBlock() { return '<div class="pbkjson"><button type="button" class="pbtn ghost" id="pBkJson">복원용 백업(JSON)</button><p class="pbknote" id="pBkNote">' + JSON_NOTE + '</p></div>'; }
+    /* state: kind = idle(처음) | busy | ok | fail.  o.again = [다시 해 보기] 보임 · o.kind = 방금 다룬 파일 종류('xlsx' | 'json') — 엑셀 쪽 창은 JSON 단추를, JSON 쪽 창은 복사 단추를 곁에 둔다 */
+    function state(kind, text, o) {
+      o = o || {};
       var st = $('pBkSt'), ac = $('promoActs'); if (!st || !ac) return;
-      st.textContent = text; st.className = 'psmsg' + (kind === 'ok' ? ' ok' : (kind === 'busy' ? ' neutral' : '')); st.setAttribute('role', kind === 'fail' ? 'alert' : 'status');
-      ac.className = 'pbtns pbk'; ac.innerHTML = (again ? '<button type="button" class="pbtn first" id="pBkAgain">다시 해 보기</button>' : '') + '<button type="button" class="pbtn ghost" id="promoCancel">닫기</button>' + (kind !== 'busy' ? '<button type="button" class="pbtn ghost" id="pBkCopy">복사해서 붙여 두기</button>' : '');
-      $('promoCancel').onclick = hide; var c = $('pBkCopy'); if (c) c.onclick = copyText; var g = $('pBkAgain'); if (g) g.onclick = run;
+      st.textContent = text; st.className = 'psmsg' + (kind === 'ok' ? ' ok' : ((kind === 'busy' || kind === 'idle') ? ' neutral' : '')); st.setAttribute('role', kind === 'fail' ? 'alert' : 'status');
+      var h = '';
+      if (kind === 'idle') h = '<button type="button" class="pbtn first" id="pBkExcel">엑셀로 내려받기</button>' + jsonBlock() + '<button type="button" class="pbtn ghost" id="promoCancel">닫기</button>';
+      else if (kind === 'busy') h = '<button type="button" class="pbtn ghost" id="promoCancel">닫기</button>';
+      else h = (o.again ? '<button type="button" class="pbtn first" id="pBkAgain">다시 해 보기</button>' : '') + '<button type="button" class="pbtn ghost" id="promoCancel">닫기</button>' + (o.kind === 'json' ? '<button type="button" class="pbtn ghost" id="pBkCopy">복사해서 붙여 두기</button>' : jsonBlock());
+      ac.className = 'pbtns pbk'; ac.innerHTML = h;
+      $('promoCancel').onclick = hide;
+      var ex = $('pBkExcel'); if (ex) ex.onclick = function () { run('xlsx'); };
+      var jb = $('pBkJson'); if (jb) jb.onclick = function () { run('json'); };
+      var c = $('pBkCopy'); if (c) c.onclick = copyText;
+      var g = $('pBkAgain'); if (g) g.onclick = function () { run(my.kind); };
     }
-    function run() {
+    function buildExcel() {      // 눌렀을 때의 최신 점수로 만든다(창을 연 뒤 바뀔 수 있으므로 미리 만들어 두지 않는다)
+      var P = global.PromoXlsx, XL = global.XLSX;
+      if (!P || !XL || !XL.write) throw new Error('이 앱 버전에서는 엑셀 만들기를 쓸 수 없어요');
+      var A = X.compute();
+      if (!A || A.error) throw new Error('점수를 계산하지 못했어요(점수 규칙표를 받지 못했을 수 있어요)');
+      return P.toFile(XL, P.model({ A: A, items: S().items, rules: S().rules, rulesVer: S().rulesVer, now: new Date() }));
+    }
+    function run(kind) {
       if (my.busy) return;
-      var f = null; try { f = new File([payload], name, { type: 'application/json' }); } catch (e) { f = null; }
-      if (!f || typeof X.saveFile !== 'function') { state('fail', '파일로 저장하지 못했어요 — 이 기기에서는 파일 만들기를 쓸 수 없어요.', false); return; }
-      my.busy = true; state('busy', '폰에 저장하는 중이에요… 공유함에 한 부 올려 두고 거기서 받아요. 몇 초 걸려요.', false);
+      my.kind = kind;
+      var f = null, xl = kind !== 'json';
+      try { f = xl ? buildExcel() : new File([payload], jsonName, { type: 'application/json' }); }
+      catch (e) {
+        if (xl) { state('fail', '엑셀 파일을 만들지 못했어요 — ' + why(e) + '.', { kind: 'xlsx' }); return; }
+        f = null;
+      }
+      if (!f || typeof X.saveFile !== 'function') { state('fail', '파일로 저장하지 못했어요 — 이 기기에서는 파일 만들기를 쓸 수 없어요.', { kind: kind }); return; }
+      my.busy = true; state('busy', '폰에 저장하는 중이에요… 공유함에 한 부 올려 두고 거기서 받아요. 몇 초 걸려요.');
       var done;
       try { done = Promise.resolve(X.saveFile(f)); } catch (e) { done = Promise.reject(e); }
       done.then(function (res) {
         my.busy = false;
-        var nm = (res && res.name) || name;
-        var msgOk = res && res.quiet ? '저장을 요청했어요 — 다운로드 폴더(폰은 알림창)에서 「' + nm + '」이 보이는지 확인해 주세요. 안 보이면 「복사해서 붙여 두기」를 눌러 주세요.' : '저장했어요 — 「' + nm + '」 (' + count + '건). 폰의 「내 파일 › 다운로드」에 있어요.';
-        if (live()) state('ok', msgOk, false); else X.toast('백업을 저장했어요 — ' + nm);
+        var nm = (res && res.name) || f.name, msgOk, again = false;
+        if (xl) {
+          again = !!(res && res.quiet);
+          msgOk = again ? '저장을 요청했어요 — 다운로드 폴더(폰은 알림창)에서 「' + nm + '」이 보이는지 확인해 주세요. 안 보이면 「다시 해 보기」를 눌러 주세요.'
+            : '저장했어요 — 「' + nm + '」. 폰의 내 파일 › 다운로드에 있어요. 엑셀 앱으로 열 수 있어요. 열리지 않으면 PC로 옮겨 열거나 구글 시트로 열 수 있어요.';
+        } else {
+          msgOk = res && res.quiet ? '저장을 요청했어요 — 다운로드 폴더(폰은 알림창)에서 「' + nm + '」이 보이는지 확인해 주세요. 안 보이면 「복사해서 붙여 두기」를 눌러 주세요.' : '저장했어요 — 「' + nm + '」 (' + count + '건). 폰의 「내 파일 › 다운로드」에 있어요.' + (XL_ON ? ' ' + JSON_NOTE + '.' : '');
+        }
+        if (live()) state('ok', msgOk, { kind: kind, again: again }); else X.toast((xl ? '엑셀을 저장했어요 — ' : '백업을 저장했어요 — ') + nm);
       }, function (e) {
         my.busy = false;
-        var t = '파일로 저장하지 못했어요 — ' + why(e) + '. 아래 「다시 해 보기」를 누르거나, 「복사해서 붙여 두기」로 내용을 대신 보관할 수 있어요.';
-        if (live()) state('fail', t, true); else X.toast('백업 파일 저장에 실패했어요 — ' + why(e));
+        var t = '파일로 저장하지 못했어요 — ' + why(e) + (xl ? '. 아래 「다시 해 보기」를 눌러 주세요.' : '. 아래 「다시 해 보기」를 누르거나, 「복사해서 붙여 두기」로 내용을 대신 보관할 수 있어요.');
+        if (live()) state('fail', t, { kind: kind, again: true }); else X.toast((xl ? '엑셀 파일 저장에 실패했어요 — ' : '백업 파일 저장에 실패했어요 — ') + why(e));
       });
     }
     I = my;
-    sheet(head('백업 내려받기', '프로필과 승진 항목 ' + count + '건(휴지통 포함)을 파일 하나로 저장해요. 연동 암호는 들어가지 않아요. 같은 파일이 공유함에도 한 부 남아요. 공유함에서 지워도 파일 자체는 남아요(주소를 아는 사람만 열 수 있어요).') + '<div class="psmsg" id="pBkSt" role="status" aria-live="polite"></div>' + acts(''), '백업');
-    run();
+    sheet(head('백업 내려받기', (XL_ON ? '점수 요약과 승진 항목 ' + count + '건(휴지통 포함)을 엑셀 파일로 저장해요. 연동 암호와 저자 이름은 들어가지 않아요.' : '프로필과 승진 항목 ' + count + '건(휴지통 포함)을 파일 하나로 저장해요. 연동 암호는 들어가지 않아요.') + ' 같은 파일이 공유함에도 한 부 남아요. 공유함에서 지워도 파일 자체는 남아요(주소를 아는 사람만 열 수 있어요).') + '<div class="psmsg" id="pBkSt" role="status" aria-live="polite"></div>' + acts(''), '백업');
+    if (XL_ON) state('idle', ''); else run('json');
   }
 
   /* ---------- 바깥에서 부르는 곳 ---------- */
