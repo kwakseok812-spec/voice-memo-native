@@ -755,7 +755,7 @@
 
   /* ---------- 백업 내려받기 ---------- */
   /* v9.68(O-0696 후속) — 기본 결과물을 엑셀로: 대표님이 JSON 백업을 받아 보시고 「읽을 수도 없는 이상한 파일」이라고 하셨다. JSON 은 컴퓨터용 형식이라 폰에서 열어도 읽을 수 없다
-   *   (파일 이름 · 바이트는 서버 원본과 같다 — 진단은 보고서). 그래서 첫 단추는 「엑셀로 내려받기」(점수 요약 · 항목 목록 · 안내, js/promotion-xlsx.js), JSON 은 둘째 단추 「복원용 백업(JSON)」으로 남겼다.
+   *   (파일 이름 · 바이트는 서버 원본과 같다 — 진단은 보고서). 그래서 첫 단추는 「엑셀로 내려받기」(점수 요약 · 항목 목록 · 안내, js/promotion-xlsx.js), JSON 은 둘째 단추 「컴퓨터용 백업(JSON)」으로 남겼다(앱에는 JSON 으로 되돌리는 기능이 없으므로 「복원용」이라고 쓰지 않는다).
    *   창을 열자마자 저장하지 않는다 — 어느 파일을 받을지 단추로 고른다.
    * v9.66 고침(그대로) — 왜 안 됐나: v9.63~65 는 `navigator.share({files})` 로 파일을 넘기고 안 되면 클립보드, 그것도 안 되면 「길게 눌러 복사」 상자였다.
    *   폰 앱(안드로이드 웹뷰)에서 blob 파일 만들기가 안 되는 것은 코드 주석이 근거다(FileDownloadPlugin.java 24행 · app.js v6.7). 공유 창(navigator.share)이 웹뷰에 없다는 것은 코드 근거가 없는 추정이며 실기기 확인 전이다.
@@ -770,7 +770,7 @@
     var my = { view: 'backup', busy: false, kind: XL_ON ? 'xlsx' : 'json' };
     function live() { return I === my && layer() && layer().classList.contains('show'); }
     function why(e) {      // 이유는 쉬운 말만: (HTTP 500) · (FAILED_1006) 같은 기술 표기는 빼고, 「다시 보내 주세요」는 이 창에 맞게 「다시 해 보세요」로
-      return String((e && (e.friendly || e.message)) || e || '알 수 없는 오류').replace(/\s+/g, ' ').replace(/\s*[(（][^)）]*(?:HTTP|FAILED|WAITING|[A-Z_]{5,})[^)）]*[)）]/g, '').replace(/다시 보내 주세요/g, '다시 해 보세요').replace(/\s+([.,])/g, '$1').slice(0, 160).replace(/[.。\s]+$/, '');
+      return String((e && (e.friendly || e.message)) || e || '알 수 없는 오류').replace(/\s+/g, ' ').replace(/\s*[(（][^)）]*(?:HTTP|FAILED|WAITING|[A-Z_]{5,})[^)）]*[)）]/g, '').replace(/다시 보내 주세요/g, '다시 해 보세요').replace(/않습니다/g, '않아요').replace(/못했습니다/g, '못했어요').replace(/했습니다/g, '했어요').replace(/있습니다/g, '있어요').replace(/없습니다/g, '없어요').replace(/넘었습니다/g, '넘었어요').replace(/입니다/g, '이에요').replace(/\s+([.,])/g, '$1').slice(0, 160).replace(/[.。\s]+$/, '');
     }
     function showBox() {
       I = my;
@@ -780,8 +780,8 @@
     function copyText() {
       try { navigator.clipboard.writeText(payload).then(function () { if (live()) state('ok', '백업 내용을 복사했어요 (' + count + '건). 메모 앱 등에 붙여 두세요.', { kind: 'json' }); else X.toast('백업 내용을 복사했어요 (' + count + '건)'); }, showBox); } catch (e) { showBox(); }
     }
-    var JSON_NOTE = '컴퓨터용 파일이라 열어 봐도 읽을 수 없어요 — 나중에 복원할 때만 쓰는 파일이에요';
-    function jsonBlock() { return '<div class="pbkjson"><button type="button" class="pbtn ghost" id="pBkJson">복원용 백업(JSON)</button><p class="pbknote" id="pBkNote">' + JSON_NOTE + '</p></div>'; }
+    var JSON_NOTE = '컴퓨터용 파일이라 열어 봐도 읽을 수 없어요 — 사무소가 자료를 되살려야 할 때만 쓰는 보관용이에요';      // 앱 안에서 되돌리는 기능은 없다 — 「복원」이라고 쓰지 않는다
+    function jsonBlock() { return '<div class="pbkjson"><button type="button" class="pbtn ghost" id="pBkJson">컴퓨터용 백업(JSON)</button><p class="pbknote" id="pBkNote">' + JSON_NOTE + '</p></div>'; }
     /* state: kind = idle(처음) | busy | ok | fail.  o.again = [다시 해 보기] 보임 · o.kind = 방금 다룬 파일 종류('xlsx' | 'json') — 엑셀 쪽 창은 JSON 단추를, JSON 쪽 창은 복사 단추를 곁에 둔다 */
     function state(kind, text, o) {
       o = o || {};
