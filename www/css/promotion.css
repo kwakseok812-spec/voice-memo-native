@@ -1,0 +1,124 @@
+/* ============================================================================
+ * promotion.css — 「승진」 점수판 (v9.62, O-0684 후속)
+ * 모든 규칙은 #promoView(화면) · #promoLayer(날짜 창) 안에서만 먹는다 — 다른 화면에 영향 없음.
+ * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 --in-bg --ok --warn --rec ...)를 그대로 쓴다(밝은·어두운 화면 자동).
+ * ==========================================================================*/
+#promoView, #promoLayer { --pd: #8F9CBE; --p-sheet: var(--bg1); --p-scrim: rgba(3,6,18,.62); --p-ok: var(--ok); --p-bad: var(--rec); --p-wait: #9fb0c4; }
+html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd: var(--dim); --p-sheet: var(--bg0); --p-scrim: rgba(15,23,42,.35); --p-wait: #5b6b7d; }
+
+#promoView { padding-bottom: 96px; }
+#promoView button { font-family: inherit; }
+#promoView .pcard { border-radius: 20px; padding: 16px; background: var(--glass); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); margin-bottom: 10px; word-break: keep-all; overflow-wrap: break-word; }
+#promoView .pcard h3 { margin: 0 0 8px; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#promoView .pcnt { font-size: 12.5px; font-weight: 600; color: var(--pd); }
+#promoView .pbanner { border-radius: 14px; padding: 9px 12px; margin-bottom: 8px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 12.5px; color: var(--pd); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#promoView .pbtn { height: 44px; padding: 0 18px; border-radius: 14px; border: 0; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s; }
+#promoView .pbtn.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 11px; }
+#promoView .pbtn.ghost, #promoLayer .pbtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); }
+#promoView .pbtn:active, #promoLayer .pbtn:active, #promoView .ptile:active, #promoView .prow:active { transform: scale(.97); }
+
+/* ----- 첫 카드: 케이가 서류를 정리하는 모습 + 큰 숫자 ----- */
+#promoView .phero { padding: 14px; }
+#promoView .pkimg { height: 168px; border-radius: 16px; overflow: hidden; margin-bottom: 10px; background: linear-gradient(135deg, var(--in-bg), transparent); display: flex; align-items: center; justify-content: center; border: 1px solid var(--glass-b); }
+#promoView .pkimg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 14%; display: block; }
+#promoView .pkfb { font-size: 54px; font-weight: 900; color: var(--pd); opacity: .5; }
+#promoView .psay { margin: 0 0 10px; font-size: 16px; font-weight: 800; line-height: 1.45; }
+#promoView .ppair { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; align-items: end; }
+#promoView .plab { font-size: 12.5px; color: var(--pd); }
+#promoView .pfloor { display: inline-block; font-size: 11px; font-weight: 700; color: var(--warn); border: 1px solid var(--warn); border-radius: 9px; padding: 0 7px; margin-left: 4px; vertical-align: middle; }
+#promoView .pbig { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+#promoView .pbig > span { font-size: 36px; font-weight: 900; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; background: linear-gradient(135deg, var(--p1), var(--p2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#promoView .pbig small { font-size: 15px; font-weight: 700; color: var(--muted); }
+#promoView .pbig.sm > span { font-size: 30px; }
+#promoView .pmid { font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--p1); white-space: nowrap; }
+#promoView .pmeter { position: relative; height: 12px; border-radius: 8px; background: var(--in-bg); margin: 12px 0 4px; overflow: hidden; }
+#promoView .pmeter i { display: block; height: 100%; width: 0; border-radius: 8px; background: linear-gradient(90deg, var(--p1), var(--p2)); transition: width .45s ease-out; }
+#promoView .pmeter u { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--text); opacity: .5; }
+#promoView .pmscale { display: flex; justify-content: space-between; font-size: 11px; color: var(--pd); }
+#promoView .pdiff { margin-top: 10px; border-radius: 12px; padding: 8px 11px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 12.5px; color: var(--pd); line-height: 1.55; }
+#promoView .pdiff b { color: var(--text); }
+#promoView .pnote { margin-top: 6px; font-size: 11.5px; color: var(--pd); line-height: 1.5; }
+
+/* ----- 판정 타일 5개 ----- */
+#promoView .ptiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 8px; }
+#promoView .ptile { border-radius: 14px; padding: 9px 2px 8px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--text); display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; box-shadow: var(--card-sh); transition: transform .12s; min-height: 82px; }
+#promoView .ptile .pic { font-size: 18px; font-weight: 900; line-height: 1.2; }
+#promoView .ptile .pt { font-size: 11px; color: var(--pd); line-height: 1.25; text-align: center; word-break: keep-all; }
+#promoView .ptile .ps { font-size: 11.5px; font-weight: 800; margin-top: auto; }
+#promoView .ptile.pass .pic, #promoView .ptile.pass .ps { color: var(--p-ok); }
+#promoView .ptile.fail .pic, #promoView .ptile.fail .ps { color: var(--p-bad); }
+#promoView .ptile.unknown .pic, #promoView .ptile.unknown .ps { color: var(--p-wait); }
+#promoView .ptile.sel { outline: 2px solid var(--p1); }
+#promoView .pdetail { display: none; border-radius: 16px; padding: 12px 14px; margin: 0 0 10px; background: var(--glass); border: 1px solid var(--glass-b); font-size: 13.5px; line-height: 1.6; word-break: keep-all; }
+#promoView .pdetail.show { display: block; animation: promoRise .2s ease-out; }
+#promoView .pdetail .ph { display: block; margin-bottom: 4px; font-size: 14px; }
+#promoView .pdetail .ppl { margin: 6px 0 4px; padding: 0 0 0 18px; }
+#promoView .pdetail .ppl li { margin: 3px 0; }
+#promoView .pdetail .ppl small { color: var(--pd); }
+#promoView .pdetail .psub { margin-top: 6px; color: var(--pd); font-size: 12.5px; }
+#promoView .pb { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 9px; padding: 0 7px; border: 1px solid var(--glass-b); color: var(--pd); }
+#promoView .pb.yes { color: var(--p-ok); border-color: var(--p-ok); }
+#promoView .pb.asis { color: var(--warn); border-color: var(--warn); }
+#promoView .pb.need { color: var(--p-bad); border-color: var(--p-bad); }
+@keyframes promoRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ----- 점검할 것 (접지 않음) ----- */
+#promoView .pwarn { list-style: none; margin: 0; padding: 0; }
+#promoView .pwarn li { border-top: 1px solid var(--glass-b); padding: 10px 0; font-size: 13.5px; line-height: 1.5; }
+#promoView .pwarn li:first-child { border-top: 0; padding-top: 2px; }
+#promoView .pwarn em { font-style: normal; font-weight: 900; color: var(--warn); margin-right: 5px; }
+#promoView .pwarn em.okm { color: var(--p-ok); } #promoView .pwarn em.inm { color: var(--pd); }
+#promoView .pwarn .psb { display: block; margin-top: 2px; color: var(--pd); font-size: 12.5px; }
+
+/* ----- 승진 시기 ----- */
+#promoView .ptenure .pl { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--glass-b); font-size: 13.5px; }
+#promoView .ptenure .pl:first-of-type { border-top: 0; }
+#promoView .ptenure .pl small { color: var(--pd); font-size: 11.5px; }
+#promoView .ptenure .pl b { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ----- 부문 막대(한 눈금) ----- */
+#promoView .prow { width: 100%; display: grid; grid-template-columns: 96px 1fr 58px; gap: 8px; align-items: center; margin: 10px 0; padding: 0; border: 0; background: none; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; transition: transform .12s; }
+#promoView .prow b { text-align: right; font-variant-numeric: tabular-nums; }
+#promoView .prow.na { cursor: default; grid-template-columns: 96px 1fr; }
+#promoView .pnaTxt { font-size: 12.5px; color: var(--pd); }
+#promoView .ptrack { position: relative; height: 14px; border-radius: 7px; background: var(--in-bg); overflow: hidden; }
+#promoView .pfill, #promoView .pghost { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width .35s ease-out; }
+#promoView .pfill { z-index: 2; border-radius: 7px 0 0 7px; background: linear-gradient(90deg, var(--p1), var(--p2)); }
+#promoView .pghost { z-index: 1; background: repeating-linear-gradient(45deg, var(--warn) 0 3px, transparent 3px 6px); opacity: .45; }
+#promoView .ptrack u { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); opacity: .55; z-index: 3; }
+#promoView .pcap { font-size: 11.5px; color: var(--warn); margin: -4px 0 6px 104px; line-height: 1.45; }
+#promoView .pticks { display: flex; gap: 12px; font-size: 10.5px; color: var(--pd); margin: 2px 0 0 104px; flex-wrap: wrap; }
+#promoView .pfoot { font-size: 11.5px; color: var(--pd); text-align: center; margin: 14px 4px 0; line-height: 1.5; }
+
+/* ----- 부문 상세 목록(읽기) ----- */
+#promoView .plist { list-style: none; margin: 0; padding: 0; }
+#promoView .plist li { border-top: 1px solid var(--glass-b); padding: 10px 0; }
+#promoView .plist li:first-child { border-top: 0; padding-top: 2px; }
+#promoView .pl1 { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; font-size: 13.5px; line-height: 1.45; }
+#promoView .pl1 .plb { flex: 1; min-width: 0; }
+#promoView .pl1 .psc { flex: none; font-variant-numeric: tabular-nums; }
+#promoView .ptags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+#promoView .ptag { font-size: 11px; font-weight: 800; border-radius: 9px; padding: 0 8px; border: 1px solid var(--glass-b); color: var(--pd); }
+#promoView .ptag.t-excluded, #promoView .ptag.t-dup, #promoView .ptag.t-unv { color: var(--warn); border-color: var(--warn); }
+#promoView .ptag.t-before { color: var(--pd); } #promoView .ptag.t-ok { color: var(--p-ok); border-color: var(--p-ok); }
+#promoView .plist .psb { font-size: 12px; color: var(--pd); margin-top: 3px; line-height: 1.5; }
+#promoView .pempty { text-align: center; padding: 28px 16px; }
+#promoView .pempty p { color: var(--pd); font-size: 13.5px; line-height: 1.55; margin: 6px 0 12px; }
+
+/* ----- 날짜 고치기 창 ----- */
+#promoLayer { display: none; position: fixed; inset: 0; z-index: 60; }
+#promoLayer.show { display: block; }
+#promoLayer .pscrim { position: absolute; inset: 0; background: var(--p-scrim); }
+#promoLayer .psheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88vh; overflow: auto; background: var(--p-sheet); color: var(--text); border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 30px rgba(0,0,0,.35); animation: promoUp .2s ease-out; }
+#promoLayer .psheet h4 { margin: 0 0 12px; font-size: 17px; }
+#promoLayer .psheet label { display: block; font-size: 13.5px; font-weight: 700; margin: 12px 0; }
+#promoLayer .psheet label small { color: var(--pd); font-weight: 500; }
+#promoLayer .psheet input[type=date] { display: block; width: 100%; margin-top: 6px; height: 48px; border-radius: 14px; border: 1.5px solid var(--glass-b); background: var(--in-bg); color: var(--text); font-size: 16px; padding: 0 12px; font-family: inherit; }
+#promoLayer .psmsg { min-height: 20px; font-size: 12.5px; color: var(--warn); margin: 6px 0; }
+#promoLayer .pbtns { display: flex; gap: 8px; justify-content: flex-end; }
+#promoLayer .pbtn { height: 46px; padding: 0 20px; border-radius: 14px; border: 0; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s; }
+#promoLayer .pbtn:disabled { opacity: .5; }
+@keyframes promoUp { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+
+/* ----- 움직임 줄이기 ----- */
+@media (prefers-reduced-motion: reduce) { #promoView *, #promoLayer * { animation: none !important; transition: none !important; } }

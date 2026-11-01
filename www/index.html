@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="css/markup.css"><!-- O-0544 문서 뷰어 「수정 요청」 -->
   <link rel="stylesheet" href="css/mtg-out.css"><!-- O-0626 회의록 「맞춤 정리본 받기」 -->
   <link rel="stylesheet" href="css/achievements.css"><!-- O-0684 v9.59 「실적」 탭 -->
+  <link rel="stylesheet" href="css/promotion.css"><!-- O-0684 v9.62 「승진」 점수판 -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
   <link rel="stylesheet" href="css/k-fashion-show.css"><!-- O-0557 케이 패션쇼 -->
@@ -194,6 +195,8 @@
         <button class="tool" id="btnSearchToggle"><span class="ic blue"><svg><use href="#i-card"/></svg></span><b>명함 검색</b><small>이름·기관</small></button>
         <!-- O-0684 v9.59: 「실적」 — 맨 끝 칸(기존 칸 자리는 그대로). 스위치 ACHIEVE_TAB(app.js)이 'on' 일 때만 app.js 가 보이게 한다 -->
         <button class="tool" id="btnAch" style="display:none;"><span class="ic cyan"><svg><use href="#i-star"/></svg></span><b>실적</b><small>논문·특허·저서</small></button>
+        <!-- O-0684 v9.62: 「승진」 — 홈 9번째 칸(3×3). 입구는 이 칸 하나뿐. 스위치 PROMO_TAB(app.js)이 'on' 일 때만 app.js 가 보이게 한다 -->
+        <button class="tool" id="btnPromo" style="display:none;"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><b>승진</b><small>점수·시기</small></button>
         <div class="tools-sub">PC 연결</div>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
@@ -595,6 +598,12 @@
       <div id="achBody"></div>
     </section>
 
+    <!-- ===================== 승진 (O-0684 v9.62 · 로직은 promotion.js · 계산은 promotion-calc.js) ===================== -->
+    <section id="promoView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">정교수 승진</span><span class="spacer end"><button type="button" class="iconbtn" id="promoReload" aria-label="다시 불러오기" title="다시 불러오기"><span aria-hidden="true" style="font-size:18px;line-height:1">↻</span></button></span></div>
+      <div id="promoBody"></div>
+    </section>
+
     <!-- ===================== 문서 뷰어(고르기) ===================== -->
     <section id="docsView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title" data-so-name>S-Office</span><span class="spacer"></span></div>
@@ -875,6 +884,7 @@
 <script src="js/push.js"></script>
 <script src="js/health.js"></script>
 <script src="js/achievements.js"></script><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
+<script src="js/promotion-calc.js"></script><script src="js/promotion.js"></script><!-- O-0684 v9.62 「승진」 점수판 — app.js 보다 먼저 -->
 <script src="js/markup.js"></script><!-- O-0544 문서 뷰어 「수정 요청」(docviewer.js 보다 먼저 — init 때 길게 누르기를 붙인다) -->
 <script src="js/docviewer.js"></script>
 <script src="js/smartoffice/so-core.js"></script><!-- S-Office 공통 틀 — 형식 모듈(js/smartoffice/<형식>/so-<형식>.js)은 처음 열 때 불러온다 -->

@@ -257,7 +257,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -9383,6 +9383,10 @@
       if (window.AchTab && AchTab.back && AchTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('promoView'))) {      // O-0684 v9.62: 승진 — 열린 날짜 창·부문 상세부터 닫고, 더 닫을 게 없으면 홈으로
+      if (window.PromoTab && PromoTab.back && PromoTab.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen(filePanel) && filePanelFromChat) { filePanelFromChat = false; pendingFiles = []; pendingKind = null; openChat(); return true; }   // (O-0176) 채팅 ＋ 에서 왔으면 채팅으로
     if (isOpen(recPrep) || isOpen(recordedPanel) || isOpen(filePanel) || isOpen(searchPanel) || isOpen(resultWrap) || isOpen(chatView) || isOpen($('lockerView')) || isOpen($('healthView'))) {
       // v9.8: 녹음 중(또는 보내지 않은 녹음이 남아 있는 동안)에는 붙여 둔 회의자료를 지우지 않는다 — 다른 화면을 보고 돌아와도 완료 화면까지 이어진다
@@ -9877,6 +9881,23 @@
       var achGrid = $('homeTools'), achSub = achGrid && achGrid.querySelector('.tools-sub');
       if (achGrid && achSub) achGrid.insertBefore($('btnAch'), achSub);   // 홈 도구 맨 끝(위 도구 순서 정리 뒤) — 기존 칸 자리는 그대로
       $('btnAch').style.display = ''; $('btnAch').addEventListener('click', openAch);
+    } catch (e) {}
+  }
+
+  /* ---- 승진 점수판(O-0684 v9.62): 화면 열기/연결(로직은 promotion.js · 계산은 promotion-calc.js) ----
+   *   스위치 PROMO_TAB: 'on' = 홈 도구 9번째 칸에 「승진」 · 'off' = 칸이 보이지 않아 v9.61 과 같다(서버·SQL 무관). 입구는 이 칸 하나뿐(실적 탭 안에 두 번째 입구 없음). */
+  var PROMO_TAB = 'on';
+  var promoView = $('promoView');
+  function openPromo() {
+    openScreen(promoView);
+    if (window.PromoTab && PromoTab.open) { try { PromoTab.open(); } catch (e) {} }
+  }
+  if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
+    try {
+      PromoTab.init({ toast: toast });
+      var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
+      if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
+      $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);
     } catch (e) {}
   }
 
