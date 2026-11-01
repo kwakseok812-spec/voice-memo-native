@@ -20,6 +20,24 @@
   function layer() { return $('promoLayer'); }
   function R() { return S().rules || {}; }
   function nameOf(code) { return ((R().names || {})[code]) || code; }
+  /* 금액: 「3000000」 「3,000,000」 「300만원」 「1억 2천만」 모두 받는다. 못 읽으면 null */
+  function parseMoney(t) {
+    var x = String(t == null ? '' : t).replace(/[\s,원]/g, '');
+    if (x === '') return null;
+    if (/^\d+$/.test(x)) return Number(x);
+    var m = /^(?:(\d+(?:\.\d+)?)억)?(?:(\d+(?:\.\d+)?)천만)?(?:(\d+(?:\.\d+)?)만)?(?:(\d+(?:\.\d+)?)천)?$/.exec(x);
+    if (!m || m[0] === '') return null;
+    var v = (+m[1] || 0) * 1e8 + (+m[2] || 0) * 1e7 + (+m[3] || 0) * 1e4 + (+m[4] || 0) * 1e3;
+    return Math.round(v);
+  }
+  function wonText(n) {
+    if (!isFinite(n) || n < 0) return '';
+    var eok = Math.floor(n / 1e8), man = Math.floor((n % 1e8) / 1e4), rest = n % 1e4, out = [];
+    if (eok) out.push(eok.toLocaleString('ko-KR') + '억');
+    if (man) out.push(man.toLocaleString('ko-KR') + '만');
+    if (rest || !out.length) out.push(rest.toLocaleString('ko-KR'));
+    return out.join(' ') + '원';
+  }
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
   function blank(v) { return v === undefined || v === null || v === ''; }
   function sign(n) { return (n > 0 ? '+' : (n < 0 ? '−' : '')) + X.fmt(Math.abs(n)); }
@@ -34,10 +52,10 @@
   function part(label, hint) { return { id: 'part', where: 'part', kind: 'int', label: label, hint: hint, mode: 'numeric', min: 1, max: 200, req: true, def: 1 }; }
   function subF(code, label, opts, req) { return { id: 'sub', where: 'sub', kind: 'sel', label: label, opts: opts, req: req !== false }; }
   var SUB_LOCAL = {
-    '1-3': [['book', '저서'], ['kmooc', 'K-MOOC 강좌'], ['univ', '대학 지정 콘텐츠'], ['personal', '개인 콘텐츠']],
+    '1-3': [['book', '저서'], ['kmooc', 'K-MOOC'], ['univ', '대학'], ['personal', '개인']],
     '4-3': [['intl', '국제 특허·지재권'], ['domestic', '국내 특허·지재권']],
-    '4-4': [['solo_top', '개인전'], ['group_award', '단체전 입상'], ['collective', '단체전 참가']],
-    '4-5': [['solo_top', '개인전'], ['group_award', '단체전 입상'], ['collective', '단체전 참가']]
+    '4-4': [['solo_top', '개인전/본상'], ['group_award', '그룹전/입상'], ['collective', '단체전/입선']],
+    '4-5': [['solo_top', '개인전/본상'], ['group_award', '그룹전/입상'], ['collective', '단체전/입선']]
   };
   function subOpts(code) {
     var m = (R().sub_names || {})[code]; if (isObj(m)) return Object.keys(m).map(function (k) { return [k, m[k]]; });
@@ -47,13 +65,13 @@
     var F = [];
     switch (code) {
       case '1-1': F = [ay(true), sem(), nm('lectureAvg', '강의평가 평균', { req: true, min: 0, max: 5, hint: '5점 만점', ph: '4.50' }), nm('guidanceAvg', '학생지도평가 평균', { min: 0, max: 5, hint: '없으면 비워 두세요', ph: '4.50' })]; break;
-      case '1-2': F = [ay(true), sem(), txt('courseName', '프로그램 이름', { ph: '예: 교수법 워크숍' }), { id: 'ran', where: 'val', key: 'ran', kind: 'sel', label: '이수했나요?', req: true, opts: [['yes', '이수했어요'], ['no', '아직 안 했어요']] }]; break;
+      case '1-2': F = [ay(true), sem(), txt('courseName', '운영한 역량 교과목', { ph: '예: 교과목 이름' }), { id: 'ran', where: 'val', key: 'ran', kind: 'sel', label: '1개 학기 이상 운영했나요?', req: true, opts: [['yes', '운영했어요'], ['no', '아직 안 했어요']] }]; break;
       case '1-3': F = [subF(code, '종류', subOpts(code)), txt('title', '이름', { req: true, ph: '저서·콘텐츠 이름', cover: true, max: 200 }), part('함께 쓴 사람 수(나 포함)')]; break;
       case '1-4': F = [txt('companyName', '업체 이름', { req: true, max: 100 }), txt('programName', '연수 내용', { max: 200 }), dt('start', '연수 시작일', ['startYear', 'startMonth', 'startDay'], 'ymd', { req: true }), dt('end', '연수 종료일', ['endYear', 'endMonth', 'endDay'], 'ymd'), it('hours', '연수 시간', { req: true, min: 1, max: 2000, hint: '시간 단위', ph: '40' })]; break;
-      case '1-5': F = [txt('title', '기부·유치 내용', { max: 200 }), it('amount', '금액(원)', { req: true, min: 0, max: 100000000000, hint: '숫자만', ph: '3000000' })]; break;
+      case '1-5': F = [txt('title', '기부·유치 내용', { max: 200 }), it('amount', '금액(원)', { req: true, min: 0, max: 100000000000, hint: '예: 3000000 또는 300만원', ph: '300만원', money: true })]; break;
       case '1-6': F = [{ id: 'ay', where: 'col', key: 'academic_year', kind: 'text', label: '학기', hint: '예: 2026-2학기', ph: '2026-2학기', max: 20 }, it('courses', 'PBL 강좌 수', { req: true, min: 0, max: 50, ph: '1' })]; break;
-      case '2-1': F = [ay(true), txt('title', '과제 이름', { max: 200 }), it('amount', '수탁 연구비(원)', { req: true, min: 0, max: 100000000000, hint: '숫자만', ph: '10000000' })]; break;
-      case '2-2': F = [ay(true), txt('title', '자문 내용', { max: 200 }), it('amount', '자문 금액(원)', { req: true, min: 0, max: 100000000000, hint: '숫자만', ph: '1000000' })]; break;
+      case '2-1': F = [ay(true), txt('title', '과제 이름', { max: 200 }), it('amount', '수탁 연구비(원)', { req: true, min: 0, max: 100000000000, hint: '예: 10000000 또는 1000만원', ph: '1000만원', money: true })]; break;
+      case '2-2': F = [ay(true), txt('title', '자문 내용', { max: 200 }), it('amount', '자문 금액(원)', { req: true, min: 0, max: 100000000000, hint: '예: 1000000 또는 100만원', ph: '100만원', money: true })]; break;
       case '3-1': F = [subF(code, '보직 종류', subOpts(code)), txt('positionName', '보직 이름', { max: 100, ph: '예: 기획혁신부처장' }), dt('start', '시작', ['startYear', 'startMonth'], 'ym', { req: true }), dt('end', '끝(예정 포함)', ['endYear', 'endMonth'], 'ym', { req: true })]; break;
       case '3-2': F = [subF(code, '중요도', subOpts(code)), txt('title', 'TFT 이름', { req: true, max: 200, cover: false }), dt('start', '시작일', ['startYear', 'startMonth', 'startDay'], 'ymd'), dt('end', '종료일', ['endYear', 'endMonth', 'endDay'], 'ymd')]; break;
       case '3-3': F = [txt('title', '연구 이름', { req: true, max: 200 }), dt('completion', '최종 완성일', ['completionYear', 'completionMonth', 'completionDay'], 'ymd')]; break;
@@ -124,6 +142,7 @@
     try { $('promoNo').focus({ preventScroll: true }); } catch (e) {}
   }
   function tryClose() {
+    if (I && I.view === 'suggest' && I.busy) { X.toast('연결 중이에요. 끝나면 닫을 수 있어요.'); return; }
     if (I && I.view === 'profile') { tryCloseProfile(); return; }
     if (I && I.view === 'pick') { I.view = 'form'; renderForm(); return; }
     if (I && I.view === 'form' && dirty()) {
@@ -165,6 +184,7 @@
     if (f.where === 'col') return d.ay; if (f.where === 'sub') return d.sub; if (f.where === 'part') return d.part; if (f.where === 'memo') return d.memo;
     if (f.where === 'ev') return d.jc; return d.val[f.key];
   }
+  function moneyLine(v) { var n = (typeof v === 'number') ? v : parseMoney(v); return (n === null || n === undefined || !isFinite(n)) ? '' : '= ' + wonText(n) + (n >= 10000 ? ' (' + n.toLocaleString('ko-KR') + '원)' : ''); }
   function inp(f, extra) {
     var id = 'pf_' + f.id, v = fieldVal(f), ph = f.ph ? ' placeholder="' + esc(f.ph) + '"' : '';
     return '<input type="text" id="' + id + '" value="' + esc(blank(v) ? '' : v) + '" inputmode="' + (f.mode || 'text') + '" autocomplete="off" enterkeyhint="next"' + ph + (f.max && f.kind === 'text' ? ' maxlength="' + f.max + '"' : '') + ' aria-describedby="pe_' + f.id + '"' + (extra || '') + '>';
@@ -192,7 +212,7 @@
       return h + '</select><div class="perr" id="pe_' + f.id + '" role="alert"></div></label>';
     }
     if (f.kind === 'area') return '<label class="pfld"><span class="plab2">' + esc(f.label) + '</span><textarea id="pf_' + f.id + '" rows="2" maxlength="' + (f.max || 500) + '">' + esc(I.d.memo || '') + '</textarea></label>';
-    return '<label class="pfld"><span class="plab2">' + esc(f.label) + req + hint + '</span>' + inp(f) + '<div class="perr" id="pe_' + f.id + '" role="alert"></div></label>';
+    return '<label class="pfld"><span class="plab2">' + esc(f.label) + req + hint + '</span>' + inp(f) + (f.money ? '<div class="pmoney" id="pm_' + f.id + '" aria-live="polite">' + moneyLine(fieldVal(f)) + '</div>' : '') + '<div class="perr" id="pe_' + f.id + '" role="alert"></div></label>';
   }
 
   /* 실적 탭 연결 상자 */
@@ -241,7 +261,7 @@
   }
   function statusBox() {
     var d = I.d, fl = d.flags || {}, h = '';
-    if (I.mode === 'edit' && fl.unverified) h += '<label class="pchk"><input type="checkbox" id="pf_unv"' + (d.unv ? ' checked' : '') + '><span>이 항목은 <b>확인 전</b>이에요. 원고·증빙을 확인했으면 「확인됨」으로 바꿔요.</span></label>';
+    if (I.mode === 'edit' && fl.unverified) h += '<label class="pchk"><input type="checkbox" id="pf_unv"' + (d.unv ? ' checked' : '') + '><span><b>확인했어요 — 확인됨으로 바꾸기</b><small>지금은 「확인 전」이에요. 원고·증빙을 확인했으면 체크해 주세요.</small></span></label>';
     if (I.mode === 'edit' && fl.excluded_default) h += '<label class="pchk"><input type="checkbox" id="pf_incl"' + (d.incl ? ' checked' : '') + '><span>점수에서 뺀 항목이에요(중복 의심). <b>중복이 아니에요 — 점수에 넣기</b></span></label>';
     return h;
   }
@@ -258,7 +278,8 @@
       if (f.kind === 'bool') return;       // 단추가 바로 d.val 에 적는다
       el = $('pf_' + f.id); if (!el) return;
       v = el.value;
-      if (f.kind === 'num' || f.kind === 'int') { v = String(v).replace(/[,\s]/g, ''); v = v === '' ? null : (isFinite(Number(v)) ? Number(v) : v); if (f.kind === 'int' && typeof v === 'number') v = Math.floor(v); }
+      if (f.money) { var raw0 = String(v).trim(), pm = parseMoney(raw0); v = raw0 === '' ? null : (pm === null ? raw0 : pm); var me = $('pm_' + f.id); if (me) me.textContent = (typeof v === 'number') ? moneyLine(v) : (raw0 === '' ? '' : '금액을 읽지 못했어요 — 예: 3000000 또는 300만원'); }
+      else if (f.kind === 'num' || f.kind === 'int') { v = String(v).replace(/[,\s]/g, ''); v = v === '' ? null : (isFinite(Number(v)) ? Number(v) : v); if (f.kind === 'int' && typeof v === 'number') v = Math.floor(v); }
       else if (f.kind === 'text' || f.kind === 'area') v = String(v).replace(/^\s+|\s+$/g, '');
       if (f.where === 'col') d.ay = v || ''; else if (f.where === 'sub') d.sub = v || ''; else if (f.where === 'part') d.part = (v === null || v === '') ? '' : v; else if (f.where === 'memo') d.memo = v || ''; else if (f.where === 'ev') d.jc = v || '';
       else d.val[f.key] = (v === '' ? null : v);
@@ -367,7 +388,7 @@
       if (f.req && (blank(v) || v === '')) { E[f.id] = (f.kind === 'sel' ? label + '을(를) 골라 주세요.' : label + '을(를) 적어 주세요.'); return; }
       if (blank(v) || v === '') return;
       if (f.kind === 'num' || f.kind === 'int') {
-        if (typeof v !== 'number') { E[f.id] = '숫자로 적어 주세요.'; return; }
+        if (typeof v !== 'number') { E[f.id] = f.money ? '금액을 숫자로 적어 주세요(예: 3000000 또는 300만원).' : '숫자로 적어 주세요.'; return; }
         if (f.min !== undefined && v < f.min) { E[f.id] = f.min + ' 이상으로 적어 주세요.'; return; }
         if (f.max !== undefined && v > f.max) { E[f.id] = f.max + ' 이하로 적어 주세요.'; return; }
       }
@@ -416,7 +437,7 @@
     var items = S().items, at = -1; items.forEach(function (x, i) { if (x.id === r.id) at = i; });
     if (at >= 0) items[at] = r; else items.push(r);
   }
-  var SAVE_ERR = { BAD_ROW: '저장하지 못했어요 — 입력한 값을 서버가 받아들이지 않았어요. 숫자와 날짜를 확인해 주세요.', BAD_ACH: '저장하지 못했어요 — 연결한 실적 항목이 서버에서 사라졌어요. 연결을 끊고 다시 저장해 주세요.', TOO_BIG: '저장하지 못했어요 — 내용이 너무 길어요. 메모를 줄여 주세요.' };
+  var SAVE_ERR = { BAD_ROW: '저장하지 못했어요 — 입력한 값이 받아들여지지 않았어요. 숫자와 날짜를 확인해 주세요.', BAD_ACH: '저장하지 못했어요 — 연결한 실적 항목이 사라졌어요. 연결을 끊고 다시 저장해 주세요.', TOO_BIG: '저장하지 못했어요 — 내용이 너무 길어요. 메모를 줄여 주세요.' };
   function busy(on) { I.busy = on; var b = $('promoSave'); if (b) { b.disabled = on; if (!I.sim || !on) b.textContent = on ? '저장 중…' : (I.sim ? '이 항목으로 저장하기' : '저장'); } }
   function onSave() {
     if (!I || I.busy) return;
@@ -439,7 +460,7 @@
     return X.rpc('ach_save_item', { p_row: { id: a.id, base_rev: a.rev, kind_id: a.kind_id, data: { lead: want } } }).then(function (res) {
       if (isObj(res) && res.ok === true) {
         var d = clone(a.data || {}); if (want === null) delete d.lead; else d.lead = want;
-        var next = (isObj(res.row) ? res.row : Object.assign({}, a, { data: d, rev: res.rev || (a.rev + 1) }));
+        var next = X.slimAch(isObj(res.row) ? res.row : Object.assign({}, a, { data: d, rev: res.rev || (a.rev + 1) }));       // 서버가 돌려준 행에는 저자 이름이 있을 수 있어 반드시 줄여서(people·note 제외) 보관
         var arr = S().ach, i; for (i = 0; i < arr.length; i++) if (arr[i].id === a.id) arr[i] = next;
         X.saveAch(); return { ok: true };
       }
@@ -462,7 +483,7 @@
       if (I.mode === 'new' || managedEqual(row, res.row)) { putItem(res.row); X.saveCache(); X.flash(res.row.id); hide(); X.render(); X.toast('이미 저장돼 있어요'); return; }    // 응답만 못 받은 경우
       I.srv = res.row; I.view = 'conflict'; renderConflict(); return;
     }
-    msg(SAVE_ERR[err] || '저장하지 못했어요 — 서버가 받아들이지 않았어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요.');
+    msg(SAVE_ERR[err] || '저장하지 못했어요 — 받아들여지지 않았어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요.');
   }
   function dispOf(f, row, d) {      // 칸 하나의 값을 사람이 읽는 글자로 (row=서버 항목, d=지금 입력)
     var v;
@@ -484,11 +505,11 @@
   function renderConflict() {
     var s = I.srv, h = head('다른 기기에서 먼저 고쳤어요');
     var diffs = diffLines(s), dh = '';
-    diffs.forEach(function (x) { dh += '<li><b>' + esc(x.label) + '</b><span>서버 「' + esc(x.srv) + '」</span><span>내 입력 「' + esc(x.mine) + '」</span></li>'; });
-    h += '<div class="pconfl"><p>이 항목이 다른 곳에서 먼저 바뀌었어요. 어떻게 할까요?</p>' + (dh ? '<ul class="pdiffs">' + dh + '</ul>' : '<div class="pcmp"><div><small>서버에 있는 값</small><b>' + esc(PC.rowLabel(s, R())) + '</b></div><div><small>지금 입력한 값</small><b>' + esc(PC.rowLabel(draftItem(), R())) + '</b></div></div>') + '</div>';
-    h += acts('<button type="button" class="pbtn ghost" id="pcTheirs">서버 값 보기 (내 입력은 버려요)</button><button type="button" class="pbtn" id="pcMine">내 입력으로 덮어쓰기</button>');
+    diffs.forEach(function (x) { dh += '<li><b>' + esc(x.label) + '</b><span>다른 기기에 저장된 값 「' + esc(x.srv) + '」</span><span>내 입력 「' + esc(x.mine) + '」</span></li>'; });
+    h += '<div class="pconfl"><p>이 항목이 다른 곳에서 먼저 바뀌었어요. 어떻게 할까요?</p>' + (dh ? '<ul class="pdiffs">' + dh + '</ul>' : '<div class="pcmp"><div><small>다른 기기에 저장된 값</small><b>' + esc(PC.rowLabel(s, R())) + '</b></div><div><small>지금 입력한 값</small><b>' + esc(PC.rowLabel(draftItem(), R())) + '</b></div></div>') + '</div>';
+    h += acts('<button type="button" class="pbtn ghost" id="pcTheirs">다른 기기 값 보기 (내 입력은 버려요)</button><button type="button" class="pbtn" id="pcMine">내 입력으로 덮어쓰기</button>');
     sheet(h, '충돌');
-    $('pcMine').onclick = function () { I.base = s; putItem(s); I.view = 'form'; renderForm(true); msg('서버의 최신 값 위에 내 입력을 얹었어요. 「저장」을 한 번 더 눌러 주세요.', true); };
+    $('pcMine').onclick = function () { I.base = s; putItem(s); I.view = 'form'; renderForm(true); msg('다른 기기에 저장된 최신 값 위에 내 입력을 얹었어요. 「저장」을 한 번 더 눌러 주세요.', true); };
     $('pcTheirs').onclick = function () { putItem(s); X.saveCache(); var id = I.id, code = I.code; hide(); X.render(); openItem(code, id); };
   }
 
@@ -606,7 +627,7 @@
     h += '<div class="pfld"><span class="plab2" id="pl_fe">교수업적 순위 <small>(학년도별 상위 %)</small></span><div id="pFeRows"></div><button type="button" class="pbtn sm ghost" id="pFeAdd">＋ 학년도 추가</button><div class="psb">부처장을 하신 학년도는 평가에서 빠져서 값이 있어도 판정에 안 써요. 값은 지우지 않고 그대로 둬요.</div><div class="perr" id="pe_fe" role="alert"></div></div>';
     h += '<div class="psmsg" id="promoMsg" role="alert" aria-live="assertive"></div>' + acts('<button type="button" class="pbtn ghost" id="promoCancel">닫기</button><button type="button" class="pbtn" id="promoSave">저장</button>');
     sheet(h, '승진 설정');
-    I.snap = profSnap(); drawFe();
+    drawFe(); I.snap = profSnap();          // 칸을 그린 뒤에 기준을 잡아야 아무것도 안 고친 채 닫을 때 묻지 않는다
     $('promoCancel').onclick = tryCloseProfile; $('promoX').onclick = tryCloseProfile; $('promoScrim').onclick = tryCloseProfile; $('promoSave').onclick = saveProfile;
     $('pFeAdd').onclick = function () { readFe(); var last = I.rows.length ? Math.max.apply(null, I.rows.map(function (r) { return parseInt(r.ay, 10) || 0; })) : 2022; I.rows.push({ ay: last + 1, pct: '' }); drawFe(); var inps = document.querySelectorAll('#pFeRows input'); if (inps.length) inps[inps.length - 1].focus(); };
     $('promoRs').oninput = $('promoRs').onchange = function () { I.clearOk = false; var b = $('promoSave'); if (b) b.textContent = '저장'; var m = $('promoMsg'); if (m && /비우/.test(m.textContent)) m.textContent = ''; };
@@ -685,44 +706,50 @@
     });
     h += '</ul><div class="psmsg" id="promoMsg" role="alert" aria-live="polite"></div>' + acts('<button type="button" class="pbtn ghost" id="promoCancel">닫기</button><button type="button" class="pbtn" id="pSugGo">선택한 항목 연결하기</button>');
     sheet(h, '연결 제안');
-    $('promoCancel').onclick = hide;
+    $('promoCancel').onclick = tryClose;
     $('pSugGo').onclick = runSuggest;
   }
   function runSuggest() {
-    if (I.busy) return; I.busy = true;
+    var my = I; if (!my || my.busy) return; my.busy = true;
     var boxes = document.querySelectorAll('#pSugL input[type=checkbox]'), pick = [], i;
-    for (i = 0; i < boxes.length; i++) if (boxes[i].checked) pick.push(+boxes[i].getAttribute('data-i'));
-    if (!pick.length) { I.busy = false; msg('연결할 항목을 골라 주세요.'); return; }
-    $('pSugGo').disabled = true; var ok = 0, fail = 0;
-    var seq = Promise.resolve();
+    for (i = 0; i < boxes.length; i++) if (boxes[i].checked && !boxes[i].disabled) pick.push(+boxes[i].getAttribute('data-i'));
+    if (!pick.length) { my.busy = false; msg('연결할 항목을 골라 주세요.'); return; }
+    var go = $('pSugGo'), cl = $('promoCancel'); go.disabled = true; if (cl) { cl.disabled = true; cl.textContent = '연결 중…'; }
+    msg('연결 중이에요… 잠깐만 기다려 주세요.', true);
+    var ok = 0, fail = 0, seq = Promise.resolve();
+    function line(ix) { var li = document.querySelector('#pSugL li[data-i="' + ix + '"]'); return { li: li, res: li && li.querySelector('.psres') }; }
     pick.forEach(function (ix) {
       seq = seq.then(function () {
-        var c = I.list[ix], o = S().items.filter(function (x) { return x.id === c.itemId; })[0], a = achOf(c.achId), li = document.querySelector('#pSugL li[data-i="' + ix + '"]'), res = li && li.querySelector('.psres');
-        if (!o || !a) { fail++; return; }
+        var c = my.list[ix], o = S().items.filter(function (x) { return x.id === c.itemId; })[0], a = achOf(c.achId), L = line(ix);
+        if (L.res) L.res.textContent = '연결 중…';
+        if (!o || !a) { fail++; if (L.res) L.res.textContent = '연결 못 했어요 — 항목을 찾지 못했어요. 화면을 닫고 다시 열어 주세요.'; return; }
         var pre = Promise.resolve({ ok: true });
         if (c.needLead) pre = writeLead(a, c.leadPromo === true);
         return pre.then(function (r1) {
-          if (!r1.ok) { fail++; if (res) res.textContent = '실려 있는 실적 항목이 바뀌어 건너뛰었어요.'; return; }
+          if (!r1.ok) { fail++; if (L.res) L.res.textContent = '연결 못 했어요 — 실적 탭 항목이 먼저 바뀌었어요. 다시 시도해 주세요.'; return; }
           var n = PC.achPeopleN(a), row = { id: o.id, base_rev: o.rev, ach_id: a.id, participants: n > 0 ? n : o.participants, section: o.section, item_code: o.item_code };
           return X.rpc('promo_save_item', { p_row: row }).then(function (r) {
-            if (isObj(r) && r.ok === true && isObj(r.row)) { putItem(r.row); ok++; if (li) { li.classList.add('done'); if (res) res.innerHTML = '✓ 연결했어요 <button type="button" class="pbtn sm ghost" data-un="' + esc(o.id) + '">연결 끊기</button>'; } }
-            else { fail++; if (res) res.textContent = '연결하지 못했어요' + ((isObj(r) && r.err === 'CONFLICT') ? '(다른 곳에서 먼저 바뀜)' : '') + '.'; }
+            if (isObj(r) && r.ok === true && isObj(r.row)) { putItem(r.row); ok++; if (L.li) { L.li.classList.add('done'); if (L.res) { L.res.className = 'psres ok'; L.res.innerHTML = '✓ 연결했어요 <button type="button" class="pbtn sm ghost" data-un="' + esc(o.id) + '">연결 끊기</button>'; } } }
+            else { fail++; if (L.res) L.res.textContent = '연결 못 했어요' + ((isObj(r) && r.err === 'CONFLICT') ? ' — 다른 기기에서 먼저 바뀌었어요. 화면을 닫고 다시 열어 주세요.' : ' — 다시 시도해 주세요.'); }
           });
         });
-      }).catch(function () { fail++; });
+      }).catch(function (e) { fail++; var L = line(ix); if (L.res) L.res.textContent = '연결 못 했어요 — ' + (e && e.kind === 'net' ? '인터넷이 끊겼어요. 연결되면 아래 「남은 항목 연결하기」를 다시 눌러 주세요.' : '다시 시도해 주세요.'); });
     });
     seq.then(function () {
-      I.busy = false; X.saveCache(); $('pSugGo').disabled = false; $('pSugGo').textContent = '남은 항목 연결하기'; X.render();
-      msg(ok + '건 연결했어요' + (fail ? ' · ' + fail + '건은 못 했어요' : '') + '. 연결된 항목은 아래 「연결 끊기」로 바로 풀 수 있어요.', fail === 0);
-      pick.forEach(function (ix) { var li = document.querySelector('#pSugL li[data-i="' + ix + '"] input[type=checkbox]'); if (li && li.closest && li.closest('li').classList.contains('done')) { li.checked = false; li.disabled = true; } });
+      my.busy = false; X.saveCache(); X.render();
+      Array.prototype.forEach.call(document.querySelectorAll('#pSugL .psres'), function (e) { if (/^연결 못/.test(e.textContent)) e.classList.add('fail'); });
+      if (I !== my) return;                                   // (닫기를 막아 두었지만) 창이 바뀌었으면 화면 손대지 않음 — 서버·캐시는 위에서 이미 갱신됨
+      var g2 = $('pSugGo'), c2 = $('promoCancel'); if (g2) { g2.disabled = false; g2.textContent = '남은 항목 연결하기'; } if (c2) { c2.disabled = false; c2.textContent = '닫기'; }
+      msg(ok + '건 연결했어요' + (fail ? ' · ' + fail + '건은 못 했어요(줄에 이유가 있어요)' : '') + '. 연결된 항목은 아래 「연결 끊기」로 바로 풀 수 있어요.', fail === 0);
+      pick.forEach(function (ix) { var cb = document.querySelector('#pSugL li[data-i="' + ix + '"] input[type=checkbox]'); if (cb && cb.closest('li').classList.contains('done')) { cb.checked = false; cb.disabled = true; } });
     });
     $('pSugL').onclick = function (ev) {
       var b = ev.target; var id = b && b.getAttribute && b.getAttribute('data-un'); if (!id) return;
       var o = S().items.filter(function (x) { return x.id === id; })[0]; if (!o) return; b.disabled = true;
       X.rpc('promo_save_item', { p_row: { id: o.id, base_rev: o.rev, ach_id: null, section: o.section, item_code: o.item_code } }).then(function (r) {
         if (isObj(r) && r.ok === true && isObj(r.row)) { putItem(r.row); X.saveCache(); X.render(); b.parentNode.textContent = '연결을 끊었어요.'; }
-        else { b.disabled = false; b.parentNode.insertAdjacentText && (b.textContent = '끊지 못했어요'); }
-      }).catch(function () { b.disabled = false; });
+        else { b.disabled = false; b.textContent = '끊지 못했어요 — 다시'; }
+      }).catch(function () { b.disabled = false; b.textContent = '끊지 못했어요 — 다시'; });
     };
   }
 

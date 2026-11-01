@@ -399,7 +399,7 @@
     var rb = $('promoReload'); if (rb) rb.onclick = function () { S.err = null; load(false); };
   }
   function makeCtx() {
-    return { S: S, PC: PC, edit: S.edit, link: S.link, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
   }
