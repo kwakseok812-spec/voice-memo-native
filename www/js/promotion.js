@@ -3,7 +3,7 @@
  * 서버: promo_list(읽기) · promo_save_profile(현 직급 시작일·신청 마감일만 고침). 항목 입력·수정은 2단계.
  * 건강·실적 탭과 같은 연동 암호(localStorage smart_sync_pass)를 모든 호출에 붙인다. 이름·생년월일·점수표는 이 파일에 없다.
  * 스위치: app.js 의 PROMO_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.61 과 같다.
- * 진입점: 홈 도구 9번째 칸 하나뿐(실적 탭 안에 두 번째 입구를 만들지 않는다 — 기능 중복 금지).
+ * 진입점: 홈 도구 끝 칸(실적 다음) 하나뿐(실적 탭 안에 두 번째 입구를 만들지 않는다 — 기능 중복 금지).
  */
 (function (global) {
   'use strict';
@@ -54,7 +54,7 @@
   var rpc = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
 
   /* ---------- 상태 ---------- */
-  var S = { loaded: false, loading: null, err: null, offline: false, cachedAt: null, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
+  var S = { fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
   var _toast = function () {}, built = false, animTimer = null;
   function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ at: Date.now(), profile: S.profile, items: S.items, rules: S.rules, rulesVer: S.rulesVer })); } catch (e) {} }
   function readCache() { try { var c = JSON.parse(localStorage.getItem(CKEY) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) {} return null; }
@@ -77,12 +77,13 @@
     if (S.loading) return S.loading;
     var p = rpc('promo_list', {}).then(function (d) {
       if (!isObj(d) || !Array.isArray(d.items)) throw mkErr('BAD_SHAPE', 'server');
-      applyData(d); S.loaded = true; S.offline = false; S.err = null; S.cachedAt = null; saveCache();
+      applyData(d); S.loaded = true; S.offline = false; S.fromCache = false; S.err = null; S.cachedAt = null; saveCache();
     }).catch(function (e) {
       S.err = e;
       var c = readCache();
       if (c && (e.kind === 'net' || e.kind === 'server')) { applyData(c); S.loaded = true; S.offline = true; S.cachedAt = c.at; }
       else if (!S.loaded && c && e.kind !== 'badpass' && e.kind !== 'notready') { applyData(c); S.loaded = true; S.offline = true; S.cachedAt = c.at; }
+      else if (S.loaded) { S.offline = true; S.cachedAt = S.cachedAt || Date.now(); }          // 이미 보여 주던 자료가 최신이 아닐 수 있으니, 불러오기가 실패했을 때만 배너(성공하면 배너 없음)
       if (!quiet && S.loaded && S.offline) _toast('인터넷이 안 돼서 폰에 저장해 둔 사본을 보여 드려요.', 3200);
     }).then(function () { S.loading = null; if (shown()) render(); });
     S.loading = p; return p;
@@ -93,7 +94,7 @@
     if (!S.rules) return { error: 'RULES' };
     return PC.computeAll({ items: S.items, profile: S.profile || {}, rules: S.rules, today: todayStr() });
   }
-  var SW = { pass: '통과', fail: '부족', unknown: '확인 전' }, SIC = { pass: '✓', fail: '✗', unknown: '?' };
+  var SW = { pass: '통과', fail: '부족', unknown: '확인 전', wait: '기다리는 중' }, SIC = { pass: '✓', fail: '✗', unknown: '?', wait: '⏳' };
   function ymText(cut) { return cut ? (cut[0] + '.' + cut[1]) : ''; }
   function yearsText(list) {
     if (!list.length) return '';
@@ -107,7 +108,7 @@
     var ex = 'smile', c = A.checks;
     if (c.total.s === 'fail' || c.sec3.s === 'fail' || c.lead.s === 'fail' || c.eval.s === 'fail') ex = 'concern';
     else if (c.eval.s === 'unknown' || c.tenure.s === 'unknown') ex = 'thinking';
-    else if (c.tenure.s === 'fail') ex = 'smile';
+    else if (c.tenure.s === 'wait') ex = 'smile';
     var u = '';
     try { var K = global.KChar; if (K) u = (K.poseUrl && K.poseUrl('note')) || (K.exprUrl && K.exprUrl(ex)) || ''; } catch (e) {}
     return u;
@@ -130,7 +131,7 @@
           return '<li>' + esc(p.title) + ' <small>' + esc(p.journal) + ' · ' + (p.sci ? 'SCI급' : '등재급') + '</small> ' + b + '</li>';
         }).join('') + '</ul>';
       }
-      h += '<div class="psub">「입력대로」는 대표님이 승진 앱에 넣으신 분류예요. 학술지가 SCI·등재지인지는 사무소가 조회해서 확인되면 「확인됨」으로 바꿔요. 예전 승진 앱 기준 책임저자 점수는 ' + fmtS(c.lead.legacyCorr) + '점(100점 이상이면 통과)이에요.</div>';
+      h += '<div class="psub">「입력대로」는 대표님이 승진 앱에 넣으신 분류예요. 학술지가 SCI·등재지인지는 사무소가 조회해서 확인되면 「확인됨」으로 바꿔요. 예전 승진 앱 기준 책임저자 점수는 ' + fmtS(c.lead.legacyCorr) + '점(' + c.lead.legacyNeed + '점 이상이면 통과)이에요.</div>';
     } else if (k === 'eval') {
       if (c.eval.s === 'pass') {
         h = '<b class="ph">교수업적 순위 — 통과(' + c.eval.used.map(function (e) { return e.ay + '학년도'; }).join('·') + ' 기준, 부처장 재임 학년도는 평가 제외)</b>';
@@ -143,7 +144,7 @@
     } else if (k === 'tenure') {
       if (ten.state === 'unknown') h = '<b class="ph">재직 6년 — 확인 전</b>현 직급 시작일(부교수 임용일)을 넣으면 승진임용 가능일을 계산해 드려요. 아래 「승진 시기」에서 입력할 수 있어요.';
       else if (ten.state === 'pass') h = '<b class="ph">재직 6년 — 통과</b>승진임용 가능일(' + PC.fmtDay(ten.eligible) + ')이 지났어요. 신청 마감은 인사팀 공고를 확인해 주세요.';
-      else h = '<b class="ph">재직 6년 — 부족(시간이 필요해요)</b>시작일 ' + PC.fmtDay(ten.start) + ' 기준으로 승진임용 가능일은 <b>' + PC.fmtDay(ten.eligible) + '</b>이에요(6년 이상 재직 뒤 첫 9월 1일자). 신청은 그 해 4~5월쯤이고 정확한 날은 인사팀 공고를 확인해야 해요.';
+      else h = '<b class="ph">재직 6년 — 기다리는 중(시간이 필요해요)</b>시작일 ' + PC.fmtDay(ten.start) + ' 기준으로 승진임용 가능일은 <b>' + PC.fmtDay(ten.eligible) + '</b>이에요(6년 이상 재직 뒤 첫 9월 1일자). 신청은 그 해 4~5월쯤이고 정확한 날은 인사팀 공고를 확인해야 해요.';
     }
     return h;
   }
@@ -151,7 +152,8 @@
   function banner() {            // 오프라인 사본 안내 줄
     if (!S.offline) return '';
     var d = S.cachedAt ? new Date(S.cachedAt) : null;
-    return '<div class="pbanner">' + (d ? '오프라인 사본 · ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 기준 · ' : '') + '인터넷에 다시 연결되면 새로 불러와요 <button type="button" class="pbtn sm" id="promoRetry">다시 시도</button></div>';
+    var why = (S.err && S.err.kind === 'net') ? '오프라인 사본' : '불러오지 못해 저장해 둔 사본';
+    return '<div class="pbanner"><span>' + why + (d ? ' · ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 기준' : '') + ' · 연결되면 새로 불러와요</span><button type="button" class="pbtn sm" id="promoRetry">다시 시도</button></div>';
   }
 
   function emptyHtml(kind) {
@@ -181,7 +183,9 @@
     ph += '<div class="ppair"><div><div class="plab">오늘 기준 <span class="pfloor">바닥값</span></div><div class="pbig"><span id="pTotal">0</span><small>/ ' + T.total + '</small></div></div>';
     ph += '<div><div class="plab">' + (A.expCut ? '신청 마감(' + ymText(A.expCut) + ')까지 예상' : '임기 끝까지 예상') + '</div><div class="pmid" id="pExp">0</div></div></div>';
     ph += '<div class="pmeter"><i id="pMeter"></i><u></u></div><div class="pmscale"><span>0</span><span>합격선 ' + T.total + '</span><span>합격선의 ' + Math.round(A.today.total / T.total * 100) + '%</span></div>';
-    ph += '<div class="pdiff">예전 승진 앱(<b>' + fmt(A.vsLegacy.legacyTotal) + '</b>)보다 <b>' + fmt(A.vsLegacy.diff) + '점</b> 적어요' + (A.vsLegacy.parts.length ? ': ' + A.vsLegacy.parts.map(function (p) { return esc(p.label) + ' ' + fmt(p.pts); }).join(' + ') : '') + '</div>';
+    var PEXP = { future: '보직 점수는 지금까지 재임한 개월만 세요(임기를 채우면 올라가요)', round: '반올림·절사를 규정대로 맞췄어요', before: '현 직급 시작 이전 실적은 빼요' };
+    ph += '<div class="pdiff"><button type="button" class="pdiffbtn" id="pDiffBtn" aria-expanded="' + (S.diffOpen ? 'true' : 'false') + '"><span>예전 승진 앱(<b>' + fmt(A.vsLegacy.legacyTotal) + '</b>)보다 <b>' + fmt(A.vsLegacy.diff) + '점</b> 적어요</span>' + (A.vsLegacy.parts.length ? '<i aria-hidden="true">' + (S.diffOpen ? '▴' : '▾') + '</i>' : '') + '</button>'
+      + (A.vsLegacy.parts.length ? '<ul class="pdiffl" id="pDiffL"' + (S.diffOpen ? '' : ' style="display:none"') + '>' + A.vsLegacy.parts.map(function (p) { return '<li><span>' + esc(PEXP[p.key] || p.label) + '</span><b>−' + fmt(p.pts) + '</b></li>'; }).join('') + '</ul>' : '') + '</div>';
     ph += '<div class="pnote">오늘 기준은 보직을 지금(' + ymText(A.todayCut) + ')까지 재임한 개월만 센 값이라, 임기를 채우면 올라가는 바닥값이에요.</div></section>';
     /* 타일 */
     ph += '<div class="ptiles" id="pTiles">';
@@ -225,6 +229,7 @@
     var rows = v.querySelectorAll('.prow[data-sec]');
     for (i = 0; i < rows.length; i++) rows[i].onclick = function () { S.sec = parseInt(this.getAttribute('data-sec'), 10); render(); try { v.scrollTop = 0; window.scrollTo(0, 0); } catch (e) {} };
     var ed = $('promoEdit'); if (ed) ed.onclick = openSheet;
+    var db = $('pDiffBtn'); if (db) db.onclick = function () { S.diffOpen = !S.diffOpen; var l = $('pDiffL'); if (l) l.style.display = S.diffOpen ? '' : 'none'; this.setAttribute('aria-expanded', S.diffOpen ? 'true' : 'false'); var ic = this.querySelector('i'); if (ic) ic.textContent = S.diffOpen ? '▴' : '▾'; };
     wireRetry();
     animate(A, v);
   }
@@ -237,15 +242,18 @@
     var t0 = null, dur = 450, done = false;
     function step(ts) { if (done) return; if (!t0) t0 = ts; var p = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = fmt(to * e); if (p < 1) requestAnimationFrame(step); else { done = true; el.textContent = fmt(to); } }
     requestAnimationFrame(step);
-    setTimeout(function () { done = true; el.textContent = fmt(to); }, dur + 150);        // 화면이 가려져 애니메이션이 멈춰도 최종값은 반드시 보이게
+    setTimeout(function () { done = true; el.textContent = fmt(to); }, dur + 160);        // 화면이 가려져 애니메이션이 멈춰도 최종값은 반드시 보이게
   }
   function animate(A, v) {
-    countTo($('pTotal'), A.today.total); countTo($('pExp'), A.expected.total);
     var m = $('pMeter'), mw = Math.min(100, A.today.total / (A.T.total * 2) * 100);
     var fills = v.querySelectorAll('.pfill, .pghost'), j;
+    var key = A.today.total + '|' + A.expected.total + '|' + S.rev, again = (S.lastAnim === key);       // 같은 값을 다시 그릴 때(타일 누르기 등)는 효과를 되풀이하지 않는다
+    S.lastAnim = key;
+    if (again) { var tt = $('pTotal'), ee = $('pExp'); if (tt) tt.textContent = fmt(A.today.total); if (ee) ee.textContent = fmt(A.expected.total); if (m) { m.style.transition = 'none'; m.style.width = mw + '%'; } for (j = 0; j < fills.length; j++) { fills[j].style.transition = 'none'; fills[j].style.width = fills[j].getAttribute('data-w') + '%'; } return; }
+    countTo($('pTotal'), A.today.total); countTo($('pExp'), A.expected.total);
     if (calm()) { if (m) m.style.width = mw + '%'; for (j = 0; j < fills.length; j++) fills[j].style.width = fills[j].getAttribute('data-w') + '%'; return; }
     if (animTimer) clearTimeout(animTimer);
-    animTimer = setTimeout(function () { if (m) m.style.width = mw + '%'; for (j = 0; j < fills.length; j++) (function (f, k) { setTimeout(function () { f.style.width = f.getAttribute('data-w') + '%'; }, k * 25); })(fills[j], j); }, 30);
+    animTimer = setTimeout(function () { if (m) m.style.width = mw + '%'; for (j = 0; j < fills.length; j++) (function (f, k) { setTimeout(function () { f.style.width = f.getAttribute('data-w') + '%'; }, k * 25); })(fills[j], j); }, 45);
   }
 
   /* ---------- 부문 화면(읽기 목록) ---------- */
@@ -289,13 +297,14 @@
   function openSheet() {
     var L = $('promoLayer'); if (!L) return;
     var p = S.profile || {}, ds = p.rank_start || '', dd = p.apply_deadline || '';
-    S.sheet = true;
+    S.sheet = true; S.clearOk = false;
     L.innerHTML = '<div class="pscrim" id="promoScrim"></div><div class="psheet" role="dialog" aria-label="승진 시기 날짜"><h4>승진 시기 날짜</h4>'
       + '<label>현 직급 시작일 <small>(부교수 승진 발령일)</small><input type="date" id="promoRs" value="' + esc(ds) + '"></label>'
       + '<label>신청 마감일 <small>(인사팀 공고가 나오면 · 모르면 비워 두세요)</small><input type="date" id="promoDl" value="' + esc(dd) + '"></label>'
       + '<div class="psmsg" id="promoMsg"></div><div class="pbtns"><button type="button" class="pbtn ghost" id="promoCancel">닫기</button><button type="button" class="pbtn" id="promoSave">저장</button></div></div>';
     L.classList.add('show');
     $('promoScrim').onclick = closeSheet; $('promoCancel').onclick = closeSheet; $('promoSave').onclick = saveDates;
+    $('promoRs').oninput = $('promoRs').onchange = function () { S.clearOk = false; var b = $('promoSave'); if (b) b.textContent = '저장'; var m = $('promoMsg'); if (m && /비우/.test(m.textContent)) m.textContent = ''; };
   }
   function closeSheet() { var L = $('promoLayer'); S.sheet = false; if (L) { L.classList.remove('show'); L.innerHTML = ''; } }
   function saveDates() {
@@ -304,6 +313,9 @@
     if (rs && !PC.parseDay(rs)) { msg.textContent = '시작일 날짜를 확인해 주세요.'; return; }
     if (dl && !PC.parseDay(dl)) { msg.textContent = '신청 마감일 날짜를 확인해 주세요.'; return; }
     if (rs && dl && dl < rs) { msg.textContent = '신청 마감일이 시작일보다 앞서요.'; return; }
+    if (!rs && S.profile && S.profile.rank_start && !S.clearOk) {         // 있던 시작일을 비우는 경우만 한 번 되묻는다
+      S.clearOk = true; msg.textContent = '시작일을 비우면 현 직급 이전 실적을 거르지 못하고 승진임용 가능일도 계산하지 못해요. 정말 비울까요?'; $('promoSave').textContent = '네, 비울게요'; return;
+    }
     S.saving = true; $('promoSave').disabled = true; msg.textContent = '저장 중…';
     var row = { rank_start: rs, apply_deadline: dl }; if (S.profile && typeof S.profile.rev === 'number') row.base_rev = S.profile.rev;
     rpc('promo_save_profile', { p_row: row }).then(function (res) {
@@ -330,9 +342,9 @@
   }
   function init(o) { if (o && o.toast) _toast = o.toast; build(); }
   function open() {
-    build(); S.sel = ''; S.sec = 0; closeSheet();
+    build(); S.sel = ''; S.sec = 0; S.lastAnim = ''; S.rev = (S.rev || 0) + 1; closeSheet();
     var c = readCache();
-    if (!S.loaded && c) { applyData(c); S.loaded = true; S.offline = true; S.cachedAt = c.at; }
+    if (!S.loaded && c) { applyData(c); S.loaded = true; S.fromCache = true; S.offline = false; S.cachedAt = c.at; }      // 저장본을 먼저 보여 주는 동안은 배너 없음
     render(); load(true);
   }
   /* 뒤로 가기: 창이 열려 있으면 창부터, 부문 화면이면 점수판으로. true = 여기서 처리함 */

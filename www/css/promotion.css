@@ -11,9 +11,10 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoView .pcard { border-radius: 20px; padding: 16px; background: var(--glass); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); margin-bottom: 10px; word-break: keep-all; overflow-wrap: break-word; }
 #promoView .pcard h3 { margin: 0 0 8px; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 #promoView .pcnt { font-size: 12.5px; font-weight: 600; color: var(--pd); }
+#promoView .pbanner span { min-width: 0; line-height: 1.45; }
 #promoView .pbanner { border-radius: 14px; padding: 9px 12px; margin-bottom: 8px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 12.5px; color: var(--pd); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 #promoView .pbtn { height: 44px; padding: 0 18px; border-radius: 14px; border: 0; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s; }
-#promoView .pbtn.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 11px; }
+#promoView .pbtn.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 11px; white-space: nowrap; flex: none; }
 #promoView .pbtn.ghost, #promoLayer .pbtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); }
 #promoView .pbtn:active, #promoLayer .pbtn:active, #promoView .ptile:active, #promoView .prow:active { transform: scale(.97); }
 
@@ -37,6 +38,13 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoView .pmscale { display: flex; justify-content: space-between; font-size: 11px; color: var(--pd); }
 #promoView .pdiff { margin-top: 10px; border-radius: 12px; padding: 8px 11px; background: var(--in-bg); border: 1px solid var(--glass-b); font-size: 12.5px; color: var(--pd); line-height: 1.55; }
 #promoView .pdiff b { color: var(--text); }
+#promoView .pdiff { padding: 0; overflow: hidden; }
+#promoView .pdiffbtn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; border: 0; background: none; color: var(--pd); font-size: 12.5px; line-height: 1.5; text-align: left; cursor: pointer; transition: transform .12s; }
+#promoView .pdiffbtn:active { transform: scale(.98); }
+#promoView .pdiffbtn i { font-style: normal; flex: none; }
+#promoView .pdiffl { list-style: none; margin: 0; padding: 0 11px 9px; }
+#promoView .pdiffl li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--glass-b); font-size: 12.5px; line-height: 1.45; }
+#promoView .pdiffl li b { flex: none; font-variant-numeric: tabular-nums; }
 #promoView .pnote { margin-top: 6px; font-size: 11.5px; color: var(--pd); line-height: 1.5; }
 
 /* ----- 판정 타일 5개 ----- */
@@ -48,6 +56,8 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoView .ptile.pass .pic, #promoView .ptile.pass .ps { color: var(--p-ok); }
 #promoView .ptile.fail .pic, #promoView .ptile.fail .ps { color: var(--p-bad); }
 #promoView .ptile.unknown .pic, #promoView .ptile.unknown .ps { color: var(--p-wait); }
+#promoView .ptile.wait .pic, #promoView .ptile.wait .ps { color: var(--muted); }
+#promoView .ptile.wait .ps { font-size: 10px; letter-spacing: -.4px; white-space: nowrap; }      /* 시간이 지나야 풀리는 상태 — 경고색(빨강)이 아닌 중립색 */
 #promoView .ptile.sel { outline: 2px solid var(--p1); }
 #promoView .pdetail { display: none; border-radius: 16px; padding: 12px 14px; margin: 0 0 10px; background: var(--glass); border: 1px solid var(--glass-b); font-size: 13.5px; line-height: 1.6; word-break: keep-all; }
 #promoView .pdetail.show { display: block; animation: promoRise .2s ease-out; }

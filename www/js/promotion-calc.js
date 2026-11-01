@@ -43,8 +43,10 @@
 
   /* ---------- 규칙 읽기 ---------- */
   function rulesOk(R) {
-    return isObj(R) && isObj(R.targets) && isObj(R.pos) && isObj(R.paper) && isObj(R.co_rate) && isObj(R.lecture) && isObj(R.train) && isObj(R.tft) && isObj(R.qual);
+    return isObj(R) && isObj(R.targets) && isObj(R.pos) && isObj(R.paper) && isObj(R.co_rate) && isObj(R.lecture) && isObj(R.train) && isObj(R.tft) && isObj(R.qual) && isObj(R.row_max) && typeof R.train.hours_per_day === 'number';
   }
+  /* 행(논문·저서 한 건)당 상한 — 규칙 표 row_max 에서 읽는다(없으면 상한 없음) */
+  function rowMax(R, code) { var v = R.row_max && R.row_max[code]; return typeof v === 'number' ? v : Infinity; }
   function tgt(R, target) { return (R.targets && (R.targets[target] || R.targets[R.target_default || 'full'])) || {}; }
 
   function coRate(R, n, mode) {
@@ -152,7 +154,7 @@
       r.score = r.v.ran === 'yes' ? R.programs : 0;
     });
     /* 1-3 저서·콘텐츠 / 1-5 유치금 / 1-6 PBL */
-    live('1-3').forEach(function (r) { r.score = Math.min(rnd((R.book[r.sub] || 0) * coRate(R, r.n, mode)), 70); });
+    live('1-3').forEach(function (r) { r.score = Math.min(rnd((R.book[r.sub] || 0) * coRate(R, r.n, mode)), rowMax(R, '1-3')); });
     (function () {
       var rs = live('1-5'); if (!rs.length) return;
       var t = 0; rs.forEach(function (r) { r.score = Math.floor(num(r.v.amount) / R.donation.per); t += r.score; });
@@ -215,11 +217,11 @@
     });
     /* 4부문 논문·지재권·공모 */
     function pubOK(r) { return !S || !r.v.pubYear || r.v.pubYear < 1900 || dayNum({ y: num(r.v.pubYear), m: num(r.v.pubMonth) || 12, d: 28 }) >= dayNum(S); }
-    live('4-1').forEach(function (r) { if (!pubOK(r)) { before(r, '현 직급 이전 논문'); return; } r.score = Math.min(rnd(R.paper.sci * coRate(R, r.n, mode)), R.paper.sci); });
-    live('4-2').forEach(function (r) { if (!pubOK(r)) { before(r, '현 직급 이전 논문'); return; } r.score = Math.min(rnd((R.paper.kci[r.sub] || 0) * coRate(R, r.n, mode)), 70); });
-    live('4-3').forEach(function (r) { r.score = Math.min(rnd((R.ip[r.sub] || 0) * coRate(R, r.n, mode)), 70); });
-    live('4-4').forEach(function (r) { r.score = Math.min(rnd((R.exhibit_intl[r.sub] || 0) * coRate(R, r.n, mode)), 70); });
-    live('4-5').forEach(function (r) { r.score = Math.min(rnd((R.exhibit_dom[r.sub] || 0) * coRate(R, r.n, mode)), 50); });
+    live('4-1').forEach(function (r) { if (!pubOK(r)) { before(r, '현 직급 이전 논문'); return; } r.score = Math.min(rnd(R.paper.sci * coRate(R, r.n, mode)), rowMax(R, '4-1')); });
+    live('4-2').forEach(function (r) { if (!pubOK(r)) { before(r, '현 직급 이전 논문'); return; } r.score = Math.min(rnd((R.paper.kci[r.sub] || 0) * coRate(R, r.n, mode)), rowMax(R, '4-2')); });
+    live('4-3').forEach(function (r) { r.score = Math.min(rnd((R.ip[r.sub] || 0) * coRate(R, r.n, mode)), rowMax(R, '4-3')); });
+    live('4-4').forEach(function (r) { r.score = Math.min(rnd((R.exhibit_intl[r.sub] || 0) * coRate(R, r.n, mode)), rowMax(R, '4-4')); });
+    live('4-5').forEach(function (r) { r.score = Math.min(rnd((R.exhibit_dom[r.sub] || 0) * coRate(R, r.n, mode)), rowMax(R, '4-5')); });
     /* 5부문 수상 */
     ['5-1', '5-2', '5-3'].forEach(function (code) {
       live(code).forEach(function (r) {
@@ -261,7 +263,7 @@
     if (dayNum(cand) < dayNum(el)) cand = { y: el.y + 1, m: R.promo_month, d: R.promo_day };     // 6년을 채운 뒤 첫 9월 1일
     o.eligible = cand; o.deadlineYear = cand.y;
     if (td) o.daysLeft = epochDay(cand) - epochDay(td);
-    o.state = (td && dayNum(td) >= dayNum(cand)) ? 'pass' : 'fail';
+    o.state = (td && dayNum(td) >= dayNum(cand)) ? 'pass' : 'wait';        // 시간이 지나야 풀리는 상태 — 부족(경고)이 아니라 「기다리는 중」
     return o;
   }
 
@@ -316,7 +318,7 @@
     /* 1. 현장연수 단위 */
     var tr = rows.filter(function (r) { return r.code === '1-4' && r.status === 'in'; });
     if (tr.length) {
-      var hours = ctx.today.trainHours, days = tr.reduce(function (a, r) { return a + num(r.v.hours) / 8; }, 0);
+      var hours = ctx.today.trainHours, days = tr.reduce(function (a, r) { return a + num(r.v.hours) / R.train.hours_per_day; }, 0);
       list.push({ k: 'train_unit', level: 'check', title: '현장연수 기준 단위, 인사팀 확인이 필요해요',
         text: '임용규칙 별표 11은 「일수(' + T.label.replace(' 승진', '') + ' ' + T.train_days + '일)」, 세부 기준은 「시간(' + T.train_hours + '시간)」이라고 적혀 있어요. 입력된 ' + tr.length + '건은 ' + hours + '시간(= ' + money(days) + '일)이라 시간 기준은 ' + (hours >= T.train_hours ? '통과' : '미달') + ', 일수 기준은 ' + (days >= T.train_days ? '통과' : '미달(' + R.train.points + '점이 0점)') + '이에요.' });
     }
@@ -374,11 +376,12 @@
   /* ---------- 판정 문장 ---------- */
   var CHECK_NAMES = { total: '총점', sec3: '대학발전', lead: '책임저자', eval: '교수업적 순위', tenure: '재직' };
   function sayText(ch, ten) {
-    var fails = [], waits = [], k, order = ['total', 'sec3', 'lead', 'eval', 'tenure'];
+    var fails = [], waits = [], k, order = ['total', 'sec3', 'lead', 'eval', 'tenure'], tenWait = ch.tenure.s === 'wait';
     for (var i = 0; i < order.length; i++) { k = order[i]; if (ch[k].s === 'fail') fails.push(k); else if (ch[k].s === 'unknown') waits.push(CHECK_NAMES[k]); }
     var scoreOk = ch.total.s === 'pass' && ch.sec3.s === 'pass', lead = scoreOk ? '점수는 합격선을 넘었어요. ' : '';
-    if (fails.length === 1 && fails[0] === 'tenure') return lead + '재직 6년은 아직이에요' + (ten && ten.eligible ? ' (' + fmtDay(ten.eligible) + ' 가능).' : '.') + (waits.length ? ' 아직 확인 전인 것: ' + waits.join(', ') + '.' : '');
-    if (fails.length) return '부족한 것: ' + fails.map(function (x) { return CHECK_NAMES[x]; }).join(', ') + '.' + (waits.length ? ' 확인 전인 것: ' + waits.join(', ') + '.' : '');
+    var tenTxt = '재직 6년은 아직이에요' + (ten && ten.eligible ? ' (' + fmtDay(ten.eligible) + ' 가능).' : '.');
+    if (!fails.length && tenWait) return lead + tenTxt + (waits.length ? ' 아직 확인 전인 것: ' + waits.join(', ') + '.' : '');
+    if (fails.length) return '부족한 것: ' + fails.map(function (x) { return CHECK_NAMES[x]; }).join(', ') + '.' + (waits.length ? ' 확인 전인 것: ' + waits.join(', ') + '.' : '') + (tenWait ? ' ' + tenTxt : '');
     if (waits.length) return lead + '아직 확인 전인 것: ' + waits.join(', ') + '.';
     return '모든 요건을 채웠어요.';
   }
@@ -400,7 +403,7 @@
     var L1 = score({ items: items, rules: R, target: target, mode: 'legacy', cut: todayCut, rankStart: null });
     var O1 = score({ items: items, rules: R, target: target, mode: 'official', cut: todayCut, rankStart: null });
     var legacyTotal = (profile.options && typeof profile.options.legacy_total === 'number') ? profile.options.legacy_total : L0.total;
-    var parts = [{ label: '아직 안 온 보직 달', pts: round2(L0.total - L1.total) }, { label: '반올림·절사', pts: round2(L1.total - O1.total) }, { label: '현 직급 이전 실적', pts: round2(O1.total - today.total) }].filter(function (p) { return Math.abs(p.pts) >= 0.005; });
+    var parts = [{ key: 'future', label: '아직 안 온 보직 달', pts: round2(L0.total - L1.total) }, { key: 'round', label: '반올림·절사', pts: round2(L1.total - O1.total) }, { key: 'before', label: '현 직급 이전 실적', pts: round2(O1.total - today.total) }].filter(function (p) { return Math.abs(p.pts) >= 0.005; });
     var ten = tenure(Object.assign({}, profile, { rank_start: rank }), R, opts.today);
     var fe = facultyEval(profile, items, R);
     var lead = leadPapers(today.rows, R);
@@ -408,7 +411,7 @@
     var ch = {
       total: { s: today.total >= T.total ? 'pass' : 'fail', value: today.total, need: T.total },
       sec3: { s: today.sec3 >= T.sec3 ? 'pass' : 'fail', value: today.sec3, need: T.sec3 },
-      lead: { s: (lead.length >= R.qual.min_lead_papers || profile.qual_manual) ? 'pass' : (today.rows.some(function (r) { return r.code === '4-1' || r.code === '4-2'; }) ? 'fail' : 'unknown'), papers: lead, legacyCorr: round2(legacyCorr) },
+      lead: { s: (lead.length >= R.qual.min_lead_papers || profile.qual_manual) ? 'pass' : (today.rows.some(function (r) { return r.code === '4-1' || r.code === '4-2'; }) ? 'fail' : 'unknown'), papers: lead, legacyCorr: round2(legacyCorr), legacyNeed: R.qual.legacy_points },
       eval: { s: fe.state, avg: fe.avg, used: fe.used, skipped: fe.skipped, exYears: fe.exYears, max: fe.max },
       tenure: { s: ten.state, eligible: ten.eligible, daysLeft: ten.daysLeft, start: ten.start }
     };
