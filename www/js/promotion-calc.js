@@ -59,6 +59,95 @@
     return Math.round((100 / n + 1e-9) * d) / d / 100;                    // 100/n % 를 소수 둘째 자리까지 반올림
   }
 
+  /* ---------- 실적 탭 연결 (승진 항목이 실적 항목을 가리킴 — 제목·학술지·연도·저자 수는 실적 탭 값을 그대로 쓰고 사본을 두지 않는다) ---------- */
+  function achPeopleN(a) {
+    if (!a) return 0;
+    var n = a.np != null ? a.np : (Array.isArray(a.people) ? a.people.length : 0);
+    n = Math.floor(num(n));
+    return n > 0 ? n : Math.floor(num(a.data && a.data.author_total));
+  }
+  /* 책임저자(제1저자 또는 교신저자). 승진 화면에서 정한 값(data.lead)이 있으면 그것, 없으면 실적 탭의 숨겨 둔 값(순번·공동제1·교신)으로 「제안」만 한다. 모르면 null */
+  function leadOf(a, cofirst) {
+    var d = (a && isObj(a.data)) ? a.data : {};
+    if (d.lead === true || d.lead === false) return d.lead;
+    var pos = Math.floor(num(d.author_pos)), co = d.co_first === true;
+    if (d.corresponding === true) return true;
+    if (co && cofirst !== false) return true;
+    if (pos === 1 && !co) return true;
+    if (d.corresponding === false) return false;
+    if (pos === 1 && co && cofirst === false) return false;
+    return null;
+  }
+  function achMap(ach) {
+    if (!ach) return {};
+    if (Array.isArray(ach)) { var m = {}; ach.forEach(function (a) { if (a && a.id) m[a.id] = a; }); return m; }
+    return ach;
+  }
+  function applyLinks(items, ach, on, cofirst) {
+    var map = achMap(ach), out = [], info = { mismatch: [], broken: [], leadUnknown: [], linked: 0 };
+    (items || []).forEach(function (it) {
+      if (!it || !on || !it.ach_id || it.deleted_at) { out.push(it); return; }
+      var a = map[it.ach_id];
+      if (!a || a.deleted_at) { info.broken.push(it.id); out.push(it); return; }
+      var v = Object.assign({}, isObj(it.value) ? it.value : {}), n = achPeopleN(a), mm = [], ya = a.year != null ? Number(a.year) : null;
+      if (it.item_code === '4-1' || it.item_code === '4-2') {
+        if (ya && v.pubYear !== undefined && v.pubYear !== null && Number(v.pubYear) !== ya) mm.push('연도');
+        if (ya) v.pubYear = ya;
+        if (a.title) v.title = a.title;
+        if (a.venue) v.journal = a.venue;
+        var ld = leadOf(a, cofirst);
+        v.isCorresponding = ld === true;
+        if (ld === null && (it.item_code === '4-1' || it.sub_type === 'intl_kci')) info.leadUnknown.push(it.id);        // 필수 요건에 쓰이는 논문(SCI급·등재급)만
+      } else if (a.title) { v.title = a.title; }
+      if (n > 0 && Number(it.participants) !== n) mm.push('저자 수');
+      var copy = Object.assign({}, it, { value: v, participants: n > 0 ? n : it.participants, _link: { ach: a, mismatch: mm } });
+      if (mm.length) info.mismatch.push({ id: it.id, fields: mm });
+      info.linked++; out.push(copy);
+    });
+    return { items: out, info: info };
+  }
+  /* ---------- 제목 닮은 정도 (연결 제안용 — 한글·영문 이중 표기도 괄호 안팎을 따로 비교) ---------- */
+  function normT(s) { return String(s || '').toLowerCase().replace(/[^0-9a-z\u3131-\u318e\uac00-\ud7a3]+/g, ''); }
+  function grams(s) { var g = {}, n = 0, i, k; for (i = 0; i + 1 < s.length; i++) { k = s.substr(i, 2); if (!g[k]) { g[k] = 1; n++; } } return { g: g, n: n }; }
+  function simStr(a, b) {
+    a = normT(a); b = normT(b);
+    if (a.length < 2 || b.length < 2) return (a && a === b) ? 1 : 0;
+    var A = grams(a), B = grams(b), inter = 0, k;
+    for (k in A.g) if (B.g[k]) inter++;
+    return Math.max(2 * inter / (A.n + B.n), inter / Math.min(A.n, B.n) * 0.85);
+  }
+  function titleVariants(t) { t = String(t || ''); var v = [t], m = /^(.*?)\s*\((.*)\)\s*$/.exec(t); if (m) { v.push(m[1]); v.push(m[2]); } return v; }
+  function titleSim(a, b) { var A = titleVariants(a), B = titleVariants(b), best = 0; A.forEach(function (x) { B.forEach(function (y) { var s1 = simStr(x, y); if (s1 > best) best = s1; }); }); return best; }
+  /* 연결 제안: 아직 연결 안 된 논문 항목(4-1·4-2)마다 실적 탭 논문 중 같아 보이는 것을 한 쌍씩(일대일). 자동으로 연결하지 않는다 — 화면에서 사람이 확인 */
+  function suggestLinks(items, achItems, opts) {
+    var map = achMap(achItems), cands = [], linkedAch = {}, byId = {}, list = [], usedI = {}, usedA = {}, cofirst = opts && opts.cofirst;
+    (items || []).forEach(function (it) { if (it) { byId[it.id] = it; if (!it.deleted_at && it.ach_id) linkedAch[it.ach_id] = 1; } });
+    var achArr = Object.keys(map).map(function (k) { return map[k]; }).filter(function (a) { return a && !a.deleted_at && !linkedAch[a.id]; });
+    (items || []).forEach(function (it) {
+      if (!it || it.deleted_at || it.ach_id || (it.item_code !== '4-1' && it.item_code !== '4-2')) return;
+      if (isObj(it.flags) && it.flags.excluded_default) return;
+      var v = isObj(it.value) ? it.value : {};
+      achArr.forEach(function (a) {
+        var ts = titleSim(v.title, a.title); if (ts < 0.55) return;
+        var ya = a.year != null ? Number(a.year) : null, yp = Number(v.pubYear) || null, np = achPeopleN(a);
+        var yearOk = !!(ya && yp && Math.abs(ya - yp) <= 1), nOk = np > 0 && np === Number(it.participants);
+        if (!yearOk && !nOk) return;
+        cands.push({ itemId: it.id, achId: a.id, score: ts * 0.7 + (yearOk ? (ya === yp ? 0.15 : 0.08) : 0) + (nOk ? 0.15 : 0), titleSim: ts, yearOk: yearOk, nOk: nOk });
+      });
+    });
+    cands.sort(function (x, y) { return y.score - x.score; });
+    cands.forEach(function (c) {
+      if (usedI[c.itemId] || usedA[c.achId] || c.score < 0.7) return;
+      usedI[c.itemId] = 1; usedA[c.achId] = 1;
+      var it = byId[c.itemId], a = map[c.achId], lp = !!(it.value && it.value.isCorresponding), la = leadOf(a, cofirst);
+      c.leadPromo = lp; c.leadAch = la; c.needLead = (it.item_code === '4-1' || it.sub_type === 'intl_kci') && la !== lp;                       // 승진 앱 값과 실적 탭에서 읽은 값이 다르거나 모르면, 확인 때 승진 앱 값으로 실적 항목 data.lead 에 적는다
+      list.push(c);
+    });
+    var order = {}; (items || []).forEach(function (it, i) { if (it) order[it.id] = i; });
+    list.sort(function (x, y) { return order[x.itemId] - order[y.itemId]; });
+    return list;
+  }
+
   /* ---------- 항목 이름표 (화면용) ---------- */
   function subName(R, code, sub) { var m = R.sub_names && R.sub_names[code]; return (m && m[sub]) || ''; }
   function rowLabel(it, R) {
@@ -178,6 +267,11 @@
       });
       var meets = tot >= T.train_hours, den = tot > 0 ? tot : 1;
       use.forEach(function (r) { r.score = meets ? rnd(R.train.points * (eff[r.id] || 0) / den) : 0; });
+      /* 건별로 나눠 반올림하다 생기는 0.01~0.02점 어긋남은 마지막 건에 몰아 합계를 정확히 맞춘다(예전 앱 방식은 그대로 둠) */
+      if (meets && mode !== 'legacy') {
+        var withH = use.filter(function (r) { return (eff[r.id] || 0) > 0; });
+        if (withH.length) { var sm = 0; withH.forEach(function (r) { sm += r.score; }); withH[withH.length - 1].score = rnd(withH[withH.length - 1].score + (R.train.points - sm)); }
+      }
       trainHoursVal = tot;
     })();
     /* 2-1 수탁 연구비 · 2-2 자문 — 학년도별 50점 상한 */
@@ -211,8 +305,9 @@
       r.score = R.tft[r.sub] || 0;
     });
     live('3-3').forEach(function (r) {
-      if (S && r.v.endYear && !dayOK(num(r.v.endYear), num(r.v.endMonth) || 12, 28)) { before(r, '최종 완성이 현 직급 이전'); return; }
-      if (!r.v.endYear && !r.v.completionYear) r.reasons.push('날짜가 없어요');
+      var ey = num(r.v.endYear) || num(r.v.completionYear), em = num(r.v.endMonth) || num(r.v.completionMonth);
+      if (S && ey && !dayOK(ey, em || 12, 28)) { before(r, '최종 완성이 현 직급 이전'); return; }
+      if (!ey) r.reasons.push('날짜가 없어요');
       r.score = R.policy_report;
     });
     /* 4부문 논문·지재권·공모 */
@@ -313,34 +408,51 @@
   }
 
   /* ---------- 점검할 것 ---------- */
+  /* level: check(데이터 점검) · ok(확인됨) · info(안내) · ref(규정이 분명하지 않은 부분 — 참고) */
   function buildChecks(ctx) {
-    var R = ctx.rules, T = tgt(R, ctx.target), list = [], rows = ctx.today.rows, ten = ctx.tenure, fe = ctx.fe, profile = ctx.profile, items = ctx.items;
-    /* 1. 현장연수 단위 */
+    var R = ctx.rules, T = tgt(R, ctx.target), list = [], rows = ctx.today.rows, ten = ctx.tenure, fe = ctx.fe, li = ctx.linkInfo || { mismatch: [], broken: [], leadUnknown: [], linked: 0 };
+    var byId = {}; rows.forEach(function (r) { byId[r.id] = r; });
+    /* 시작일 */
+    if (!ten.start) list.push({ k: 'start_missing', level: 'check', title: '현 직급 시작일이 입력 전이에요', text: '시작일을 넣으면 현 직급 이전 실적을 가려내고 승진임용 가능일을 계산해요(승진 시기 칸에서 넣을 수 있어요).' });
+    /* 중복 의심 · 확인 전 */
+    var dup = rows.filter(function (r) { return r.flags.dup_suspect; });
+    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐어요', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 실적 탭에는 한 편이에요. 삭제하지 않았고, 항목을 열어 「점수에 넣기」로 바꿀 수 있어요.' });
+    var unv = rows.filter(function (r) { return r.flags.unverified && r.status === 'in'; });
+    if (unv.length) list.push({ k: 'unverified', level: 'check', title: '확인 전 항목 ' + unv.length + '건(점수에는 포함)', text: unv.map(function (r) { return '「' + (r.v.title || '') + '」'; }).join(' · ') + ' — 게재 여부·증명서가 확인되면 항목을 열어 「확인됨」으로 바꿀 수 있어요.' });
+    var nd = rows.filter(function (r) { return r.code === '3-3' && r.status === 'in' && !(num(r.v.endYear) || num(r.v.completionYear)); });
+    if (nd.length) list.push({ k: 'dates_missing', level: 'check', title: '날짜가 없는 정책연구 ' + nd.length + '건', text: '최종 완성일이 있으면 현 직급 기간 안인지 가릴 수 있어요(항목을 열어 날짜를 넣을 수 있어요).' });
+    /* 실적 탭 연결 */
+    if (li.mismatch.length) list.push({ k: 'link_mismatch', level: 'check', title: '연결된 논문과 승진 쪽에 적어 둔 값이 달라요 ' + li.mismatch.length + '건', text: li.mismatch.map(function (m) { var r = byId[m.id]; return '「' + (r ? (r.v.title || '') : '') + '」(' + m.fields.join('·') + ')'; }).join(' · ') + ' — 점수는 실적 탭 값으로 계산하고 있어요.' });
+    if (li.broken.length) list.push({ k: 'link_broken', level: 'check', title: '연결된 실적 항목을 찾지 못한 승진 항목 ' + li.broken.length + '건', text: '실적 탭에서 지웠거나 휴지통에 있어요. 지금은 승진 쪽에 적어 둔 값으로 계산해요(항목을 열어 다시 연결하거나 연결을 끊을 수 있어요).' });
+    if (li.leadUnknown.length) list.push({ k: 'lead_unknown', level: 'info', title: '책임저자 표시를 정하지 않은 연결 논문 ' + li.leadUnknown.length + '편', text: '항목을 열어 「책임저자(제1저자 또는 교신저자)」를 정하면 필수 요건 판정에 쓰여요. 정하기 전에는 책임저자가 아닌 것으로 봐요.' });
+    if (ctx.suggestCount) list.push({ k: 'link_suggest', level: 'info', title: '실적 탭 논문과 연결할 수 있는 승진 항목 ' + ctx.suggestCount + '건', text: '같아 보이는 논문을 찾았어요. 점수판의 「연결 제안」에서 한 번에 확인할 수 있어요.' });
+    /* 임기 확인됨 */
+    var conf = rows.filter(function (r) { return r.code === '3-1' && r.flags.term_confirmed; });
+    if (conf.length) {
+      var ev0 = isObj(conf[0].it.evidence) ? conf[0].it.evidence : {};
+      list.push({ k: 'term_confirmed', level: 'ok', title: '보직 임기: 확인됨' + (ev0.term_confirmed_by ? '(' + ev0.term_confirmed_by + ')' : ''), text: conf.map(function (r) { return r.v.positionName || '보직'; }).join('·') + ' 임기' + (ev0.term_note ? ' — ' + ev0.term_note : '') + ' · 입력된 기간을 그대로 인정했어요.' });
+    }
+    /* 경계 항목 안내 */
+    var part = rows.filter(function (r) { return r.status === 'partial' && r.code === '3-1' && r.startLoss > 0; });
+    if (part.length) list.push({ k: 'partial', level: 'info', title: '경계 항목은 시작일 이후만 인정했어요', text: part.map(function (r) { return (r.v.positionName || '보직') + ' ' + r.monthsRaw + '개월 중 ' + (r.monthsRaw - r.startLoss) + '개월'; }).join(', ') + ' (재임 개월 비율로 계산).' });
+    var bef = rows.filter(function (r) { return r.status === 'before'; });
+    if (bef.length) list.push({ k: 'before', level: 'info', title: '현 직급 이전 실적 ' + bef.length + '건은 점수에 안 넣었어요', text: bef.map(function (r) { return rowLabel(r.it, R); }).join(' / ') });
+    /* ---- 규정이 분명하지 않은 부분(참고) — 점수에는 위 기본값으로 반영했고, 행동은 필요 없어요 ---- */
     var tr = rows.filter(function (r) { return r.code === '1-4' && r.status === 'in'; });
     if (tr.length) {
       var hours = ctx.today.trainHours, days = tr.reduce(function (a, r) { return a + num(r.v.hours) / R.train.hours_per_day; }, 0);
-      list.push({ k: 'train_unit', level: 'check', title: '현장연수 기준 단위, 인사팀 확인이 필요해요',
-        text: '임용규칙 별표 11은 「일수(' + T.label.replace(' 승진', '') + ' ' + T.train_days + '일)」, 세부 기준은 「시간(' + T.train_hours + '시간)」이라고 적혀 있어요. 입력된 ' + tr.length + '건은 ' + hours + '시간(= ' + money(days) + '일)이라 시간 기준은 ' + (hours >= T.train_hours ? '통과' : '미달') + ', 일수 기준은 ' + (days >= T.train_days ? '통과' : '미달(' + R.train.points + '점이 0점)') + '이에요.' });
+      list.push({ k: 'train_unit', level: 'ref', title: '현장연수 기준이 문서마다 달라요',
+        text: '임용규칙 별표 11은 「일수(' + T.label.replace(' 승진', '') + ' ' + T.train_days + '일)」, 세부 기준은 「시간(' + T.train_hours + '시간)」이라고 적혀 있어요. 입력된 ' + tr.length + '건은 ' + hours + '시간(= ' + money(days) + '일)이라 시간 기준은 ' + (hours >= T.train_hours ? '통과' : '미달') + ', 일수 기준은 ' + (days >= T.train_days ? '통과' : '미달(' + R.train.points + '점이 0점)') + '이에요. 지금은 시간 기준으로 계산했어요.' });
     }
-    /* 2. 시작일 */
-    if (!ten.start) list.push({ k: 'start_missing', level: 'check', title: '현 직급 시작일이 입력 전이에요', text: '시작일이 있어야 현 직급 이전 실적을 거르고 승진임용 가능일을 계산해요. 승진 시기 칸에서 입력해 주세요.' });
-    /* 3. 교수업적 순위 */
     if (fe.mixed.length && ten.start) {
       fe.mixed.forEach(function (ay) {
         var beforeMonths = Math.max(0, mi(ten.start.y, ten.start.m) - mi(ay, 3));
-        list.push({ k: 'eval_mixed', level: 'check', title: '교수업적 순위: ' + ay + '학년도에 현 직급 이전 기간이 섞여 있어요',
-          text: ay + '학년도(' + ay + '.3~' + (ay + 1) + '.2) 안에 현 직급 시작(' + fmtDay(ten.start) + ') 이전 ' + beforeMonths + '개월이 들어 있어요. 규정(세부기준 공통 6)은 현 직급이 아닌 기간이 든 학년도의 평가를 반영하지 않는다고 하는데, 부교수 승진 직후 학년도를 어떻게 보는지 인사팀 확인이 필요해요. 지금은 대표님 말씀대로 ' + ay + '학년도 값을 반영했어요.' });
+        list.push({ k: 'eval_mixed', level: 'ref', title: '교수업적 순위: ' + ay + '학년도 일부는 현 직급 이전이에요',
+          text: ay + '학년도(' + ay + '.3~' + (ay + 1) + '.2) 안에 현 직급 시작(' + fmtDay(ten.start) + ') 이전 ' + beforeMonths + '개월이 들어 있어요. 규정(세부기준 공통 6)은 현 직급이 아닌 기간이 든 학년도의 평가를 반영하지 않는다고 하는데, 부교수 승진 직후 학년도를 어떻게 보는지는 분명하지 않아요. 지금은 이 학년도 값을 반영했어요.' });
       });
     }
-    if (fe.partialYears.length) list.push({ k: 'eval_partial', level: 'check', title: '부처장 재임이 학년도 일부만 걸치는 학년도가 있어요',
-      text: fe.partialYears.map(function (e) { return e.ay + '학년도(' + e.cover + '개월)'; }).join(', ') + ' — 일부만 걸쳐도 그 학년도 평가를 빼는지 인사팀 확인이 필요해요. 지금은 일부만 걸쳐도 뺀다고 봤어요.' });
-    /* 4. 중복 의심 */
-    var dup = rows.filter(function (r) { return r.flags.dup_suspect; });
-    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐어요', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 실적 탭에는 한 편이에요. 삭제하지 않았고 대표님 확인 뒤 확정해요.' });
-    /* 5. 확인 전 */
-    var unv = rows.filter(function (r) { return r.flags.unverified && r.status === 'in'; });
-    if (unv.length) list.push({ k: 'unverified', level: 'check', title: '확인 전 논문 ' + unv.length + '편(점수에는 포함)', text: unv.map(function (r) { return '「' + (r.v.title || '') + '」'; }).join(' · ') + ' — 게재 여부·증명서를 나중에 확인하면 확정해요.' });
-    /* 6. 같은 사업 연차별 중복 */
+    if (fe.partialYears.length) list.push({ k: 'eval_partial', level: 'ref', title: '부처장 재임이 학년도 일부만 걸치는 학년도',
+      text: fe.partialYears.map(function (e) { return e.ay + '학년도(' + e.cover + '개월)'; }).join(', ') + ' — 일부만 걸쳐도 그 학년도 평가를 빼는지는 분명하지 않아요. 지금은 일부만 걸쳐도 뺀다고 봤어요.' });
     var groups = {};
     rows.forEach(function (r) { if (r.flags.series && r.status !== 'excluded') { var k = r.code + '|' + r.flags.series; (groups[k] = groups[k] || []).push(r); } });
     var effect = 0, gtxt = [];
@@ -348,28 +460,13 @@
       var g = groups[k]; if (g.length < 2) return;
       var each = g[0].score || 0, loss = each * (g.length - 1); effect += loss; gtxt.push(g[0].flags.series + ' ' + g.length + '건(' + R.names[g[0].code] + ')');
     });
-    if (gtxt.length) list.push({ k: 'series_dup', level: 'check', title: '같은 사업의 연차별 실적 중복 의심', text: '규정 공통 13번은 같은 사업의 연차별 실적을 부문별로 1회만 인정한다고 해요. ' + gtxt.join(', ') + '. 엄격히 보면 최대 −' + money(effect) + '점이고 합격에는 영향이 없어요. 자동으로 깎지는 않았고 표시만 해요.', effect: effect });
-    /* 7. 임기 확인됨 */
-    var conf = rows.filter(function (r) { return r.code === '3-1' && r.flags.term_confirmed; });
-    if (conf.length) {
-      var ev0 = isObj(conf[0].it.evidence) ? conf[0].it.evidence : {};
-      list.push({ k: 'term_confirmed', level: 'ok', title: '보직 임기: 확인됨' + (ev0.term_confirmed_by ? '(' + ev0.term_confirmed_by + ')' : ''), text: conf.map(function (r) { return r.v.positionName || '보직'; }).join('·') + ' 임기' + (ev0.term_note ? ' — ' + ev0.term_note : '') + ' · 입력된 기간을 그대로 인정했어요.' });
-    }
-    /* 8. 교수법 2건 · 진행 중 학기 */
+    if (gtxt.length) list.push({ k: 'series_dup', level: 'ref', title: '같은 사업의 연차별 실적 중복 가능성', text: '규정 공통 13번은 같은 사업의 연차별 실적을 부문별로 1회만 인정한다고 해요. ' + gtxt.join(', ') + '. 엄격히 보면 최대 −' + money(effect) + '점이고 합격에는 영향이 없어요. 지금은 깎지 않고 입력된 대로 뒀어요.', effect: effect });
     var pr = rows.filter(function (r) { return r.code === '1-2' && r.status === 'in'; });
     if (pr.length >= 1) {
       var td = parseDay(ctx.todayStr), ing = pr.filter(function (r) { var st = semStart(r.ay, r.v.semester); if (!st || !td) return false; var en = st.m === 3 ? { y: st.y, m: 8, d: 31 } : { y: st.y + 1, m: 2, d: 28 }; return dayNum(td) >= dayNum(st) && dayNum(td) <= dayNum(en); });
-      if (pr.length >= 2 || ing.length) list.push({ k: 'programs', level: 'check', title: '교수법 프로그램 ' + pr.length + '건: ' + (pr.length * R.programs) + '점(최대 ' + R.programs + '점일 수도 있음, ±' + ((pr.length - 1) * R.programs) + ')',
-        text: (pr.length >= 2 ? '규정이 「' + R.programs + '점」만 말해서 합산인지 항목 최대인지 인사팀 확인이 필요해요. ' : '') + (ing.length ? '진행 중인 학기(' + ing.map(function (r) { return r.ay + '학년도 ' + r.v.semester + '학기'; }).join(', ') + ') 실적이 학기가 끝나기 전에 인정되는지도 확인이 필요해요.' : '') });
+      if (pr.length >= 2 || ing.length) list.push({ k: 'programs', level: 'ref', title: '교수법 프로그램 ' + pr.length + '건: ' + (pr.length * R.programs) + '점(최대 ' + R.programs + '점일 수도 있음, ±' + ((pr.length - 1) * R.programs) + ')',
+        text: (pr.length >= 2 ? '규정이 「' + R.programs + '점」만 말해서 합산인지 항목 최대인지 분명하지 않아요. ' : '') + (ing.length ? '진행 중인 학기(' + ing.map(function (r) { return r.ay + '학년도 ' + r.v.semester + '학기'; }).join(', ') + ') 실적이 학기가 끝나기 전에 인정되는지도 분명하지 않아요. ' : '') + '지금은 입력된 대로 합산해 계산했어요.' });
     }
-    /* 9. 날짜 없는 정책연구 */
-    var nd = rows.filter(function (r) { return r.code === '3-3' && r.status === 'in' && !r.v.endYear && !r.v.completionYear; });
-    if (nd.length) list.push({ k: 'dates_missing', level: 'check', title: '날짜가 없는 정책연구 ' + nd.length + '건', text: '최종 완성일이 없으면 현 직급 기간 안인지 확인할 수 없어요. 증빙(보고서 표지·제출문)을 확인해 주세요.' });
-    /* 10. 부분 인정 안내 */
-    var part = rows.filter(function (r) { return r.status === 'partial' && r.code === '3-1' && r.startLoss > 0; });
-    if (part.length) list.push({ k: 'partial', level: 'info', title: '경계 항목은 시작일 이후만 인정했어요', text: part.map(function (r) { return (r.v.positionName || '보직') + ' ' + r.monthsRaw + '개월 중 ' + (r.monthsRaw - r.startLoss) + '개월'; }).join(', ') + ' (재임 개월 비율로 계산).' });
-    var bef = rows.filter(function (r) { return r.status === 'before'; });
-    if (bef.length) list.push({ k: 'before', level: 'info', title: '현 직급 이전 실적 ' + bef.length + '건은 점수에 안 넣었어요', text: bef.map(function (r) { return rowLabel(r.it, R); }).join(' / ') });
     return list;
   }
 
@@ -387,11 +484,14 @@
   }
 
   /* ---------- 한 번에 계산 ---------- */
-  /* opts: { items, profile, rules, today:'YYYY-MM-DD' } → 화면이 쓰는 모든 값 */
+  /* opts: { items, profile, rules, today:'YYYY-MM-DD', ach:[실적 항목]|{id:항목}|null, link:true|false, cofirst } → 화면이 쓰는 모든 값 */
   function computeAll(opts) {
-    var R = opts.rules, profile = opts.profile || {}, items = opts.items || [], td = parseDay(opts.today);
+    var R = opts.rules, profile = opts.profile || {}, td = parseDay(opts.today);
     if (!rulesOk(R)) return { error: 'RULES' };
     if (!td) return { error: 'TODAY' };
+    var rawItems = opts.items || [], linkOn = opts.link !== false && !!opts.ach;
+    var lk = applyLinks(rawItems, opts.ach, linkOn, opts.cofirst), items = lk.items;
+    var suggestions = linkOn ? suggestLinks(rawItems, opts.ach, { cofirst: opts.cofirst }) : [];
     var target = profile.target || R.target_default || 'full', T = tgt(R, target), rank = profile.rank_start || null;
     var dl = parseDay(profile.apply_deadline), todayCut = [td.y, td.m];
     if (dl && mi(dl.y, dl.m) < mi(td.y, td.m)) todayCut = [dl.y, dl.m];
@@ -404,6 +504,9 @@
     var O1 = score({ items: items, rules: R, target: target, mode: 'official', cut: todayCut, rankStart: null });
     var legacyTotal = (profile.options && typeof profile.options.legacy_total === 'number') ? profile.options.legacy_total : L0.total;
     var parts = [{ key: 'future', label: '아직 안 온 보직 달', pts: round2(L0.total - L1.total) }, { key: 'round', label: '반올림·절사', pts: round2(L1.total - O1.total) }, { key: 'before', label: '현 직급 이전 실적', pts: round2(O1.total - today.total) }].filter(function (p) { return Math.abs(p.pts) >= 0.005; });
+    var todayNoBonus = today.total;
+    var bonus = Math.max(0, Math.floor(num(profile.president_bonus)) || 0);       // 총장 가점(범위는 서버가 지킴) — 총점에만 더한다(대학발전 합격선 판정에는 안 들어감, 규정 제27조 ②)
+    if (bonus) { today.total = round2(today.total + bonus); expected.total = round2(expected.total + bonus); }
     var ten = tenure(Object.assign({}, profile, { rank_start: rank }), R, opts.today);
     var fe = facultyEval(profile, items, R);
     var lead = leadPapers(today.rows, R);
@@ -411,20 +514,40 @@
     var ch = {
       total: { s: today.total >= T.total ? 'pass' : 'fail', value: today.total, need: T.total },
       sec3: { s: today.sec3 >= T.sec3 ? 'pass' : 'fail', value: today.sec3, need: T.sec3 },
-      lead: { s: (lead.length >= R.qual.min_lead_papers || profile.qual_manual) ? 'pass' : (today.rows.some(function (r) { return r.code === '4-1' || r.code === '4-2'; }) ? 'fail' : 'unknown'), papers: lead, legacyCorr: round2(legacyCorr), legacyNeed: R.qual.legacy_points },
+      lead: { s: (lead.length >= R.qual.min_lead_papers || profile.qual_manual) ? 'pass' : (today.rows.some(function (r) { return r.code === '4-1' || r.code === '4-2'; }) ? 'fail' : 'unknown'), papers: lead, legacyCorr: round2(legacyCorr), legacyNeed: R.qual.legacy_points, manual: !!profile.qual_manual },
       eval: { s: fe.state, avg: fe.avg, used: fe.used, skipped: fe.skipped, exYears: fe.exYears, max: fe.max },
       tenure: { s: ten.state, eligible: ten.eligible, daysLeft: ten.daysLeft, start: ten.start }
     };
-    var checks = buildChecks({ rules: R, target: target, today: today, tenure: ten, fe: fe, profile: profile, items: items, todayStr: opts.today });
+    var checks = buildChecks({ rules: R, target: target, today: today, tenure: ten, fe: fe, profile: profile, items: items, todayStr: opts.today, linkInfo: lk.info, suggestCount: suggestions.length });
     return {
-      target: target, T: T, today: today, expected: expected, vsLegacy: { legacyTotal: legacyTotal, diff: round2(legacyTotal - today.total), parts: parts, computedLegacy: L0.total },
+      target: target, T: T, today: today, expected: expected, bonus: bonus, vsLegacy: { legacyTotal: legacyTotal, diff: round2(legacyTotal - todayNoBonus), parts: parts, computedLegacy: L0.total },
       checks: ch, tenure: ten, fe: fe, notes: checks, say: sayText(ch, ten), todayCut: todayCut, expCut: expCut,
-      pass: { total: T.total, sec3: T.sec3, sec_cap: T.sec_cap }
+      pass: { total: T.total, sec3: T.sec3, sec_cap: T.sec_cap }, linkInfo: lk.info, suggestions: suggestions, items: items
+    };
+  }
+
+  /* 「+몇 점」 미리 보기: 같은 계산을 (고치는 항목을 뺀 자료 + 초안)으로 한 번 더 돌려 앞뒤를 비교 */
+  function simulate(opts, draft, replaceId) {
+    var base = computeAll(opts);
+    if (base.error) return { error: base.error };
+    var items = (opts.items || []).filter(function (i) { return !(i && replaceId && i.id === replaceId); });
+    if (draft) items.push(draft);
+    var after = computeAll(Object.assign({}, opts, { items: items }));
+    if (after.error) return { error: after.error };
+    var sec = draft ? parseInt(String(draft.item_code).charAt(0), 10) : 0, bs = sec ? base.today.sections[sec] : null, as = sec ? after.today.sections[sec] : null;
+    var row = null; after.today.rows.forEach(function (r) { if (draft && r.id === draft.id) row = r; });
+    var code = draft ? draft.item_code : null;
+    return {
+      before: { today: base.today.total, expected: base.expected.total }, after: { today: after.today.total, expected: after.expected.total },
+      dToday: round2(after.today.total - base.today.total), dExpected: round2(after.expected.total - base.expected.total),
+      itemBefore: code && base.today.itemTotals[code] !== undefined ? base.today.itemTotals[code] : 0, itemAfter: code && after.today.itemTotals[code] !== undefined ? after.today.itemTotals[code] : 0,
+      section: sec, secBefore: bs ? bs.used : 0, secAfter: as ? as.used : 0, secCapped: !!(as && as.capped), secMax: as ? as.max : null,
+      status: row ? row.status : null, reasons: row ? row.reasons : [], sec3: { before: base.today.sec3, after: after.today.sec3 }
     };
   }
 
   return {
-    computeAll: computeAll, score: score, tenure: tenure, facultyEval: facultyEval, leadPapers: leadPapers, buildChecks: buildChecks, sayText: sayText, rowLabel: rowLabel, rulesOk: rulesOk,
+    computeAll: computeAll, simulate: simulate, suggestLinks: suggestLinks, applyLinks: applyLinks, leadOf: leadOf, achPeopleN: achPeopleN, titleSim: titleSim, score: score, tenure: tenure, facultyEval: facultyEval, leadPapers: leadPapers, buildChecks: buildChecks, sayText: sayText, rowLabel: rowLabel, rulesOk: rulesOk,
     coRate: coRate, trunc2: trunc2, round2: round2, hakyeon: hakyeon, parseDay: parseDay, fmtDay: fmtDay, positionMonths: positionMonths, lowMonth: lowMonth, mi: mi, exemptMonths: exemptMonths, yearCover: yearCover, CHECK_NAMES: CHECK_NAMES
   };
 });
