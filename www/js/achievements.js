@@ -1,5 +1,5 @@
 /* ============================================================================
- * achievements.js — 「실적」 탭 (v9.59·v9.60, O-0684)  교수님의 논문·학위논문·특허·저서·연구과제·수상·학회활동 기록을 모아 보고 찾는 화면
+ * achievements.js — 「곽호석」 탭(v9.69 이전 이름 「실적」 — 화면에 보이는 이름만 바뀌었고 이 파일·ach_* 표·AchTab 이름은 그대로) (v9.59·v9.60, O-0684)  교수님의 논문·학위논문·특허·저서·연구과제·수상·학회활동 기록을 모아 보고 찾는 화면
  * v9.60: 특허·저서·연구과제·수상·학회활동 종류 추가 — 칸 정의는 아래 PROFILES 표 한 곳. 서버에 그 종류 행(ach_cats)이 없으면 탭이 보이지 않는다(서버 시드가 곧 스위치).
  * ----------------------------------------------------------------------------
  * 화면: 요약(첫 화면) · 논문 목록(역할 칩·걸러내기·정렬) · 학위논문 목록 · 상세 · 추가/고치기 · 휴지통 · ⚙ 설정(내 이름 표기·내보내기·종류 관리·스위치 2개)
@@ -220,7 +220,7 @@
       var c = dep.cfg();
       if (!c) return Promise.reject(mkErr('NO_CONFIG', 'server'));
       var pass = dep.pass();
-      if (!pass) { dep.needPass('실적을 저장·조회하려면 PC 연동 암호를 입력해 주세요.'); return Promise.reject(mkErr('NO_PASS', 'badpass')); }
+      if (!pass) { dep.needPass('저장·조회하려면 PC 연동 암호를 입력해 주세요.'); return Promise.reject(mkErr('NO_PASS', 'badpass')); }
       body = body || {}; body.p_pass = pass;
       var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, dep.timeout || 20000) : null;
       var f = dep.fetch || global.fetch;
@@ -232,7 +232,7 @@
         if (r.ok) return r.json();
         return r.text().then(function (t) {
           var kind = classifyHttp(r.status, t), e = mkErr(kind === 'badpass' ? 'BAD_PASSCODE' : (kind === 'notready' ? 'NOT_READY' : 'HTTP_' + r.status), kind);
-          if (kind === 'badpass') dep.needPass('연동 암호가 맞지 않아 실적을 저장·조회하지 못했습니다. 다시 입력해 주세요.');
+          if (kind === 'badpass') dep.needPass('연동 암호가 맞지 않아 저장·조회하지 못했습니다. 다시 입력해 주세요.');
           throw e;
         });
       }, function () { if (tm) clearTimeout(tm); throw mkErr('NETWORK', 'net'); });   // 인터넷 끊김·시간 초과
@@ -711,7 +711,7 @@
   function errText(e) {
     if (!e) return '';
     if (e.kind === 'badpass') return '연동 암호가 맞지 않아요. 암호를 다시 입력해 주세요.';
-    if (e.kind === 'notready') return '서버에 실적 표가 아직 준비되지 않았어요.';
+    if (e.kind === 'notready') return '서버에 곽호석 탭 표가 아직 준비되지 않았어요.';
     if (e.kind === 'net') return '인터넷에 연결되지 않았어요.';
     if (e.kind === 'nofile') return 'PDF 파일이 서버에 없어요.';
     if (e.kind === 'gone') return '이 항목은 휴지통에 있거나 지워졌어요.';
@@ -724,7 +724,7 @@
   function build() {
     if (built) return; built = true;
     var b = view(); if (!b) return;
-    b.innerHTML = '<div class="ach-search" id="achSearch"><span aria-hidden="true">🔍</span><input id="achQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="제목·저자·번호·연도로 찾기"><button type="button" class="ach-x" id="achQx" aria-label="검색어 지우기">✕</button></div>' +
+    b.innerHTML = '<div class="ach-walk" id="achWalk">걸어온 길</div><div class="ach-search" id="achSearch"><span aria-hidden="true">🔍</span><input id="achQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="제목·저자·번호·연도로 찾기"><button type="button" class="ach-x" id="achQx" aria-label="검색어 지우기">✕</button></div>' +
       '<div class="ach-tabs" id="achTabs" role="tablist"></div><div id="achMain"></div>';
     var layer = document.createElement('div');
     layer.id = 'achLayer';
@@ -773,6 +773,7 @@
   }
   function renderMain() {
     var m = $('achMain'); if (!m) return;
+    var wk = $('achWalk'); if (wk) wk.classList.toggle('show', S.tab === 'sum' && !S.q);     // O-0722: 요약 화면에서만 제목 아래 작은 글씨 「걸어온 길」
     if (!S.loaded) {
       if (S.loading) { m.innerHTML = '<div class="ach-empty">불러오는 중이에요…</div>'; return; }
       m.innerHTML = '<div class="ach-empty"><b>불러오지 못했어요</b>' + esc(errText(S.err) || '') + '<br><span class="ach-note">저장된 기록은 그대로예요. 숫자를 0으로 보여 드리지 않아요.</span><button type="button" class="ach-btn" data-act="reload">다시 시도</button></div>';
@@ -836,7 +837,7 @@
           '<div class="ach-small">' + (split ? split + ' · ' : '') + '학술지 논문 숫자에 섞이지 않아요</div></div>';
       }
     });
-    if (!any) return h + '<div class="ach-empty"><b>아직 종류가 없어요</b>서버의 실적 종류가 비어 있어요. ⚙ 설정에서 종류를 만들 수 있어요.</div>';
+    if (!any) return h + '<div class="ach-empty"><b>아직 종류가 없어요</b>서버의 곽호석 탭 종류가 비어 있어요. ⚙ 설정에서 종류를 만들 수 있어요.</div>';
     var paperKind = ks.filter(isPaperKind)[0];
     if (paperKind) {
       var pubs = ofKind(paperKind.id).filter(isPub), yb = yearBars(pubs, new Date().getFullYear());
@@ -1535,7 +1536,7 @@
   function openSettings() {
     build();
     var tr = trashed().length;
-    openSheet('<h2>실적 설정</h2>' +
+    openSheet('<h2>곽호석 설정</h2>' +
       '<button type="button" class="ach-setrow" data-act="trashlist">휴지통 <small>' + tr + '건 ›</small></button>' +
       (S.simple ? '' : '<button type="button" class="ach-setrow" data-act="names">내 이름 표기 <small>' + (S.settings.names.length ? '내가 더한 ' + S.settings.names.length + '개 ›' : '자동 찾기 ›') + '</small></button>') +
       '<button type="button" class="ach-setrow" data-act="export">내보내기 <small>JSON ›</small></button>' +
@@ -1565,7 +1566,7 @@
     try {
       var f = new File([payload], name, { type: 'application/json' });
       if (navigator.canShare && navigator.canShare({ files: [f] })) {
-        navigator.share({ files: [f], title: '실적 내보내기' }).catch(function (e) { if (e && e.name === 'AbortError') return; copyFallback(); });   // 공유 창을 그냥 닫은 건(AbortError) 복사하지 않고, 정말 실패했을 때만 복사
+        navigator.share({ files: [f], title: '곽호석 내보내기' }).catch(function (e) { if (e && e.name === 'AbortError') return; copyFallback(); });   // 공유 창을 그냥 닫은 건(AbortError) 복사하지 않고, 정말 실패했을 때만 복사
         return;
       }
     } catch (e) {}

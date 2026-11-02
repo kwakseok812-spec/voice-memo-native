@@ -257,7 +257,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -3704,6 +3704,7 @@
   APP_VERSION = 'v9.66';        // v9.66(O-0693): 건강 탭 「🎤 말로 기록」 — 오른쪽 아래 알약을 누르고 "공복혈당 98, 체중 71.2, 아침은 계란"처럼 말하면 확인 카드로 정리해 [저장] 한 번으로 적음(이미 적힌 칸은 덮어쓰지 않고 식단은 덧붙임 · 읽지 못한 말은 숨기지 않고 보여 줌 · 8초 되돌리기) · 폰 안 규칙 해석(서버·PC 변경 없음 · 말 원문 저장 안 함) · 스위치 health-voice.js VOICE_ENTRY_ON(끄면 이전 판과 같음) · versionCode 110
   // (직전) v9.67(O-0696): 「승진」 백업 내려받기가 폰에서 실제 파일로 저장되게 — 폰(웹뷰)에는 공유 창 · blob 다운로드가 없어 늘 복사 상자로 떨어지던 것을, 문서 사본 저장과 같은 폰 저장 길(공유함 → 다운로드 폴더)로 · 저장 중/성공/실패(이유)를 창에 표시 · 서버·SQL 변경 없음 · versionCode 111
   APP_VERSION = 'v9.68';        // v9.68(O-0696): 「승진」 백업 내려받기의 기본 결과물을 엑셀(.xlsx)로 — JSON 은 컴퓨터용이라 폰에서 열어도 읽을 수 없었다 · 첫 단추 「엑셀로 내려받기」(점수 요약·항목 목록·안내 세 시트, 앱에 든 SheetJS 만 사용) · 둘째 단추 「복원용 백업(JSON)」은 그대로 남김 · 창을 열자마자 저장하지 않고 단추로 고름 · 서버·SQL 변경 없음 · versionCode 112
+  APP_VERSION = 'v9.69';        // v9.69(O-0720·O-0721·O-0722): 홈 맨 끝 「사진첩」 칸(유치원~대학원·교수 시절·가족 사진 642장과 족보 1장을 격자로 훑고 한 장씩 밀어 넘기며 두 손가락·더블탭으로 확대 · 아무거나 보기 · 이 단계 확인함 · 고치기·휴지통) · 「실적」 탭의 화면 이름을 「곽호석」으로(걸어온 길) · 스위치 ALBUM_TAB · 서버 album_photos 표/album_* 함수/album-file 함수/비공개 저장소 album-files · versionCode 113
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9390,6 +9391,10 @@
       if (window.AchTab && AchTab.back && AchTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('albumView'))) {      // O-0720 v9.69: 사진첩 — 큰 보기·열린 창부터 닫고, 더 닫을 게 없으면 홈으로
+      if (window.AlbumTab && AlbumTab.back && AlbumTab.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('promoView'))) {      // O-0684 v9.62: 승진 — 열린 날짜 창·부문 상세부터 닫고, 더 닫을 게 없으면 홈으로
       if (window.PromoTab && PromoTab.back && PromoTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -9910,6 +9915,23 @@
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
       $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);
+    } catch (e) {}
+  }
+
+  /* ---- 사진첩(O-0720 v9.69): 화면 열기/연결(로직은 album.js) ----
+   *   스위치 ALBUM_TAB: 'on' = 홈 도구 맨 끝(승진 다음)에 「사진첩」 칸 · 'off' = 칸이 보이지 않아 v9.68 과 같다(서버 무관). 서버 표 album_photos·함수 album_*·album-file 이 있어야 사진이 보인다. */
+  var ALBUM_TAB = 'on';
+  var albumView = $('albumView');
+  function openAlbum() {
+    openScreen(albumView);
+    if (window.AlbumTab && AlbumTab.open) { try { AlbumTab.open(); } catch (e) {} }
+  }
+  if (ALBUM_TAB !== 'off' && window.AlbumTab && window.AchPure && $('btnAlbum')) {
+    try {
+      AlbumTab.init({ toast: toast });
+      var albGrid = $('homeTools'), albSub = albGrid && albGrid.querySelector('.tools-sub');
+      if (albGrid && albSub) albGrid.insertBefore($('btnAlbum'), albSub);   // 홈 도구 맨 끝(승진 다음) — 기존 칸 자리는 그대로
+      $('btnAlbum').style.display = ''; $('btnAlbum').addEventListener('click', openAlbum);
     } catch (e) {}
   }
 

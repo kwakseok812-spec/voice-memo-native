@@ -1,0 +1,120 @@
+/* ============================================================================
+ * album.css — 「사진첩」 (v9.69, O-0720)
+ * 모든 규칙은 #albumView(화면) · #albumLayer(큰 보기·창·안내 띠·떠 있는 단추) 안에서만 먹는다 — 다른 화면에 영향 없음.
+ * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 ...)를 그대로 쓴다(밝은·어두운 화면 자동).
+ * ==========================================================================*/
+
+#albumView, #albumLayer { --ad: #8F9CBE; --a-sheet: var(--bg1); --a-scrim: rgba(3,6,18,.62); --a-toast: #1f2a52; }
+html[data-style="light"] #albumView, html[data-style="light"] #albumLayer { --ad: var(--dim); --a-sheet: var(--bg0); --a-scrim: rgba(15,23,42,.35); --a-toast: #1E293B; }
+
+#albumView { padding-bottom: 110px; }
+#albumView button, #albumLayer button { font-family: inherit; }
+
+/* ----- 단계 칩 ----- */
+.alb-chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+.alb-chips::-webkit-scrollbar { display: none; }
+.alb-chip { flex: none; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--muted); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s; }
+.alb-chip small { font-size: 11.5px; font-weight: 600; opacity: .9; margin-left: 2px; }
+.alb-chip.on { color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); border-color: transparent; box-shadow: var(--glow-s); }
+.alb-chip:active, .alb-tile:active, .alb-btn:active, .alb-shuf:active, .alb-setrow:active { transform: scale(.96); }
+
+/* ----- 한 줄(장수 · 이 단계 확인함) ----- */
+.alb-line { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--ad); margin: 2px 2px 8px; min-height: 36px; }
+.alb-vfy { border: 0; background: none; color: var(--p1); font-size: 13.5px; font-weight: 700; min-height: 40px; padding: 0 6px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* ----- 격자 ----- */
+.alb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+@media (min-width: 600px) { .alb-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; } }
+.alb-tile { position: relative; aspect-ratio: 1; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: var(--glass); cursor: pointer; animation: alb-up .22s both; transition: transform .12s; }
+.alb-tile .ph { position: absolute; inset: 0; background: linear-gradient(135deg, var(--glass), var(--glass-b)); }
+.alb-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; animation: alb-fade .22s both; }
+.alb-tile .dt { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 6px 4px; font-size: 11px; font-weight: 700; color: #fff; text-align: left; background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+.alb-tile.fail::after { content: attr(data-err); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+@keyframes alb-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes alb-fade { from { opacity: 0; } to { opacity: 1; } }
+.alb-sent { height: 1px; }
+.alb-end { text-align: center; color: var(--ad); font-size: 13px; margin: 16px 0 6px; min-height: 18px; }
+
+.alb-note { font-size: 12.5px; color: var(--ad); margin: 6px 2px; line-height: 1.5; }
+.alb-banner { border-radius: 14px; background: var(--warn-bg); border: 1px solid var(--warn); padding: 10px 12px; margin: 2px 0 10px; font-size: 13.5px; font-weight: 700; color: var(--warn-t, var(--warn)); line-height: 1.5; display: flex; align-items: center; gap: 10px; }
+.alb-banner span { flex: 1; min-width: 0; }
+.alb-banner button { flex: none; height: 38px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--warn); background: none; color: var(--warn-t, var(--warn)); font-weight: 800; font-size: 14px; cursor: pointer; }
+.alb-empty { text-align: center; padding: 34px 12px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.alb-empty.sm { padding: 18px 12px; }
+.alb-empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+.alb-empty .alb-btn { margin-top: 14px; max-width: 220px; margin-left: auto; margin-right: auto; }
+
+.alb-btn { display: flex; align-items: center; justify-content: center; width: 100%; height: 56px; border-radius: 18px; border: 0; font-size: 17.5px; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); box-shadow: var(--glow-s); cursor: pointer; transition: transform .12s; }
+.alb-btn.ghost { background: var(--glass); border: 1px solid var(--glass-b); color: var(--text); box-shadow: none; }
+.alb-btn.sm { height: 44px; font-size: 15px; border-radius: 14px; width: auto; padding: 0 14px; flex: none; }
+.alb-btn.danger { color: var(--rec); }
+.alb-btn.busy { opacity: .6; pointer-events: none; }
+
+/* ----- 떠 있는 「아무거나 보기」 ----- */
+#albumLayer .alb-fab { position: fixed; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 30; display: none; }
+#albumLayer .alb-fab.show { display: block; }
+.alb-shuf { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px; border: 0; border-radius: 999px; font-size: 16px; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); box-shadow: 0 8px 22px rgba(0,0,0,.35), var(--glow-s); cursor: pointer; transition: transform .12s; }
+.alb-shuf svg { width: 20px; height: 20px; }
+
+/* ----- 창(바닥 시트) · 안내 띠 ----- */
+#albumLayer .alb-sheet { position: fixed; inset: 0; z-index: 110; background: var(--a-scrim); display: flex; justify-content: center; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity .18s; }
+#albumLayer .alb-sheet.show { opacity: 1; pointer-events: auto; }
+#albumLayer .alb-box { width: 100%; max-width: 520px; max-height: 90vh; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--a-sheet); border: 1px solid var(--glass-b); border-radius: 26px 26px 0 0; padding: 18px 18px calc(28px + env(safe-area-inset-bottom)); transform: translateY(40px); transition: transform .2s ease; }
+#albumLayer .alb-sheet.show .alb-box { transform: none; }
+#albumLayer h2 { margin: 0 0 4px; font-size: 18px; line-height: 1.4; word-break: keep-all; overflow-wrap: anywhere; }
+.alb-lbl { display: block; font-size: 13px; color: var(--ad); margin: 12px 2px 4px; }
+.alb-lbl small { font-weight: 500; }
+#albumLayer textarea, #albumLayer input[type=text], #albumLayer select { width: 100%; border-radius: 14px; border: 1.5px solid var(--glass-b); background: var(--in-bg); color: var(--text); font-size: 16px; font-family: inherit; padding: 12px 14px; }
+#albumLayer textarea { resize: vertical; min-height: 78px; }
+.alb-err { color: var(--rec); font-size: 13.5px; font-weight: 700; min-height: 18px; margin: 4px 2px 0; }
+.alb-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.alb-setrow { display: flex; flex-direction: column; align-items: flex-start; width: 100%; min-height: 56px; padding: 10px 14px; margin-top: 10px; border-radius: 16px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--text); font-size: 15.5px; font-weight: 800; text-align: left; cursor: pointer; transition: transform .12s; }
+.alb-setrow small { font-size: 12.5px; font-weight: 500; color: var(--ad); }
+.alb-trow { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--glass-b); }
+.alb-trow .c { flex: 1; min-width: 0; }
+.alb-trow .c b { display: block; font-size: 14.5px; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+.alb-trow .c small { font-size: 12px; color: var(--ad); }
+#albumLayer .alb-toast { position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); left: 50%; transform: translate(-50%, 20px); width: calc(100% - 32px); max-width: 358px; background: var(--a-toast); color: #fff; border-radius: 14px; padding: 12px 16px 14px; font-size: 14.5px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 120; box-shadow: 0 8px 24px rgba(0,0,0,.35); overflow: hidden; }
+#albumLayer .alb-toast.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.alb-toast .tr { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.alb-toast u { color: #93c5fd; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: -12px -6px; padding: 0 8px; font-weight: 800; flex: none; }
+.alb-toast .pg { position: absolute; left: 0; bottom: 0; height: 3px; background: #93c5fd; width: 100%; transform-origin: left; }
+
+/* ----- 한 장 크게 보기 (검은 바탕 · 원본 비율) ----- */
+#albumLayer .alb-vw { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; background: #000; color: #fff; }
+#albumLayer .alb-vw.show { display: flex; animation: alb-fade .18s; }
+.alb-vtop { display: flex; justify-content: space-between; align-items: center; padding: calc(8px + env(safe-area-inset-top)) 10px 8px; }
+.alb-vb { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border: 0; border-radius: 14px; background: rgba(255,255,255,.14); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+.alb-vb.sq { width: 44px; padding: 0; justify-content: center; }
+.alb-vb svg { width: 20px; height: 20px; }
+.alb-pos { color: #c9d4e0; font-size: 13.5px; font-weight: 700; }
+.alb-menu { position: absolute; right: 10px; top: calc(60px + env(safe-area-inset-top)); z-index: 5; background: #1c2233; border: 1px solid rgba(255,255,255,.15); border-radius: 14px; padding: 6px; min-width: 200px; display: none; box-shadow: 0 10px 28px rgba(0,0,0,.5); }
+.alb-menu.show { display: block; }
+.alb-menu button { display: block; width: 100%; text-align: left; background: none; color: #fff; border: 0; padding: 13px 14px; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 10px; }
+.alb-menu button:active { background: rgba(255,255,255,.12); }
+.alb-vst { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.alb-vw2 { position: absolute; inset: 0; transition: transform .12s ease, opacity .12s; }
+.alb-vw2.out-l { transform: translateX(-40px); opacity: 0; }
+.alb-vw2.out-r { transform: translateX(40px); opacity: 0; }
+#albImg { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; transform-origin: center; will-change: transform; opacity: 0; -webkit-user-drag: none; }
+#albImg.on { opacity: 1; }
+#albImg.anim { transition: transform .18s ease; }
+.alb-arr { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 44px; height: 64px; border: 1px solid rgba(255,255,255,.3); border-radius: 14px; background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.alb-arr svg { width: 24px; height: 24px; }
+.alb-arr.l { left: 6px; } .alb-arr.r { right: 6px; }
+.alb-vw.first .alb-arr.l, .alb-vw.last .alb-arr.r, .alb-vw.zoomed .alb-arr { opacity: .25; }
+.alb-zb { position: absolute; right: 10px; bottom: 10px; z-index: 2; display: flex; gap: 8px; }
+.alb-zb button { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.35); border-radius: 14px; background: rgba(0,0,0,.6); color: #fff; font-size: 22px; font-weight: 800; cursor: pointer; }
+.alb-spin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; padding: 10px 16px; border-radius: 12px; background: rgba(0,0,0,.6); color: #dfe7f1; font-size: 14.5px; font-weight: 700; display: none; max-width: 80%; text-align: center; }
+.alb-spin.show { display: block; }
+.alb-cap { padding: 12px 16px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.85)); }
+.alb-cap .d { font-size: 16px; line-height: 1.45; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; }
+.alb-cap .m { margin-top: 5px; color: #c9d4e0; font-size: 13.5px; line-height: 1.6; }
+.alb-cap .m .sub { opacity: .7; }
+.alb-cap .h { margin-top: 5px; color: #8fa0b3; font-size: 12.5px; min-height: 16px; }
+.alb-cap .tag { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; background: rgba(255,255,255,.16); color: #d5dee8; font-size: 12px; font-weight: 700; }
+.alb-cap .tag.warn { background: #4a3413; color: #ffc779; }
+
+/* ----- 움직임 줄이기 ----- */
+#albumView.alb-calm .alb-tile, #albumView.alb-calm .alb-tile img { animation: none; }
+@media (prefers-reduced-motion: reduce) { .alb-tile, .alb-tile img, #albumLayer .alb-vw.show { animation: none !important; } .alb-vw2, #albImg.anim, .alb-chip, .alb-btn { transition: none !important; } }

@@ -8,6 +8,8 @@
 html[data-style="light"] #achView, html[data-style="light"] #achLayer { --ad: var(--dim); --a-sheet: var(--bg0); --a-scrim: rgba(15,23,42,.35); --a-toast: #1E293B; }
 
 /* ----- 화면 본문 ----- */
+.ach-walk { display: none; text-align: center; font-size: 13px; font-weight: 600; color: var(--ad); margin: -4px 0 8px; line-height: 1.4; }   /* O-0722: 요약 화면에서만(제목 「곽호석」 아래 작은 글씨) */
+.ach-walk.show { display: block; }
 #achView { padding-bottom: 96px; }
 #achView button { font-family: inherit; }
 .ach-search { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 14px; border-radius: 16px; background: var(--in-bg); border: 1.5px solid var(--glass-b); margin-bottom: 8px; }

@@ -1,9 +1,9 @@
 /* promotion.js — 「승진」 점수판 (v9.63 · v9.62 읽기 점수판 + 입력·수정·실적 연결은 promotion-edit.js)
  * 대표님의 정교수 승진 점수·요건을 한눈에 보는 화면. 계산은 promotion-calc.js(순수 함수), 규칙 숫자는 서버 promo_rules 에서 받아 온다.
- * 서버: promo_list(읽기) · promo_save_profile · promo_save_item · promo_trash_item · promo_purge_item (v9.63 입력·수정은 promotion-edit.js) · 실적 탭 연결에는 ach_list 를 읽는다.
- * 건강·실적 탭과 같은 연동 암호(localStorage smart_sync_pass)를 모든 호출에 붙인다. 이름·생년월일·점수표는 이 파일에 없다.
- * 스위치: app.js 의 PROMO_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.61 과 같다. PROMO_EDIT 'off' 면 입력 단추가 없는 v9.62 화면, PROMO_LINK 'off' 면 실적 탭을 읽지도 않는다.
- * 진입점: 홈 도구 끝 칸(실적 다음) 하나뿐(실적 탭 안에 두 번째 입구를 만들지 않는다 — 기능 중복 금지).
+ * 서버: promo_list(읽기) · promo_save_profile · promo_save_item · promo_trash_item · promo_purge_item (v9.63 입력·수정은 promotion-edit.js) · 곽호석 탭 연결에는 ach_list 를 읽는다.
+ * 건강·곽호석 탭과 같은 연동 암호(localStorage smart_sync_pass)를 모든 호출에 붙인다. 이름·생년월일·점수표는 이 파일에 없다.
+ * 스위치: app.js 의 PROMO_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.61 과 같다. PROMO_EDIT 'off' 면 입력 단추가 없는 v9.62 화면, PROMO_LINK 'off' 면 곽호석 탭을 읽지도 않는다.
+ * 진입점: 홈 도구 끝 칸(실적 다음) 하나뿐(곽호석 탭 안에 두 번째 입구를 만들지 않는다 — 기능 중복 금지).
  */
 (function (global) {
   'use strict';
@@ -17,7 +17,7 @@
   function calm() { try { if (global.KScene && KScene.calm) return !!KScene.calm(); return !!(global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function todayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 
-  /* ---------- 서버 호출 (실적 탭과 같은 방식 — 오류 구분: 암호 틀림은 응답에 BAD_PASSCODE/28000 이 있을 때만) ---------- */
+  /* ---------- 서버 호출 (곽호석 탭과 같은 방식 — 오류 구분: 암호 틀림은 응답에 BAD_PASSCODE/28000 이 있을 때만) ---------- */
   function mkErr(msg, kind) { var e = new Error(msg); e.promo = true; e.kind = kind; return e; }
   function classifyHttp(status, text) {
     var t = String(text || '');
@@ -68,7 +68,7 @@
     return '서버 오류예요. 잠시 뒤 다시 해 주세요.';
   }
 
-  /* ---------- 실적 탭 자료(연결용) — 저자 이름은 가져오지도, 폰에 저장하지도 않는다 ---------- */
+  /* ---------- 곽호석 탭 자료(연결용) — 저자 이름은 가져오지도, 폰에 저장하지도 않는다 ---------- */
   function slimAch(a) {
     var d = isObj(a.data) ? a.data : {}, keep = {}, k, KS = ['lead', 'author_pos', 'author_total', 'co_first', 'corresponding'];
     for (k = 0; k < KS.length; k++) if (d[KS[k]] !== undefined && d[KS[k]] !== null) keep[KS[k]] = d[KS[k]];
@@ -245,7 +245,7 @@
       ph += '<section class="pcard pmanage"><h3>관리</h3><div class="pmgrid">'
         + '<button type="button" class="pmbtn" data-go="sim"><b>점수 더하기 해 보기</b><small>저장 없이 점수만 계산해요</small></button>'
         + '<button type="button" class="pmbtn" data-go="profile"><b>승진 설정</b><small>날짜·가점·교수업적 순위</small></button>'
-        + (S.link ? '<button type="button" class="pmbtn" data-go="suggest"' + (sugN ? '' : ' disabled') + '><b>실적 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '</b><small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '실적 탭 자료를 못 불러왔어요') + '</small></button>' : '')
+        + (S.link ? '<button type="button" class="pmbtn" data-go="suggest"' + (sugN ? '' : ' disabled') + '><b>곽호석 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '</b><small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '곽호석 탭 자료를 못 불러왔어요') + '</small></button>' : '')
         + '<button type="button" class="pmbtn" data-go="trash"><b>휴지통' + (trashN ? ' ' + trashN + '건' : '') + '</b><small>지운 항목 복원</small></button>'
         + '<button type="button" class="pmbtn" data-go="backup"><b>백업 내려받기</b><small>' + (S.xlsx ? '엑셀 파일로 저장해요' : '파일로 저장·공유해요') + '</small></button></div></section>';
     }
@@ -312,8 +312,8 @@
         if (r.flags.series) tags.push('<span class="ptag t-ser">같은 사업 연차별</span>');
         if (r.flags.term_confirmed) tags.push('<span class="ptag t-ok">임기 확인됨</span>');
         if (r.flags.corrected) tags.push('<span class="ptag t-cor">정정해 가져옴</span>');
-        if (r.it._link) tags.push('<span class="ptag t-link">실적 탭 연결</span>');
-        if (mmIds[r.id]) tags.push('<span class="ptag t-dup">실적 탭과 ' + esc(mmIds[r.id]) + ' 다름</span>');
+        if (r.it._link) tags.push('<span class="ptag t-link">곽호석 탭 연결</span>');
+        if (mmIds[r.id]) tags.push('<span class="ptag t-dup">곽호석 탭과 ' + esc(mmIds[r.id]) + ' 다름</span>');
         var sc1 = r.score; if (code === '1-1' && r.part !== null && r.part !== undefined) sc1 = r.part;
         var inner = '<div class="pl1"><span class="plb">' + esc(PC.rowLabel(r.it, R)) + '</span><b class="psc">' + (r.status === 'excluded' || r.status === 'before' ? '0' : fmtS(sc1)) + '</b></div>';
         if (tags.length) inner += '<div class="ptags">' + tags.join('') + '</div>';

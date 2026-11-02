@@ -59,14 +59,14 @@
     return Math.round((100 / n + 1e-9) * d) / d / 100;                    // 100/n % 를 소수 둘째 자리까지 반올림
   }
 
-  /* ---------- 실적 탭 연결 (승진 항목이 실적 항목을 가리킴 — 제목·학술지·연도·저자 수는 실적 탭 값을 그대로 쓰고 사본을 두지 않는다) ---------- */
+  /* ---------- 곽호석 탭 연결 (승진 항목이 실적 항목을 가리킴 — 제목·학술지·연도·저자 수는 곽호석 탭 값을 그대로 쓰고 사본을 두지 않는다) ---------- */
   function achPeopleN(a) {
     if (!a) return 0;
     var n = a.np != null ? a.np : (Array.isArray(a.people) ? a.people.length : 0);
     n = Math.floor(num(n));
     return n > 0 ? n : Math.floor(num(a.data && a.data.author_total));
   }
-  /* 책임저자(제1저자 또는 교신저자). 승진 화면에서 정한 값(data.lead)이 있으면 그것, 없으면 실적 탭의 숨겨 둔 값(순번·공동제1·교신)으로 「제안」만 한다. 모르면 null */
+  /* 책임저자(제1저자 또는 교신저자). 승진 화면에서 정한 값(data.lead)이 있으면 그것, 없으면 곽호석 탭의 숨겨 둔 값(순번·공동제1·교신)으로 「제안」만 한다. 모르면 null */
   function leadOf(a, cofirst) {
     var d = (a && isObj(a.data)) ? a.data : {};
     if (d.lead === true || d.lead === false) return d.lead;
@@ -118,7 +118,7 @@
   }
   function titleVariants(t) { t = String(t || ''); var v = [t], m = /^(.*?)\s*\((.*)\)\s*$/.exec(t); if (m) { v.push(m[1]); v.push(m[2]); } return v; }
   function titleSim(a, b) { var A = titleVariants(a), B = titleVariants(b), best = 0; A.forEach(function (x) { B.forEach(function (y) { var s1 = simStr(x, y); if (s1 > best) best = s1; }); }); return best; }
-  /* 연결 제안: 아직 연결 안 된 논문 항목(4-1·4-2)마다 실적 탭 논문 중 같아 보이는 것을 한 쌍씩(일대일). 자동으로 연결하지 않는다 — 화면에서 사람이 확인 */
+  /* 연결 제안: 아직 연결 안 된 논문 항목(4-1·4-2)마다 곽호석 탭 논문 중 같아 보이는 것을 한 쌍씩(일대일). 자동으로 연결하지 않는다 — 화면에서 사람이 확인 */
   function suggestLinks(items, achItems, opts) {
     var map = achMap(achItems), cands = [], linkedAch = {}, byId = {}, list = [], usedI = {}, usedA = {}, cofirst = opts && opts.cofirst;
     (items || []).forEach(function (it) { if (it) { byId[it.id] = it; if (!it.deleted_at && it.ach_id) linkedAch[it.ach_id] = 1; } });
@@ -140,7 +140,7 @@
       if (usedI[c.itemId] || usedA[c.achId] || c.score < 0.7) return;
       usedI[c.itemId] = 1; usedA[c.achId] = 1;
       var it = byId[c.itemId], a = map[c.achId], lp = !!(it.value && it.value.isCorresponding), la = leadOf(a, cofirst);
-      c.leadPromo = lp; c.leadAch = la; c.needLead = (it.item_code === '4-1' || it.sub_type === 'intl_kci') && la !== lp;                       // 승진 앱 값과 실적 탭에서 읽은 값이 다르거나 모르면, 확인 때 승진 앱 값으로 실적 항목 data.lead 에 적는다
+      c.leadPromo = lp; c.leadAch = la; c.needLead = (it.item_code === '4-1' || it.sub_type === 'intl_kci') && la !== lp;                       // 승진 앱 값과 곽호석 탭에서 읽은 값이 다르거나 모르면, 확인 때 승진 앱 값으로 실적 항목 data.lead 에 적는다
       list.push(c);
     });
     var order = {}; (items || []).forEach(function (it, i) { if (it) order[it.id] = i; });
@@ -416,16 +416,16 @@
     if (!ten.start) list.push({ k: 'start_missing', level: 'check', title: '현 직급 시작일이 입력 전이에요', text: '시작일을 넣으면 현 직급 이전 실적을 가려내고 승진임용 가능일을 계산해요(승진 시기 칸에서 넣을 수 있어요).' });
     /* 중복 의심 · 확인 전 */
     var dup = rows.filter(function (r) { return r.flags.dup_suspect; });
-    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐어요', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 실적 탭에는 한 편이에요. 삭제하지 않았고, 항목을 열어 「점수에 넣기」로 바꿀 수 있어요.' });
+    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐어요', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 곽호석 탭에는 한 편이에요. 삭제하지 않았고, 항목을 열어 「점수에 넣기」로 바꿀 수 있어요.' });
     var unv = rows.filter(function (r) { return r.flags.unverified && r.status === 'in'; });
     if (unv.length) list.push({ k: 'unverified', level: 'check', title: '확인 전 항목 ' + unv.length + '건(점수에는 포함)', text: unv.map(function (r) { return '「' + (r.v.title || '') + '」'; }).join(' · ') + ' — 게재 여부·증명서가 확인되면 항목을 열어 「확인됨」으로 바꿀 수 있어요.' });
     var nd = rows.filter(function (r) { return r.code === '3-3' && r.status === 'in' && !(num(r.v.endYear) || num(r.v.completionYear)); });
     if (nd.length) list.push({ k: 'dates_missing', level: 'check', title: '날짜가 없는 정책연구 ' + nd.length + '건', text: '최종 완성일이 있으면 현 직급 기간 안인지 가릴 수 있어요(항목을 열어 날짜를 넣을 수 있어요).' });
-    /* 실적 탭 연결 */
-    if (li.mismatch.length) list.push({ k: 'link_mismatch', level: 'check', title: '연결된 논문과 승진 쪽에 적어 둔 값이 달라요 ' + li.mismatch.length + '건', text: li.mismatch.map(function (m) { var r = byId[m.id]; return '「' + (r ? (r.v.title || '') : '') + '」(' + m.fields.join('·') + ')'; }).join(' · ') + ' — 점수는 실적 탭 값으로 계산하고 있어요.' });
-    if (li.broken.length) list.push({ k: 'link_broken', level: 'check', title: '연결된 실적 항목을 찾지 못한 승진 항목 ' + li.broken.length + '건', text: '실적 탭에서 지웠거나 휴지통에 있어요. 지금은 승진 쪽에 적어 둔 값으로 계산해요(항목을 열어 다시 연결하거나 연결을 끊을 수 있어요).' });
+    /* 곽호석 탭 연결 */
+    if (li.mismatch.length) list.push({ k: 'link_mismatch', level: 'check', title: '연결된 논문과 승진 쪽에 적어 둔 값이 달라요 ' + li.mismatch.length + '건', text: li.mismatch.map(function (m) { var r = byId[m.id]; return '「' + (r ? (r.v.title || '') : '') + '」(' + m.fields.join('·') + ')'; }).join(' · ') + ' — 점수는 곽호석 탭 값으로 계산하고 있어요.' });
+    if (li.broken.length) list.push({ k: 'link_broken', level: 'check', title: '연결된 곽호석 탭 항목을 찾지 못한 승진 항목 ' + li.broken.length + '건', text: '곽호석 탭에서 지웠거나 휴지통에 있어요. 지금은 승진 쪽에 적어 둔 값으로 계산해요(항목을 열어 다시 연결하거나 연결을 끊을 수 있어요).' });
     if (li.leadUnknown.length) list.push({ k: 'lead_unknown', level: 'info', title: '책임저자 표시를 정하지 않은 연결 논문 ' + li.leadUnknown.length + '편', text: '항목을 열어 「책임저자(제1저자 또는 교신저자)」를 정하면 필수 요건 판정에 쓰여요. 정하기 전에는 책임저자가 아닌 것으로 봐요.' });
-    if (ctx.suggestCount) list.push({ k: 'link_suggest', level: 'info', title: '실적 탭 논문과 연결할 수 있는 승진 항목 ' + ctx.suggestCount + '건', text: '같아 보이는 논문을 찾았어요. 점수판의 「연결 제안」에서 한 번에 확인할 수 있어요.' });
+    if (ctx.suggestCount) list.push({ k: 'link_suggest', level: 'info', title: '곽호석 탭 논문과 연결할 수 있는 승진 항목 ' + ctx.suggestCount + '건', text: '같아 보이는 논문을 찾았어요. 점수판의 「연결 제안」에서 한 번에 확인할 수 있어요.' });
     /* 임기 확인됨 */
     var conf = rows.filter(function (r) { return r.code === '3-1' && r.flags.term_confirmed; });
     if (conf.length) {
