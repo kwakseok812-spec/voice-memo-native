@@ -8,9 +8,10 @@
  *       · 저장은 서버 응답 {ok:true} 를 받은 뒤에만 「저장했어요」. 입력 내용은 실패해도 지우지 않는다.
  *       · 날짜는 지어내지 않는다 — 모르면 「날짜 모름」, 불확실하면 「날짜 불확실」. 날짜순 정렬은 없다(앨범 순서 ord).
  *       · 삭제는 휴지통(8초 되돌리기). 영구 삭제는 휴지통 안에서 한 번 더 눌러야 하고, 저장소 파일을 먼저 지운 뒤에만 표에서 지운다.
- *       · 내려받기·공유 단추는 없다(사진이 앱 밖으로 나가지 않게). 앱 안 잠금도 없다(건강·실적 탭과 같음).
+ *       · v9.70(O-0723): 큰 보기(족보 포함)의 「내려받기」 단추 하나 — 원본 JPEG 를 폰 「다운로드」 폴더에 album_<단계영문>_<번호>.jpg(족보는 genealogy.jpg)로 저장. 끝난 뒤에만 「저장했어요」, 실패하면 「못 했어요 — 이유」.
+ *         공유 단추·여러 장 한꺼번에 내려받기는 없다. 스위치 ALBUM_DL(app.js) 'off' 면 단추가 없어 v9.69 와 같다. 앱 안 잠금도 없다(건강·실적 탭과 같음).
  * 스위치: app.js 의 ALBUM_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.68 과 같다.
- * app.js 연결: AlbumTab.init({toast}) · AlbumTab.open() · AlbumTab.back() (goBack 이 먼저 물어본다).
+ * app.js 연결: AlbumTab.init({toast, save}) · AlbumTab.open() · AlbumTab.back() (goBack 이 먼저 물어본다).
  * 시험: AlbumPure(순수 함수 묶음 — 날짜 표기·고치기 행·확대 계산·일괄 확인 대상·섞기 …)는 화면 없이 시험할 수 있게 밖으로 내놓았다.
  * 서버 호출 부품은 achievements.js 의 AchPure.makeRpc 를 그대로 쓴다(그쪽 코드는 고치지 않음).
  * ==========================================================================*/
@@ -98,6 +99,21 @@
   function panTo(z, x, y, w, h) { var lim = panLimit(z.s, w, h); return { s: z.s, x: clamp(x, -lim.x, lim.x), y: clamp(y, -lim.y, lim.y) }; }
   function toggleZoom(z, cx, cy, w, h) { return z.s > 1.02 ? { s: 1, x: 0, y: 0 } : zoomAt(z, DBL_ZOOM, cx, cy, w, h); }
 
+  /* 내려받는 파일 이름 — 영문·숫자만(한글 금지). 단계 → 영문, 번호 = 앨범 순서(ord, 4자리). 족보는 genealogy.jpg */
+  var STAGE_EN = { '유치원': 'kindergarten', '초등학교': 'elementary', '중학교': 'middle', '고등학교': 'high', '대학교': 'university', '대학원': 'graduate', '교수 시절': 'professor', '가족': 'family' };
+  function padNo(n) { var t = String(n); while (t.length < 4) t = '0' + t; return t; }
+  function dlName(x) {
+    if (!x) return 'album_photo.jpg';
+    if (x.stage === TREE) return 'genealogy.jpg';
+    var en = STAGE_EN[x.stage] || 'photo', n = +x.ord, no = (isFinite(n) && n > 0) ? padNo(Math.floor(n)) : String(x.id || '').replace(/[^0-9a-z]/gi, '').slice(0, 8).toLowerCase();
+    if (!no) no = '0000';
+    return 'album_' + en + '_' + no + '.jpg';
+  }
+  /* 앱 저장 실패 사유(합니다체 문장) → 사진첩 말투(해요체) */
+  function softenWhy(t) {
+    return String(t == null ? '' : t).replace(/않습니다/g, '않아요').replace(/합니다/g, '해요').replace(/습니다/g, '어요').replace(/됩니다/g, '돼요');
+  }
+
   function classifyFileErr(code) { return ({ bad_pass: 'badpass', no_file: 'nofile', gone: 'gone' })[code] || 'server'; }
   function mkErr(msg, kind) { var e = new Error(msg); e.alb = true; e.kind = kind; return e; }
   function makeFileApi(dep) {
@@ -128,16 +144,16 @@
   global.AlbumPure = {
     STAGES: STAGES, TREE: TREE, PAGE: PAGE, MAX_ZOOM: MAX_ZOOM, DBL_ZOOM: DBL_ZOOM, parseDate: parseDate, dateLong: dateLong, dateShort: dateShort, normDateInput: normDateInput, dateInfo: dateInfo,
     listFor: listFor, verifyTargets: verifyTargets, neighbors: neighbors, shuffle: shuffle, buildSaveRow: buildSaveRow, applyRow: applyRow,
-    panLimit: panLimit, zoomAt: zoomAt, panTo: panTo, toggleZoom: toggleZoom, makeFileApi: makeFileApi, classifyFileErr: classifyFileErr
+    panLimit: panLimit, zoomAt: zoomAt, panTo: panTo, toggleZoom: toggleZoom, makeFileApi: makeFileApi, classifyFileErr: classifyFileErr, dlName: dlName, softenWhy: softenWhy
   };
 
   /* =====================================================================
    * 2. 상태·서버
    * ===================================================================*/
   var S = { items: [], loaded: false, loading: null, err: null, offline: false, cachedAt: null, tab: 'all', shown: PAGE, list: [], lastLoadAt: 0, host: null,
-    v: { open: false, list: [], idx: 0, random: false, tok: 0 }, sheet: false, hint: true };
+    v: { open: false, list: [], idx: 0, random: false, tok: 0 }, sheet: false, hint: true, save: null };
   var CKEY = 'smart_album_cache_v1', HKEY = 'smart_album_hint_v1';
-  var _toast = function () {}, built = false, toastTimer = null, io = null, loadingMore = false;
+  var _toast = function () {}, dlBusy = {}, built = false, toastTimer = null, io = null, loadingMore = false;
   function $(id) { return document.getElementById(id); }
   function cfg() { return (global.OfficeBridge && global.OfficeBridge.CONFIG) || null; }
   function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
@@ -268,7 +284,7 @@
       '<div class="alb-sheet" id="albSheet"><div class="alb-box" id="albBox" role="dialog" aria-modal="true"></div></div>' +
       '<div class="alb-toast" id="albToast" role="status" aria-live="polite"></div>' +
       '<div class="alb-vw" id="albVw" role="dialog" aria-label="사진 크게 보기">' +
-        '<div class="alb-vtop"><button type="button" class="alb-vb" data-act="vclose"><svg aria-hidden="true"><use href="#i-x"/></svg>닫기</button><span class="alb-pos" id="albPos"></span><button type="button" class="alb-vb sq" data-act="vmenu" aria-label="더 보기"><svg aria-hidden="true"><use href="#i-more"/></svg></button></div>' +
+        '<div class="alb-vtop"><button type="button" class="alb-vb" data-act="vclose"><svg aria-hidden="true"><use href="#i-x"/></svg>닫기</button><span class="alb-pos" id="albPos"></span><span class="alb-vr">' + (S.save ? '<button type="button" class="alb-vb" id="albDl" data-act="vdl" aria-label="이 사진을 폰에 내려받기"><svg aria-hidden="true"><use href="#i-download"/></svg><span id="albDlT">내려받기</span></button>' : '') + '<button type="button" class="alb-vb sq" data-act="vmenu" aria-label="더 보기"><svg aria-hidden="true"><use href="#i-more"/></svg></button></span></div>' +
         '<div class="alb-menu" id="albMenu"><button type="button" data-act="vok">맞아요 (확인함)</button><button type="button" data-act="vedit">날짜·설명 고치기</button><button type="button" data-act="vtrash">휴지통으로 옮기기</button></div>' +
         '<div class="alb-vst" id="albVst"><button type="button" class="alb-arr l" data-act="prev" aria-label="이전 사진"><svg aria-hidden="true"><use href="#i-chev-l"/></svg></button>' +
           '<div class="alb-vw2" id="albVw2"><img id="albImg" alt="" draggable="false"></div>' +
@@ -396,7 +412,7 @@
       $('albH').textContent = hint;
       $('albPos').textContent = S.v.random ? '무작위 · ' + (S.v.idx + 1) + '번째' : (S.v.idx + 1) + ' / ' + S.v.list.length;
       $('albVw').classList.toggle('first', S.v.idx === 0 && !S.v.random); $('albVw').classList.toggle('last', S.v.idx >= S.v.list.length - 1 && !S.v.random);
-      loadBig(x, tok);
+      syncDl(); loadBig(x, tok);
     }
     if (anim) { box.classList.add(dir > 0 ? 'out-l' : 'out-r'); setTimeout(function () { box.classList.remove('out-l', 'out-r'); paint(); }, 110); } else paint();
   }
@@ -551,6 +567,35 @@
     }).catch(function (e) { toast('표시하지 못했어요 — ' + errText(e)); });
   }
 
+  /* ---- 내려받기 (v9.70, O-0723) ----
+   *   큰 사진(원본 JPEG)의 짧게 유효한 서명 주소를 서버 함수 album-file 에서 받아 → app.js 가 준 save(주소, 파일이름)으로 폰에 저장한다.
+   *   폰은 안드로이드 DownloadManager(FileDownload 플러그인)로 「다운로드」 폴더에 둔다 — 실적 PDF·승진 백업과 같은 길. 저장이 끝난 뒤에만 「저장했어요」. */
+  function syncDl() {
+    var b = $('albDl'), t = $('albDlT'), x = curItem(); if (!b || !t) return;
+    var busy = !!(x && dlBusy[x.id]);
+    b.classList.toggle('busy', busy); b.disabled = busy; t.textContent = busy ? '받는 중…' : '내려받기';
+  }
+  function dlWhy(e) {
+    if (e && e.alb) return errText(e);
+    if (e && e.dlWhy) return softenWhy(e.dlWhy) + '.';
+    return '폰에 저장하지 못했어요.';
+  }
+  function downloadCurrent() {
+    var x = curItem(); if (!x || !S.save) return;
+    if (dlBusy[x.id]) { toast('이미 받고 있어요'); return; }
+    if (!online()) { toast('못 했어요 — ' + errText(mkErr('NETWORK', 'net')), 4200); return; }
+    var name = dlName(x); dlBusy[x.id] = 1; syncDl();
+    toast('내려받는 중이에요…', 2500);
+    function done() { delete dlBusy[x.id]; syncDl(); }
+    signMany([x.id], 'p').then(function (urls) {
+      var u = urls[x.id]; if (!u) throw mkErr('NO_PHOTO', 'nofile');
+      return S.save(u, name);
+    }).then(function (r) {
+      done(); var where = (r && r.where) || '다운로드 폴더', nm = (r && r.name) || name;
+      toast('저장했어요 (' + where + ' · ' + nm + ')', 5200);
+    }, function (e) { done(); toast('못 했어요 — ' + dlWhy(e), 5200); });
+  }
+
   /* ---- 휴지통 ---- */
   function trashItem(id) {
     var x = itemById(id); if (!x || !guardWrite()) return;
@@ -615,7 +660,7 @@
 
   function openSettings() {
     var n = S.items.filter(function (x) { return !!x.deleted_at; }).length, tot = S.items.filter(isLive).length;
-    openSheet('<h2>사진첩 설정</h2><div class="alb-note">사진 ' + tot + '장이 비공개 서버에 있어요. 사진 내려받기·공유 단추는 없고, 원본은 PC에 있어요.</div>' +
+    openSheet('<h2>사진첩 설정</h2><div class="alb-note">사진 ' + tot + '장이 비공개 서버에 있어요. ' + (S.save ? '내려받기는 큰 보기의 내려받기 단추로 합니다(카톡 공유 단추는 없어요).' : '사진 내려받기·공유 단추는 없고, 원본은 PC에 있어요.') + '</div>' +
       '<button type="button" class="alb-setrow" data-act="trash"><span>휴지통</span><small>' + n + '장 · 되살리거나 영구히 지우기</small></button>' +
       '<div class="alb-actions"><button type="button" class="alb-btn ghost" data-act="sclose">닫기</button></div>');
   }
@@ -634,6 +679,7 @@
       case 'vfy': askVerify(); break;
       case 'vfyyes': doVerify(); break;
       case 'vclose': closeViewer(); break;
+      case 'vdl': $('albMenu').classList.remove('show'); downloadCurrent(); break;
       case 'vmenu': $('albMenu').classList.toggle('show'); break;
       case 'prev': go(-1); break;
       case 'next': go(1); break;
@@ -656,6 +702,7 @@
    * ===================================================================*/
   function init(o) {
     if (o && o.toast) _toast = o.toast;
+    S.save = (o && typeof o.save === 'function') ? o.save : null;      // v9.70: 없으면(스위치 ALBUM_DL 'off'·옛 연결) 내려받기 단추가 없다 — v9.69 와 같음
     if (global.AchPure && AchPure.makeRpc) rpc = AchPure.makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
     build();
   }

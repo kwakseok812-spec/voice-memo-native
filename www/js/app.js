@@ -3705,6 +3705,7 @@
   // (직전) v9.67(O-0696): 「승진」 백업 내려받기가 폰에서 실제 파일로 저장되게 — 폰(웹뷰)에는 공유 창 · blob 다운로드가 없어 늘 복사 상자로 떨어지던 것을, 문서 사본 저장과 같은 폰 저장 길(공유함 → 다운로드 폴더)로 · 저장 중/성공/실패(이유)를 창에 표시 · 서버·SQL 변경 없음 · versionCode 111
   APP_VERSION = 'v9.68';        // v9.68(O-0696): 「승진」 백업 내려받기의 기본 결과물을 엑셀(.xlsx)로 — JSON 은 컴퓨터용이라 폰에서 열어도 읽을 수 없었다 · 첫 단추 「엑셀로 내려받기」(점수 요약·항목 목록·안내 세 시트, 앱에 든 SheetJS 만 사용) · 둘째 단추 「복원용 백업(JSON)」은 그대로 남김 · 창을 열자마자 저장하지 않고 단추로 고름 · 서버·SQL 변경 없음 · versionCode 112
   APP_VERSION = 'v9.69';        // v9.69(O-0720·O-0721·O-0722): 홈 맨 끝 「사진첩」 칸(유치원~대학원·교수 시절·가족 사진 642장과 족보 1장을 격자로 훑고 한 장씩 밀어 넘기며 두 손가락·더블탭으로 확대 · 아무거나 보기 · 이 단계 확인함 · 고치기·휴지통) · 「실적」 탭의 화면 이름을 「곽호석」으로(걸어온 길) · 스위치 ALBUM_TAB · 서버 album_photos 표/album_* 함수/album-file 함수/비공개 저장소 album-files · versionCode 113
+  APP_VERSION = 'v9.70';        // v9.70(O-0723): 사진첩 큰 보기(족보 포함)에 「내려받기」 단추 하나 — 원본 JPEG 를 폰 「다운로드」 폴더에 album_단계영문_번호.jpg(족보는 genealogy.jpg)로 저장, 끝난 뒤에만 「저장했어요(위치)」·실패는 「못 했어요 — 이유」 · 공유 단추·여러 장 내려받기는 없음 · 설정 ⚙ 안내문 고침 · 스위치 ALBUM_DL · versionCode 114
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9921,14 +9922,41 @@
   /* ---- 사진첩(O-0720 v9.69): 화면 열기/연결(로직은 album.js) ----
    *   스위치 ALBUM_TAB: 'on' = 홈 도구 맨 끝(승진 다음)에 「사진첩」 칸 · 'off' = 칸이 보이지 않아 v9.68 과 같다(서버 무관). 서버 표 album_photos·함수 album_*·album-file 이 있어야 사진이 보인다. */
   var ALBUM_TAB = 'on';
+  /* v9.70(O-0723): 큰 보기의 「내려받기」 단추(원본 JPEG → 폰 「다운로드」 폴더, 파일 이름 album_단계영문_번호.jpg · 족보는 genealogy.jpg). 'off' 면 단추가 없어 v9.69 와 같다(서버 무관).
+   *   폰 저장은 실적 PDF·승진 백업과 같은 길(네이티브 FileDownload = 안드로이드 DownloadManager) — 새 플러그인·권한 없음. PC판은 blob + <a download>. */
+  var ALBUM_DL = 'on';
   var albumView = $('albumView');
+  /* 사진 한 장(서명 주소)을 폰에 저장 → Promise({ok, name, where}). 실패하면 reject(Error: dlWhy = 이유 한 줄 — 사진첩이 「못 했어요 — 이유」로 보여 준다).
+   *   웹페이지(브라우저)로 넘기는 예전 대체 길은 쓰지 않는다 — 사진 주소를 밖으로 내보내지 않고, 실패는 조용히 넘기지 않는다. */
+  function albumSavePhoto(url, name) {
+    var fname = safeDownloadName(name || 'album_photo.jpg');
+    function fail(why) { var er = new Error(why); er.dlWhy = why; return er; }
+    if (!isNativeApp()) {
+      return fetch(url).then(function (r) { if (!r.ok) throw fail('파일 주소가 만료됐거나 서버에 파일이 없습니다(HTTP ' + r.status + ')'); return r.blob(); }, function () { throw fail('인터넷에 연결되지 않았습니다'); })
+        .then(function (blob) {
+          if (!blob || !blob.size) throw fail('받은 파일이 비어 있습니다');
+          var bu = URL.createObjectURL(blob), a = document.createElement('a');
+          a.href = bu; a.download = fname; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+          setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(bu); } catch (e) {} }, 5000);
+          return { ok: true, name: fname, where: '다운로드 폴더' };
+        });
+    }
+    var FD = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
+    if (!FD || !FD.download) return Promise.reject(fail('이 앱 버전은 폰에 저장하는 기능이 없습니다'));
+    return FD.download({ url: url, name: fname, open: false, mime: 'image/jpeg' }).then(function (r) {
+      return { ok: true, name: (r && r.name) || fname, where: '다운로드 폴더' };
+    }, function (e) {
+      if (e && e.code === 'CANCELLED') throw fail('내려받기를 취소했습니다');
+      throw fail(dlFailReason(e));
+    });
+  }
   function openAlbum() {
     openScreen(albumView);
     if (window.AlbumTab && AlbumTab.open) { try { AlbumTab.open(); } catch (e) {} }
   }
   if (ALBUM_TAB !== 'off' && window.AlbumTab && window.AchPure && $('btnAlbum')) {
     try {
-      AlbumTab.init({ toast: toast });
+      AlbumTab.init({ toast: toast, save: ALBUM_DL !== 'off' ? albumSavePhoto : null });
       var albGrid = $('homeTools'), albSub = albGrid && albGrid.querySelector('.tools-sub');
       if (albGrid && albSub) albGrid.insertBefore($('btnAlbum'), albSub);   // 홈 도구 맨 끝(승진 다음) — 기존 칸 자리는 그대로
       $('btnAlbum').style.display = ''; $('btnAlbum').addEventListener('click', openAlbum);

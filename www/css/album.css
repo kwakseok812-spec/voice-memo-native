@@ -1,5 +1,5 @@
 /* ============================================================================
- * album.css — 「사진첩」 (v9.69, O-0720)
+ * album.css — 「사진첩」 (v9.69, O-0720 · v9.70 내려받기 단추 O-0723)
  * 모든 규칙은 #albumView(화면) · #albumLayer(큰 보기·창·안내 띠·떠 있는 단추) 안에서만 먹는다 — 다른 화면에 영향 없음.
  * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 ...)를 그대로 쓴다(밝은·어두운 화면 자동).
  * ==========================================================================*/
@@ -87,7 +87,10 @@ html[data-style="light"] #albumView, html[data-style="light"] #albumLayer { --ad
 .alb-vb { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border: 0; border-radius: 14px; background: rgba(255,255,255,.14); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
 .alb-vb.sq { width: 44px; padding: 0; justify-content: center; }
 .alb-vb svg { width: 20px; height: 20px; }
-.alb-pos { color: #c9d4e0; font-size: 13.5px; font-weight: 700; }
+.alb-pos { color: #c9d4e0; font-size: 13.5px; font-weight: 700; flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+/* v9.70(O-0723): 큰 보기 오른쪽 위 — 내려받기 단추 + 더 보기(⋯). 단추는 닫기와 같은 알약, 받는 중에는 흐려지고 눌러지지 않는다 */
+.alb-vr { display: flex; align-items: center; gap: 6px; flex: none; }
+.alb-vb.busy { opacity: .6; pointer-events: none; }
 .alb-menu { position: absolute; right: 10px; top: calc(60px + env(safe-area-inset-top)); z-index: 5; background: #1c2233; border: 1px solid rgba(255,255,255,.15); border-radius: 14px; padding: 6px; min-width: 200px; display: none; box-shadow: 0 10px 28px rgba(0,0,0,.5); }
 .alb-menu.show { display: block; }
 .alb-menu button { display: block; width: 100%; text-align: left; background: none; color: #fff; border: 0; padding: 13px 14px; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 10px; }
