@@ -741,6 +741,7 @@
       function next() {
         if (i >= todo.length) return Promise.resolve();
         var rec = todo[i++];
+        if (!_resumeQ[rec.id]) return next();                      // 줄 서 있는 동안 지워진 녹음(dropPending)은 올리지 않는다 — 오래된 blob 으로 원본을 되살리지 않게
         if (_audioBusy[rec.id]) { delete _resumeQ[rec.id]; return next(); }
         var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
                      materials: rec.materials || [], matSlots: rec.matSlots, date: rec.date, time: rec.time, scan: rec.scan };
@@ -759,6 +760,7 @@
     var j = _audioBusy[id];
     if (j) { j.ctl.cancelled = true; try { if (j.ctl.xhr) j.ctl.xhr.abort(); } catch (e) {} }
     delete _resumeFail[id];
+    delete _resumeQ[id];                                          // 이어 올리기 줄에서도 뺀다
     return idbDel(id);
   }
 

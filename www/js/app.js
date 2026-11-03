@@ -2603,6 +2603,7 @@
    * 새 화면·새 단추 없이, 홈 「진행 중인 메모」 줄의 작은 글씨(videoProg)에 붙인다. 올리는 로직·잠금은 office-bridge.js(sendAudioChunked).
    * 끄기: office-bridge.js 의 AUDIO_UPLOAD_RESUME=false (그러면 아래 연결도 일어나지 않는다 — 훅이 불리지 않고 resumeAudioUploads 는 0 을 돌려준다). */
   var upWakeOn = false, upWakeLock = null;
+  var upRenderAt = {};
   function uploadWake(on) {
     on = !!on; upWakeOn = on;
     try {
@@ -2632,7 +2633,14 @@
     wake: function (on) { uploadWake(on); },
     progress: function (id, info) {
       var e = HistoryModule.get(id); if (!e || e.status === 'done') return;
-      videoProg[id] = audioUpText(info); renderHistory();
+      videoProg[id] = audioUpText(info);
+      // 진행 문구는 그 항목 줄의 작은 글씨만 바꾼다 — 목록 전체를 다시 그리면(1초마다) [삭제]·[다시 보내기] 첫 탭이 먹히지 않을 수 있다.
+      // 줄이 아직 없을 때만(처음·5초에 한 번) 전체를 다시 그린다. 시작·완료·실패는 각자 renderHistory 를 부른다.
+      var els = [];
+      try { els = document.querySelectorAll('.item[data-id="' + id + '"] .tx small'); } catch (x) {}
+      if (els.length) { Array.prototype.forEach.call(els, function (el) { el.textContent = videoProg[id]; }); return; }
+      var t = Date.now(); if (t - (upRenderAt[id] || 0) < 5000) return;
+      upRenderAt[id] = t; renderHistory();
     },
     done: function (id) {                    // 누가 올렸든(새로 보내기·다시 보내기·자동 이어 올리기) 끝나면 같은 마무리
       var e = HistoryModule.get(id); if (!e || e.status === 'done') return;
