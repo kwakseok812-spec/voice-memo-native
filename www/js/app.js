@@ -2599,6 +2599,73 @@
     }, 5000);
   }
 
+  /* ---------- v9.7x(O-0727 안2) 긴 녹음 올리기: 화면 켜 두기 · 진행 문구 · 이어 올리기 ----------
+   * 새 화면·새 단추 없이, 홈 「진행 중인 메모」 줄의 작은 글씨(videoProg)에 붙인다. 올리는 로직·잠금은 office-bridge.js(sendAudioChunked).
+   * 끄기: office-bridge.js 의 AUDIO_UPLOAD_RESUME=false (그러면 아래 연결도 일어나지 않는다 — 훅이 불리지 않고 resumeAudioUploads 는 0 을 돌려준다). */
+  var upWakeOn = false, upWakeLock = null;
+  function uploadWake(on) {
+    on = !!on; upWakeOn = on;
+    try {
+      if (on) {
+        if (navigator.wakeLock && !upWakeLock && !document.hidden) navigator.wakeLock.request('screen').then(function (l) {
+          if (!upWakeOn) { try { l.release(); } catch (e) {} return; }
+          upWakeLock = l; try { l.addEventListener('release', function () { upWakeLock = null; }); } catch (e) {}
+        }, function () {});
+      } else if (upWakeLock) { upWakeLock.release(); upWakeLock = null; }
+    } catch (e) {}
+    try {                                   // 폰 앱: 창 자체에 「화면 켜 두기」(KBridge.keepScreenOn, v9.6 APK 부터). 음성 대화가 켜 둔 동안엔 끄지 않는다
+      if (on || !callWakeNative) { var kb = kbPlugin(); if (kb && kb.keepScreenOn) { var pr = kb.keepScreenOn({ on: on }); if (pr && pr.catch) pr.catch(function () {}); } }
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && upWakeOn) uploadWake(true); });
+  function audioUpText(info) {
+    var n = Math.min(info.total, info.done), pct = info.size ? Math.min(99, Math.floor((info.sent / info.size) * 100)) : 0;
+    if (info.retry) return '올리는 중 ' + n + '/' + info.total + ' 조각 · 연결이 불안정해 다시 올리는 중… 화면을 켜 두세요';
+    var est = '';
+    if (info.eta != null && isFinite(info.eta)) {
+      var m = Math.max(1, Math.ceil(info.eta / 60));
+      est = ' · 약 ' + (m < 60 ? m + '분' : (Math.round(m / 6) / 10) + '시간');
+    }
+    return '올리는 중 ' + n + '/' + info.total + ' 조각 · ' + pct + '%' + est + ' · 화면을 켜 두세요';
+  }
+  if (OfficeBridge.setAudioUploadHooks) OfficeBridge.setAudioUploadHooks({
+    wake: function (on) { uploadWake(on); },
+    progress: function (id, info) {
+      var e = HistoryModule.get(id); if (!e || e.status === 'done') return;
+      videoProg[id] = audioUpText(info); renderHistory();
+    },
+    done: function (id) {                    // 누가 올렸든(새로 보내기·다시 보내기·자동 이어 올리기) 끝나면 같은 마무리
+      var e = HistoryModule.get(id); if (!e || e.status === 'done') return;
+      HistoryModule.update(id, { status: 'processing', error: null });
+      videoProg[id] = 'PC에서 정리 준비 중…'; renderHistory();
+      if (e.token) startVideoPolling(id, e.token);
+    },
+    fail: function (id, err) {               // 부른 쪽(sendChunkedAudioMemo·임시저장 보내기)은 자기 방식으로 한 번 더 정리한다 — 나중 것이 이긴다
+      var e = HistoryModule.get(id); delete videoProg[id];
+      if (e && (e.status === 'pending' || e.status === 'processing')) HistoryModule.update(id, { status: 'failed', error: friendlyErr(err) });
+      renderHistory();
+    }
+  });
+  var audioResumeAt = 0;
+  function resumeAudioNow() {
+    try {
+      if (!OfficeBridge.resumeAudioUploads) return;
+      var t = Date.now(); if (t - audioResumeAt < 3000) return; audioResumeAt = t;      // 화면 복귀·앱 활성화·인터넷 복구가 한꺼번에 와도 한 번만
+      OfficeBridge.resumeAudioUploads({
+        onStart: function (memo) {
+          var e = HistoryModule.get(memo.id);
+          if (e && e.status !== 'done') {
+            if (e.status === 'failed') HistoryModule.update(memo.id, { status: 'pending', error: null });
+            videoProg[memo.id] = '이어서 올리는 중… 화면을 켜 두세요'; renderHistory();
+          }
+        }
+      });
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) resumeAudioNow(); });
+  window.addEventListener('online', function () { resumeAudioNow(); });
+  try { if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) Capacitor.Plugins.App.addListener('appStateChange', function (st) { if (st && st.isActive) resumeAudioNow(); }); } catch (e) {}
+
   function sendBatchMemo(files, kind, title, note, isCard, asScan) {
     if (!files || !files.length) return;
     var t = now();
@@ -5271,6 +5338,7 @@
     // 폰 앱: 웹 방식(navigator.wakeLock)이 거절되는 기기에서도 꺼지지 않게 창 자체에 「화면 켜 두기」를 건다(KBridge.keepScreenOn · v9.6 APK 부터, 옛 APK 는 조용히 지나감)
     if (on !== callWakeNative) {
       callWakeNative = on;
+      if (!on && upWakeOn) return;     // v9.7x: 긴 녹음을 올리는 동안은 음성 대화가 끝나도 화면 켜 두기를 풀지 않는다(올리기가 끝나면 uploadWake 가 푼다)
       try { var kb = kbPlugin(); if (kb && kb.keepScreenOn) { var pr = kb.keepScreenOn({ on: on }); if (pr && pr.catch) pr.catch(function () {}); } } catch (e) {}
     }
   }

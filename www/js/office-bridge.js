@@ -136,6 +136,7 @@
   // 안전 업로드(2026-09-22, v5.1): pending 원본의 'sent' 표시를 내려 flush 가 다시 보내게 한다.
   //   (원본 blob 은 그대로 보존 — 자동복구/[다시 보내기] 시 재전송 대상으로 되돌리는 용도)
   function markResendable(id) {
+    try { delete _resumeFail[id]; } catch (e) {}   // v9.7x: 대표님이 직접 다시 보내면 자동 이어 올리기 실패 횟수도 처음부터
     return _db().then(function (db) {
       return new Promise(function (res) {
         var tx = db.transaction(STORE, 'readwrite'); var st = tx.objectStore(STORE); var rq = st.get(id);
@@ -593,9 +594,64 @@
               function () { return done(null); });
     } catch (e) { return Promise.resolve(done(null)); }
   }
+  /* ---------- v9.7x(O-0727 안2) 긴 녹음 조각 올리기 보강 ----------
+   * ▶ 사고: 긴 녹음 조각(fetch)이 시간 제한·멈춤 감지가 없어, 앱이 화면 뒤로 가거나 망이 바뀌면 약속이 영영 끝나지 않았고
+   *   화면에 돌아와도·인터넷이 돌아와도 이어 올리지 않았다(조각이 서버에 닿았는데 폰이 모르는 경우도 있었다).
+   * ▶ 고침(문서 뷰어에서 이미 검증된 길을 그대로 재사용 — _uploadDocPart/_docXhrPost):
+   *   1) 조각마다 XHR(진행 바이트) + 45초 무전송 멈춤 감지 + 최대 5번 재시도(인터넷 끊김이면 복귀까지 최대 1분 대기).
+   *   2) 조각 사이·재시도 직전에 서버의 progress(=PC가 받아 간 조각 수)를 읽어, 이미 받았으면 그 조각은 다시 올리지 않는다
+   *      (이미 붙여 지운 조각을 또 올리면 서버에 쓰레기 조각이 남는다). 이미 올라간 조각이 또 오면 서버가 400+중복으로 답하고 그것은 성공으로 통과(기존 그대로).
+   *   3) 같은 녹음(id)은 한 번에 하나만 올린다(잠금) — 자동 이어 올리기·[다시 보내기]·인터넷 복귀가 겹쳐도 조각이 두 번 가지 않는다.
+   *      겹쳐 부르면 이미 도는 올리기에 합류해 같은 결과를 받는다.
+   *   4) 앱이 화면 복귀·앱 활성화·인터넷 복구 때 resumeAudioUploads() 를 불러 미완료 녹음을 이어 올린다(app.js).
+   *   5) 올리는 동안 화면 켜 두기·진행 문구는 앱이 setAudioUploadHooks 로 받아 기존 「진행 중인 메모」 줄에 붙인다(새 화면·버튼 없음).
+   * ⚠️ 끄려면 AUDIO_UPLOAD_RESUME=false → v9.70 과 같은 동작(fetch·조각당 3번·잠금/이어 올리기 없음). 서버·PC 쪽은 건드리지 않는다. */
+  var AUDIO_UPLOAD_RESUME = true;
+  var AUDIO_AUTO_MAX_FAIL = 3;                       // 자동 이어 올리기가 연달아 실패하면 더는 혼자 시도하지 않는다(재시도 단추·앱 재시작이 다시 연다)
+  var _audioBusy = {}, _audioBusyN = 0, _resumeFail = {}, _resumeQ = {};
+  var _upHooks = { wake: null, progress: null, done: null, fail: null };
+  function setAudioUploadHooks(h) {
+    h = h || {};
+    ['wake', 'progress', 'done', 'fail'].forEach(function (k) { if (typeof h[k] === 'function') _upHooks[k] = h[k]; });
+  }
+  function _callHook(name, a, b) { try { if (_upHooks[name]) _upHooks[name](a, b); } catch (e) {} }
+  var _emitAt = {};
+  function _emitAudio(id, info, force) {
+    var t = Date.now();
+    if (!force && _emitAt[id] && t - _emitAt[id] < 900) return;      // 진행 줄을 초당 한 번쯤만 다시 그린다
+    _emitAt[id] = t; _callHook('progress', id, info);
+  }
+  // 서버가 이미 받아 간 조각 수(PC 정리가 끝났으면 total). 읽지 못하면 0(=모름 → 평소처럼 올린다).
+  function _consumedCount(memo, total) {
+    return poll(memo.id, memo.token).then(function (r) {
+      if (!r) return 0;
+      if (r.status === 'done') return total;
+      return Math.min(total, r.progress | 0);
+    }, function () { return 0; });
+  }
   // 큰 오디오 blob 1개를 조각으로 나눠 페이싱하며 업로드. onProgress('upload', done, total).
   // 실패하면 blob 을 IndexedDB 에 넣고 throw → flush() 가 나중에 다시 시도.
+  //   v9.7x: 같은 id 는 한 번에 하나만(잠금). 이미 도는 중이면 그 올리기에 합류한다.
   function sendAudioChunked(memo, blob, onProgress) {
+    if (!AUDIO_UPLOAD_RESUME) return _sendAudioChunkedCore(memo, blob, onProgress, null);
+    var cur = _audioBusy[memo.id];
+    if (cur) { if (onProgress) cur.subs.push(onProgress); return cur.p; }
+    var job = { subs: onProgress ? [onProgress] : [], ctl: { cancelled: false, xhr: null }, p: null };
+    _audioBusy[memo.id] = job; _audioBusyN++;
+    if (_audioBusyN === 1) _callHook('wake', true);
+    function fin() {
+      if (_audioBusy[memo.id] === job) { delete _audioBusy[memo.id]; _audioBusyN = Math.max(0, _audioBusyN - 1); delete _emitAt[memo.id]; }
+      if (_audioBusyN === 0) _callHook('wake', false);
+    }
+    job.p = _sendAudioChunkedCore(memo, blob, function (ph, d, t) {
+      job.subs.forEach(function (fn) { try { fn(ph, d, t); } catch (e) {} });
+    }, job).then(function (v) { fin(); delete _resumeFail[memo.id]; _callHook('done', memo.id); return v; },
+                 function (e) { fin(); _callHook('fail', memo.id, e); throw e; });
+    return job.p;
+  }
+  function _sendAudioChunkedCore(memo, blob, onProgress, job) {
+    var resume = AUDIO_UPLOAD_RESUME && !!job;
+    var ctl = job ? job.ctl : { cancelled: false };
     var ext = memo.ext || extFromBlob(blob);
     var total = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
     // 안전 업로드(2026-09-22, v5.1): 전송 '전에' 원본을 먼저 영속하고, 전 청크 업로드가 끝나도
@@ -621,25 +677,89 @@
       var k = 0;
       if (row && row.status === 'done') k = total;
       else if (row && row.progress > 0) k = Math.min(total, row.progress | 0);
+      var t0 = 0, b0 = 0, first = true;                    // 올리기 속도(남은 시간 안내용)
+      function etaOf(sentAll) {
+        var el = (Date.now() - t0) / 1000, got = sentAll - b0;
+        if (!t0 || el < 4 || got <= 0) return null;
+        return Math.max(0, (blob.size - sentAll) / (got / el));
+      }
+      function advance(kk) {
+        k = kk + 1; onProgress && onProgress('upload', k, total);
+        if (resume) {
+          var all = Math.min(blob.size, k * CHUNK_SIZE);
+          _emitAudio(memo.id, { done: k, total: total, sent: all, size: blob.size, eta: etaOf(all) }, true);
+        }
+        return step();
+      }
       function step() {
+        if (ctl.cancelled) return Promise.reject(voiceErr('cancelled', {}));
         if (k >= total) return Promise.resolve();
         var pacing = (k >= MAX_INFLIGHT)
           ? waitConsumed(memo.id, memo.token, k - MAX_INFLIGHT + 1)
           : Promise.resolve();
         return pacing.then(function () {
-          var part = blob.slice(k * CHUNK_SIZE, Math.min(blob.size, (k + 1) * CHUNK_SIZE));
-          return uploadAudioPartWithRetry(memo.id, k, total, ext, part, 3);
-        }).then(function () {
-          k++; onProgress && onProgress('upload', k, total);
-          return step();
+          if (!resume || first) { first = false; return 0; }
+          return _consumedCount(memo, total);                // 조각 사이 확인: 서버(PC)가 이미 받아 간 조각은 다시 올리지 않는다
+        }).then(function (n) {
+          if (n > k) { k = n; onProgress && onProgress('upload', k, total); return step(); }
+          var kk = k, start = kk * CHUNK_SIZE, part = blob.slice(start, Math.min(blob.size, (kk + 1) * CHUNK_SIZE));
+          if (!resume) return uploadAudioPartWithRetry(memo.id, kk, total, ext, part, 3).then(function () { return advance(kk); });
+          var info = { name: '녹음 조각 ' + (kk + 1) + '/' + total, size: part.size };
+          if (!t0) { t0 = Date.now(); b0 = start; }
+          return _uploadDocPart(memo.id + '/part_' + kk + '.' + ext, part, info, function (sent) {
+            var all = start + sent;
+            _emitAudio(memo.id, { done: kk, total: total, sent: all, size: blob.size, eta: etaOf(all) });
+          }, ctl, function (n2) {
+            _emitAudio(memo.id, { done: kk, total: total, sent: start, size: blob.size, retry: n2 }, true);   // 「다시 연결하는 중」 안내
+          }, function () {
+            return _consumedCount(memo, total).then(function (c) { return c > kk; });                          // 재시도 직전: 서버에 이미 도착했으면 건너뜀
+          }).then(function () { return advance(kk); });
         });
       }
       return step();
-    }).then(function () { rec.sent = true; return idbPut(rec); })   // (2) 전 청크 업로드 완료 표시(원본 보존)
+    }).then(function () { rec.sent = true; return ctl.cancelled ? null : idbPut(rec); })   // (2) 전 청크 업로드 완료 표시(원본 보존) — 올리는 중 항목을 지웠으면 되살리지 않는다
       .catch(function (e) {
         rec.sent = false;
+        if (ctl.cancelled) throw e;
         return idbPut(rec).then(function () { throw e; });          // 실패: 원본 보존(재전송 가능)
       });
+  }
+  // v9.7x 화면 복귀·앱 활성화·인터넷 복구 때 앱이 부른다 — 보내지 못한 긴 녹음이 있고 그 녹음을 올리는 중이 아니면 이어서 올린다.
+  //   flush() 와 달리 긴 녹음(조각 업로드)만 다룬다(작은 파일은 건드리지 않아 중복 전송이 없다).
+  //   opts: { onStart(memo), onEach(memo), onFail(memo, err) }. 연달아 AUDIO_AUTO_MAX_FAIL 번 실패한 녹음은 자동으로는 더 시도하지 않는다.
+  //   반환: 이어 올리기를 시작한 개수(Promise).
+  function resumeAudioUploads(opts) {
+    opts = opts || {};
+    if (!AUDIO_UPLOAD_RESUME) return Promise.resolve(0);
+    return idbAll().then(function (list) {
+      var todo = (list || []).filter(function (r) {
+        return r && !r.sent && !r.files && r.blob && r.blob.size > CHUNK_SIZE && !_audioBusy[r.id] && !_resumeQ[r.id] &&
+               (_resumeFail[r.id] || 0) < AUDIO_AUTO_MAX_FAIL;
+      });
+      todo.forEach(function (r) { _resumeQ[r.id] = 1; });        // 같은 틱 안에 표시 → 동시에 훑어도 한 녹음을 두 번 줄 세우지 않는다
+      var i = 0;
+      function next() {
+        if (i >= todo.length) return Promise.resolve();
+        var rec = todo[i++];
+        if (_audioBusy[rec.id]) { delete _resumeQ[rec.id]; return next(); }
+        var memo = { id: rec.id, kind: rec.kind, note: rec.note, title: rec.title, token: rec.token, ext: rec.ext,
+                     materials: rec.materials || [], matSlots: rec.matSlots, date: rec.date, time: rec.time, scan: rec.scan };
+        try { opts.onStart && opts.onStart(memo); } catch (x) {}
+        return sendAudioChunked(memo, rec.blob)
+          .then(function () { delete _resumeQ[rec.id]; try { opts.onEach && opts.onEach(memo); } catch (x) {} },
+                function (e) { delete _resumeQ[rec.id]; _resumeFail[rec.id] = (_resumeFail[rec.id] || 0) + 1; try { opts.onFail && opts.onFail(memo, e); } catch (x) {} })
+          .then(next);
+      }
+      next();                                                      // 올리는 동안 기다리지 않는다(순서대로 하나씩)
+      return todo.length;
+    }, function () { return 0; });
+  }
+  // 올리는 중인 녹음을 지울 때(dropPending) 함께 멈춘다 — 안 그러면 끝난 뒤 원본이 되살아나 자동으로 다시 올라간다.
+  function dropPendingAudio(id) {
+    var j = _audioBusy[id];
+    if (j) { j.ctl.cancelled = true; try { if (j.ctl.xhr) j.ctl.xhr.abort(); } catch (e) {} }
+    delete _resumeFail[id];
+    return idbDel(id);
   }
 
   // 케이와 대화: 채팅 메시지 1건 등록(kind='chat'). 응답은 poll()의 content_md 로 온다.
@@ -974,7 +1094,9 @@
     });
   }
   // 조각 하나: 메모리로 읽기 → 올리기(재시도). onRetry(시도번호, 오류) 선택.
-  function _uploadDocPart(key, blob, info, onBytes, ctl, onRetry) {
+  //   shouldSkip(선택, v9.7x 녹음 조각용): 다시 올리기 직전에 부르는 함수. true 로 풀리면 「서버가 이미 받았음」으로 보고 다시 올리지 않는다.
+  //     (문서 뷰어·편집 열기는 넘기지 않으므로 예전과 똑같이 움직인다.) 확인 자체가 실패하면 평소처럼 다시 올린다.
+  function _uploadDocPart(key, blob, info, onBytes, ctl, onRetry, shouldSkip) {
     return readAllBytes(blob, info).then(function (buf) {
       function attempt(n) {
         if (ctl && ctl.cancelled) return Promise.reject(voiceErr('cancelled', info));
@@ -985,7 +1107,11 @@
           var wait = DOC_RETRY_WAIT[Math.min(n - 1, DOC_RETRY_WAIT.length - 1)];
           return new Promise(function (res) { setTimeout(res, wait); })
             .then(function () { return _waitOnline(60000); })
-            .then(function () { return attempt(n + 1); });
+            .then(function () {
+              if (!shouldSkip) return attempt(n + 1);
+              return Promise.resolve().then(shouldSkip).then(function (skip) { return skip ? key : attempt(n + 1); },
+                                                              function () { return attempt(n + 1); });
+            });
         });
       }
       return attempt(1);
@@ -1723,6 +1849,7 @@
   global.OfficeBridge = {
     CONFIG: CONFIG, uuid: uuid, token: token, extFromBlob: extFromBlob,
     send: send, sendBatch: sendBatch, sendVideoChunked: sendVideoChunked, sendAudioChunked: sendAudioChunked,
+    resumeAudioUploads: resumeAudioUploads, setAudioUploadHooks: setAudioUploadHooks,   // v9.7x(O-0727 안2) 긴 녹음 이어 올리기·화면 켜기/진행 문구 연결
     createSearch: createSearch, sendChat: sendChat, sendChatTurn: sendChatTurn, requestTts: requestTts, sendTtsCtl: sendTtsCtl, requestVoiceSet: requestVoiceSet, poll: poll, flush: flush, pendingCount: pendingCount,
     sendChatBatch: sendChatBatch, sendChatChunked: sendChatChunked, attachmentsFrom: attachmentsFrom,
     sendChatDocAsk: sendChatDocAsk,     // v8.1(O-0154) 문서 뷰어 [케이에게 묻기·맡기기]
@@ -1748,7 +1875,7 @@
     LOCKER_MAX_BYTES: LOCKER_MAX_BYTES,   // v6.3: 공유함 한 파일 최대(서버 전역 한도와 같게)
     MAX_UPLOAD_BYTES: MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL: MAX_UPLOAD_LABEL,   // v6.6: 모든 파일 보내기 공용 상한(5GB)
     // v3.8 임시 저장: draft 스토어 저장/조회/삭제 + 발송 실패 시 pending 잔재 제거(dropPending)
-    saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: idbDel,
+    saveDraft: draftPut, getDraft: draftGet, delDraft: draftDel, dropPending: dropPendingAudio,
     markResendable: markResendable,   // v5.1: 보존 원본을 재전송 대상으로(자동복구/[다시 보내기])
     CHUNK_SIZE: CHUNK_SIZE
   };
