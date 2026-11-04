@@ -51,7 +51,7 @@
     if (!hasH && !hasT) return null;           // 「구」「오」처럼 한 글자 숫자는 혈당·체중 값으로 보지 않는다
     return v;
   }
-  var NUM_SUFFIX = /^(이야|이고|이에요|이다|입니다|인데|이네|이라고|이었|이었어|이니까|였|야|예요|이요|고(?![가-힣])|구요)/;
+  var NUM_SUFFIX = /^(이고요|이구요|이야|이고|이에요|이다|입니다|인데|이네|이라고|이었|이었어|이니까|였|야|예요|이요|고(?![가-힣])|구요)/;
   // seg 맨 앞에서 숫자 하나를 읽는다. 반환 {v, len} 또는 null.  숫자 변환은 혈당·체중 낱말 바로 뒤에서만 한다(음식 이름이 숫자로 깨지지 않게).
   function readNum(s) {
     var m = s.match(/^(\d{1,3})(?:\s*(?:\.|점)\s*(\d{1,2}))?(?![\d])/);
@@ -73,7 +73,7 @@
     return null;
   }
   var UNIT = /^\s*(mg\/?dl|mg|킬로그램|킬로|키로|kg|밀리)/i;
-  var FILL = /(^|\s)(은|는|이|가|도|을|를|에|에는|엔|으로|로|이야|이에요|예요|입니다|이고|인데|이었어|였어|이다|야|요|나왔어요|나왔어|나왔고요|나왔구요|나왔는데요|나왔네요|나왔습니다|나옴|나왔다|정도|쯤|이네|네(?!\s*(?:시간|분|개|잔|번|공기|그릇))|나왔고|나왔는데|나왔네|나오네|그리고|그런데|근데|음|어|저기|인가|했어요|했어|했음|했고|했다|하고|랑|이랑|와|과|밖에|동안|입니다만|다|전부|모두|꼭|잘|같이|함께|또|아직|이미|벌써|둘|양쪽)(?=\s|$|,|\.|\?)/g;
+  var FILL = /(^|\s)(은|는|이|가|도|을|를|에|에는|엔|으로|로|이야|이에요|예요|입니다|이고요|이구요|이고|인데|이었어|였어|이다|야|요|나왔어요|나왔어|나왔고요|나왔구요|나왔는데요|나왔네요|나왔습니다|도요|은요|는요|나옴|나왔다|정도|쯤|이네|네(?!\s*(?:시간|분|개|잔|번|공기|그릇))|나왔고|나왔는데|나왔네|나오네|그리고|그런데|근데|음|어|저기|인가|했어요|했어|했음|했고|했다|하고|랑|이랑|와|과|밖에|동안|입니다만|다|전부|모두|꼭|잘|같이|함께|또|아직|이미|벌써|둘|양쪽)(?=\s|$|,|\.|\?)/g;
   function leftover(s) {
     var r = String(s || '').replace(/[,.!?~¶]/g, ' ');
     for (var k = 0; k < 3; k++) r = r.replace(FILL, ' ');
@@ -142,6 +142,8 @@
           });
           if (best) { w = best.b; brk = true; }
           else {
+            var m0 = w.match(/^(.{2,}?)(이고요|이고|이구요|이구)$/);            // 「김밥이고요」「라면이고」: 음식 이름 뒤 서술 끝말은 뗀다(O-0736)
+            if (m0) w = m0[1];
             var m = w.match(/^(.+?)(을|를|도|만|은|는)$/);
             if (m && (isKn(m[1]) || m[1].length >= 2)) w = m[1];
             else {
@@ -234,6 +236,22 @@
     }
     return { neg: false, rest: x };
   }
+  var SKIP_TOK = '측정 안 함';        // 값 고르기 행에서 「측정 안 함」을 나타내는 후보 이름
+  function numLoop(s2) {              // 말 조각 맨 앞에서 숫자를 차례로 읽는다(정정·군말 건너뜀) → {vals, rest}
+    var vals = [], safety = 0;
+    while (s2 && safety++ < 8) {
+      s2 = s2.replace(/^[\s,]+/, '');
+      if (s2.charAt(0) === '¶') { s2 = s2.slice(1); continue; }
+      var fm = s2.match(/^(?:그리고|그런데|근데|어|음|저기|아|응)(?=\s|¶)\s*/);          // 정정 앞뒤의 군말(「그리고 어 아니 구십이」)
+      if (fm) { s2 = s2.slice(fm[0].length); continue; }
+      var mm2 = s2.match(/^(다시|정정)\s*/);
+      if (mm2) { s2 = s2.slice(mm2[0].length); continue; }
+      var r = readNum(s2);
+      if (!r) break;
+      vals.push(r.v); s2 = s2.slice(r.len).replace(UNIT, '').replace(/^\s*(?:이라고|라고|이고요|이구요|이고|이요|구요|고)(?![가-힣])/, '').replace(/^\s*(?:으로|로)?\s*(?:쟀|재었|잰|측정\s*(?:했|함))[가-힣]*/, '');
+    }
+    return { vals: vals, rest: s2 };
+  }
   /* parse(말, ctx) → { items: [...], unread: [...] }
    *   ctx = { hour: 0~23(한국 시각), learned: [배운 음식], chips: [기본 칩], lastWeight }
    *   item = { k, v, when:'today'|'yesterday'|'dayBefore'|'bad', wx: 날짜 낱말을 말했나, checked, flags[], cands[], skip, glu, newFoods[] }
@@ -299,7 +317,7 @@
     var all = hits;
     hits = all.filter(function (h) { return !h.skipMe; });
 
-    var when = 'today', whenX = false, ex = {}, prevNum = null, gluItems = [], pendMeals = [], pendMeas = null;
+    var when = 'today', whenX = false, ex = {}, prevNum = null, gluItems = [], pendMeals = [], pendMeas = null, skipAt = -9;
     var push = function (it) { it.when = it.when || when; if (it.wx === undefined) it.wx = whenX; if (it.checked === undefined) it.checked = true; if (it.when === 'bad') { it.checked = false; (it.flags = it.flags || []).push('baddate'); } out.items.push(it); return it; };
     var polarity = function (sg) {            // 약·영양제 먹음/안 먹음 — 정정(¶)이 있으면 나중 말을 따른다
       var parts = sg.split('¶'), found = [];
@@ -331,7 +349,7 @@
         if (pendMeas && pendMeas.idx === n - 1) {                       // 바로 앞이 값 없는 혈당·체중 낱말: 「체중은 오늘 안 쟀고」「혈당은 어제 95」
           var pm = pendMeas; pendMeas = null;
           var rest2 = rest.replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim(), ngp = negMeasOf(rest2), rnp = readNum(rest2);
-          if (ngp.neg && !rnp) { var lop = leftover(ngp.rest); if (lop) out.unread.push(pm.a.s + ' ' + a.s + ' ' + lop); push({ k: pm.k, skip: true, src: pm.a.s + ' ' + a.s + ' ' + rest2 }); continue; }
+          if (ngp.neg && !rnp) { skipAt = n; var lop = leftover(ngp.rest); if (lop) out.unread.push(pm.a.s + ' ' + a.s + ' ' + lop); push({ k: pm.k, skip: true, src: pm.a.s + ' ' + a.s + ' ' + rest2 }); continue; }
           if (rnp && !ngp.neg) {
             var lop2 = leftover(rest2.slice(rnp.len).replace(UNIT, '')); if (lop2) out.unread.push(lop2);
             prevNum = pm.k; var pu = push({ k: pm.k, v: rnp.v, src: pm.a.s, pos: pm.a.i }); if (pm.k === 'fasting_glucose') gluItems.push(pu); continue;
@@ -359,40 +377,46 @@
         continue;
       }
       if (k === 'fasting_glucose' || k === 'weight') {
-        var s2 = seg.replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim(), vals = [], safety = 0;
-        var negFull = negMeasOf(s2);                                  // 「측정 안 함」 말인가 — 아래 숫자 읽기보다 먼저 봐 두되, 숫자가 있으면 숫자를 먼저 쓴다(O-0736)
+        var s2 = seg.replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim(), vals = [];
+        var negFull = negMeasOf(s2);                                  // 「측정 안 함」 말인가 — 숫자와 함께 있으면 고르기 행(값 또는 측정 안 함) · 부정만 있으면 측정 안 함 행(O-0736)
         for (var pg = 0; pg < 4; pg++) {                              // 앞머리 군말: 「쟀더니」「쟀는데」「재니까」「쟀어」 …
-          var s2b = s2.replace(/^\s*(?:이야기\s*하면|이야기\s*하자면|말하면|말하자면|보면|수치(?:는|가)?|결과(?:는|가)?|측정(?:값|치)?(?:은|는)?|(?:다|둘\s*다|모두|전부)\s*(?=재|쟀)|쟀더니|재보니까?|재\s*보니|재니까|재니|쟀는데|쟀어서|쟀어요|쟀어|쟀고|쟀음|재었[가-힣]*|재서|잰|확인\s*(?:했더니|해보니|하니)|봤더니|보니까|보니)(?=[\s,.\d]|$|[일이삼사오육칠팔구십백])\s*/, '');
+          var s2b = s2.replace(/^\s*(?:이야기\s*하면|이야기\s*하자면|말하면|말하자면|보면|수치(?:는|가)?|결과(?:는|가)?|측정(?:값|치)?(?:은|는)?|(?:다|둘\s*다|모두|전부)\s*(?=재|쟀)|공복(?:\s*혈당)?|쟀더니|재보니까?|재\s*보니|재니까|재니|쟀는데|쟀어서|쟀어요|쟀어|쟀고|쟀음|재었[가-힣]*|재서|잰|확인\s*(?:했더니|해보니|하니)|봤더니|보니까|보니)(?=[\s,.\d]|$|[일이삼사오육칠팔구십백])\s*/, '');
           if (s2b === s2) break; s2 = s2b;
         }
-        while (s2 && safety++ < 8) {
-          s2 = s2.replace(/^[\s,]+/, '');
-          if (s2.charAt(0) === '¶') { s2 = s2.slice(1); continue; }
-          var fm = s2.match(/^(?:그리고|그런데|근데|어|음|저기|아|응)(?=\s|¶)\s*/);          // 정정 앞뒤의 군말(「그리고 어 아니 구십이」)
-          if (fm) { s2 = s2.slice(fm[0].length); continue; }
-          var mm2 = s2.match(/^(다시|정정)\s*/);
-          if (mm2) { s2 = s2.slice(mm2[0].length); continue; }
-          var r = readNum(s2);
-          if (!r) break;
-          vals.push(r.v); s2 = s2.slice(r.len).replace(UNIT, '').replace(/^\s*(?:이라고|라고|이고|이요|구요|고)(?![가-힣])/, '').replace(/^\s*(?:으로|로)?\s*(?:쟀|재었|잰|측정\s*(?:했|함))[가-힣]*/, '');
-        }
-        if (!vals.length) {
-          var nm5 = negFull.neg ? negFull : negMeasOf(s2);
-          var lo4 = leftover(nm5.rest);
-          if (nm5.neg) {                                              // 「체중 안 쟀어」: 측정 안 함 행(숫자를 지어내지 않는다)
-            if (lo4) out.unread.push(a.s + ' ' + lo4);
-            prevNum = k; push({ k: k, skip: true, src: a.s + ' ' + seg.trim() }); continue;
-          }
-          if (!lo4 && hits[n + 1] && hits[n + 1].k === 'when' && !BADDATE_RE.test(hits[n + 1].s.replace(/\s+/g, ' '))) { pendMeas = { k: k, a: a, idx: n }; continue; }     // 「체중은 오늘 안 쟀고」: 뒤의 날짜 낱말 처리에서 이어 본다
-          if (!lo4) {                                                 // 「체중도 혈당도 안 쟀어」「혈당 체중 둘 다 안 쟀어」: 낱말만 있고 뒤 항목이 안 쟀다고 하면 같이 안 쟀다는 뜻
-            var sh = false;
+        var NL = numLoop(s2); vals = NL.vals; s2 = NL.rest;
+        var negHere = null, nOrder = '';
+        if (vals.length) { var ng1 = negMeasOf(s2); if (ng1.neg) { negHere = ng1; nOrder = 's'; } }      // 「체중 71.5 아니 안 쟀어」: 값 다음에 부정
+        else {
+          var ng2 = negFull.neg ? negFull : negMeasOf(s2);
+          if (ng2.neg) {
+            var NL2 = numLoop(ng2.rest);
+            if (NL2.vals.length) { vals = NL2.vals; s2 = NL2.rest; negHere = ng2; nOrder = 'v'; }          // 「혈당 안 쟀어 아니 98」: 부정 다음에 값
+            else {                                                    // 「체중 안 쟀어」: 측정 안 함 행(숫자를 지어내지 않는다)
+              var lo4 = leftover(ng2.rest);
+              if (lo4) out.unread.push(a.s + ' ' + lo4);
+              prevNum = k; skipAt = n; push({ k: k, skip: true, src: a.s + ' ' + seg.trim() }); continue;
+            }
+          } else if (!leftover(s2) || /^\s*도(?:요)?\s*$/.test(s2)) {
+            if (skipAt === n - 1 && /^\s*도(?:요)?\s*$/.test(s2)) { skipAt = n; push({ k: k, skip: true, src: a.s + ' (앞 말과 같이)' }); continue; }       // 「체중 안 쟀어요 혈당도요」
+            if (hits[n + 1] && hits[n + 1].k === 'when' && !BADDATE_RE.test(hits[n + 1].s.replace(/\s+/g, ' '))) { pendMeas = { k: k, a: a, idx: n }; continue; }     // 「체중은 오늘 안 쟀고」: 뒤의 날짜 낱말 처리에서 이어 본다
+            var sh = false;                                           // 「체중도 혈당도 안 쟀어」「혈당 체중 둘 다 안 쟀어」: 낱말만 있고 뒤 항목이 안 쟀다고 하면 같이 안 쟀다는 뜻
             for (var jj = n + 1; jj < hits.length && (hits[jj].k === 'fasting_glucose' || hits[jj].k === 'weight'); jj++) {
               var sg2 = t.slice(hits[jj].s0, hits[jj].s1).replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim();
               if (negMeasOf(sg2).neg) { sh = true; break; }
               if (leftover(sg2)) break;
             }
-            if (sh) { push({ k: k, skip: true, src: a.s + ' (뒤 말과 함께)' }); continue; }
+            if (sh) { skipAt = n; push({ k: k, skip: true, src: a.s + ' (뒤 말과 함께)' }); continue; }
           }
+        }
+        if (negHere) {                                                // 값과 「안 쟀어」가 함께: 어느 쪽이 맞는지 고르게 한다(마지막 말이 기본 선택 · 고르기 전에는 체크 꺼짐)
+          var restM = nOrder === 's' ? negHere.rest : s2, loM = leftover(restM);
+          if (loM) out.unread.push(loM);
+          var uv = vals.filter(function (x, i) { return vals.indexOf(x) === i; });
+          var cs = nOrder === 's' ? uv.concat(SKIP_TOK) : [SKIP_TOK].concat(uv);
+          prevNum = k;
+          var pm2 = push({ k: k, v: cs[cs.length - 1], cands: cs, flags: ['confirm', 'mixed'], checked: false, src: a.s, pos: a.i });
+          if (k === 'fasting_glucose') gluItems.push(pm2);
+          continue;
         }
         var lo5 = leftover(s2);
         if (!vals.length) { out.unread.push((a.s + (lo5 ? ' ' + lo5 : '')).trim()); continue; }     // 값 없는 항목 낱말도 뒷말과 함께 남긴다
@@ -499,10 +523,16 @@
     out.items.forEach(function (it) {
       var key = it.when + '|' + it.k, p = by[key];
       if (!p) { by[key] = it; merged.push(it); return; }
-      var c = (p.cands || [p.v]).concat(it.cands || [it.v]), uniq = c.filter(function (x, i) { return c.indexOf(x) === i; });
+      var cOf = function (x) { return x.skip ? SKIP_TOK : x.v; };       // 「측정 안 함」도 하나의 후보
+      var c = (p.cands || [cOf(p)]).concat(it.cands || [cOf(it)]), uniq = c.filter(function (x, i) { return c.indexOf(x) === i; });
       p.wx = p.wx || it.wx;
       if (it.glu && !p.glu) p.glu = it.glu;
-      if (uniq.length > 1) { p.cands = uniq; p.v = it.v; p.flags = (p.flags || []).filter(function (f) { return f !== 'confirm'; }).concat('confirm'); p.checked = it.checked !== false; }
+      if (uniq.length > 1) {
+        var hasSkip = uniq.indexOf(SKIP_TOK) >= 0;
+        p.cands = uniq; p.v = it.cands ? it.v : cOf(it); p.skip = false; p.flags = (p.flags || []).filter(function (f) { return f !== 'confirm'; }).concat('confirm');
+        if (hasSkip) { p.flags.push('mixed'); p.checked = false; }          // 값과 측정 안 함이 섞이면 직접 고르기 전에는 체크하지 않는다
+        else p.checked = it.checked !== false;
+      }
     });
     out.items = merged;
     var seenU = {};
@@ -514,12 +544,12 @@
    *   range 는 evalRow 가 다시 계산하므로 parse 결과에는 없다 → 여기서 따로 붙여 단위 시험이 시제품 기대값과 맞게 한다. */
   function fmtItem(it, ctx) {
     var fl = (it.flags || []).slice(); if (it.checked === false) fl.push('unchk');
-    var v = it.skip ? 'skip' : it.v;
-    if (!it.skip && (it.k === 'fasting_glucose' || it.k === 'weight' || it.k === 'sleep_hours')) {
+    var v = it.skip || it.v === SKIP_TOK ? 'skip' : it.v;
+    if (!it.skip && it.v !== SKIP_TOK && (it.k === 'fasting_glucose' || it.k === 'weight' || it.k === 'sleep_hours')) {
       var rg = rangeOf(it.k, it.v, ctx);
       if (rg === 'block' || rg === 'warn') { fl.push(rg); if (rg === 'block' && fl.indexOf('unchk') < 0) fl.push('unchk'); }
     }
-    if (it.cands && it.cands.length > 1) fl = fl.filter(function (f) { return f !== 'confirm'; }).concat('confirm:' + it.cands.join('/'));
+    if (it.cands && it.cands.length > 1) fl = fl.filter(function (f) { return f !== 'confirm'; }).concat('confirm:' + it.cands.map(function (c) { return c === SKIP_TOK ? 'skip' : c; }).join('/'));
     return (it.when || 'today') + '|' + it.k + '=' + v + (fl.length ? '{' + fl.sort().join(',') + '}' : '');
   }
 
@@ -579,15 +609,16 @@
       var isBad = it.when === 'bad';                              // 오늘·어제·그제가 아닌 날짜 말(「10월 28일」 등) — 적지 않고 보여만 준다
       var date = (it.wx && !isBad) ? shiftDate(env.today, WHEN_OFF[it.when] || 0) : env.screen;
       var k = it.k, type = TYPE[k];
-      var row = { id: (isBad ? 'bad|' : '') + date + '|' + k, baddate: isBad, date: date, k0: k, k: k, type: type, label: LABEL[k], skip: !!it.skip, glu: it.glu || null,
+      var row = { id: (isBad ? 'bad|' : '') + date + '|' + k, baddate: isBad, date: date, k0: k, k: k, type: type, label: LABEL[k], skip0: !!it.skip, skip: !!it.skip, glu: it.glu || null,
                   v0: it.skip ? null : it.v, cands: it.cands ? it.cands.slice() : null, kcands: null,
                   flags: (it.flags || []).filter(function (f) { return f !== 'warn' && f !== 'block'; }), newFoods: (it.newFoods || []).slice(),
                   pchecked: it.checked !== false, srcText: it.src || '', newEx: (it.newEx || []).slice() };
       if (k === 'med_morning' && row.cands && row.cands.length === 2 && row.cands[0] === 'med_morning' && row.cands[1] === 'med_evening') { row.kcands = row.cands; row.cands = null; }
       var p = byId[row.id];
       if (p) {                                                  // 화면 날짜와 말한 날짜가 겹쳐 같은 칸이 두 번 → 「확인 필요」 하나로
-        var c = (p.cands || [p.v0]).concat(row.cands || [row.v0]), uniq = c.filter(function (x, i) { return c.indexOf(x) === i; });
-        if (uniq.length > 1) { p.cands = uniq; p.v0 = row.v0; if (p.flags.indexOf('confirm') < 0) p.flags.push('confirm'); }
+        var rc = function (x) { return x.skip0 ? SKIP_TOK : x.v0; };
+        var c = (p.cands || [rc(p)]).concat(row.cands || [rc(row)]), uniq = c.filter(function (x, i) { return c.indexOf(x) === i; });
+        if (uniq.length > 1) { p.cands = uniq; p.v0 = row.cands ? row.v0 : rc(row); p.skip0 = false; if (p.flags.indexOf('confirm') < 0) p.flags.push('confirm'); if (uniq.indexOf(SKIP_TOK) >= 0) { if (p.flags.indexOf('mixed') < 0) p.flags.push('mixed'); p.pchecked = false; } }
         return;
       }
       byId[row.id] = row; rows.push(row);
@@ -610,8 +641,9 @@
     // 값 고르기: 두 번 말한 값(cands) · 막힌 값 고쳐 보기(fix)
     var v = row.v0;
     if (row.cands && u.v !== undefined && row.cands.indexOf(u.v) >= 0) v = u.v;
-    if (t === 'num' || t === 'sleep') { if (u.fix !== undefined && !row.skip) v = u.fix; }
+    if (t === 'num' || t === 'sleep') { if (u.fix !== undefined && !row.skip0 && v !== SKIP_TOK) v = u.fix; }
     row.v = v;
+    row.skip = !!row.skip0 || (t === 'num' && v === SKIP_TOK);       // 값 고르기 행에서 「측정 안 함」을 고른 경우
     var b = env.base ? env.base(row.date) : undefined;
     row.notes = []; row.fixes = []; row.modes = null; row.mode = null; row.range = 'ok'; row.locked = false; row.lockWhy = ''; row.status = 'empty'; row.baseText = ''; row.pending = false;
     // 식단 낱말(뺀 것 반영)
@@ -681,7 +713,7 @@
     if (fl.indexOf('time-guess') >= 0) N.push('때를 말씀하지 않아 ' + (k === 'med_evening' ? '저녁약' : '아침약') + '으로 봤습니다');
     if (row.kcands && fl.indexOf('confirm') >= 0) N.push('아침약인지 저녁약인지 골라 주세요');
     if (fl.indexOf('guess') >= 0) N.push('항목 이름이 없는 숫자입니다. ' + LABEL[row.k0] + '으로 적을까요?');
-    if (fl.indexOf('confirm') >= 0 && row.cands) N.push('두 가지로 말씀하셨습니다. 맞는 값을 골라 주세요');
+    if (fl.indexOf('confirm') >= 0 && row.cands) N.push(fl.indexOf('mixed') >= 0 ? '값과 「측정 안 함」을 함께 말씀하셨습니다. 맞는 쪽을 골라 주세요' : '두 가지로 말씀하셨습니다. 맞는 값을 골라 주세요');
     if (row.range === 'warn') N.push(k === 'weight' && row.v <= 200 ? '지난 기록과 5kg 넘게 다릅니다. 숫자를 확인해 주세요' : '숫자를 확인해 주세요');
     if (row.range === 'block') N.push('숫자를 확인해 주세요. 이 값으로는 저장할 수 없습니다');
     if (b.note) N.push(b.note);
@@ -891,8 +923,8 @@
     $('hvLive').textContent = '준비 중입니다…';
     var first = lsGet(HINT_KEY) !== '1';
     $('hvHint').innerHTML = first
-      ? '이렇게 말씀해 보세요<br><b>「공복혈당 98, 체중 71.2, 아침은 양배추랑 계란 먹었어, 체중은 안 쟀어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 쭉 말씀하셔도 됩니다. 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」를 눌러 주세요.'
-      : '예: 「공복혈당 98, 체중 71.2, 아침은 계란, 체중은 안 쟀어」 — 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」';
+      ? '이렇게 말씀해 보세요<br><b>「혈당 98, 체중은 안 쟀어, 아침은 양배추랑 계란 먹었어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 쭉 말씀하셔도 됩니다. 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」를 눌러 주세요.'
+      : '예: 「혈당 98, 체중은 안 쟀어, 아침은 계란」 — 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」';
     lsSet(HINT_KEY, '1');
     K('듣고 있습니다. 편하게 말씀하세요.');
     var m = mic = { KS: KS, hs: [], acc: '', cur: '', heard: false, quietT: null, noSpT: null, finT: null, readyT: null, clockT: null, t0: Date.now(), lastAct: Date.now(), endNote: '', ready: false, stopping: false, ended: false };
@@ -1046,7 +1078,7 @@
     r.notes.forEach(function (t) { h += '<div class="hv-nt">' + esc(t) + '</div>'; });
     if (r.locked && r.lockWhy) h += '<div class="hv-nt bad">' + esc(r.lockWhy) + '</div>';
     var ch = '';
-    if (r.cands && r.cands.length > 1) ch += r.cands.map(function (c) { return '<button type="button" class="hv-c' + (c === r.v ? ' on' : '') + '" data-pick="' + esc(r.id) + '" data-c="' + esc(c) + '">' + esc(r.type === 'num' ? numText(r.k, c) : r.type === 'sleep' ? fmtSleep(c) : c) + '</button>'; }).join('');
+    if (r.cands && r.cands.length > 1) ch += r.cands.map(function (c) { return '<button type="button" class="hv-c' + (c === r.v ? ' on' : '') + '" data-pick="' + esc(r.id) + '" data-c="' + esc(c) + '">' + esc(c === SKIP_TOK ? SKIP_TOK : r.type === 'num' ? numText(r.k, c) : r.type === 'sleep' ? fmtSleep(c) : c) + '</button>'; }).join('');
     if (r.kcands) ch += r.kcands.map(function (c) { return '<button type="button" class="hv-c' + (c === r.k ? ' on' : '') + '" data-kpick="' + esc(r.id) + '" data-c="' + esc(c) + '">' + (c === 'med_evening' ? '저녁약' : '아침약') + '</button>'; }).join('');
     if (r.modes && r.modes.length > 1) ch += r.modes.map(function (m) { return '<button type="button" class="hv-c' + (m === r.mode ? ' on' : '') + '" data-mode="' + esc(r.id) + '" data-m="' + m + '">' + (m === 'append' ? '덧붙이기' : '바꾸기') + '</button>'; }).join('');
     if (r.fixes && r.fixes.length) ch += r.fixes.map(function (f) { return '<button type="button" class="hv-c fix" data-fix="' + esc(r.id) + '" data-f="' + f + '">' + esc(String(r.v) + ' → ' + numText(r.k, f) + '?') + '</button>'; }).join('');
@@ -1065,7 +1097,7 @@
     var root2 = $('hvRows');
     Array.prototype.forEach.call(root2.querySelectorAll('[data-ck]'), function (b) { b.addEventListener('click', function () { var r = rowById(b.getAttribute('data-ck')); if (r) touch(r.id, { checked: !r.checked }); }); });
     Array.prototype.forEach.call(root2.querySelectorAll('[data-pick]'), function (b) {
-      b.addEventListener('click', function () { var r = rowById(b.getAttribute('data-pick')); if (!r) return; var c = b.getAttribute('data-c'); touch(r.id, { v: r.type === 'num' || r.type === 'sleep' ? parseFloat(c) : c, checked: true }); });
+      b.addEventListener('click', function () { var r = rowById(b.getAttribute('data-pick')); if (!r) return; var c = b.getAttribute('data-c'); touch(r.id, { v: (r.type === 'num' || r.type === 'sleep') && c !== SKIP_TOK ? parseFloat(c) : c, checked: true }); });
     });
     Array.prototype.forEach.call(root2.querySelectorAll('[data-kpick]'), function (b) { b.addEventListener('click', function () { var r = rowById(b.getAttribute('data-kpick')); if (r) touch(r.id, { k: b.getAttribute('data-c'), checked: true }); }); });
     Array.prototype.forEach.call(root2.querySelectorAll('[data-mode]'), function (b) { b.addEventListener('click', function () { var r = rowById(b.getAttribute('data-mode')); if (r) touch(r.id, { mode: b.getAttribute('data-m'), checked: true }); }); });
