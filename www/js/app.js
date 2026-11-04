@@ -3782,6 +3782,7 @@
   APP_VERSION = 'v9.69';        // v9.69(O-0720·O-0721·O-0722): 홈 맨 끝 「사진첩」 칸(유치원~대학원·교수 시절·가족 사진 642장과 족보 1장을 격자로 훑고 한 장씩 밀어 넘기며 두 손가락·더블탭으로 확대 · 아무거나 보기 · 이 단계 확인함 · 고치기·휴지통) · 「실적」 탭의 화면 이름을 「곽호석」으로(걸어온 길) · 스위치 ALBUM_TAB · 서버 album_photos 표/album_* 함수/album-file 함수/비공개 저장소 album-files · versionCode 113
   APP_VERSION = 'v9.70';        // v9.70(O-0723): 사진첩 큰 보기(족보 포함)에 「내려받기」 단추 하나 — 원본 JPEG 를 폰 「다운로드」 폴더에 album_단계영문_번호.jpg(족보는 genealogy.jpg)로 저장, 끝난 뒤에만 「저장했어요(위치)」·실패는 「못 했어요 — 이유」 · 공유 단추·여러 장 내려받기는 없음 · 설정 ⚙ 안내문 고침 · 스위치 ALBUM_DL · versionCode 114
   APP_VERSION = 'v9.71';        // v9.71(O-0727): 긴 녹음 PC 보내기 보강 — 조각 올리기가 45초 멈추면 알아채고 5번까지 다시 시도, 화면에 「올리는 중 n/m 조각」 표시, 앱을 내렸다가 돌아오거나 인터넷이 돌아오면 이어서 올림, 올리는 동안 화면 켜 둠 · 스위치 AUDIO_UPLOAD_RESUME · versionCode 115
+  APP_VERSION = 'v9.72';        // v9.72(O-0736): 「말로 기록」 보강 — ①「체중(혈당) 안 쟀어·측정 안 했어·재지 않았어·못 쟀어」 등을 「측정 안 함」 행으로 정확히 읽음(체중도 혈당도 안 쟀어 · 오늘은 안 쟀고 · 쟀고/쟀지만 꼬리 포함) ②긴 말 여러 항목: 「-고요」 끝말·「어제 잠」·「새벽에」 등을 걸러 더 많이 칸으로 ③받아쓰기: 쉼 2초→7초에 끊기던 것을 늘리고 듣는 시간·곧 마무리 안내·[다 말했어요]는 항상 보임·최대 5분·듣는 동안 화면 켜 두기(화면이 꺼져 끊기던 것 방지)
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9940,7 +9941,9 @@
   }
   if (window.HealthTab && HealthTab.init) { try { HealthTab.init({ toast: toast }); } catch (e) {} }
   // O-0693 건강 탭 「말로 기록」 — 음성 대화·채팅 받아쓰기 중이면 켜지 않고, 효과음 설정은 채팅과 같은 값
-  if (window.HealthVoice && HealthVoice.setHost) { try { HealthVoice.setHost({ toast: toast, sttBusy: function () { return !!(convoOn || (stt && stt.on)); }, sfx: function () { return sfxMode; } }); } catch (e) {} }
+  // O-0736: screen = 듣는 동안 화면 켜 두기(끌 때는 음성 대화·긴 올리기가 켜 둔 것을 풀지 않는다)
+  if (window.HealthVoice && HealthVoice.setHost) { try { HealthVoice.setHost({ toast: toast, sttBusy: function () { return !!(convoOn || (stt && stt.on)); }, sfx: function () { return sfxMode; },
+      screen: function (on) { try { var kb = kbPlugin(); if (!kb || !kb.keepScreenOn) return; if (on || (!upWakeOn && !callWakeNative)) { var pr = kb.keepScreenOn({ on: !!on }); if (pr && pr.catch) pr.catch(function () {}); } } catch (e) {} } }); } catch (e) {} }
   if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
 
   /* ---- 실적 탭(O-0684 v9.59): 화면 열기/연결(로직은 achievements.js) ----

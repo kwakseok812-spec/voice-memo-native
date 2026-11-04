@@ -37,7 +37,7 @@
   var EX_ALIAS = { '러닝머신': '런닝머신', '슬로우 러닝': '슬로우러닝' };
   var NUMCH = '일이삼사오육칠팔구';
   // 값이 없는 때·상황 낱말 — 조용히 걷어내는 두 목록 가운데 하나(나머지 하나는 「끼니 낱말이 때만 가리키는 경우」, 아래 breakfast 처리에 표시)
-  var CTX = /(어젯밤에?|간밤에|지난밤에|아까|방금|일어나자마자|일어나서|눈\s*뜨자마자|출근해서)/g;
+  var CTX = /(어젯밤에?|간밤에|지난밤에|아까|방금|일어나자마자|일어나서|눈\s*뜨자마자|출근해서|새벽에|(?:오늘\s*)?(?:건강\s*)?기록\s*(?:할게요?|할께요?|시작할게요?|시작)|어제\s*(?=수면|잠(?:(?![가-힣])|[은을도이](?![가-힣])))|어제\s*밤(?:에는|에|엔)?(?=\s*(?:\d+|[가-힣]{1,3})\s*시간))/g;
   // 정정·번복 낱말 — 코드에 명시한 목록(조용히 걷어내는 낱말): 「아니」「어 아니」「아 잠깐」「그게 아니라」「정정」「A 말고 B」. 있던 자리에는 ¶ 표시를 남겨 앞 말과 뒤 말을 나눈다.
   var CORR = /(?:^|[\s,])(?:(?:어|아|음|그|저|에이)\s+)*(?:(?:그게\s*)?아니(?:야|요|다|고|라)?(?:\s+(?:그게\s*)?아니(?:야|요|다|고|라)?)*|아\s*잠깐|잠깐만?|정정(?:할게요?|하면|합니다)?|말고)(?=[\s,.?]|$)/g;
 
@@ -73,7 +73,7 @@
     return null;
   }
   var UNIT = /^\s*(mg\/?dl|mg|킬로그램|킬로|키로|kg|밀리)/i;
-  var FILL = /(^|\s)(은|는|이|가|도|을|를|에|에는|엔|으로|로|이야|이에요|예요|입니다|이고|인데|이었어|였어|이다|야|요|나왔어요|나왔어|나옴|나왔다|정도|쯤|이네|네(?!\s*(?:시간|분|개|잔|번|공기|그릇))|나왔고|나왔는데|나왔네|나오네|그리고|그런데|근데|음|어|저기|인가|했어요|했어|했음|했고|했다|하고|랑|이랑|와|과|밖에|동안|입니다만|다|전부|모두|꼭|잘|같이|함께|또|아직|이미|벌써|둘|양쪽)(?=\s|$|,|\.|\?)/g;
+  var FILL = /(^|\s)(은|는|이|가|도|을|를|에|에는|엔|으로|로|이야|이에요|예요|입니다|이고|인데|이었어|였어|이다|야|요|나왔어요|나왔어|나왔고요|나왔구요|나왔는데요|나왔네요|나왔습니다|나옴|나왔다|정도|쯤|이네|네(?!\s*(?:시간|분|개|잔|번|공기|그릇))|나왔고|나왔는데|나왔네|나오네|그리고|그런데|근데|음|어|저기|인가|했어요|했어|했음|했고|했다|하고|랑|이랑|와|과|밖에|동안|입니다만|다|전부|모두|꼭|잘|같이|함께|또|아직|이미|벌써|둘|양쪽)(?=\s|$|,|\.|\?)/g;
   function leftover(s) {
     var r = String(s || '').replace(/[,.!?~¶]/g, ' ');
     for (var k = 0; k < 3; k++) r = r.replace(FILL, ' ');
@@ -104,7 +104,7 @@
   }
 
   // ---- 식단 쪼개기: 이름 사전(칩+배운 음식+자주 쓰는 이름)으로 먼저 통째로 맞춘다 ----
-  var EAT = /(먹었어요|먹었어|먹었습니다|먹었음|먹었고|먹었는데|먹었다|먹음|먹고|드셨어요|드셨어|드셨음|마셨어요|마셨어|마셨고|마셨음|마심|마시고|식사했어)/g;
+  var EAT = /(먹었고요|먹었구요|먹었는데요|먹었네요|먹었어요|먹었어|먹었습니다|먹었음|먹었고|먹었는데|먹었다|먹음|먹고|드셨어요|드셨어|드셨음|마셨어요|마셨어|마셨고|마셨음|마심|마시고|식사했어)/g;
   // 음식 이름으로 인정하지 않고 조용히 빼는 낱말 — 코드에 명시한 군말·접속·정도·때 낱말 목록(이 목록 밖의 말은 사라지지 않고 「읽지 못한 말」로 남는다)
   var FOOD_DROP = { '어': 1, '음': 1, '그': 1, '저': 1, '뭐': 1, '아': 1, '응': 1, '다': 1, '전부': 1, '모두': 1, '그냥': 1, '좀': 1, '조금': 1, '약간': 1, '많이': 1,
                     '같이': 1, '함께': 1, '또': 1, '정도': 1, '쯤': 1, '먹고': 1, '하고': 1, '그럼': 1, '그래서': 1, '오늘': 1, '어제': 1, '그제': 1, '지금': 1, '아까': 1,
@@ -221,6 +221,19 @@
   var QUESTION_RE = /(\?|야\s*돼|돼\s*$|될까|할까|일까|인가요|나요|까요|되나|괜찮|늘려야|줄여야|끊어야|바꿔야|해야)/;      // 질문·상담 말에는 「먹었는지 모름」 같은 꼬리를 붙이지 않는다
   var NEG_VERB = /(?<![가-힣])(?:안|못)\s*(?:먹|챙|드)[가-힣]*|먹지\s*(?:않|못)[가-힣]*|깜빡[가-힣]*|빼먹[가-힣]*|걸렀[가-힣]*/g;
 
+  // ---- 혈당·체중 「측정 안 함」 말 (O-0736) ----
+  //   「안 쟀어」「못 재서」「안 잰」「안 재었어」「재지 않았어」「측정 안 했어」「측정을 못 했어」「측정하지 않았어」「패스」「건너뛰었어」… 낱말 하나를 통째로 걷어낸다(「쟀고」「쟀지만」 같은 꼬리가 읽지 못한 말로 남지 않게).
+  //   받아쓰기가 「쟀」을 「잤」으로 적는 일이 있어 혈당·체중 낱말 바로 뒤의 「안 잤어」도 같은 뜻으로 본다(이 두 칸 안에서만 쓰는 규칙).
+  var NEG_MEAS_ANY = /(?<![가-힣])(?:안|못)\s*(?:쟀|재|잰|잼|잴|잤|잠)[가-힣]*|(?:재|측정\s*하|체크\s*하|확인\s*하)지\s*(?:않|못)[가-힣]*|(?:측정|체크|확인)\s*(?:이|을|를|은|는|도)?\s*(?:안|못)\s*[가-힣]*|(?<![가-힣])(?:안|못)\s*나(?:왔|와|오|옴)[가-힣]*|(?<![가-힣])(?:패스|건너뛰|건너뛴|생략|깜빡|빼먹|걸렀)[가-힣]*/;
+  var NEG_MEAS_LEAD = /^\s*(?:(?:안|못)\s*(?:했|함|해|하|됐|돼|되)|없(?:어|음|고|었|네|다))[가-힣]*/;
+  function negMeasOf(s) {            // 말 조각이 「측정 안 함」인가 → {neg, rest(그 말을 걷어낸 나머지)}
+    var x = String(s || '');
+    if (NEG_MEAS_ANY.test(x) || NEG_MEAS_LEAD.test(x)) {
+      var g = new RegExp(NEG_MEAS_ANY.source, 'g'), l = new RegExp(NEG_MEAS_LEAD.source);
+      return { neg: true, rest: x.replace(g, ' ').replace(l, ' ') };
+    }
+    return { neg: false, rest: x };
+  }
   /* parse(말, ctx) → { items: [...], unread: [...] }
    *   ctx = { hour: 0~23(한국 시각), learned: [배운 음식], chips: [기본 칩], lastWeight }
    *   item = { k, v, when:'today'|'yesterday'|'dayBefore'|'bad', wx: 날짜 낱말을 말했나, checked, flags[], cands[], skip, glu, newFoods[] }
@@ -286,7 +299,7 @@
     var all = hits;
     hits = all.filter(function (h) { return !h.skipMe; });
 
-    var when = 'today', whenX = false, ex = {}, prevNum = null, gluItems = [], pendMeals = [];
+    var when = 'today', whenX = false, ex = {}, prevNum = null, gluItems = [], pendMeals = [], pendMeas = null;
     var push = function (it) { it.when = it.when || when; if (it.wx === undefined) it.wx = whenX; if (it.checked === undefined) it.checked = true; if (it.when === 'bad') { it.checked = false; (it.flags = it.flags || []).push('baddate'); } out.items.push(it); return it; };
     var polarity = function (sg) {            // 약·영양제 먹음/안 먹음 — 정정(¶)이 있으면 나중 말을 따른다
       var parts = sg.split('¶'), found = [];
@@ -315,6 +328,16 @@
         when = isBad ? 'bad' : /어제/.test(a.s) ? 'yesterday' : /그제|그저께/.test(a.s) ? 'dayBefore' : 'today'; whenX = true;
         if (isBad) out.unread.push(a.s.replace(/\s+/g, ' ') + ' (날짜는 오늘·어제·그제까지 말씀해 주세요)');
         var rest = seg.replace(/^\s*(은|는|엔|에는|에|도|부터)(?=\s|$)/, '').replace(/¶/g, ' ').trim();
+        if (pendMeas && pendMeas.idx === n - 1) {                       // 바로 앞이 값 없는 혈당·체중 낱말: 「체중은 오늘 안 쟀고」「혈당은 어제 95」
+          var pm = pendMeas; pendMeas = null;
+          var rest2 = rest.replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim(), ngp = negMeasOf(rest2), rnp = readNum(rest2);
+          if (ngp.neg && !rnp) { var lop = leftover(ngp.rest); if (lop) out.unread.push(pm.a.s + ' ' + a.s + ' ' + lop); push({ k: pm.k, skip: true, src: pm.a.s + ' ' + a.s + ' ' + rest2 }); continue; }
+          if (rnp && !ngp.neg) {
+            var lop2 = leftover(rest2.slice(rnp.len).replace(UNIT, '')); if (lop2) out.unread.push(lop2);
+            prevNum = pm.k; var pu = push({ k: pm.k, v: rnp.v, src: pm.a.s, pos: pm.a.i }); if (pm.k === 'fasting_glucose') gluItems.push(pu); continue;
+          }
+          out.unread.push(pm.a.s);
+        }
         var rn = rest ? readNum(rest) : null;
         if (rn && prevNum && !leftover(rest.slice(rn.len).replace(UNIT, ''))) {       // 「어제는 혈당 95 오늘은 98」: 항목 이름이 빠진 숫자는 추측 행으로(기본 체크 해제)
           push({ k: prevNum, v: rn.v, flags: ['guess'], checked: false, src: a.s + ' ' + rest });
@@ -336,10 +359,12 @@
         continue;
       }
       if (k === 'fasting_glucose' || k === 'weight') {
-        var s2 = seg.replace(/^\s*(은|는|이|가|도)(?=\s)/, '').trim(), vals = [], safety = 0;
-        s2 = s2.replace(/^\s*(?:이야기\s*하면|이야기\s*하자면|말하면|말하자면|보면|수치(?:는|가)?|결과(?:는|가)?|측정(?:값|치)?(?:은|는)?|쟀더니|재보니|재니|쟀는데|확인\s*(?:했더니|해보니|하니)|봤더니|보니까|보니)\s*/, '');
-        var noMeas = /((?<![가-힣])안\s*(쟀|재|잼)|(?<![가-힣])못\s*(쟀|재)|측정\s*안)/.test(s2);
-        if (noMeas) { var lo4 = leftover(s2.replace(/(안\s*(쟀어요|쟀어|쟀음|쟀다|재|잼)|못\s*(쟀어|쟀음|재)|측정\s*안\s*(했어|함|했음)?)/g, ' ')); if (lo4) out.unread.push(a.s + ' ' + lo4); push({ k: k, skip: true, src: a.s + ' ' + s2 }); continue; }
+        var s2 = seg.replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim(), vals = [], safety = 0;
+        var negFull = negMeasOf(s2);                                  // 「측정 안 함」 말인가 — 아래 숫자 읽기보다 먼저 봐 두되, 숫자가 있으면 숫자를 먼저 쓴다(O-0736)
+        for (var pg = 0; pg < 4; pg++) {                              // 앞머리 군말: 「쟀더니」「쟀는데」「재니까」「쟀어」 …
+          var s2b = s2.replace(/^\s*(?:이야기\s*하면|이야기\s*하자면|말하면|말하자면|보면|수치(?:는|가)?|결과(?:는|가)?|측정(?:값|치)?(?:은|는)?|(?:다|둘\s*다|모두|전부)\s*(?=재|쟀)|쟀더니|재보니까?|재\s*보니|재니까|재니|쟀는데|쟀어서|쟀어요|쟀어|쟀고|쟀음|재었[가-힣]*|재서|잰|확인\s*(?:했더니|해보니|하니)|봤더니|보니까|보니)(?=[\s,.\d]|$|[일이삼사오육칠팔구십백])\s*/, '');
+          if (s2b === s2) break; s2 = s2b;
+        }
         while (s2 && safety++ < 8) {
           s2 = s2.replace(/^[\s,]+/, '');
           if (s2.charAt(0) === '¶') { s2 = s2.slice(1); continue; }
@@ -349,7 +374,25 @@
           if (mm2) { s2 = s2.slice(mm2[0].length); continue; }
           var r = readNum(s2);
           if (!r) break;
-          vals.push(r.v); s2 = s2.slice(r.len).replace(UNIT, '').replace(/^\s*(?:이라고|라고|이고|이요|구요|고)(?![가-힣])/, '');
+          vals.push(r.v); s2 = s2.slice(r.len).replace(UNIT, '').replace(/^\s*(?:이라고|라고|이고|이요|구요|고)(?![가-힣])/, '').replace(/^\s*(?:으로|로)?\s*(?:쟀|재었|잰|측정\s*(?:했|함))[가-힣]*/, '');
+        }
+        if (!vals.length) {
+          var nm5 = negFull.neg ? negFull : negMeasOf(s2);
+          var lo4 = leftover(nm5.rest);
+          if (nm5.neg) {                                              // 「체중 안 쟀어」: 측정 안 함 행(숫자를 지어내지 않는다)
+            if (lo4) out.unread.push(a.s + ' ' + lo4);
+            prevNum = k; push({ k: k, skip: true, src: a.s + ' ' + seg.trim() }); continue;
+          }
+          if (!lo4 && hits[n + 1] && hits[n + 1].k === 'when' && !BADDATE_RE.test(hits[n + 1].s.replace(/\s+/g, ' '))) { pendMeas = { k: k, a: a, idx: n }; continue; }     // 「체중은 오늘 안 쟀고」: 뒤의 날짜 낱말 처리에서 이어 본다
+          if (!lo4) {                                                 // 「체중도 혈당도 안 쟀어」「혈당 체중 둘 다 안 쟀어」: 낱말만 있고 뒤 항목이 안 쟀다고 하면 같이 안 쟀다는 뜻
+            var sh = false;
+            for (var jj = n + 1; jj < hits.length && (hits[jj].k === 'fasting_glucose' || hits[jj].k === 'weight'); jj++) {
+              var sg2 = t.slice(hits[jj].s0, hits[jj].s1).replace(/^\s*(은|는|이|가|도|을|를|만)(?=\s)/, '').trim();
+              if (negMeasOf(sg2).neg) { sh = true; break; }
+              if (leftover(sg2)) break;
+            }
+            if (sh) { push({ k: k, skip: true, src: a.s + ' (뒤 말과 함께)' }); continue; }
+          }
         }
         var lo5 = leftover(s2);
         if (!vals.length) { out.unread.push((a.s + (lo5 ? ' ' + lo5 : '')).trim()); continue; }     // 값 없는 항목 낱말도 뒷말과 함께 남긴다
@@ -365,7 +408,7 @@
         var full = t.slice(a.i, a.s1), parts = full.split('¶'), vs = [], restAll = '';
         parts.forEach(function (p) { var hv = hoursFrom(p); if (hv) { vs.push(hv.v); restAll += ' ' + p.replace(hv.text, ' '); } else restAll += ' ' + p; });
         if (!vs.length) { out.unread.push(full.replace(/¶/g, ' ').replace(/\s+/g, ' ').trim()); continue; }
-        var lo6 = leftover(restAll.replace(/(?<![가-힣])(수면\s*시간|수면|잤[가-힣]*|잠|자고|잔|동안|정도|쯤|밖에|가량|이나|못|안)(?=\s|$|,|\.|은|는|을|을|도|이)/g, ' '));
+        var lo6 = leftover(restAll.replace(/(?<![가-힣])(?:것\s*같(?:아요|아|은데요|은데|다|네요|네)|수면\s*시간|수면|잤[가-힣]*|잠|자고|잔|동안|정도|쯤|밖에|가량|이나|못|안)(?=\s|$|,|\.|은|는|을|을|도|이)/g, ' '));
         if (lo6) out.unread.push(lo6);
         var sit = { k: k, v: vs[vs.length - 1], src: a.s };
         var su = vs.filter(function (x, i) { return vs.indexOf(x) === i; });
@@ -699,7 +742,9 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
   var HINT_KEY = 'smart_health_voice_hint';
-  var MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000, UNDO_MS = 8000;
+  // O-0736: 대표님 「녹음 듣는 시간이 너무 짧다」 — 말 사이 쉼 2초에 끊던 것을 7초로(「다 말했어요」를 누르면 바로 끝), 처음 말을 시작하기까지 12초, 한 번에 최대 5분.
+  //   값을 바꿀 곳은 이 한 줄이다(받아쓰기 플러그인 KSpeech 자체는 쉼에서 스스로 끝나도 곧바로 다시 듣는 이어 듣기라 따로 고칠 것이 없다).
+  var MIC_QUIET_MS = 7000, MIC_NOSPEECH_MS = 12000, MIC_MAX_MS = 300000, MIC_COUNT_MS = 3000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000, UNDO_MS = 8000;
   var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
                   nospeech: '말씀이 들리지 않아 멈췄습니다', nomatch: '잘 알아듣지 못했습니다',
                   busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
@@ -733,6 +778,7 @@
         '<div class="hv-body" id="hvBody">' +
           '<div class="hv-listen" id="hvListen" hidden>' +
             '<div class="hv-bars" id="hvBars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>' +
+            '<div class="hv-clock" id="hvClock" aria-hidden="true"></div>' +
             '<div class="hv-live" id="hvLive" aria-live="polite"></div>' +
             '<div class="hv-hint" id="hvHint"></div>' +
             '<div class="hv-acts"><button type="button" class="hv-btn pri" id="hvDone">다 말했어요</button><button type="button" class="hv-btn" id="hvCancel">취소</button></div>' +
@@ -845,14 +891,27 @@
     $('hvLive').textContent = '준비 중입니다…';
     var first = lsGet(HINT_KEY) !== '1';
     $('hvHint').innerHTML = first
-      ? '이렇게 말씀해 보세요<br><b>「공복혈당 98, 체중 71.2, 아침은 양배추랑 계란 먹었어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 말씀하셔도 됩니다.'
-      : '예: 「공복혈당 98, 체중 71.2, 아침은 계란」';
+      ? '이렇게 말씀해 보세요<br><b>「공복혈당 98, 체중 71.2, 아침은 양배추랑 계란 먹었어, 체중은 안 쟀어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 쭉 말씀하셔도 됩니다. 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」를 눌러 주세요.'
+      : '예: 「공복혈당 98, 체중 71.2, 아침은 계란, 체중은 안 쟀어」 — 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」';
     lsSet(HINT_KEY, '1');
     K('듣고 있습니다. 편하게 말씀하세요.');
-    var m = mic = { KS: KS, hs: [], acc: '', cur: '', heard: false, quietT: null, noSpT: null, finT: null, readyT: null, ready: false, stopping: false, ended: false };
+    var m = mic = { KS: KS, hs: [], acc: '', cur: '', heard: false, quietT: null, noSpT: null, finT: null, readyT: null, clockT: null, t0: Date.now(), lastAct: Date.now(), endNote: '', ready: false, stopping: false, ended: false };
+    screenHold(true);
     function text() { return (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); }
-    function show() { var t = text(); if (t) m.heard = true; var lv = $('hvLive'); if (lv && S.phase === 'listen') lv.textContent = t || (m.ready ? '듣는 중… 말씀이 끝나고 2초 조용하면 멈춥니다' : '준비 중입니다…'); }
-    function quiet() { clearTimeout(m.quietT); m.quietT = setTimeout(function () { if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
+    function show() {
+      var t = text(); if (t) m.heard = true; var lv = $('hvLive');
+      if (lv && S.phase === 'listen') { lv.textContent = t || (m.ready ? '듣는 중… 편하게 말씀하세요' : '준비 중입니다…'); lv.scrollTop = lv.scrollHeight; }      // 길게 말하면 칸 안에서 스크롤 — 단추가 밀려 내려가지 않게
+    }
+    function quiet() { m.lastAct = Date.now(); clearTimeout(m.quietT); m.quietT = setTimeout(function () { m.quietT = null; if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
+    function tick() {                                      // 듣는 시간(0:00)과 곧 마무리된다는 안내 — 0.5초마다
+      if (mic !== m || m.ended || S.phase !== 'listen') return;
+      var now = Date.now(), el = Math.floor((now - m.t0) / 1000), ck = $('hvClock'); if (!ck) return;
+      var tx = '듣는 시간 ' + Math.floor(el / 60) + ':' + (el % 60 < 10 ? '0' : '') + (el % 60);
+      if (!m.stopping && m.heard) { var left = MIC_QUIET_MS - (now - m.lastAct); if (left <= MIC_COUNT_MS && left > 0) tx += ' · ' + Math.ceil(left / 1000) + '초 뒤 마무리합니다 — 계속 말씀하셔도 됩니다'; }
+      ck.textContent = tx;
+      if (!m.stopping && now - m.t0 >= MIC_MAX_MS) { m.endNote = '5분이 되어 여기까지 들은 말로 정리했습니다'; stopMic(false, 'max'); }
+    }
+    m.clockT = setInterval(tick, 500); tick();
     function on(ev, fn) { try { var h = KS.addListener(ev, function (e) { if (!m.ended && (mic === m || m.stopping)) fn(e || {}); }); if (h && h.then) h.then(function (x) { if (m.ended) { try { x.remove(); } catch (e) {} } else m.hs.push(x); }); else if (h) m.hs.push(h); } catch (e) {} }
     on('ready', function () {
       m.ready = true; clearTimeout(m.readyT);
@@ -863,7 +922,10 @@
     on('speech', function () { clearTimeout(m.noSpT); if (!m.stopping) quiet(); });
     on('rms', function (e) { var lv = Math.max(0, Math.min(1, ((+e.db || 0) + 2) / 12)); var b = $('hvBars'); if (b && !calm()) b.style.setProperty('--lv', lv.toFixed(2)); });
     on('partial', function (e) { m.cur = e.text || ''; show(); clearTimeout(m.noSpT); if (!m.stopping) quiet(); });
-    on('segment', function (e) { if (e.text) { m.acc = (m.acc ? m.acc + ' ' : '') + e.text; } m.cur = ''; show(); if (!m.stopping && m.heard) quiet(); });
+    on('segment', function (e) {       // 인식기가 쉼에서 스스로 한 토막을 끝냄(곧바로 다시 듣는 중). 빈 토막(말 없음 시간 초과)이나 쉼 뒤에 오는 결과로 조용한 시간을 다시 세지 않는다 — 아니면 말이 없어도 끝나지 않는다(O-0736)
+      if (e.text) { m.acc = (m.acc ? m.acc + ' ' : '') + e.text; m.cur = ''; } show();          // 빈 토막은 지금까지 보이던 부분 결과를 지우지 않는다(말이 조용히 사라지지 않게)
+      if (!m.stopping && m.heard && e.text && !m.quietT) quiet();            // 부분 결과를 못 주는 인식기를 위한 안전장치: 아직 조용한 시간 세기가 시작되지 않았을 때만
+    });
     on('final', function (e) { if (e.text) { m.cur = e.text; } show(); m.acc = (m.acc + ' ' + m.cur).trim(); m.cur = ''; micEnd(m, null, null, false, text()); });
     on('error', function (e) { micEnd(m, m.stopping && /nospeech|nomatch|client/.test(e.reason || '') ? null : (e.reason || 'other'), null, false, text()); });
     try {
@@ -877,10 +939,20 @@
     } catch (e) { micEnd(m, 'start', e && e.message, false, text()); }
     m.text = text;
   }
+  // 듣는 동안 화면이 꺼지지 않게(폰 화면 꺼짐 시간이 30초쯤이면 길게 말하는 도중 앱이 가려져 받아쓰기가 끊긴다 — visibilitychange 가 멈춤으로 처리). 앱이 건넨 host.screen 이 다른 기능(음성 대화·긴 올리기)의 화면 켜 두기를 풀지 않게 처리한다.
+  var heldLock = null;
+  function screenHold(on) {
+    try { if (host.screen) host.screen(!!on); } catch (e) {}
+    try {
+      if (on) { if (root.navigator && navigator.wakeLock && !heldLock && !doc.hidden) navigator.wakeLock.request('screen').then(function (l) { if (!mic) { try { l.release(); } catch (e) {} return; } heldLock = l; try { l.addEventListener('release', function () { if (heldLock === l) heldLock = null; }); } catch (e) {} }, function () {}); }
+      else if (heldLock) { try { heldLock.release(); } catch (e) {} heldLock = null; }
+    } catch (e) {}
+  }
   function stopMic(hard, why) {
     var m = mic; if (!m) return;
     if (hard || m.stopping) { micEnd(m, null, null, true); return; }
     m.stopping = true; clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.readyT);
+    var ck0 = $('hvClock'); if (ck0 && S.phase === 'listen') ck0.textContent = '';
     var lv = $('hvLive'); if (lv && S.phase === 'listen') lv.textContent = '정리하는 중…';
     try { m.KS.stop(); } catch (e) {}
     m.finT = setTimeout(function () { micEnd(m, why === 'nospeech' && !m.heard ? 'nospeech' : null, null, false, m.text ? m.text() : ''); }, MIC_FINAL_WAIT_MS);
@@ -888,7 +960,9 @@
   }
   function micEnd(m, reason, detail, cancel, heardText) {
     if (m.ended) return; m.ended = true;
-    clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.finT); clearTimeout(m.readyT);
+    clearTimeout(m.quietT); clearTimeout(m.noSpT); clearTimeout(m.finT); clearTimeout(m.readyT); clearInterval(m.clockT);
+    screenHold(false);
+    var ck1 = $('hvClock'); if (ck1) ck1.textContent = '';
     if (cancel || reason) { try { m.KS.cancel(); } catch (e) {} }
     setTimeout(function () { m.hs.forEach(function (h) { try { h.remove(); } catch (e) {} }); }, 300);
     if (mic === m) mic = null;
@@ -896,7 +970,7 @@
     if (cancel || !S.open) return;
     var text = String(heardText || '').trim();
     var why = reason ? (MIC_WHY[reason] || ('받아쓰기가 멈췄습니다' + (detail ? '(' + String(detail).slice(0, 40) + ')' : ''))) : '';
-    if (text) { S.raw = text; S.note = why ? why + ' — 여기까지 들은 말로 정리했습니다' : ''; toCard(); return; }
+    if (text) { S.raw = text; S.note = why ? why + ' — 여기까지 들은 말로 정리했습니다' : (m.endNote || ''); toCard(); return; }
     if (reason) showMsg('받아쓰기를 하지 못했습니다', esc(why) + '.', reason !== 'permission' && reason !== 'recording');
     else showMsg('들은 말이 없습니다', '받아 적은 말이 없습니다. 이렇게 말씀해 보세요 — 「공복혈당 98, 체중 71.2, 아침은 계란」', true);
     K(reason ? '받아쓰기를 하지 못했습니다.' : '잘 들리지 않았습니다. 다시 말씀해 주세요.');

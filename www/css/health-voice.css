@@ -39,12 +39,15 @@ html[data-style="light"] .hv-pill{box-shadow:0 8px 20px rgba(79,70,229,.35),0 2p
 .hv-bars i{display:block;width:8px;border-radius:4px;background:linear-gradient(180deg,var(--cyan),var(--p2));
   height:calc(8px + var(--lv) * 38px * var(--m,1));transition:height .09s linear}
 .hv-bars i:nth-child(1){--m:.55}.hv-bars i:nth-child(2){--m:.85}.hv-bars i:nth-child(3){--m:1}.hv-bars i:nth-child(4){--m:.8}.hv-bars i:nth-child(5){--m:.5}
-.hv-live{width:100%;min-height:52px;padding:11px 14px;border-radius:16px;background:var(--in-bg);border:1.5px solid var(--glass-b);color:var(--text);font-size:17px;font-weight:700;line-height:1.55;text-align:center;word-break:keep-all;overflow-wrap:anywhere}
+.hv-clock{min-height:20px;margin-top:-4px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.4;text-align:center;font-variant-numeric:tabular-nums}
+.hv-clock:empty{display:none}
+.hv-live{width:100%;min-height:52px;max-height:min(28vh,210px);overflow-y:auto;overscroll-behavior:contain;padding:11px 14px;border-radius:16px;background:var(--in-bg);border:1.5px solid var(--glass-b);color:var(--text);font-size:17px;font-weight:700;line-height:1.55;text-align:center;word-break:keep-all;overflow-wrap:anywhere}
 .hv-hint{width:100%;color:var(--muted);font-size:14px;font-weight:600;line-height:1.6;text-align:center;word-break:keep-all}
 .hv-hint b{color:var(--text);font-weight:800}
 
 /* ---------- 단추 ---------- */
 .hv-acts{display:flex;gap:10px;width:100%;margin-top:6px}
+.hv-listen .hv-acts{position:sticky;bottom:0;padding-top:6px}
 .hv-btn{flex:1;min-height:50px;padding:0 14px;border-radius:16px;border:1.5px solid var(--glass-b2);background:var(--glass);color:var(--text);font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;transition:transform .12s ease}
 .hv-btn:active{transform:scale(.97)}
 .hv-btn.pri{border-color:transparent;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff}
