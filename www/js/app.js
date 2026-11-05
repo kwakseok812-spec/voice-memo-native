@@ -263,7 +263,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -3794,6 +3794,7 @@
   APP_VERSION = 'v9.72';        // v9.72(O-0736): 「말로 기록」 보강 — ①「체중(혈당) 안 쟀어·측정 안 했어·재지 않았어·못 쟀어」 등을 「측정 안 함」 행으로 정확히 읽음(체중도 혈당도 안 쟀어 · 오늘은 안 쟀고 · 쟀고/쟀지만 꼬리 포함) ②긴 말 여러 항목: 「-고요」 끝말·「어제 잠」·「새벽에」 등을 걸러 더 많이 칸으로 ③받아쓰기: 쉼 2초→7초에 끊기던 것을 늘리고 듣는 시간·곧 마무리 안내·[다 말했어요]는 항상 보임·최대 5분·듣는 동안 화면 켜 두기(화면이 꺼져 끊기던 것 방지)
   APP_VERSION = 'v9.73';        // v9.73: 영수증 「돌리기」 — 영수증 스캔 미리보기에 「↺ 왼쪽으로 · ↻ 오른쪽으로」(누르는 즉시 돌아가고 「이 사진 사용」 때 한 번만 저장, 모서리 조정도 돌린 방향 그대로) + 사진 칸 높이 고정(돌려도 아래 단추가 안 움직임) + 사진첩에서 고른 영수증 한 장도 보정 화면을 거침 · 스위치 doc-scan.js DSC_RCPT_ROT · app.js RECEIPT_GALLERY_SCAN · versionCode 117
   APP_VERSION = 'v9.74';        // v9.74: 카메라 화면 — 미리보기를 가리던 단단한 띠를 없애고 단추를 작게 정리(윗줄 하나 · 확대 막대는 「×1.0 ▾」를 눌러야 펴짐 · 안내 문장 6초 뒤 사라짐). 영수증·일반 사진은 긴 화면에서 더 크게(「크게 보기」), 문서는 지금 그대로. 카메라 ⚙ 「화면 모양」에서 크게 보기 / 단추만 작게 / 예전 화면 그대로 선택, 스위치 SILENT_CAM_LAYOUT · versionCode 118
+  APP_VERSION = 'v9.75';        // v9.75(O-0755): 홈 「PC 연결」에 「PC 상태」 줄 — 이 PC의 CPU·메모리·그래픽카드·바쁜 프로그램 3개를 폰에서 실시간으로 보고(화면을 연 동안 4초), 접힌 「PC 관리」에서 클로드 앱·PC 전체를 다시 시작(재시작 암호 6자리 + 길게 누르기, 접수→실행→PC가 직접 확인→결과 알림). 스위치 PC_MON_UI·PC_POWER_UI. 서버 함수가 없으면 「서버 준비 중입니다」
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -6267,6 +6268,7 @@
     } catch (e) {}
   }
   function renderKStat() {
+    try { if (window.PcStatus && PcStatus.homeDot) setTimeout(PcStatus.homeDot, 0); } catch (e) {}   // v9.75(O-0755): 홈 「PC 상태」 줄의 점도 같은 값으로
     var dot = $('kHeadDot'), sub = $('kHeadSub'), btn = $('kHeadBtn'), ps = $('kProfStat');
     if (!dot || !sub) return;
     if (!kStatState) {
@@ -9485,6 +9487,10 @@
       if (window.AlbumTab && AlbumTab.back && AlbumTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('pcView'))) {         // O-0755 v9.75: PC 상태 — 열린 확인 시트부터 닫고, 더 닫을 게 없으면 홈으로
+      if (window.PcStatus && PcStatus.back && PcStatus.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('promoView'))) {      // O-0684 v9.62: 승진 — 열린 날짜 창·부문 상세부터 닫고, 더 닫을 게 없으면 홈으로
       if (window.PromoTab && PromoTab.back && PromoTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -10051,6 +10057,25 @@
       var albGrid = $('homeTools'), albSub = albGrid && albGrid.querySelector('.tools-sub');
       if (albGrid && albSub) albGrid.insertBefore($('btnAlbum'), albSub);   // 홈 도구 맨 끝(승진 다음) — 기존 칸 자리는 그대로
       $('btnAlbum').style.display = ''; $('btnAlbum').addEventListener('click', openAlbum);
+    } catch (e) {}
+  }
+
+  /* ---- PC 상태(O-0755 v9.75): 화면 열기/연결(로직은 pc-status.js) ----
+   *   스위치 PC_MON_UI: 'on' = 홈 「PC 연결」 묶음의 세 번째 줄 「PC 상태」(CPU·메모리 보기) · 'off' = 줄이 보이지 않아 v9.74 와 같다(서버 무관).
+   *   스위치 PC_POWER_UI: 'on' = 화면 맨 아래 접힌 「PC 관리」(클로드 앱 / PC 전체 다시 시작) · 'off' = 그 묶음이 없다.
+   *   PC 전체 단추가 실제로 열리는 것은 앱이 아니라 PC(서버 payload.power.pc_btn)가 정한다 — 앱에서 풀 수 없다(시험 뒤 열림).
+   *   서버 함수(get_pc_status 등)가 아직 없으면 화면이 「서버 준비 중입니다」를 말할 뿐 홈은 그대로 동작한다. */
+  var PC_MON_UI = 'on';
+  var PC_POWER_UI = 'on';
+  var pcView = $('pcView');
+  function openPcStatus() {
+    if (window.PcStatus && PcStatus.open) { try { PcStatus.open(); } catch (e) { openScreen(pcView); } }
+    else openScreen(pcView);
+  }
+  if (PC_MON_UI !== 'off' && window.PcStatus && $('btnPcStatus')) {
+    try {
+      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off' });
+      $('btnPcStatus').style.display = ''; $('btnPcStatus').addEventListener('click', openPcStatus);
     } catch (e) {}
   }
 

@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="css/mtg-out.css"><!-- O-0626 회의록 「맞춤 정리본 받기」 -->
   <link rel="stylesheet" href="css/achievements.css"><!-- O-0684 v9.59 「곽호석」 탭(옛 이름 「실적」) -->
   <link rel="stylesheet" href="css/album.css"><!-- O-0720 v9.69 「사진첩」 -->
+  <link rel="stylesheet" href="css/pc-status.css"><!-- O-0755 v9.75 「PC 상태」 -->
   <link rel="stylesheet" href="css/promotion.css"><!-- O-0684 v9.62 「승진」 점수판 -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
@@ -207,6 +208,8 @@
              ② PC 원격 제어 = 크롬 원격 데스크톱으로 PC 화면을 직접 보고 조작 — 문서 뷰어 편집 시트 [PC 원격 제어 열기]와 같은 동작(SmartDocs.openRemote) -->
         <button class="tool wide" id="btnPcK"><span class="ic cyan"><svg><use href="#i-chat"/></svg></span><span class="tw"><b>Claude Code 연결</b><small>PC 케이와 대화방에서 직접 일 시키기</small></span></button>
         <button class="tool wide" id="btnPcScreen"><span class="ic blue"><svg><use href="#i-monitor"/></svg></span><span class="tw"><b>PC 원격 제어</b><small>PC 화면을 보며 직접 조작</small></span></button>
+        <!-- O-0755 v9.75: 「PC 상태」 — 「PC 연결」 묶음의 세 번째 줄(새 칸을 늘리지 않음). 스위치 PC_MON_UI(app.js)가 'off' 면 이 줄은 보이지 않아 v9.74 와 같다. 점 색은 채팅 머리줄 점(kStatState)과 같은 값 — 누르기 전에는 서버에 묻지 않는다. -->
+        <button class="tool wide" id="btnPcStatus" style="display:none;"><span class="ic cyan"><svg><use href="#i-monitor"/></svg></span><span class="tw"><b>PC 상태</b><small id="pcHomeSub">CPU·메모리 보기 · 다시 시작</small></span><i class="pcs-hd na" id="pcHomeDot" aria-hidden="true"></i></button>
         <!-- v9.3(O-0247) 미러링: 폰 화면을 로키드 안경에 비추기 — 별도 앱 「미러링」이던 것을 앱 안으로. 누르면 네이티브 「미러링」 화면(MirrorPlugin → android/mirror 모듈).
              위의 4칸×2줄과 「PC 연결」은 그대로 두고, 같은 모양의 넓은 줄 하나를 「안경 연결」로 더했다(9번째 작은 칸을 두면 셋째 줄에 혼자 남는다).
              처음엔 숨김 — 폰 앱이고 안드로이드 10 이상일 때만 app.js 가 보이게 한다. PC판·옛 폰에서는 숨긴 채다. -->
@@ -608,6 +611,12 @@
       <div id="albumBody"></div>
     </section>
 
+    <!-- ===================== PC 상태 (O-0755 v9.75 · 로직은 pc-status.js) ===================== -->
+    <section id="pcView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">PC 상태</span><span class="spacer end"><i class="pcs-sdot na" id="pcSdot" aria-hidden="true"></i></span></div>
+      <div id="pcBody"></div>
+    </section>
+
     <!-- ===================== 승진 (O-0684 v9.62 · 로직은 promotion.js · 계산은 promotion-calc.js) ===================== -->
     <section id="promoView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">정교수 승진</span><span class="spacer end"><button type="button" class="iconbtn" id="promoReload" aria-label="다시 불러오기" title="다시 불러오기"><span aria-hidden="true" style="font-size:18px;line-height:1">↻</span></button></span></div>
@@ -893,7 +902,7 @@
 <script src="js/history.js"></script>
 <script src="js/push.js"></script>
 <script src="js/health.js"></script><script src="js/health-voice.js"></script><!-- O-0693 건강 탭 「말로 기록」 — health.js 바로 뒤, app.js 보다 먼저(app.js 가 host 를 건넨다) -->
-<script src="js/achievements.js"></script><script src="js/album.js"></script><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
+<script src="js/achievements.js"></script><script src="js/album.js"></script><script src="js/pc-status.js"></script><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
 <script src="js/promotion-calc.js"></script><script src="js/promotion.js"></script><script src="js/promotion-edit.js"></script><script src="js/promotion-xlsx.js"></script><!-- O-0684 v9.62 「승진」 점수판 — app.js 보다 먼저 -->
 <script src="js/markup.js"></script><!-- O-0544 문서 뷰어 「수정 요청」(docviewer.js 보다 먼저 — init 때 길게 누르기를 붙인다) -->
 <script src="js/docviewer.js"></script>
