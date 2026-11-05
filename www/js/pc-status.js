@@ -47,6 +47,13 @@
     return h + '시간' + (mm ? ' ' + mm + '분' : '');
   }
   /* 걸린 시간 → 「48초」「3분 12초」 */
+  // 받침에 따라 「이/가」: 「클로드 앱」→「클로드 앱이」, 「리스너」→「리스너가」. 한글로 끝나지 않으면 「쪽이」(「이(가)」를 화면에 내지 않는다)
+  function iga(word) {
+    var w = String(word == null ? '' : word), c = w.length ? w.charCodeAt(w.length - 1) : 0;
+    if (c >= 0xAC00 && c <= 0xD7A3) return w + ((c - 0xAC00) % 28 ? '이' : '가');
+    return w + ' 쪽이';
+  }
+
   function fmtTook(sec) {
     sec = Math.max(0, Math.round(Number(sec) || 0));
     if (sec < 60) return sec + '초';
@@ -244,7 +251,7 @@
         break;
       case 'partial':
         out.tone = 'warn';
-        out.title = bad.length ? bad.join(', ') + '이(가) 아직 안 켜졌습니다' : '일부가 아직 안 켜졌습니다';
+        out.title = bad.length ? iga(bad.join(', ')) + ' 아직 안 켜졌습니다' : '일부가 아직 안 켜졌습니다';
         if (okI.length) out.lines.push('켜진 것: ' + okI.join(', '));
         if (detail) out.lines.push(detail);
         break;
@@ -293,7 +300,7 @@
   }
 
   var PcPure = {
-    K: K, esc: esc, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
+    K: K, esc: esc, iga: iga, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
     cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
     isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
