@@ -168,7 +168,11 @@ class SilentCameraActivity : ComponentActivity() {
     private lateinit var segBox: FrameLayout
     private lateinit var segHl: View
     private var lastSeg = -1
-    private var lastHint = ""
+    private var lastBase = ""                                // 안내 알약의 «기본 안내»(일시 안내 말고) 마지막 글
+    private var baseFaded = false                            // 기본 안내가 6초를 채워 이미 사라졌나
+    private var transientShown = false                       // 일시 안내(「3쪽 찍었어요」 등)가 떠 있나
+    private var boundPreview: Preview? = null                // 지금 연결된 미리보기(실제 크기를 나중에 다시 읽기 위해)
+    private var retreatNote = false                          // 나중 확인에서 물러나기로 했다 → 다시 연결한 뒤 안내 한 번
     private var hintFade: Runnable? = null
     private var seekHide: Runnable? = null
 
@@ -686,7 +690,7 @@ class SilentCameraActivity : ComponentActivity() {
         val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         zoomLabel = tv("×1.0 ▾", 13f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
-            minWidth = dp(66); minimumWidth = dp(66)
+            minWidth = dp(CamLayout.ZOOM_LABEL_DP); minimumWidth = dp(CamLayout.ZOOM_LABEL_DP)
             minHeight = dp(CamLayout.ZOOM_ROW_DP); minimumHeight = dp(CamLayout.ZOOM_ROW_DP)
             setPadding(dp(8), 0, dp(8), 0)
             contentDescription = "지금 확대 배율. 누르면 확대 막대가 펴져요"
@@ -695,7 +699,7 @@ class SilentCameraActivity : ComponentActivity() {
             setOnClickListener { toggleSeek() }
             pressFx(this)
         }
-        head.addView(zoomLabel, LinearLayout.LayoutParams(-2, -2).apply { setMargins(0, 0, dp(4), 0) })
+        head.addView(zoomLabel, LinearLayout.LayoutParams(-2, -2).apply { setMargins(0, 0, dp(2), 0) })
         zoomBtnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         head.addView(zoomBtnRow)
         zoomBox.addView(head, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
@@ -817,13 +821,16 @@ class SilentCameraActivity : ComponentActivity() {
     }
 
     private fun resizeZoomBtnsCompact() {
+        // 알약 하나의 누르는 칸은 가로·세로 모두 48dp. 360dp 폰에서도 한 줄에 들어간다(CamLayout.zoomPillWidthDp).
+        val screenDp = (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toInt()
+        val pw = dp(CamLayout.zoomPillWidthDp(screenDp, zoomBtnRow.childCount))
         for (i in 0 until zoomBtnRow.childCount) {
             val b = zoomBtnRow.getChildAt(i) as TextView
-            b.minWidth = dp(44); b.minimumWidth = dp(44)
+            b.minWidth = pw; b.minimumWidth = pw
             b.minHeight = dp(CamLayout.ZOOM_ROW_DP); b.minimumHeight = dp(CamLayout.ZOOM_ROW_DP)
-            b.setPadding(dp(3), 0, dp(3), 0)
+            b.setPadding(dp(2), 0, dp(2), 0)
             b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            (b.layoutParams as? LinearLayout.LayoutParams)?.setMargins(dp(1), 0, dp(1), 0)
+            (b.layoutParams as? LinearLayout.LayoutParams)?.setMargins(0, 0, 0, 0)
             pressFx(b)
         }
     }
@@ -839,11 +846,31 @@ class SilentCameraActivity : ComponentActivity() {
         }
     }
 
-    /** 안내 알약: 글이 바뀌면 나타나 6초 뒤 사라진다(손떨림·어두움·많이 확대 같은 경고는 계속 보임). 모드를 바꾸거나 카메라를 열면 글이 바뀌므로 다시 나타난다. */
-    private fun hintChanged(warn: Boolean) {
+    /**
+     * 안내 알약. «기본 안내»(모드별 문장·경고)는 글이 바뀔 때 나타나 6초 뒤 사라진다(손떨림·어두움·많이 확대 같은 경고는 계속 보임).
+     * 모드를 바꾸거나 카메라를 열면 기본 안내 글이 달라지므로 다시 나타난다.
+     * «일시 안내»(「3쪽 찍었어요」「카메라가 준비됐어요」「불빛 켬」 …, transient = true)는 잠깐 보였다가 기본 안내로 돌아오는데,
+     * 돌아왔을 때 기본 안내가 이미 6초를 채워 사라진 상태였다면 다시 켜지 않는다.
+     */
+    private fun hintChanged(warn: Boolean, transient: Boolean) {
         val t = hintTv.text.toString()
-        if (t == lastHint) return
-        lastHint = t
+        if (transient) {
+            transientShown = true
+            hintTv.animate().cancel()
+            hintTv.visibility = if (t.isEmpty()) View.INVISIBLE else View.VISIBLE
+            hintTv.alpha = 1f
+            return
+        }
+        if (t == lastBase) {
+            if (!transientShown) return                      // 400ms 마다 오는 같은 글 — 할 일 없음
+            transientShown = false                           // 일시 안내가 끝나 기본 안내로 돌아옴
+            hintTv.animate().cancel()
+            hintTv.alpha = if (baseFaded) 0f else 1f
+            return
+        }
+        transientShown = false
+        lastBase = t
+        baseFaded = false
         hintFade?.let { main.removeCallbacks(it) }
         hintFade = null
         hintTv.animate().cancel()
@@ -852,6 +879,8 @@ class SilentCameraActivity : ComponentActivity() {
         if (warn || t.isEmpty()) return
         val r = Runnable {
             hintFade = null
+            baseFaded = true
+            if (hintTv.text.toString() != lastBase) return@Runnable      // 일시 안내가 떠 있는 중이면 건드리지 않고, 돌아올 때 숨김
             if (reduceMotion()) hintTv.alpha = 0f else hintTv.animate().alpha(0f).setDuration(200).start()
         }
         hintFade = r
@@ -880,30 +909,64 @@ class SilentCameraActivity : ComponentActivity() {
         if (abs(wantedAspect() - camAspect) > 0.01f) bindCamera()
     }
 
-    /** 새 배치의 카메라 연결: 미리보기와 사진을 같은 비율로 묶고, 기기가 그 비율을 못 주면 지금 비율로 물러난다(보이는 범위 = 찍히는 범위). */
+    /**
+     * 새 배치의 카메라 연결: 미리보기와 사진을 같은 비율로 묶는다(보이는 범위 = 찍히는 범위).
+     *  - 길쭉한 비율 연결이 예외로 실패하면(기기가 그 조합을 못 줌) 폰 기본 카메라로 가지 않고 지금 비율로 물러난다.
+     *  - 기기가 알려 준 실제 크기가 다르면 지금 비율로 물러난다.
+     *  - 크기를 아직 안 알려 주면 «적용됐다»고 단정하지 않고 잠시 뒤 두 번 더 확인하며, 끝까지 모르면 안전하게 지금 비율로 물러난다.
+     */
     private fun bindCameraCompact() {
         val f = ProcessCameraProvider.getInstance(this)
         f.addListener({
             val provider = try { f.get() } catch (e: Exception) { finishWith("error"); return@addListener }
             try {
                 provider.unbindAll()
+                val wanted = wantedAspect()
+                var v = try {
+                    bindWith(provider, wanted)
+                } catch (e: Exception) {
+                    if (wanted >= CamLayout.BASE_ASPECT - 0.01f) throw e      // 지금 비율이 안 되면 예전과 같은 길(오류 처리)
+                    CamLayout.V_RETREAT
+                }
                 var retreated = false
-                if (!bindWith(provider, wantedAspect())) {
+                if (v == CamLayout.V_RETREAT) {
                     forceBase = true
                     provider.unbindAll()
                     bindWith(provider, CamLayout.BASE_ASPECT)
                     retreated = true
+                    v = CamLayout.V_OK
+                } else if (v == CamLayout.V_WAIT) {
+                    verifyLater(wanted, 1)
                 }
                 syncOverlayCompact()
-                if (retreated) flashNote("이 폰에서는 화면을 더 크게 못 보여 드려요. 지금 모양으로 찍어요", 3500) else flashNote("카메라가 준비됐어요", 1200)
+                if (retreated || retreatNote) flashNote("이 폰에서는 화면을 더 크게 못 보여 드려요. 지금 모양으로 찍어요", 3500) else flashNote("카메라가 준비됐어요", 1200)
+                retreatNote = false
             } catch (e: Exception) {
                 finishWith("error")
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /** 비율 asp 로 미리보기·사진(또는 프레임)을 연결한다. 기기가 알려 준 실제 크기가 asp 와 다르면 false(물러나야 함). */
-    private fun bindWith(provider: ProcessCameraProvider, asp: Float): Boolean {
+    /** 연결 직후 기기가 크기를 안 알려 줬을 때의 다시 확인: 0.6초 뒤, 그래도 모르면 1.5초 뒤(마지막). 마지막까지 모르면 지금 비율로 물러난다. */
+    private fun verifyLater(asp: Float, attempt: Int) {
+        main.postDelayed({
+            if (closing || isFinishing || abs(camAspect - asp) > 0.01f) return@postDelayed
+            val ps = sizeRatio(try { boundPreview?.resolutionInfo?.resolution } catch (e: Exception) { null })
+            val cs = sizeRatio(try { (imageCapture?.resolutionInfo ?: analysis?.resolutionInfo)?.resolution } catch (e: Exception) { null })
+            val v = CamLayout.verdict(asp, ps, cs, attempt >= 2)
+            if (v == CamLayout.V_WAIT) verifyLater(asp, attempt + 1)
+            else if (v == CamLayout.V_RETREAT) {
+                forceBase = true
+                retreatNote = true
+                if (pages.isEmpty() && !busy) bindCamera()          // 이미 찍기 시작했으면 바꾸지 않는다(한 문서에 비율이 섞이지 않게)
+            }
+        }, if (attempt <= 1) 600L else 1500L)
+    }
+
+    private fun sizeRatio(sz: android.util.Size?): Float? = if (sz == null) null else CamLayout.shortOverLong(sz.width, sz.height)
+
+    /** 비율 asp 로 미리보기·사진(또는 프레임)을 연결하고 CamLayout.verdict 의 판정(V_OK · V_RETREAT · V_WAIT)을 돌려준다. */
+    private fun bindWith(provider: ProcessCameraProvider, asp: Float): Int {
         val longAsp = asp < CamLayout.BASE_ASPECT - 0.01f
         val strat = if (longAsp) AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY else AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
         val prevSel = ResolutionSelector.Builder().setAspectRatioStrategy(strat).build()
@@ -915,6 +978,7 @@ class SilentCameraActivity : ComponentActivity() {
             .build()
         imageCapture = null
         analysis = null
+        boundPreview = null
         var capSize: android.util.Size? = null
         if (useEngine() == "frame") {
             val an = ImageAnalysis.Builder()
@@ -922,8 +986,8 @@ class SilentCameraActivity : ComponentActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             an.setAnalyzer(camExec) { img -> onFrame(img) }
-            analysis = an
             camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, an)
+            analysis = an
             capSize = try { an.resolutionInfo?.resolution } catch (e: Exception) { null }
         } else {
             val ic = ImageCapture.Builder()
@@ -932,16 +996,15 @@ class SilentCameraActivity : ComponentActivity() {
                 .setFlashMode(flashMode)
                 .setJpegQuality(90)
                 .build()
-            imageCapture = ic
             camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic)
+            imageCapture = ic
             capSize = try { ic.resolutionInfo?.resolution } catch (e: Exception) { null }
         }
+        boundPreview = preview
         camAspect = asp
         camera?.let { setupZoom(it) }
         val prevSize: android.util.Size? = try { preview.resolutionInfo?.resolution } catch (e: Exception) { null }
-        val ps = if (prevSize == null) null else CamLayout.shortOverLong(prevSize.width, prevSize.height)
-        val cs = if (capSize == null) null else CamLayout.shortOverLong(capSize.width, capSize.height)
-        return !CamLayout.mustRetreat(asp, ps, cs)
+        return CamLayout.verdict(asp, sizeRatio(prevSize), sizeRatio(capSize), false)
     }
 
     /** ⚙ 「화면 모양」을 고르면 저장하고 화면을 새로 연다(사진을 찍기 전에만). 고른 모드·이어 찍기는 그대로 이어진다. */
@@ -1129,12 +1192,12 @@ class SilentCameraActivity : ComponentActivity() {
             mode == "photo" -> "찍을 장면을 비춰 주세요"
             else -> "문서 전체가 들어오게 비춰 주세요"
         }
-        if (compact) hintChanged(shakeLevel > 1.6f || (darkLive && flashMode == ImageCapture.FLASH_MODE_OFF) || (zoomOn && zoomWanted >= ZOOM_COARSE_FROM))
+        if (compact) hintChanged(shakeLevel > 1.6f || (darkLive && flashMode == ImageCapture.FLASH_MODE_OFF) || (zoomOn && zoomWanted >= ZOOM_COARSE_FROM), false)
     }
 
     private fun flashNote(msg: String, ms: Long = 2200) {
         hintTv.text = msg
-        if (compact) hintChanged(false)
+        if (compact) hintChanged(false, true)
         guideReset?.let { main.removeCallbacks(it) }
         val r = Runnable { guideReset = null; updateGuideText() }
         guideReset = r

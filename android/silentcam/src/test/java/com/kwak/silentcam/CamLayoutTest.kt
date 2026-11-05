@@ -60,6 +60,26 @@ class CamLayoutTest {
         assertFalse(CamLayout.mustRetreat(base, 0.5625f, 0.5625f))   // 지금 비율을 원했다면 물러날 곳이 없음
     }
 
+    @Test fun verdict_waitsThenRetreatsWhenSizeUnknown() {
+        assertEquals(CamLayout.V_OK, CamLayout.verdict(long, 0.5625f, 0.5625f, false))
+        assertEquals(CamLayout.V_RETREAT, CamLayout.verdict(long, 0.75f, 0.5625f, false))      // 하나라도 다르면 바로 후퇴
+        assertEquals(CamLayout.V_RETREAT, CamLayout.verdict(long, null, 0.75f, false))
+        assertEquals(CamLayout.V_WAIT, CamLayout.verdict(long, null, null, false))              // 아직 모름 → 기다림
+        assertEquals(CamLayout.V_WAIT, CamLayout.verdict(long, 0.5625f, null, false))
+        assertEquals(CamLayout.V_RETREAT, CamLayout.verdict(long, null, null, true))            // 끝까지 모르면 안전하게 후퇴
+        assertEquals(CamLayout.V_RETREAT, CamLayout.verdict(long, 0.5625f, null, true))
+        assertEquals(CamLayout.V_OK, CamLayout.verdict(base, null, null, false))                // 지금 비율이면 확인할 것 없음
+    }
+
+    @Test fun zoomPill_fitsInNarrowPhones() {
+        assertEquals(48, CamLayout.zoomPillWidthDp(390, 6))      // 폰
+        assertEquals(48, CamLayout.zoomPillWidthDp(360, 6))      // 360dp 폰: 58 + 2 + 6×48 = 348 ≤ 352
+        assertEquals(48, CamLayout.zoomPillWidthDp(750, 6))      // 펼친 폴드
+        assertEquals(42, CamLayout.zoomPillWidthDp(320, 6))      // 아주 좁은 화면만 줄어듦
+        assertEquals(48, CamLayout.zoomPillWidthDp(360, 4))      // 알약이 적으면 그대로
+        assertEquals(48, CamLayout.zoomPillWidthDp(360, 0))
+    }
+
     @Test fun fit_centersPreview() {
         val a = CamLayout.fit(390f, 844f, long)
         assertEquals(390f, a.w, 0.5f); assertEquals(693.3f, a.h, 0.5f); assertEquals(75.3f, a.y, 0.5f); assertEquals(0f, a.x, 0.5f)

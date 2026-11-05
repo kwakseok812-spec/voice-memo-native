@@ -31,10 +31,23 @@ object CamLayout {
     const val STRIP_DP = 72            // 썸네일 줄(그대로)
     const val ZOOM_ROW_DP = 48         // 확대 알약 줄(누르는 칸)
     const val ZOOM_PILL_DP = 32        // 확대 알약의 보이는 높이
+    const val ZOOM_PILL_W_DP = 48      // 확대 알약의 누르는 칸 가로(세로 48 과 같게)
+    const val ZOOM_LABEL_DP = 58       // 「×1.0 ▾」 칸의 가로
+    const val ZOOM_SIDE_DP = 8         // 확대 줄 좌우 여유 합계
     const val SEEK_DP = 32             // 펴지는 확대 막대
     const val HINT_DP = 30             // 안내 알약
     const val HINT_FADE_MS = 6000L     // 안내 알약이 사라지기까지
     const val SEEK_HIDE_MS = 4000L     // 확대 막대가 저절로 접히기까지
+
+    /**
+     * 확대 알약 한 개의 가로(dp): 6개(0.5·1·2·3·5·10)와 「×1.0 ▾」 칸이 한 줄에 들어가도록 한다.
+     * 화면 폭 360dp 에서도 48(= 58 + 2 + 6×48 = 348 ≤ 352)이라 그대로 들어가고, 더 좁은 화면에서만 48 밑으로 줄어든다.
+     */
+    fun zoomPillWidthDp(screenWidthDp: Int, count: Int): Int {
+        if (count <= 0) return ZOOM_PILL_W_DP
+        val fit = (screenWidthDp - ZOOM_SIDE_DP - ZOOM_LABEL_DP - 2) / count
+        return min(ZOOM_PILL_W_DP, fit)
+    }
 
     /** 위 묶음 높이(상태바 제외). tab = 홈에서 열림(모드 알약 있음), doc = 문서 모드, notice = 알림 띠가 떠 있음. */
     fun topDp(tab: Boolean, doc: Boolean, notice: Boolean): Int =
@@ -69,6 +82,23 @@ object CamLayout {
      */
     fun mustRetreat(wanted: Float, previewShortOverLong: Float?, captureShortOverLong: Float?): Boolean =
         wanted < BASE_ASPECT - 0.01f && !(agrees(wanted, previewShortOverLong) && agrees(wanted, captureShortOverLong))
+
+    const val V_OK = 0          // 보이는 범위 = 찍히는 범위가 확인됨(또는 원래 지금 비율)
+    const val V_RETREAT = 1     // 지금 비율로 물러나야 함
+    const val V_WAIT = 2        // 아직 기기가 크기를 안 알려 줌 — 잠시 뒤 다시 확인
+
+    /**
+     * 길쭉한 비율을 연결한 뒤의 판정. 하나라도 다른 비율로 알려 오면 후퇴. 둘 다 알려 와 같으면 OK.
+     * 아직 모르면(null) 맞다고 단정하지 않고 기다리며(WAIT), 마지막 확인(lastTry)에서도 모르면 안전하게 지금 비율로 후퇴한다.
+     */
+    fun verdict(wanted: Float, previewShortOverLong: Float?, captureShortOverLong: Float?, lastTry: Boolean): Int {
+        if (wanted >= BASE_ASPECT - 0.01f) return V_OK
+        val pBad = previewShortOverLong != null && !agrees(wanted, previewShortOverLong)
+        val cBad = captureShortOverLong != null && !agrees(wanted, captureShortOverLong)
+        if (pBad || cBad) return V_RETREAT
+        if (previewShortOverLong != null && captureShortOverLong != null) return V_OK
+        return if (lastTry) V_RETREAT else V_WAIT
+    }
 
     // ───────── 미리보기 칸 · 안내선 ─────────
     class Box(val x: Float, val y: Float, val w: Float, val h: Float)
