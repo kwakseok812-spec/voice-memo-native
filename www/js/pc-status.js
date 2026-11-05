@@ -2,13 +2,13 @@
  * pc-status.js — 「PC 상태」 (v9.75, O-0755)  이 PC의 CPU·메모리를 폰에서 보고, 클로드 앱·PC를 다시 시작한다
  * ----------------------------------------------------------------------------
  * 화면: 상태(CPU·메모리 큰 숫자+막대+최근 선 그래프 · 그래픽카드 · 바쁜 프로그램 3개 · 케이 한 줄) · 접힌 「PC 관리」 ·
- *       확인 시트(재시작 암호 6자리 + 길게 누르기) · 요청 카드(접수 → 실행 중 → 확인 중 → 결과)
+ *       확인 창([취소] / [다시 시작]) · 요청 카드(접수 → 실행 중 → 확인 중 → 결과)
  * 서버: get_pc_status / pc_power_request / pc_power_cancel (연동 암호 게이트 RPC, 표 직접 접근 불가). 계약은 설계안 v3 · CONTRACT.md.
  *       함수가 아직 서버에 없으면(404) 「서버 준비 중입니다」 — 홈은 그대로 동작한다.
  * 규칙: · 「0%」를 지어 보이지 않는다. 못 읽은 값은 「확인 못 함」, 오래된 값은 흐리게 + 「마지막 확인 N분 전」.
  *       · 생존은 seen_at(서버 시계), 수치 신선도는 updated_at — 평소 모드(15초 확인·1분 올림)에서 수치가 1분 묵어도 정상으로 본다.
  *       · 결과 문구는 서버 상태가 done 일 때만 「성공」. 마감까지 결과가 없으면 서버가 unknown, 2분 안에 PC가 못 가져가면 expired 로 돌려준다.
- *       · 재시작 암호(6자리)는 앱에 저장하지 않는다. 길게 누르기 2초(작업 중이면 3초 + 「그래도 다시 시작」).
+ *       · 확인은 「단추 → 확인 창([취소]/[다시 시작]) 두 번 누르기」. 작업 중이면 확인 창에 경고 한 줄 + 「그래도 다시 시작」(force). 재시작 암호·길게 누르기는 없다(대표님 결정).
  * 스위치: app.js 의 PC_MON_UI('on'|'off' — off 면 홈 줄이 보이지 않아 v9.74 와 같다) · PC_POWER_UI('on'|'off' — off 면 「PC 관리」가 없다).
  * app.js 연결: PcStatus.init({toast, getPass, openScreen, kstat, power}) · PcStatus.open() · PcStatus.back() · PcStatus.homeDot()
  * 시험: PcPure(순수 함수 묶음)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
@@ -124,7 +124,6 @@
     return { items: items, unsure: unsure };
   }
   function workText(w) { return w.items.map(function (x) { return x.n + ' ' + x.c + (/작업실|건/.test(x.n) ? '건' : ''); }).join(', '); }
-  function holdSeconds(work) { return (work && work.items && work.items.length) ? 3 : 2; }
 
   /* 케이 한 줄 — 숫자가 문장을 정한다(합니다체). 값이 없으면 지어내지 않는다. */
   function sayLine(d, j) {
@@ -166,8 +165,6 @@
   function errText(code, info) {
     info = info || {};
     switch (code) {
-      case 'BAD_PIN': return '재시작 암호가 맞지 않습니다' + (info.left !== undefined && info.left !== null ? ' (남은 시도 ' + info.left + '번)' : '');
-      case 'LOCKED': return '암호를 여러 번 틀려 ' + (info.retry_s ? fmtAgo(info.retry_s) : '15분') + ' 동안 잠겼습니다';
       case 'BUSY': return '이미 처리 중인 요청이 있습니다';
       case 'TOO_SOON': return '방금 다시 시작했습니다. ' + (info.retry_s ? fmtAgo(info.retry_s) : '15분') + ' 뒤에 다시 눌러 주세요';
       case 'LIMIT': return '오늘 횟수를 모두 썼습니다';
@@ -284,13 +281,12 @@
     if (which === 'claude_restart') return pw.claude_btn === true ? '' : '이 단추는 지금 꺼져 있습니다';
     return pw.pc_btn === true ? '' : '시험 뒤 열립니다';
   }
-  function validPin(s) { return /^\d{6}$/.test(String(s == null ? '' : s)); }
 
   var PcPure = {
     K: K, esc: esc, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
-    cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, holdSeconds: holdSeconds, sayLine: sayLine,
+    cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
-    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, lockReason: lockReason, validPin: validPin, KIND_NAME: KIND_NAME, gb1: gb1
+    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
   };
   global.PcPure = PcPure;
   if (typeof module !== 'undefined' && module.exports) module.exports = PcPure;
@@ -305,7 +301,7 @@
   var data = null;                // 마지막으로 받은 get_pc_status 결과(+_at: 받은 폰 시각)
   var openedAt = 0, timer = null, polling = false, notready = false, badpass = false, netErr = false, noPass = false;
   var trackId = '', foldOpen = false;
-  var sheet = { kind: '', open: false, sending: false, force: false, holdT: 0, holdRaf: 0, holdMs: 2000 };
+  var sheet = { kind: '', open: false, sending: false, force: false };
   var lastState = '', lastCmdSig = '';
 
   function bridge() { return global.OfficeBridge; }
@@ -335,7 +331,7 @@
     '<div class="pcs-cmd" id="pcCmd" style="display:none;"></div>' +
     '<div class="pcs-fold" id="pcFold"><button type="button" class="pcs-foldbtn" id="pcFoldBtn" aria-expanded="false"><span class="pcs-ic"><svg><use href="#i-monitor"/></svg></span><b>PC 관리 (다시 시작)</b><span class="pcs-op" id="pcFoldOp">눌러 펼침</span></button>' +
       '<div class="pcs-foldbody" id="pcFoldBody" style="display:none;">' +
-        '<p class="pcs-fp">누르면 바로 실행되지 않습니다. 재시작 암호를 넣고 길게 눌러야 하며, 결과는 PC가 직접 확인한 뒤에 알려 드립니다.</p>' +
+        '<p class="pcs-fp">누르면 확인 창이 한 번 더 뜹니다. 결과는 PC가 직접 확인한 뒤에 알려 드립니다.</p>' +
         '<button type="button" class="pcs-pow claude" id="pcBtnClaude"><b>클로드 앱 다시 시작</b><small>클로드 앱을 닫았다 다시 켭니다. 앱 안에서 도는 대화가 중단됩니다. 1~3분</small><em id="pcLockClaude"></em></button>' +
         '<button type="button" class="pcs-pow pc" id="pcBtnPc"><b>PC 전체 다시 시작</b><small>60초 뒤 재부팅합니다. 켜진 뒤 클로드·리스너·일꾼 상태까지 확인합니다. 3~6분</small><em id="pcLockPc"></em></button>' +
       '</div></div>' +
@@ -344,11 +340,8 @@
       '<div class="pcs-sh" id="pcShTitle"></div>' +
       '<div class="pcs-sbody" id="pcShBody"></div>' +
       '<div class="pcs-warn" id="pcShWarn" style="display:none;"></div>' +
-      '<label class="pcs-pinlab" for="pcPin">재시작 암호 (숫자 6자리)</label>' +
-      '<div class="pcs-pin" id="pcPinBoxes"><input type="password" inputmode="numeric" autocomplete="off" maxlength="6" id="pcPin" aria-label="재시작 암호 6자리"><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
       '<div class="pcs-err" id="pcShErr" role="alert"></div>' +
-      '<button type="button" class="pcs-hold" id="pcHold"><i id="pcHoldFill"></i><span id="pcHoldTx"></span></button>' +
-      '<button type="button" class="pcs-sclose" id="pcShClose">닫기</button>' +
+      '<div class="pcs-sact"><button type="button" class="pcs-sbtn" id="pcShCancel">취소</button><button type="button" class="pcs-sbtn go" id="pcShGo">다시 시작</button></div>' +
     '</div></div>';
 
   function build() {
@@ -360,17 +353,9 @@
     $('pcBtnClaude').addEventListener('click', function () { onPow('claude_restart'); });
     $('pcBtnPc').addEventListener('click', function () { onPow('pc_reboot'); });
     $('pcAgain').addEventListener('click', function () { poll(true); });
-    $('pcShClose').addEventListener('click', closeSheet);
+    $('pcShCancel').addEventListener('click', closeSheet);
+    $('pcShGo').addEventListener('click', sendRequest);
     $('pcSheet').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
-    var pin = $('pcPin');
-    pin.addEventListener('input', function () { pin.value = pin.value.replace(/\D/g, '').slice(0, 6); paintPin(); $('pcShErr').textContent = ''; updateHoldEnabled(); });
-    $('pcPinBoxes').addEventListener('click', function () { pin.focus(); });
-    var h = $('pcHold');
-    h.addEventListener('pointerdown', function (e) { if (e.button && e.button !== 0) return; holdStart(); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { h.addEventListener(ev, holdStop); });
-    h.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-    h.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); holdStart(); } });
-    h.addEventListener('keyup', function (e) { if (e.key === 'Enter' || e.key === ' ') holdStop(); });
   }
 
   /* ---- 그리기 ---- */
@@ -519,16 +504,11 @@
   }
 
   /* ---- 확인 시트 ---- */
-  function paintPin() {
-    var pin = $('pcPin'), spans = $('pcPinBoxes').querySelectorAll('span'), n = pin.value.length;
-    for (var i = 0; i < spans.length; i++) { spans[i].className = i < n ? 'f' : (i === n ? 'cur' : ''); spans[i].textContent = i < n ? '●' : ''; }
-  }
-  function updateHoldEnabled() { var h = $('pcHold'); h.classList.toggle('off', !validPin($('pcPin').value) || sheet.sending); }
   function openSheet(kind) {
     var d = data, w = workInfo(d && d.payload);
-    sheet.kind = kind; sheet.open = true; sheet.sending = false; sheet.force = w.items.length > 0; sheet.holdMs = holdSeconds(w) * 1000;
+    sheet.kind = kind; sheet.open = true; sheet.sending = false; sheet.force = w.items.length > 0;
     var pcK = kind === 'pc_reboot';
-    $('pcShTitle').textContent = pcK ? 'PC 전체를 다시 시작할까요?' : '클로드 앱을 다시 시작할까요?';
+    $('pcShTitle').textContent = pcK ? '정말 PC를 다시 시작할까요?' : '정말 클로드 앱을 다시 시작할까요?';
     var lines = pcK
       ? ['PC에서 저장 안 한 작업은 사라질 수 있습니다.', '60초 뒤 재부팅합니다. 그 사이 앱에서 취소할 수 있습니다.', '켜진 뒤 클로드·리스너·일꾼 상태를 PC가 직접 확인해 알려 드립니다. 보통 3~6분 걸립니다.']
       : ['클로드 앱을 닫았다 다시 켭니다. 앱 안에서 돌던 대화·작업이 중단됩니다(PC 케이 대화방 포함).', '10초 뒤 시작합니다. 그 사이 앱에서 취소할 수 있습니다.', '새 앱과 창이 뜬 것을 PC가 확인한 뒤에 결과를 알려 드립니다.'];
@@ -537,16 +517,13 @@
     if (w.items.length) { wb.innerHTML = '이 작업이 도는 중입니다 — ' + esc(workText(w)) + '. 그래도 다시 시작할까요?' + (w.unsure.length ? '<br>확인하지 못한 항목: ' + esc(w.unsure.join(', ')) : ''); wb.style.display = ''; }
     else if (w.unsure.length) { wb.innerHTML = '확인하지 못한 항목이 있습니다: ' + esc(w.unsure.join(', ')); wb.style.display = ''; }
     else wb.style.display = 'none';
-    $('pcPin').value = ''; paintPin(); $('pcShErr').textContent = '';
-    setText('pcHoldTx', (w.items.length ? '그래도 다시 시작 · ' : '') + sheet.holdMs / 1000 + '초 길게 누르세요');
-    updateHoldEnabled();
+    $('pcShErr').textContent = '';
+    var go = $('pcShGo'); go.disabled = false; go.textContent = w.items.length ? '그래도 다시 시작' : '다시 시작';
     $('pcSheet').style.display = '';
-    setTimeout(function () { try { $('pcPin').focus(); } catch (e) {} }, 60);
+    setTimeout(function () { try { $('pcShGo').focus(); } catch (e) {} }, 60);
   }
   function closeSheet() {
-    holdStop();
     sheet.open = false; sheet.sending = false;
-    $('pcPin').value = '';                  // 재시작 암호는 남기지 않는다
     $('pcSheet').style.display = 'none';
   }
   function onPow(kind) {
@@ -555,35 +532,15 @@
     if (why) { host.toast(why + '.', 2600); return; }
     openSheet(kind);
   }
-  function holdStart() {
-    if (!sheet.open || sheet.sending) return;
-    if (!validPin($('pcPin').value)) { $('pcShErr').textContent = '재시작 암호 6자리를 먼저 넣어 주세요'; return; }
-    holdStop();
-    var t0 = Date.now(), fill = $('pcHoldFill');
-    $('pcHold').classList.add('hold');
-    function step() {
-      var k = Math.min(1, (Date.now() - t0) / sheet.holdMs);
-      fill.style.width = (k * 100) + '%';
-      if (k >= 1) { sheet.holdRaf = 0; sendRequest(); return; }
-      sheet.holdRaf = setTimeout(step, 30);
-    }
-    sheet.holdRaf = setTimeout(step, 30);
-  }
-  function holdStop() {
-    if (sheet.holdRaf) { clearTimeout(sheet.holdRaf); sheet.holdRaf = 0; }
-    var fill = $('pcHoldFill'); if (fill) fill.style.width = '0';
-    var h = $('pcHold'); if (h) h.classList.remove('hold');
-  }
+  /* [다시 시작]을 누르면 요청을 한 번 보낸다. 보내는 동안(sheet.sending)과 시트가 닫힌 뒤에는 연타해도 다시 보내지 않는다. */
   function sendRequest() {
-    holdStop();
     if (!sheet.open || sheet.sending) return;
-    var pin = $('pcPin').value, kind = sheet.kind, pass = host.getPass();
-    if (!validPin(pin)) { $('pcShErr').textContent = '재시작 암호 6자리를 넣어 주세요'; return; }
+    var kind = sheet.kind, pass = host.getPass(), go = $('pcShGo');
     if (!pass) { $('pcShErr').textContent = '연동 암호가 없습니다. 케이 채팅에서 먼저 연동해 주세요'; return; }
     var B = bridge(); if (!B || !B.pcPowerRequest) { $('pcShErr').textContent = '이 앱 버전은 지원하지 않습니다'; return; }
-    sheet.sending = true; updateHoldEnabled(); $('pcShErr').textContent = '';
-    setText('pcHoldTx', '보내는 중…');
-    B.pcPowerRequest(pass, pin, kind, !!sheet.force, 'app').then(function (r) {
+    sheet.sending = true; go.disabled = true; var goTx = go.textContent; go.textContent = '보내는 중…'; $('pcShErr').textContent = '';
+    B.pcPowerRequest(pass, kind, !!sheet.force, 'app').then(function (r) {
+      if (!sheet.open) return;                                  // 그 사이 시트가 닫혔다
       sheet.sending = false;
       if (r && r.ok) {
         trackId = String(r.id || '');
@@ -593,12 +550,11 @@
         host.toast('요청을 보냈습니다. 결과는 PC가 확인한 뒤에 알려 드립니다.', 2800);
         return;
       }
-      $('pcPin').value = ''; paintPin(); updateHoldEnabled();
-      setText('pcHoldTx', (sheet.force ? '그래도 다시 시작 · ' : '') + sheet.holdMs / 1000 + '초 길게 누르세요');
+      go.disabled = false; go.textContent = goTx;
       $('pcShErr').textContent = errText(r && r.code, r || {});
     }, function (e) {
-      sheet.sending = false; $('pcPin').value = ''; paintPin(); updateHoldEnabled();
-      setText('pcHoldTx', (sheet.force ? '그래도 다시 시작 · ' : '') + sheet.holdMs / 1000 + '초 길게 누르세요');
+      if (!sheet.open) return;
+      sheet.sending = false; go.disabled = false; go.textContent = goTx;
       if (e && e.notready) $('pcShErr').textContent = '서버 준비 중입니다. 요청은 보내지 않았습니다';
       else if (e && e.badpass) $('pcShErr').textContent = '연동 암호가 맞지 않습니다. 요청은 보내지 않았습니다';
       else $('pcShErr').textContent = '서버에 연결하지 못했습니다. 요청은 보내지 않았습니다';

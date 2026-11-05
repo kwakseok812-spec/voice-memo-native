@@ -1402,7 +1402,7 @@
   }
   /* O-0755(v9.75) 「PC 상태」 — 이 PC의 CPU·메모리·바쁜 프로그램과 「다시 시작」 요청(클로드 앱 / PC 전체).
    *   getPcStatus(pass, watch)                       → {server_now, seen_at, updated_at, payload, cmd}  (watch=true 면 서버가 「보는 중」 30초를 갱신)
-   *   pcPowerRequest(pass, pin, kind, force, client) → {ok:true,id,expires_at} | {ok:false,code,retry_s,left}
+   *   pcPowerRequest(pass, kind, force, client)      → {ok:true,id,expires_at} | {ok:false,code,retry_s}   (code: BUSY|TOO_SOON|LIMIT|DISABLED|BAD_KIND — 재시작 암호는 없다)
    *   pcPowerCancel(pass, id)                        → {ok:true} | {ok:false,code}
    *   🔒 연동 암호 게이트(틀리면 err.badpass). 서버 SQL 미적용(404)이면 err.notready → 화면은 「서버 준비 중입니다」.
    *   읽기 15초·요청 20초 시간 제한 — 굳은 요청이 다음 확인을 막지 않게(같은 이유로 getKStatus 와 같은 방식). 재시작 요청은 자동으로 다시 보내지 않는다(한 번 눌렀으면 한 번만). */
@@ -1424,8 +1424,8 @@
       .then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
   }
   function getPcStatus(pass, watch) { return _pcRpc('get_pc_status', { p_pass: pass || '', p_watch: !!watch }, 15000, 'PC 상태 조회'); }
-  function pcPowerRequest(pass, pin, kind, force, client) {
-    return _pcRpc('pc_power_request', { p_pass: pass || '', p_pin: String(pin || ''), p_kind: String(kind || ''), p_force: !!force, p_client: String(client || 'app') }, 20000, 'PC 다시 시작 요청');
+  function pcPowerRequest(pass, kind, force, client) {
+    return _pcRpc('pc_power_request', { p_pass: pass || '', p_kind: String(kind || ''), p_force: !!force, p_client: String(client || 'app') }, 20000, 'PC 다시 시작 요청');
   }
   function pcPowerCancel(pass, id) { return _pcRpc('pc_power_cancel', { p_pass: pass || '', p_id: String(id || '') }, 15000, 'PC 다시 시작 취소'); }
   /* (O-0201) 읽음 기준 기기 간 공유 — 「어디까지 읽었나」를 서버 한 줄(k_read_state)에 두고 폰·PC가 함께 쓴다.
