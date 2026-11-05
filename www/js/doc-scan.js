@@ -149,6 +149,7 @@
    * 쪽 하나 = 원본(orig, 긴 변 2400·JPEG 0.85) + 처리 결과(out, 긴 변 2000·0.80). 처리는 DocScanCV(vendor/opencv.js) 가 한다.
    * 이 구역은 «원본 그림(canvas) → 결과 그림» 순수 함수와 흑백·회색용 1채널 JPEG 만들기. 화면과 저장소는 모른다. */
   var DSC_ORIG_SIDE = 2400, DSC_OUT_SIDE = 2000, DSC_SPREAD_SIDE = 2400;
+  var DSC_RCPT_ROT = 'on';    // v9.73: 영수증 미리보기에 «돌리기»(↺ 왼쪽으로 · ↻ 오른쪽으로) + 고정 높이 사진 칸. 'off' 면 v9.72 와 같음
   var DSC_RCPT_EDIT = 'on';   // v9.50: 영수증 미리보기에서 «모서리 조정»(문서 스캔의 자르기 화면 rEdit 재사용). 'off' 면 v9.49 와 같음
   var DSC_QUALITY = {                              // PDF 화질: side=긴 변, q=JPEG 품질. 예상 용량은 estBytes 가 쪽 크기로 어림한다
     normal: { side: 2000, q: 0.80, label: '보통(권장)' },
@@ -548,6 +549,12 @@
     '.dsc-foot3 .dsc-btn{padding:8px 4px;font-size:15px}',
     '.dsc-thumb-go{cursor:pointer}',
     '.dsc-big{min-height:64px;font-size:19px;width:100%}',
+    '.dsc-rcpt-box{position:relative;height:max(240px,50vh);overflow:hidden;border-radius:8px;background:var(--bg0,#EEF1FA)}',
+    '.dsc-rcpt-box .dsc-rcpt-img{position:absolute;left:50%;top:50%;max-width:none;max-height:none;margin:0;transform-origin:50% 50%;transition:transform .22s ease,width .22s ease,height .22s ease}',
+    '.dsc-rcpt-hint{position:absolute;left:8px;right:8px;bottom:8px;padding:6px 10px;border-radius:10px;background:rgba(15,23,42,.78);color:#fff;font-size:14px;line-height:1.35;text-align:center;pointer-events:none;transition:opacity .22s ease}',
+    '.dsc-rcpt-hint.dsc-gone{opacity:0}',
+    '.dsc-rot-h{font-weight:800;margin-top:2px}',
+    '.dsc-pvnav .dsc-big{width:auto}',
     '.dsc-card{background:var(--bg1,#fff);border:1px solid var(--glass-b2,#cbd2e6);border-radius:16px;padding:14px}',
     '.dsc-sub{color:var(--muted,#55627D);font-size:15px}',
     '.dsc-warn{color:var(--warn-t,#B45309);font-size:15px;font-weight:600}',
@@ -890,12 +897,13 @@
       if (S !== mine || !pgs || !pgs.length) return;
       var pg = pgs[0], blob = pg.out || pg.blob;
       rcptFree();
-      S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, cr: pg.corners || null, cand: pg.cand || null, orig: pg.orig || null, ow: pg.ow, oh: pg.oh, url: URL.createObjectURL(blob), extra: !!extra };
+      S.rcpt = { blob: blob, w: pg.w, h: pg.h, how: pg.how, corners: !!pg.corners, cr: pg.corners || null, cand: pg.cand || null, orig: pg.orig || null, ow: pg.ow, oh: pg.oh, url: URL.createObjectURL(blob), extra: !!extra, rot: 0, vis: 0 };
       relFile(file);
       S.busy = false; S.prog = null; S.screen = 'rcptprev'; render();
       if (extra) toast('고르신 사진 중 첫 장만 씁니다.', null, null, 4000);
     }).catch(function (e) {
       if (S !== mine) return;
+      if (S.opts.onRawFallback && e && e.message === BAD) { var rf = S.opts.onRawFallback; S.doneCalled = true; closeUi(false, false); try { rf(file); } catch (e2) {} return; }   // v9.73: 사진첩에서 고른 사진을 웹뷰가 못 읽으면(HEIC 등) 예전처럼 원본 그대로 보내기 창으로
       if (!isQuota(e)) relFile(file);
       S.busy = false; S.prog = null; S.screen = 'start'; render();
       toast(storageMsg(e, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
@@ -908,11 +916,55 @@
     var s = S; s.doneCalled = true; closeUi(false, false);   // 닫은 뒤 앱의 기존 「사진 고르기」(#photoInput)를 같은 눌림 안에서 연다
     try { cb(); } catch (e) {}
   }
-  function rcptUse() {
-    if (!S || S.busy || !S.rcpt) return;
-    var r = S.rcpt, cb = S.opts.onDone, file = rcptFile(r.blob), info = { pages: 1, bytes: r.blob.size, w: r.w, h: r.h, how: r.how, corners: r.corners };
+  function rotOn() { return DSC_RCPT_ROT === 'on'; }
+  function rcptFin(blob, w, h, how, corners) {      // 「이 사진 사용」 마무리: 파일 한 장을 앱에 넘기고 화면을 닫는다
+    var cb = S.opts.onDone, file = rcptFile(blob), info = { pages: 1, bytes: blob.size, w: w, h: h, how: how, corners: corners };
     S.doneCalled = true; closeUi(false, false);
     if (cb) cb(file, info);
+  }
+  function rcptUse() {
+    if (!S || S.busy || !S.rcpt) return;
+    var mine = S, r = S.rcpt, rot = rotOn() ? (r.rot || 0) : 0;
+    if (!rot) return rcptFin(r.blob, r.w, r.h, r.how, r.corners);          // 돌리지 않았거나 4번 돌려 제자리 → 다시 굽지 않고 처음 사진 그대로
+    S.busy = true; rcptLock(true);
+    prepCanvas(r.blob, 100000).then(function (c) {                          // v9.73: 돌린 각도로 한 번만 굽는다(돌리기 전 사진에서)
+      var rc = rotCv(c, rot), w = rc.width, h2 = rc.height;
+      return encodeOut(rc, 'doc', 0.80).then(function (b) { freeCv(rc); return { blob: b, w: w, h: h2 }; }, function (e) { freeCv(rc); throw e; });
+    }).then(function (n) {
+      if (S !== mine || S.rcpt !== r) return;                               // 그 사이 닫혔거나(뒤로가기) 다른 사진이 되었으면 아무것도 하지 않는다
+      rcptFin(n.blob, n.w, n.h, r.how, r.corners);
+    }).catch(function (e) {
+      if (S !== mine) return;
+      S.busy = false; rcptLock(false); toast(storageMsg(e, '사진을 돌려 저장하지 못했습니다. 다시 눌러 주세요.'));
+    });
+  }
+  function rcptLock(on) { if (!S) return; [].forEach.call(S.root.querySelectorAll('.dsc-body button, .dsc-foot button'), function (b) { b.disabled = !!on; }); }
+  /* v9.73 돌리기 — 누르는 순간 각도(rot)와 화면 누적각(vis)만 바꾸고 사진은 CSS 로 돌려 보여 준다(기다림 없음 → 연타해도 누름이 사라지지 않는다).
+   * 파일을 굽는 건 「이 사진 사용」 때 한 번뿐이고(rcptUse), 각도 0이면 처음 사진(S.rcpt.blob) 그대로다. 모서리 조정은 원본 사진에서 다시 펴므로 굽지 않는다. */
+  function rcptPaint(still) {
+    if (!S || S.screen !== 'rcptprev' || !S.rcpt) return;
+    var box = S.body.querySelector('.dsc-rcpt-box'), im = box && box.querySelector('.dsc-rcpt-img'), r = S.rcpt;
+    if (!box || !im) return;
+    var bw = box.clientWidth, bh = box.clientHeight, sw = r.rot === 90 || r.rot === 270, aw = sw ? bh : bw, ah = sw ? bw : bh;
+    var sc = Math.min(aw / r.w, ah / r.h, 1), w = Math.max(1, Math.round(r.w * sc)), hh = Math.max(1, Math.round(r.h * sc));
+    if (still) im.style.transition = 'none';
+    im.style.width = w + 'px'; im.style.height = hh + 'px';
+    im.style.transform = 'translate(-50%,-50%) rotate(' + (r.vis || 0) + 'deg)';
+    if (still) { void im.offsetWidth; im.style.transition = ''; }
+  }
+  function rcptTurn(dir) {                          // dir: 1 = 오른쪽(시계 방향), -1 = 왼쪽
+    if (!S || S.busy || S.screen !== 'rcptprev' || !S.rcpt || !rotOn()) return;
+    var r = S.rcpt; r.vis = (r.vis || 0) + dir * 90; r.rot = ((r.vis % 360) + 360) % 360;
+    var hi = S.body.querySelector('.dsc-rcpt-hint'); if (hi) hi.classList.add('dsc-gone'); r.turned = true;
+    rcptPaint(false);
+  }
+  function rotPts(pts, w, h, rot) {                 // 시계방향 rot(90 배수)로 돌린 그림 속 점들(w,h = 돌리기 전 크기). 네 점 순서(왼위·오른위·오른아래·왼아래)는 돌린 그림 기준으로 다시 맞춘다
+    var k = (((rot % 360) + 360) % 360) / 90, out = [];
+    pts.forEach(function (p, i) {
+      var q = k === 1 ? { x: h - p.y, y: p.x } : k === 2 ? { x: w - p.x, y: h - p.y } : k === 3 ? { x: p.y, y: w - p.x } : { x: p.x, y: p.y };
+      out[(i + k) % 4] = q;
+    });
+    return out;
   }
   /* v9.50 영수증 모서리 조정 — 문서 스캔의 자르기 화면(rEdit·editAuto·applyEdit 의 모서리 끌기·확대경·전체·자동 찾기)을 그대로 쓴다.
    * 쪽 저장소는 쓰지 않고, 처음 자동으로 찾은 모서리(없으면 후보, 그것도 없으면 사진 전체)를 시작점으로 보여 준다. 적용하면 S.rcpt 만 새로 만든다. */
@@ -923,22 +975,26 @@
     prepCanvas(r.orig, 100000).then(function (cvs) {
       if (S !== mine || S.rcpt !== r) { freeCv(cvs); return; }
       var ow = cvs.width, oh = cvs.height;
-      var cr = r.cr ? r.cr.map(cp) : (r.cand ? r.cand.map(cp) : fullQuad(ow, oh));
-      S.ed = { rcpt: true, id: 0, rec: null, cvs: cvs, ow: ow, oh: oh, corners: cr, hasSplit: false, newSplit: false, pos: 0.5, side: null };
+      var cr = r.cr ? r.cr.map(cp) : (r.cand ? r.cand.map(cp) : fullQuad(ow, oh)), rv = rotOn() ? (r.rot || 0) : 0;
+      if (rv) { cr = rotPts(cr, ow, oh, rv); cvs = rotCv(cvs, rv); ow = cvs.width; oh = cvs.height; }   // v9.73: 돌리신 방향 그대로 조정 화면을 연다(그림과 네 점을 같이 돌린다)
+      S.ed = { rcpt: true, id: 0, rec: null, cvs: cvs, ow: ow, oh: oh, corners: cr, hasSplit: false, newSplit: false, pos: 0.5, side: null, rotView: rv };
       S.busy = false; S.screen = 'edit'; render();
     }).catch(function () { if (S === mine) { S.busy = false; toast('모서리 조정 화면을 열지 못했습니다.'); } });
   }
   function applyRcptEdit(ed, cr) {
     var mine = S, r0 = S.rcpt; S.busy = true; toast('적용하는 중입니다…', null, null, 20000);
     (async function () {
-      var corners = isFullQuad(cr, ed.ow, ed.oh) ? null : cr, flat = flatOf(ed.cvs, { corners: corners }, DSC_OUT_SIDE);
+      var corners = isFullQuad(cr, ed.ow, ed.oh) ? null : cr, flat = flatOf(ed.cvs, { corners: corners }, DSC_OUT_SIDE), rv = ed.rotView || 0;
       try {
         if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주세요.');
         var oc = finishOut(flat.flat, { split: null, rot: 0 }, 'doc', DSC_OUT_SIDE); await tick();
+        if (rv) oc = rotCv(oc, (360 - rv) % 360);                 // v9.73: 돌린 화면에서 맞춘 것을 «돌리기 전 편 사진»으로 되돌려 새 처음 사진(blob)으로 삼는다 — 각도(rot)는 그대로 유지
         var w = oc.width, h2 = oc.height, blob = await encodeOut(oc, 'doc', 0.80); freeCv(oc);
         if (S !== mine || S.rcpt !== r0) return;
-        rcptFree();
-        S.rcpt = { blob: blob, w: w, h: h2, how: 'manual', corners: !!corners, cr: corners, cand: r0.cand, orig: r0.orig, ow: ed.ow, oh: ed.oh, url: URL.createObjectURL(blob), extra: r0.extra };
+        var oldUrl = r0.url, sw = rv === 90 || rv === 270;
+        S.rcpt = { blob: blob, w: w, h: h2, how: 'manual', corners: !!corners, cr: corners && rv ? rotPts(corners, ed.ow, ed.oh, (360 - rv) % 360) : corners, cand: r0.cand, orig: r0.orig,
+                   ow: sw ? ed.oh : ed.ow, oh: sw ? ed.ow : ed.oh, url: URL.createObjectURL(blob), extra: r0.extra, rot: r0.rot || 0, vis: r0.vis || 0, turned: r0.turned };
+        try { URL.revokeObjectURL(oldUrl); } catch (e) {}
         hideToast(); leaveEdit(); toast('적용했습니다.');
       } catch (e) {
         if (S === mine) { S.busy = false; toast(storageMsg(e, '적용하지 못했습니다.')); }
@@ -955,15 +1011,28 @@
   }
   function rRcptPrev(col) {
     setTop('영수증 스캔', function () { rcptFree(); S.rcpt = null; S.screen = 'start'; render(); });
-    var r = S.rcpt, c = h('div', 'dsc-card dsc-item');
-    var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진'; c.appendChild(im);
+    var r = S.rcpt, c = h('div', 'dsc-card dsc-item'), ro = rotOn();
+    var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진';
+    if (ro) {                                                  // v9.73: 사진 칸은 높이가 고정이라 돌려도 아래 단추가 움직이지 않는다
+      var box = h('div', 'dsc-rcpt-box'); box.appendChild(im);
+      if (!r.turned && r.w >= r.h * 1.15) box.appendChild(h('div', 'dsc-rcpt-hint', '영수증이 옆으로 누워 있으면 아래 「돌리기」를 눌러 주세요. 거꾸로면 두 번 누르세요.'));
+      c.appendChild(box);
+    } else c.appendChild(im);
     c.appendChild(h('div', 'dsc-sub', (r.how === 'manual' ? '직접 맞춘 모서리로 펴고 보정했습니다' : r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
     col.appendChild(c);
+    if (ro) {
+      col.appendChild(h('div', 'dsc-sub dsc-rot-h', '돌리기'));
+      var nav = h('div', 'dsc-pvnav'), bl = h('button', 'dsc-btn dsc-big', '↺ 왼쪽으로', function () { rcptTurn(-1); }), br = h('button', 'dsc-btn dsc-big', '↻ 오른쪽으로', function () { rcptTurn(1); });
+      bl.setAttribute('aria-label', '왼쪽으로 돌리기'); br.setAttribute('aria-label', '오른쪽으로 돌리기');
+      nav.appendChild(bl); nav.appendChild(br); col.appendChild(nav);
+    }
     if (rcptEditOk()) col.appendChild(h('button', 'dsc-btn dsc-big', '✂ 모서리 조정', openRcptEdit));
     col.appendChild(h('button', 'dsc-btn dsc-big', '📷 다시 찍기', function () { rcptShoot('camera'); }));
     col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 불러오기', rcptGallery));
     foot([h('button', 'dsc-btn dsc-pri', '이 사진 사용', rcptUse)]);
+    if (ro) { rcptPaint(true); if (!rotHooked) { rotHooked = true; window.addEventListener('resize', function () { rcptPaint(true); }); } }   // 폴드 접힘·펼침으로 폭이 바뀌면 다시 맞춘다
   }
+  var rotHooked = false;
 
   /* ───────── v9.26 쪽 미리보기 (DOC_SCAN_PREVIEW) ─────────
    * 찍은 직후 · 자르기/보정을 마친 직후 · 쪽 목록에서 썸네일을 눌렀을 때, 그 한 쪽의 «처리된 결과»를 크게 보여 준다.
@@ -1195,6 +1264,7 @@
     }   // v9.50: 길쭉한 영수증은 화면보다 길게 보여 주고 위아래로 밀어 가며 맞춘다(점 끌기는 화면을 밀지 않는다: touch-action none)
     var sc = Math.min(availW / ed.ow, availH / ed.oh), dw = Math.round(ed.ow * sc), dh = Math.round(ed.oh * sc);
     if (ed.rec && ed.rec.rot) col.appendChild(h('div', 'dsc-sub', '돌리기 전 원본 방향으로 보여 드립니다.'));   // O-0586
+    if (ed.rcpt && ed.rotView) col.appendChild(h('div', 'dsc-sub', '돌리신 방향 그대로 보여 드립니다.'));   // v9.73
     col.appendChild(h('div', 'dsc-sub', ed.rcpt ? '네 모서리의 둥근 점을 손가락으로 끌어 영수증 테두리에 맞춘 뒤 [적용]을 누르세요.' + (dh > (window.innerHeight || 700) - 330 ? ' 사진이 길면 점이 없는 곳을 밀어 위아래로 움직이세요.' : '') : '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르세요.'));
     var stage = h('div', 'dsc-stage'); stage.style.width = dw + 'px'; stage.style.height = dh + 'px';
     ed.cvs.style.width = dw + 'px'; ed.cvs.style.height = dh + 'px'; ed.cvs.className = 'dsc-stage-img'; stage.appendChild(ed.cvs);

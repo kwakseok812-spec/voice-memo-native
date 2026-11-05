@@ -109,6 +109,9 @@
   /* v9.32 영수증 여러 장 · 「맞나요?」 확인 말풍선 — RECEIPT_MULTI 'off' 면 영수증은 한 장만(v9.31 과 같음), RECEIPT_ACK 'off' 면 PC 가 보낸 확인 단추를 그리지 않고 글만 보인다.
    *   RECEIPT_MULTI_MAX 는 한 번에 보내는 장수(PC 계약과 같은 값 10). */
   var RECEIPT_MULTI = 'on', RECEIPT_ACK = 'on', RECEIPT_MULTI_MAX = 10;
+  /* v9.73 사진첩에서 영수증 사진 한 장을 고르면 카메라로 찍은 것과 똑같이 「영수증 스캔」 보정 화면(펴기·보정·돌리기·모서리 조정)을 거친다. 'off' 면 v9.72 처럼 곧바로 「영수증 등록」 창.
+   *  2장 이상은 어느 쪽이든 묶음 화면. (영수증 미리보기의 돌리기 단추 자체의 스위치는 doc-scan.js DSC_RCPT_ROT) */
+  var RECEIPT_GALLERY_SCAN = 'on';
   /* v9.51 영수증 보내기 전 «결제 카드»·«메모» — 앱 안에서만 쓴다(PC·서버 변경 없음). 고른 값은 이 기기의 기록(card_pick·memo_pick)에 붙여 두었다가,
    * PC 가 읽은 뒤 열리는 확인 카드의 「어느 앱에」 기본값(카드 끝자리를 못 읽었을 때)과 「설명」 기본값으로만 쓴다. 'off' 면 v9.50 과 같음 */
   var RECEIPT_PICK = 'on';
@@ -2715,7 +2718,8 @@
       } else if (photoAsScan && SCAN_HUB === 'on' && RECEIPT_MULTI === 'on' && this.files.length > 1) {     // v9.32: 영수증 여러 장 → 묶음 보내기 화면(1장이면 아래 예전 길 그대로)
         rcbOpen(this.files, false);
       } else if (photoAsScan && SCAN_HUB === 'on') {                   // 영수증 모드: 한 장만(여러 장이면 첫 장 + 안내 한 줄)
-        receiptToPanel(this.files[0], this.files.length > 1);
+        if (RECEIPT_GALLERY_SCAN === 'on' && this.files.length === 1) openReceiptScan(filePanelFromChat, this.files[0], true);     // v9.73: 사진첩 한 장도 보정 화면으로(못 읽는 사진은 원본 그대로 아래 길로)
+        else receiptToPanel(this.files[0], this.files.length > 1);
       } else {
         reviewFiles(this.files, 'photo'); setScanPanel(false);
       }
@@ -2764,7 +2768,7 @@
   function receiptPick(fc) { photoAsScan = true; filePanelFromChat = fc !== false; $('photoInput').click(); }   // 기존 사진 고르기 길(v9.25 와 같음)
   function receiptCamOk() { return RECEIPT_SCAN_CAM === 'on' && docScanOn() && !!(window.DocScan && DocScan.RECEIPT); }
   // fc=false: 확인 카드 [다시 찍기] — 패널을 채팅에서 연 것이 아니므로 filePanelFromChat 을 false 로 둔다(그 밖엔 true)
-  function openReceiptScan(fc, initFile) {
+  function openReceiptScan(fc, initFile, fromGallery) {
     fc = fc !== false;
     if (SCAN_HUB !== 'on') return;
     function pick() { receiptPick(fc); }
@@ -2776,9 +2780,10 @@
         ok = DocScan.open({ auto: DOC_SCAN_AUTO === 'on', purpose: 'receipt', initialFile: initFile || null, isRecording: function () { return !!isRecording; },
           onDone: function (file) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(file, false); photoAsScan = false; },
           onGallery: pick,
+          onRawFallback: fromGallery ? function (file) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(file, false); photoAsScan = false; } : null,     // v9.73: 사진첩 사진을 보정 화면이 못 읽으면 원본 그대로 「영수증 등록」 창으로
           onCancel: function () { photoAsScan = false; filePanelFromChat = false; } });
       } catch (e) { ok = false; }
-      if (!ok) pick();                                  // 스캔 화면을 못 열면 영수증 등록이 막히지 않게 기존 길로
+      if (!ok) { if (fromGallery && initFile) { photoAsScan = true; filePanelFromChat = fc; receiptToPanel(initFile, false); photoAsScan = false; } else pick(); }                                  // 스캔 화면을 못 열면 영수증 등록이 막히지 않게 기존 길로
     }
     var done = false, tm;
     function next(denied) { if (done) return; done = true; clearTimeout(tm); if (denied) { toast('카메라를 쓸 수 없어 사진 고르기로 엽니다.'); pick(); } else go(); }
@@ -3783,6 +3788,7 @@
   APP_VERSION = 'v9.70';        // v9.70(O-0723): 사진첩 큰 보기(족보 포함)에 「내려받기」 단추 하나 — 원본 JPEG 를 폰 「다운로드」 폴더에 album_단계영문_번호.jpg(족보는 genealogy.jpg)로 저장, 끝난 뒤에만 「저장했어요(위치)」·실패는 「못 했어요 — 이유」 · 공유 단추·여러 장 내려받기는 없음 · 설정 ⚙ 안내문 고침 · 스위치 ALBUM_DL · versionCode 114
   APP_VERSION = 'v9.71';        // v9.71(O-0727): 긴 녹음 PC 보내기 보강 — 조각 올리기가 45초 멈추면 알아채고 5번까지 다시 시도, 화면에 「올리는 중 n/m 조각」 표시, 앱을 내렸다가 돌아오거나 인터넷이 돌아오면 이어서 올림, 올리는 동안 화면 켜 둠 · 스위치 AUDIO_UPLOAD_RESUME · versionCode 115
   APP_VERSION = 'v9.72';        // v9.72(O-0736): 「말로 기록」 보강 — ①「체중(혈당) 안 쟀어·측정 안 했어·재지 않았어·못 쟀어」 등을 「측정 안 함」 행으로 정확히 읽음(체중도 혈당도 안 쟀어 · 오늘은 안 쟀고 · 쟀고/쟀지만 꼬리 포함) ②긴 말 여러 항목: 「-고요」 끝말·「어제 잠」·「새벽에」 등을 걸러 더 많이 칸으로 ③받아쓰기: 쉼 2초→7초에 끊기던 것을 늘리고 듣는 시간·곧 마무리 안내·[다 말했어요]는 항상 보임·최대 5분·듣는 동안 화면 켜 두기(화면이 꺼져 끊기던 것 방지)
+  APP_VERSION = 'v9.73';        // v9.73: 영수증 「돌리기」 — 영수증 스캔 미리보기에 「↺ 왼쪽으로 · ↻ 오른쪽으로」(누르는 즉시 돌아가고 「이 사진 사용」 때 한 번만 저장, 모서리 조정도 돌린 방향 그대로) + 사진 칸 높이 고정(돌려도 아래 단추가 안 움직임) + 사진첩에서 고른 영수증 한 장도 보정 화면을 거침 · 스위치 doc-scan.js DSC_RCPT_ROT · app.js RECEIPT_GALLERY_SCAN · versionCode 117
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
