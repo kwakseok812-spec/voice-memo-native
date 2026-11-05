@@ -27,6 +27,10 @@
     PENDING_HINT: 20,                      // 요청을 보낸 지 이 시간이 지나도 PC가 안 가져가면 안내
     SECS_START: { claude_restart: 10, pc_reboot: 60 }
   };
+  /* 시안(합니다체)에서 가져온 안내 문구 — 대표님이 느린 PC를 재시작으로 풀려 하시는 일을 막는 설명 포함 */
+  var HINT_PC_GONE = '카운트다운이 끝나면 앱이 PC에 닿지 않게 됩니다. 다시 켜지면 알려 드립니다.';
+  var HINT_CLOSE_PC = '앱을 닫으셔도 됩니다. 다시 켜지면 알림으로 알려 드립니다.';
+  var HINT_CLOSE_CLAUDE = '앱을 닫으셔도 됩니다. 결과 알림이 올 때까지는 끝난 것이 아닙니다.';
   var FINAL = { done: 1, partial: 1, failed: 1, refused: 1, expired: 1, unknown: 1 };
   var ACTIVE = { pending: 1, accepted: 1, running: 1, verifying: 1 };
   var KIND_NAME = { claude_restart: '클로드 앱 다시 시작', pc_reboot: 'PC 전체 다시 시작' };
@@ -47,11 +51,18 @@
     return h + '시간' + (mm ? ' ' + mm + '분' : '');
   }
   /* 걸린 시간 → 「48초」「3분 12초」 */
-  // 받침에 따라 「이/가」: 「클로드 앱」→「클로드 앱이」, 「리스너」→「리스너가」. 한글로 끝나지 않으면 「쪽이」(「이(가)」를 화면에 내지 않는다)
+  // 받침에 따라 「이/가」: 「클로드 앱」→「클로드 앱이」, 「리스너」→「리스너가」. 한글로 끝나지 않으면 「항목이」(「이(가)」를 화면에 내지 않는다)
   function iga(word) {
     var w = String(word == null ? '' : word), c = w.length ? w.charCodeAt(w.length - 1) : 0;
     if (c >= 0xAC00 && c <= 0xD7A3) return w + ((c - 0xAC00) % 28 ? '이' : '가');
-    return w + ' 쪽이';
+    return w + ' 항목이';
+  }
+  /* 일꾼 영어 내부 이름이 서버 결과에 섞여 와도 화면에는 한글 이름만 보인다(PC가 처음부터 한글 이름을 보내지만, 마지막 방어선) */
+  var WORKER_KO = { chat_responder: '케이 채팅 응답기', doc_worker: '문서 변환 일꾼', edit_worker: '문서 편집 일꾼', job_worker: '작업실 일꾼', meeting_out_worker: '회의록 출력 일꾼', search_poller: '명함 검색 일꾼', video_worker: '영상 처리 일꾼' };
+  function koItem(x) {
+    var w = String(x == null ? '' : x);
+    if (/[가-힣]/.test(w)) return w;
+    return Object.prototype.hasOwnProperty.call(WORKER_KO, w) ? WORKER_KO[w] : '알 수 없는 일꾼';
   }
 
   function fmtTook(sec) {
@@ -199,13 +210,13 @@
       case 'partial': return ['done', 'done', 'done', 'warn'];
       case 'failed': return ['done', 'done', 'done', 'bad'];
       case 'unknown': return ['done', 'done', 'unk', 'unk'];
-      case 'refused': return ['bad', 'todo', 'todo', 'todo'];
+      case 'refused': return ['neu', 'todo', 'todo', 'todo'];
       case 'expired': return ['bad', 'todo', 'todo', 'todo'];
     }
     return ['todo', 'todo', 'todo', 'todo'];
   }
   /* 요청 한 건을 화면 문구로. o: { nowServer(ms, 서버 시계 기준 지금) }
-   * 반환 { status, final, tone(ok|warn|bad|unk|run), title, lines[], steps[4], countdown(초|null), cancel(bool), dry } */
+   * 반환 { status, final, tone(ok|warn|bad|unk|neu|run), tag(끝난 요청의 꼬리표), hint(카드 아래 안내 한 줄, 없으면 ''), title, lines[], steps[4], countdown(초|null), cancel(bool), dry } */
   function cmdView(cmd, o) {
     if (!isObj(cmd)) return null;
     o = o || {};
@@ -214,10 +225,10 @@
     var claude = kind === 'claude_restart';
     var nowS = o.nowServer || Date.now();
     var req = ms(cmd.requested_at), acc = ms(cmd.accepted_at);
-    var out = { status: st, final: !!FINAL[st], tone: 'run', title: '', lines: [], steps: stepStates(st), countdown: null, cancel: false, dry: !!r.dry, kindName: kn, elapsed: null, alert: '' };
+    var out = { status: st, final: !!FINAL[st], tone: 'run', title: '', lines: [], steps: stepStates(st), countdown: null, cancel: false, dry: !!r.dry, kindName: kn, elapsed: null, alert: '', tag: '', hint: '' };
     var detail = r.text ? String(r.text) : '';
     var took = num(r.took_s);
-    var bad = Array.isArray(r.bad_items) ? r.bad_items.map(String) : [], okI = Array.isArray(r.ok_items) ? r.ok_items.map(String) : [];
+    var bad = Array.isArray(r.bad_items) ? r.bad_items.map(koItem) : [], okI = Array.isArray(r.ok_items) ? r.ok_items.map(koItem) : [];
     if (out.dry) out.lines.push('시험 중입니다 — 실제로는 실행하지 않았습니다.');
     switch (st) {
       case 'pending':
@@ -235,44 +246,53 @@
           out.cancel = false;
           out.alert = r.text ? String(r.text) : '취소하지 못했습니다 · PC 앞에서 확인해 주십시오';
         }
+        if (!claude && !out.dry) out.hint = HINT_PC_GONE;           // 시안: 카운트다운 화면 안내
         break; }
       case 'running':
         out.title = claude ? '클로드 앱이 다시 시작되는 중입니다' : 'PC가 다시 시작되는 중입니다';
         out.lines.push(claude ? '앱을 닫고 다시 켜는 중입니다.' : '재부팅하는 중입니다. 이 동안 PC 응답이 끊기는 것은 정상입니다. 보통 3~6분 걸립니다.');
+        out.hint = claude ? HINT_CLOSE_CLAUDE : HINT_CLOSE_PC;     // 시안: 재시작 중 화면 안내
         break;
       case 'verifying':
         out.title = '제대로 켜졌는지 확인하는 중입니다';
         out.lines.push(claude ? '이전 앱이 끝났는지, 새 앱과 창이 떴는지 PC가 직접 확인합니다.' : '부팅 시각이 바뀌었는지, 클로드·리스너·일꾼이 켜졌는지 PC가 직접 확인합니다.');
+        out.hint = claude ? HINT_CLOSE_CLAUDE : HINT_CLOSE_PC;
         break;
       case 'done':
-        out.tone = 'ok';
+        out.tone = 'ok'; out.tag = '성공';
         out.title = (claude ? '클로드 앱이 다시 켜졌습니다' : 'PC가 다시 정상 작동합니다') + (took !== null ? ' · ' + fmtTook(took) + ' 걸림' : '');
         if (detail && detail.indexOf(claude ? '클로드 앱이 다시 켜졌습니다' : 'PC가 다시 정상 작동합니다') < 0) out.lines.push(detail);   // PC가 보낸 한 줄이 제목과 같으면 되풀이하지 않는다
         break;
       case 'partial':
-        out.tone = 'warn';
+        out.tone = 'warn'; out.tag = '일부 실패';
         out.title = bad.length ? iga(bad.join(', ')) + ' 아직 안 켜졌습니다' : '일부가 아직 안 켜졌습니다';
         if (okI.length) out.lines.push('켜진 것: ' + okI.join(', '));
         if (detail) out.lines.push(detail);
         break;
       case 'failed':
-        out.tone = 'bad';
+        out.tone = 'bad'; out.tag = '실패';
         out.title = claude ? '클로드 앱이 다시 켜지지 않았습니다' : 'PC가 다시 시작되지 않았습니다';
         if (r.reason) out.lines.push(String(r.reason)); else if (detail) out.lines.push(detail);
+        if (claude && r.code === 'not_launched') out.lines.push('이전 앱은 종료되었습니다. 지금 클로드가 꺼져 있을 수 있습니다.');   // 푸시 알림과 같은 안내
         out.lines.push('PC 앞에서 확인이 필요할 수 있습니다.');
         break;
       case 'refused':
-        out.tone = 'bad';
-        out.title = '실행하지 않았습니다';
-        out.lines.push('이유: ' + (r.reason ? String(r.reason) : (detail || '알 수 없음')));
+        out.tone = 'neu';                                         // 실패가 아니다 — 취소했거나 조건이 맞지 않아 실행하지 않은 것(회색)
+        if (r.code === 'cancelled') {
+          out.tag = '취소됨'; out.title = '취소했습니다';
+          out.lines.push('아무것도 바뀌지 않았습니다.');
+        } else {
+          out.tag = '거절됨'; out.title = '실행하지 않았습니다';
+          out.lines.push('이유: ' + (r.reason ? String(r.reason) : (detail || '알 수 없습니다')));
+        }
         break;
       case 'expired':
-        out.tone = 'unk';
+        out.tone = 'unk'; out.tag = '실행 안 됨';
         out.title = '요청이 PC에 닿지 않았습니다';
         out.lines.push('아무것도 실행되지 않았습니다. PC가 꺼졌거나 응답하지 않을 수 있습니다.');
         break;
       case 'unknown':
-        out.tone = 'unk';
+        out.tone = 'unk'; out.tag = '확인 못 함';
         out.title = '결과를 확인하지 못했습니다';
         out.lines.push('실행되었는지 알 수 없습니다. PC 앞 확인이 필요합니다.');
         if (r.late) out.lines.push('뒤늦게 소식이 오면 이 카드가 바뀝니다.');
@@ -300,7 +320,7 @@
   }
 
   var PcPure = {
-    K: K, esc: esc, iga: iga, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
+    K: K, esc: esc, iga: iga, koItem: koItem, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
     cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
     isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
@@ -348,9 +368,10 @@
     '<div class="pcs-cmd" id="pcCmd" style="display:none;"></div>' +
     '<div class="pcs-fold" id="pcFold"><button type="button" class="pcs-foldbtn" id="pcFoldBtn" aria-expanded="false"><span class="pcs-ic"><svg><use href="#i-monitor"/></svg></span><b>PC 관리 (다시 시작)</b><span class="pcs-op" id="pcFoldOp">눌러 펼침</span></button>' +
       '<div class="pcs-foldbody" id="pcFoldBody" style="display:none;">' +
-        '<p class="pcs-fp">누르면 확인 창이 한 번 더 뜹니다. 결과는 PC가 직접 확인한 뒤에 알려 드립니다.</p>' +
-        '<button type="button" class="pcs-pow claude" id="pcBtnClaude"><b>클로드 앱 다시 시작</b><small>클로드 앱을 닫았다 다시 켭니다. 앱 안에서 도는 대화가 중단됩니다. 1~3분</small><em id="pcLockClaude"></em></button>' +
-        '<button type="button" class="pcs-pow pc" id="pcBtnPc"><b>PC 전체 다시 시작</b><small>60초 뒤 재부팅합니다. 켜진 뒤 클로드·리스너·일꾼 상태까지 확인합니다. 3~6분</small><em id="pcLockPc"></em></button>' +
+        '<p class="pcs-fp">누르면 바로 시작되지 않고 한 번 더 확인합니다. 아래쪽이 영향이 더 큽니다.</p>' +
+        '<button type="button" class="pcs-pow claude" id="pcBtnClaude"><b>클로드 앱 다시 시작</b><small>클로드 앱을 닫았다 다시 켭니다. 앱 안에서 도는 대화가 중단됩니다. 1~3분</small><small class="w">언제 쓰나 · 클로드 앱이 멈췄을 때</small><em id="pcLockClaude"></em></button>' +
+        '<button type="button" class="pcs-pow pc" id="pcBtnPc"><b>PC 전체 다시 시작</b><small>60초 뒤 재부팅합니다. 켜진 뒤 클로드·리스너·일꾼 상태까지 확인합니다. 3~6분</small><small class="w">언제 쓰나 · 클로드 앱 재시작으로 안 풀릴 때 마지막으로</small><em id="pcLockPc"></em></button>' +
+        '<p class="pcs-honest">※ 두 버튼 모두 PC가 느린 원인(무거운 작업)을 직접 풀어 주지는 못합니다. 무엇이 CPU를 쓰는지는 위 화면에서 보십시오.</p>' +
       '</div></div>' +
     '<div class="pcs-foot" id="pcFoot"></div>' +
     '<div class="pcs-sheet" id="pcSheet" style="display:none;" role="dialog" aria-modal="true"><div class="pcs-sbox">' +
@@ -490,7 +511,7 @@
     if (sig === lastCmdSig && box.style.display !== 'none') return;
     lastCmdSig = sig;
     var steps = cv.steps.map(function (s, i) { return '<li class="' + s + '"><i></i><span>' + esc(STEP_NAMES[i]) + '</span></li>'; }).join('');
-    var h = '<div class="pcs-ch"><b>' + esc(cv.kindName) + '</b><span class="pcs-tag t-' + cv.tone + '">' + (cv.final ? (({ ok: '성공', warn: '일부 실패', bad: '실패', unk: '확인 못 함' })[cv.tone] || '끝') : '진행 중') + '</span></div>';
+    var h = '<div class="pcs-ch"><b>' + esc(cv.kindName) + '</b><span class="pcs-tag t-' + cv.tone + '">' + (cv.final ? (cv.tag || '끝') : '진행 중') + '</span></div>';
     h += '<div class="pcs-ct t-' + cv.tone + '">' + esc(cv.title) + '</div>';
     if (cv.countdown !== null) h += '<div class="pcs-cd">' + (cv.countdown > 0 ? '<b>' + cv.countdown + '</b> 초 남음' : '곧 시작합니다') + '</div>';
     else if (cv.elapsed !== null) h += '<div class="pcs-cd"><b>' + fmtClock(cv.elapsed) + '</b> 경과</div>';
@@ -498,6 +519,7 @@
     cv.lines.forEach(function (l) { h += '<p class="pcs-cl">' + esc(l) + '</p>'; });
     if (cv.alert) h += '<p class="pcs-cl pcs-alert" role="alert">' + esc(cv.alert) + '</p>';
     if (cv.cancel) h += '<button type="button" class="pcs-cancel" id="pcCancel">재시작 취소</button>';
+    if (cv.hint) h += '<p class="pcs-hint">' + esc(cv.hint) + '</p>';
     if (cv.final && (cv.tone === 'unk' || cv.tone === 'bad')) h += '<button type="button" class="pcs-cancel" id="pcAgain2">다시 확인</button>';
     box.innerHTML = h; box.className = 'pcs-cmd c-' + cv.tone; box.style.display = '';
     var cb = $('pcCancel'); if (cb) cb.addEventListener('click', onCancel);
