@@ -71,6 +71,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.TextViewCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -103,6 +104,7 @@ class SilentCameraActivity : ComponentActivity() {
         const val X_ENGINE = "engine"       // auto | quality | fast | frame
         const val X_RESUME = "resume"
         const val X_ZOOM = "zoom"           // on | off  (off 면 v9.29 와 같은 화면·동작)
+        const val X_LAYOUT = "layout"       // auto | classic  (classic 이면 ⚙ 선택과 상관없이 v9.72 와 똑같은 예전 화면으로 고정 — 개발 스위치 SILENT_CAM_LAYOUT)
         const val RESULT = "json"
         const val AUTO_MS = 2800L
         /** 이어 찍기에서 다음 쪽에도 배율을 그대로 둔다(같은 문서를 같은 거리에서 찍는 장면). false 면 쪽마다 1×로 돌아간다. */
@@ -153,6 +155,22 @@ class SilentCameraActivity : ComponentActivity() {
     private lateinit var zoomBtnRow: LinearLayout
     private lateinit var topGroup: View
     private lateinit var bottomGroup: View
+
+    // 화면 모양(v9.74): classic = 예전 화면 그대로, small = 단추만 작게, big = 크게 보기. compact 는 classic 이 아닌 새 배치.
+    private var layoutVariant = CamLayout.BIG
+    private var layoutLocked = false                         // 개발 스위치가 classic 으로 고정 → ⚙ 의 «화면 모양» 줄을 숨긴다
+    private var compact = false
+    private var camAspect = CamLayout.BASE_ASPECT            // 지금 연결된 미리보기·사진 비율(세로 기준 폭÷높이)
+    private var forceBase = false                            // 기기가 길쭉한 비율을 못 주면 true — 그 뒤로는 지금 비율
+    private lateinit var scrimTop: View
+    private lateinit var scrimBottom: View
+    private lateinit var seekBox: FrameLayout
+    private lateinit var segBox: FrameLayout
+    private lateinit var segHl: View
+    private var lastSeg = -1
+    private var lastHint = ""
+    private var hintFade: Runnable? = null
+    private var seekHide: Runnable? = null
 
     private val main = Handler(Looper.getMainLooper())
     private val bg = Executors.newSingleThreadExecutor()
@@ -222,6 +240,9 @@ class SilentCameraActivity : ComponentActivity() {
         customTitle = intent.getStringExtra(X_TITLE)
         engine = intent.getStringExtra(X_ENGINE) ?: "auto"
         zoomOn = (intent.getStringExtra(X_ZOOM) ?: "on") != "off"
+        layoutLocked = (intent.getStringExtra(X_LAYOUT) ?: "auto") == "classic"
+        layoutVariant = if (layoutLocked) CamLayout.CLASSIC else CamLayout.normalize(prefs.getString("layout", CamLayout.BIG))
+        compact = layoutVariant != CamLayout.CLASSIC
         lowDisk = Session.freeBytes(this) < Session.LOW_DISK_BYTES
         if (from == "tab" && mode == "doc") multi = prefs.getBoolean("multiDoc", true)
         if (mode != "doc") multi = false
@@ -293,6 +314,7 @@ class SilentCameraActivity : ComponentActivity() {
         // 접기·펴기·돌리기: 화면 크기가 바뀌어도 이 화면은 다시 만들어지지 않는다. 카메라 방향만 맞춘다.
         val rot = previewView.display?.rotation ?: Surface.ROTATION_0
         analysis?.targetRotation = rot
+        if (compact) rebindIfAspectChanged()
     }
 
     // ───────── 센서(손떨림·어두움 안내) ─────────
@@ -416,6 +438,7 @@ class SilentCameraActivity : ComponentActivity() {
         root.addView(ui, FrameLayout.LayoutParams(-1, -1))
         insetViews.add(ui)
 
+        if (compact) { buildBarsCompact() } else {
         // 위 묶음: 윗줄 · 모드 칩 · 이어 찍기 칩 · 안내 · 알림
         val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0x99000000.toInt()) }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(2), dp(4), dp(2)) }
@@ -488,6 +511,7 @@ class SilentCameraActivity : ComponentActivity() {
         ui.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         bottomGroup = bottom
         buildZoomUi()
+        }
 
         layers = FrameLayout(this)
         root.addView(layers, FrameLayout.LayoutParams(-1, -1))
@@ -499,6 +523,434 @@ class SilentCameraActivity : ComponentActivity() {
             for (v in insetViews) v.setPadding(inL, inT, inR, inB)
             insets
         }
+    }
+
+    // ───────── 새 배치(v9.74 «크게 보기 / 단추만 작게») ─────────
+    // 예전 화면(buildUi 의 else 쪽)은 한 줄도 바꾸지 않았다. 새 배치는 같은 이름의 부품(titleTv·modeRow·hintTv·zoomBox …)을 이 함수들이 다시 만들고,
+    // refreshAll·applyMode 같은 공통 함수는 그대로 쓰되 compact 일 때만 모양을 손질하는 한 줄씩(아래 style… 함수)이 붙어 있다.
+    // 치수·규칙의 숫자는 CamLayout.kt 와 시안(camera_layout_mockup_v2.html)이 같다.
+
+    /** 눌림 반응(0.94배 · 0.08초). 「움직임 줄이기」면 없음. */
+    private fun pressFx(v: View) {
+        v.setOnTouchListener { x, ev ->
+            if (!reduceMotion()) {
+                if (ev.action == MotionEvent.ACTION_DOWN) x.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start()
+                else if (ev.action == MotionEvent.ACTION_UP || ev.action == MotionEvent.ACTION_CANCEL) x.animate().scaleX(1f).scaleY(1f).setDuration(80).start()
+            }
+            false
+        }
+    }
+
+    /** 모드 알약의 한 칸: 누르는 칸 높이 48, 폭은 세 칸이 나눠 가짐, 글자는 14sp(글자 크기를 키운 폰에서는 11sp 까지 줄어듦). */
+    private fun segChip(label: String, onClick: () -> Unit): TextView = tv(label, 14f, Color.WHITE, true).apply {
+        gravity = Gravity.CENTER
+        maxLines = 1
+        minHeight = dp(CamLayout.TOUCH_DP)
+        minimumHeight = dp(CamLayout.TOUCH_DP)
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(0, dp(CamLayout.TOUCH_DP), 1f)
+        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 11, 14, 1, TypedValue.COMPLEX_UNIT_SP)
+        pressFx(this)
+    }
+
+    private fun pillC(color: Int): InsetDrawable = InsetDrawable(round(color, 16), 0, dp(8), 0, dp(8))     // 보이는 높이 32, 누르는 칸 48
+
+    private fun buildBarsCompact() {
+        // 단단한 띠 대신 어두운 그림자 — 위·아래 단추 뒤에만 깔린다(높이는 syncOverlayCompact 가 맞춘다)
+        scrimTop = View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x9E000000.toInt(), 0x57000000, 0x00000000)) }
+        root.addView(scrimTop, root.indexOfChild(ui), FrameLayout.LayoutParams(-1, dp(120), Gravity.TOP))
+        scrimBottom = View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0x9E000000.toInt(), 0x57000000, 0x00000000)) }
+        root.addView(scrimBottom, root.indexOfChild(ui), FrameLayout.LayoutParams(-1, dp(160), Gravity.BOTTOM))
+
+        // 위 묶음: 윗줄(✕ · 모드 알약 · ⚡ · ⚙) + 이어 찍기 줄 + 알림 띠
+        val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        bar.addView(iconBtn("✕", "닫기") { onClose() }.also { pressFx(it) })
+        val mid = FrameLayout(this)
+        titleTv = tv("", 15f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            visibility = if (from == "tab") View.GONE else View.VISIBLE
+        }
+        mid.addView(titleTv, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        segBox = CapFrame(this, 252).apply {
+            background = InsetDrawable(round(0x73000000, 17), 0, dp(7), 0, dp(7))
+            visibility = if (from == "tab") View.VISIBLE else View.GONE
+        }
+        segHl = View(this).apply { background = round(0xFF3B82F6.toInt(), 15) }
+        segBox.addView(segHl, FrameLayout.LayoutParams(dp(60), dp(30), Gravity.START or Gravity.CENTER_VERTICAL))
+        modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        chipDoc = segChip("문서") { setMode("doc") }
+        chipRcpt = segChip("영수증") { setMode("receipt") }
+        chipPhoto = segChip("일반 사진") { setMode("photo") }
+        modeRow.addView(chipDoc); modeRow.addView(chipRcpt); modeRow.addView(chipPhoto)
+        segBox.addView(modeRow, FrameLayout.LayoutParams(-1, dp(CamLayout.TOUCH_DP), Gravity.CENTER_VERTICAL))
+        segBox.addOnLayoutChangeListener(View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionHl(false) })
+        mid.addView(segBox, FrameLayout.LayoutParams(-1, dp(CamLayout.TOUCH_DP), Gravity.CENTER))
+        bar.addView(mid, LinearLayout.LayoutParams(0, dp(CamLayout.BAR_DP), 1f))
+        flashBtn = iconBtn("⚡", "불빛 바꾸기") { cycleFlash() }
+        pressFx(flashBtn)
+        bar.addView(flashBtn)
+        bar.addView(iconBtn("⚙", "카메라 설정") { openSettings() }.also { pressFx(it) })
+        top.addView(bar, LinearLayout.LayoutParams(-1, dp(CamLayout.BAR_DP)))
+
+        // 이어 찍기 줄: 칩의 누르는 칸은 48dp 이지만 줄이 차지하는 높이는 34dp — 위아래 7dp 씩을 윗줄·알림 띠와 겹쳐 둔다
+        multiRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), 0, dp(12), 0) }
+        multiChip = tv("", 13f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(CamLayout.TOUCH_DP)
+            minimumHeight = dp(CamLayout.TOUCH_DP)
+            setPadding(dp(13), 0, dp(13), 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { toggleMulti() }
+            pressFx(this)
+        }
+        multiRow.addView(multiChip, LinearLayout.LayoutParams(-2, dp(CamLayout.TOUCH_DP)))
+        infoTv = tv("", 13f, 0xFFE4E8F2.toInt()).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL; maxLines = 2; setPadding(dp(8), 0, 0, 0) }
+        multiRow.addView(infoTv, LinearLayout.LayoutParams(0, -2, 1f))
+        val overlap = (dp(CamLayout.TOUCH_DP) - dp(CamLayout.CHIP_ROW_DP)) / 2
+        top.addView(multiRow, LinearLayout.LayoutParams(-1, dp(CamLayout.TOUCH_DP)).apply { setMargins(0, -overlap, 0, -overlap) })
+
+        // 알림 띠(100쪽 도달 · 저장 공간 · 일반 사진 안내): 작은 알약, 사라지지 않고 계속 보인다
+        noticeTv = tv("", 13f, 0xFF111111.toInt(), true).apply {
+            gravity = Gravity.CENTER
+            maxLines = 2
+            setPadding(dp(14), dp(5), dp(14), dp(5))
+            background = round(0xFFFBBF24.toInt(), 14)
+            visibility = View.GONE
+        }
+        top.addView(noticeTv, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(2) })
+        ui.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        topGroup = top
+
+        // 아래 묶음: 썸네일 줄(그대로) · 촬영 줄. 안내 알약과 확대 줄은 사진 위에 얹힌다
+        val bottom = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        hintTv = tv("", 14f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER
+            maxLines = 2
+            setPadding(dp(14), dp(4), dp(14), dp(4))
+            background = round(0x80000000.toInt(), 15)
+            visibility = View.INVISIBLE
+        }
+        strip = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; visibility = View.GONE }
+        stripBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(8), dp(4), dp(8), dp(4)) }
+        strip.addView(stripBox)
+        bottom.addView(strip, LinearLayout.LayoutParams(-1, dp(CamLayout.STRIP_DP)))
+        bottomBar = FrameLayout(this).apply { setPadding(dp(14), dp(5), dp(14), dp(5)) }
+        lastThumb = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = round(0x33FFFFFF, 10, 0x66FFFFFF)
+            clipToOutline = true
+            visibility = View.INVISIBLE
+            contentDescription = "방금 찍은 사진 보기"
+            setOnClickListener { if (pages.isNotEmpty()) peek(pages.size - 1) }
+        }
+        bottomBar.addView(lastThumb, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
+        shutter = FrameLayout(this).apply {
+            contentDescription = "찍기"
+            isClickable = true
+            isFocusable = true
+            val ring = View(this@SilentCameraActivity).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.TRANSPARENT); setStroke(dp(4), Color.WHITE) } }
+            val core = View(this@SilentCameraActivity).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) } }
+            addView(ring, FrameLayout.LayoutParams(-1, -1))
+            addView(core, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.CENTER))
+            setOnTouchListener { v, ev ->
+                if (!reduceMotion()) {
+                    if (ev.action == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
+                    else if (ev.action == MotionEvent.ACTION_UP || ev.action == MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(80).start()
+                }
+                false
+            }
+            setOnClickListener { shoot() }
+        }
+        bottomBar.addView(shutter, FrameLayout.LayoutParams(dp(72), dp(72), Gravity.CENTER))
+        doneBtn = button("완료", true) { onDone() }
+        bottomBar.addView(doneBtn, FrameLayout.LayoutParams(-2, dp(52), Gravity.END or Gravity.CENTER_VERTICAL))
+        bottom.addView(bottomBar)
+        ui.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        bottomGroup = bottom
+        ui.addView(hintTv, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        buildZoomUiCompact()
+    }
+
+    private fun buildZoomUiCompact() {
+        zoomBox = CapBox(this, 420).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            visibility = View.GONE                           // 기기가 배율 범위를 알려 줄 때까지 숨김
+        }
+        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        zoomLabel = tv("×1.0 ▾", 13f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER
+            minWidth = dp(66); minimumWidth = dp(66)
+            minHeight = dp(CamLayout.ZOOM_ROW_DP); minimumHeight = dp(CamLayout.ZOOM_ROW_DP)
+            setPadding(dp(8), 0, dp(8), 0)
+            contentDescription = "지금 확대 배율. 누르면 확대 막대가 펴져요"
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { toggleSeek() }
+            pressFx(this)
+        }
+        head.addView(zoomLabel, LinearLayout.LayoutParams(-2, -2).apply { setMargins(0, 0, dp(4), 0) })
+        zoomBtnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        head.addView(zoomBtnRow)
+        zoomBox.addView(head, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        ui.addView(zoomBox, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        zoomSeek = SeekBar(this).apply {
+            max = 1000
+            progressTintList = ColorStateList.valueOf(Color.WHITE)
+            progressBackgroundTintList = ColorStateList.valueOf(0x66FFFFFF)
+            thumbTintList = ColorStateList.valueOf(Color.WHITE)
+            setPadding(dp(16), 0, dp(16), 0)
+            contentDescription = "확대 정도 조절"
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    if (!fromUser || busy || zoomMax <= zoomMin) return
+                    zoomAnim?.cancel()
+                    setZoom(zoomMin * exp(ln(zoomMax / zoomMin) * (p / 1000f)), true)
+                    scheduleSeekHide()
+                }
+                override fun onStartTrackingTouch(sb: SeekBar) { }
+                override fun onStopTrackingTouch(sb: SeekBar) { }
+            })
+        }
+        // 확대 막대는 평소 숨겨 두고 「×1.0 ▾」를 누르면 확대 줄 위로 얹혀 펴진다(사진 칸·안내선은 움직이지 않음)
+        seekBox = FrameLayout(this).apply { background = round(0x73000000, 16); visibility = View.GONE; alpha = 0f }
+        seekBox.addView(zoomSeek, FrameLayout.LayoutParams(-1, dp(CamLayout.SEEK_DP)))
+        val sw = minOf(resources.displayMetrics.widthPixels - dp(48), dp(340))
+        ui.addView(seekBox, FrameLayout.LayoutParams(sw, dp(CamLayout.SEEK_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        val sync = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncOverlayCompact() }
+        topGroup.addOnLayoutChangeListener(sync)
+        bottomGroup.addOnLayoutChangeListener(sync)
+        zoomBox.addOnLayoutChangeListener(sync)
+    }
+
+    private fun toggleSeek() {
+        if (busy || zoomMax <= zoomMin) return
+        if (seekBox.visibility == View.VISIBLE && seekBox.alpha > 0.5f) hideSeek() else showSeek()
+    }
+
+    private fun showSeek() {
+        seekBox.animate().cancel()
+        seekBox.visibility = View.VISIBLE
+        if (reduceMotion()) seekBox.alpha = 1f else seekBox.animate().alpha(1f).setDuration(150).start()
+        scheduleSeekHide()
+    }
+
+    private fun hideSeek() {
+        seekHide?.let { main.removeCallbacks(it) }
+        seekHide = null
+        seekBox.animate().cancel()
+        if (reduceMotion()) { seekBox.alpha = 0f; seekBox.visibility = View.GONE; return }
+        seekBox.animate().alpha(0f).setDuration(150).withEndAction { seekBox.visibility = View.GONE }.start()
+    }
+
+    /** 4초 동안 안 만지면 확대 막대가 저절로 접힌다(막대를 움직일 때마다 다시 센다). */
+    private fun scheduleSeekHide() {
+        seekHide?.let { main.removeCallbacks(it) }
+        val r = Runnable { seekHide = null; hideSeek() }
+        seekHide = r
+        main.postDelayed(r, CamLayout.SEEK_HIDE_MS)
+    }
+
+    /** 그림자 높이 · 안내 알약 자리 · 확대 줄/막대 자리 · 안내선 칸을 단추 묶음 높이에 맞춘다. */
+    private fun syncOverlayCompact() {
+        val w = root.width
+        val h = root.height
+        if (w <= 0 || h <= 0) return
+        val bm = bottomGroup.height
+        val zlp = zoomBox.layoutParams as FrameLayout.LayoutParams
+        if (zlp.bottomMargin != bm) { zlp.bottomMargin = bm; zoomBox.layoutParams = zlp }
+        val zbH = if (zoomBox.visibility == View.VISIBLE) zoomBox.height else 0
+        val slp = seekBox.layoutParams as FrameLayout.LayoutParams
+        if (slp.bottomMargin != bm + zbH) { slp.bottomMargin = bm + zbH; seekBox.layoutParams = slp }
+        val hlp = hintTv.layoutParams as FrameLayout.LayoutParams
+        val ht = topGroup.height + dp(10)
+        if (hlp.topMargin != ht) { hlp.topMargin = ht; hintTv.layoutParams = hlp }
+        val stH = inT + topGroup.height + dp(28)
+        val stp = scrimTop.layoutParams
+        if (stp.height != stH) { stp.height = stH; scrimTop.layoutParams = stp }
+        val sbH = inB + bm + zbH + dp(34)
+        val sbp = scrimBottom.layoutParams
+        if (sbp.height != sbH) { sbp.height = sbH; scrimBottom.layoutParams = sbp }
+        val pv = CamLayout.fit(w.toFloat(), h.toFloat(), camAspect)
+        val g = CamLayout.guide(pv, (inT + topGroup.height).toFloat(), (h - inB - bm - zbH).toFloat(), dp(8).toFloat())
+        guide.setRect(if (g == null) null else RectF(g.x, g.y, g.x + g.w, g.y + g.h))
+    }
+
+    /** refreshAll 끝에서: 이어 찍기 칩 · ⚡ 단추 · 모드 알약 표시를 새 배치 모양으로 손질한다. */
+    private fun styleCompactAfterRefresh() {
+        multiChip.background = InsetDrawable(
+            if (multi) round(0xFF3B82F6.toInt(), 17) else round(0x73000000, 17, 0x66FFFFFF),
+            0, dp(7), 0, dp(7))
+        val state = when (flashMode) { ImageCapture.FLASH_MODE_AUTO -> "자동"; ImageCapture.FLASH_MODE_ON -> "켬"; else -> "끔" }
+        flashBtn.text = if (flashMode == ImageCapture.FLASH_MODE_AUTO) "⚡A" else "⚡"
+        flashBtn.alpha = if (flashMode == ImageCapture.FLASH_MODE_OFF) 0.8f else 1f
+        flashBtn.setTextColor(if (flashMode == ImageCapture.FLASH_MODE_ON) Color.BLACK else Color.WHITE)
+        flashBtn.background = when (flashMode) {
+            ImageCapture.FLASH_MODE_ON -> InsetDrawable(round(0xFFFBBF24.toInt(), 18), dp(6))
+            ImageCapture.FLASH_MODE_AUTO -> InsetDrawable(round(0x47FFFFFF, 18), dp(6))
+            else -> null
+        }
+        flashBtn.contentDescription = "불빛 $state. 누르면 바뀌어요"
+        positionHl(true)
+    }
+
+    /** 모드 알약의 파란 표시를 고른 칸으로 옮긴다(0.16초 미끄러짐 · 「움직임 줄이기」면 바로). */
+    private fun positionHl(animate: Boolean) {
+        val w = segBox.width
+        if (w <= 0) return
+        val cell = w / 3f
+        val lp = segHl.layoutParams
+        val hw = (cell - dp(4)).toInt()
+        if (lp.width != hw) { lp.width = hw; segHl.layoutParams = lp }
+        val idx = when (mode) { "doc" -> 0; "receipt" -> 1; else -> 2 }
+        val tx = idx * cell + dp(2)
+        segHl.animate().cancel()
+        if (!animate || reduceMotion() || lastSeg < 0 || idx == lastSeg) segHl.translationX = tx
+        else segHl.animate().translationX(tx).setDuration(160).start()
+        lastSeg = idx
+    }
+
+    private fun resizeZoomBtnsCompact() {
+        for (i in 0 until zoomBtnRow.childCount) {
+            val b = zoomBtnRow.getChildAt(i) as TextView
+            b.minWidth = dp(44); b.minimumWidth = dp(44)
+            b.minHeight = dp(CamLayout.ZOOM_ROW_DP); b.minimumHeight = dp(CamLayout.ZOOM_ROW_DP)
+            b.setPadding(dp(3), 0, dp(3), 0)
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            (b.layoutParams as? LinearLayout.LayoutParams)?.setMargins(dp(1), 0, dp(1), 0)
+            pressFx(b)
+        }
+    }
+
+    private fun styleZoomCompact() {
+        zoomLabel.text = fmtX(zoomWanted) + " ▾"
+        zoomLabel.background = pillC(0x99000000.toInt())
+        for (i in 0 until zoomBtnRow.childCount) {
+            val b = zoomBtnRow.getChildAt(i) as TextView
+            val v = b.tag as Float
+            val sel = abs(zoomWanted - v) / v < 0.04f
+            b.background = pillC(if (sel) 0xFF3B82F6.toInt() else 0x66000000)
+        }
+    }
+
+    /** 안내 알약: 글이 바뀌면 나타나 6초 뒤 사라진다(손떨림·어두움·많이 확대 같은 경고는 계속 보임). 모드를 바꾸거나 카메라를 열면 글이 바뀌므로 다시 나타난다. */
+    private fun hintChanged(warn: Boolean) {
+        val t = hintTv.text.toString()
+        if (t == lastHint) return
+        lastHint = t
+        hintFade?.let { main.removeCallbacks(it) }
+        hintFade = null
+        hintTv.animate().cancel()
+        hintTv.visibility = if (t.isEmpty()) View.INVISIBLE else View.VISIBLE
+        hintTv.alpha = 1f
+        if (warn || t.isEmpty()) return
+        val r = Runnable {
+            hintFade = null
+            if (reduceMotion()) hintTv.alpha = 0f else hintTv.animate().alpha(0f).setDuration(200).start()
+        }
+        hintFade = r
+        main.postDelayed(r, CamLayout.HINT_FADE_MS)
+    }
+
+    /** 찍으면 마지막 사진 칸이 톡 커졌다 제자리로(0.2초). */
+    private fun popThumb() {
+        if (reduceMotion()) return
+        lastThumb.animate().cancel()
+        lastThumb.scaleX = 0.6f
+        lastThumb.scaleY = 0.6f
+        lastThumb.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
+    }
+
+    // ───────── 새 배치: 비율·카메라 연결 ─────────
+    private fun wantedAspect(): Float {
+        if (forceBase) return CamLayout.BASE_ASPECT
+        val dm = resources.displayMetrics
+        return CamLayout.aspect(layoutVariant, mode, maxOf(dm.widthPixels, dm.heightPixels).toFloat(), minOf(dm.widthPixels, dm.heightPixels).toFloat())
+    }
+
+    /** 모드를 바꿨거나 화면이 접히고 펴졌을 때 — 아직 사진을 안 찍었고, 원하는 비율이 달라졌을 때만 카메라를 다시 연결한다. */
+    private fun rebindIfAspectChanged() {
+        if (pages.isNotEmpty() || busy || closing || camera == null) return
+        if (abs(wantedAspect() - camAspect) > 0.01f) bindCamera()
+    }
+
+    /** 새 배치의 카메라 연결: 미리보기와 사진을 같은 비율로 묶고, 기기가 그 비율을 못 주면 지금 비율로 물러난다(보이는 범위 = 찍히는 범위). */
+    private fun bindCameraCompact() {
+        val f = ProcessCameraProvider.getInstance(this)
+        f.addListener({
+            val provider = try { f.get() } catch (e: Exception) { finishWith("error"); return@addListener }
+            try {
+                provider.unbindAll()
+                var retreated = false
+                if (!bindWith(provider, wantedAspect())) {
+                    forceBase = true
+                    provider.unbindAll()
+                    bindWith(provider, CamLayout.BASE_ASPECT)
+                    retreated = true
+                }
+                syncOverlayCompact()
+                if (retreated) flashNote("이 폰에서는 화면을 더 크게 못 보여 드려요. 지금 모양으로 찍어요", 3500) else flashNote("카메라가 준비됐어요", 1200)
+            } catch (e: Exception) {
+                finishWith("error")
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    /** 비율 asp 로 미리보기·사진(또는 프레임)을 연결한다. 기기가 알려 준 실제 크기가 asp 와 다르면 false(물러나야 함). */
+    private fun bindWith(provider: ProcessCameraProvider, asp: Float): Boolean {
+        val longAsp = asp < CamLayout.BASE_ASPECT - 0.01f
+        val strat = if (longAsp) AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY else AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+        val prevSel = ResolutionSelector.Builder().setAspectRatioStrategy(strat).build()
+        val preview = Preview.Builder().setResolutionSelector(prevSel).build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+        // 긴 변 약 4000px(4:3) 또는 3840px(길쭉) 이하 — 실제 크기는 기기마다 다르다
+        val capSel = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(strat)
+            .setResolutionStrategy(ResolutionStrategy(if (longAsp) android.util.Size(3840, 2160) else android.util.Size(4000, 3000), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+            .build()
+        imageCapture = null
+        analysis = null
+        var capSize: android.util.Size? = null
+        if (useEngine() == "frame") {
+            val an = ImageAnalysis.Builder()
+                .setResolutionSelector(capSel)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+            an.setAnalyzer(camExec) { img -> onFrame(img) }
+            analysis = an
+            camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, an)
+            capSize = try { an.resolutionInfo?.resolution } catch (e: Exception) { null }
+        } else {
+            val ic = ImageCapture.Builder()
+                .setResolutionSelector(capSel)
+                .setCaptureMode(if (useEngine() == "fast") ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setFlashMode(flashMode)
+                .setJpegQuality(90)
+                .build()
+            imageCapture = ic
+            camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic)
+            capSize = try { ic.resolutionInfo?.resolution } catch (e: Exception) { null }
+        }
+        camAspect = asp
+        camera?.let { setupZoom(it) }
+        val prevSize: android.util.Size? = try { preview.resolutionInfo?.resolution } catch (e: Exception) { null }
+        val ps = if (prevSize == null) null else CamLayout.shortOverLong(prevSize.width, prevSize.height)
+        val cs = if (capSize == null) null else CamLayout.shortOverLong(capSize.width, capSize.height)
+        return !CamLayout.mustRetreat(asp, ps, cs)
+    }
+
+    /** ⚙ 「화면 모양」을 고르면 저장하고 화면을 새로 연다(사진을 찍기 전에만). 고른 모드·이어 찍기는 그대로 이어진다. */
+    private fun chooseLayout(v: String) {
+        if (pages.isNotEmpty() || busy || v == layoutVariant) return
+        prefs.edit().putString("layout", v).apply()
+        intent.putExtra(X_MODE, mode)
+        intent.putExtra(X_MULTI, multi)
+        recreate()
     }
 
     /** 안전 영역(상태바·아래 제스처 띠·카메라 구멍)을 지키는 전체 화면 덮개를 만든다. */
@@ -524,6 +976,16 @@ class SilentCameraActivity : ComponentActivity() {
             else super.onMeasure(w, h)
         }
     }
+    /** CapBox 의 겹치기(FrameLayout) 판 — 모드 알약 덩어리가 펼친 화면에서도 길게 늘어나지 않게 폭을 묶는다. */
+    class CapFrame(ctx: Context, private val maxDp: Int) : FrameLayout(ctx) {
+        override fun onMeasure(w: Int, h: Int) {
+            val max = (maxDp * resources.displayMetrics.density).toInt()
+            val size = MeasureSpec.getSize(w)
+            val mode = MeasureSpec.getMode(w)
+            if (mode != MeasureSpec.UNSPECIFIED && size > max) super.onMeasure(MeasureSpec.makeMeasureSpec(max, MeasureSpec.EXACTLY), h)
+            else super.onMeasure(w, h)
+        }
+    }
     private fun centerLp(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
 
     /** 가장자리 안내선: 화면 가장자리에서 6% 안쪽의 옅은 점선 사각형. 실시간 문서 인식은 하지 않는다(찍은 뒤 기존 자동 테두리가 한다). */
@@ -536,12 +998,17 @@ class SilentCameraActivity : ComponentActivity() {
         }
         var on = true
             set(v) { field = v; invalidate() }
+        /** 새 배치(v9.74)가 정해 주는 안내선 칸. 정해져 있으면 이 칸을 그리고, null 이면 예전 규칙. */
+        private var custom: RectF? = null
+        fun setRect(r: RectF?) { custom = r; invalidate() }
         private var bTop = -1f
         private var bBot = -1f
         /** 위·아래 단추 묶음 사이(줌 막대 포함)로 안내선을 맞춘다. 부르지 않으면(줌 끔) 예전처럼 위아래 20% 안쪽. */
         fun setBounds(t: Float, b: Float) { if (t != bTop || b != bBot) { bTop = t; bBot = b; invalidate() } }
         override fun onDraw(c: Canvas) {
             if (!on) return
+            val cr = custom
+            if (cr != null) { c.drawRoundRect(cr, 24f, 24f, p); return }
             val mx = width * 0.06f
             var top = height * 0.20f
             var bot = height * 0.80f
@@ -567,6 +1034,7 @@ class SilentCameraActivity : ComponentActivity() {
         prefs.edit().putString("lastMode", m).apply()
         applyMode()
         refreshAll()
+        if (compact) rebindIfAspectChanged()
     }
 
     private fun toggleMulti() {
@@ -580,6 +1048,7 @@ class SilentCameraActivity : ComponentActivity() {
         modeRow.visibility = if (from == "tab") View.VISIBLE else View.GONE
         guide.on = mode != "photo"
         fun paint(c: TextView, sel: Boolean) {
+            if (compact) { c.alpha = if (!sel && pages.isNotEmpty()) 0.4f else 1f; c.contentDescription = c.text.toString() + if (sel) " 선택됨" else ""; return }
             c.background = if (sel) round(0xFF3B82F6.toInt(), 22) else round(0x33FFFFFF, 22, 0x55FFFFFF)
             c.alpha = if (!sel && pages.isNotEmpty()) 0.4f else 1f
             c.contentDescription = c.text.toString() + if (sel) " 선택됨" else ""
@@ -645,6 +1114,7 @@ class SilentCameraActivity : ComponentActivity() {
             thumbs[pages[n - 1].path]?.let { lastThumb.setImageBitmap(it) }
         } else lastThumb.visibility = View.INVISIBLE
         flashBtn.text = when (flashMode) { ImageCapture.FLASH_MODE_AUTO -> "⚡ 자동"; ImageCapture.FLASH_MODE_ON -> "⚡ 켬"; else -> "⚡ 끔" }
+        if (compact) styleCompactAfterRefresh()
         updateGuideText()
     }
 
@@ -659,10 +1129,12 @@ class SilentCameraActivity : ComponentActivity() {
             mode == "photo" -> "찍을 장면을 비춰 주세요"
             else -> "문서 전체가 들어오게 비춰 주세요"
         }
+        if (compact) hintChanged(shakeLevel > 1.6f || (darkLive && flashMode == ImageCapture.FLASH_MODE_OFF) || (zoomOn && zoomWanted >= ZOOM_COARSE_FROM))
     }
 
     private fun flashNote(msg: String, ms: Long = 2200) {
         hintTv.text = msg
+        if (compact) hintChanged(false)
         guideReset?.let { main.removeCallbacks(it) }
         val r = Runnable { guideReset = null; updateGuideText() }
         guideReset = r
@@ -677,6 +1149,7 @@ class SilentCameraActivity : ComponentActivity() {
         }
         imageCapture?.flashMode = flashMode
         refreshAll()
+        if (compact) flashNote(when (flashMode) { ImageCapture.FLASH_MODE_AUTO -> "불빛 자동"; ImageCapture.FLASH_MODE_ON -> "불빛 켬"; else -> "불빛 끔" }, 1500)
     }
 
     // ───────── 확대·축소(줌) ─────────
@@ -734,6 +1207,7 @@ class SilentCameraActivity : ComponentActivity() {
 
     /** 줌 막대를 아래 묶음 바로 위에 놓고, 문서 안내선이 위·아래 묶음과 줌 막대를 피하게 한다. 가로(낮은) 화면에서는 막대를 접고 단추만 둔다. */
     private fun syncOverlay() {
+        if (compact) { syncOverlayCompact(); return }
         if (!zoomOn) return
         val h = root.height
         if (h <= 0) return
@@ -795,6 +1269,7 @@ class SilentCameraActivity : ComponentActivity() {
             }
             zoomBtnRow.addView(b, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(2), 0, dp(2), 0) })
         }
+        if (compact) resizeZoomBtnsCompact()
     }
 
     private fun updateZoomUi(fromSeek: Boolean = false) {
@@ -813,6 +1288,7 @@ class SilentCameraActivity : ComponentActivity() {
             b.contentDescription = "확대 " + b.text + if (sel) " 선택됨" else ""
         }
         if (!fromSeek) zoomSeek.progress = (ln(zoomWanted / zoomMin) / ln(zoomMax / zoomMin) * 1000f).toInt().coerceIn(0, 1000)
+        if (compact) styleZoomCompact()
         updateGuideText()
         syncOverlay()
     }
@@ -854,6 +1330,7 @@ class SilentCameraActivity : ComponentActivity() {
     }
 
     private fun bindCamera() {
+        if (compact) { bindCameraCompact(); return }
         val f = ProcessCameraProvider.getInstance(this)
         f.addListener({
             val provider = try { f.get() } catch (e: Exception) { finishWith("error"); return@addListener }
@@ -1013,6 +1490,7 @@ class SilentCameraActivity : ComponentActivity() {
                     addThumb(pg)
                     if (zoomOn && !ZOOM_KEEP_ACROSS_PAGES) setZoom(1f)
                     refreshAll()
+                    if (compact) popThumb()
                     val extra = if (h.q == "blur") " · 조금 흐려요" else if (h.q == "dark") " · 조금 어두워요" else ""
                     flashNote(pages.size.toString() + "쪽 찍었어요" + extra)
                 } else {
@@ -1301,6 +1779,17 @@ class SilentCameraActivity : ComponentActivity() {
         fun fill() {
             col.removeAllViews()
             col.addView(head)
+            if (!layoutLocked) {
+                val c0 = card()
+                c0.addView(tv("화면 모양", 17f, Color.WHITE, true))
+                val choices = arrayOf(
+                    arrayOf(CamLayout.BIG, "크게 보기 (처음 설정)", "영수증·일반 사진은 카메라 화면을 더 크게 보여 줘요. 문서는 지금처럼 넓게 보여요."),
+                    arrayOf(CamLayout.SMALL, "단추만 작게 (시야 그대로)", "비추는 범위는 그대로 두고, 단추만 작게 정리해요."),
+                    arrayOf(CamLayout.CLASSIC, "예전 화면 그대로", "지난 버전과 똑같이 보여요."))
+                for (ch in choices) c0.addView(option(ch[1], ch[2], layoutVariant == ch[0]) { chooseLayout(ch[0]) })
+                if (pages.isNotEmpty()) c0.addView(tv("사진을 찍은 뒤에는 모양을 바꿀 수 없어요. 완료한 뒤 바꿔 주세요", 13f, 0xFFFCD34D.toInt()).apply { setPadding(0, dp(6), 0, 0) })
+                col.addView(c0)
+            }
             val auto = prefs.getBoolean("auto", false)
             val c1 = card()
             c1.addView(tv("찍은 뒤 확인 방식", 17f, Color.WHITE, true))

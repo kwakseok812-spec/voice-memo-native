@@ -101,6 +101,7 @@ public class SilentCameraPlugin extends Plugin {
             it.putExtra(SilentCameraActivity.X_ENGINE, call.getString("engine", "auto"));
             it.putExtra(SilentCameraActivity.X_RESUME, call.getBoolean("resume", false));
             it.putExtra(SilentCameraActivity.X_ZOOM, call.getString("zoom", "on"));
+            it.putExtra(SilentCameraActivity.X_LAYOUT, call.getString("layout", "auto"));
             startActivityForResult(call, it, "onCameraResult");
         } catch (Exception e) {
             JSObject r = new JSObject(); r.put("action", "error"); r.put("reason", "open_failed"); call.resolve(r);
