@@ -230,7 +230,7 @@
       case 'done':
         out.tone = 'ok';
         out.title = (claude ? '클로드 앱이 다시 켜졌습니다' : 'PC가 다시 정상 작동합니다') + (took !== null ? ' · ' + fmtTook(took) + ' 걸림' : '');
-        if (detail) out.lines.push(detail);
+        if (detail && detail.indexOf(claude ? '클로드 앱이 다시 켜졌습니다' : 'PC가 다시 정상 작동합니다') < 0) out.lines.push(detail);   // PC가 보낸 한 줄이 제목과 같으면 되풀이하지 않는다
         break;
       case 'partial':
         out.tone = 'warn';
