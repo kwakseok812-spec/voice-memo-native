@@ -166,13 +166,19 @@
     info = info || {};
     switch (code) {
       case 'BUSY': return '이미 처리 중인 요청이 있습니다';
-      case 'TOO_SOON': return '방금 다시 시작했습니다. ' + (info.retry_s ? fmtAgo(info.retry_s) : '15분') + ' 뒤에 다시 눌러 주세요';
+      case 'TOO_SOON': return '방금 다시 시작했습니다. ' + (info.retry_s ? fmtAgo(info.retry_s) : '15분') + ' 뒤에 다시 눌러 주십시오';
       case 'LIMIT': return '오늘 횟수를 모두 썼습니다';
       case 'DISABLED': return '이 기능은 지금 꺼져 있습니다';
       case 'BAD_KIND': return '알 수 없는 요청입니다';
+      case 'BAD_PASSCODE': return '연동 암호가 맞지 않습니다';
     }
-    return '요청을 보내지 못했습니다(' + (code || '알 수 없음') + ')';
+    return UNKNOWN_ERR;      // 영어 코드·서버 문구는 화면에 보이지 않는다(코드는 콘솔 로그에만)
   }
+  var UNKNOWN_ERR = '알 수 없는 오류입니다(코드는 로그에 있습니다)';
+  var KNOWN_CODES = { BUSY: 1, TOO_SOON: 1, LIMIT: 1, DISABLED: 1, BAD_KIND: 1, BAD_PASSCODE: 1 };
+  function knownCode(code) { return !!KNOWN_CODES[code]; }
+  var NET_UNSURE = '요청을 보냈는지 확인하지 못했습니다. 서버에 이미 갔을 수 있으니 상태를 확인한 뒤 다시 눌러 주십시오';
+  var CANCEL_UNSURE = '취소 요청을 보냈는지 확인하지 못했습니다. 상태를 확인한 뒤 다시 눌러 주십시오';
 
   /* 요청 카드 4칸: 요청 접수 → 실행 중 → 확인 중 → 결과 */
   var STEP_NAMES = ['요청 접수', '실행 중', '확인 중', '결과'];
@@ -201,7 +207,7 @@
     var claude = kind === 'claude_restart';
     var nowS = o.nowServer || Date.now();
     var req = ms(cmd.requested_at), acc = ms(cmd.accepted_at);
-    var out = { status: st, final: !!FINAL[st], tone: 'run', title: '', lines: [], steps: stepStates(st), countdown: null, cancel: false, dry: !!r.dry, kindName: kn, elapsed: null };
+    var out = { status: st, final: !!FINAL[st], tone: 'run', title: '', lines: [], steps: stepStates(st), countdown: null, cancel: false, dry: !!r.dry, kindName: kn, elapsed: null, alert: '' };
     var detail = r.text ? String(r.text) : '';
     var took = num(r.took_s);
     var bad = Array.isArray(r.bad_items) ? r.bad_items.map(String) : [], okI = Array.isArray(r.ok_items) ? r.ok_items.map(String) : [];
@@ -218,6 +224,10 @@
         if (start !== null) { var left = Math.ceil((start - nowS) / 1000); out.countdown = left > 0 ? left : 0; out.cancel = left > 0; }
         out.lines.push(kn + ' — ' + (out.countdown ? out.countdown + '초 뒤 시작합니다. 지금은 취소할 수 있습니다.' : '곧 시작합니다.'));
         out.lines.push('결과 알림이 올 때까지는 끝난 것이 아닙니다.');
+        if (r.cancel_failed === true) {                          // 취소가 안 먹혔다(PC가 알려 줌) — [취소]를 숨기고 빨간 안내
+          out.cancel = false;
+          out.alert = r.text ? String(r.text) : '취소하지 못했습니다 · PC 앞에서 확인해 주십시오';
+        }
         break; }
       case 'running':
         out.title = claude ? '클로드 앱이 다시 시작되는 중입니다' : 'PC가 다시 시작되는 중입니다';
@@ -286,7 +296,7 @@
     K: K, esc: esc, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
     cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
-    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
+    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
   };
   global.PcPure = PcPure;
   if (typeof module !== 'undefined' && module.exports) module.exports = PcPure;
@@ -406,7 +416,7 @@
     var say;
     if (notready) say = '서버에 PC 상태 기능이 아직 켜지지 않았습니다. 준비가 끝나면 이 화면에서 바로 보입니다.';
     else if (badpass) say = '연동 암호가 맞지 않아 PC 상태를 읽지 못했습니다.';
-    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다. 케이 채팅 화면에서 먼저 연동해 주세요.';
+    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다. 케이 채팅 화면에서 먼저 연동해 주십시오.';
     else say = sayLine(data, j);
     setText('pcSay', say);
     var face = $('pcFace');
@@ -469,7 +479,7 @@
     // 끝난 요청은 30분 동안만 보인다(그 뒤엔 접어 둔다)
     var req = ms(c.requested_at);
     if (cv.final && req !== null && (nowServer() - req) > 30 * 60 * 1000 && c.id !== trackId) { box.style.display = 'none'; return; }
-    var sig = [c.id, c.status, cv.countdown, cv.elapsed === null ? '' : Math.floor(cv.elapsed / 1), cv.title, cv.lines.join('|')].join('~');
+    var sig = [c.id, c.status, cv.countdown, cv.elapsed === null ? '' : Math.floor(cv.elapsed / 1), cv.title, cv.lines.join('|'), cv.alert].join('~');
     if (sig === lastCmdSig && box.style.display !== 'none') return;
     lastCmdSig = sig;
     var steps = cv.steps.map(function (s, i) { return '<li class="' + s + '"><i></i><span>' + esc(STEP_NAMES[i]) + '</span></li>'; }).join('');
@@ -479,6 +489,7 @@
     else if (cv.elapsed !== null) h += '<div class="pcs-cd"><b>' + fmtClock(cv.elapsed) + '</b> 경과</div>';
     h += '<ol class="pcs-steps">' + steps + '</ol>';
     cv.lines.forEach(function (l) { h += '<p class="pcs-cl">' + esc(l) + '</p>'; });
+    if (cv.alert) h += '<p class="pcs-cl pcs-alert" role="alert">' + esc(cv.alert) + '</p>';
     if (cv.cancel) h += '<button type="button" class="pcs-cancel" id="pcCancel">재시작 취소</button>';
     if (cv.final && (cv.tone === 'unk' || cv.tone === 'bad')) h += '<button type="button" class="pcs-cancel" id="pcAgain2">다시 확인</button>';
     box.innerHTML = h; box.className = 'pcs-cmd c-' + cv.tone; box.style.display = '';
@@ -536,9 +547,10 @@
   function sendRequest() {
     if (!sheet.open || sheet.sending) return;
     var kind = sheet.kind, pass = host.getPass(), go = $('pcShGo');
-    if (!pass) { $('pcShErr').textContent = '연동 암호가 없습니다. 케이 채팅에서 먼저 연동해 주세요'; return; }
+    if (!pass) { $('pcShErr').textContent = '연동 암호가 없습니다. 케이 채팅에서 먼저 연동해 주십시오'; return; }
     var B = bridge(); if (!B || !B.pcPowerRequest) { $('pcShErr').textContent = '이 앱 버전은 지원하지 않습니다'; return; }
     sheet.sending = true; go.disabled = true; var goTx = go.textContent; go.textContent = '보내는 중…'; $('pcShErr').textContent = '';
+    var sentAt = nowServer();
     B.pcPowerRequest(pass, kind, !!sheet.force, 'app').then(function (r) {
       if (!sheet.open) return;                                  // 그 사이 시트가 닫혔다
       sheet.sending = false;
@@ -551,14 +563,37 @@
         return;
       }
       go.disabled = false; go.textContent = goTx;
-      $('pcShErr').textContent = errText(r && r.code, r || {});
+      var code = r && r.code;
+      if (!knownCode(code)) { try { console.warn('[pc-status] 알 수 없는 응답 코드:', code, r); } catch (e0) {} }
+      $('pcShErr').textContent = errText(code, r || {});
     }, function (e) {
       if (!sheet.open) return;
       sheet.sending = false; go.disabled = false; go.textContent = goTx;
-      if (e && e.notready) $('pcShErr').textContent = '서버 준비 중입니다. 요청은 보내지 않았습니다';
-      else if (e && e.badpass) $('pcShErr').textContent = '연동 암호가 맞지 않습니다. 요청은 보내지 않았습니다';
-      else $('pcShErr').textContent = '서버에 연결하지 못했습니다. 요청은 보내지 않았습니다';
+      if (e && e.notready) { $('pcShErr').textContent = '서버 준비 중입니다. 요청은 보내지 않았습니다'; return; }
+      if (e && e.badpass) { $('pcShErr').textContent = '연동 암호가 맞지 않습니다. 요청은 보내지 않았습니다'; return; }
+      // 연결이 끊기거나 시간이 지난 경우: 서버에는 이미 갔을 수 있다 — 「실패」라고 단정하지 않고 바로 상태를 읽어 확인한다
+      try { console.warn('[pc-status] 요청 응답을 받지 못함:', e && e.message); } catch (e1) {}
+      $('pcShErr').textContent = NET_UNSURE;
+      verifyAfterUncertain(kind, sentAt, pass, B);
     });
+  }
+  /* 요청 응답을 못 받았을 때: get_pc_status 로 최근 요청 1건을 한 번 읽는다. 방금 보낸 것과 같은 요청이 있으면 카드로 이어 간다. */
+  function verifyAfterUncertain(kind, sentAt, pass, B) {
+    if (!B || !B.getPcStatus) return;
+    B.getPcStatus(pass, true).then(function (d) {
+      if (!isObj(d)) return;
+      d._at = Date.now(); data = d; netErr = false;
+      var c = d.cmd, rq = c ? ms(c.requested_at) : null;
+      if (c && c.kind === kind && rq !== null && rq >= sentAt - 15000 && (isActiveStatus(c.status) || isFinalStatus(c.status))) {
+        trackId = String(c.id || '');
+        if (sheet.open) closeSheet();
+        foldOpen = false; lastCmdSig = ''; render(); schedule(300);
+        host.toast('요청은 서버에 이미 도착해 있었습니다. 진행 상황을 이어서 보여 드립니다.', 3200);
+      } else if (sheet.open) {
+        $('pcShErr').textContent = NET_UNSURE + ' (방금 읽어 본 때는 서버에 새 요청이 없었습니다)';
+        render();
+      }
+    }, function () { /* 상태도 못 읽었다 — 위의 「확인하지 못했습니다」 안내를 그대로 둔다 */ });
   }
   function onCancel() {
     var c = curCmd(), B = bridge();
@@ -568,7 +603,7 @@
       if (r && r.ok) host.toast('취소를 요청했습니다. 취소됐는지 PC가 알려 드립니다.', 2600);
       else host.toast('이미 늦었습니다. 시작된 요청은 취소할 수 없습니다.', 2800);
       poll(true);
-    }, function () { host.toast('취소 요청을 보내지 못했습니다. 다시 눌러 주세요.', 2600); if (b) { b.disabled = false; b.textContent = '재시작 취소'; } });
+    }, function () { host.toast(CANCEL_UNSURE, 3200); if (b) { b.disabled = false; b.textContent = '재시작 취소'; } poll(true); });
   }
 
   /* ---- 서버 읽기(화면이 보이는 동안만) ---- */

@@ -76,6 +76,7 @@
 .pcs-steps li.doing i { border-color: var(--p1); background: radial-gradient(circle, var(--p1) 40%, transparent 45%); } .pcs-steps li.doing { color: var(--text); }
 .pcs-steps li.warn i { background: var(--warn); border-color: var(--warn); } .pcs-steps li.bad i { background: var(--rec); border-color: var(--rec); } .pcs-steps li.unk i { border-style: dashed; border-color: var(--muted); }
 .pcs-cl { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin-top: 6px; word-break: keep-all; overflow-wrap: break-word; }
+.pcs-alert { color: var(--rec); font-weight: 800; background: rgba(244,63,94,.12); border: 1px solid rgba(244,63,94,.35); border-radius: 12px; padding: 9px 11px; }
 .pcs-cancel { display: block; width: 100%; margin-top: 12px; height: 46px; border-radius: 14px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 15px; font-weight: 800; cursor: pointer; }
 .pcs-cancel:disabled { opacity: .5; }
 
