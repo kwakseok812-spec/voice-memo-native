@@ -2710,6 +2710,7 @@
     });
   }
   if ($('btnPhoto')) $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
+  $('photoInput').addEventListener('cancel', function () { photoAsScan = false; photoAsCard = false; });                            // 사진 고르기 창을 그냥 닫았을 때도 영수증·명함 모드를 푼다
   if ($('btnVideo')) $('btnVideo').addEventListener('click', function () { $('videoInput').click(); });
   $('photoInput').addEventListener('change', function () {
     if (this.files && this.files.length) {

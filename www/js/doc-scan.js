@@ -549,11 +549,12 @@
     '.dsc-foot3 .dsc-btn{padding:8px 4px;font-size:15px}',
     '.dsc-thumb-go{cursor:pointer}',
     '.dsc-big{min-height:64px;font-size:19px;width:100%}',
-    '.dsc-rcpt-box{position:relative;height:max(240px,50vh);overflow:hidden;border-radius:8px;background:var(--bg0,#EEF1FA)}',
+    '.dsc-rcpt-box{position:relative;height:clamp(160px,calc(100vh - 540px),50vh);overflow:hidden;border-radius:8px;background:var(--bg0,#EEF1FA)}',
+    '.dsc-rcpt-col{gap:8px}','.dsc-rcpt-col .dsc-card{padding:10px}',
     '.dsc-rcpt-box .dsc-rcpt-img{position:absolute;left:50%;top:50%;max-width:none;max-height:none;margin:0;transform-origin:50% 50%;transition:transform .22s ease,width .22s ease,height .22s ease}',
-    '.dsc-rcpt-hint{position:absolute;left:8px;right:8px;bottom:8px;padding:6px 10px;border-radius:10px;background:rgba(15,23,42,.78);color:#fff;font-size:14px;line-height:1.35;text-align:center;pointer-events:none;transition:opacity .22s ease}',
+    '.dsc-rcpt-hint{position:absolute;left:8px;right:8px;top:0;height:40px;display:flex;align-items:center;justify-content:center;color:var(--text,#0F172A);font-size:14px;font-weight:700;line-height:1.25;text-align:center;pointer-events:none;transition:opacity .22s ease}',
     '.dsc-rcpt-hint.dsc-gone{opacity:0}',
-    '.dsc-rot-h{font-weight:800;margin-top:2px}',
+    '.dsc-rcpt-col .dsc-rot-h{font-weight:800;font-size:14px;line-height:1.1;margin:0}',
     '.dsc-pvnav .dsc-big{width:auto}',
     '.dsc-card{background:var(--bg1,#fff);border:1px solid var(--glass-b2,#cbd2e6);border-radius:16px;padding:14px}',
     '.dsc-sub{color:var(--muted,#55627D);font-size:15px}',
@@ -931,24 +932,25 @@
       var rc = rotCv(c, rot), w = rc.width, h2 = rc.height;
       return encodeOut(rc, 'doc', 0.80).then(function (b) { freeCv(rc); return { blob: b, w: w, h: h2 }; }, function (e) { freeCv(rc); throw e; });
     }).then(function (n) {
-      if (S !== mine || S.rcpt !== r) return;                               // 그 사이 닫혔거나(뒤로가기) 다른 사진이 되었으면 아무것도 하지 않는다
+      if (S !== mine) return;                                               // 그 사이 닫혔으면(뒤로가기) 아무것도 하지 않는다
+      if (S.rcpt !== r) { S.busy = false; rcptLock(false); return; }        // 다른 사진이 되었으면 저장하지 않고 잠금만 푼다(시작 화면 단추가 먹도록)
       rcptFin(n.blob, n.w, n.h, r.how, r.corners);
     }).catch(function (e) {
       if (S !== mine) return;
       S.busy = false; rcptLock(false); toast(storageMsg(e, '사진을 돌려 저장하지 못했습니다. 다시 눌러 주세요.'));
     });
   }
-  function rcptLock(on) { if (!S) return; [].forEach.call(S.root.querySelectorAll('.dsc-body button, .dsc-foot button'), function (b) { b.disabled = !!on; }); }
+  function rcptLock(on) { if (!S) return; [].forEach.call(S.root.querySelectorAll('.dsc-top button, .dsc-body button, .dsc-foot button'), function (b) { b.disabled = !!on; }); }
   /* v9.73 돌리기 — 누르는 순간 각도(rot)와 화면 누적각(vis)만 바꾸고 사진은 CSS 로 돌려 보여 준다(기다림 없음 → 연타해도 누름이 사라지지 않는다).
    * 파일을 굽는 건 「이 사진 사용」 때 한 번뿐이고(rcptUse), 각도 0이면 처음 사진(S.rcpt.blob) 그대로다. 모서리 조정은 원본 사진에서 다시 펴므로 굽지 않는다. */
   function rcptPaint(still) {
     if (!S || S.screen !== 'rcptprev' || !S.rcpt) return;
     var box = S.body.querySelector('.dsc-rcpt-box'), im = box && box.querySelector('.dsc-rcpt-img'), r = S.rcpt;
     if (!box || !im) return;
-    var bw = box.clientWidth, bh = box.clientHeight, sw = r.rot === 90 || r.rot === 270, aw = sw ? bh : bw, ah = sw ? bw : bh;
+    var slot = r.slot ? 40 : 0, bw = box.clientWidth, bh = box.clientHeight - slot, sw = r.rot === 90 || r.rot === 270, aw = sw ? bh : bw, ah = sw ? bw : bh;
     var sc = Math.min(aw / r.w, ah / r.h, 1), w = Math.max(1, Math.round(r.w * sc)), hh = Math.max(1, Math.round(r.h * sc));
     if (still) im.style.transition = 'none';
-    im.style.width = w + 'px'; im.style.height = hh + 'px';
+    im.style.width = w + 'px'; im.style.height = hh + 'px'; im.style.top = (slot + bh / 2) + 'px';
     im.style.transform = 'translate(-50%,-50%) rotate(' + (r.vis || 0) + 'deg)';
     if (still) { void im.offsetWidth; im.style.transition = ''; }
   }
@@ -993,7 +995,7 @@
         if (S !== mine || S.rcpt !== r0) return;
         var oldUrl = r0.url, sw = rv === 90 || rv === 270;
         S.rcpt = { blob: blob, w: w, h: h2, how: 'manual', corners: !!corners, cr: corners && rv ? rotPts(corners, ed.ow, ed.oh, (360 - rv) % 360) : corners, cand: r0.cand, orig: r0.orig,
-                   ow: sw ? ed.oh : ed.ow, oh: sw ? ed.ow : ed.oh, url: URL.createObjectURL(blob), extra: r0.extra, rot: r0.rot || 0, vis: r0.vis || 0, turned: r0.turned };
+                   ow: sw ? ed.oh : ed.ow, oh: sw ? ed.ow : ed.oh, url: URL.createObjectURL(blob), extra: r0.extra, rot: r0.rot || 0, vis: r0.vis || 0, turned: r0.turned, slot: r0.slot };
         try { URL.revokeObjectURL(oldUrl); } catch (e) {}
         hideToast(); leaveEdit(); toast('적용했습니다.');
       } catch (e) {
@@ -1012,10 +1014,11 @@
   function rRcptPrev(col) {
     setTop('영수증 스캔', function () { rcptFree(); S.rcpt = null; S.screen = 'start'; render(); });
     var r = S.rcpt, c = h('div', 'dsc-card dsc-item'), ro = rotOn();
+    if (ro) { col.classList.add('dsc-rcpt-col'); if (r.slot == null) r.slot = (!r.turned && r.w >= r.h * 1.15) ? 1 : 0; }   // 가로로 누운 사진이면 사진 칸 맨 위에 안내 줄 자리를 비워 둔다(사진을 가리지 않고, 사라져도 사진 자리는 그대로)
     var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진';
     if (ro) {                                                  // v9.73: 사진 칸은 높이가 고정이라 돌려도 아래 단추가 움직이지 않는다
       var box = h('div', 'dsc-rcpt-box'); box.appendChild(im);
-      if (!r.turned && r.w >= r.h * 1.15) box.appendChild(h('div', 'dsc-rcpt-hint', '영수증이 옆으로 누워 있으면 아래 「돌리기」를 눌러 주세요. 거꾸로면 두 번 누르세요.'));
+      if (r.slot) { var hi = h('div', 'dsc-rcpt-hint', '옆으로 누웠으면 아래 「돌리기」를, 거꾸로면 두 번 눌러 주세요.'); if (r.turned) hi.classList.add('dsc-gone'); box.appendChild(hi); }
       c.appendChild(box);
     } else c.appendChild(im);
     c.appendChild(h('div', 'dsc-sub', (r.how === 'manual' ? '직접 맞춘 모서리로 펴고 보정했습니다' : r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
