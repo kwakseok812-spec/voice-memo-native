@@ -62,10 +62,11 @@
   }
 
   function isLive(x) { return !!x && !x.deleted_at; }
+  function seen(x) { return HEART_ON || !x || x.stage !== HEART; }     /* v9.77: 스위치 ALBUM_HEART 'off' 면 ♥ 사진은 목록·숫자·휴지통 어디에도 없는 것으로 친다 */
   function byOrd(a, b) { return (a.ord || 0) - (b.ord || 0) || String(a.id).localeCompare(String(b.id)); }
   /* tab: 'all'(족보·♥ 빼고 전부) · 단계 이름 · 족보 · ♥ */
   function listFor(items, tab) {
-    return items.filter(function (x) { return isLive(x) && (tab === 'all' ? (x.stage !== TREE && x.stage !== HEART) : x.stage === tab) && (HEART_ON || x.stage !== HEART); }).sort(byOrd);
+    return items.filter(function (x) { return isLive(x) && (tab === 'all' ? (x.stage !== TREE && x.stage !== HEART) : x.stage === tab) && seen(x); }).sort(byOrd);
   }
   function verifyTargets(list) { return list.filter(function (x) { return isLive(x) && !x.verified; }).map(function (x) { return x.id; }); }
   /* 앞뒤 몇 장 — 큰 보기에서 미리 받을 순서(지금 → 다음 → 이전 → 그다음 …) */
@@ -280,7 +281,7 @@
   function build() {
     if (built) return; built = true;
     var b = view(); if (!b) return;
-    b.innerHTML = '<div class="alb-chips" id="albChips" role="tablist"></div><div id="albMain"></div>';
+    b.innerHTML = '<div class="alb-chiprow"><div class="alb-chips" id="albChips" role="tablist"></div><div class="alb-chippin" id="albChipPin"></div></div><div id="albMain"></div>';
     var layer = document.createElement('div');
     layer.id = 'albumLayer';
     layer.innerHTML =
@@ -315,7 +316,8 @@
     var left = box.scrollLeft, h = '<button type="button" class="alb-chip' + (S.tab === 'all' ? ' on' : '') + '" data-act="tab" data-t="all" role="tab">전체' + (S.loaded ? ' <small>' + countOf('all') + '</small>' : '') + '</button>';
     STAGES.forEach(function (s) { h += '<button type="button" class="alb-chip' + (S.tab === s ? ' on' : '') + '" data-act="tab" data-t="' + esc(s) + '" role="tab">' + esc(s) + (S.loaded ? ' <small>' + countOf(s) + '</small>' : '') + '</button>'; });
     h += '<button type="button" class="alb-chip' + (S.tab === TREE ? ' on' : '') + '" data-act="tab" data-t="' + TREE + '" role="tab">' + TREE + '</button>';
-    if (HEART_ON) h += '<button type="button" class="alb-chip heart' + (S.tab === HEART ? ' on' : '') + '" data-act="tab" data-t="' + HEART + '" role="tab" aria-label="하트 앨범"><span class="hg" aria-hidden="true">' + HEART + '</span>' + (S.loaded ? ' <small>' + countOf(HEART) + '</small>' : '') + '</button>';
+    var pinH = HEART_ON ? '<button type="button" class="alb-chip heart' + (S.tab === HEART ? ' on' : '') + '" data-act="tab" data-t="' + HEART + '" role="tab" aria-label="하트 앨범"><span class="hg" aria-hidden="true">' + HEART + '</span>' + (S.loaded ? ' <small>' + countOf(HEART) + '</small>' : '') + '</button>' : '';     /* ♥ 칩은 스크롤 줄 밖 오른쪽에 따로 붙박이(칩을 덮지 않음) */
+    var pin = $('albChipPin'); if (pin) pin.innerHTML = pinH;
     box.innerHTML = h; box.scrollLeft = left;
     var on = box.querySelector('.alb-chip.on'); if (on && !S.chipShown) { S.chipShown = true; box.scrollLeft = Math.max(0, on.offsetLeft - (box.clientWidth - on.offsetWidth) / 2); }
   }
@@ -621,7 +623,7 @@
     }).catch(function (e) { toast('되돌리지 못했어요 — ' + errText(e)); });
   }
   function openTrash() {
-    var l = S.items.filter(function (x) { return !!x.deleted_at; }).sort(byOrd), h = '<h2>휴지통</h2><div class="alb-note">여기서 지우면 사진 파일까지 영구히 사라져요. 되돌릴 수 없어요.</div>';
+    var l = S.items.filter(function (x) { return !!x.deleted_at && seen(x); }).sort(byOrd), h = '<h2>휴지통</h2><div class="alb-note">여기서 지우면 사진 파일까지 영구히 사라져요. 되돌릴 수 없어요.</div>';
     if (!l.length) h += '<div class="alb-empty sm">휴지통이 비어 있어요</div>';
     l.forEach(function (x) { h += '<div class="alb-trow"><div class="c"><b>' + esc(x.caption) + '</b><small>' + esc(x.stage) + (x.date_text ? ' · ' + esc(dateLong(x.date_text)) : '') + (x.data && x.data.purged_at ? ' · 파일은 이미 지워졌어요' : '') + '</small></div><button type="button" class="alb-btn sm ghost" data-act="restore" data-id="' + esc(x.id) + '">되살리기</button><button type="button" class="alb-btn sm danger" data-act="purge1" data-id="' + esc(x.id) + '">영구 삭제…</button></div>'; });
     h += '<div class="alb-actions"><button type="button" class="alb-btn ghost" data-act="settings">뒤로</button></div>';
@@ -664,7 +666,7 @@
   }
 
   function openSettings() {
-    var n = S.items.filter(function (x) { return !!x.deleted_at; }).length, tot = S.items.filter(isLive).length;
+    var n = S.items.filter(function (x) { return !!x.deleted_at && seen(x); }).length, tot = S.items.filter(function (x) { return isLive(x) && seen(x); }).length;
     openSheet('<h2>사진첩 설정</h2><div class="alb-note">사진 ' + tot + '장이 비공개 서버에 있어요. ' + (S.save ? '내려받기는 큰 보기의 내려받기 단추로 합니다(카톡 공유 단추는 없어요).' : '사진 내려받기·공유 단추는 없고, 원본은 PC에 있어요.') + '</div>' +
       '<button type="button" class="alb-setrow" data-act="trash"><span>휴지통</span><small>' + n + '장 · 되살리거나 영구히 지우기</small></button>' +
       '<div class="alb-actions"><button type="button" class="alb-btn ghost" data-act="sclose">닫기</button></div>');
