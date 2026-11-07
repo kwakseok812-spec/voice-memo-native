@@ -1,5 +1,5 @@
 /* ============================================================================
- * album.js — 「사진첩」 (v9.69, O-0720)  유치원~대학원·교수 시절·가족 사진과 족보를 심심할 때 넘겨 보는 화면
+ * album.js — 「사진첩」 (v9.69, O-0720 · v9.77 「♥」 앨범)  유치원~대학원·교수 시절·가족 사진과 족보를 심심할 때 넘겨 보는 화면
  * ----------------------------------------------------------------------------
  * 화면: 단계 칩 · 격자(24장씩, 끝에 닿으면 자동으로 더) · 한 장 크게 보기(좌우로 밀기 · 두 손가락/더블탭 확대 · 원본 비율) · 아무거나 보기 · 고치기 · 휴지통 · 「이 단계 확인함」
  * 저장: 스마트비서 서버의 album_photos 표와 album_* 함수(RPC) — 표 직접 접근은 막혀 있고 건강·실적 탭과 같은 「연동 암호」(localStorage smart_sync_pass)를 모든 호출에 붙인다.
@@ -10,6 +10,8 @@
  *       · 삭제는 휴지통(8초 되돌리기). 영구 삭제는 휴지통 안에서 한 번 더 눌러야 하고, 저장소 파일을 먼저 지운 뒤에만 표에서 지운다.
  *       · v9.70(O-0723): 큰 보기(족보 포함)의 「내려받기」 단추 하나 — 원본 JPEG 를 폰 「다운로드」 폴더에 album_<단계영문>_<번호>.jpg(족보는 genealogy.jpg)로 저장. 끝난 뒤에만 「저장했어요」, 실패하면 「못 했어요 — 이유」.
  *         공유 단추·여러 장 한꺼번에 내려받기는 없다. 스위치 ALBUM_DL(app.js) 'off' 면 단추가 없어 v9.69 와 같다. 앱 안 잠금도 없다(건강·실적 탭과 같음).
+ *       · v9.77(♥ 앨범): 단계 칩 맨 끝에 하트(♥) 칩 하나 — 분류 이름 '♥' 인 사진만 모아 보는 따로 앨범. 「전체」·「아무거나 보기」에는 섞이지 않는다(족보와 같은 방식). 날짜가 사진 파일의 촬영 기록(date_src 'exif')이면 「(촬영 기록 기준)」으로 표시.
+ *         스위치 ALBUM_HEART(app.js) 'off' 면 하트 칩이 없고 ♥ 사진도 어디에도 보이지 않는다(서버 무관).
  * 스위치: app.js 의 ALBUM_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.68 과 같다.
  * app.js 연결: AlbumTab.init({toast, save}) · AlbumTab.open() · AlbumTab.back() (goBack 이 먼저 물어본다).
  * 시험: AlbumPure(순수 함수 묶음 — 날짜 표기·고치기 행·확대 계산·일괄 확인 대상·섞기 …)는 화면 없이 시험할 수 있게 밖으로 내놓았다.
@@ -23,6 +25,8 @@
    * ===================================================================*/
   var STAGES = ['유치원', '초등학교', '중학교', '고등학교', '대학교', '대학원', '교수 시절', '가족'];
   var TREE = '족보';
+  var HEART = '♥';             /* ♥ — v9.77 하트 앨범의 분류 이름(서버 표 stage 값과 같다) */
+  var HEART_ON = true;             /* 스위치 ALBUM_HEART — init 의 heart:false 로 끈다 */
   var PAGE = 24, THUMB_BATCH = 50, AHEAD = 3, BEHIND = 1, BIG_KEEP = 150, MAX_ZOOM = 5, DBL_ZOOM = 2.5;
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -50,18 +54,18 @@
     var s = m[1] + (m[2] ? '-' + ('0' + m[2]).slice(-2) : '') + (m[3] ? '-' + ('0' + m[3]).slice(-2) : '');
     return parseDate(s) ? { ok: true, val: s } : { ok: false };
   }
-  /* 화면에 보일 날짜 설명. src: print(사진에 찍힌 글자) · uncertain(날짜 불확실) · user(직접 적은 날짜) · 없음 */
+  /* 화면에 보일 날짜 설명. src: print(사진에 찍힌 글자) · exif(사진 파일의 촬영 기록, v9.77) · uncertain(날짜 불확실) · user(직접 적은 날짜) · 없음 */
   function dateInfo(x) {
     var t = x && x.date_text, long = dateLong(t), src = x && x.date_src ? x.date_src : '';
     var unc = src === 'uncertain';
-    return { has: !!long, long: long, short: dateShort(t), unc: unc, user: src === 'user', none: !long && !unc, src: src };
+    return { has: !!long, long: long, short: dateShort(t), unc: unc, user: src === 'user', exif: src === 'exif', none: !long && !unc, src: src };
   }
 
   function isLive(x) { return !!x && !x.deleted_at; }
   function byOrd(a, b) { return (a.ord || 0) - (b.ord || 0) || String(a.id).localeCompare(String(b.id)); }
-  /* tab: 'all'(족보 빼고 전부) · 단계 이름 · 족보 */
+  /* tab: 'all'(족보·♥ 빼고 전부) · 단계 이름 · 족보 · ♥ */
   function listFor(items, tab) {
-    return items.filter(function (x) { return isLive(x) && (tab === 'all' ? x.stage !== TREE : x.stage === tab); }).sort(byOrd);
+    return items.filter(function (x) { return isLive(x) && (tab === 'all' ? (x.stage !== TREE && x.stage !== HEART) : x.stage === tab) && (HEART_ON || x.stage !== HEART); }).sort(byOrd);
   }
   function verifyTargets(list) { return list.filter(function (x) { return isLive(x) && !x.verified; }).map(function (x) { return x.id; }); }
   /* 앞뒤 몇 장 — 큰 보기에서 미리 받을 순서(지금 → 다음 → 이전 → 그다음 …) */
@@ -100,7 +104,7 @@
   function toggleZoom(z, cx, cy, w, h) { return z.s > 1.02 ? { s: 1, x: 0, y: 0 } : zoomAt(z, DBL_ZOOM, cx, cy, w, h); }
 
   /* 내려받는 파일 이름 — 영문·숫자만(한글 금지). 단계 → 영문, 번호 = 앨범 순서(ord, 4자리). 족보는 genealogy.jpg */
-  var STAGE_EN = { '유치원': 'kindergarten', '초등학교': 'elementary', '중학교': 'middle', '고등학교': 'high', '대학교': 'university', '대학원': 'graduate', '교수 시절': 'professor', '가족': 'family' };
+  var STAGE_EN = { '유치원': 'kindergarten', '초등학교': 'elementary', '중학교': 'middle', '고등학교': 'high', '대학교': 'university', '대학원': 'graduate', '교수 시절': 'professor', '가족': 'family', '♥': 'heart' };
   function padNo(n) { var t = String(n); while (t.length < 4) t = '0' + t; return t; }
   function dlName(x) {
     if (!x) return 'album_photo.jpg';
@@ -142,7 +146,7 @@
   }
 
   global.AlbumPure = {
-    STAGES: STAGES, TREE: TREE, PAGE: PAGE, MAX_ZOOM: MAX_ZOOM, DBL_ZOOM: DBL_ZOOM, parseDate: parseDate, dateLong: dateLong, dateShort: dateShort, normDateInput: normDateInput, dateInfo: dateInfo,
+    STAGES: STAGES, TREE: TREE, HEART: HEART, setHeart: function (v) { HEART_ON = !!v; }, PAGE: PAGE, MAX_ZOOM: MAX_ZOOM, DBL_ZOOM: DBL_ZOOM, parseDate: parseDate, dateLong: dateLong, dateShort: dateShort, normDateInput: normDateInput, dateInfo: dateInfo,
     listFor: listFor, verifyTargets: verifyTargets, neighbors: neighbors, shuffle: shuffle, buildSaveRow: buildSaveRow, applyRow: applyRow,
     panLimit: panLimit, zoomAt: zoomAt, panTo: panTo, toggleZoom: toggleZoom, makeFileApi: makeFileApi, classifyFileErr: classifyFileErr, dlName: dlName, softenWhy: softenWhy
   };
@@ -311,6 +315,7 @@
     var left = box.scrollLeft, h = '<button type="button" class="alb-chip' + (S.tab === 'all' ? ' on' : '') + '" data-act="tab" data-t="all" role="tab">전체' + (S.loaded ? ' <small>' + countOf('all') + '</small>' : '') + '</button>';
     STAGES.forEach(function (s) { h += '<button type="button" class="alb-chip' + (S.tab === s ? ' on' : '') + '" data-act="tab" data-t="' + esc(s) + '" role="tab">' + esc(s) + (S.loaded ? ' <small>' + countOf(s) + '</small>' : '') + '</button>'; });
     h += '<button type="button" class="alb-chip' + (S.tab === TREE ? ' on' : '') + '" data-act="tab" data-t="' + TREE + '" role="tab">' + TREE + '</button>';
+    if (HEART_ON) h += '<button type="button" class="alb-chip heart' + (S.tab === HEART ? ' on' : '') + '" data-act="tab" data-t="' + HEART + '" role="tab" aria-label="하트 앨범"><span class="hg" aria-hidden="true">' + HEART + '</span>' + (S.loaded ? ' <small>' + countOf(HEART) + '</small>' : '') + '</button>';
     box.innerHTML = h; box.scrollLeft = left;
     var on = box.querySelector('.alb-chip.on'); if (on && !S.chipShown) { S.chipShown = true; box.scrollLeft = Math.max(0, on.offsetLeft - (box.clientWidth - on.offsetWidth) / 2); }
   }
@@ -392,7 +397,7 @@
   }
   function captionHtml(x) {
     var d = dateInfo(x), parts = [esc(x.stage)];
-    if (d.has) parts.push(esc(d.long) + ' <span class="sub">' + (d.user ? '(직접 적은 날짜)' : (d.unc ? '' : '(사진에 찍힌 글자 기준)')) + '</span>');
+    if (d.has) parts.push(esc(d.long) + ' <span class="sub">' + (d.user ? '(직접 적은 날짜)' : (d.exif ? '(촬영 기록 기준)' : (d.unc ? '' : '(사진에 찍힌 글자 기준)'))) + '</span>');
     var tags = '';
     if (d.unc) tags += '<span class="tag warn">날짜 불확실</span>';
     else if (d.none) tags += '<span class="tag warn">날짜 모름</span>';
@@ -532,7 +537,7 @@
   /* ---- 고치기 ---- */
   function openEdit(id) {
     var x = itemById(id); if (!x || !guardWrite()) return;
-    var opts = STAGES.concat([TREE]).map(function (s) { return '<option value="' + esc(s) + '"' + (s === x.stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('');
+    var opts = STAGES.concat([TREE]).concat(HEART_ON ? [HEART] : []).map(function (s) { return '<option value="' + esc(s) + '"' + (s === x.stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('');
     var d = dateInfo(x);
     openSheet('<h2>날짜·설명 고치기</h2><div class="alb-note">날짜를 모르면 비워 두세요. 지어내지 않아요.</div>' +
       '<label class="alb-lbl" for="albFC">설명</label><textarea id="albFC" rows="3" maxlength="300">' + esc(x.caption) + '</textarea>' +
@@ -702,6 +707,7 @@
    * ===================================================================*/
   function init(o) {
     if (o && o.toast) _toast = o.toast;
+    HEART_ON = !(o && o.heart === false);                              // v9.77: 스위치 ALBUM_HEART 'off' → heart:false
     S.save = (o && typeof o.save === 'function') ? o.save : null;      // v9.70: 없으면(스위치 ALBUM_DL 'off'·옛 연결) 내려받기 단추가 없다 — v9.69 와 같음
     if (global.AchPure && AchPure.makeRpc) rpc = AchPure.makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
     build();

@@ -1,5 +1,5 @@
 /* ============================================================================
- * album.css — 「사진첩」 (v9.69, O-0720 · v9.70 내려받기 단추 O-0723)
+ * album.css — 「사진첩」 (v9.69, O-0720 · v9.70 내려받기 단추 O-0723 · v9.77 하트 칩)
  * 모든 규칙은 #albumView(화면) · #albumLayer(큰 보기·창·안내 띠·떠 있는 단추) 안에서만 먹는다 — 다른 화면에 영향 없음.
  * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 ...)를 그대로 쓴다(밝은·어두운 화면 자동).
  * ==========================================================================*/
@@ -16,6 +16,16 @@ html[data-style="light"] #albumView, html[data-style="light"] #albumLayer { --ad
 .alb-chip { flex: none; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--muted); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s; }
 .alb-chip small { font-size: 11.5px; font-weight: 600; opacity: .9; margin-left: 2px; }
 .alb-chip.on { color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); border-color: transparent; box-shadow: var(--glow-s); }
+/* v9.77 하트(♥) 칩 — 맨 끝, 한눈에 보이게 분홍빛. 골라지면 분홍 그라데이션 + 하트가 한 번 콩 뛴다(움직임 줄이기면 없음) */
+.alb-chip.heart { position: sticky; right: 0; z-index: 2; color: #E0457B; padding: 0 16px; border-color: rgba(224,69,123,.45); background: linear-gradient(rgba(224,69,123,.14), rgba(224,69,123,.14)), var(--a-sheet); box-shadow: -8px 0 10px -2px var(--a-sheet); }
+/* 하트 칩은 줄 맨 끝에 있으면서(자리는 맨 끝) 오른쪽 가장자리에 붙어 있어, 칩 줄을 밀지 않아도 늘 보인다 */
+.alb-chip.heart .hg { display: inline-block; font-size: 20px; line-height: 1; vertical-align: -1px; transform-origin: 50% 60%; }
+.alb-chip.heart small { color: var(--muted); }
+.alb-chip.heart.on { color: #fff; background: linear-gradient(135deg, #FF6B9A, #E0245E); border-color: transparent; box-shadow: -8px 0 10px -2px var(--a-sheet), 0 4px 14px rgba(224,36,94,.38); }
+.alb-chip.heart.on small { color: #fff; }
+.alb-chip.heart.on .hg { animation: alb-beat .7s ease-out 1; }
+@keyframes alb-beat { 0% { transform: scale(1); } 22% { transform: scale(1.38); } 40% { transform: scale(.94); } 58% { transform: scale(1.18); } 100% { transform: scale(1); } }
+#albumView.alb-calm .alb-chip.heart .hg { animation: none; }
 .alb-chip:active, .alb-tile:active, .alb-btn:active, .alb-shuf:active, .alb-setrow:active { transform: scale(.96); }
 
 /* ----- 한 줄(장수 · 이 단계 확인함) ----- */
@@ -120,4 +130,4 @@ html[data-style="light"] #albumView, html[data-style="light"] #albumLayer { --ad
 
 /* ----- 움직임 줄이기 ----- */
 #albumView.alb-calm .alb-tile, #albumView.alb-calm .alb-tile img { animation: none; }
-@media (prefers-reduced-motion: reduce) { .alb-tile, .alb-tile img, #albumLayer .alb-vw.show { animation: none !important; } .alb-vw2, #albImg.anim, .alb-chip, .alb-btn { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .alb-chip.heart .hg, .alb-tile, .alb-tile img, #albumLayer .alb-vw.show { animation: none !important; } .alb-vw2, #albImg.anim, .alb-chip, .alb-btn { transition: none !important; } }

@@ -3796,6 +3796,7 @@
   APP_VERSION = 'v9.74';        // v9.74: 카메라 화면 — 미리보기를 가리던 단단한 띠를 없애고 단추를 작게 정리(윗줄 하나 · 확대 막대는 「×1.0 ▾」를 눌러야 펴짐 · 안내 문장 6초 뒤 사라짐). 영수증·일반 사진은 긴 화면에서 더 크게(「크게 보기」), 문서는 지금 그대로. 카메라 ⚙ 「화면 모양」에서 크게 보기 / 단추만 작게 / 예전 화면 그대로 선택, 스위치 SILENT_CAM_LAYOUT · versionCode 118
   APP_VERSION = 'v9.75';        // v9.75(O-0755): 홈 「PC 연결」에 「PC 상태」 줄 — 이 PC의 CPU·메모리·그래픽카드·바쁜 프로그램 3개를 폰에서 실시간으로 보고(화면을 연 동안 4초), 접힌 「PC 관리」에서 클로드 앱·PC 전체를 다시 시작(확인 창에서 [다시 시작]을 한 번 더 눌러야 실행, 접수→실행→PC가 직접 확인→결과 알림). 스위치 PC_MON_UI·PC_POWER_UI. 서버 함수가 없으면 「서버 준비 중입니다」
   APP_VERSION = 'v9.76';        // v9.76: 업무 허브를 스마트비서 안으로 — 홈 도구 맨 끝에 「업무 앱」(분류별 카드 목록: 학과 홈페이지·유전자분석·진로 설문·PBL·학교 장부·걷기 포인트·자리 배치)과 「규정 도우미」(동그래 규정 챗봇 바로 열기) 칸 둘. 카드를 누르면 크롬 맞춤 탭(앱 위에 얹혀 열리고 ✕·뒤로 가기로 돌아옴, 로그인은 크롬 것이라 유지)으로 열림. 목록·주소는 서버 get_hub_apps(연동 암호)에서 받아 폰에 저장(주소는 APK 안에 없음, 못 받으면 「못 불러왔어요」). 규정 도우미는 서버를 깨우는 신호 + 「처음 열 땐 30~60초」·「질문을 보낼 때마다 약 15원」 안내. 스위치 HUB_APPS·HUB_REG·HUB_OPEN. versionCode 120
+  APP_VERSION = 'v9.77';        // v9.77: 사진첩 단계 칩 맨 끝에 하트(♥) 앨범 하나 — 따로 모아 보는 앨범(전체·아무거나 보기에는 안 섞임), 촬영 기록 날짜는 「(촬영 기록 기준)」으로 표시 · 스위치 ALBUM_HEART(끄면 v9.76) · 서버는 분류 '♥'·날짜 출처 'exif' 허용만 추가 · 새 권한 없음 · versionCode 121
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10024,6 +10025,8 @@
   /* v9.70(O-0723): 큰 보기의 「내려받기」 단추(원본 JPEG → 폰 「다운로드」 폴더, 파일 이름 album_단계영문_번호.jpg · 족보는 genealogy.jpg). 'off' 면 단추가 없어 v9.69 와 같다(서버 무관).
    *   폰 저장은 실적 PDF·승진 백업과 같은 길(네이티브 FileDownload = 안드로이드 DownloadManager) — 새 플러그인·권한 없음. PC판은 blob + <a download>. */
   var ALBUM_DL = 'on';
+  /* v9.77: 단계 칩 맨 끝의 하트(♥) 앨범. 'off' 면 하트 칩이 없고 ♥ 사진도 어디에도 안 보여 v9.76 과 같다(서버 무관). 분류 '♥'·날짜 출처 'exif' 는 서버 제약에 이미 추가돼 있다(album_heart_v1). */
+  var ALBUM_HEART = 'on';
   var albumView = $('albumView');
   /* 사진 한 장(서명 주소)을 폰에 저장 → Promise({ok, name, where}). 실패하면 reject(Error: dlWhy = 이유 한 줄 — 사진첩이 「못 했어요 — 이유」로 보여 준다).
    *   웹페이지(브라우저)로 넘기는 예전 대체 길은 쓰지 않는다 — 사진 주소를 밖으로 내보내지 않고, 실패는 조용히 넘기지 않는다. */
@@ -10055,7 +10058,7 @@
   }
   if (ALBUM_TAB !== 'off' && window.AlbumTab && window.AchPure && $('btnAlbum')) {
     try {
-      AlbumTab.init({ toast: toast, save: ALBUM_DL !== 'off' ? albumSavePhoto : null });
+      AlbumTab.init({ toast: toast, save: ALBUM_DL !== 'off' ? albumSavePhoto : null, heart: ALBUM_HEART !== 'off' });
       var albGrid = $('homeTools'), albSub = albGrid && albGrid.querySelector('.tools-sub');
       if (albGrid && albSub) albGrid.insertBefore($('btnAlbum'), albSub);   // 홈 도구 맨 끝(승진 다음) — 기존 칸 자리는 그대로
       $('btnAlbum').style.display = ''; $('btnAlbum').addEventListener('click', openAlbum);
