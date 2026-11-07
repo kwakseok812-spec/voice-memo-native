@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="css/achievements.css"><!-- O-0684 v9.59 「곽호석」 탭(옛 이름 「실적」) -->
   <link rel="stylesheet" href="css/album.css"><!-- O-0720 v9.69 「사진첩」 -->
   <link rel="stylesheet" href="css/pc-status.css"><!-- O-0755 v9.75 「PC 상태」 -->
+  <link rel="stylesheet" href="css/hub-apps.css"><!-- v9.76 「업무 앱」 -->
   <link rel="stylesheet" href="css/promotion.css"><!-- O-0684 v9.62 「승진」 점수판 -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
@@ -202,6 +203,9 @@
         <button class="tool" id="btnPromo" style="display:none;"><span class="ic blue"><svg><use href="#i-doc"/></svg></span><b>승진</b><small>점수·시기</small></button>
         <!-- O-0720 v9.69: 「사진첩」 — 홈 도구 맨 끝 칸(승진 다음). 스위치 ALBUM_TAB(app.js)이 'on' 일 때만 app.js 가 보이게 한다 -->
         <button class="tool" id="btnAlbum" style="display:none;"><span class="ic cyan"><svg><use href="#i-image"/></svg></span><b>사진첩</b><small>어린 시절·가족</small></button>
+        <!-- v9.76 「업무 앱」·「규정 도우미」 — 홈 도구 맨 끝 칸 둘(사진첩 다음). 스위치 HUB_APPS·HUB_REG(app.js)가 'on' 일 때만 app.js 가 보이게 한다. 업무 허브(폰 PWA)로 가던 길을 앱 안으로 옮긴 것 -->
+        <button class="tool" id="btnHub" style="display:none;"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><b>업무 앱</b><small>학과·장부·포인트</small></button>
+        <button class="tool" id="btnReg" style="display:none;"><span class="ic cyan"><svg><use href="#i-search"/></svg></span><b>규정 도우미</b><small>질문마다 약 15원</small></button>
         <div class="tools-sub">PC 연결</div>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
@@ -611,6 +615,12 @@
       <div id="albumBody"></div>
     </section>
 
+    <!-- ===================== 업무 앱 (v9.76 · 로직은 hub-apps.js) ===================== -->
+    <section id="hubView" style="display:none;">
+      <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">업무 앱</span><span class="spacer end"><button type="button" class="iconbtn" id="hubRefresh" aria-label="목록 새로 받기" title="목록 새로 받기"><svg><use href="#i-refresh"/></svg></button></span></div>
+      <div id="hubBody"></div>
+    </section>
+
     <!-- ===================== PC 상태 (O-0755 v9.75 · 로직은 pc-status.js) ===================== -->
     <section id="pcView" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">PC 상태</span><span class="spacer end"><i class="pcs-sdot na" id="pcSdot" aria-hidden="true"></i></span></div>
@@ -902,7 +912,7 @@
 <script src="js/history.js"></script>
 <script src="js/push.js"></script>
 <script src="js/health.js"></script><script src="js/health-voice.js"></script><!-- O-0693 건강 탭 「말로 기록」 — health.js 바로 뒤, app.js 보다 먼저(app.js 가 host 를 건넨다) -->
-<script src="js/achievements.js"></script><script src="js/album.js"></script><script src="js/pc-status.js"></script><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
+<script src="js/achievements.js"></script><script src="js/album.js"></script><script src="js/pc-status.js"></script><script src="js/hub-apps.js"></script><!-- v9.76 「업무 앱」 --><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
 <script src="js/promotion-calc.js"></script><script src="js/promotion.js"></script><script src="js/promotion-edit.js"></script><script src="js/promotion-xlsx.js"></script><!-- O-0684 v9.62 「승진」 점수판 — app.js 보다 먼저 -->
 <script src="js/markup.js"></script><!-- O-0544 문서 뷰어 「수정 요청」(docviewer.js 보다 먼저 — init 때 길게 누르기를 붙인다) -->
 <script src="js/docviewer.js"></script>

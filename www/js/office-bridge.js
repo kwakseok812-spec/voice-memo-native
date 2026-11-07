@@ -1423,6 +1423,8 @@
     }, function (e) { if (to) clearTimeout(to); throw e; })
       .then(function (d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : null; });
   }
+  /* v9.76 「업무 앱」 목록 — 서버 한 줄(분류·카드·규정 도우미 칸). 🔒 연동 암호 게이트(틀리면 err.badpass), 서버 칸이 없으면 err.notready, 아직 올라온 목록이 없으면 null. 8초 시간 제한. */
+  function getHubApps(pass) { return _pcRpc('get_hub_apps', { p_pass: pass || '' }, 8000, '업무 앱 목록'); }
   function getPcStatus(pass, watch) { return _pcRpc('get_pc_status', { p_pass: pass || '', p_watch: !!watch }, 15000, 'PC 상태 조회'); }
   function pcPowerRequest(pass, kind, force, client) {
     return _pcRpc('pc_power_request', { p_pass: pass || '', p_kind: String(kind || ''), p_force: !!force, p_client: String(client || 'app') }, 20000, 'PC 다시 시작 요청');
@@ -1893,6 +1895,7 @@
     sendIdeaText: sendIdeaText, listIdeas: listIdeas, setIdeaDecision: setIdeaDecision,   // v5.5: 💡 아이디어 수첩
     getHomeDigest: getHomeDigest,   // (O-0129) 홈 「오늘 한눈에」
     getKStatus: getKStatus,         // v8.4(O-0162) 채팅 머리줄 PC 케이 상태 점
+    getHubApps: getHubApps,         // v9.76 「업무 앱」 목록(hub-apps.js)
     getPcStatus: getPcStatus, pcPowerRequest: pcPowerRequest, pcPowerCancel: pcPowerCancel,   // v9.75(O-0755) 「PC 상태」 화면(pc-status.js)
     getChatRead: getChatRead, markChatRead: markChatRead,   // (O-0201) 읽음 기준 기기 간 공유
     getKOutfit: getKOutfit, setKOutfit: setKOutfit,         // (O-0487) 케이 옷 기기 간 맞추기

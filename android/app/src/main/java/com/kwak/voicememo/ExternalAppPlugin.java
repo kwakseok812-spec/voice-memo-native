@@ -82,6 +82,46 @@ public class ExternalAppPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /* v9.76 「업무 앱」·「규정 도우미」 — 웹 주소를 크롬 맞춤 탭(Custom Tabs)으로 연다.
+     *  - 앱 위에 크롬이 살짝 얹히고(상단 색 띠 = 앱 배경색, 제목 표시), ✕ 또는 뒤로 가기 = 바로 스마트비서로 돌아온다. 로그인·쿠키·저장소는 크롬 것이라 한 번 로그인하면 유지된다.
+     *  - https:// 주소만 허용(다른 앱·임의 스킴을 여는 통로가 되지 않게). 주소는 연동 암호로 받아 온 목록의 것만 JS 가 넘긴다.
+     *  - 맞춤 탭을 못 열면(맞춤 탭을 지원하는 브라우저가 없음 등) 평범한 보기(ACTION_VIEW)로 자동 전환 → 그것도 안 되면 {opened:false}.
+     *  - 새 권한 없음. androidx.browser 라이브러리만 더했다.
+     *  - JS: Capacitor.Plugins.ExternalApp.openTab({url}) → {opened: true|false, mode?: 'tab'|'view', reason?: 'not_allowed'|'error'} */
+    @PluginMethod
+    public void openTab(final PluginCall call) {
+        final String url = call.getString("url");
+        JSObject ret = new JSObject();
+        if (url == null || !url.startsWith("https://") || url.length() > 2000) {
+            ret.put("opened", false); ret.put("reason", "not_allowed"); call.resolve(ret); return;
+        }
+        final Uri uri = Uri.parse(url);
+        try {
+            androidx.browser.customtabs.CustomTabColorSchemeParams cs = new androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+                .setToolbarColor(0xFF070B1D).build();
+            androidx.browser.customtabs.CustomTabsIntent tab = new androidx.browser.customtabs.CustomTabsIntent.Builder()
+                .setShowTitle(true)
+                .setDefaultColorSchemeParams(cs)
+                .build();
+            tab.launchUrl(getActivity(), uri);
+            ret.put("opened", true); ret.put("mode", "tab");
+            call.resolve(ret); return;
+        } catch (Exception e) {
+            // 맞춤 탭 실패 → 아래 평범한 보기로
+        }
+        try {
+            Intent it = new Intent(Intent.ACTION_VIEW, uri);
+            it.addCategory(Intent.CATEGORY_BROWSABLE);
+            getActivity().startActivity(it);
+            ret.put("opened", true); ret.put("mode", "view");
+        } catch (ActivityNotFoundException e) {
+            ret.put("opened", false); ret.put("reason", "error");
+        } catch (Exception e) {
+            ret.put("opened", false); ret.put("reason", "error");
+        }
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void openUri(final PluginCall call) {
         final String uri = call.getString("uri");

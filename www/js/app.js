@@ -263,7 +263,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('hubView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -3795,6 +3795,7 @@
   APP_VERSION = 'v9.73';        // v9.73: 영수증 「돌리기」 — 영수증 스캔 미리보기에 「↺ 왼쪽으로 · ↻ 오른쪽으로」(누르는 즉시 돌아가고 「이 사진 사용」 때 한 번만 저장, 모서리 조정도 돌린 방향 그대로) + 사진 칸 높이 고정(돌려도 아래 단추가 안 움직임) + 사진첩에서 고른 영수증 한 장도 보정 화면을 거침 · 스위치 doc-scan.js DSC_RCPT_ROT · app.js RECEIPT_GALLERY_SCAN · versionCode 117
   APP_VERSION = 'v9.74';        // v9.74: 카메라 화면 — 미리보기를 가리던 단단한 띠를 없애고 단추를 작게 정리(윗줄 하나 · 확대 막대는 「×1.0 ▾」를 눌러야 펴짐 · 안내 문장 6초 뒤 사라짐). 영수증·일반 사진은 긴 화면에서 더 크게(「크게 보기」), 문서는 지금 그대로. 카메라 ⚙ 「화면 모양」에서 크게 보기 / 단추만 작게 / 예전 화면 그대로 선택, 스위치 SILENT_CAM_LAYOUT · versionCode 118
   APP_VERSION = 'v9.75';        // v9.75(O-0755): 홈 「PC 연결」에 「PC 상태」 줄 — 이 PC의 CPU·메모리·그래픽카드·바쁜 프로그램 3개를 폰에서 실시간으로 보고(화면을 연 동안 4초), 접힌 「PC 관리」에서 클로드 앱·PC 전체를 다시 시작(확인 창에서 [다시 시작]을 한 번 더 눌러야 실행, 접수→실행→PC가 직접 확인→결과 알림). 스위치 PC_MON_UI·PC_POWER_UI. 서버 함수가 없으면 「서버 준비 중입니다」
+  APP_VERSION = 'v9.76';        // v9.76: 업무 허브를 스마트비서 안으로 — 홈 도구 맨 끝에 「업무 앱」(분류별 카드 목록: 학과 홈페이지·유전자분석·진로 설문·PBL·학교 장부·걷기 포인트·자리 배치)과 「규정 도우미」(동그래 규정 챗봇 바로 열기) 칸 둘. 카드를 누르면 크롬 맞춤 탭(앱 위에 얹혀 열리고 ✕·뒤로 가기로 돌아옴, 로그인은 크롬 것이라 유지)으로 열림. 목록·주소는 서버 get_hub_apps(연동 암호)에서 받아 폰에 저장(주소는 APK 안에 없음, 못 받으면 「못 불러왔어요」). 규정 도우미는 서버를 깨우는 신호 + 「처음 열 땐 30~60초」·「질문을 보낼 때마다 약 15원」 안내. 스위치 HUB_APPS·HUB_REG·HUB_OPEN. versionCode 120
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9487,6 +9488,7 @@
       if (window.AlbumTab && AlbumTab.back && AlbumTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('hubView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }   // v9.76: 업무 앱 목록 — 열린 창이 없다, 뒤로 = 홈으로
     if (isOpen($('pcView'))) {         // O-0755 v9.75: PC 상태 — 열린 확인 시트부터 닫고, 더 닫을 게 없으면 홈으로
       if (window.PcStatus && PcStatus.back && PcStatus.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -10076,6 +10078,29 @@
     try {
       PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off' });
       $('btnPcStatus').style.display = ''; $('btnPcStatus').addEventListener('click', openPcStatus);
+    } catch (e) {}
+  }
+
+  /* ---- 업무 앱·규정 도우미(v9.76): 화면 열기/연결(로직은 hub-apps.js) ----
+   *   업무 허브(폰 PWA)로 가던 길을 앱 안으로. 홈 도구 맨 끝(사진첩 다음)에 칸 둘 — 「업무 앱」(분류별 카드 목록) · 「규정 도우미」(동그래 규정 챗봇 바로 열기).
+   *   스위치 HUB_APPS: 'on' = 「업무 앱」 칸 · 'off' = 칸이 보이지 않는다.   HUB_REG: 'on' = 「규정 도우미」 칸 · 'off' = 칸이 보이지 않는다.
+   *   스위치 HUB_OPEN: 'tab' = 크롬 맞춤 탭(앱 위에 얹혀 열리고 ✕·뒤로 가기로 돌아옴. 안 열리면 일반 브라우저로 자동 전환) · 'browser' = 예전 방식(window.open = 폰 기본 브라우저 전체 화면).
+   *   목록·주소는 서버(get_hub_apps, 연동 암호)에서 받아 폰에 저장해 둔다 — 주소는 APK 안에 없다. 칸이 모두 꺼지면 v9.75 와 같다(서버 무관). */
+  var HUB_APPS = 'on', HUB_REG = 'on', HUB_OPEN = 'tab';
+  var hubView = $('hubView');
+  function openHub() { if (window.HubApps && HubApps.open) { try { HubApps.open(); } catch (e) { openScreen(hubView); } } else openScreen(hubView); }
+  if ((HUB_APPS !== 'off' || HUB_REG !== 'off') && window.HubApps) {
+    try {
+      HubApps.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(hubView); }, showGate: function (f) { showSyncGate(!!f); }, mode: HUB_OPEN });
+      var hubGrid = $('homeTools'), hubSub = hubGrid && hubGrid.querySelector('.tools-sub');
+      if (HUB_APPS !== 'off' && $('btnHub')) {
+        if (hubGrid && hubSub) hubGrid.insertBefore($('btnHub'), hubSub);   // 홈 도구 맨 끝(사진첩 다음) — 기존 칸 자리는 그대로
+        $('btnHub').style.display = ''; $('btnHub').addEventListener('click', openHub);
+      }
+      if (HUB_REG !== 'off' && $('btnReg')) {
+        if (hubGrid && hubSub) hubGrid.insertBefore($('btnReg'), hubSub);
+        $('btnReg').style.display = ''; $('btnReg').addEventListener('click', function () { try { HubApps.openReg(); } catch (e) { toast('규정 도우미를 열지 못했어요.'); } });
+      }
     } catch (e) {}
   }
 

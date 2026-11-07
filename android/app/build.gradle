@@ -7,8 +7,8 @@ android {
         applicationId "com.kwak.voicememo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 119
-        versionName "9.75"
+        versionCode 120
+        versionName "9.76"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -64,6 +64,7 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     // v8.2(O-0157) 알림 [답장](RemoteInput·MessagingStyle)·위젯 — androidx.core 를 명시(버전은 variables.gradle)
     implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.browser:browser:1.8.0"   // v9.76: 「업무 앱」·「규정 도우미」를 크롬 맞춤 탭으로 열기(ExternalApp.openTab)
     // v8.2(O-0157) KMessagingService 가 Capacitor 푸시 서비스를 이어받으려면 FCM 클래스가 앱 컴파일에도 보여야 한다.
     //   버전은 Capacitor 푸시 플러그인과 같은 값(variables.gradle firebaseMessagingVersion)으로 맞춘다.
     implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
