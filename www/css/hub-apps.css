@@ -45,3 +45,15 @@ html[data-fs] .hub-say b { font-size: calc(15px * var(--fsx)); }
 #hubView.calm .hub-card { animation: none; }
 #hubView.calm .hub-card:active, #hubView.calm .hub-btn:active { transform: none; }
 @media (prefers-reduced-motion: reduce) { .hub-card { animation: none !important; } .hub-card, .hub-btn { transition: none !important; } .hub-card:active, .hub-btn:active { transform: none; } .hub-spin { animation-duration: 2.4s; } }
+
+/* v9.80 (O-0781) 맨 위 「포인트 앱 바로 열기」 묶음 — #hubPoint 안에서만. 카드 모양은 .hub-card 그대로(서버 목록 카드와 같은 모양), 등장 움직임 없음(자리가 움직이지 않게) */
+#hubPoint { margin: 0 0 6px; }
+#hubPoint .hub-cat { margin-top: 4px; }
+#hubPoint + .hub-say { margin-top: 14px; }
+.hub-card.hub-pt { animation: none; }
+.hub-card.hub-pt.pc { opacity: .62; }
+@media (min-width: 600px) {
+  #hubPoint { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-items: start; }
+  #hubPoint .hub-cat { grid-column: 1 / -1; margin-bottom: 0; }
+  #hubPoint .hub-card { margin: 0; }
+}

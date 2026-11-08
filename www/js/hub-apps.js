@@ -11,6 +11,8 @@
  *       · 카드가 0개인 분류는 화면에서 숨긴다. 이름·설명은 서버 목록의 글자 그대로(앱이 다시 짓지 않는다).
  *       · 규정 도우미가 「깨어났는지」는 앱이 알 수 없다(무료 서버, 응답을 읽을 수 없는 방식) — 안내 문구와 선행 신호만 한다. 신호(/health)는 AI 를 부르지 않아 무과금.
  * 스위치(app.js): HUB_APPS('on'|'off') · HUB_REG('on'|'off') · HUB_OPEN('tab'|'browser') — off 면 칸이 보이지 않아 v9.75 와 같다.
+ * v9.80(O-0781): 화면 맨 위에 「포인트 앱 바로 열기」 묶음(phone-apps.js 의 앱 코드 고정 목록 7장) — 서버 목록·로딩·실패와 무관하게 항상 첫 줄에 있고 움직이지 않는다.
+ *       카드를 누르면 폰의 그 앱이 열린다(PhoneApps.openApp). 스위치 POINT_APPS(app.js) = ctx.points. 서버 목록의 웹 「걷기 포인트」 카드(기록 앱)는 그대로 아래 목록에 있다.
  * app.js 연결: HubApps.init({toast,getPass,openScreen,showGate,mode}) · HubApps.open() · HubApps.openReg() · HubApps.back()
  * 시험: HubPure(순수 함수)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
@@ -167,8 +169,11 @@
   function build() {
     if (HTML_BUILT || !$('hubBody')) return;
     HTML_BUILT = true;
-    $('hubBody').innerHTML = '<div class="hub-say"><span class="kface sm hub-kf" data-kface="head" aria-hidden="true"></span><b id="hubSay"></b></div><div id="hubList"></div>';
+    $('hubBody').innerHTML = '<div id="hubPoint"></div><div class="hub-say"><span class="kface sm hub-kf" data-kface="head" aria-hidden="true"></span><b id="hubSay"></b></div><div id="hubList"></div>';
+    renderPoints();
     $('hubBody').addEventListener('click', function (ev) {
+      var pt = ev.target.closest && ev.target.closest('[data-pt]');
+      if (pt) { if (global.PhoneApps && PhoneApps.openApp) PhoneApps.openApp(pt.getAttribute('data-pt')); return; }   // v9.80: 폰 앱 열기(잠금·미설치 시트·PC 안내는 phone-apps.js)
       var b = ev.target.closest && ev.target.closest('[data-hub]');
       if (b) {
         var id = b.getAttribute('data-hub'), found = null;
@@ -183,6 +188,21 @@
       else if (act === 'gate' && ctx.showGate) ctx.showGate(true);
     });
     var rf = $('hubRefresh'); if (rf) rf.addEventListener('click', function () { load(true).then(function (ok) { if (ok) ctx.toast('목록을 새로 받았어요.', 1600); }); });
+  }
+
+  /* v9.80 「포인트 앱 바로 열기」 — 서버 목록과 독립(render 가 지우지 않는다). 열 때마다 다시 그려 폰/PC 표시만 맞춘다. 카드 등장 움직임 없음(움직이지 않는 자리). */
+  function renderPoints() {
+    var box = $('hubPoint'); if (!box) return;
+    var P = global.PhoneApps;
+    if (!(ctx && ctx.points !== false && P && P.POINTS && P.POINTS.length)) { box.innerHTML = ''; return; }
+    var native = P.isNative(), html = '<div class="hub-cat">포인트 앱 바로 열기</div>';
+    P.POINTS.forEach(function (a) {
+      html += '<button type="button" class="hub-card hub-pt' + (native ? '' : ' pc') + '" data-pt="' + esc(a.id) + '">' +
+        '<span class="hub-ic" aria-hidden="true">' + esc(a.icon || '•') + '</span>' +
+        '<span class="hub-tx"><b>' + esc(a.name) + '</b><small>' + esc(native ? a.desc : P.PC_DESC) + '</small></span>' +
+        '<svg class="hub-go" aria-hidden="true"><use href="#i-chev-r"/></svg></button>';
+    });
+    box.innerHTML = html;
   }
 
   function errBlock(title, body, actions) {
@@ -227,7 +247,7 @@
 
   function open() {
     if (!ctx) return;
-    build(); ctx.openScreen();
+    build(); renderPoints(); ctx.openScreen();
     S.lastOpen = Date.now();
     if (!S.m) loadSaved();
     var recent = !!(S.m && S.status === 'ok' && Date.now() - S.lastOk < 60000);     // 방금 받았으면 다시 묻지 않는다

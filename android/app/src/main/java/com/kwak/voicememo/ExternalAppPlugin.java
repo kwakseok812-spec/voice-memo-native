@@ -31,8 +31,15 @@ public class ExternalAppPlugin extends Plugin {
      *  - 설치 여부 확인을 위해 AndroidManifest 의 <queries> 에 이 패키지를 적어 두었다(Android 11+ 패키지 가시성).
      *  - JS: Capacitor.Plugins.ExternalApp.launchApp({pkg}) → {opened, reason?:'not_installed'|'not_allowed'|'error'}
      *        Capacitor.Plugins.ExternalApp.openStore({pkg})  → 플레이 스토어 그 앱 화면(market://, 없으면 웹) */
+    /* v9.80 (O-0781) 홈 「영상」 칸 + 업무 앱 「포인트 앱 바로 열기」 — 열 수 있는 앱을 11개 더했다(영상 4: 넷플릭스·웨이브·티빙·디즈니+ / 걷기 포인트 7: 캐시워크·손목닥터·머니워크(에이헬스)·야핏무브·캐시슬라이드·토스·KB스타뱅킹).
+     *  - 이 목록 ⇔ AndroidManifest.xml 의 <queries><package> ⇔ www/js/phone-apps.js 의 패키지 집합은 같아야 한다(어긋나면 시험 phone_apps_test.py 의 일치 검사가 잡는다). 앱을 하나 더 넣으려면 세 곳을 함께 고친다.
+     *  - 호출은 패키지 이름 하나만 받는다(주소·추가 데이터 없음). 앱의 첫 화면만 연다 — 로그인·계좌·포인트 값은 읽지도 입력하지도 않는다(금융 앱 토스·KB스타뱅킹 포함). */
     private static final java.util.Set<String> LAUNCH_ALLOWED =
-        new java.util.HashSet<>(java.util.Arrays.asList("com.google.chromeremotedesktop"));
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "com.google.chromeremotedesktop",
+            "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
+            "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
+            "com.cashslide", "viva.republica.toss", "com.kbstar.kbbank"));
 
     @PluginMethod
     public void launchApp(final PluginCall call) {
@@ -43,7 +50,13 @@ public class ExternalAppPlugin extends Plugin {
         }
         try {
             Intent it = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
-            if (it == null) { ret.put("opened", false); ret.put("reason", "not_installed"); call.resolve(ret); return; }
+            if (it == null) {
+                /* v9.80 보험: 런처 인텐트를 못 얻었다 = 미설치이거나 <queries> 선언이 빠졌다. 선언이 빠져도 「설치돼 있는데 앱이 없다」고 나오지 않게 명시 인텐트로 한 번 더 연다
+                 * (startActivity 는 패키지 가시성 제한을 받지 않는다 — developer.android.com 「URL 열기」 절). 정말 없으면 ActivityNotFoundException → 아래에서 not_installed. */
+                it = new Intent(Intent.ACTION_MAIN);
+                it.addCategory(Intent.CATEGORY_LAUNCHER);
+                it.setPackage(pkg);
+            }
             it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             getActivity().startActivity(it);
             ret.put("opened", true);
@@ -55,9 +68,14 @@ public class ExternalAppPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /* v9.78 (O-0779) 홈 「유튜브」 칸(Brave로 열기, v9.79 에서 칸 이름만 바뀜) — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (launchApp 허용 목록은 그대로 — Brave 는 openInApp 으로만 연다) */
+    /* v9.78 (O-0779) 홈 「유튜브」 칸(Brave로 열기) — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (Brave 는 openInApp 으로만 연다 — launchApp 허용 목록에 없다)
+     * v9.80 (O-0781) + 위 LAUNCH_ALLOWED 의 새 11개(미설치일 때 「스토어 열기」). 즉 STORE_ALLOWED = LAUNCH_ALLOWED + Brave. */
     private static final java.util.Set<String> STORE_ALLOWED =
-        new java.util.HashSet<>(java.util.Arrays.asList("com.google.chromeremotedesktop", "com.brave.browser"));
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "com.google.chromeremotedesktop", "com.brave.browser",
+            "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
+            "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
+            "com.cashslide", "viva.republica.toss", "com.kbstar.kbbank"));
 
     @PluginMethod
     public void openStore(final PluginCall call) {
