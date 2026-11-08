@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="css/hub-apps.css"><!-- v9.76 「업무 앱」 -->
   <link rel="stylesheet" href="css/promotion.css"><!-- O-0684 v9.62 「승진」 점수판 -->
   <link rel="stylesheet" href="css/perf-seg.css"><!-- O-0782 v9.82 「성과」 안 「실적 | 승진」 알약(합침이 켜졌을 때만 먹는다) -->
+  <link rel="stylesheet" href="css/games.css"><!-- O-0783 v9.83 「게임」 칸·시트·게임 층(#gameRoot · .gm-* 안에서만 먹는다) -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
   <link rel="stylesheet" href="css/k-fashion-show.css"><!-- O-0557 케이 패션쇼 -->
@@ -96,6 +97,7 @@
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
   <symbol id="i-glasses" viewBox="0 0 24 24"><circle cx="7" cy="14.2" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="14.2" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10.5 13.5q1.5-1.3 3 0M3.5 13.2 5.2 6.8M20.5 13.2 18.8 6.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol><!-- v9.80 재생(홈 「영상」 칸·영상 시트) -->
+  <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M7.5 7h9A5.5 5.5 0 0 1 22 12.6c0 1.6-.4 3.1-.9 4.4a2.5 2.5 0 0 1-4.2.9L15.3 16H8.7l-1.6 1.9a2.5 2.5 0 0 1-4.2-.9C2.4 15.7 2 14.2 2 12.6A5.5 5.5 0 0 1 7.5 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10v4M5 12h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="15.8" cy="10.8" r="1.2" fill="currentColor"/><circle cx="18.4" cy="13.2" r="1.2" fill="currentColor"/></symbol><!-- v9.83 게임 패드(홈 「게임」 칸) -->
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.8v5.7c0 4.4-2.9 7.9-7 9.5-4.1-1.6-7-5.1-7-9.5V5.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12.2l2.2 2.2L15.2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -211,6 +213,8 @@
         <button class="tool" id="btnReg" style="display:none;"><span class="ic cyan"><svg><use href="#i-search"/></svg></span><b>규정 도우미</b><small>질문마다 약 15원</small></button>
         <!-- v9.78(O-0779) · v9.79(O-0780) · v9.80(O-0781) · v9.81 「OTT」 — 홈 도구 맨 끝 칸(규정 도우미 다음, 같은 자리에서 교체 — 칸 수 12개 그대로). v9.80: 칸 이름 「유튜브」→「영상」, v9.81: 「영상」→「OTT」(칸 id 도 btnVideo→btnVideoApps — 옛 영상 첨부 칸 id btnVideo 와 같아 누르면 파일 선택이 열리던 것 고침). 작은 글씨 「유튜브·넷플릭스」·재생 기호. 누르면 5줄 시트(유튜브=Brave로 · 넷플릭스·웨이브·티빙·디즈니+ 폰 앱 열기). 스위치 VIDEO_TAB(app.js)가 'off' 가 아니면 app.js 가 보이게 하고, 'brave' 면 app.js 가 v9.79 와 같은 「유튜브」 칸(방패·Brave로 열기)으로 바꿔 쓴다 -->
         <button class="tool" id="btnVideoApps" style="display:none;" aria-label="OTT, 유튜브·넷플릭스 등 고르기"><span class="ic blue"><svg><use href="#i-play"/></svg></span><b>OTT</b><small>유튜브·넷플릭스</small></button>
+        <!-- v9.83(O-0783) 「게임」 칸 — 홈 맨 끝(OTT 다음). 누르면 목록 시트 → 앱 안 게임 층. 스위치 GAME_TAB. id 는 btnGames(옛 「영상 정리」 첨부 칸 id 와 겹치지 않는다 — v9.80 사고). -->
+        <button class="tool" id="btnGames" style="display:none;" aria-label="게임, 장기·오목"><span class="ic cyan"><svg><use href="#i-gamepad"/></svg></span><b>게임</b><small>장기·오목</small></button>
         <div class="tools-sub">PC 연결</div>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)
@@ -847,6 +851,12 @@
 <!-- 토스트 -->
 <div id="toast" class="toast" style="display:none;"></div>
 
+<!-- v9.83(O-0783) 게임 층 — .app 밖 고정 층(문서 뷰어와 같은 방식). 위 줄 「‹ 홈」은 한 번에 나가기(data-back 을 쓰지 않는다: 쓰면 앱 뒤로가기 한 단계가 된다). iframe 은 열 때 만들고 닫을 때 지운다(games.js) -->
+<div id="gameRoot" aria-hidden="true">
+  <div id="gameBar"><button type="button" id="gameBack" aria-label="스마트비서 홈으로 나가기"><svg aria-hidden="true"><use href="#i-chev-l"/></svg>홈</button><span id="gameTitle">장기·오목</span><span class="gm-bar-end" aria-hidden="true"></span></div>
+  <div id="gameStage"></div>
+</div>
+
 <!-- v6.0 케이 프로필 카드(헤더·말풍선 사진을 누르면) -->
 <div id="kProfile" class="kprof" style="display:none;" role="dialog" aria-modal="true" aria-label="케이 프로필">
   <div class="kprof-box">
@@ -936,6 +946,7 @@
 <script src="js/silent-cam.js"></script><!-- O-0607 소리 없는 카메라 웹 창구 — doc-scan.js·app.js 보다 먼저 -->
 <script src="js/doc-scan.js"></script><!-- O-0576 문서 스캔(여러 장 → PDF) — app.js 보다 먼저 -->
 <script src="js/mtg-out.js"></script><!-- O-0626 회의록 「맞춤 정리본 받기」 — app.js 보다 먼저(app.js 가 host 를 건넨다) -->
+<script src="js/games.js"></script><!-- O-0783 v9.83 「게임」 칸·목록 시트·게임 층 — app.js 보다 먼저(app.js 가 켠다) -->
 <script src="js/app.js"></script>
 <script src="js/today-card.js"></script><!-- O-0129 홈 「오늘 한눈에」 -->
 <!-- 네이티브 채팅 입력(안드로이드 한글 IME 씹힘 근본 회피) — app.js 뒤에 실려 입력창을 네이티브 입력으로 전환.

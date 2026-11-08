@@ -316,6 +316,7 @@
     rcbReturn = false;
     dropChatReturn();
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
+    if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층도 닫기(알림·바로가기로 다른 화면에 갈 때 게임이 덮고 있지 않게)
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
     try { if (window.KScene && KScene.reset) KScene.reset(); } catch (e) {}   // v9.5: 화면을 새로 열면 장면이 스르륵 다시 등장
@@ -337,6 +338,7 @@
     try { if (el !== $('kWardrobeView') && isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
     if (window.SmartDocs && SmartDocs.leave && el !== $('docsView')) { try { SmartDocs.leave(); } catch (e) {} }
+    if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층(고정 오버레이)도 다른 화면을 가리지 않게 닫는다
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
     if (el !== searchPanelRef()) clearSearch();
@@ -3802,6 +3804,7 @@
   APP_VERSION = 'v9.80';        // v9.80(O-0781): 홈 맨 끝 「유튜브」 칸 → 「영상」 칸(작은 글씨 「유튜브·넷플릭스」) — 누르면 5줄 시트(유튜브=기존대로 Brave로 · 넷플릭스·웨이브·티빙·디즈니+ = 폰 앱 열기) + 「업무 앱」 화면 맨 위에 고정 묶음 「포인트 앱 바로 열기」(캐시워크·손목닥터·머니워크(에이헬스)·야핏무브·캐시슬라이드·토스·KB스타포인트 = 폰 앱 첫 화면 열기, 서버 목록과 무관하게 항상 보임) · 앱 없으면 「○○ 앱이 없습니다」 시트 → 스토어 열기 · PC판은 유튜브만 새 탭, 나머지 「폰에서만 열립니다」 · 새 파일 phone-apps.js · 네이티브 launchApp·openStore 허용 목록 11개 확장 + 매니페스트 <queries> 11줄(권한 아님, 새 권한 0) · 스위치 VIDEO_TAB('on'|'brave'|'off', 'brave'=v9.79 와 같은 「유튜브」 칸 · 'off'=칸 없음)·POINT_APPS('on'|'off') · 서버·SQL 변경 없음 · versionCode 124
   APP_VERSION = 'v9.81';        // v9.81(O-0781 보정): ① 홈 「영상」 칸 이름 → 「OTT」(작은 글씨 「유튜브·넷플릭스」 그대로) ② 칸을 누르면 5줄 시트와 함께 폰의 영상 파일 고르기 화면이 뜨던 결함 고침 — 칸 id btnVideo 가 옛 「영상 정리」 첨부 핸들러(videoInput.click)와 겹쳤다 → 새 id btnVideoApps ③ 「포인트 앱 바로 열기」 7장을 같은 크기의 2열 칸(아이콘+이름만, 설명어구 없음)으로 · 「머니워크(에이헬스)」→「에이헬스」 · 「캐시슬라이드」(잠금화면 앱 com.cashslide)→「캐시슬라이드 스텝업」(걷기 앱 com.nbt.moves, NBT Inc.) 교체 · 서버·SQL·권한 변경 없음(매니페스트 <queries> 11줄 그대로) · versionCode 125
   APP_VERSION = 'v9.82';        // v9.82(O-0782): 홈 「곽호석」 칸 → 「성과」(작은 글씨 「실적·승진」) + 홈 「승진」 칸을 성과 안으로 합침 — 「성과」 맨 위 「실적 | 승진」 두 칸 알약(건강 탭과 같은 모양)으로 두 화면을 오감 · 승진 점수·시기 계산(promotion-calc.js)은 한 글자도 안 바뀜 · 홈 칸 12→11 · 스위치 PERF_MERGE('off' 면 옛 두 칸) · 서버·SQL·권한 변경 없음 · versionCode 126
+  APP_VERSION = 'v9.83';        // v9.83(O-0783): 홈 맨 끝에 「게임」 칸(작은 글씨 「장기·오목」, OTT 칸 다음) — 누르면 「한 판 둘까요?」 목록 시트(OTT 시트와 같은 틀) → 장기·오목을 스마트비서 안 고정 층(iframe)에서 둔다. 게임 파일은 원본 그대로 www/games/janggi/ 에 담아(deploy/sync_games.sh) 인터넷 없이 열리고 두던 판은 이어진다(같은 출처 localStorage janggi.*). 뒤로 가기는 앱이 처리(판 → 게임 고르기 → 홈), 위 줄 「‹ 홈」은 한 번에 나감. 스위치 GAME_TAB('on'|'off')·GAME_OPEN('app'|'tab')·GAME_LIST('sheet'|'auto'). 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 127
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9441,6 +9444,7 @@
     if (fsSheet) { closeFontSheet(); return true; }                        // v8.4: 글자 크기 창
     if (window.TodayCard && TodayCard.closeWeather && TodayCard.closeWeather()) return true;   // v8.5(O-0169): 오늘 날씨 창
     if (document.querySelector('.shin-sheet')) { try { document.querySelector('.shin-sheet').remove(); } catch (e) {} return true; }   // v8.4: 공유 고르기 창(문서·녹음)
+    if (window.GamesTab && GamesTab.isOpen && GamesTab.isOpen()) { try { GamesTab.back(); } catch (e) { try { GamesTab.close(); } catch (e2) {} } return true; }   // v9.83(O-0783): 게임 층 — 게임 안 「‹ 게임 고르기」 단계부터, 고르기 화면이면 층을 닫고 홈으로
     if (kProfile && isOpen(kProfile)) { closeKProfile(); return true; }   // v6.0: 케이 프로필 카드
     if (sheetEl && isOpen(sheetEl)) { closeSheet(); return true; }
     if ($('syncGate') && isOpen($('syncGate'))) { hideSyncGate(); return true; }   // PC 연동 암호창도 뒤로가기로 닫히게
@@ -10204,6 +10208,28 @@
     } else {
       $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', function () { try { PhoneApps.openVideoSheet(); } catch (e) { toast('OTT 목록을 열지 못했습니다 — 다시 눌러 주세요.'); } });
     }
+  }
+
+  /* ---- 「게임」 칸(v9.83, O-0783) = 홈 맨 끝 칸(OTT 다음). 누르면 「한 판 둘까요?」 시트 → 게임을 앱 안 고정 층(#gameRoot)에서 연다. 로직은 games.js(GamesTab) ----
+   *   게임 파일은 www/games/<id>/ 에 담은 원본 그대로의 복사본(deploy/sync_games.sh) — 인터넷 없이도 열리고, 같은 출처라 두던 판(localStorage janggi.*)이 이어진다.
+   *   칸 id = btnGames. 옛 「영상 정리」 첨부 칸·그 입력 id 와 겹치지 않는다(v9.80 사고 — 시험이 두 이름의 부재를 검사).
+   *   스위치 GAME_TAB: 'on' = 칸 보임 · 'off' = 칸이 보이지 않고 목록·층 코드가 불리지 않는다(v9.82 와 같음).
+   *   스위치 GAME_OPEN: 'app' = 앱 안 층(기본) · 'tab' = Pages 주소를 크롬 맞춤 탭으로(준비해 둔 대체 길 — 즉시 전환이 아니라 새 번호 재배포가 필요. 탭 모드의 두던 판은 폰 기본 브라우저가 같을 때만 이어진다).
+   *   스위치 GAME_LIST: 'sheet' = 칸 → 시트(기본) · 'auto' = 게임이 하나뿐이면 시트를 건너뛰고 바로 게임으로(게임이 둘 이상이면 자동으로 시트).
+   *   연타 잠금은 v9.81 의 PhoneApps.tryLock()(700ms)을 칸·시트 줄이 함께 쓴다. 서버·저장·새 권한 없음. */
+  var GAME_TAB = 'on';
+  var GAME_OPEN = 'app';
+  var GAME_LIST = 'sheet';
+  if (GAME_TAB !== 'off' && window.GamesTab && $('btnGames')) {
+    try {
+      GamesTab.init({ toast: toast, open: GAME_OPEN, list: GAME_LIST });
+      var gameGrid = $('homeTools'), gameSub = gameGrid && gameGrid.querySelector('.tools-sub');
+      if (gameGrid && gameSub) gameGrid.insertBefore($('btnGames'), gameSub);   // 홈 도구 맨 끝(OTT 다음) — 앞 칸들이 늘거나 줄어도(성과 합침 등) 항상 맨 끝
+      $('btnGames').querySelector('small').textContent = GamesTab.tileSub();
+      $('btnGames').setAttribute('aria-label', GamesTab.tileLabel());
+      $('btnGames').style.display = '';
+      $('btnGames').addEventListener('click', function () { try { GamesTab.onTile(); } catch (e) { toast('게임 목록을 열지 못했어요 — 다시 눌러 주세요.'); } });
+    } catch (e) {}
   }
 
   /* ---- 문서 뷰어: 화면 열기/연결(로직은 docviewer.js) ---- */

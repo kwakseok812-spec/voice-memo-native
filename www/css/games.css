@@ -1,0 +1,35 @@
+/* ============================================================================
+ * games.css — 홈 「게임」 칸·목록 시트·게임 층 (v9.83, O-0783)
+ * 모든 규칙은 #gameRoot · .gm-* 안에서만 먹는다(다른 화면에 영향 없음).
+ * 층 = .app 밖 고정 층(문서 뷰어 #docRoot 와 같은 방식, z-index 120 — 시트(1100)·토스트(9999)·녹음 띠(10000)보다 아래).
+ * 위 얇은 줄은 게임 색(#1c1611) 단색 — 게임은 항상 어두운 색이라 밝은 앱 화면에서도 한 장으로 보이게. 투명·blur 없음.
+ * 녹음 띠가 떠 있으면(--rec-h 44px) 층이 띠 아래에서 시작한다(문서 뷰어와 같은 방식 — 띠가 상태바 자리까지 덮으므로 위 줄의 안전영역 여백은 그대로 둔다). 위 안전영역은 앱 공용 변수 --sat(= env(safe-area-inset-top)) 를 쓴다.
+ * 아래: 항상 env(safe-area-inset-bottom) 만큼 비운다(제스처 바 자리). 판별 코드는 없다.
+ * ==========================================================================*/
+#gameRoot{display:none}
+#gameRoot.on{display:flex;flex-direction:column;position:fixed;left:0;right:0;top:var(--rec-h,0px);bottom:0;z-index:120;background:#1c1611;color:#f3e9d8;
+  padding-bottom:env(safe-area-inset-bottom);animation:gmIn .18s ease-out both}
+#gameRoot.on.calm{animation:none}
+@keyframes gmIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+#gameRoot *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+#gameBar{flex:none;display:flex;align-items:center;gap:6px;min-height:calc(44px + var(--sat,0px));padding:var(--sat,0px) 8px 0 4px;background:#1c1611;border-bottom:1px solid rgba(243,233,216,.14)}
+#gameBack{flex:none;display:inline-flex;align-items:center;gap:2px;min-width:68px;min-height:44px;padding:0 12px 0 6px;border:0;border-radius:12px;background:transparent;color:#f3e9d8;font:700 16px/1 inherit;font-family:inherit;cursor:pointer}
+#gameBack svg{width:22px;height:22px}
+#gameBack:active{background:rgba(243,233,216,.14)}
+#gameTitle{flex:1;min-width:0;text-align:center;font-size:15px;font-weight:800;color:#f3e9d8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gm-bar-end{flex:none;min-width:68px}
+html[data-fs] #gameBack{font-size:calc(16px * var(--fsx))}
+html[data-fs] #gameTitle{font-size:calc(15px * var(--fsx))}
+#gameStage{position:relative;flex:1;min-height:0;background:#1c1611}
+#gameFrame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#1c1611;display:block}
+.gm-load{position:absolute;left:0;right:0;top:42%;text-align:center;font-size:16px;font-weight:700;color:rgba(243,233,216,.85);pointer-events:none}
+.gm-fail{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#1c1611;color:#f3e9d8;font-size:17px}
+.gm-failbtn{min-height:48px;padding:0 22px;border-radius:14px;border:1px solid rgba(243,233,216,.3);background:rgba(243,233,216,.1);color:#f3e9d8;font:700 16px/1 inherit;font-family:inherit;cursor:pointer}
+.gm-failbtn:active{background:rgba(243,233,216,.2)}
+
+/* 목록 시트(OTT 시트와 같은 .atm-sheet 틀 위에 아이콘·표식만 더한다) */
+.atm-sheet .sheet-btn.gm-row{position:relative}
+.atm-sheet .gm-ico{flex:none;width:36px;height:36px;border-radius:10px;object-fit:cover;background:#1c1611}
+.atm-sheet .gm-row > span:not(.gm-badge){flex:1;min-width:0}
+.gm-badge{flex:none;align-self:center;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800;line-height:1.3;color:#fff;background:linear-gradient(135deg,var(--p1,#3B82F6),var(--p2,#8B5CF6));white-space:nowrap}
+html[data-fs] .gm-badge{font-size:calc(11.5px * var(--fsx))}
