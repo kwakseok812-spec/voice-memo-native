@@ -1,7 +1,7 @@
 /* ============================================================================
  * phone-apps.js — 폰의 다른 앱을 스마트비서에서 열어 주는 통로 (v9.80, O-0781)
  * ----------------------------------------------------------------------------
- * 무엇: ① 홈 「영상」 칸 → 5줄 목록 시트(유튜브·넷플릭스·웨이브·티빙·디즈니+)  ② 업무 앱 화면 맨 위 「포인트 앱 바로 열기」(캐시워크·손목닥터·머니워크(에이헬스)·야핏무브·캐시슬라이드·토스·KB스타포인트)
+ * 무엇: ① 홈 「OTT」 칸(v9.80 까지 「영상」) → 5줄 목록 시트(유튜브·넷플릭스·웨이브·티빙·디즈니+)  ② 업무 앱 화면 맨 위 「포인트 앱 바로 열기」(캐시워크·손목닥터·에이헬스·야핏무브·캐시슬라이드 스텝업·토스·KB스타포인트)
  *       누르면 그 폰 앱의 첫 화면이 열린다(앱을 합치는 것이 아니라 열어 주는 통로). 앱 안의 특정 화면(토스 만보기·KB 스타포인트 화면)으로는 들어가지 않는다 — 첫 화면만.
  * 어떻게: 기존 네이티브 ExternalApp.launchApp({pkg}) · openStore({pkg}) 를 그대로 쓴다(새 네이티브 방법 없음). 열 수 있는 앱은 자바 허용 목록에 있는 것만이다.
  *       목록은 이 파일에 고정(서버·SQL 변경 없음 — 연동 암호·인터넷이 없어도 항상 보인다).
@@ -24,7 +24,7 @@
   var PC_MSG = '폰에서만 열립니다 — 폰의 스마트비서에서 눌러 주세요.';
   var OLD_APK_MSG = '앱을 새 버전으로 바꾸면 바로 열 수 있습니다.';
 
-  /* 영상 시트 5줄(순서 그대로). brave:true = 기존 유튜브(Brave) 동작. 패키지는 플레이 스토어 앱 제목으로 확인한 값(설계안 3장). */
+  /* OTT 시트 5줄(순서 그대로). brave:true = 기존 유튜브(Brave) 동작. 패키지는 플레이 스토어 앱 제목으로 확인한 값(설계안 3장). */
   var VIDEO = [
     { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true },
     { id: 'netflix', name: '넷플릭스', pkg: 'com.netflix.mediaclient', desc: '앱 열기' },
@@ -32,15 +32,16 @@
     { id: 'tving', name: '티빙', pkg: 'net.cj.cjhv.gs.tving', desc: '앱 열기' },
     { id: 'disney', name: '디즈니+', pkg: 'com.disney.disneyplus', desc: '앱 열기' }
   ];
-  /* 업무 앱 「포인트 앱 바로 열기」 7장(순서 그대로). store = 미설치 시트·실패 토스트에 쓰는 스토어 이름(카드 이름과 다를 때만). */
+  /* 업무 앱 「포인트 앱 바로 열기」 7장(순서 그대로, 2열 같은 크기 칸 — 칸에는 아이콘과 앱 이름만, 설명어구 없음). store = 미설치 시트·실패 토스트에 쓰는 스토어 이름(카드 이름과 다를 때만).
+   * v9.81: 「머니워크(에이헬스)」→「에이헬스」, 「캐시슬라이드」(잠금화면 앱 com.cashslide — 걷기 앱이 아님)→「캐시슬라이드 스텝업」(com.nbt.moves, 플레이 스토어 제목 「캐시슬라이드 스텝업 - 걸으면 돈버는 만보기」, NBT Inc.). */
   var POINTS = [
-    { id: 'cashwalk', name: '캐시워크', pkg: 'com.cashwalk.cashwalk', icon: '👟', desc: '폰 앱 열기' },                       // 한국판 하나만(같은 이름 해외·일본판은 다른 앱)
-    { id: 'wristdoctor', name: '손목닥터', pkg: 'kr.go.seoul.healthcare', icon: '⌚', desc: '폰 앱 열기' },
-    { id: 'moneywalk', name: '머니워크(에이헬스)', store: '에이헬스(머니워크)', pkg: 'com.tracerofficial', icon: '💰', desc: '폰 앱 열기' },   // 스토어 제목 「에이헬스 (구 머니워크)」
-    { id: 'yafitmove', name: '야핏무브', pkg: 'kr.co.openit.openrider', icon: '🏃', desc: '폰 앱 열기' },                      // 야핏사이클(com.yafit.cycle)은 다른 앱
-    { id: 'cashslide', name: '캐시슬라이드', pkg: 'com.cashslide', icon: '🔓', desc: '폰 앱 열기' },
-    { id: 'toss', name: '토스', pkg: 'viva.republica.toss', icon: '💙', desc: '토스 앱 열기 (만보기는 앱 안)' },              // 토스 만보기는 별도 앱이 아니라 토스 앱 안 기능
-    { id: 'kbstar', name: 'KB스타포인트', store: 'KB스타뱅킹', pkg: 'com.kbstar.kbbank', icon: '⭐', desc: '국민은행 앱 열기 (포인트는 앱 안)' }   // 스타포인트는 KB스타뱅킹 앱 안 메뉴
+    { id: 'cashwalk', name: '캐시워크', pkg: 'com.cashwalk.cashwalk', icon: '👟' },                       // 한국판 하나만(같은 이름 해외·일본판은 다른 앱)
+    { id: 'wristdoctor', name: '손목닥터', pkg: 'kr.go.seoul.healthcare', icon: '⌚' },
+    { id: 'ahealth', name: '에이헬스', pkg: 'com.tracerofficial', icon: '💰' },                           // 스토어 제목 「에이헬스 - 구 머니워크」 (옛 머니워크 이름은 화면에 쓰지 않는다)
+    { id: 'yafitmove', name: '야핏무브', pkg: 'kr.co.openit.openrider', icon: '🏃' },                      // 야핏사이클(com.yafit.cycle)은 다른 앱
+    { id: 'stepup', name: '캐시슬라이드 스텝업', pkg: 'com.nbt.moves', icon: '🔓' },                      // 잠금화면 앱 com.cashslide 는 다른 앱(넣지 않는다)
+    { id: 'toss', name: '토스', pkg: 'viva.republica.toss', icon: '💙' },                                 // 토스 만보기는 별도 앱이 아니라 토스 앱 안 기능
+    { id: 'kbstar', name: 'KB스타포인트', store: 'KB스타뱅킹', pkg: 'com.kbstar.kbbank', icon: '⭐' }          // 스타포인트는 KB스타뱅킹 앱 안 메뉴 — 미설치 시트에서만 「KB스타뱅킹」
   ];
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -57,7 +58,7 @@
     var bad = [], ids = {}, pk = {};
     all().forEach(function (x) {
       if (!x.id || ids[x.id]) bad.push('id 중복/없음: ' + x.id); ids[x.id] = 1;
-      if (!x.name || !x.desc) bad.push('이름/설명 없음: ' + x.id);
+      if (!x.name || (!x.desc && !x.icon)) bad.push('이름/설명 없음: ' + x.id);
       if (x.pkg) {
         if (!/^[a-z][a-z0-9_]*(\.[A-Za-z0-9_]+)+$/.test(x.pkg)) bad.push('패키지 모양: ' + x.pkg);
         if (pk[x.pkg]) bad.push('패키지 중복: ' + x.pkg); pk[x.pkg] = 1;
@@ -106,14 +107,14 @@
     return true;
   }
 
-  /* 영상 5줄 시트 — 채팅 ＋ 고르기 창(atm-sheet)과 같은 틀(뒤로 가기로 닫힘은 app.js goBack 의 .shin-sheet 처리가 맡는다) */
+  /* OTT 5줄 시트 — 채팅 ＋ 고르기 창(atm-sheet)과 같은 틀(뒤로 가기로 닫힘은 app.js goBack 의 .shin-sheet 처리가 맡는다) */
   function openVideoSheet() {
     if (!ctx) return;
     var old = document.querySelector('.atm-sheet'); if (old) { try { old.remove(); } catch (e) {} }
     var native = isNative();
     var sh = document.createElement('div');
     sh.className = 'sheet shin-sheet atm-sheet vid-sheet';
-    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="영상 앱 고르기"><div class="sheet-head">무엇을 볼까요?</div>' +
+    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="OTT 앱 고르기"><div class="sheet-head">무엇을 볼까요?</div>' +
       VIDEO.map(function (v) {
         var d = (!native && !v.brave) ? PC_DESC : v.desc;
         return '<button type="button" class="sheet-btn" data-vid="' + esc(v.id) + '"><svg class="atm-ic"><use href="#i-play"/></svg><span><b>' + esc(v.name) + '</b><small>' + esc(d) + '</small></span></button>';

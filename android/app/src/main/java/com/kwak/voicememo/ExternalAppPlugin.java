@@ -39,7 +39,7 @@ public class ExternalAppPlugin extends Plugin {
             "com.google.chromeremotedesktop",
             "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
             "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
-            "com.cashslide", "viva.republica.toss", "com.kbstar.kbbank"));
+            "com.nbt.moves", "viva.republica.toss", "com.kbstar.kbbank"));
 
     @PluginMethod
     public void launchApp(final PluginCall call) {
@@ -75,7 +75,7 @@ public class ExternalAppPlugin extends Plugin {
             "com.google.chromeremotedesktop", "com.brave.browser",
             "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
             "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
-            "com.cashslide", "viva.republica.toss", "com.kbstar.kbbank"));
+            "com.nbt.moves", "viva.republica.toss", "com.kbstar.kbbank"));
 
     @PluginMethod
     public void openStore(final PluginCall call) {

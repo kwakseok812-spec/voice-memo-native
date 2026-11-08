@@ -190,19 +190,19 @@
     var rf = $('hubRefresh'); if (rf) rf.addEventListener('click', function () { load(true).then(function (ok) { if (ok) ctx.toast('목록을 새로 받았어요.', 1600); }); });
   }
 
-  /* v9.80 「포인트 앱 바로 열기」 — 서버 목록과 독립(render 가 지우지 않는다). 열 때마다 다시 그려 폰/PC 표시만 맞춘다. 카드 등장 움직임 없음(움직이지 않는 자리). */
+  /* v9.80 「포인트 앱 바로 열기」 — 서버 목록과 독립(render 가 지우지 않는다). 카드 등장 움직임 없음(움직이지 않는 자리).
+   * v9.81: 세로 긴 카드 목록 → 같은 크기의 2열 칸(아이콘 + 앱 이름만). 설명어구·「폰에서만 열립니다」 표시 없음(PC 에서는 눌렀을 때 안내 토스트만 — phone-apps.js). 접근성 라벨은 이름만. */
   function renderPoints() {
     var box = $('hubPoint'); if (!box) return;
     var P = global.PhoneApps;
     if (!(ctx && ctx.points !== false && P && P.POINTS && P.POINTS.length)) { box.innerHTML = ''; return; }
-    var native = P.isNative(), html = '<div class="hub-cat">포인트 앱 바로 열기</div>';
+    var html = '<div class="hub-cat">포인트 앱 바로 열기</div><div class="hub-ptgrid">';
     P.POINTS.forEach(function (a) {
-      html += '<button type="button" class="hub-card hub-pt' + (native ? '' : ' pc') + '" data-pt="' + esc(a.id) + '">' +
+      html += '<button type="button" class="hub-card hub-pt" data-pt="' + esc(a.id) + '" aria-label="' + esc(a.name) + '">' +
         '<span class="hub-ic" aria-hidden="true">' + esc(a.icon || '•') + '</span>' +
-        '<span class="hub-tx"><b>' + esc(a.name) + '</b><small>' + esc(native ? a.desc : P.PC_DESC) + '</small></span>' +
-        '<svg class="hub-go" aria-hidden="true"><use href="#i-chev-r"/></svg></button>';
+        '<b>' + esc(a.name) + '</b></button>';
     });
-    box.innerHTML = html;
+    box.innerHTML = html + '</div>';
   }
 
   function errBlock(title, body, actions) {

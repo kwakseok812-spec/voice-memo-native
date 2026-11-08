@@ -207,7 +207,7 @@
         <package android:name="kr.go.seoul.healthcare" /><!-- 손목닥터 -->
         <package android:name="com.tracerofficial" /><!-- 머니워크=에이헬스 -->
         <package android:name="kr.co.openit.openrider" /><!-- 야핏무브 -->
-        <package android:name="com.cashslide" /><!-- 캐시슬라이드 -->
+        <package android:name="com.nbt.moves" /><!-- 캐시슬라이드 스텝업(걷기 포인트 앱, NBT Inc.). v9.81: 잠금화면 앱 com.cashslide 에서 교체 -->
         <package android:name="viva.republica.toss" /><!-- 토스 -->
         <package android:name="com.kbstar.kbbank" /><!-- KB스타뱅킹(KB스타포인트는 이 앱 안 메뉴) -->
         <!-- O-0177 폰에서 바로 받아쓰기: Android 11+ 에서 음성 인식 서비스를 찾으려면 이 선언이 있어야 한다(없으면 「사용 불가」로 나와 녹음 경로로 폴백) -->

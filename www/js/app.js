@@ -3800,6 +3800,7 @@
   APP_VERSION = 'v9.78';        // v9.78(O-0779): 홈 도구 맨 끝에 「Brave」 칸 — 누르면 폰에 설치된 Brave 앱을 패키지로 직접 지정해 열고(유튜브 앱·선택창이 끼어들지 않게) 기본 주소는 유튜브. Brave 가 없으면 「Brave 앱이 없습니다」 안내 시트 → [스토어 열기] · PC판은 새 탭으로 유튜브 · 스위치 BRAVE_TAB·BRAVE_URL·BRAVE_PKG(app.js 한 곳, BRAVE_TAB='off' 면 칸이 없어 v9.77 과 같음) · 네이티브 ExternalApp.openInApp 추가(허용 패키지 Brave 하나) · 새 권한·서버 변경 없음 · versionCode 122
   APP_VERSION = 'v9.79';        // v9.79(O-0780): 홈 끝 칸의 이름을 「Brave」→「유튜브」, 작은 글씨를 「유튜브 열기」→「Brave로 열기」로(어떤 앱으로 열리는지만 알림 — 광고가 없어진다는 약속 문구 아님) · 열기 실패 안내도 「Brave로 유튜브를 열지 못했습니다」 · 동작·방패 아이콘·맨 끝 자리·스위치 BRAVE_TAB·BRAVE_URL·BRAVE_PKG·주소·「Brave 앱이 없습니다」 시트는 그대로 · 서버·권한 변경 없음 · versionCode 123
   APP_VERSION = 'v9.80';        // v9.80(O-0781): 홈 맨 끝 「유튜브」 칸 → 「영상」 칸(작은 글씨 「유튜브·넷플릭스」) — 누르면 5줄 시트(유튜브=기존대로 Brave로 · 넷플릭스·웨이브·티빙·디즈니+ = 폰 앱 열기) + 「업무 앱」 화면 맨 위에 고정 묶음 「포인트 앱 바로 열기」(캐시워크·손목닥터·머니워크(에이헬스)·야핏무브·캐시슬라이드·토스·KB스타포인트 = 폰 앱 첫 화면 열기, 서버 목록과 무관하게 항상 보임) · 앱 없으면 「○○ 앱이 없습니다」 시트 → 스토어 열기 · PC판은 유튜브만 새 탭, 나머지 「폰에서만 열립니다」 · 새 파일 phone-apps.js · 네이티브 launchApp·openStore 허용 목록 11개 확장 + 매니페스트 <queries> 11줄(권한 아님, 새 권한 0) · 스위치 VIDEO_TAB('on'|'brave'|'off', 'brave'=v9.79 와 같은 「유튜브」 칸 · 'off'=칸 없음)·POINT_APPS('on'|'off') · 서버·SQL 변경 없음 · versionCode 124
+  APP_VERSION = 'v9.81';        // v9.81(O-0781 보정): ① 홈 「영상」 칸 이름 → 「OTT」(작은 글씨 「유튜브·넷플릭스」 그대로) ② 칸을 누르면 5줄 시트와 함께 폰의 영상 파일 고르기 화면이 뜨던 결함 고침 — 칸 id btnVideo 가 옛 「영상 정리」 첨부 핸들러(videoInput.click)와 겹쳤다 → 새 id btnVideoApps ③ 「포인트 앱 바로 열기」 7장을 같은 크기의 2열 칸(아이콘+이름만, 설명어구 없음)으로 · 「머니워크(에이헬스)」→「에이헬스」 · 「캐시슬라이드」(잠금화면 앱 com.cashslide)→「캐시슬라이드 스텝업」(걷기 앱 com.nbt.moves, NBT Inc.) 교체 · 서버·SQL·권한 변경 없음(매니페스트 <queries> 11줄 그대로) · versionCode 125
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10112,11 +10113,12 @@
     } catch (e) {}
   }
 
-  /* ---- 「영상」 칸(v9.80 O-0781) = 홈 맨 끝 칸. v9.78(O-0779) 「Brave」 칸 → v9.79(O-0780) 「유튜브」 칸 → v9.80 「영상」 칸(같은 자리에서 교체 — 칸 수 12개 그대로) ----
+  /* ---- 「OTT」 칸(v9.81, 전 이름 「영상」 v9.80 O-0781) = 홈 맨 끝 칸. v9.78(O-0779) 「Brave」 칸 → v9.79(O-0780) 「유튜브」 칸 → v9.80 「영상」 칸 → v9.81 「OTT」 칸(같은 자리에서 교체 — 칸 수 12개 그대로) ----
+   *   칸 id = btnVideoApps(v9.81). v9.80 의 btnVideo 는 옛 「영상 정리」 첨부 핸들러(위쪽 videoInput.click)가 같은 id 로 이미 붙어 있어, 칸을 누르면 시트와 함께 영상 파일 고르기가 열렸다 — id 를 바꿔 해결.
    *   누르면 5줄 시트: 유튜브(= 기존 openBrave 그대로: 폰에 설치된 Brave 앱을 패키지로 직접 열어 유튜브 — Brave 광고 차단은 Brave 쪽 기능) · 넷플릭스 · 웨이브 · 티빙 · 디즈니+(폰 앱 첫 화면 열기).
    *   시트·앱 열기·미설치 안내·연타 잠금은 phone-apps.js(PhoneApps). 앱 안 WebView·크롬 맞춤 탭에서는 Brave 의 광고 차단이 걸리지 않으므로 Brave 앱을 직접 연다
    *   (네이티브 ExternalApp.openInApp = ACTION_VIEW + setPackage → 유튜브 앱·「어느 앱으로 열까요」 선택창이 끼어들 수 없다).
-   *   스위치 VIDEO_TAB: 'on' = 「영상」 칸 + 5줄 시트 · 'brave' = v9.79 와 똑같은 「유튜브」 칸(누르면 곧바로 Brave 로 유튜브 — 문제가 생겼을 때 새 판 하나로 예전 화면으로 돌아가는 길) · 'off' = 칸이 보이지 않는다(v9.77 과 같음).
+   *   스위치 VIDEO_TAB: 'on' = 「OTT」 칸 + 5줄 시트 · 'brave' = v9.79 와 똑같은 「유튜브」 칸(누르면 곧바로 Brave 로 유튜브 — 문제가 생겼을 때 새 판 하나로 예전 화면으로 돌아가는 길) · 'off' = 칸이 보이지 않는다(v9.77 과 같음).
    *   BRAVE_URL = 유튜브 줄·'brave' 모드가 여는 기본 주소(https 만) · BRAVE_PKG = 열 앱(네이티브 허용 목록이 Brave 정식판 하나뿐이라 다른 값은 거절됨). 세 값은 여기 한 곳.
    *   Brave 가 없으면 「Brave 앱이 없습니다」 시트 → [스토어 열기](플레이 스토어 Brave 화면). PC판·브라우저는 새 탭으로 유튜브(Brave 지정은 폰 앱에서만).
    *   서버에 묻거나 저장하는 것 없음. 새 권한 없음. */
@@ -10150,16 +10152,16 @@
     } catch (e) { fail(); }
   }
   if (window.PhoneApps) { try { PhoneApps.init({ toast: toast, openSheet: openSheet, openBrave: openBrave }); } catch (e) {} }
-  if (VIDEO_TAB !== 'off' && $('btnVideo')) {
+  if (VIDEO_TAB !== 'off' && $('btnVideoApps')) {
     var videoGrid = $('homeTools'), videoSub = videoGrid && videoGrid.querySelector('.tools-sub');
-    if (videoGrid && videoSub) videoGrid.insertBefore($('btnVideo'), videoSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다
+    if (videoGrid && videoSub) videoGrid.insertBefore($('btnVideoApps'), videoSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다
     if (BRAVE_DIRECT) {   // v9.79 와 똑같은 「유튜브」 칸(되돌리는 길). phone-apps.js 가 없을 때도 이 모양으로 안전하게
-      $('btnVideo').setAttribute('aria-label', '유튜브, Brave로 열기');
-      $('btnVideo').querySelector('use').setAttribute('href', '#i-shield');
-      $('btnVideo').querySelector('b').textContent = '유튜브'; $('btnVideo').querySelector('small').textContent = 'Brave로 열기';
-      $('btnVideo').style.display = ''; $('btnVideo').addEventListener('click', openBrave);
+      $('btnVideoApps').setAttribute('aria-label', '유튜브, Brave로 열기');
+      $('btnVideoApps').querySelector('use').setAttribute('href', '#i-shield');
+      $('btnVideoApps').querySelector('b').textContent = '유튜브'; $('btnVideoApps').querySelector('small').textContent = 'Brave로 열기';
+      $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', openBrave);
     } else {
-      $('btnVideo').style.display = ''; $('btnVideo').addEventListener('click', function () { try { PhoneApps.openVideoSheet(); } catch (e) { toast('영상 목록을 열지 못했습니다 — 다시 눌러 주세요.'); } });
+      $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', function () { try { PhoneApps.openVideoSheet(); } catch (e) { toast('OTT 목록을 열지 못했습니다 — 다시 눌러 주세요.'); } });
     }
   }
 
