@@ -13,7 +13,10 @@
  *       PC_DISK_UI('on'|'off' — v9.84(O-0784): off 면 메모리 아래 「저장공간」 칸이 없어 v9.83 과 같다. PC 쪽 스위치(pc_agent_switch.json "disk")로도 숨겨진다).
  * v9.84 저장공간 칸: PC 프로그램이 payload.disk(C: 용량 숫자만)를 올릴 때만 보인다. 칸 없음·off → 줄 숨김 · pending → 「읽는 중입니다」 · err → 「확인 못 함」 ·
  *       10분 넘게 묵은 값 → 「N분 전 값」(흐리게). 사용률 80% 이상 노랑 · 90% 이상 빨강. 홈 글씨·케이 한 줄 문구는 바꾸지 않는다.
- * app.js 연결: PcStatus.init({toast, getPass, openScreen, kstat, power}) · PcStatus.open() · PcStatus.back() · PcStatus.homeDot()
+ * v9.86 외장하드 줄(O-0787): PC 프로그램(v1.2)이 payload.disk.ext(외장하드 목록 — 볼륨 이름·용량 숫자만)를 올릴 때만, C: 칸 바로 아래에 줄이 하나씩 생기고 뽑으면 사라진다.
+ *       없으면(평소·옛 PC 프로그램) 줄 없음 — v9.85 와 화면이 같다. 색 기준은 C: 와 같다(80% 노랑·90% 빨강). 스위치 PC_DISK_EXT_UI('on'|'off') — off 면 외장 줄만 없다(PC 쪽 스위치 disk_ext 로도 숨겨진다).
+ *       pending → 「읽는 중입니다」 · err → 「확인 못 함」 · 3분 넘게 묵은 값 → 화면 연 뒤 40초는 「확인 중」, 그 뒤에도 묵었으면 흐리게 + 「N분 전 값」. 이름은 PC 가 정리해 보내지만 앱도 esc() 로 한 번 더 막는다.
+ * app.js 연결: PcStatus.init({toast, getPass, openScreen, kstat, power, disk, diskExt}) · PcStatus.open() · PcStatus.back() · PcStatus.homeDot()
  * 시험: PcPure(순수 함수 묶음)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
 (function (global) {
@@ -31,7 +34,11 @@
     SECS_START: { claude_restart: 10, pc_reboot: 60 },
     DISK_WARN: 80, DISK_HOT: 90,           // 저장공간 사용률 이상이면 노랑 · 빨강(v9.84)
     DISK_OLD: 600,                         // 읽은 지(읽기 나이 + 값 나이) 이 초를 넘으면 「N분 전 값」으로 흐리게
-    DISK_NOTE: '디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다'     // 항상 보이는 작은 안내 한 줄(표기 단위를 바꾸면 이 문구도 함께)
+    DISK_NOTE: '디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다',    // 항상 보이는 작은 안내 한 줄(표기 단위를 바꾸면 이 문구도 함께)
+    EXT_OLD: 180,                          // 외장 값이 (읽기 나이 + 값 나이) 이 초를 넘게 묵으면 「확인 중」/「N분 전 값」(v9.86)
+    EXT_WAIT: 40,                          // 화면을 연 뒤 이 초 동안은 묵은 외장 값을 흐리게 하지 않고 「확인 중」 으로 둔다(PC 가 화면이 열린 것을 알고 새로 읽는 시간)
+    EXT_MAX: 3,                            // 한 번에 그리는 외장 줄 수(넘치면 「외 N개 연결됨」)
+    EXT_NAME_MAX: 24
   };
   /* 시안(합니다체)에서 가져온 안내 문구 — 대표님이 느린 PC를 재시작으로 풀려 하시는 일을 막는 설명 포함 */
   var HINT_PC_GONE = '카운트다운이 끝나면 앱이 PC에 닿지 않게 됩니다. 다시 켜지면 알려 드립니다.';
@@ -181,6 +188,44 @@
   function diskOld(readAgo, valAge) {
     var t = (num(readAgo) || 0) + (num(valAge) || 0);
     return t > K.DISK_OLD ? t : 0;
+  }
+  /* ---- 외장하드(v9.86, O-0787) — payload.disk.ext[]: 정상 {d,n?,total_gb,used_gb,free_gb,pct,ago} · 읽는 중 {d,n?,pending:true} · 확인 못 함 {d,n?,err:true}
+   * 반환 { show, items:[{kind:'ok'|'pending'|'err', letter, name, used,total,free,pct, old(초, 0=정상), checking}], more }
+   *   ext 가 없거나(평소·옛 PC 프로그램) 빈 목록·측정 꺼짐(disk.off)이면 show:false. 문자(A~Z)가 없거나 모양이 이상한 항목은 건너뛴다(지어 그리지 않는다).
+   *   opt: { valAge(payload 나이, 초), openedAt, now } — 묵은 값(K.EXT_OLD 초 초과)은 화면을 연 지 K.EXT_WAIT 초 안이면 checking(「확인 중」), 그 뒤면 old(「N분 전 값」). */
+  function extName(n) { return typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, K.EXT_NAME_MAX) : ''; }
+  function nn(v) { return (typeof v === 'number' || typeof v === 'string') ? num(v) : null; }      // 배열·객체·참거짓은 숫자로 읽지 않는다
+  function extOld(ago, valAge) {
+    var t = (num(ago) || 0) + (num(valAge) || 0);
+    return t > K.EXT_OLD ? t : 0;
+  }
+  function diskExtList(p, opt) {
+    opt = opt || {};
+    var none = { show: false, items: [], more: 0 };
+    if (!isObj(p) || !isObj(p.disk) || p.disk.off === true || !Array.isArray(p.disk.ext)) return none;
+    var items = [];
+    p.disk.ext.forEach(function (e) {
+      if (!isObj(e)) return;
+      var L = (typeof e.d === 'string' && /^[A-Za-z]$/.test(e.d)) ? e.d.toUpperCase() : '';
+      if (!L) return;
+      var it = { kind: 'err', letter: L, name: extName(e.n), used: 0, total: 0, free: 0, pct: 0, old: 0, checking: false };
+      if (e.pending === true) { it.kind = 'pending'; items.push(it); return; }
+      if (e.err === true) { items.push(it); return; }
+      var total = nn(e.total_gb), used = nn(e.used_gb), free = nn(e.free_gb), pct = nn(e.pct);
+      if (total === null || total <= 0 || used === null || used < 0 || used > total * 1.01) { items.push(it); return; }
+      if (free === null || free < 0) free = Math.max(0, total - used);
+      if (pct === null) pct = 100 * used / total;
+      it.kind = 'ok'; it.used = used; it.total = total; it.free = free; it.pct = clamp(Math.round(pct), 0, 100);
+      var old = extOld(e.ago, opt.valAge);
+      if (old) {
+        var fresh = opt.openedAt && opt.now && (opt.now - opt.openedAt) / 1000 < K.EXT_WAIT;
+        if (fresh) it.checking = true; else it.old = old;
+      }
+      items.push(it);
+    });
+    var em = num(p.disk.ext_more);
+    var more = (items.length > K.EXT_MAX ? items.length - K.EXT_MAX : 0) + (em !== null && em > 0 ? Math.floor(em) : 0);
+    return { show: items.length > 0, items: items.slice(0, K.EXT_MAX), more: items.length ? more : 0 };
   }
   function topList(p) {
     if (!isObj(p) || !Array.isArray(p.top)) return [];
@@ -375,7 +420,8 @@
     cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
     isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1,
-    capParts: capParts, fmtCap: fmtCap, diskLevel: diskLevel, diskInfo: diskInfo, diskOld: diskOld, DISK_WORD: DISK_WORD
+    capParts: capParts, fmtCap: fmtCap, diskLevel: diskLevel, diskInfo: diskInfo, diskOld: diskOld, DISK_WORD: DISK_WORD,
+    diskExtList: diskExtList, extOld: extOld, extName: extName
   };
   global.PcPure = PcPure;
   if (typeof module !== 'undefined' && module.exports) module.exports = PcPure;
@@ -384,7 +430,7 @@
   /* =====================================================================
    * 2. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true };
+  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true, diskExt: true };
   var $ = function (id) { return document.getElementById(id); };
   var built = false, inited = false;
   var data = null;                // 마지막으로 받은 get_pc_status 결과(+_at: 받은 폰 시각)
@@ -415,6 +461,7 @@
         '<div class="pcs-mb"><div class="pcs-num"><b id="pcDisk">-</b><i id="pcDiskU"></i></div></div>' +
         '<div class="pcs-bar"><u id="pcDiskBar"></u></div><div class="pcs-mf"><span id="pcDiskWord"></span><span id="pcDiskFree"></span></div>' +
         '<div class="pcs-dnote" id="pcDiskNote"></div></div>' +
+      '<div id="pcExtBox"></div>' +
       '<div class="pcs-misc" id="pcGpuRow"><span>그래픽카드</span><span id="pcGpu"></span></div>' +
       '<div class="pcs-misc" id="pcStateRow"><span>클로드 앱 · 일꾼</span><span id="pcState"></span></div>' +
       '<div class="pcs-top" id="pcTop"><div class="pcs-t">지금 가장 바쁜 프로그램</div><div id="pcTopRows"></div></div>' +
@@ -539,6 +586,7 @@
     $('pcMemBox').className = 'pcs-m lv-' + lm;
     setText('pcMemWord', mem && mem.pct !== null ? '사용 ' + Math.round(mem.pct) + ' % · ' + LEVEL_WORD[lm] : '확인 못 함');
     renderDisk(p, j);
+    renderExt(p, j);
     // 그래픽·상태·상위 프로그램
     var g = p && isObj(p.gpu) ? p.gpu : null;
     $('pcGpuRow').style.display = g ? '' : 'none';
@@ -585,6 +633,37 @@
     }
     setText('pcDiskSpan', old ? fmtAgo(old) + ' 전 값' : '1분마다 확인');
     box.className = 'pcs-m lv-' + lv + (old ? ' old' : '');
+  }
+
+  /* 외장하드 줄(v9.86). 스위치 PC_DISK_EXT_UI='off'(host.diskExt === false)나 저장공간 칸 전체 off(host.disk === false)면 줄이 없다 — v9.85 화면과 같다.
+   * 줄 HTML 은 전부 esc() 를 거치고, 직전과 같으면 다시 그리지 않는다. 새 단추·누름 반응·알림·정리 기능은 없다(표시용). */
+  function extRow(it) {
+    var title = '외장하드' + (it.name ? ' · ' + it.name : '') + ' (' + it.letter + ' 드라이브)';
+    var lv = 'na', cls = 'pcs-m pcs-ex', tag = '', num2, word, free = '', w = 0;
+    if (it.kind === 'ok') {
+      var u = capParts(it.used);
+      lv = diskLevel(it.pct); w = it.pct;
+      num2 = '<b>' + esc(u ? u.num : '확인 못 함') + '</b><i>' + (u ? esc(' ' + u.unit + ' / ' + fmtCap(it.total)) : '') + '</i>';
+      word = '사용 ' + it.pct + ' % · ' + DISK_WORD[lv]; free = '남은 공간 ' + fmtCap(it.free);
+      if (it.checking) tag = '확인 중'; else if (it.old) { tag = fmtAgo(it.old) + ' 전 값'; cls += ' old'; }
+    } else {
+      num2 = '<b>' + (it.kind === 'pending' ? '-' : '확인 못 함') + '</b>';
+      word = it.kind === 'pending' ? '읽는 중입니다' : '확인 못 함';
+    }
+    return '<div class="' + cls + ' lv-' + lv + '"><div class="pcs-exh"><span class="pcs-exn">' + esc(title) + '</span><span class="pcs-exs">' + esc(tag) + '</span></div>' +
+      '<div class="pcs-mb"><div class="pcs-num">' + num2 + '</div></div>' +
+      '<div class="pcs-bar"><u class="lv-' + lv + '" style="width:' + clamp(w, 0, 100) + '%"></u></div>' +
+      '<div class="pcs-mf"><span>' + esc(word) + '</span><span>' + esc(free) + '</span></div></div>';
+  }
+  function renderExt(p, j) {
+    var box = $('pcExtBox'); if (!box) return;
+    var ex = (host.disk === false || host.diskExt === false) ? { show: false, items: [], more: 0 } : diskExtList(p, { valAge: j && j.valAge, openedAt: openedAt, now: Date.now() });
+    var h = '';
+    if (ex.show) {
+      h = ex.items.map(extRow).join('');
+      if (ex.more) h += '<div class="pcs-exmore">' + esc('외 ' + ex.more + '개 연결됨') + '</div>';
+    }
+    if (box.getAttribute('data-sig') !== h) { box.innerHTML = h; box.setAttribute('data-sig', h); }
   }
 
   function renderCmd(j) {

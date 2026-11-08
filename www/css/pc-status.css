@@ -54,6 +54,23 @@
 #pcDiskBox.old .pcs-num b, #pcDiskBox.old .pcs-bar { opacity: .45; }
 #pcDiskBox .pcs-dnote { margin-top: 2px; font-size: 12px; line-height: 1.5; font-weight: 600; color: var(--dim); word-break: keep-all; overflow-wrap: break-word; }
 
+/* 외장하드 줄(v9.86, O-0787) — C: 칸과 같은 틀(.pcs-m .pcs-mb .pcs-num .pcs-bar .pcs-mf)을 작게. 새 규칙은 전부 #pcView 안. 줄이 없으면 칸이 비어 높이 0(v9.85 와 같은 화면) */
+#pcExtBox:empty { display: none; }
+#pcView .pcs-ex { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-b); }
+#pcView .pcs-exh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#pcView .pcs-exn { min-width: 0; font-size: 14px; font-weight: 800; color: var(--muted); word-break: keep-all; overflow-wrap: anywhere; }
+#pcView .pcs-exs { flex: none; font-size: 12.5px; font-weight: 700; color: var(--dim); }
+#pcView .pcs-ex .pcs-mb { min-height: 34px; }
+#pcView .pcs-ex .pcs-num { flex-wrap: wrap; row-gap: 0; }
+#pcView .pcs-ex .pcs-num b { font-size: 24px; }
+#pcView .pcs-ex .pcs-num i { font-size: 15px; }
+#pcView .pcs-ex .pcs-bar { height: 8px; margin: 4px 0; }
+#pcView .pcs-ex .pcs-mf { flex-wrap: wrap; word-break: keep-all; }
+#pcView .pcs-ex .pcs-mf span:last-child { text-align: right; margin-left: auto; }
+#pcView .pcs-ex.old .pcs-num b, #pcView .pcs-ex.old .pcs-bar { opacity: .45; }
+#pcView .pcs-exmore { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--dim); }
+@media (min-width: 700px) { #pcView .pcs-ex .pcs-num b { font-size: 30px; } }
+
 .pcs-misc { display: flex; justify-content: space-between; gap: 10px; padding: 11px 2px; margin-top: 4px; border-top: 1px solid var(--glass-b); font-size: 14px; font-weight: 700; }
 .pcs-misc span:first-child { color: var(--muted); }
 .pcs-misc span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
