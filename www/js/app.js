@@ -10216,7 +10216,7 @@
    *   스위치 GAME_TAB: 'on' = 칸 보임 · 'off' = 칸이 보이지 않고 목록·층 코드가 불리지 않는다(v9.82 와 같음).
    *   스위치 GAME_OPEN: 'app' = 앱 안 층(기본) · 'tab' = Pages 주소를 크롬 맞춤 탭으로(준비해 둔 대체 길 — 즉시 전환이 아니라 새 번호 재배포가 필요. 탭 모드의 두던 판은 폰 기본 브라우저가 같을 때만 이어진다).
    *   스위치 GAME_LIST: 'sheet' = 칸 → 시트(기본) · 'auto' = 게임이 하나뿐이면 시트를 건너뛰고 바로 게임으로(게임이 둘 이상이면 자동으로 시트).
-   *   연타 잠금은 v9.81 의 PhoneApps.tryLock()(700ms)을 칸·시트 줄이 함께 쓴다. 서버·저장·새 권한 없음. */
+   *   연타 잠금은 v9.81 의 PhoneApps.tryLock()(700ms)을 시트 줄(과 GAME_LIST='auto' 의 곧바로 열기)이 쓴다. 서버·저장·새 권한 없음. */
   var GAME_TAB = 'on';
   var GAME_OPEN = 'app';
   var GAME_LIST = 'sheet';

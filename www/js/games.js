@@ -8,7 +8,7 @@
  *       열 때마다 새 iframe 을 만들고 닫을 때 지운다(AI 계산 Worker·타이머가 같이 정리되고, 화면 기록이 쌓이지 않는다).
  * 뒤로 가기: app.js goBack 이 GamesTab.back() 을 먼저 부른다 — 게임이 고르기 화면이 아니면 지금 화면의 「‹ 게임 고르기」를 사람이 누른 것과 같은 길로 눌러 주고, 고르기 화면이면 층을 닫는다.
  *       위 줄 「‹ 홈」은 한 번에 나간다(두던 판은 한 수마다 게임이 스스로 저장해 두므로 잃지 않는다).
- * 연타: v9.81 의 PhoneApps.tryLock()(700ms 하나의 잠금)을 홈 칸·시트 줄이 함께 쓴다 — 층이 두 번 열리지 않는다. 없으면 이 파일의 같은 모양 잠금.
+ * 연타: v9.81 의 PhoneApps.tryLock()(700ms 하나의 잠금)을 시트 줄(과 GAME_LIST='auto' 일 때 곧바로 열리는 홈 칸)이 쓴다 — 층이 두 번 열리지 않는다. 시트만 여는 홈 칸은 잠금을 잡지 않는다(OTT 칸과 같음). 없으면 이 파일의 같은 모양 잠금.
  * 스위치(app.js): GAME_TAB('on'|'off') · GAME_OPEN('app'|'tab' — 'tab' = 크롬 맞춤 탭으로 Pages 주소 열기, 준비해 둔 대체 길) · GAME_LIST('sheet'|'auto' — 'auto' = 게임이 하나뿐이면 시트를 건너뜀).
  * 이 파일이 하지 않는 것: 서버 통신, 저장(게임 저장은 게임 안에서만), 권한, 새 네이티브 방법. 옛 「영상 정리」 첨부 칸의 id·핸들러와 이름이 겹치는 것을 쓰지 않는다(v9.80 사고).
  * 시험: GamesPure(순수 함수·목록)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
@@ -137,10 +137,9 @@
   /* ---- 홈 칸 ---- */
   function onTile() {
     if (!ctx || isOpen()) return;                       // 층이 이미 열려 있으면 아무것도 하지 않는다
-    if (!tryLock()) return;
     try {
-      if (listAction(GAMES, ctx.list) === 'direct') openGame(GAMES[0]);
-      else openSheet();
+      if (listAction(GAMES, ctx.list) === 'direct') { if (!tryLock()) return; openGame(GAMES[0]); }   // 곧바로 게임으로 가는 길만 칸에서 잠금을 잡는다
+      else openSheet();                                  // 시트 열기는 잠금 없음(기존 시트를 지우고 다시 만들 뿐 — 칸을 누른 직후 0.7초 안에 줄을 눌러도 열린다). 줄을 누를 때 잠금
     } catch (e) { toast(TXT.listFail); }
   }
 

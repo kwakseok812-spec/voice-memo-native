@@ -13,7 +13,7 @@
 @keyframes gmIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 #gameRoot *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 #gameBar{flex:none;display:flex;align-items:center;gap:6px;min-height:calc(44px + var(--sat,0px));padding:var(--sat,0px) 8px 0 4px;background:#1c1611;border-bottom:1px solid rgba(243,233,216,.14)}
-#gameBack{flex:none;display:inline-flex;align-items:center;gap:2px;min-width:68px;min-height:44px;padding:0 12px 0 6px;border:0;border-radius:12px;background:transparent;color:#f3e9d8;font:700 16px/1 inherit;font-family:inherit;cursor:pointer}
+#gameBack{flex:none;display:inline-flex;align-items:center;gap:2px;min-width:68px;min-height:44px;padding:0 12px 0 6px;border:0;border-radius:12px;background:transparent;color:#f3e9d8;font-family:inherit;font-size:16px;font-weight:700;line-height:1;cursor:pointer}
 #gameBack svg{width:22px;height:22px}
 #gameBack:active{background:rgba(243,233,216,.14)}
 #gameTitle{flex:1;min-width:0;text-align:center;font-size:15px;font-weight:800;color:#f3e9d8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -24,7 +24,7 @@ html[data-fs] #gameTitle{font-size:calc(15px * var(--fsx))}
 #gameFrame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#1c1611;display:block}
 .gm-load{position:absolute;left:0;right:0;top:42%;text-align:center;font-size:16px;font-weight:700;color:rgba(243,233,216,.85);pointer-events:none}
 .gm-fail{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#1c1611;color:#f3e9d8;font-size:17px}
-.gm-failbtn{min-height:48px;padding:0 22px;border-radius:14px;border:1px solid rgba(243,233,216,.3);background:rgba(243,233,216,.1);color:#f3e9d8;font:700 16px/1 inherit;font-family:inherit;cursor:pointer}
+.gm-failbtn{min-height:48px;padding:0 22px;border-radius:14px;border:1px solid rgba(243,233,216,.3);background:rgba(243,233,216,.1);color:#f3e9d8;font-family:inherit;font-size:16px;font-weight:700;line-height:1;cursor:pointer}
 .gm-failbtn:active{background:rgba(243,233,216,.2)}
 
 /* 목록 시트(OTT 시트와 같은 .atm-sheet 틀 위에 아이콘·표식만 더한다) */
