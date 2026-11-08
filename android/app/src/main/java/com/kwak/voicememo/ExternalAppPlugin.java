@@ -55,7 +55,7 @@ public class ExternalAppPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /* v9.78 (O-0779) 「Brave」 칸 — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (launchApp 허용 목록은 그대로 — Brave 는 openInApp 으로만 연다) */
+    /* v9.78 (O-0779) 홈 「유튜브」 칸(Brave로 열기, v9.79 에서 칸 이름만 바뀜) — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (launchApp 허용 목록은 그대로 — Brave 는 openInApp 으로만 연다) */
     private static final java.util.Set<String> STORE_ALLOWED =
         new java.util.HashSet<>(java.util.Arrays.asList("com.google.chromeremotedesktop", "com.brave.browser"));
 
@@ -126,7 +126,7 @@ public class ExternalAppPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /* v9.78 (O-0779) 「Brave」 칸 — 웹 주소를 지정한 앱(Brave)으로 연다.
+    /* v9.78 (O-0779) 홈 「유튜브」 칸(Brave로 열기, v9.79 에서 칸 이름만 바뀜) — 웹 주소를 지정한 앱(Brave)으로 연다.
      *  - Intent(ACTION_VIEW, https주소) + setPackage(pkg) → 그 앱의 화면만 후보라서 유튜브 앱·「어느 앱으로 열까요」 선택창이 끼어들 수 없다.
      *  - 허용 패키지 = Brave 정식판 하나(다른 앱을 아무거나 여는 통로가 되지 않게). 주소는 https:// 만, 공백·제어문자 없음, 2000자 이하.
      *  - 미설치 판단 = 실제로 열어 보고 ActivityNotFoundException 이면 not_installed (미리 조회하지 않으므로 <queries> 선언이 필요 없다 — startActivity 는 패키지 가시성 제한을 받지 않는다).
