@@ -15,7 +15,7 @@
  *       10분 넘게 묵은 값 → 「N분 전 값」(흐리게). 사용률 80% 이상 노랑 · 90% 이상 빨강. 홈 글씨·케이 한 줄 문구는 바꾸지 않는다.
  * v9.86 외장하드 줄(O-0787): PC 프로그램(v1.2)이 payload.disk.ext(외장하드 목록 — 볼륨 이름·용량 숫자만)를 올릴 때만, C: 칸 바로 아래에 줄이 하나씩 생기고 뽑으면 사라진다.
  *       없으면(평소·옛 PC 프로그램) 줄 없음 — v9.85 와 화면이 같다. 색 기준은 C: 와 같다(80% 노랑·90% 빨강). 스위치 PC_DISK_EXT_UI('on'|'off') — off 면 외장 줄만 없다(PC 쪽 스위치 disk_ext 로도 숨겨진다).
- *       pending → 「읽는 중입니다」 · err → 「확인 못 함」 · 3분 넘게 묵은 값 → 화면 연 뒤 40초는 「확인 중」, 그 뒤에도 묵었으면 흐리게 + 「N분 전 값」. 이름은 PC 가 정리해 보내지만 앱도 esc() 로 한 번 더 막는다.
+ *       pending → 「읽는 중입니다」 · err → 「확인 못 함」(큰 글씨 자리는 「—」) · 3분 넘게 묵은 값 → 화면 연 뒤 40초는 「확인 중」, 그 뒤에도 묵었으면 흐리게 + 「N분 전 값」. 이름은 PC 가 정리해 보내지만 앱도 esc() 로 한 번 더 막는다.
  * app.js 연결: PcStatus.init({toast, getPass, openScreen, kstat, power, disk, diskExt}) · PcStatus.open() · PcStatus.back() · PcStatus.homeDot()
  * 시험: PcPure(순수 함수 묶음)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
@@ -647,7 +647,7 @@
       word = '사용 ' + it.pct + ' % · ' + DISK_WORD[lv]; free = '남은 공간 ' + fmtCap(it.free);
       if (it.checking) tag = '확인 중'; else if (it.old) { tag = fmtAgo(it.old) + ' 전 값'; cls += ' old'; }
     } else {
-      num2 = '<b>' + (it.kind === 'pending' ? '-' : '확인 못 함') + '</b>';
+      num2 = '<b>' + (it.kind === 'pending' ? '-' : '—') + '</b>';          // 큰 글씨 자리는 「—」 — 「확인 못 함」은 아래 작은 글씨로 한 번만
       word = it.kind === 'pending' ? '읽는 중입니다' : '확인 못 함';
     }
     return '<div class="' + cls + ' lv-' + lv + '"><div class="pcs-exh"><span class="pcs-exn">' + esc(title) + '</span><span class="pcs-exs">' + esc(tag) + '</span></div>' +
