@@ -39,7 +39,7 @@
     { id: 'wristdoctor', name: '손목닥터', pkg: 'kr.go.seoul.healthcare', icon: '⌚' },
     { id: 'ahealth', name: '에이헬스', pkg: 'com.tracerofficial', icon: '💰' },                           // 스토어 제목 「에이헬스 - 구 머니워크」 (옛 머니워크 이름은 화면에 쓰지 않는다)
     { id: 'yafitmove', name: '야핏무브', pkg: 'kr.co.openit.openrider', icon: '🏃' },                      // 야핏사이클(com.yafit.cycle)은 다른 앱
-    { id: 'stepup', name: '캐시슬라이드 스텝업', pkg: 'com.nbt.moves', icon: '🔓' },                      // 잠금화면 앱 com.cashslide 는 다른 앱(넣지 않는다)
+    { id: 'stepup', name: '캐시슬라이드 스텝업', pkg: 'com.nbt.moves', icon: '👣' },                      // 잠금화면 앱 com.cashslide 는 다른 앱(넣지 않는다) · v9.85: 아이콘 🔓(잠금화면 앱 시절)→👣(걷기 모양), 그 밖은 그대로
     { id: 'toss', name: '토스', pkg: 'viva.republica.toss', icon: '💙' },                                 // 토스 만보기는 별도 앱이 아니라 토스 앱 안 기능
     { id: 'kbstar', name: 'KB스타포인트', store: 'KB스타뱅킹', pkg: 'com.kbstar.kbbank', icon: '⭐' }          // 스타포인트는 KB스타뱅킹 앱 안 메뉴 — 미설치 시트에서만 「KB스타뱅킹」
   ];
