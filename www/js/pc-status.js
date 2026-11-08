@@ -9,7 +9,10 @@
  *       · 생존은 seen_at(서버 시계), 수치 신선도는 updated_at — 평소 모드(15초 확인·1분 올림)에서 수치가 1분 묵어도 정상으로 본다.
  *       · 결과 문구는 서버 상태가 done 일 때만 「성공」. 마감까지 결과가 없으면 서버가 unknown, 2분 안에 PC가 못 가져가면 expired 로 돌려준다.
  *       · 확인은 「단추 → 확인 창([취소]/[다시 시작]) 두 번 누르기」. 작업 중이면 확인 창에 경고 한 줄 + 「그래도 다시 시작」(force). 재시작 암호·길게 누르기는 없다(대표님 결정).
- * 스위치: app.js 의 PC_MON_UI('on'|'off' — off 면 홈 줄이 보이지 않아 v9.74 와 같다) · PC_POWER_UI('on'|'off' — off 면 「PC 관리」가 없다).
+ * 스위치: app.js 의 PC_MON_UI('on'|'off' — off 면 홈 줄이 보이지 않아 v9.74 와 같다) · PC_POWER_UI('on'|'off' — off 면 「PC 관리」가 없다) ·
+ *       PC_DISK_UI('on'|'off' — v9.84(O-0784): off 면 메모리 아래 「저장공간」 칸이 없어 v9.83 과 같다. PC 쪽 스위치(pc_agent_switch.json "disk")로도 숨겨진다).
+ * v9.84 저장공간 칸: PC 프로그램이 payload.disk(C: 용량 숫자만)를 올릴 때만 보인다. 칸 없음·off → 줄 숨김 · pending → 「읽는 중입니다」 · err → 「확인 못 함」 ·
+ *       10분 넘게 묵은 값 → 「N분 전 값」(흐리게). 사용률 80% 이상 노랑 · 90% 이상 빨강. 홈 글씨·케이 한 줄 문구는 바꾸지 않는다.
  * app.js 연결: PcStatus.init({toast, getPass, openScreen, kstat, power}) · PcStatus.open() · PcStatus.back() · PcStatus.homeDot()
  * 시험: PcPure(순수 함수 묶음)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
@@ -25,7 +28,10 @@
     FAST_VAL: 12, IDLE_VAL: 75,            // 수치가 이보다 묵으면 흐리게
     CONNECT_WAIT: 25,                      // 화면을 연 직후 평소 모드 → 빠른 모드로 바뀌길 기다리는 시간
     PENDING_HINT: 20,                      // 요청을 보낸 지 이 시간이 지나도 PC가 안 가져가면 안내
-    SECS_START: { claude_restart: 10, pc_reboot: 60 }
+    SECS_START: { claude_restart: 10, pc_reboot: 60 },
+    DISK_WARN: 80, DISK_HOT: 90,           // 저장공간 사용률 이상이면 노랑 · 빨강(v9.84)
+    DISK_OLD: 600,                         // 읽은 지(읽기 나이 + 값 나이) 이 초를 넘으면 「N분 전 값」으로 흐리게
+    DISK_NOTE: '디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다'     // 항상 보이는 작은 안내 한 줄(표기 단위를 바꾸면 이 문구도 함께)
   };
   /* 시안(합니다체)에서 가져온 안내 문구 — 대표님이 느린 PC를 재시작으로 풀려 하시는 일을 막는 설명 포함 */
   var HINT_PC_GONE = '카운트다운이 끝나면 앱이 PC에 닿지 않게 됩니다. 다시 켜지면 알려 드립니다.';
@@ -131,6 +137,51 @@
     return { pct: pct, used: u, total: t };
   }
   function gb1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
+
+  /* ---- 저장공간(v9.84, O-0784) — PC가 올리는 payload.disk(용량 숫자만). 1 TB = 1024 GB(메모리 칸과 같은 계산 · 윈도 탐색기와 같은 계산) ---- */
+  /* 용량(GB) → { num: '481', unit: 'GB' } / { num: '1.82', unit: 'TB' }. 반올림한 값이 1024 GB 미만이면 GB(정수), 이상이면 TB(소수 둘째). 못 읽으면 null. */
+  function capParts(gb) {
+    if (typeof gb !== 'number' && typeof gb !== 'string') return null;     // 배열·객체·참거짓은 숫자로 읽지 않는다
+    var v = num(gb);
+    if (v === null || v < 0) return null;
+    var r = Math.round(v);
+    if (r < 1024) return { num: String(r), unit: 'GB' };
+    return { num: (Math.round(v / 1024 * 100) / 100).toFixed(2), unit: 'TB' };
+  }
+  function fmtCap(gb) { var c = capParts(gb); return c ? c.num + ' ' + c.unit : ''; }
+  /* 사용률(%) → 단계. 값이 없거나 음수면 na(지어내지 않는다) */
+  function diskLevel(pct) {
+    var v = num(pct);
+    if (v === null || v < 0) return 'na';
+    return v >= K.DISK_HOT ? 'hot' : (v >= K.DISK_WARN ? 'warn' : 'ok');
+  }
+  var DISK_WORD = { ok: '여유', warn: '많이 참', hot: '거의 참', na: '확인 못 함' };
+  /* payload → 저장공간 칸에 그릴 것.
+   *   { show:false, kind:'none'|'off' }                    칸 없음(옛 PC 프로그램·측정 꺼짐) · PC 스위치로 끔 → 줄 전체를 숨긴다
+   *   { show:true, kind:'pending' }                         PC가 막 시작해 첫 읽기가 아직 → 「읽는 중입니다」
+   *   { show:true, kind:'err' }                             읽기 실패·값 이상 → 「확인 못 함」
+   *   { show:true, kind:'ok', letter, used, total, free, pct, readAgo } 정상(드라이브가 여럿이어도 첫 번째만) */
+  function diskInfo(p) {
+    if (!isObj(p) || !isObj(p.disk)) return { show: false, kind: 'none' };
+    var d = p.disk;
+    if (d.off === true) return { show: false, kind: 'off' };
+    if (d.pending === true) return { show: true, kind: 'pending' };
+    if (d.err === true) return { show: true, kind: 'err' };
+    var dr = Array.isArray(d.drives) ? d.drives.filter(isObj)[0] : null;
+    if (!dr) return { show: true, kind: 'err' };
+    var total = num(dr.total_gb), used = num(dr.used_gb), free = num(dr.free_gb), pct = num(dr.pct);
+    if (total === null || total <= 0 || used === null || used < 0 || used > total * 1.01) return { show: true, kind: 'err' };
+    if (free === null || free < 0) free = Math.max(0, total - used);
+    if (pct === null) pct = 100 * used / total;
+    pct = clamp(Math.round(pct), 0, 100);
+    var ra = num(d.read_ago_s);
+    return { show: true, kind: 'ok', letter: String(dr.d || 'C').charAt(0).toUpperCase(), used: used, total: total, free: free, pct: pct, readAgo: ra === null ? 0 : Math.max(0, ra) };
+  }
+  /* 읽은 지 얼마나 묵은 값인가(초). 읽기 나이(PC 시계)와 payload 나이(서버 시계)를 더한다. K.DISK_OLD 를 넘으면 그 초, 아니면 0. */
+  function diskOld(readAgo, valAge) {
+    var t = (num(readAgo) || 0) + (num(valAge) || 0);
+    return t > K.DISK_OLD ? t : 0;
+  }
   function topList(p) {
     if (!isObj(p) || !Array.isArray(p.top)) return [];
     return p.top.filter(function (x) { return isObj(x) && x.n; }).slice(0, 3).map(function (x) { return { n: String(x.n), pct: num(x.pct) }; });
@@ -323,7 +374,8 @@
     K: K, esc: esc, iga: iga, koItem: koItem, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
     cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
-    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1
+    isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1,
+    capParts: capParts, fmtCap: fmtCap, diskLevel: diskLevel, diskInfo: diskInfo, diskOld: diskOld, DISK_WORD: DISK_WORD
   };
   global.PcPure = PcPure;
   if (typeof module !== 'undefined' && module.exports) module.exports = PcPure;
@@ -332,7 +384,7 @@
   /* =====================================================================
    * 2. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true };
+  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true };
   var $ = function (id) { return document.getElementById(id); };
   var built = false, inited = false;
   var data = null;                // 마지막으로 받은 get_pc_status 결과(+_at: 받은 폰 시각)
@@ -359,6 +411,10 @@
       '<div class="pcs-m" id="pcMemBox"><div class="pcs-mh"><span>메모리</span><span></span></div>' +
         '<div class="pcs-mb"><div class="pcs-num"><b id="pcMem">-</b><i id="pcMemU"></i></div></div>' +
         '<div class="pcs-bar"><u id="pcMemBar"></u></div><div class="pcs-mf"><span id="pcMemWord"></span><span></span></div></div>' +
+      '<div class="pcs-m" id="pcDiskBox" style="display:none;"><div class="pcs-mh"><span id="pcDiskName">저장공간 (C 드라이브)</span><span id="pcDiskSpan">1분마다 확인</span></div>' +
+        '<div class="pcs-mb"><div class="pcs-num"><b id="pcDisk">-</b><i id="pcDiskU"></i></div></div>' +
+        '<div class="pcs-bar"><u id="pcDiskBar"></u></div><div class="pcs-mf"><span id="pcDiskWord"></span><span id="pcDiskFree"></span></div>' +
+        '<div class="pcs-dnote" id="pcDiskNote"></div></div>' +
       '<div class="pcs-misc" id="pcGpuRow"><span>그래픽카드</span><span id="pcGpu"></span></div>' +
       '<div class="pcs-misc" id="pcStateRow"><span>클로드 앱 · 일꾼</span><span id="pcState"></span></div>' +
       '<div class="pcs-top" id="pcTop"><div class="pcs-t">지금 가장 바쁜 프로그램</div><div id="pcTopRows"></div></div>' +
@@ -482,6 +538,7 @@
     setBar('pcMemBar', mem ? mem.pct : null, lm);
     $('pcMemBox').className = 'pcs-m lv-' + lm;
     setText('pcMemWord', mem && mem.pct !== null ? '사용 ' + Math.round(mem.pct) + ' % · ' + LEVEL_WORD[lm] : '확인 못 함');
+    renderDisk(p, j);
     // 그래픽·상태·상위 프로그램
     var g = p && isObj(p.gpu) ? p.gpu : null;
     $('pcGpuRow').style.display = g ? '' : 'none';
@@ -498,6 +555,36 @@
     setText('pcFoot', '');
     renderCmd(j);
     renderFold(j, st);
+  }
+
+  /* 저장공간 칸(v9.84). 스위치 PC_DISK_UI='off'(host.disk === false)면 칸을 그리지 않는다 — v9.83 화면과 같다.
+   * 숫자가 굴러가는 효과는 쓰지 않는다(천천히 변하는 값). 칸 없음·PC 스위치 off 는 줄 전체를 숨긴다(「확인 못 함」으로 겁주지 않는다). */
+  function renderDisk(p, j) {
+    var box = $('pcDiskBox'); if (!box) return;
+    var dk = host.disk === false ? { show: false, kind: 'off' } : diskInfo(p);
+    box.style.display = dk.show ? '' : 'none';
+    if (!dk.show) return;
+    var lv = 'na', old = 0;
+    setText('pcDiskName', '저장공간 (' + (dk.letter || 'C') + ' 드라이브)');
+    setText('pcDiskNote', K.DISK_NOTE);
+    if (dk.kind === 'ok') {
+      var u = capParts(dk.used);
+      lv = diskLevel(dk.pct);
+      old = diskOld(dk.readAgo, j && j.valAge);
+      setText('pcDisk', u ? u.num : '확인 못 함');
+      setText('pcDiskU', u ? ' ' + u.unit + ' / ' + fmtCap(dk.total) : '');
+      setText('pcDiskWord', '사용 ' + dk.pct + ' % · ' + DISK_WORD[lv]);
+      setText('pcDiskFree', '남은 공간 ' + fmtCap(dk.free));
+      setBar('pcDiskBar', dk.pct, lv);
+    } else {
+      setText('pcDisk', dk.kind === 'pending' ? '-' : '확인 못 함');
+      setText('pcDiskU', '');
+      setText('pcDiskWord', dk.kind === 'pending' ? '읽는 중입니다' : '확인 못 함');
+      setText('pcDiskFree', '');
+      setBar('pcDiskBar', null, 'na');
+    }
+    setText('pcDiskSpan', old ? fmtAgo(old) + ' 전 값' : '1분마다 확인');
+    box.className = 'pcs-m lv-' + lv + (old ? ' old' : '');
   }
 
   function renderCmd(j) {

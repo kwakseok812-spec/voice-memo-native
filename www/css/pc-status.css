@@ -47,6 +47,13 @@
 .pcs-bar u.lv-ok { background: var(--ok); } .pcs-bar u.lv-warn { background: var(--warn); } .pcs-bar u.lv-hot { background: var(--rec); } .pcs-bar u.lv-na { background: var(--pc-na); }
 .pcs-bar.sm { height: 6px; margin: 0; grid-column: 2 / -1; }
 
+/* 저장공간 칸(v9.84, O-0784) — 메모리 칸과 같은 틀을 그대로 쓴다. 새 규칙은 전부 #pcView 안 */
+#pcDisk { font-size: 34px; }
+#pcDiskBox .pcs-num { flex-wrap: wrap; row-gap: 0; }
+#pcDiskBox .pcs-mf span:last-child { text-align: right; }
+#pcDiskBox.old .pcs-num b, #pcDiskBox.old .pcs-bar { opacity: .45; }
+#pcDiskBox .pcs-dnote { margin-top: 2px; font-size: 12px; line-height: 1.5; font-weight: 600; color: var(--dim); word-break: keep-all; overflow-wrap: break-word; }
+
 .pcs-misc { display: flex; justify-content: space-between; gap: 10px; padding: 11px 2px; margin-top: 4px; border-top: 1px solid var(--glass-b); font-size: 14px; font-weight: 700; }
 .pcs-misc span:first-child { color: var(--muted); }
 .pcs-misc span:last-child { text-align: right; font-variant-numeric: tabular-nums; }

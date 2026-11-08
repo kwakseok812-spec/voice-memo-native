@@ -3805,6 +3805,7 @@
   APP_VERSION = 'v9.81';        // v9.81(O-0781 보정): ① 홈 「영상」 칸 이름 → 「OTT」(작은 글씨 「유튜브·넷플릭스」 그대로) ② 칸을 누르면 5줄 시트와 함께 폰의 영상 파일 고르기 화면이 뜨던 결함 고침 — 칸 id btnVideo 가 옛 「영상 정리」 첨부 핸들러(videoInput.click)와 겹쳤다 → 새 id btnVideoApps ③ 「포인트 앱 바로 열기」 7장을 같은 크기의 2열 칸(아이콘+이름만, 설명어구 없음)으로 · 「머니워크(에이헬스)」→「에이헬스」 · 「캐시슬라이드」(잠금화면 앱 com.cashslide)→「캐시슬라이드 스텝업」(걷기 앱 com.nbt.moves, NBT Inc.) 교체 · 서버·SQL·권한 변경 없음(매니페스트 <queries> 11줄 그대로) · versionCode 125
   APP_VERSION = 'v9.82';        // v9.82(O-0782): 홈 「곽호석」 칸 → 「성과」(작은 글씨 「실적·승진」) + 홈 「승진」 칸을 성과 안으로 합침 — 「성과」 맨 위 「실적 | 승진」 두 칸 알약(건강 탭과 같은 모양)으로 두 화면을 오감 · 승진 점수·시기 계산(promotion-calc.js)은 한 글자도 안 바뀜 · 홈 칸 12→11 · 스위치 PERF_MERGE('off' 면 옛 두 칸) · 서버·SQL·권한 변경 없음 · versionCode 126
   APP_VERSION = 'v9.83';        // v9.83(O-0783): 홈 맨 끝에 「게임」 칸(작은 글씨 「장기·오목」, OTT 칸 다음) — 누르면 「한 판 둘까요?」 목록 시트(OTT 시트와 같은 틀) → 장기·오목을 스마트비서 안 고정 층(iframe)에서 둔다. 게임 파일은 원본 그대로 www/games/janggi/ 에 담아(deploy/sync_games.sh) 인터넷 없이 열리고 두던 판은 이어진다(같은 출처 localStorage janggi.*). 뒤로 가기는 앱이 처리(판 → 게임 고르기 → 홈), 위 줄 「‹ 홈」은 한 번에 나감. 스위치 GAME_TAB('on'|'off')·GAME_OPEN('app'|'tab')·GAME_LIST('sheet'|'auto'). 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 127
+  APP_VERSION = 'v9.84';        // v9.84(O-0784): 「PC 상태」 화면의 메모리 아래에 「저장공간」 칸 — C 드라이브 사용량(예: 481 GB / 1.82 TB) + 막대 + 남은 공간, 80% 이상 노랑·90% 이상 빨강, 작은 안내 「디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다」. PC 프로그램이 값을 올릴 때만 보이고(옛 프로그램이면 줄이 없음) 못 읽으면 「확인 못 함」·10분 넘게 묵으면 「N분 전 값」. 홈 글씨·알림·정리 기능 없음. 스위치 PC_DISK_UI. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 128
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10117,10 +10118,12 @@
   /* ---- PC 상태(O-0755 v9.75): 화면 열기/연결(로직은 pc-status.js) ----
    *   스위치 PC_MON_UI: 'on' = 홈 「PC 연결」 묶음의 세 번째 줄 「PC 상태」(CPU·메모리 보기) · 'off' = 줄이 보이지 않아 v9.74 와 같다(서버 무관).
    *   스위치 PC_POWER_UI: 'on' = 화면 맨 아래 접힌 「PC 관리」(클로드 앱 / PC 전체 다시 시작) · 'off' = 그 묶음이 없다.
+   *   스위치 PC_DISK_UI(v9.84, O-0784): 'on' = 메모리 아래 「저장공간」 칸(C 드라이브 사용량 · PC가 disk 값을 올릴 때만 보임) · 'off' = 그 칸이 없어 v9.83 과 같다.
    *   PC 전체 단추가 실제로 열리는 것은 앱이 아니라 PC(서버 payload.power.pc_btn)가 정한다 — 앱에서 풀 수 없다(시험 뒤 열림).
    *   서버 함수(get_pc_status 등)가 아직 없으면 화면이 「서버 준비 중입니다」를 말할 뿐 홈은 그대로 동작한다. */
   var PC_MON_UI = 'on';
   var PC_POWER_UI = 'on';
+  var PC_DISK_UI = 'on';
   var pcView = $('pcView');
   function openPcStatus() {
     if (window.PcStatus && PcStatus.open) { try { PcStatus.open(); } catch (e) { openScreen(pcView); } }
@@ -10128,7 +10131,7 @@
   }
   if (PC_MON_UI !== 'off' && window.PcStatus && $('btnPcStatus')) {
     try {
-      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off' });
+      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off', disk: PC_DISK_UI !== 'off' });
       $('btnPcStatus').style.display = ''; $('btnPcStatus').addEventListener('click', openPcStatus);
     } catch (e) {}
   }
