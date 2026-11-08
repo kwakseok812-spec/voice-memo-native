@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="css/pc-status.css"><!-- O-0755 v9.75 「PC 상태」 -->
   <link rel="stylesheet" href="css/hub-apps.css"><!-- v9.76 「업무 앱」 -->
   <link rel="stylesheet" href="css/promotion.css"><!-- O-0684 v9.62 「승진」 점수판 -->
+  <link rel="stylesheet" href="css/perf-seg.css"><!-- O-0782 v9.82 「성과」 안 「실적 | 승진」 알약(합침이 켜졌을 때만 먹는다) -->
   <link rel="stylesheet" href="css/k-intro.css"><!-- O-0116 시작 인사·전신 -->
   <link rel="stylesheet" href="css/k-voice-stage.css"><!-- O-0490 케이 목소리 고르는 화면(케이 무대) -->
   <link rel="stylesheet" href="css/k-fashion-show.css"><!-- O-0557 케이 패션쇼 -->
@@ -916,6 +917,7 @@
 <script src="js/history.js"></script>
 <script src="js/push.js"></script>
 <script src="js/health.js"></script><script src="js/health-voice.js"></script><!-- O-0693 건강 탭 「말로 기록」 — health.js 바로 뒤, app.js 보다 먼저(app.js 가 host 를 건넨다) -->
+<script src="js/perf-seg.js"></script><!-- O-0782 v9.82 「성과」 알약 — achievements.js·promotion.js·app.js 보다 먼저(app.js 가 있는지 보고 켠다) -->
 <script src="js/achievements.js"></script><script src="js/album.js"></script><script src="js/pc-status.js"></script><script src="js/phone-apps.js"></script><!-- v9.80 「영상」 시트·「포인트 앱 바로 열기」 — 폰 앱 열기(hub-apps.js·app.js 보다 먼저) --><script src="js/hub-apps.js"></script><!-- v9.76 「업무 앱」 --><!-- O-0684 v9.59 「실적」 탭 — app.js 보다 먼저 -->
 <script src="js/promotion-calc.js"></script><script src="js/promotion.js"></script><script src="js/promotion-edit.js"></script><script src="js/promotion-xlsx.js"></script><!-- O-0684 v9.62 「승진」 점수판 — app.js 보다 먼저 -->
 <script src="js/markup.js"></script><!-- O-0544 문서 뷰어 「수정 요청」(docviewer.js 보다 먼저 — init 때 길게 누르기를 붙인다) -->

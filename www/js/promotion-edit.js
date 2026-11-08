@@ -78,7 +78,7 @@
       case '4-1':
       case '4-2': F = [(code === '4-2' ? subF(code, '학술지 종류', subOpts(code)) : null), txt('title', '논문 제목', { req: true, max: 400, cover: true }), txt('journal', '학술지', { max: 200, cover: true }),
         it('pubYear', '발행 연도', { req: true, min: 1990, max: 2100, ph: '2025', cover: true }), it('pubMonth', '발행 월', { min: 1, max: 12, hint: '모르면 비워 두세요', ph: '7' }),
-        Object.assign(part('저자 수(나 포함)', '곽호석 탭에서 고르면 거기 값을 써요'), { cover: true }),
+        Object.assign(part('저자 수(나 포함)', '실적 탭에서 고르면 거기 값을 써요'), { cover: true }),
         { id: 'isCorresponding', where: 'val', key: 'isCorresponding', kind: 'bool', label: '책임저자인가요?', hint: '제1저자 또는 교신저자', cover: true, lead: true },
         { id: 'jc', where: 'ev', key: 'journal_check', kind: 'sel', label: '학술지 분류 확인', hint: 'SCI·등재지인지', opts: [['', '입력한 그대로'], ['confirmed', '확인됨'], ['need', '확인 필요']] }].filter(Boolean); break;
       case '4-3': F = [subF(code, '종류', subOpts(code)), txt('title', '이름', { req: true, max: 300, cover: true }), part('공동 발명자 수(나 포함)')]; break;
@@ -220,24 +220,24 @@
     var k = linkKind(I.code); if (!k || !X.link) return '';
     var d = I.d, a = d.ach_id ? achOf(d.ach_id) : null, h = '';
     if (d.ach_id) {
-      if (!a) return '<div class="plinkbox"><b>곽호석 탭에 연결돼 있어요</b><p class="psb">연결한 곽호석 탭 항목을 지금은 찾을 수 없어요(인터넷이 안 되거나 곽호석 탭에서 지웠을 수 있어요). 저장된 값으로 계산해요.</p><button type="button" class="pbtn sm ghost" id="pUnlink">연결 끊기</button></div>';
+      if (!a) return '<div class="plinkbox"><b>실적 탭에 연결돼 있어요</b><p class="psb">연결한 실적 탭 항목을 지금은 찾을 수 없어요(인터넷이 안 되거나 실적 탭에서 지웠을 수 있어요). 저장된 값으로 계산해요.</p><button type="button" class="pbtn sm ghost" id="pUnlink">연결 끊기</button></div>';
       var ld = PC.leadOf(a), n = PC.achPeopleN(a), isP = (I.code === '4-1' || I.code === '4-2');
-      h += '<div class="plinkbox on"><b>곽호석 탭 「' + esc(k.label) + '」과 연결됨</b><div class="plt">' + esc(a.title || '(제목 없음)') + '</div><div class="psb">' + [a.year ? a.year + '년' : '', a.venue || '', isP && n ? '저자 ' + n + '명' : ''].filter(Boolean).map(esc).join(' · ') + '</div>';
-      h += '<p class="psb">제목·학술지·연도·저자 수는 곽호석 탭 값을 그대로 써요(여기서 고치지 않아요).</p>';
+      h += '<div class="plinkbox on"><b>실적 탭 「' + esc(k.label) + '」과 연결됨</b><div class="plt">' + esc(a.title || '(제목 없음)') + '</div><div class="psb">' + [a.year ? a.year + '년' : '', a.venue || '', isP && n ? '저자 ' + n + '명' : ''].filter(Boolean).map(esc).join(' · ') + '</div>';
+      h += '<p class="psb">제목·학술지·연도·저자 수는 실적 탭 값을 그대로 써요(여기서 고치지 않아요).</p>';
       if (isP) {
-        h += '<div class="pfld"><span class="plab2" id="pl_lead">책임저자인가요? <small>제1저자 또는 교신저자 · 곽호석 탭 항목에 적혀요</small></span><div class="pseg three" role="radiogroup" aria-labelledby="pl_lead" data-seg="lead">'
+        h += '<div class="pfld"><span class="plab2" id="pl_lead">책임저자인가요? <small>제1저자 또는 교신저자 · 실적 탭 항목에 적혀요</small></span><div class="pseg three" role="radiogroup" aria-labelledby="pl_lead" data-seg="lead">'
           + [['auto', '제안 따름'], ['yes', '예'], ['no', '아니에요']].map(function (o) { var on = d.lead === o[0]; return '<button type="button" role="radio" aria-checked="' + (on ? 'true' : 'false') + '" data-v="' + o[0] + '" class="' + (on ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</div>'
           + '<div class="psb" id="pLeadHint">' + leadHint(a) + '</div></div>';
       }
       h += '<button type="button" class="pbtn sm ghost" id="pUnlink">연결 끊기</button></div>';
     } else {
-      h += '<div class="plinkbox"><b>곽호석 탭에 있는 ' + esc(k.label) + '인가요?</b><p class="psb">연결하면 제목·연도 등을 한 곳에서만 관리해요.</p><button type="button" class="pbtn sm" id="pPick"' + (S().ach ? '' : ' disabled') + '>곽호석 탭에서 고르기</button>' + (S().ach ? '' : '<p class="psb">곽호석 탭 자료를 아직 못 불러왔어요. 인터넷이 되면 다시 열어 주세요.</p>') + '</div>';
+      h += '<div class="plinkbox"><b>실적 탭에 있는 ' + esc(k.label) + '인가요?</b><p class="psb">연결하면 제목·연도 등을 한 곳에서만 관리해요.</p><button type="button" class="pbtn sm" id="pPick"' + (S().ach ? '' : ' disabled') + '>실적 탭에서 고르기</button>' + (S().ach ? '' : '<p class="psb">실적 탭 자료를 아직 못 불러왔어요. 인터넷이 되면 다시 열어 주세요.</p>') + '</div>';
     }
     return h;
   }
   function leadHint(a) {
     var l = PC.leadOf(a);
-    return I.d.lead === 'auto' ? (l === true ? '곽호석 탭의 순번·교신 표시로는 책임저자로 보여요.' : (l === false ? '곽호석 탭의 표시로는 책임저자가 아니에요.' : '곽호석 탭에는 순번·교신 표시가 없어 모르는 상태예요. 아는 대로 골라 주세요.')) : '고른 값을 곽호석 탭 항목에 적어 둬요.';
+    return I.d.lead === 'auto' ? (l === true ? '실적 탭의 순번·교신 표시로는 책임저자로 보여요.' : (l === false ? '실적 탭의 표시로는 책임저자가 아니에요.' : '실적 탭에는 순번·교신 표시가 없어 모르는 상태예요. 아는 대로 골라 주세요.')) : '고른 값을 실적 탭 항목에 적어 둬요.';
   }
 
   function renderForm(keepScroll) {
@@ -437,7 +437,7 @@
     var items = S().items, at = -1; items.forEach(function (x, i) { if (x.id === r.id) at = i; });
     if (at >= 0) items[at] = r; else items.push(r);
   }
-  var SAVE_ERR = { BAD_ROW: '저장하지 못했어요 — 입력한 값이 받아들여지지 않았어요. 숫자와 날짜를 확인해 주세요.', BAD_ACH: '저장하지 못했어요 — 연결한 곽호석 탭 항목이 사라졌어요. 연결을 끊고 다시 저장해 주세요.', TOO_BIG: '저장하지 못했어요 — 내용이 너무 길어요. 메모를 줄여 주세요.' };
+  var SAVE_ERR = { BAD_ROW: '저장하지 못했어요 — 입력한 값이 받아들여지지 않았어요. 숫자와 날짜를 확인해 주세요.', BAD_ACH: '저장하지 못했어요 — 연결한 실적 탭 항목이 사라졌어요. 연결을 끊고 다시 저장해 주세요.', TOO_BIG: '저장하지 못했어요 — 내용이 너무 길어요. 메모를 줄여 주세요.' };
   function busy(on) { I.busy = on; var b = $('promoSave'); if (b) { b.disabled = on; if (!I.sim || !on) b.textContent = on ? '저장 중…' : (I.sim ? '이 항목으로 저장하기' : '저장'); } }
   function onSave() {
     if (!I || I.busy) return;
@@ -464,8 +464,8 @@
         var arr = S().ach, i; for (i = 0; i < arr.length; i++) if (arr[i].id === a.id) arr[i] = next;
         X.saveAch(); return { ok: true };
       }
-      if (isObj(res) && res.err === 'CONFLICT') { X.achReload(); return { ok: false, text: '곽호석 탭의 이 항목이 다른 곳에서 먼저 바뀌었어요. 곽호석 탭 자료를 다시 불러왔으니 한 번 더 저장해 주세요.' }; }
-      return { ok: false, text: '곽호석 탭 항목에 책임저자 표시를 적지 못했어요. 다시 시도해 주세요. (입력한 내용은 그대로 있어요)' };
+      if (isObj(res) && res.err === 'CONFLICT') { X.achReload(); return { ok: false, text: '실적 탭의 이 항목이 다른 곳에서 먼저 바뀌었어요. 실적 탭 자료를 다시 불러왔으니 한 번 더 저장해 주세요.' }; }
+      return { ok: false, text: '실적 탭 항목에 책임저자 표시를 적지 못했어요. 다시 시도해 주세요. (입력한 내용은 그대로 있어요)' };
     });
   }
   function managedEqual(row, srv) {
@@ -565,10 +565,10 @@
   function renderPick() {
     var k = linkKind(I.code), list = achCandidates(I.code), q = (I.q || '').toLowerCase().replace(/\s+/g, '');
     var linkedTo = {}; S().items.forEach(function (o) { if (o.ach_id && !o.deleted_at && o.id !== I.id) linkedTo[o.ach_id] = o; });
-    var h = head('곽호석 탭에서 고르기 · ' + k.label, '고른 ' + k.label + '의 제목·연도·저자 수를 그대로 써요.');
-    h += '<label class="pfld"><span class="plab2">찾기</span><input type="search" id="pPickQ" value="' + esc(I.q || '') + '" placeholder="제목·학술지·연도" autocomplete="off"></label><ul class="ppick" id="pPickL" role="listbox" aria-label="곽호석 탭 목록"></ul>';
+    var h = head('실적 탭에서 고르기 · ' + k.label, '고른 ' + k.label + '의 제목·연도·저자 수를 그대로 써요.');
+    h += '<label class="pfld"><span class="plab2">찾기</span><input type="search" id="pPickQ" value="' + esc(I.q || '') + '" placeholder="제목·학술지·연도" autocomplete="off"></label><ul class="ppick" id="pPickL" role="listbox" aria-label="실적 탭 목록"></ul>';
     h += acts('<button type="button" class="pbtn ghost" id="pPickBack">‹ 돌아가기</button>');
-    sheet(h, '곽호석 탭에서 고르기');
+    sheet(h, '실적 탭에서 고르기');
     function fill() {
       var ul = $('pPickL'), s = '', n = 0; q = ($('pPickQ').value || '').toLowerCase().replace(/\s+/g, ''); I.q = $('pPickQ').value;
       list.slice().sort(function (a, b) { return (b.year || 0) - (a.year || 0) || String(a.title) < String(b.title) ? -1 : 1; }).forEach(function (a) {
@@ -576,7 +576,7 @@
         var used = linkedTo[a.id];
         s += '<li><button type="button" role="option" data-id="' + esc(a.id) + '"><span class="plt">' + esc(a.title || '(제목 없음)') + '</span><small>' + [a.year ? a.year + '년' : '', a.venue || '', PC.achPeopleN(a) ? '저자 ' + PC.achPeopleN(a) + '명' : ''].filter(Boolean).map(esc).join(' · ') + (used ? ' · <b class="warnt">이미 다른 항목에 연결됨</b>' : '') + '</small></button></li>';
       });
-      ul.innerHTML = s || '<li class="psb">' + (list.length ? '찾는 항목이 없어요.' : '곽호석 탭에 이 종류의 항목이 없어요.') + '</li>';
+      ul.innerHTML = s || '<li class="psb">' + (list.length ? '찾는 항목이 없어요.' : '실적 탭에 이 종류의 항목이 없어요.') + '</li>';
     }
     fill();
     $('pPickQ').oninput = fill;
@@ -696,13 +696,13 @@
     var A = X.compute(); if (!A || A.error) return;
     var list = A.suggestions || [], byItem = {}; S().items.forEach(function (o) { byItem[o.id] = o; });
     I = { view: 'suggest', mode: 'view', busy: false, done: [], list: list };
-    var h = head('연결할 수 있는 항목 ' + list.length + '건', '승진 항목과 곽호석 탭 논문이 같아 보여요. 연결하면 제목·연도·저자 수를 곽호석 탭 값으로 써요. <b>자동으로 연결하지 않았어요 — 아래에서 확인해 주세요.</b>');
+    var h = head('연결할 수 있는 항목 ' + list.length + '건', '승진 항목과 실적 탭 논문이 같아 보여요. 연결하면 제목·연도·저자 수를 실적 탭 값으로 써요. <b>자동으로 연결하지 않았어요 — 아래에서 확인해 주세요.</b>');
     h += '<ul class="psug" id="pSugL">';
     list.forEach(function (c, i) {
       var o = byItem[c.itemId], a = achOf(c.achId); if (!o || !a) return;
       var why = [c.yearOk ? '연도 비슷' : '', c.nOk ? '저자 수 같음' : ''].filter(Boolean).join(' · ');
-      h += '<li data-i="' + i + '"><label class="pchk"><input type="checkbox" checked data-i="' + i + '"><span><b>' + esc((o.value && o.value.title) || '(제목 없음)') + '</b><small>승진 항목 · ' + esc(o.item_code) + '</small></span></label><div class="psarrow" aria-hidden="true">↕ 연결</div><div class="psa"><b>' + esc(a.title || '') + '</b><small>곽호석 탭 · ' + [a.year ? a.year + '년' : '', a.venue || '', why].filter(Boolean).map(esc).join(' · ') + '</small></div>'
-        + (c.needLead ? '<div class="psb">책임저자 표시(' + (c.leadPromo ? '예' : '아니에요') + ')를 곽호석 탭 항목에 적어 둬요.</div>' : '') + '<div class="psres" aria-live="polite"></div></li>';
+      h += '<li data-i="' + i + '"><label class="pchk"><input type="checkbox" checked data-i="' + i + '"><span><b>' + esc((o.value && o.value.title) || '(제목 없음)') + '</b><small>승진 항목 · ' + esc(o.item_code) + '</small></span></label><div class="psarrow" aria-hidden="true">↕ 연결</div><div class="psa"><b>' + esc(a.title || '') + '</b><small>실적 탭 · ' + [a.year ? a.year + '년' : '', a.venue || '', why].filter(Boolean).map(esc).join(' · ') + '</small></div>'
+        + (c.needLead ? '<div class="psb">책임저자 표시(' + (c.leadPromo ? '예' : '아니에요') + ')를 실적 탭 항목에 적어 둬요.</div>' : '') + '<div class="psres" aria-live="polite"></div></li>';
     });
     h += '</ul><div class="psmsg" id="promoMsg" role="alert" aria-live="polite"></div>' + acts('<button type="button" class="pbtn ghost" id="promoCancel">닫기</button><button type="button" class="pbtn" id="pSugGo">선택한 항목 연결하기</button>');
     sheet(h, '연결 제안');
@@ -726,7 +726,7 @@
         var pre = Promise.resolve({ ok: true });
         if (c.needLead) pre = writeLead(a, c.leadPromo === true);
         return pre.then(function (r1) {
-          if (!r1.ok) { fail++; if (L.res) L.res.textContent = '연결 못 했어요 — 곽호석 탭 항목이 먼저 바뀌었어요. 다시 시도해 주세요.'; return; }
+          if (!r1.ok) { fail++; if (L.res) L.res.textContent = '연결 못 했어요 — 실적 탭 항목이 먼저 바뀌었어요. 다시 시도해 주세요.'; return; }
           var n = PC.achPeopleN(a), row = { id: o.id, base_rev: o.rev, ach_id: a.id, participants: n > 0 ? n : o.participants, section: o.section, item_code: o.item_code };
           return X.rpc('promo_save_item', { p_row: row }).then(function (r) {
             if (isObj(r) && r.ok === true && isObj(r.row)) { putItem(r.row); ok++; if (L.li) { L.li.classList.add('done'); if (L.res) { L.res.className = 'psres ok'; L.res.innerHTML = '✓ 연결했어요 <button type="button" class="pbtn sm ghost" data-un="' + esc(o.id) + '">연결 끊기</button>'; } } }

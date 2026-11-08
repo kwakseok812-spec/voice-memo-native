@@ -51,10 +51,14 @@
   function cfg() { return (global.OfficeBridge && global.OfficeBridge.CONFIG) || null; }
   function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
   function needPass(msg) { try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {} }
-  var rpc = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  var rpcRaw = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  function rpc(name, body) { if (!/_list$/.test(name) && global.PerfSeg && PerfSeg.noteWrite) PerfSeg.noteWrite(); return rpcRaw(name, body); }   // O-0782: 서버에 쓴 일(승진 항목·프로필·책임저자 표시)을 알린다 — 알약 전환 때 방금 읽은 자료가 낡았는지 보려고
+  function perfEp() { return global.PerfSeg && PerfSeg.epoch ? PerfSeg.epoch() : 0; }
+  /* O-0782: 계산 파일(promotion-calc.js)이 만드는 점검 안내 글에 든 옛 이름 「곽호석 탭」을 화면에 그릴 때만 「실적 탭」으로 바꿔 보여 준다(계산 결과 객체는 그대로) */
+  function lbl(t) { return String(t == null ? '' : t).split('곽호석 탭').join('실적 탭'); }
 
   /* ---------- 상태 ---------- */
-  var S = { edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
+  var S = { edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, lastLoadAt: 0, lastLoadEp: -1, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
   var _toast = function () {}, _saveFile = null, built = false, animTimer = null;
   function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ at: Date.now(), profile: S.profile, items: S.items, rules: S.rules, rulesVer: S.rulesVer })); } catch (e) {} }
   function readCache() { try { var c = JSON.parse(localStorage.getItem(CKEY) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) {} return null; }
@@ -94,9 +98,10 @@
   }
   function load(quiet) {
     if (S.loading) return S.loading;
+    var ep = perfEp();
     var p = rpc('promo_list', {}).then(function (d) {
       if (!isObj(d) || !Array.isArray(d.items)) throw mkErr('BAD_SHAPE', 'server');
-      applyData(d); S.loaded = true; S.offline = false; S.fromCache = false; S.err = null; S.cachedAt = null; saveCache();
+      applyData(d); S.loaded = true; S.offline = false; S.fromCache = false; S.err = null; S.cachedAt = null; saveCache(); S.lastLoadAt = Date.now(); S.lastLoadEp = ep;
     }).catch(function (e) {
       S.err = e;
       var c = readCache();
@@ -207,14 +212,14 @@
     ph += '<section class="pcard"><h3>점검할 것 <span class="pcnt">' + A.notes.filter(function (n) { return n.level === 'check'; }).length + '건</span></h3><ul class="pwarn">';
     chk.forEach(function (n) {
       var mark = n.level === 'ok' ? '<em class="okm" aria-hidden="true">✓</em>' : (n.level === 'info' ? '<em class="inm" aria-hidden="true">i</em>' : '<em aria-hidden="true">!</em>');
-      ph += '<li class="' + n.level + '"><b>' + mark + esc(n.title) + '</b><span class="psb">' + esc(n.text) + '</span>' + (n.k === 'link_suggest' && S.edit ? '<button type="button" class="pbtn sm" data-go="suggest">확인하기</button>' : '') + '</li>';
+      ph += '<li class="' + n.level + '"><b>' + mark + esc(lbl(n.title)) + '</b><span class="psb">' + esc(lbl(n.text)) + '</span>' + (n.k === 'link_suggest' && S.edit ? '<button type="button" class="pbtn sm" data-go="suggest">확인하기</button>' : '') + '</li>';
     });
     if (!chk.length) ph += '<li class="ok"><em class="okm" aria-hidden="true">✓</em><b>점검할 것이 없어요</b></li>';
     ph += '</ul></section>';
     if (refs.length) {
       ph += '<section class="pcard pref"><h3><button type="button" class="prefbtn" id="pRefBtn" aria-expanded="' + (S.refOpen ? 'true' : 'false') + '" aria-controls="pRefL"><span>규정이 분명하지 않은 부분 <small>(참고)</small></span><span class="pcnt">' + refs.length + '건 <i aria-hidden="true">' + (S.refOpen ? '▴' : '▾') + '</i></span></button></h3>'
         + '<p class="psb">점수에는 아래 기본값으로 이미 넣었어요. 따로 하실 일은 없어요.</p><ul class="pwarn" id="pRefL"' + (S.refOpen ? '' : ' style="display:none"') + '>';
-      refs.forEach(function (n) { ph += '<li class="ref"><b><em class="inm" aria-hidden="true">i</em>' + esc(n.title) + '</b><span class="psb">' + esc(n.text) + '</span></li>'; });
+      refs.forEach(function (n) { ph += '<li class="ref"><b><em class="inm" aria-hidden="true">i</em>' + esc(lbl(n.title)) + '</b><span class="psb">' + esc(lbl(n.text)) + '</span></li>'; });
       ph += '</ul></section>';
     }
     /* 승진 시기 */
@@ -245,7 +250,7 @@
       ph += '<section class="pcard pmanage"><h3>관리</h3><div class="pmgrid">'
         + '<button type="button" class="pmbtn" data-go="sim"><b>점수 더하기 해 보기</b><small>저장 없이 점수만 계산해요</small></button>'
         + '<button type="button" class="pmbtn" data-go="profile"><b>승진 설정</b><small>날짜·가점·교수업적 순위</small></button>'
-        + (S.link ? '<button type="button" class="pmbtn" data-go="suggest"' + (sugN ? '' : ' disabled') + '><b>곽호석 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '</b><small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '곽호석 탭 자료를 못 불러왔어요') + '</small></button>' : '')
+        + (S.link ? '<button type="button" class="pmbtn" data-go="suggest"' + (sugN ? '' : ' disabled') + '><b>실적 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '</b><small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '실적 탭 자료를 못 불러왔어요') + '</small></button>' : '')
         + '<button type="button" class="pmbtn" data-go="trash"><b>휴지통' + (trashN ? ' ' + trashN + '건' : '') + '</b><small>지운 항목 복원</small></button>'
         + '<button type="button" class="pmbtn" data-go="backup"><b>백업 내려받기</b><small>' + (S.xlsx ? '엑셀 파일로 저장해요' : '파일로 저장·공유해요') + '</small></button></div></section>';
     }
@@ -312,8 +317,8 @@
         if (r.flags.series) tags.push('<span class="ptag t-ser">같은 사업 연차별</span>');
         if (r.flags.term_confirmed) tags.push('<span class="ptag t-ok">임기 확인됨</span>');
         if (r.flags.corrected) tags.push('<span class="ptag t-cor">정정해 가져옴</span>');
-        if (r.it._link) tags.push('<span class="ptag t-link">곽호석 탭 연결</span>');
-        if (mmIds[r.id]) tags.push('<span class="ptag t-dup">곽호석 탭과 ' + esc(mmIds[r.id]) + ' 다름</span>');
+        if (r.it._link) tags.push('<span class="ptag t-link">실적 탭 연결</span>');
+        if (mmIds[r.id]) tags.push('<span class="ptag t-dup">실적 탭과 ' + esc(mmIds[r.id]) + ' 다름</span>');
         var sc1 = r.score; if (code === '1-1' && r.part !== null && r.part !== undefined) sc1 = r.part;
         var inner = '<div class="pl1"><span class="plb">' + esc(PC.rowLabel(r.it, R)) + '</span><b class="psc">' + (r.status === 'excluded' || r.status === 'before' ? '0' : fmtS(sc1)) + '</b></div>';
         if (tags.length) inner += '<div class="ptags">' + tags.join('') + '</div>';
@@ -399,11 +404,18 @@
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();
   }
-  function open() {
-    build(); S.sel = ''; S.sec = 0; S.lastAnim = ''; S.rev = (S.rev || 0) + 1; closeSheet(); if (S.edit) { try { global.PromoEdit.close(); } catch (e) {} }
+  /* O-0782: 방금(20초 안) 잘 읽었고(승진 자료 + 연결용 실적 자료) 그 뒤 실적·승진에서 서버에 쓴 일이 없고 오프라인·오류 상태도 아니면 true — 알약 전환 때만 서버 읽기를 건너뛰는 데 쓴다 */
+  function fresh() { return S.loaded && !S.err && !S.offline && !S.fromCache && !S.achErr && (!S.link || !!S.ach) && S.lastLoadAt > 0 && Date.now() - S.lastLoadAt < 20000 && S.lastLoadEp === perfEp(); }
+  function open(o) {   // o.keep === true = 「실적 | 승진」 알약으로 넘어옴: 열어 둔 부문·눌러 둔 판정 칸·참고 펼침을 지우지 않고, 숫자 올라가는 움직임도 되풀이하지 않는다(홈 칸으로 열 때는 예전 그대로 모두 초기화)
+    build();
+    var keep = !!(o && o.keep === true);
+    if (keep) { var sn = $('promoSnack'); if (sn) sn.className = 'psnack'; }      // 방금 지운 항목의 8초 되돌리기 안내는 화면을 떠나면 사라진다(항목은 휴지통에 그대로 있다)
+    else { S.sel = ''; S.sec = 0; S.lastAnim = ''; S.rev = (S.rev || 0) + 1; closeSheet(); if (S.edit) { try { global.PromoEdit.close(); } catch (e) {} } }
     var c = readCache();
     if (!S.loaded && c) { applyData(c); S.loaded = true; S.fromCache = true; S.offline = false; S.cachedAt = c.at; }      // 저장본을 먼저 보여 주는 동안은 배너 없음
-    render(); load(true);
+    render();
+    if (keep && fresh()) return;
+    load(true);
   }
   /* 뒤로 가기: 창이 열려 있으면 창부터, 부문 화면이면 점수판으로. true = 여기서 처리함 */
   function back() {

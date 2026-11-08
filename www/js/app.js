@@ -3801,6 +3801,7 @@
   APP_VERSION = 'v9.79';        // v9.79(O-0780): 홈 끝 칸의 이름을 「Brave」→「유튜브」, 작은 글씨를 「유튜브 열기」→「Brave로 열기」로(어떤 앱으로 열리는지만 알림 — 광고가 없어진다는 약속 문구 아님) · 열기 실패 안내도 「Brave로 유튜브를 열지 못했습니다」 · 동작·방패 아이콘·맨 끝 자리·스위치 BRAVE_TAB·BRAVE_URL·BRAVE_PKG·주소·「Brave 앱이 없습니다」 시트는 그대로 · 서버·권한 변경 없음 · versionCode 123
   APP_VERSION = 'v9.80';        // v9.80(O-0781): 홈 맨 끝 「유튜브」 칸 → 「영상」 칸(작은 글씨 「유튜브·넷플릭스」) — 누르면 5줄 시트(유튜브=기존대로 Brave로 · 넷플릭스·웨이브·티빙·디즈니+ = 폰 앱 열기) + 「업무 앱」 화면 맨 위에 고정 묶음 「포인트 앱 바로 열기」(캐시워크·손목닥터·머니워크(에이헬스)·야핏무브·캐시슬라이드·토스·KB스타포인트 = 폰 앱 첫 화면 열기, 서버 목록과 무관하게 항상 보임) · 앱 없으면 「○○ 앱이 없습니다」 시트 → 스토어 열기 · PC판은 유튜브만 새 탭, 나머지 「폰에서만 열립니다」 · 새 파일 phone-apps.js · 네이티브 launchApp·openStore 허용 목록 11개 확장 + 매니페스트 <queries> 11줄(권한 아님, 새 권한 0) · 스위치 VIDEO_TAB('on'|'brave'|'off', 'brave'=v9.79 와 같은 「유튜브」 칸 · 'off'=칸 없음)·POINT_APPS('on'|'off') · 서버·SQL 변경 없음 · versionCode 124
   APP_VERSION = 'v9.81';        // v9.81(O-0781 보정): ① 홈 「영상」 칸 이름 → 「OTT」(작은 글씨 「유튜브·넷플릭스」 그대로) ② 칸을 누르면 5줄 시트와 함께 폰의 영상 파일 고르기 화면이 뜨던 결함 고침 — 칸 id btnVideo 가 옛 「영상 정리」 첨부 핸들러(videoInput.click)와 겹쳤다 → 새 id btnVideoApps ③ 「포인트 앱 바로 열기」 7장을 같은 크기의 2열 칸(아이콘+이름만, 설명어구 없음)으로 · 「머니워크(에이헬스)」→「에이헬스」 · 「캐시슬라이드」(잠금화면 앱 com.cashslide)→「캐시슬라이드 스텝업」(걷기 앱 com.nbt.moves, NBT Inc.) 교체 · 서버·SQL·권한 변경 없음(매니페스트 <queries> 11줄 그대로) · versionCode 125
+  APP_VERSION = 'v9.82';        // v9.82(O-0782): 홈 「곽호석」 칸 → 「성과」(작은 글씨 「실적·승진」) + 홈 「승진」 칸을 성과 안으로 합침 — 「성과」 맨 위 「실적 | 승진」 두 칸 알약(건강 탭과 같은 모양)으로 두 화면을 오감 · 승진 점수·시기 계산(promotion-calc.js)은 한 글자도 안 바뀜 · 홈 칸 12→11 · 스위치 PERF_MERGE('off' 면 옛 두 칸) · 서버·SQL·권한 변경 없음 · versionCode 126
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9970,6 +9971,11 @@
       screen: function (on) { try { var kb = kbPlugin(); if (!kb || !kb.keepScreenOn) return; if (on || (!upWakeOn && !callWakeNative)) { var pr = kb.keepScreenOn({ on: !!on }); if (pr && pr.catch) pr.catch(function () {}); } } catch (e) {} } }); } catch (e) {} }
   if ($('btnHealth')) $('btnHealth').addEventListener('click', openHealth);
 
+  /* ---- 성과 합치기(O-0782 v9.82): 홈 「곽호석」 칸을 「성과」로, 「승진」 칸은 성과 안 「실적 | 승진」 알약으로 ----
+   *   스위치 PERF_MERGE: 'on' = 홈에 「성과」 한 칸 + 두 화면(achView·promoView) 머리줄 아래 같은 두 칸 알약 · 'off' = v9.81 과 같은 옛 두 칸(「곽호석」·「승진」, 알약 없음).
+   *   켜짐 조건(PERF_ON): 스위치가 'off' 가 아니고, 실적·승진이 둘 다 정상으로 붙었고(perfAchOk·perfPromoOk), PerfSeg(js/perf-seg.js)가 먼저 불러와져 있을 때만. 하나라도 빠지면 자동으로 옛 두 칸.
+   *   계산 파일(promotion-calc.js)·서버·점수표·캐시 키는 그대로이고, 화면 껍데기만 바꾼다. */
+  var PERF_MERGE = 'on', PERF_ON = false, perfAchOk = false, perfPromoOk = false, perfScroll = { ach: 0, promo: 0 };
   /* ---- 실적 탭(O-0684 v9.59): 화면 열기/연결(로직은 achievements.js) ----
    *   스위치 ACHIEVE_TAB: 'on' = 홈 도구 맨 끝에 「실적」 칸 · 'off' = 칸이 보이지 않아 v9.58 과 같다(서버·SQL 무관). */
   var ACHIEVE_TAB = 'on';
@@ -9990,13 +9996,15 @@
     openDocFromChat(att);
   }
   var achView = $('achView');
-  function openAch() {
+  function openAch(keep) {   // keep === true = 알약으로 넘어옴(검색어 유지·방금 읽었으면 서버 안 읽음). 홈 칸 클릭은 이벤트가 넘어오므로 true 가 아니다 = 예전과 같음
     openScreen(achView);
-    if (window.AchTab && AchTab.open) { try { AchTab.open(); } catch (e) {} }
+    if (window.AchTab && AchTab.open) { try { AchTab.open(keep === true ? { keep: true } : undefined); } catch (e) {} }
+    if (PERF_ON && keep !== true) perfHintOnce();
   }
   if (ACHIEVE_TAB !== 'off' && window.AchTab && $('btnAch')) {
     try {
       AchTab.init({ toast: toast, simpleAuthors: ACH_SIMPLE_AUTHORS !== 'off', files: ACH_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null });
+      perfAchOk = true;
       var achGrid = $('homeTools'), achSub = achGrid && achGrid.querySelector('.tools-sub');
       if (achGrid && achSub) achGrid.insertBefore($('btnAch'), achSub);   // 홈 도구 맨 끝(위 도구 순서 정리 뒤) — 기존 칸 자리는 그대로
       $('btnAch').style.display = ''; $('btnAch').addEventListener('click', openAch);
@@ -10010,16 +10018,49 @@
   /* v9.68: 백업 내려받기의 엑셀(PROMO_XLSX). 'off' 면 창을 열자마자 JSON 백업을 저장하던 v9.67 모양으로 돌아간다(서버·SQL 무관). */
   var PROMO_EDIT = 'on', PROMO_LINK = 'on', PROMO_XLSX = 'on';
   var promoView = $('promoView');
-  function openPromo() {
+  function openPromo(keep) {   // keep === true = 알약으로 넘어옴(열어 둔 부문·판정 칸 유지·숫자 움직임 반복 안 함·방금 읽었으면 서버 안 읽음)
     openScreen(promoView);
-    if (window.PromoTab && PromoTab.open) { try { PromoTab.open(); } catch (e) {} }
+    if (window.PromoTab && PromoTab.open) { try { PromoTab.open(keep === true ? { keep: true } : undefined); } catch (e) {} }
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
       PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
+      perfPromoOk = true;
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
-      $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo);
+      PERF_ON = PERF_MERGE !== 'off' && perfAchOk && perfPromoOk && !!(window.PerfSeg && PerfSeg.mount && PerfSeg.noteWrite && PerfSeg.epoch);   // O-0782: 켜지면 홈 「승진」 칸은 숨긴 채(HTML 그대로) 두고 클릭도 연결하지 않는다
+      if (!PERF_ON) { $('btnPromo').style.display = ''; $('btnPromo').addEventListener('click', openPromo); }
+    } catch (e) {}
+  }
+
+  /* ---- 성과(O-0782 v9.82): 알약으로 실적 ↔ 승진 오가기 + 홈 칸·머리줄 글자 바꾸기 ---- */
+  var PERF_HINT_KEY = 'smart_perf_hint_v1';
+  function perfHintOnce() {   // 「성과」를 처음 여는 한 번만 — 승진 칸이 어디 갔는지 한 줄로 알린다(저장이 막혀도 동작에는 영향 없음)
+    try { if (localStorage.getItem(PERF_HINT_KEY)) return; localStorage.setItem(PERF_HINT_KEY, '1'); } catch (e) { return; }
+    try { toast('승진 점수판은 여기 ‘승진’ 탭으로 옮겼어요.', 3600, true); } catch (e) {}
+  }
+  function openPerf(tab) {    // 알약 누름: 지금 화면의 스크롤을 기억하고 다른 쪽을 연다(홈 칸으로 열 때와 달리 검색어 등을 지우지 않는다). 뒤로 가기 기록은 쌓지 않는다
+    var from = isOpen(achView) ? 'ach' : (isOpen(promoView) ? 'promo' : '');
+    if (!from || from === tab || (tab !== 'ach' && tab !== 'promo')) return;
+    try { perfScroll[from] = window.pageYOffset || document.documentElement.scrollTop || 0; } catch (e) {}
+    if (tab === 'promo') openPromo(true); else openAch(true);
+    try { window.scrollTo(0, perfScroll[tab] || 0); } catch (e) {}      // 복원은 한 번만 — 문서보다 길면 브라우저가 맨 아래로 맞춘다
+    try { var pb = document.querySelector('#' + (tab === 'promo' ? 'perfSegP' : 'perfSegA') + ' .hseg-btn.on'); if (pb) pb.focus({ preventScroll: true }); } catch (e) {}   // 눌렀던 단추는 화면과 함께 숨겨졌으므로 새 화면의 같은 칸으로
+  }
+  if (PERF_ON) {
+    try {
+      var perfTitleA = achView && achView.querySelector('.subbar .title'), perfTitleP = promoView && promoView.querySelector('.subbar .title'), perfGear = $('achGear');
+      if (perfTitleA) perfTitleA.textContent = '성과';
+      if (perfTitleP) perfTitleP.textContent = '성과';
+      if (perfGear) { perfGear.setAttribute('aria-label', '실적 설정'); perfGear.setAttribute('title', '실적 설정'); }
+      var perfTile = $('btnAch'), perfTb = perfTile.querySelector('b'), perfTs = perfTile.querySelector('small'), perfTi = perfTile.querySelector('.ic');
+      if (perfTb) perfTb.textContent = '성과';
+      if (perfTs) perfTs.textContent = '실적·승진';
+      if (perfTi) perfTi.className = 'ic blue';   // 홈 격자의 청록·파랑 번갈아 규칙 유지(승진 칸이 빠져도 사진첩과 같은 색이 붙지 않게)
+      perfTile.setAttribute('aria-label', '성과, 실적과 승진');
+      PerfSeg.mount($('achBody'), 'perfSegA', 'ach', openPerf);
+      PerfSeg.mount($('promoBody'), 'perfSegP', 'promo', openPerf);
+      document.documentElement.classList.add('perfmerge');
     } catch (e) {}
   }
 

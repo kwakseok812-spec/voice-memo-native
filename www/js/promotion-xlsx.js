@@ -116,7 +116,7 @@
   }
 
   /* ---------- 시트 2: 항목 목록 ---------- */
-  var ITEM_HEAD = ['부문', '종류', '제목·내용', '일자', '점수', '확인', '점수 상태', '곽호석 탭 연결', '휴지통에 있음'];
+  var ITEM_HEAD = ['부문', '종류', '제목·내용', '일자', '점수', '확인', '점수 상태', '실적 탭 연결', '휴지통에 있음'];
   function itemRows(o, A, R, PC) {
     var byId = {}; A.today.rows.forEach(function (r) { byId[r.id] = r; });
     var list = (o.items || []).filter(function (it) { return !!it; });

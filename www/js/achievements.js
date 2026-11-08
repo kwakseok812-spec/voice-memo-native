@@ -641,7 +641,7 @@
     loaded: false, loading: null, err: null, offline: false, stale: false, cachedAt: null,
     cats: [], items: [], settings: loadSettings(),
     tab: 'sum', role: 'all', sub: 'all', fInh: false, fWait: false, filt: false, fCat: 'all', pchip: 'all', sortKey: 'new', q: '',
-    sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0,
+    sheet: false, sheetBack: null, noScrim: false, lastLoadAt: 0, lastLoadEp: -1,
     simple: true, host: null, fbusy: false      /* v9.61: 저자 단순화(app.js ACH_SIMPLE_AUTHORS) · 파일 기능 부품(app.js ACH_FILES — 없으면 파일 화면 없음) */
   };
   var _toast = function () {}, toastTimer = null, E = null, built = false;
@@ -658,7 +658,9 @@
   function cfg() { return (global.OfficeBridge && global.OfficeBridge.CONFIG) || null; }
   function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
   function needPass(msg) { try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {} }
-  var rpc = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  var rpcRaw = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  function rpc(name, body) { if (!/_list$/.test(name) && global.PerfSeg && PerfSeg.noteWrite) PerfSeg.noteWrite(); return rpcRaw(name, body); }   // O-0782: 서버에 쓴 일을 알린다(알약 전환 때 방금 읽은 자료가 낡았는지 보려고)
+  function perfEp() { return global.PerfSeg && PerfSeg.epoch ? PerfSeg.epoch() : 0; }
   var fileApi = makeFileApi({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
   function calm() { try { if (global.KScene && KScene.calm) return !!KScene.calm(); return !!(global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function uuid() {
@@ -692,9 +694,10 @@
    * ===================================================================*/
   function load(quiet) {
     if (S.loading) return S.loading;
+    var ep = perfEp();
     var p = rpc('ach_list', {}).then(function (d) {
       if (!isObj(d) || !Array.isArray(d.cats) || !Array.isArray(d.items)) throw mkErr('BAD_SHAPE', 'server');
-      S.cats = d.cats; S.items = d.items; S.loaded = true; S.offline = false; S.stale = false; S.err = null; S.lastLoadAt = Date.now();
+      S.cats = d.cats; S.items = d.items; S.loaded = true; S.offline = false; S.stale = false; S.err = null; S.lastLoadAt = Date.now(); S.lastLoadEp = ep;
       saveCache(d); thPrune();
     }).catch(function (e) {
       S.err = e;
@@ -711,7 +714,7 @@
   function errText(e) {
     if (!e) return '';
     if (e.kind === 'badpass') return '연동 암호가 맞지 않아요. 암호를 다시 입력해 주세요.';
-    if (e.kind === 'notready') return '서버에 곽호석 탭 표가 아직 준비되지 않았어요.';
+    if (e.kind === 'notready') return '서버에 실적 탭 표가 아직 준비되지 않았어요.';
     if (e.kind === 'net') return '인터넷에 연결되지 않았어요.';
     if (e.kind === 'nofile') return 'PDF 파일이 서버에 없어요.';
     if (e.kind === 'gone') return '이 항목은 휴지통에 있거나 지워졌어요.';
@@ -837,7 +840,7 @@
           '<div class="ach-small">' + (split ? split + ' · ' : '') + '학술지 논문 숫자에 섞이지 않아요</div></div>';
       }
     });
-    if (!any) return h + '<div class="ach-empty"><b>아직 종류가 없어요</b>서버의 곽호석 탭 종류가 비어 있어요. ⚙ 설정에서 종류를 만들 수 있어요.</div>';
+    if (!any) return h + '<div class="ach-empty"><b>아직 종류가 없어요</b>서버의 실적 탭 종류가 비어 있어요. ⚙ 설정에서 종류를 만들 수 있어요.</div>';
     var paperKind = ks.filter(isPaperKind)[0];
     if (paperKind) {
       var pubs = ofKind(paperKind.id).filter(isPub), yb = yearBars(pubs, new Date().getFullYear());
@@ -1536,7 +1539,7 @@
   function openSettings() {
     build();
     var tr = trashed().length;
-    openSheet('<h2>곽호석 설정</h2>' +
+    openSheet('<h2>실적 설정</h2>' +
       '<button type="button" class="ach-setrow" data-act="trashlist">휴지통 <small>' + tr + '건 ›</small></button>' +
       (S.simple ? '' : '<button type="button" class="ach-setrow" data-act="names">내 이름 표기 <small>' + (S.settings.names.length ? '내가 더한 ' + S.settings.names.length + '개 ›' : '자동 찾기 ›') + '</small></button>') +
       '<button type="button" class="ach-setrow" data-act="export">내보내기 <small>JSON ›</small></button>' +
@@ -1566,7 +1569,7 @@
     try {
       var f = new File([payload], name, { type: 'application/json' });
       if (navigator.canShare && navigator.canShare({ files: [f] })) {
-        navigator.share({ files: [f], title: '곽호석 내보내기' }).catch(function (e) { if (e && e.name === 'AbortError') return; copyFallback(); });   // 공유 창을 그냥 닫은 건(AbortError) 복사하지 않고, 정말 실패했을 때만 복사
+        navigator.share({ files: [f], title: '실적 내보내기' }).catch(function (e) { if (e && e.name === 'AbortError') return; copyFallback(); });   // 공유 창을 그냥 닫은 건(AbortError) 복사하지 않고, 정말 실패했을 때만 복사
         return;
       }
     } catch (e) {}
@@ -1801,9 +1804,15 @@
     S.host = o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function' ? o.files : null;   // { view, download, guard? }
     build();
   }
-  function open() {
-    build(); tabShown = null; S.q = ''; var q = $('achQ'); if (q) q.value = ''; var sb = $('achSearch'); if (sb) sb.classList.remove('has');
-    renderAll(); load(S.loaded);
+  /* O-0782: 방금(20초 안) 잘 읽었고 그 뒤 실적·승진에서 서버에 쓴 일이 없고 오프라인·오류 상태도 아니면 true — 알약 전환 때만 서버 읽기를 건너뛰는 데 쓴다 */
+  function fresh() { return S.loaded && !S.err && !S.offline && !S.stale && S.lastLoadAt > 0 && Date.now() - S.lastLoadAt < 20000 && S.lastLoadEp === perfEp(); }
+  function open(o) {   // o.keep === true = 「실적 | 승진」 알약으로 넘어옴: 검색어·가운데 맞춘 탭을 지우지 않는다(홈 칸으로 열 때는 예전 그대로 모두 초기화)
+    build();
+    var keep = !!(o && o.keep === true);
+    if (!keep) { tabShown = null; S.q = ''; var q = $('achQ'); if (q) q.value = ''; var sb = $('achSearch'); if (sb) sb.classList.remove('has'); }
+    renderAll();
+    if (keep && fresh()) return;
+    load(S.loaded);
   }
   /* 뒤로 가기: 창이 열려 있으면 창부터 닫는다. true = 여기서 처리함 */
   var editWarnAt = 0;
