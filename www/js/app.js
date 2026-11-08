@@ -3808,6 +3808,7 @@
   APP_VERSION = 'v9.84';        // v9.84(O-0784): 「PC 상태」 화면의 메모리 아래에 「저장공간」 칸 — C 드라이브 사용량(예: 481 GB / 1.82 TB) + 막대 + 남은 공간, 80% 이상 노랑·90% 이상 빨강, 작은 안내 「디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다」. PC 프로그램이 값을 올릴 때만 보이고(옛 프로그램이면 줄이 없음) 못 읽으면 「확인 못 함」·10분 넘게 묵으면 「N분 전 값」. 홈 글씨·알림·정리 기능 없음. 스위치 PC_DISK_UI. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 128
   APP_VERSION = 'v9.85';        // v9.85(O-0785): 업무 앱 「포인트 앱 바로 열기」 7칸 중 「캐시슬라이드 스텝업」 칸 아이콘만 🔓(잠금화면 앱 시절) → 👣(걷기 모양). 이름·순서·패키지·동작·칸 크기 그대로(phone-apps.js 한 글자). 새 스위치 없음 — 되돌리기는 이 수정 기록을 되돌리거나 아이콘을 🔓 로. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 129
   APP_VERSION = 'v9.86';        // v9.86(O-0787): 「PC 상태」 저장공간 칸(C 드라이브) 바로 아래에 「외장하드」 줄 — PC 프로그램(v1.2)이 외장하드(USB로 연결된 64GiB 이상 디스크)를 올릴 때만, 꽂으면 줄이 하나 생기고 뽑으면 사라짐. 「외장하드 · 이름 (F 드라이브)」 + 사용량/전체 + 막대(80% 이상 노랑·90% 이상 빨강, C: 와 같은 기준) + 남은 공간, 읽는 중·확인 못 함·N분 전 값 표시. 외장이 없으면(평소) v9.85 와 같은 화면. 홈 글씨·케이 한 줄·알림·정리 기능 없음. 스위치 PC_DISK_EXT_UI. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 130
+  APP_VERSION = 'v9.87';        // v9.87(O-0794): 홈 「OTT」 칸 시트 맨 위 「유튜브」 줄 → 「미니뷰」 줄(작은 글씨 「유튜브 · 광고 없이」) — 누르면 폰의 별개 앱 「미니뷰」(com.kwak.tubelab)의 첫 화면이 열린다. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고 「미니뷰가 없어서 Brave로 열었어요」 안내(Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트), PC·브라우저는 유튜브 새 탭. 되돌림 스위치 YT_MODE('tube'|'brave'). 넷플릭스·웨이브·티빙·디즈니+ 줄·홈 글씨·다른 칸 그대로. 미니뷰 코드·광고 차단 코드는 이 저장소에 없다(패키지 이름만). 자바 허용 목록·매니페스트 선언에 패키지 하나 추가(새 권한 없음) · versionCode 131
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10174,17 +10175,22 @@
    *   BRAVE_URL = 유튜브 줄·'brave' 모드가 여는 기본 주소(https 만) · BRAVE_PKG = 열 앱(네이티브 허용 목록이 Brave 정식판 하나뿐이라 다른 값은 거절됨). 세 값은 여기 한 곳.
    *   Brave 가 없으면 「Brave 앱이 없습니다」 시트 → [스토어 열기](플레이 스토어 Brave 화면). PC판·브라우저는 새 탭으로 유튜브(Brave 지정은 폰 앱에서만).
    *   서버에 묻거나 저장하는 것 없음. 새 권한 없음. */
+  /*   v9.87(O-0794) 스위치 YT_MODE: 'tube' = 시트 맨 위 줄이 「미니뷰 · 유튜브 · 광고 없이」(별개 앱 com.kwak.tubelab 열기 — 없으면 Brave 로 유튜브 + 안내 한 줄, Brave 도 없으면 아래 「Brave 앱이 없습니다」 시트, PC 는 새 탭)
+   *     · 'brave' = v9.86 과 똑같은 「유튜브 · Brave로 열기」 줄(미니뷰에 문제가 있을 때 새 번호 하나로 예전 줄로 돌아가는 길). 아래 openBrave 코드는 지우지 않고 그대로 두 줄이 함께 쓴다. */
+  var YT_MODE = 'tube';
   var VIDEO_TAB = 'on';
   var BRAVE_URL = 'https://www.youtube.com';
   var BRAVE_PKG = 'com.brave.browser';
   var braveLastTap = 0;
   var BRAVE_DIRECT = (VIDEO_TAB === 'brave' || !window.PhoneApps);   // 칸이 곧바로 Brave 를 여는 모양(v9.79 와 같은 「유튜브」 칸) — 미설치 안내 글이 「이 칸을」 로 말한다
-  function openBrave() {
-    if (window.PhoneApps && PhoneApps.tryLock) { if (!PhoneApps.tryLock()) return; }   // 하나의 잠금(700ms) — 홈 칸·시트 줄·업무 앱 카드와 함께(두 번 누름·앱 두 개 겹침 방지)
+  function openBrave(o) {   // o = {noLock, from:'minview', why} — 미니뷰 줄이 Brave 로 넘길 때만(잠금은 미니뷰 줄이 이미 얻었다). 홈 칸 클릭 핸들러로 불릴 땐 o 가 이벤트라 무시한다
+    var fromMv = !!(o && o.from === 'minview'), noLock = !!(o && o.noLock === true);
+    if (noLock) { /* 같은 누름의 두 번째 단계 — 잠금을 다시 얻지 않는다 */ }
+    else if (window.PhoneApps && PhoneApps.tryLock) { if (!PhoneApps.tryLock()) return; }   // 하나의 잠금(700ms) — 홈 칸·시트 줄·업무 앱 카드와 함께(두 번 누름·앱 두 개 겹침 방지)
     else { var now = Date.now(); if (now - braveLastTap < 700) return; braveLastTap = now; }   // 700ms 안 두 번 누름 = 한 번만(Brave 탭이 겹쳐 열리지 않게)
     if (!isNativeApp()) {
       var w = null; try { w = window.open(BRAVE_URL, '_blank'); if (w) w.opener = null; } catch (e) {}   // 'noopener' 를 주면 열려도 null 이 돌아와 막힘과 구분이 안 된다 → 열린 뒤 opener 만 끊는다
-      toast(w ? 'PC에서는 이 브라우저의 새 탭으로 엽니다(Brave 앱은 폰에서만).' : '새 탭을 열지 못했습니다 — 팝업 차단을 확인해 주세요.', 3000);
+      toast(w ? (fromMv ? 'PC에서는 이 브라우저의 새 탭으로 유튜브를 엽니다(미니뷰·Brave 앱은 폰에서만).' : 'PC에서는 이 브라우저의 새 탭으로 엽니다(Brave 앱은 폰에서만).') : '새 탭을 열지 못했습니다 — 팝업 차단을 확인해 주세요.', 3000);
       return;
     }
     var EA = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ExternalApp;
@@ -10203,7 +10209,7 @@
       }, fail);
     } catch (e) { fail(); }
   }
-  if (window.PhoneApps) { try { PhoneApps.init({ toast: toast, openSheet: openSheet, openBrave: openBrave }); } catch (e) {} }
+  if (window.PhoneApps) { try { PhoneApps.init({ toast: toast, openSheet: openSheet, openBrave: openBrave, ytMode: YT_MODE }); } catch (e) {} }
   if (VIDEO_TAB !== 'off' && $('btnVideoApps')) {
     var videoGrid = $('homeTools'), videoSub = videoGrid && videoGrid.querySelector('.tools-sub');
     if (videoGrid && videoSub) videoGrid.insertBefore($('btnVideoApps'), videoSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다

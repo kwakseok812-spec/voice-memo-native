@@ -39,7 +39,8 @@ public class ExternalAppPlugin extends Plugin {
             "com.google.chromeremotedesktop",
             "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
             "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
-            "com.nbt.moves", "viva.republica.toss", "com.kbstar.kbbank"));
+            "com.nbt.moves", "viva.republica.toss", "com.kbstar.kbbank",
+            "com.kwak.tubelab"));   /* v9.87 (O-0794) 미니뷰(별개 앱) — 이 목록 ⇔ 매니페스트 <queries> ⇔ phone-apps.js 가 같아야 한다 */
 
     @PluginMethod
     public void launchApp(final PluginCall call) {
@@ -69,7 +70,8 @@ public class ExternalAppPlugin extends Plugin {
     }
 
     /* v9.78 (O-0779) 홈 「유튜브」 칸(Brave로 열기) — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (Brave 는 openInApp 으로만 연다 — launchApp 허용 목록에 없다)
-     * v9.80 (O-0781) + 위 LAUNCH_ALLOWED 의 새 11개(미설치일 때 「스토어 열기」). 즉 STORE_ALLOWED = LAUNCH_ALLOWED + Brave. */
+     * v9.80 (O-0781) + 위 LAUNCH_ALLOWED 의 새 11개(미설치일 때 「스토어 열기」). 즉 STORE_ALLOWED = LAUNCH_ALLOWED + Brave.
+     * v9.87 (O-0794) 미니뷰(com.kwak.tubelab)는 LAUNCH_ALLOWED 에만 있다 — 스토어에 없는 앱이라 「스토어 열기」가 없고, 없으면 Brave 로 폴백한다(JS). */
     private static final java.util.Set<String> STORE_ALLOWED =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "com.google.chromeremotedesktop", "com.brave.browser",

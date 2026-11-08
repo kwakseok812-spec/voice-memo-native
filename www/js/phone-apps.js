@@ -8,10 +8,13 @@
  * 세 곳이 같아야 한다(어긋나면 시험 phone_apps_test.py 가 잡는다): 이 파일의 패키지 ⇔ ExternalAppPlugin.java LAUNCH_ALLOWED ⇔ AndroidManifest.xml <queries><package>.
  *       앱을 하나 더 넣을 때마다 앱 업데이트(새 APK)가 필요하다. 금융 앱(토스·KB스타뱅킹)도 실행만 한다 — 로그인·계좌·포인트 값은 읽지도 입력하지도 않는다.
  * 유튜브 줄: 기존 app.js 의 openBrave(Brave 지정·「Brave 앱이 없습니다」 시트·PC 새 탭)를 그대로 부른다(ctx.openBrave).
+ * v9.87(O-0794) 미니뷰 줄: 시트 맨 위 「유튜브」 줄이 「미니뷰」 줄로 바뀐다(별개 앱 com.kwak.tubelab 을 패키지로 열 뿐 — 그 앱의 코드는 이 저장소에 없다).
+ *       누르면 미니뷰의 첫 화면. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고(openBrave 그대로 — Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트) 안내 한 줄.
+ *       PC·브라우저: 유튜브 새 탭. 되돌림 스위치 = app.js YT_MODE('tube'|'brave'): 'brave' 면 예전 「유튜브 · Brave로 열기」 줄(v9.86 과 같음).
  * 연타: 홈 칸·시트 줄·업무 앱 카드·유튜브가 하나의 잠금(700ms)을 쓴다 — 같은 줄이 두 번, 다른 앱 두 개가 겹쳐 열리지 않는다.
  * PC(비 Capacitor)·폰 일반 브라우저: 화면은 폰과 똑같이 보이고 동작만 다르다 — 유튜브 줄 = 새 탭, 나머지 = 「폰에서만 열립니다」 안내.
- * 스위치(app.js): VIDEO_TAB('on'|'brave'|'off') · POINT_APPS('on'|'off').
- * app.js 연결: PhoneApps.init({toast, openSheet, openBrave}) · PhoneApps.openVideoSheet() · PhoneApps.openApp(id) · PhoneApps.tryLock()
+ * 스위치(app.js): VIDEO_TAB('on'|'brave'|'off') · YT_MODE('tube'|'brave') · POINT_APPS('on'|'off').
+ * app.js 연결: PhoneApps.init({toast, openSheet, openBrave, ytMode}) · PhoneApps.openVideoSheet() · PhoneApps.openApp(id) · PhoneApps.tryLock()
  * 시험: PhonePure(순수 함수·목록)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
 (function (global) {
@@ -25,8 +28,14 @@
   var OLD_APK_MSG = '앱을 새 버전으로 바꾸면 바로 열 수 있습니다.';
 
   /* OTT 시트 5줄(순서 그대로). brave:true = 기존 유튜브(Brave) 동작. 패키지는 플레이 스토어 앱 제목으로 확인한 값(설계안 3장). */
+  var MINVIEW_PKG = 'com.kwak.tubelab';
+  var MINVIEW_DESC = '유튜브 · 광고 없이';
+  var MINVIEW_MISSING_DESC = '미니뷰가 없어서 Brave로 열려요';
+  var MINVIEW_PC_DESC = '새 탭으로 유튜브 열기';
+  var ROW_MINVIEW = { id: 'minview', name: '미니뷰', pkg: MINVIEW_PKG, desc: MINVIEW_DESC, minview: true };   // v9.87(O-0794) 기본 첫 줄
+  var ROW_BRAVE = { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true };                       // v9.86 까지의 첫 줄 — 지우지 않고 남겨 둔다(YT_MODE='brave' 일 때 init 이 이 줄로 바꿔 끼운다)
   var VIDEO = [
-    { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true },
+    ROW_MINVIEW,
     { id: 'netflix', name: '넷플릭스', pkg: 'com.netflix.mediaclient', desc: '앱 열기' },
     { id: 'wavve', name: '웨이브', pkg: 'kr.co.captv.pooqV2', desc: '앱 열기' },        // 옛 푹 시절 주소(…pooq)는 플레이에서 404 — 쓰지 않는다
     { id: 'tving', name: '티빙', pkg: 'net.cj.cjhv.gs.tving', desc: '앱 열기' },
@@ -47,7 +56,12 @@
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function all() { return VIDEO.concat(POINTS); }
   function byId(id) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
-  function packages() { return all().filter(function (x) { return x.pkg; }).map(function (x) { return x.pkg; }); }
+  /* 네이티브 허용 목록(자바)·매니페스트 선언과 비교하는 패키지 목록 — 미니뷰는 YT_MODE 가 'brave' 여도 허용 목록에는 남기므로 항상 포함한다 */
+  function packages() {
+    var a = all().filter(function (x) { return x.pkg; }).map(function (x) { return x.pkg; });
+    if (a.indexOf(MINVIEW_PKG) < 0) a.unshift(MINVIEW_PKG);
+    return a;
+  }
   function storeName(it) { return (it && (it.store || it.name)) || ''; }
   /* 조사 「을(를)」을 쓰지 않는다 — 「○○ 앱이 없습니다 / ○○ 앱을 열지 못했습니다」로 고정(앱 이름 끝소리와 무관하게 자연스럽다) */
   function missingTitle(n) { return n + ' 앱이 없습니다'; }
@@ -68,7 +82,7 @@
     return bad;
   }
 
-  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
+  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, ROW_MINVIEW: ROW_MINVIEW, ROW_BRAVE: ROW_BRAVE, MINVIEW_PKG: MINVIEW_PKG, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
   if (typeof module !== 'undefined' && module.exports) { module.exports = { PhonePure: PhonePure }; }
   if (typeof document === 'undefined') return;   // node 시험: 화면 부분은 건너뜀
 
@@ -85,6 +99,7 @@
   function openApp(id) {
     var it = byId(id);
     if (!ctx || !it || !it.pkg) return false;
+    if (it.minview) return openMinview();   // 미니뷰는 스토어 줄이 없다 — 없으면 Brave 폴백(아래 openMinview)
     if (!tryLock()) return false;
     if (!isNative()) { ctx.toast(PC_MSG, 3200); return false; }
     var EA = plugin();
@@ -107,6 +122,33 @@
     return true;
   }
 
+  /* 미니뷰 줄(v9.87, O-0794): 미니뷰 앱의 첫 화면을 연다. 없으면(또는 열 수 없으면) 예전처럼 Brave 로 유튜브 — 대표님이 다른 폰·재설치에서도 막히지 않게.
+   * 잠금은 여기서 한 번만 얻고, Brave 로 넘어갈 때는 openBrave 에 noLock 으로 알려 같은 누름이 두 번 막히지 않게 한다. */
+  var minviewMissing = false;   // 이 실행 중에 「미니뷰가 없음」을 겪었는지 — 시트의 작은 글씨 안내용(저장하지 않는다: 나중에 설치하면 다음 실행부터 원래대로)
+  function toBrave(why) { try { ctx.openBrave({ noLock: true, from: 'minview', why: why }); } catch (e) {} }
+  function minviewFallback(why) {
+    if (why === 'not_installed') minviewMissing = true;
+    var msg = why === 'not_installed' ? '미니뷰가 없어서 Brave로 열었어요'
+      : why === 'not_allowed' ? '앱을 새 버전으로 바꾸면 미니뷰를 열 수 있어요 — 지금은 Brave로 열었어요'
+      : '미니뷰를 열지 못해 Brave로 열었어요';
+    try { ctx.toast(msg, 3200); } catch (e) {}
+    toBrave(why);
+  }
+  function openMinview() {
+    if (!ctx) return false;
+    if (!tryLock()) return false;
+    if (!isNative()) { toBrave('pc'); return true; }   // PC·브라우저: 유튜브 새 탭(openBrave 가 안내까지)
+    var EA = plugin();
+    if (!EA || typeof EA.launchApp !== 'function') { minviewFallback('not_allowed'); return true; }
+    try {
+      EA.launchApp({ pkg: MINVIEW_PKG }).then(function (r) {
+        if (r && r.opened) { minviewMissing = false; return; }   // 미니뷰가 앞으로 나옴 — 말 없이 끝
+        minviewFallback((r && r.reason) || 'error');
+      }, function () { minviewFallback('error'); });
+    } catch (e) { minviewFallback('error'); }
+    return true;
+  }
+
   /* OTT 5줄 시트 — 채팅 ＋ 고르기 창(atm-sheet)과 같은 틀(뒤로 가기로 닫힘은 app.js goBack 의 .shin-sheet 처리가 맡는다) */
   function openVideoSheet() {
     if (!ctx) return;
@@ -116,7 +158,7 @@
     sh.className = 'sheet shin-sheet atm-sheet vid-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="OTT 앱 고르기"><div class="sheet-head">무엇을 볼까요?</div>' +
       VIDEO.map(function (v) {
-        var d = (!native && !v.brave) ? PC_DESC : v.desc;
+        var d = v.minview ? (!native ? MINVIEW_PC_DESC : (minviewMissing ? MINVIEW_MISSING_DESC : v.desc)) : ((!native && !v.brave) ? PC_DESC : v.desc);
         return '<button type="button" class="sheet-btn" data-vid="' + esc(v.id) + '"><svg class="atm-ic"><use href="#i-play"/></svg><span><b>' + esc(v.name) + '</b><small>' + esc(d) + '</small></span></button>';
       }).join('') +
       '<button type="button" class="sheet-btn atm-close" data-vid="close">닫기</button></div>';
@@ -124,20 +166,25 @@
       var b = ev.target.closest ? ev.target.closest('[data-vid]') : null;
       if (!b && ev.target !== sh) return;
       var k = b && b.getAttribute('data-vid'), v = (k && k !== 'close') ? byId(k) : null;
-      if (v && !v.brave && !isNative()) { ctx.toast(PC_MSG, 3200); return; }   // PC: 열 수 없는 줄은 안내만 하고 시트는 그대로
+      if (v && !v.brave && !v.minview && !isNative()) { ctx.toast(PC_MSG, 3200); return; }   // PC: 열 수 없는 줄은 안내만 하고 시트는 그대로(유튜브·미니뷰 줄은 새 탭)
       try { sh.remove(); } catch (e) {}
       if (!v) return;
       if (v.brave) { try { ctx.openBrave(); } catch (e) {} }
+      else if (v.minview) openMinview();
       else openApp(v.id);
     });
     document.body.appendChild(sh);
     sh.style.display = 'flex';
   }
 
-  function init(c) { ctx = c; return true; }
+  function init(c) {
+    ctx = c;
+    if (c && c.ytMode === 'brave') VIDEO[0] = ROW_BRAVE;   // 되돌림 스위치(app.js YT_MODE='brave'): 첫 줄을 예전 「유튜브 · Brave로 열기」로
+    return true;
+  }
 
   global.PhoneApps = {
-    init: init, openApp: openApp, openVideoSheet: openVideoSheet, tryLock: tryLock, isNative: isNative,
+    init: init, openApp: openApp, openMinview: openMinview, openVideoSheet: openVideoSheet, tryLock: tryLock, isNative: isNative,
     VIDEO: VIDEO, POINTS: POINTS, PC_DESC: PC_DESC,
     _test: { lastGo: function () { return lastGo; } }
   };
