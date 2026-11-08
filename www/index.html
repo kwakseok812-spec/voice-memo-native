@@ -94,6 +94,7 @@
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z" fill="currentColor"/></symbol>
   <symbol id="i-glasses" viewBox="0 0 24 24"><circle cx="7" cy="14.2" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="14.2" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10.5 13.5q1.5-1.3 3 0M3.5 13.2 5.2 6.8M20.5 13.2 18.8 6.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.8v5.7c0 4.4-2.9 7.9-7 9.5-4.1-1.6-7-5.1-7-9.5V5.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12.2l2.2 2.2L15.2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3v-3H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20S4 14.5 4 9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 8 2.2C20 14.5 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -206,6 +207,8 @@
         <!-- v9.76 「업무 앱」·「규정 도우미」 — 홈 도구 맨 끝 칸 둘(사진첩 다음). 스위치 HUB_APPS·HUB_REG(app.js)가 'on' 일 때만 app.js 가 보이게 한다. 업무 허브(폰 PWA)로 가던 길을 앱 안으로 옮긴 것 -->
         <button class="tool" id="btnHub" style="display:none;"><span class="ic blue"><svg><use href="#i-tasks"/></svg></span><b>업무 앱</b><small>학과·장부·포인트</small></button>
         <button class="tool" id="btnReg" style="display:none;"><span class="ic cyan"><svg><use href="#i-search"/></svg></span><b>규정 도우미</b><small>질문마다 약 15원</small></button>
+        <!-- v9.78(O-0779) 「Brave」 — 홈 도구 맨 끝 칸(규정 도우미 다음). 폰에 설치된 Brave 앱을 패키지로 직접 열어 유튜브를 본다(광고 차단은 Brave 쪽 기능). 스위치 BRAVE_TAB(app.js)가 'off' 가 아니면 app.js 가 보이게 한다 -->
+        <button class="tool" id="btnBrave" style="display:none;" aria-label="Brave로 유튜브 열기"><span class="ic blue"><svg><use href="#i-shield"/></svg></span><b>Brave</b><small>유튜브 열기</small></button>
         <div class="tools-sub">PC 연결</div>
         <!-- (O-0176 C) PC 로 가는 두 길은 합치지 않고 이름으로 구분한다.
              ① Claude Code 연결 = PC 케이 대화방(Claude 앱 Remote Control 세션) — 안내 시트 → [Claude 앱 열기] (app.js PC_K_* 상수)

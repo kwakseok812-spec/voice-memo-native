@@ -55,11 +55,15 @@ public class ExternalAppPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /* v9.78 (O-0779) 「Brave」 칸 — 스토어로 보낼 수 있는 앱 = 크롬 원격 데스크톱 + Brave. (launchApp 허용 목록은 그대로 — Brave 는 openInApp 으로만 연다) */
+    private static final java.util.Set<String> STORE_ALLOWED =
+        new java.util.HashSet<>(java.util.Arrays.asList("com.google.chromeremotedesktop", "com.brave.browser"));
+
     @PluginMethod
     public void openStore(final PluginCall call) {
         final String pkg = call.getString("pkg");
         JSObject ret = new JSObject();
-        if (pkg == null || !LAUNCH_ALLOWED.contains(pkg)) {
+        if (pkg == null || !STORE_ALLOWED.contains(pkg)) {
             ret.put("opened", false); ret.put("reason", "not_allowed"); call.resolve(ret); return;
         }
         try {
@@ -116,6 +120,39 @@ public class ExternalAppPlugin extends Plugin {
             ret.put("opened", true); ret.put("mode", "view");
         } catch (ActivityNotFoundException e) {
             ret.put("opened", false); ret.put("reason", "error");
+        } catch (Exception e) {
+            ret.put("opened", false); ret.put("reason", "error");
+        }
+        call.resolve(ret);
+    }
+
+    /* v9.78 (O-0779) 「Brave」 칸 — 웹 주소를 지정한 앱(Brave)으로 연다.
+     *  - Intent(ACTION_VIEW, https주소) + setPackage(pkg) → 그 앱의 화면만 후보라서 유튜브 앱·「어느 앱으로 열까요」 선택창이 끼어들 수 없다.
+     *  - 허용 패키지 = Brave 정식판 하나(다른 앱을 아무거나 여는 통로가 되지 않게). 주소는 https:// 만, 공백·제어문자 없음, 2000자 이하.
+     *  - 미설치 판단 = 실제로 열어 보고 ActivityNotFoundException 이면 not_installed (미리 조회하지 않으므로 <queries> 선언이 필요 없다 — startActivity 는 패키지 가시성 제한을 받지 않는다).
+     *  - 새 권한·새 라이브러리 없음.
+     *  - JS: Capacitor.Plugins.ExternalApp.openInApp({pkg, url}) → {opened:true} | {opened:false, reason:'not_allowed'|'not_installed'|'error'} */
+    private static final java.util.Set<String> OPEN_IN_APP_ALLOWED =
+        new java.util.HashSet<>(java.util.Arrays.asList("com.brave.browser"));
+
+    @PluginMethod
+    public void openInApp(final PluginCall call) {
+        final String pkg = call.getString("pkg");
+        final String url = call.getString("url");
+        JSObject ret = new JSObject();
+        if (pkg == null || !OPEN_IN_APP_ALLOWED.contains(pkg)
+                || url == null || !url.startsWith("https://") || url.length() > 2000 || !url.matches("[^\\x00-\\x20\\x7F]+")) {
+            ret.put("opened", false); ret.put("reason", "not_allowed"); call.resolve(ret); return;
+        }
+        try {
+            Intent it = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            it.addCategory(Intent.CATEGORY_BROWSABLE);
+            it.setPackage(pkg);
+            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getActivity().startActivity(it);
+            ret.put("opened", true);
+        } catch (ActivityNotFoundException e) {
+            ret.put("opened", false); ret.put("reason", "not_installed");
         } catch (Exception e) {
             ret.put("opened", false); ret.put("reason", "error");
         }

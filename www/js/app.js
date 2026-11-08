@@ -3797,6 +3797,7 @@
   APP_VERSION = 'v9.75';        // v9.75(O-0755): 홈 「PC 연결」에 「PC 상태」 줄 — 이 PC의 CPU·메모리·그래픽카드·바쁜 프로그램 3개를 폰에서 실시간으로 보고(화면을 연 동안 4초), 접힌 「PC 관리」에서 클로드 앱·PC 전체를 다시 시작(확인 창에서 [다시 시작]을 한 번 더 눌러야 실행, 접수→실행→PC가 직접 확인→결과 알림). 스위치 PC_MON_UI·PC_POWER_UI. 서버 함수가 없으면 「서버 준비 중입니다」
   APP_VERSION = 'v9.76';        // v9.76: 업무 허브를 스마트비서 안으로 — 홈 도구 맨 끝에 「업무 앱」(분류별 카드 목록: 학과 홈페이지·유전자분석·진로 설문·PBL·학교 장부·걷기 포인트·자리 배치)과 「규정 도우미」(동그래 규정 챗봇 바로 열기) 칸 둘. 카드를 누르면 크롬 맞춤 탭(앱 위에 얹혀 열리고 ✕·뒤로 가기로 돌아옴, 로그인은 크롬 것이라 유지)으로 열림. 목록·주소는 서버 get_hub_apps(연동 암호)에서 받아 폰에 저장(주소는 APK 안에 없음, 못 받으면 「못 불러왔어요」). 규정 도우미는 서버를 깨우는 신호 + 「처음 열 땐 30~60초」·「질문을 보낼 때마다 약 15원」 안내. 스위치 HUB_APPS·HUB_REG·HUB_OPEN. versionCode 120
   APP_VERSION = 'v9.77';        // v9.77: 사진첩 단계 칩 맨 끝에 하트(♥) 앨범 하나 — 따로 모아 보는 앨범(전체·아무거나 보기에는 안 섞임), 촬영 기록 날짜는 「(촬영 기록 기준)」으로 표시 · 스위치 ALBUM_HEART(끄면 v9.76) · 서버는 분류 '♥'·날짜 출처 'exif' 허용만 추가 · 새 권한 없음 · versionCode 121
+  APP_VERSION = 'v9.78';        // v9.78(O-0779): 홈 도구 맨 끝에 「Brave」 칸 — 누르면 폰에 설치된 Brave 앱을 패키지로 직접 지정해 열고(유튜브 앱·선택창이 끼어들지 않게) 기본 주소는 유튜브. Brave 가 없으면 「Brave 앱이 없습니다」 안내 시트 → [스토어 열기] · PC판은 새 탭으로 유튜브 · 스위치 BRAVE_TAB·BRAVE_URL·BRAVE_PKG(app.js 한 곳, BRAVE_TAB='off' 면 칸이 없어 v9.77 과 같음) · 네이티브 ExternalApp.openInApp 추가(허용 패키지 Brave 하나) · 새 권한·서버 변경 없음 · versionCode 122
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10105,6 +10106,46 @@
         $('btnReg').style.display = ''; $('btnReg').addEventListener('click', function () { try { HubApps.openReg(); } catch (e) { toast('규정 도우미를 열지 못했어요.'); } });
       }
     } catch (e) {}
+  }
+
+  /* ---- Brave 칸(v9.78, O-0779): 폰에 설치된 Brave 앱으로 유튜브 열기 ----
+   *   대표님이 Brave 의 광고 차단으로 유튜브를 보시려는 것. 앱 안 WebView·크롬 맞춤 탭에서는 Brave 의 광고 차단이 걸리지 않으므로 Brave 앱을 패키지로 직접 연다
+   *   (네이티브 ExternalApp.openInApp = ACTION_VIEW + setPackage → 유튜브 앱·「어느 앱으로 열까요」 선택창이 끼어들 수 없다).
+   *   스위치 BRAVE_TAB: 'on' = 홈 맨 끝에 「Brave」 칸 · 'off' = 칸이 보이지 않는다(v9.77 과 같음).
+   *   BRAVE_URL = 칸을 누르면 여는 기본 주소(https 만) · BRAVE_PKG = 열 앱(네이티브 허용 목록이 Brave 정식판 하나뿐이라 다른 값은 거절됨). 세 값은 여기 한 곳.
+   *   Brave 가 없으면 「Brave 앱이 없습니다」 시트 → [스토어 열기](플레이 스토어 Brave 화면). PC판·브라우저는 새 탭으로 유튜브(Brave 지정은 폰 앱에서만).
+   *   서버에 묻거나 저장하는 것 없음. 새 권한 없음. */
+  var BRAVE_TAB = 'on';
+  var BRAVE_URL = 'https://www.youtube.com';
+  var BRAVE_PKG = 'com.brave.browser';
+  var braveLastTap = 0;
+  function openBrave() {
+    var now = Date.now(); if (now - braveLastTap < 700) return; braveLastTap = now;   // 700ms 안 두 번 누름 = 한 번만(Brave 탭이 겹쳐 열리지 않게)
+    if (!isNativeApp()) {
+      var w = null; try { w = window.open(BRAVE_URL, '_blank'); if (w) w.opener = null; } catch (e) {}   // 'noopener' 를 주면 열려도 null 이 돌아와 막힘과 구분이 안 된다 → 열린 뒤 opener 만 끊는다
+      toast(w ? 'PC에서는 이 브라우저의 새 탭으로 엽니다(Brave 앱은 폰에서만).' : '새 탭을 열지 못했습니다 — 팝업 차단을 확인해 주세요.', 3000);
+      return;
+    }
+    var EA = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ExternalApp;
+    if (!EA || typeof EA.openInApp !== 'function') { toast('앱을 새 버전으로 바꾸면 Brave를 바로 열 수 있습니다.', 3000); return; }
+    var fail = function () { toast('Brave를 열지 못했습니다 — 다시 눌러 주세요.', 2800); };
+    try {
+      EA.openInApp({ pkg: BRAVE_PKG, url: BRAVE_URL }).then(function (r) {
+        if (r && r.opened) return;   // Brave 가 앞으로 나옴 — 말 없이 끝
+        if (r && r.reason === 'not_installed') {
+          openSheet('Brave 앱이 없습니다', '플레이 스토어에서 Brave(무료)를 설치한 뒤 이 칸을 다시 눌러 주세요.', '스토어 열기', function () {
+            try { EA.openStore({ pkg: BRAVE_PKG }).catch(function () { toast('플레이 스토어를 열지 못했습니다.'); }); } catch (e) { toast('플레이 스토어를 열지 못했습니다.'); }
+          }, null, null, { positive: true, icon: 'i-shield' });
+          return;
+        }
+        fail();
+      }, fail);
+    } catch (e) { fail(); }
+  }
+  if (BRAVE_TAB !== 'off' && $('btnBrave')) {
+    var braveGrid = $('homeTools'), braveSub = braveGrid && braveGrid.querySelector('.tools-sub');
+    if (braveGrid && braveSub) braveGrid.insertBefore($('btnBrave'), braveSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다
+    $('btnBrave').style.display = ''; $('btnBrave').addEventListener('click', openBrave);
   }
 
   /* ---- 문서 뷰어: 화면 열기/연결(로직은 docviewer.js) ---- */
