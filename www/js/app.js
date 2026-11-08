@@ -3809,6 +3809,7 @@
   APP_VERSION = 'v9.85';        // v9.85(O-0785): 업무 앱 「포인트 앱 바로 열기」 7칸 중 「캐시슬라이드 스텝업」 칸 아이콘만 🔓(잠금화면 앱 시절) → 👣(걷기 모양). 이름·순서·패키지·동작·칸 크기 그대로(phone-apps.js 한 글자). 새 스위치 없음 — 되돌리기는 이 수정 기록을 되돌리거나 아이콘을 🔓 로. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 129
   APP_VERSION = 'v9.86';        // v9.86(O-0787): 「PC 상태」 저장공간 칸(C 드라이브) 바로 아래에 「외장하드」 줄 — PC 프로그램(v1.2)이 외장하드(USB로 연결된 64GiB 이상 디스크)를 올릴 때만, 꽂으면 줄이 하나 생기고 뽑으면 사라짐. 「외장하드 · 이름 (F 드라이브)」 + 사용량/전체 + 막대(80% 이상 노랑·90% 이상 빨강, C: 와 같은 기준) + 남은 공간, 읽는 중·확인 못 함·N분 전 값 표시. 외장이 없으면(평소) v9.85 와 같은 화면. 홈 글씨·케이 한 줄·알림·정리 기능 없음. 스위치 PC_DISK_EXT_UI. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 130
   APP_VERSION = 'v9.87';        // v9.87(O-0794): 홈 「OTT」 칸 시트 맨 위 「유튜브」 줄 → 「미니뷰」 줄(작은 글씨 「유튜브 · 광고 없이」) — 누르면 폰의 별개 앱 「미니뷰」(com.kwak.tubelab)의 첫 화면이 열린다. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고 「미니뷰가 없어서 Brave로 열었어요」 안내(Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트), PC·브라우저는 유튜브 새 탭. 되돌림 스위치 YT_MODE('tube'|'brave'). 넷플릭스·웨이브·티빙·디즈니+ 줄·홈 글씨·다른 칸 그대로. 미니뷰 코드·광고 차단 코드는 이 저장소에 없다(패키지 이름만). 자바 허용 목록·매니페스트 선언에 패키지 하나 추가(새 권한 없음) · versionCode 131
+  APP_VERSION = 'v9.88';        // v9.88(O-0796): 「PC 상태」 「지금 가장 바쁜 프로그램」 이름 밑에 작은 글씨 설명 — PC 일꾼(v1.2 이상)이 올리는 무슨 작업인지 한 줄(d)·스크립트와 시작 시각(s)·시작한 곳과 메모리(o·c·m)·쉬운 안내(h, 눈에 띄되 겁주지 않는 작은 알림 줄)를 그린다. 값이 없으면 v9.87 과 같은 이름만(옛 일꾼·빈 칸 무해). 맨 위 문장 「가장 큰 몫은 ○○입니다」는 괄호 설명을 떼고 이름을 모르면 그렇게 말한다. 스위치 PC_PROC_DESC_UI. 새 버튼·새 화면·서버·SQL·자바·매니페스트·권한 변경 없음 (배포 전, main 에 올리지 않음)
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10123,12 +10124,14 @@
    *   스위치 PC_POWER_UI: 'on' = 화면 맨 아래 접힌 「PC 관리」(클로드 앱 / PC 전체 다시 시작) · 'off' = 그 묶음이 없다.
    *   스위치 PC_DISK_UI(v9.84, O-0784): 'on' = 메모리 아래 「저장공간」 칸(C 드라이브 사용량 · PC가 disk 값을 올릴 때만 보임) · 'off' = 그 칸이 없어 v9.83 과 같다.
    *   스위치 PC_DISK_EXT_UI(v9.86, O-0787): 'on' = 저장공간 칸 아래 「외장하드」 줄(PC가 외장 목록을 올릴 때만 보임 · 꽂혀 있을 때만) · 'off' = 외장 줄만 없어 v9.85 와 같다(C: 칸은 그대로).
+   *   스위치 PC_PROC_DESC_UI(v9.88, O-0796): 'on' = 「지금 가장 바쁜 프로그램」 이름 밑 설명 줄(PC 일꾼 v1.2 이상이 올릴 때만 보임) · 'off' = 이름·퍼센트만 있어 v9.87 과 같다.
    *   PC 전체 단추가 실제로 열리는 것은 앱이 아니라 PC(서버 payload.power.pc_btn)가 정한다 — 앱에서 풀 수 없다(시험 뒤 열림).
    *   서버 함수(get_pc_status 등)가 아직 없으면 화면이 「서버 준비 중입니다」를 말할 뿐 홈은 그대로 동작한다. */
   var PC_MON_UI = 'on';
   var PC_POWER_UI = 'on';
   var PC_DISK_UI = 'on';
   var PC_DISK_EXT_UI = 'on';
+  var PC_PROC_DESC_UI = 'on';       // v9.88(O-0796): 'on' = 바쁜 프로그램 이름 밑 설명(d·s·h·o·c·m) · 'off' = 이름·% 만(v9.87 과 같다)
   var pcView = $('pcView');
   function openPcStatus() {
     if (window.PcStatus && PcStatus.open) { try { PcStatus.open(); } catch (e) { openScreen(pcView); } }
@@ -10136,7 +10139,7 @@
   }
   if (PC_MON_UI !== 'off' && window.PcStatus && $('btnPcStatus')) {
     try {
-      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off', disk: PC_DISK_UI !== 'off', diskExt: PC_DISK_EXT_UI !== 'off' });
+      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off', disk: PC_DISK_UI !== 'off', diskExt: PC_DISK_EXT_UI !== 'off', procDesc: PC_PROC_DESC_UI !== 'off' });
       $('btnPcStatus').style.display = ''; $('btnPcStatus').addEventListener('click', openPcStatus);
     } catch (e) {}
   }

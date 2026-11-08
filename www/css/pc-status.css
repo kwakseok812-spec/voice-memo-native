@@ -80,6 +80,14 @@
 .pcs-row .rk { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--ic-bg); font-size: 12px; font-weight: 800; color: var(--muted); }
 .pcs-row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pcs-row .pc2 { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* 바쁜 프로그램 이름 밑 설명(v9.88, O-0796) — 일꾼이 d·s·h·o·c·m 을 올릴 때만 생긴다(옛 일꾼이면 이 줄들이 없어 v9.87 과 같은 화면). 새 규칙은 전부 #pcView 안 */
+#pcView .pcs-row .nm.wrap { white-space: normal; overflow-wrap: anywhere; word-break: keep-all; line-height: 1.35; }
+#pcView .pcs-det { grid-column: 2 / -1; margin-top: 1px; min-width: 0; font-weight: 600; }
+#pcView .pcs-dd { font-size: 13px; line-height: 1.5; color: var(--muted); word-break: keep-all; overflow-wrap: anywhere; }
+#pcView .pcs-ds, #pcView .pcs-dm { font-size: 12px; line-height: 1.5; color: var(--dim); word-break: keep-all; overflow-wrap: anywhere; }
+#pcView .pcs-dh { display: flex; align-items: flex-start; gap: 7px; margin-top: 6px; padding: 7px 9px; border-radius: 10px; background: var(--ic-bg); border-left: 3px solid var(--p1); font-size: 12.5px; line-height: 1.5; font-weight: 700; color: var(--text); word-break: keep-all; overflow-wrap: anywhere; }
+#pcView .pcs-dh i { flex: none; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--p1); color: var(--p1); font-style: normal; font-size: 10px; font-weight: 800; line-height: 12px; text-align: center; }
+#pcView .pcs-dh span { min-width: 0; }
 .pcs-none { font-size: 14px; color: var(--dim); font-weight: 700; }
 .pcs-work { margin-top: 4px; font-size: 13.5px; font-weight: 700; color: var(--warn-t, var(--warn)); background: var(--warn-bg); border-radius: 10px; padding: 8px 10px; }
 .pcs-upd { margin-top: 10px; font-size: 12.5px; color: var(--dim); font-weight: 600; text-align: center; min-height: 18px; }

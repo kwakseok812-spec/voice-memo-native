@@ -37,6 +37,7 @@
     DISK_NOTE: '디스크 상자의 2TB는 컴퓨터 계산으로 1.82TB입니다',    // 항상 보이는 작은 안내 한 줄(표기 단위를 바꾸면 이 문구도 함께)
     EXT_OLD: 180,                          // 외장 값이 (읽기 나이 + 값 나이) 이 초를 넘게 묵으면 「확인 중」/「N분 전 값」(v9.86)
     EXT_WAIT: 40,                          // 화면을 연 뒤 이 초 동안은 묵은 외장 값을 흐리게 하지 않고 「확인 중」 으로 둔다(PC 가 화면이 열린 것을 알고 새로 읽는 시간)
+    TOP_D: 90, TOP_S: 100, TOP_H: 100, TOP_O: 50,   // v9.88(O-0796): 이름 밑 설명 글자 수 상한(넘으면 …)
     EXT_MAX: 3,                            // 한 번에 그리는 외장 줄 수(넘치면 「외 N개 연결됨」)
     EXT_NAME_MAX: 24
   };
@@ -229,7 +230,32 @@
   }
   function topList(p) {
     if (!isObj(p) || !Array.isArray(p.top)) return [];
-    return p.top.filter(function (x) { return isObj(x) && x.n; }).slice(0, 3).map(function (x) { return { n: String(x.n), pct: num(x.pct) }; });
+    return p.top.filter(function (x) { return isObj(x) && x.n; }).slice(0, 3).map(function (x) {
+      var o = { n: String(x.n), pct: num(x.pct) };
+      /* v9.88(O-0796): PC 일꾼 v1.2 이상이 이름 밑 설명을 함께 올린다. 문자열만 받고, 있는 것만 담는다(옛 일꾼이면 {n,pct} 그대로) */
+      [['d', K.TOP_D], ['s', K.TOP_S], ['h', K.TOP_H], ['o', K.TOP_O]].forEach(function (k) {
+        var v = x[k[0]]; if (typeof v !== 'string') return;
+        v = v.replace(/\s+/g, ' ').trim(); if (!v) return;
+        o[k[0]] = v.length > k[1] ? v.slice(0, k[1] - 1) + '…' : v;
+      });
+      var c = num(x.c); if (c !== null && c >= 2 && c <= 999) o.c = Math.floor(c);
+      var m = num(x.m); if (m !== null && m > 0 && m < 4194304) o.m = Math.round(m);
+      return o;
+    });
+  }
+  /* 「가장 큰 몫은 ○○입니다」에 넣는 이름: 괄호 설명은 떼고, 이름을 모르면 그렇게 말한다 */
+  function bigName(n) {
+    var t = String(n || '').replace(/\s*\([^)]*\)/g, '').trim() || String(n || '');
+    return t === '기타 프로그램' ? '이름을 알 수 없는 프로그램' : t;
+  }
+  function fmtMem(mb) { return mb >= 1024 ? gb1(mb / 1024) + ' GB' : Math.round(mb) + ' MB'; }
+  /* 이름 밑 작은 글씨 줄: [설명] [스크립트 · 시작 시각] [시작한 곳 · 개수 · 메모리] + 안내(h). 값이 없는 줄은 만들지 않는다 */
+  function topDetail(t) {
+    var meta = [];
+    if (t.o) meta.push(t.o);
+    if (t.c && String(t.n).indexOf(t.c + '개') < 0) meta.push('작업 ' + t.c + '개');
+    if (t.m) meta.push('메모리 ' + fmtMem(t.m));
+    return { d: t.d || '', s: t.s || '', meta: meta.join(' · '), h: t.h || '' };
   }
   function workInfo(p) {
     var w = (isObj(p) && isObj(p.work)) ? p.work : {};
@@ -250,7 +276,7 @@
     if (j.state === 'connecting') return 'PC에 연결하는 중입니다.';
     var cpu = cpuNow(p), mem = memInfo(p), top = topList(p);
     var lc = level(cpu, 'cpu'), lm = level(mem && mem.pct, 'mem');
-    var big = (top.length && top[0].pct !== null && top[0].pct >= 10) ? ' 가장 큰 몫은 ' + top[0].n + '입니다.' : '';
+    var big = (top.length && top[0].pct !== null && top[0].pct >= 10) ? ' 가장 큰 몫은 ' + bigName(top[0].n) + '입니다.' : '';
     if (lc === 'hot') return 'PC가 많이 바쁩니다.' + big;
     if (lc === 'warn') return 'PC가 조금 바쁩니다.' + big;
     if (lm === 'hot') return '메모리가 거의 찼습니다.';
@@ -417,7 +443,7 @@
 
   var PcPure = {
     K: K, esc: esc, iga: iga, koItem: koItem, fmtAgo: fmtAgo, fmtTook: fmtTook, fmtClock: fmtClock, ages: ages, judge: judge, level: level, LEVEL_WORD: LEVEL_WORD,
-    cpuNow: cpuNow, memInfo: memInfo, topList: topList, workInfo: workInfo, workText: workText, sayLine: sayLine,
+    cpuNow: cpuNow, memInfo: memInfo, topList: topList, bigName: bigName, topDetail: topDetail, fmtMem: fmtMem, workInfo: workInfo, workText: workText, sayLine: sayLine,
     statusLine: statusLine, DOWN_NOTE: DOWN_NOTE, errText: errText, stepStates: stepStates, STEP_NAMES: STEP_NAMES, cmdView: cmdView,
     isFinalStatus: isFinalStatus, isActiveStatus: isActiveStatus, knownCode: knownCode, UNKNOWN_ERR: UNKNOWN_ERR, NET_UNSURE: NET_UNSURE, CANCEL_UNSURE: CANCEL_UNSURE, lockReason: lockReason, KIND_NAME: KIND_NAME, gb1: gb1,
     capParts: capParts, fmtCap: fmtCap, diskLevel: diskLevel, diskInfo: diskInfo, diskOld: diskOld, DISK_WORD: DISK_WORD,
@@ -430,7 +456,7 @@
   /* =====================================================================
    * 2. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true, diskExt: true };
+  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true, diskExt: true, procDesc: true };
   var $ = function (id) { return document.getElementById(id); };
   var built = false, inited = false;
   var data = null;                // 마지막으로 받은 get_pc_status 결과(+_at: 받은 폰 시각)
@@ -595,7 +621,14 @@
     $('pcStateRow').style.display = (cl || wk) ? '' : 'none';
     setText('pcState', (cl ? (cl.up ? (cl.window === false ? '켜짐(창 확인 못 함)' : '켜짐') : '꺼짐') : '확인 못 함') + ' · ' + (wk && num(wk.total) ? '일꾼 ' + wk.total + '개 중 ' + wk.ok + '개 정상' : '일꾼 확인 못 함'));
     var tops = topList(p), rows = '';
-    tops.forEach(function (t, i) { rows += '<div class="pcs-row"><span class="rk">' + (i + 1) + '</span><span class="nm">' + esc(t.n) + '</span><span class="pc2">' + (t.pct === null ? '-' : Math.round(t.pct) + '%') + '</span><div class="pcs-bar sm"><u class="lv-' + lc + '" style="width:' + (t.pct === null ? 0 : clamp(t.pct, 0, 100)) + '%"></u></div></div>'; });
+    tops.forEach(function (t, i) {
+      var dt = host.procDesc === false ? null : topDetail(t), det = '';
+      if (dt && (dt.d || dt.s || dt.meta || dt.h)) {
+        det = '<div class="pcs-det">' + (dt.d ? '<div class="pcs-dd">' + esc(dt.d) + '</div>' : '') + (dt.s ? '<div class="pcs-ds">' + esc(dt.s) + '</div>' : '') + (dt.meta ? '<div class="pcs-dm">' + esc(dt.meta) + '</div>' : '') +
+          (dt.h ? '<div class="pcs-dh"><i aria-hidden="true">i</i><span>' + esc(dt.h) + '</span></div>' : '') + '</div>';
+      }
+      rows += '<div class="pcs-row"><span class="rk">' + (i + 1) + '</span><span class="nm' + (det ? ' wrap' : '') + '">' + esc(t.n) + '</span><span class="pc2">' + (t.pct === null ? '-' : Math.round(t.pct) + '%') + '</span><div class="pcs-bar sm"><u class="lv-' + lc + '" style="width:' + (t.pct === null ? 0 : clamp(t.pct, 0, 100)) + '%"></u></div>' + det + '</div>';
+    });
     if ($('pcTopRows').getAttribute('data-sig') !== rows) { $('pcTopRows').innerHTML = rows || '<div class="pcs-none">' + (hasP ? '확인 못 함' : '-') + '</div>'; $('pcTopRows').setAttribute('data-sig', rows); }
     var w = workInfo(p), wr = $('pcWorkRow');
     if (w.items.length) { wr.textContent = '지금 도는 일: ' + workText(w); wr.style.display = ''; } else wr.style.display = 'none';
