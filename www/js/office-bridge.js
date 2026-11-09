@@ -449,6 +449,7 @@
     var m = { app: 'voice-memo-test', files: filesMeta };
     if (memo && memo.scan && memo.scan.type === 'receipt') {
       m.scan = { type: 'receipt', v: 1 };
+      if (memo.scan.pick === 'opex' || memo.scan.pick === 'research') m.scan.pick = memo.scan.pick;   // v9.89(O-0802): 앱에서 고른 장부 구분(운영비·연구비)만 — 그 밖의 값은 싣지 않는다
       var bt = memo.scan.batch;      // v9.32: 여러 장 묶음 소속(PC 가 알림을 모아 한 번 보낸다). 형식이 틀리면 싣지 않는다 → 한 장과 같다
       if (bt && /^[0-9a-f]{8}$/.test(String(bt.id)) && bt.i >= 1 && bt.n >= bt.i && bt.n <= 10) m.scan.batch = { id: String(bt.id), i: bt.i | 0, n: bt.n | 0 };
     }

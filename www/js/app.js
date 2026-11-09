@@ -115,10 +115,20 @@
   /* v9.51 영수증 보내기 전 «결제 카드»·«메모» — 앱 안에서만 쓴다(PC·서버 변경 없음). 고른 값은 이 기기의 기록(card_pick·memo_pick)에 붙여 두었다가,
    * PC 가 읽은 뒤 열리는 확인 카드의 「어느 앱에」 기본값(카드 끝자리를 못 읽었을 때)과 「설명」 기본값으로만 쓴다. 'off' 면 v9.50 과 같음 */
   var RECEIPT_PICK = 'on';
+  /* v9.89(O-0802) 위에서 고른 「결제 카드」(= 운영비/연구비 구분)를 PC 로도 함께 보낸다 — 행 meta.scan.pick = 'opex'|'research'. 예전(v9.51~v9.88)에는 이 기기의 기록에만 붙여 두어
+   *   PC 는 선택을 알 수 없었고(영수증 카드번호는 가려져 있어 PC 가 장부를 못 정함) 그래서 자동 등록이 멈췄다. 'off' 면 v9.88 과 같음(선택을 PC 로 보내지 않음). 못 고른 경우(칩 해제)는 보내지 않는다 → PC 가 먼저 여쭘. */
+  var RECEIPT_PICK_SEND = 'on';
   var RP_CARDS = [{ v: '9801', app: 'opex', t: '보직자 운영비 카드 9801' }, { v: '8837', app: 'research', t: '교내 연구비 카드 8837' }];
   var RP = { card: '', memo: '' };
   try { var _rc = localStorage.getItem('smart_rcpt_card'); if (_rc === '9801' || _rc === '8837') RP.card = _rc; } catch (e) {}
   function rpOn() { return RECEIPT_PICK === 'on' && SCAN_HUB === 'on'; }
+  function rpSendPick() { return (RECEIPT_PICK_SEND === 'on' && rpOn()) ? rpApp(RP.card) : ''; }   // 'opex' | 'research' | ''
+  function rpScan(batch) {          // 영수증 행 meta.scan 에 실을 값(한 장·묶음 공통). pick 은 고른 경우에만
+    var o = { type: 'receipt', v: 1 }, pk = rpSendPick();
+    if (pk) o.pick = pk;
+    if (batch) o.batch = batch;
+    return o;
+  }
   function rpApp(card) { for (var i = 0; i < RP_CARDS.length; i++) if (RP_CARDS[i].v === card) return RP_CARDS[i].app; return ''; }
   function rpFields() { return rpOn() ? { card_pick: RP.card || '', memo_pick: String(RP.memo || '').trim() } : {}; }
   function rpHtml() {
@@ -2695,7 +2705,7 @@
       kind: kind, note: noteFull || null, date: t.date, time: t.time
     };
     if (scan) {
-      memo.scan = { type: 'receipt', v: 1 };
+      memo.scan = rpScan();
     }
     var hrec = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: kind };
     if (scan) { var pf = rpFields(); if (pf.card_pick) hrec.card_pick = pf.card_pick; if (pf.memo_pick) hrec.memo_pick = pf.memo_pick; }
@@ -3004,7 +3014,7 @@
       if (k >= rcb.items.length) { rcbPollStart(); return; }
       var it = rcb.items[k], t = now();
       var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
-                   kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
+                   kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: rpScan({ id: rcb.bid, i: k + 1, n: n }) };
       it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
       var hr2 = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }, pf2 = rpFields(); if (pf2.card_pick) hr2.card_pick = pf2.card_pick; if (pf2.memo_pick) hr2.memo_pick = pf2.memo_pick; HistoryModule.add(hr2); renderHistory();
       OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
@@ -3022,7 +3032,7 @@
     var it = rcb.items[k]; if (!it || it.st !== 'failed') return;
     var t = now(), n = rcb.items.length;
     var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '영수증 ' + t.date + ' ' + t.time + ' (' + (k + 1) + '/' + n + ')',
-                 kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: { type: 'receipt', v: 1, batch: { id: rcb.bid, i: k + 1, n: n } } };
+                 kind: 'photo', note: '영수증', date: t.date, time: t.time, scan: rpScan({ id: rcb.bid, i: k + 1, n: n }) };
     it.id = memo.id; it.token = memo.token; it.st = 'uploading'; rcbRender();
     var hr2 = { id: memo.id, token: memo.token, title: memo.title, date: t.date, time: t.time, status: 'pending', kind: 'photo' }, pf2 = rpFields(); if (pf2.card_pick) hr2.card_pick = pf2.card_pick; if (pf2.memo_pick) hr2.memo_pick = pf2.memo_pick; HistoryModule.add(hr2); renderHistory();
     OfficeBridge.sendBatch(memo, [it.file], function () {}).then(function () {
@@ -3810,6 +3820,7 @@
   APP_VERSION = 'v9.86';        // v9.86(O-0787): 「PC 상태」 저장공간 칸(C 드라이브) 바로 아래에 「외장하드」 줄 — PC 프로그램(v1.2)이 외장하드(USB로 연결된 64GiB 이상 디스크)를 올릴 때만, 꽂으면 줄이 하나 생기고 뽑으면 사라짐. 「외장하드 · 이름 (F 드라이브)」 + 사용량/전체 + 막대(80% 이상 노랑·90% 이상 빨강, C: 와 같은 기준) + 남은 공간, 읽는 중·확인 못 함·N분 전 값 표시. 외장이 없으면(평소) v9.85 와 같은 화면. 홈 글씨·케이 한 줄·알림·정리 기능 없음. 스위치 PC_DISK_EXT_UI. 서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 130
   APP_VERSION = 'v9.87';        // v9.87(O-0794): 홈 「OTT」 칸 시트 맨 위 「유튜브」 줄 → 「미니뷰」 줄(작은 글씨 「유튜브 · 광고 없이」) — 누르면 폰의 별개 앱 「미니뷰」(com.kwak.tubelab)의 첫 화면이 열린다. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고 「미니뷰가 없어서 Brave로 열었어요」 안내(Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트), PC·브라우저는 유튜브 새 탭. 되돌림 스위치 YT_MODE('tube'|'brave'). 넷플릭스·웨이브·티빙·디즈니+ 줄·홈 글씨·다른 칸 그대로. 미니뷰 코드·광고 차단 코드는 이 저장소에 없다(패키지 이름만). 자바 허용 목록·매니페스트 선언에 패키지 하나 추가(새 권한 없음) · versionCode 131
   APP_VERSION = 'v9.88';        // v9.88(O-0796): 「PC 상태」 「지금 가장 바쁜 프로그램」 이름 밑에 작은 글씨 설명 — PC 일꾼(v1.2 이상)이 올리는 무슨 작업인지 한 줄(d)·스크립트와 시작 시각(s)·시작한 곳과 메모리(o·c·m)·쉬운 안내(h, 눈에 띄되 겁주지 않는 작은 알림 줄)를 그린다. 값이 없으면 v9.87 과 같은 이름만(옛 일꾼·빈 칸 무해). 맨 위 문장 「가장 큰 몫은 ○○입니다」는 괄호 설명을 떼고 이름을 모르면 그렇게 말한다. 스위치 PC_PROC_DESC_UI. 새 버튼·새 화면·서버·SQL·자바·매니페스트·권한 변경 없음 (배포 전, main 에 올리지 않음)
+  APP_VERSION = 'v9.89';        // v9.89(O-0802): 영수증을 보낼 때 위에서 고른 「결제 카드」(운영비 9801 / 연구비 8837)를 PC 로도 함께 보낸다(meta.scan.pick = 'opex'|'research'). 예전에는 이 기기에만 남아 PC 가 장부를 못 정해 자동 등록이 멈췄다. 못 고르면 보내지 않는다(PC 가 먼저 여쭘). 스위치 RECEIPT_PICK_SEND('on'|'off', app.js 한 곳) — 'off' 면 v9.88 과 같다. 새 버튼·새 화면·서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 133
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
