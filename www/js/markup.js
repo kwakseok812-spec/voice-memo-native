@@ -6,10 +6,23 @@
  *   · 좌표는 PDF 단위(scale 1, 왼쪽 위 원점) — 확대·폭과 상관없다. 글자는 PDF.js getTextContent, 표 칸은 그 쪽의 선(그리기 명령)으로 짐작.
  *   · 보관: 이 기기 IndexedDB(문서 키별, 7일). 보내기·취소·상태는 app.js 가 준 host(send·cancel·status·openChat).
  *   · 되돌리기: MARKUP_ON = 'off' → [고치기]에 「표시해서 요청하기」가 안 보이고 길게 누르기도 꺼짐(지금의 [편집하기]와 같아짐).
+ *   · O-0810 손가락 방식: 한 손가락 = 표시, 두 손가락 = 옮기기·확대·축소. [펜|손] 단추는 없다. MARKUP_GESTURE = 'off' → 옛 [펜|손] 방식(bindInput)이 그대로 돌아온다.
+ *     MK_INERTIA = 'off' → 두 손가락을 떼면 바로 멈춘다(미끄러지는 효과만 끔).
  * ==========================================================================*/
 (function (global) {
   'use strict';
   var MARKUP_ON = 'on';
+  var MARKUP_GESTURE = 'on';   // O-0810 한 손가락 표시 · 두 손가락 이동(스위치). 'off' = 옛 [펜|손] 단추 방식
+  var MK_INERTIA = 'on';       // O-0810 「요청 외 추가」 두 손가락을 떼면 문서가 조금 미끄러진다. 'off' = 바로 멈춤
+  var MK_INERTIA_MAX = 3.2;    // 미끄러짐 시작 속도 상한(px/ms) — 너무 멀리 날아가지 않게
+  var MK_INERTIA_DECAY = 0.94; // 16.7ms(한 프레임)마다 곱하는 값
+  var MK_INERTIA_STOP = 0.018; // 이 속도(px/ms, 약 0.3px/프레임) 아래면 멈춘다
+  var MK_PALM = 96;            // 터치 닿은 크기(CSS px)가 이 이상이면 손바닥으로 보고 그 닿음만 무시. 짐작값이다 — 낮게 잡아 보통 손가락을 무시하는 쪽이 손바닥이 새는 것보다 해가 커서 설계안의 72에서 96으로 올렸다(실기기에서 조정, 0 = 끔)
+  var MK_SECOND_PX = 30;       // 한 손가락이 그린 선이 이 길이(화면 px) 미만일 때 두 번째 손가락이 닿으면 선을 버리고 이동으로, 이상이면 두 번째 손가락을 무시 — 기준은 「두 번째 손가락이 닿는 그 순간」 하나뿐
+  var MK_ZOOM_START = 0.08;    // 두 손가락 거리가 8% 넘게 변하면 확대·축소 시작(이동은 늘 함께 한다)
+  var MK_PEN_HOLD_MS = 400;    // S펜을 뗀 뒤 이 시간 동안은 손가락 닿음을 무시
+  var GHINT_KEY = 'smart_markup_gesture_hint_v1', GIGN_KEY = 'smart_markup_gesture_ign_v1', GPALM_KEY = 'smart_markup_palm_notice_n';
+  function gOn() { return MARKUP_GESTURE === 'on'; }
   var LP_KEY = 'smart_markup_longpress', HELP_KEY = 'smart_markup_help_seen_v1', KEEP_MS = 7 * 24 * 3600 * 1000;
   var NS = 'http://www.w3.org/2000/svg';
   var doc = document;
@@ -60,8 +73,8 @@
     '<div class="mk-top"><button class="mk-tbtn" data-a="end" aria-label="끝내기">‹</button><div class="mk-fname" id="mkName"></div><button class="mk-tbtn mk-z" data-a="zout" aria-label="작게 보기">－</button><button class="mk-tbtn mk-z" data-a="zin" aria-label="크게 보기">＋</button><div class="mk-pgno" id="mkPg"></div><button class="mk-tbtn mk-chatbtn" data-a="gochat" aria-label="채팅으로 가기" title="채팅으로">💬</button></div>' +
     '<div class="mk-band"><div class="mk-band-row"><div class="mk-band-title">✏️ 수정 요청</div>' +
     '<button class="mk-help" data-a="help" aria-label="사용법">? 사용법</button>' +
-    '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div></div>' +
-    '<div class="mk-band-hint"><span class="mk-state" id="mkState">펜 · 그리는 중</span> — <span id="mkHint">고칠 곳에 동그라미를 치거나 밑줄을 그어 주세요</span></div></div>' +
+    '@SEG@</div>' +
+    '@HINT@</div>' +
     '<div class="mk-strip mk-sent" id="mkSent"><span class="mk-grow" id="mkSentTxt"></span><button class="mk-job" data-a="jobs">작업 현황</button><button data-a="cancelreq">요청 취소</button></div>' +
     '<div class="mk-strip mk-done" id="mkDone"><span class="mk-grow" id="mkDoneTxt"></span><button data-a="chat">채팅 보기</button><button data-a="cleardone">목록 비우기</button></div>' +
     '<div class="mk-main"><div class="mk-area" id="mkArea">' +
@@ -81,14 +94,20 @@
     '<div class="mk-row2"><button class="mk-close" id="mkHPrev">‹ 앞</button><button class="mk-big" id="mkHNext">다음 ›</button></div><button class="mk-close" id="mkHClose">닫기</button></div></div>' +
     '<div class="mk-toast" id="mkToast"><span id="mkToastTxt"></span><button id="mkToastBtn" style="display:none"></button></div>';
 
+  // 띠: 손가락 방식이면 [펜|손] 단추 없이 안내 글 한 줄(앱 화면 문구에는 가운데 점을 쓰지 않는다), 옛 방식이면 지금 그대로
+  function bandHtml(h) {
+    var seg = gOn() ? '' : '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div>';
+    var hint = gOn() ? '<div class="mk-band-hint"><span class="mk-state" id="mkState">한 손가락으로 표시하고,</span> <span id="mkHint">두 손가락으로 넘기거나 확대합니다</span></div>'
+                     : '<div class="mk-band-hint"><span class="mk-state" id="mkState">펜 · 그리는 중</span> — <span id="mkHint">고칠 곳에 동그라미를 치거나 밑줄을 그어 주세요</span></div>';
+    return h.replace('@SEG@', seg).replace('@HINT@', hint);
+  }
   function build() {
     if (R) return;
     var dr = $('docRoot'); if (!dr) return;
-    var el = doc.createElement('div'); el.id = 'mkRoot'; el.innerHTML = HTML; dr.appendChild(el);
+    var el = doc.createElement('div'); el.id = 'mkRoot'; el.innerHTML = bandHtml(HTML); dr.appendChild(el);
     R = { root: el, scroll: $('mkScroll'), area: $('mkArea') };
     el.addEventListener('click', onClick);
-    $('mkPen').onclick = function () { setTool('pen'); };
-    $('mkHand').onclick = function () { setTool('hand'); };
+    if (!gOn()) { $('mkPen').onclick = function () { setTool('pen'); }; $('mkHand').onclick = function () { setTool('hand'); }; }
     Array.prototype.forEach.call(el.querySelectorAll('.mk-chip'), function (b) { b.onclick = function () { pickChip(b.getAttribute('data-pick')); }; });
     Array.prototype.forEach.call(el.querySelectorAll('.mk-sheet'), function (s) {
       s.addEventListener('click', function (e) {
@@ -99,7 +118,7 @@
         }
       });
     });
-    bindInput();
+    if (gOn()) bindGesture(); else bindInput();
     buildHelp();
     $('mkHPrev').onclick = function () { showHelp(hIdx - 1); };
     $('mkHNext').onclick = function () { if (hIdx === HELP.length - 1) closeHelp(); else showHelp(hIdx + 1); };
@@ -175,7 +194,10 @@
         var real = rs.memo.isNew ? null : S.items.filter(function (x) { return x.n === rs.memo.item.n && !x.status; })[0];
         openMemo(real || rs.memo.item, { text: rs.memo.text, isNew: !real });
       }, 300);
-      if (!rs && lsGet(HELP_KEY, '') !== '1') { lsSet(HELP_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
+      var seen = lsGet(HELP_KEY, '') === '1';
+      if (!rs && !seen) { lsSet(HELP_KEY, '1'); lsSet(GHINT_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
+      // O-0810: 처음 쓰는 분은 사용법이 저절로 열린다. 이미 사용법을 본 분만 방식이 바뀐 것을 한 번 알려 준다(길게 눌러 켠 때는 「켰습니다」 알림과 겹치니 다음 기회에)
+      else if (gOn() && !rs && seen && lsGet(GHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(GHINT_KEY, '1'); toast('이제 한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', '사용법', function () { help(1); }, 4500); }
       if (statusT) clearInterval(statusT);
       statusT = setInterval(refreshStatus, 20000);
       return true;
@@ -187,6 +209,7 @@
     var quiet = !!(o && o.quiet);
     var n = S.items.filter(notSent).length;
     stopMic(true); clearSel(); closeSheets(); kHide();
+    if (gOn()) gClose();
     S.on = false; R.root.classList.remove('on');
     if (statusT) { clearInterval(statusT); statusT = null; }
     if (io) { io.disconnect(); io = null; }
@@ -216,6 +239,11 @@
     close(); return true;
   }
   function setTool(t, quiet) {
+    if (gOn()) {          // O-0810: 도구 구분이 없다 — 늘 「표시(한 손가락)·이동(두 손가락)」. S.tool 은 'pen' 으로 고정(보관된 'hand'는 무시)
+      S.tool = 'pen'; R.scroll.classList.toggle('gest', !!S.on); R.scroll.classList.remove('pen');
+      if (S.on && !quiet) kSay('어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+      return;
+    }
     S.tool = t; var seg = $('mkSeg');
     seg.classList.toggle('hand', t === 'hand'); $('mkPen').classList.toggle('on', t === 'pen'); $('mkHand').classList.toggle('on', t === 'hand');
     $('mkPen').setAttribute('aria-pressed', t === 'pen'); $('mkHand').setAttribute('aria-pressed', t === 'hand');
@@ -471,6 +499,184 @@
       }
       lastTap = { t: now, x: ev.clientX, y: ev.clientY };
     });
+  }
+  /* ---------------- O-0810 손가락 입력(새 방식): 한 손가락 = 표시, 두 손가락 = 옮기기·확대·축소 ----------------
+   *  손가락 목록 하나(G.all)·상태기계 하나로 선 긋기·이동·확대·길게 누르기·손잡이·핀·메모창을 함께 다룬다.
+   *  mode: idle(대기) → hold(한 손가락 닿음, 아직 안 그림) → draw(표시) | lone(쪽 바깥에서 시작, 아무것도 안 함) | dead(막힘, 모든 손가락이 뗄 때까지 아무것도 안 함) | pan(두 손가락)
+   *  - hold 에서 8px 넘게 움직이면 그때서야 선을 만들고 앞 선택을 지운다(두 손가락 이동 때 선택이 안 지워진다)
+   *  - 두 번째 손가락이 닿는 순간: hold·lone 이면 이동으로 / draw 이고 선이 MK_SECOND_PX 미만이면 선을 버리고 이동으로 / 그 이상이면 그 손가락만 무시(선은 계속)
+   *  - 핀·팝업·손잡이·메모창에서 시작한 손가락은 dead 로 막아 뗄 때까지 뒤에 닿는 손가락도 모두 무시
+   *  - 두 손가락 이동은 늘 반영, 거리 변화가 MK_ZOOM_START(8%)를 넘으면 확대·축소를 시작하고 이동도 이어 한다. 한 손가락을 떼면 이동은 끝(남은 손가락은 아무것도 안 함)
+   *  - 마우스 = 왼쪽 끌기 표시(휠 스크롤), S펜 = 표시(펜이 닿은 동안과 뗀 뒤 MK_PEN_HOLD_MS 동안 손가락 무시), 손가락 닿은 크기 MK_PALM 이상 = 그 닿음만 무시 */
+  var G = { f: {}, all: {}, ign: {}, mode: 'idle', pri: null, pan: null, panRaf: 0, panDirty: false, lpT: null, slen: 0, lx: 0, ly: 0, penId: null, penUntil: 0, inertia: null, vel: null, lastAct: 0 };
+  function gNow() { return Date.now(); }
+  function gCancelLP() { if (G.lpT) { clearTimeout(G.lpT); G.lpT = null; } }
+  function gStopInertia() { if (G.inertia) { cancelAnimationFrame(G.inertia.raf); G.inertia = null; } }
+  function gRemaining() { return Object.keys(G.all).length; }
+  function gReset(markIgn) {
+    gCancelLP(); gStopInertia();
+    if (G.pan) gPanEnd(true);
+    cancelStroke();
+    if (markIgn) Object.keys(G.all).forEach(function (k) { G.ign[k] = true; });
+    G.f = {}; G.all = {}; G.mode = 'idle'; G.pri = null; G.pan = null; G.vel = null;
+  }
+  function gPalmNotice() { var n = +lsGet(GPALM_KEY, '0') || 0; if (n >= 3) return; lsSet(GPALM_KEY, String(n + 1)); toast('너무 크게 닿은 손가락은 쓰지 않았습니다', null, null, 2200); }
+  function gIgnHint() { if (lsGet(GIGN_KEY, '') === '1') return; lsSet(GIGN_KEY, '1'); toast('표시하는 중에는 다른 손가락을 쓰지 않습니다. 넘기려면 손을 떼고 두 손가락을 함께 대 주세요', null, null, 4200); }
+  function gNewF(id, x, y, type, P, adopted) { return { id: id, x: x, y: y, sx: x, sy: y, t0: gNow(), type: type, P: P, adopted: !!adopted, pts: [] }; }
+  function gDead(id) { G.lastAct = gNow(); if (G.mode === 'idle') { G.mode = 'dead'; G.all[id] = true; } else if (G.mode === 'dead') G.all[id] = true; else G.ign[id] = true; }
+  function gDown(ev, sc) {
+    if (!S.on) return;
+    var id = ev.pointerId, type = ev.pointerType || 'touch', now = gNow();
+    if (ev.button && ev.button !== 0) return;                      // 오른쪽 클릭 등
+    gStopInertia();
+    delete G.ign[id]; if (G.all[id]) { gEnd({ pointerId: id, type: 'pointercancel' }); }          // 같은 번호가 다시 오면 이전 닿음은 끝난 것(뗌 신호를 놓친 경우)
+    if (G.mode === 'dead' && now - G.lastAct > 4000) gReset(true);                                  // 뗌 신호를 놓쳐 막힌 채 남는 일을 막는 안전장치
+    var inScroll = sc.contains(ev.target), tgt = ev.target;
+    if (type === 'pen') G.penId = id;                                                             // 펜이 UI(손잡이 등) 위에 닿아도 펜 우선은 적용
+    if (type === 'touch') {
+      if (G.penId !== null || now < G.penUntil) { G.ign[id] = true; return; }                       // S펜 우선
+      var wd = Math.max(ev.width || 0, ev.height || 0);
+      if (MK_PALM > 0 && wd >= MK_PALM) { G.ign[id] = true; gPalmNotice(); return; }              // 손바닥으로 보이는 큰 닿음만 무시
+    }
+    if (!inScroll) { gDead(id); return; }                                                           // 칩 같은 화면 위 단추에서 시작한 손가락
+    if (S.memo && S.memo.side) { ev.preventDefault(); closeMemo(); if (S.sel) showPop(); gDead(id); return; }
+    if (tgt.closest && (tgt.closest('.mk-pop') || tgt.closest('.mk-pin') || tgt.closest('.mk-hit'))) { gDead(id); return; }
+    if (type === 'pen') { gReset(true); G.penId = id; }
+    var P = pageAt(ev.clientX, ev.clientY);
+    if (G.mode === 'dead') { G.all[id] = true; G.lastAct = now; return; }
+    G.lastAct = now;
+    if (G.mode === 'idle') {
+      G.mode = 'hold'; G.pri = id; G.all[id] = true; G.slen = 0; G.lx = ev.clientX; G.ly = ev.clientY;
+      G.f[id] = gNewF(id, ev.clientX, ev.clientY, type, P, false);
+      if (P || type === 'touch') { ev.preventDefault(); try { sc.setPointerCapture(id); } catch (e) {} }
+      if (P) G.lpT = setTimeout(gLong, LP_MS);
+      return;
+    }
+    // 이미 한 손가락이 있는 채 두 번째 손가락이 닿음
+    var f1 = G.f[G.pri];
+    if (type !== 'touch' || !f1 || f1.type !== 'touch' || G.mode === 'pan') { G.ign[id] = true; return; }
+    if (G.mode === 'draw') {
+      if (G.slen >= MK_SECOND_PX) { G.ign[id] = true; gIgnHint(); return; }
+      cancelStroke();
+    }
+    gCancelLP(); ev.preventDefault();
+    G.f[id] = gNewF(id, ev.clientX, ev.clientY, 'touch', P, false); G.all[id] = true;
+    try { sc.setPointerCapture(id); } catch (e) {}
+    gPanStart(f1, G.f[id], sc);
+  }
+  function gLong() {
+    G.lpT = null; var f = G.f[G.pri];
+    if (G.mode !== 'hold' || !f || !f.P || f.adopted) return;
+    G.mode = 'dead'; vibrate();
+    var P = f.P, pt = toPt(P, f.sx, f.sy);
+    loadChars(P).then(function () { var c = nearestChar(P, pt); if (!c) return; makeTextSel(P, P.chars.filter(function (x) { return x.l === c.l; }).map(function (x) { return x.i; })); });
+  }
+  function gHoldMove(f) {
+    var slop = f.type === 'touch' ? TOL : 4;
+    f.pts.push([f.x, f.y]);
+    if (Math.hypot(f.x - f.sx, f.y - f.sy) <= slop) return;
+    var P = f.P || (f.adopted ? (pageAt(f.sx, f.sy) || pageAt(f.x, f.y)) : null);
+    if (!P) { if (!f.adopted) { gCancelLP(); G.mode = 'lone'; } return; }
+    gCancelLP(); G.mode = 'draw'; f.P = P;
+    startStroke(P, f.sx, f.sy, f.id);
+    G.slen = 0; var lx = f.sx, ly = f.sy;
+    f.pts.forEach(function (q) { G.slen += Math.hypot(q[0] - lx, q[1] - ly); lx = q[0]; ly = q[1]; addPoint(q[0], q[1]); });
+    G.lx = lx; G.ly = ly; f.pts = [];
+  }
+  function gMove(ev) {
+    if (G.all[ev.pointerId]) G.lastAct = gNow();                    // 막힌 손가락(손잡이·핀을 끄는 손가락 등)이 움직이는 동안에도 「마지막 신호」를 갱신 — 4초 안전장치가 잘못 풀지 않게
+    var f = G.f[ev.pointerId]; if (!f || !S.on) return;
+    f.x = ev.clientX; f.y = ev.clientY; G.lastAct = gNow();
+    if (G.mode === 'hold' && ev.pointerId === G.pri) gHoldMove(f);
+    else if (G.mode === 'draw' && ev.pointerId === G.pri && stroke) { G.slen += Math.hypot(f.x - G.lx, f.y - G.ly); G.lx = f.x; G.ly = f.y; addPoint(f.x, f.y); }
+    else if (G.mode === 'pan' && G.pan && (ev.pointerId === G.pan.a || ev.pointerId === G.pan.b)) {
+      // 두 손가락의 움직임은 손가락마다 따로 도착한다 — 하나만 갱신된 중간 상태로 거리를 재면 빠르게 밀 때 확대로 잘못 읽는다. 화면 한 프레임에 한 번, 두 손가락 위치가 다 들어온 뒤에 처리한다.
+      G.panDirty = true;
+      if (!G.panRaf) G.panRaf = requestAnimationFrame(function () { G.panRaf = 0; if (G.panDirty && G.pan) { G.panDirty = false; gPanMove(false); } });
+    }
+  }
+  function gTap() {          // 움직이지 않고 짧게 뗌 = 표시가 아님. 선택이 있으면 풀고 안내만(옛 방식에서 닿자마자 선택이 지워지던 효과를 탭으로 옮김)
+    clearSel(); kSay(S.items.length ? '다른 곳도 동그라미 쳐 주세요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+  }
+  function gEnd(ev) {
+    var id = ev.pointerId, cancelled = ev.type === 'pointercancel';
+    if (G.penId === id) { G.penId = null; G.penUntil = gNow() + MK_PEN_HOLD_MS; }
+    if (G.ign[id]) { delete G.ign[id]; return; }
+    if (!G.all[id]) return;
+    var f = G.f[id]; delete G.f[id]; delete G.all[id]; G.lastAct = gNow();
+    if (G.mode === 'hold' || G.mode === 'lone') { if (id === G.pri) { gCancelLP(); if (G.mode === 'hold' && !cancelled && f && f.P && !f.adopted) gTap(); G.mode = 'idle'; } }
+    else if (G.mode === 'draw') { if (id === G.pri) { G.mode = 'idle'; finishStroke(cancelled); } }
+    else if (G.mode === 'pan') { if (G.pan && (id === G.pan.a || id === G.pan.b)) gPanEnd(false); }
+    if (!gRemaining()) {
+      G.mode = 'idle'; G.pri = null;
+      var v = G.vel; G.vel = null;
+      if (v && gNow() - v.t < 120 && MK_INERTIA === 'on' && !reduce()) gInertia(v.vx, v.vy);
+      if (S.helpPending) { S.helpPending = false; setTimeout(function () { help(0); }, 700); }
+    }
+  }
+  /* 두 손가락: 가운데점 이동 = 문서 이동(늘), 거리 변화 8% 넘음 = 확대·축소(미리보기는 CSS 확대, 떼면 그 배율로 다시 그림) */
+  function gPanStart(a, b, sc) {
+    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, now = performance.now();
+    G.mode = 'pan'; G.vel = null;
+    G.pan = { a: a.id, b: b.id, mx: mx, my: my, d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoomOn: false, kk: 1, z0: S.zoom || 1, ox: mx, oy: my, s: [{ t: now, x: mx, y: my }], sc: sc };
+  }
+  function gPanMove(noZoom) {
+    var p = G.pan, a = G.f[p.a], b = G.f[p.b]; if (!a || !b) return;
+    var sc = p.sc, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), now = performance.now(), k = p.zoomOn ? p.kk : 1;
+    sc.scrollTop -= (my - p.my) / k; sc.scrollLeft -= (mx - p.mx) / k; p.mx = mx; p.my = my;
+    p.s.push({ t: now, x: mx, y: my }); while (p.s.length > 2 && now - p.s[0].t > 120) p.s.shift();
+    if (!noZoom && !p.zoomOn && Math.abs(d / p.d0 - 1) > MK_ZOOM_START) {
+      p.zoomOn = true; p.d0 = d; p.ox = mx; p.oy = my; var rc = sc.getBoundingClientRect(); sc.style.transformOrigin = (mx - rc.left) + 'px ' + (my - rc.top) + 'px';
+    }
+    if (p.zoomOn && !noZoom) { var z = Math.max(1, Math.min(3, p.z0 * d / p.d0)); p.kk = z / p.z0; sc.style.transform = 'scale(' + p.kk.toFixed(3) + ')'; }
+  }
+  function gPanEnd(quiet) {
+    var p = G.pan; if (!p) return;
+    if (G.panRaf) { cancelAnimationFrame(G.panRaf); G.panRaf = 0; }
+    if (G.panDirty && !quiet) gPanMove(true);       // 마지막 프레임의 이동분만 반영(확대 판정은 하지 않음)
+    G.panDirty = false; G.pan = null;
+    var sc = p.sc; sc.style.transform = ''; sc.style.transformOrigin = '';
+    if (p.zoomOn && Math.abs(p.kk - 1) > 0.02) setZoom(p.z0 * p.kk, p.ox, p.oy);
+    G.mode = 'dead';
+    if (!quiet && !p.zoomOn && p.s.length >= 2) {            // 마지막 100ms 안 움직임의 속도 → 모든 손가락이 떨어지면 미끄러짐(관성)
+      var o = p.s[0], l = p.s[p.s.length - 1], dt = l.t - o.t;
+      if (dt >= 8 && performance.now() - l.t < 100) G.vel = { vx: -(l.x - o.x) / dt, vy: -(l.y - o.y) / dt, t: gNow() };
+    }
+  }
+  function gInertia(vx, vy) {
+    var sc = R && R.scroll; if (!sc || !S.on) return;
+    var sp = Math.hypot(vx, vy); if (sp > MK_INERTIA_MAX) { vx *= MK_INERTIA_MAX / sp; vy *= MK_INERTIA_MAX / sp; }
+    if (Math.hypot(vx, vy) < MK_INERTIA_STOP * 2) return;
+    var st = { vx: vx, vy: vy, y: sc.scrollTop, x: sc.scrollLeft, ry: sc.scrollTop, rx: sc.scrollLeft, last: performance.now(), raf: 0 };
+    function step(ts) {
+      if (G.inertia !== st || !S.on) return;
+      if (Math.abs(sc.scrollTop - st.ry) > 2 || Math.abs(sc.scrollLeft - st.rx) > 2) { G.inertia = null; return; }   // 다른 동작(목록에서 이동 등)이 화면을 옮겼으면 미끄러짐을 멈춘다
+      var dt = Math.min(48, Math.max(1, ts - st.last)); st.last = ts;
+      st.y += st.vy * dt; st.x += st.vx * dt; sc.scrollTop = st.y; sc.scrollLeft = st.x;
+      if (Math.abs(sc.scrollTop - st.y) > 1) { st.y = sc.scrollTop; st.vy = 0; } if (Math.abs(sc.scrollLeft - st.x) > 1) { st.x = sc.scrollLeft; st.vx = 0; }   // 끝에 닿으면 그 방향은 멈춤
+      st.ry = sc.scrollTop; st.rx = sc.scrollLeft;
+      var f = Math.pow(MK_INERTIA_DECAY, dt / 16.67); st.vx *= f; st.vy *= f;
+      if (Math.hypot(st.vx, st.vy) < MK_INERTIA_STOP) { G.inertia = null; return; }
+      st.raf = requestAnimationFrame(step);
+    }
+    G.inertia = st; st.raf = requestAnimationFrame(step);
+  }
+  // 길게 눌러 켠 손가락(뷰어에서 0.5초 꾹)을 손가락 목록에 넣는다. 그 손가락이 그리는 중에 두 번째 손가락이 닿아도 선이 둘 생기지 않게
+  function gAdopt(id, x, y) {
+    if (!R || !S.on) return;
+    gReset(true);
+    G.mode = 'hold'; G.pri = id; G.all[id] = true; G.lastAct = gNow(); G.slen = 0; G.lx = x; G.ly = y;
+    G.f[id] = gNewF(id, x, y, 'touch', pageAt(x, y), true);
+  }
+  function gClose() { gReset(false); G.ign = {}; G.penId = null; G.penUntil = 0; }
+  function bindGesture() {
+    var sc = R.scroll;
+    sc.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    R.area.addEventListener('pointerdown', function (ev) { gDown(ev, sc); }, true);          // 캡처 단계: 핀·손잡이가 pointerdown 을 막아도 우리가 먼저 본다
+    global.addEventListener('pointermove', gMove);
+    global.addEventListener('pointerup', gEnd); global.addEventListener('pointercancel', gEnd);
+    sc.addEventListener('touchmove', function (e) { if (S.on) e.preventDefault(); }, { passive: false });   // 브라우저 스크롤·당겨서 새로고침이 끼어들지 않게(touch-action:none 과 함께)
+    sc.addEventListener('wheel', function () { gStopInertia(); }, { passive: true });
   }
   function avgX() { var k = Object.keys(ptrs), s = 0; k.forEach(function (i) { s += ptrs[i].x; }); return s / Math.max(1, k.length); }
   function avgY() { var k = Object.keys(ptrs), s = 0; k.forEach(function (i) { s += ptrs[i].y; }); return s / Math.max(1, k.length); }
@@ -920,17 +1126,25 @@
       '<rect x="20" y="10" width="140" height="150" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="34" y="28" width="110" height="7" rx="3"/><rect x="34" y="44" width="90" height="7" rx="3"/><rect x="34" y="60" width="100" height="7" rx="3"/></g>' +
       '<rect x="26" y="126" width="72" height="24" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="62" y="142" font-size="11" font-weight="800" text-anchor="middle" fill="var(--ink)">✏️ 고치기</text>' +
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
-    { t: '펜과 손', h: '펜: 한 손가락으로 그립니다 · 손: 넘겨 봅니다', d: '위 띠의 [펜 | 손]으로 바꿉니다. 펜일 때 넘기려면 두 손가락으로 미십시오. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿀 수 있습니다.', svg:
+    gOn() ? { t: '표시와 넘기기', h: '한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', d: '한 손가락으로 동그라미를 치거나 밑줄을 그으면 표시가 됩니다. 두 손가락을 대고 밀어서 넘기고, 벌리면 커지고 오므리면 작아집니다. 위 ＋ －로도 바꿀 수 있습니다.', svg:
+      '<rect x="10" y="12" width="132" height="148" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="22" y="30" width="108" height="7" rx="3"/><rect x="22" y="48" width="84" height="7" rx="3"/><rect x="22" y="66" width="100" height="7" rx="3"/></g>' +
+      '<ellipse class="mk-draw" style="--len:190" cx="62" cy="52" rx="36" ry="16" fill="none" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round"/><circle class="mk-tap" cx="98" cy="52" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/>' +
+      '<text x="76" y="132" font-size="13" font-weight="900" text-anchor="middle" fill="var(--mk-red)">한 손가락은 표시</text>' +
+      '<rect x="158" y="12" width="132" height="148" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="170" y="30" width="108" height="7" rx="3"/><rect x="170" y="48" width="84" height="7" rx="3"/></g>' +
+      '<g class="mk-two"><circle cx="206" cy="86" r="9" fill="var(--brand)" opacity=".85"/><circle cx="242" cy="86" r="9" fill="var(--brand)" opacity=".85"/></g>' +
+      '<path d="M224 62 V46 M218 52 L224 44 L230 52 M224 110 V126 M218 120 L224 128 L230 120" fill="none" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<text x="224" y="150" font-size="13" font-weight="900" text-anchor="middle" fill="var(--brand)">두 손가락은 넘기기</text>' }
+    : { t: '펜과 손', h: '펜: 한 손가락으로 그립니다 · 손: 넘겨 봅니다', d: '위 띠의 [펜 | 손]으로 바꿉니다. 펜일 때 넘기려면 두 손가락으로 미십시오. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿀 수 있습니다.', svg:
       '<rect x="60" y="40" width="180" height="70" rx="16" fill="var(--card)" stroke="var(--mk-red-line)" stroke-width="3"/><rect x="66" y="46" width="82" height="58" rx="12" fill="var(--mk-red)"/><text x="107" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">펜</text><text x="194" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="var(--sub)">손</text>' +
       '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보입니다</text>' },
-    { t: '표시하기', h: '동그라미 · 밑줄 · 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나옵니다.', svg:
+    { t: '표시하기', h: '동그라미, 밑줄, 꾹 누르기', d: '동그라미는 그 안의 낱말, 밑줄은 시작~끝 글자, 0.5초 꾹 누르면 그 줄 전체. 표 칸을 감싸면 파란 칸과 칩이 나옵니다.', svg:
       '<g fill="var(--line)"><rect x="30" y="30" width="240" height="8" rx="4"/><rect x="30" y="56" width="60" height="8" rx="4"/><rect x="162" y="56" width="108" height="8" rx="4"/><rect x="30" y="82" width="200" height="8" rx="4"/><rect x="30" y="108" width="230" height="8" rx="4"/></g>' +
       '<rect x="96" y="51" width="60" height="18" rx="4" fill="var(--mk-hl)"/><text x="126" y="64" font-size="12" font-weight="900" text-anchor="middle" fill="var(--ink)">취금</text>' +
       '<ellipse class="mk-draw" style="--len:240" cx="126" cy="60" rx="44" ry="20" fill="none" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round"/>' +
       '<path class="mk-draw" style="--len:120" d="M30 98 L140 98" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round" fill="none"/>' +
       '<rect x="28" y="104" width="234" height="16" rx="4" fill="var(--mk-hl)"/><circle class="mk-tap" cx="200" cy="112" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/>' +
       '<text x="214" y="148" font-size="11" font-weight="900" fill="var(--mk-red)">꾹 = 한 줄</text>' },
-    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁힙니다', d: '낱말 단위로 늘고 줄어듭니다. 표에서는 화면 위쪽 칩으로 「잡힌 칸만 · 이 행 전체 · 이 열 전체 · 표 전체」를 고를 수 있습니다.', svg:
+    { t: '범위 고치기', h: '양 끝 동그란 손잡이를 끌어 넓히고 좁힙니다', d: '낱말 단위로 늘고 줄어듭니다. 표에서는 화면 위쪽 칩으로 「잡힌 칸만, 이 행 전체, 이 열 전체, 표 전체」를 고를 수 있습니다.', svg:
       '<g font-size="10" font-weight="800"><rect x="30" y="4" width="62" height="20" rx="10" fill="var(--mk-cell)" stroke="var(--mk-cell-line)"/><text x="61" y="18" text-anchor="middle" fill="var(--brand)">잡힌 칸만</text>' +
       '<rect x="98" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="121" y="18" text-anchor="middle" fill="var(--ink)">이 행</text>' +
       '<rect x="150" y="4" width="46" height="20" rx="10" fill="var(--bg)" stroke="var(--line)"/><text x="173" y="18" text-anchor="middle" fill="var(--ink)">이 열</text>' +
@@ -942,7 +1156,7 @@
       '<rect x="30" y="72" width="150" height="36" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="105" y="95" font-size="13" font-weight="900" text-anchor="middle" fill="var(--ink)">🎤 말로 적기</text>' +
       '<rect x="190" y="72" width="80" height="36" rx="10" fill="var(--mk-red)"/><text x="230" y="95" font-size="13" font-weight="900" text-anchor="middle" fill="#fff">저장</text>' +
       '<g transform="translate(150 140)"><circle r="12" fill="var(--mk-red)" stroke="#fff" stroke-width="2"/><text y="5" font-size="13" font-weight="900" text-anchor="middle" fill="#fff">1</text></g>' },
-    { t: 'PC로 보내기', h: '「수정 요청 N건」 목록 → [PC로 보내기]', d: '목록에서 [메모 바꾸기]·[빼기]. 앱을 껐다 켜도 남습니다(7일). 보내면 PC가 원본의 사본(_rev1)을 고칩니다. 원본은 그대로입니다.', svg:
+    { t: 'PC로 보내기', h: '「수정 요청 N건」 목록 → [PC로 보내기]', d: '목록에서 [메모 바꾸기]와 [빼기]. 앱을 껐다 켜도 남습니다(7일). 보내면 PC가 원본의 사본(_rev1)을 고칩니다. 원본은 그대로입니다.', svg:
       '<rect x="20" y="40" width="70" height="110" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><rect x="200" y="40" width="90" height="70" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><rect x="230" y="110" width="30" height="16" fill="var(--line)"/>' +
       '<path class="mk-draw" style="--len:120" d="M96 95 C130 60 160 60 194 75" fill="none" stroke="var(--brand)" stroke-width="3" stroke-dasharray="6 5"/>' +
       '<text x="245" y="80" font-size="12" font-weight="900" text-anchor="middle" fill="var(--ink)">_rev1</text><text x="55" y="100" font-size="20" text-anchor="middle">📍</text>' },
@@ -977,7 +1191,7 @@
   function closeHelp() {
     $('mkHelp').classList.remove('on');
     if (!S.on) { R.root.classList.remove('on', 'help-only'); if (helpFrom && host.reopenFix) host.reopenFix(); helpFrom = null; return; }
-    kSay(S.tool === 'pen' ? '어디를 고칠까요? 동그라미 쳐 주세요' : '넘겨 보시다가 [펜]을 누르고 표시해 주세요', 'note');
+    kSay(S.tool === 'pen' || gOn() ? '어디를 고칠까요? 동그라미 쳐 주세요' : '넘겨 보시다가 [펜]을 누르고 표시해 주세요', 'note');
   }
 
   /* ---------------- 뷰어 띠(적어 둔 요청·보낸 요청) ---------------- */
@@ -1015,7 +1229,7 @@
   // 길게 눌러 켠 그 손가락의 움직임 → 표시 화면의 선 긋기로 이어 준다(터치는 처음 누른 요소에 묶여 있어 창에서 받는다)
   var lpDrag = null;
   global.addEventListener('pointermove', function (ev) {
-    var d = lpDrag; if (!d || ev.pointerId !== d.id || !S.on) return;
+    var d = lpDrag; if (!d || ev.pointerId !== d.id || !S.on || gOn()) return;      // O-0810: 새 방식에서는 손가락 목록(gAdopt)이 처리
     if (!d.on) {
       if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < TOL) return;
       if (S.tool !== 'pen') { lpDrag = null; return; }
@@ -1027,6 +1241,7 @@
   function lpEnd(ev) {
     var d = lpDrag; if (!d || ev.pointerId !== d.id) return;
     lpDrag = null;
+    if (gOn()) return;       // 새 방식: 끝 처리와 사용법 지연 열기는 gEnd 에서
     if (d.on && stroke && stroke.id === 'lp' + d.id) finishStroke(ev.type === 'pointercancel');
     if (S.helpPending) { S.helpPending = false; setTimeout(function () { help(0); }, 700); }
   }
@@ -1043,7 +1258,7 @@
       t = setTimeout(function () {
         var c = st && ctxFn(st.x, st.y); var s0 = st; clear(); if (!c) return;
         var r = open({ pdfDoc: c.pdfDoc, doc: c.doc, page: c.page, how: 'long', anchor: { ptY: c.ptY, clientY: s0.y } });
-        if (r) lpDrag = { id: s0.id, x: s0.x, y: s0.y, on: false };   // 손을 떼지 않고 그대로 그으면 바로 표시(안내서 ⑪)
+        if (r) { lpDrag = { id: s0.id, x: s0.x, y: s0.y, on: false }; if (gOn()) gAdopt(s0.id, s0.x, s0.y); }   // 손을 떼지 않고 그대로 그으면 바로 표시(안내서 ⑪)
       }, LP_MS);
     });
     el.addEventListener('pointermove', function (ev) { if (st && ev.pointerId === st.id && Math.hypot(ev.clientX - st.x, ev.clientY - st.y) > TOL) clear(); });
@@ -1060,6 +1275,7 @@
     longPressOn: function () { return lsGet(LP_KEY, '1') === '1'; },
     setLongPress: function (on) { lsSet(LP_KEY, on ? '1' : '0'); },
     _dbg: function () { return S; },   // 점검용(시험에서 내부 상태 확인)
+    _gdbg: function () { return { mode: G.mode, all: Object.keys(G.all), ign: Object.keys(G.ign), f: Object.keys(G.f), penId: G.penId, slen: G.slen, vel: G.vel, inertia: !!G.inertia, lastAct: G.lastAct }; },   // 점검용(O-0810 손가락 상태)
     _state: function () { return { on: S.on, tool: S.tool, items: S.items.length, sent: S.sent.length, sel: S.sel ? S.sel.kind : null }; }   // 점검용
   };
 })(window);

@@ -151,9 +151,9 @@
 .mk-item.done .st{background:#dcfce7; color:#166534}
 .mk-empty{font-size:14.5px; color:var(--sub); font-weight:700; padding:14px 4px; text-align:center; line-height:1.5; word-break:keep-all}
 .mk-toast{position:absolute; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px); z-index:60; background:#111827; color:#fff; border-radius:14px; padding:11px 14px;
-  font-size:14.5px; font-weight:800; display:flex; gap:12px; align-items:center; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; max-width:calc(100% - 32px)}
+  font-size:14.5px; font-weight:800; display:flex; gap:12px; align-items:center; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; max-width:calc(100% - 32px); width:max-content; word-break:keep-all}
 .mk-toast.on{opacity:1; transform:translateX(-50%); pointer-events:auto}
-.mk-toast button{border:0; background:transparent; color:#93c5fd; font-size:14.5px; font-weight:900; cursor:pointer; padding:4px}
+.mk-toast button{border:0; background:transparent; color:#93c5fd; font-size:14.5px; font-weight:900; cursor:pointer; padding:4px; flex:none; white-space:nowrap}
 /* 사용법 */
 .mk-hstage{position:relative; overflow:hidden; border-radius:16px; background:var(--bg); border:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none}
 .mk-htrack{display:flex; transition:transform .25s cubic-bezier(.2,.8,.2,1)}
@@ -197,6 +197,11 @@
 .mk-top .mk-tbtn.mk-z{min-width:44px; font-size:22px; padding:0}
 .mk-scroll{touch-action:pan-x pan-y}          /* 손: 한 손가락 넘기기는 브라우저가, 두 손가락 크게·작게는 markup.js 가 */
 .mk-scroll.pen{touch-action:none}
+/* O-0810 한 손가락 표시 · 두 손가락 이동: 수정 요청 화면에서는 늘 브라우저 스크롤·핀치를 끄고 markup.js 가 손가락을 처리(MARKUP_GESTURE='on' 일 때 .gest). 마우스 휠은 그대로 스크롤 */
+.mk-scroll.gest{touch-action:none; overscroll-behavior:contain}
+.mk-scroll.gest .mk-pg svg.mk-ov{pointer-events:auto; cursor:crosshair}
+.mk-two{animation:mkTwo 2.2s ease-in-out infinite}
+@keyframes mkTwo{0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)}}
 
 /* O-0548 뷰어 → 채팅 바로 가기: 좁으면 아이콘만 */
 #docRoot .btn.icon.dv-chatbtn{font-size:21px; gap:4px; display:inline-flex; align-items:center; justify-content:center; min-width:46px; padding:10px 10px}
