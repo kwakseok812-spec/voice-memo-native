@@ -3821,6 +3821,7 @@
   APP_VERSION = 'v9.87';        // v9.87(O-0794): 홈 「OTT」 칸 시트 맨 위 「유튜브」 줄 → 「미니뷰」 줄(작은 글씨 「유튜브 · 광고 없이」) — 누르면 폰의 별개 앱 「미니뷰」(com.kwak.tubelab)의 첫 화면이 열린다. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고 「미니뷰가 없어서 Brave로 열었어요」 안내(Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트), PC·브라우저는 유튜브 새 탭. 되돌림 스위치 YT_MODE('tube'|'brave'). 넷플릭스·웨이브·티빙·디즈니+ 줄·홈 글씨·다른 칸 그대로. 미니뷰 코드·광고 차단 코드는 이 저장소에 없다(패키지 이름만). 자바 허용 목록·매니페스트 선언에 패키지 하나 추가(새 권한 없음) · versionCode 131
   APP_VERSION = 'v9.88';        // v9.88(O-0796): 「PC 상태」 「지금 가장 바쁜 프로그램」 이름 밑에 작은 글씨 설명 — PC 일꾼(v1.2 이상)이 올리는 무슨 작업인지 한 줄(d)·스크립트와 시작 시각(s)·시작한 곳과 메모리(o·c·m)·쉬운 안내(h, 눈에 띄되 겁주지 않는 작은 알림 줄)를 그린다. 값이 없으면 v9.87 과 같은 이름만(옛 일꾼·빈 칸 무해). 맨 위 문장 「가장 큰 몫은 ○○입니다」는 괄호 설명을 떼고 이름을 모르면 그렇게 말한다. 스위치 PC_PROC_DESC_UI. 새 버튼·새 화면·서버·SQL·자바·매니페스트·권한 변경 없음 (배포 전, main 에 올리지 않음)
   APP_VERSION = 'v9.89';        // v9.89(O-0802): 영수증을 보낼 때 위에서 고른 「결제 카드」(운영비 9801 / 연구비 8837)를 PC 로도 함께 보낸다(meta.scan.pick = 'opex'|'research'). 예전에는 이 기기에만 남아 PC 가 장부를 못 정해 자동 등록이 멈췄다. 못 고르면 보내지 않는다(PC 가 먼저 여쭘). 스위치 RECEIPT_PICK_SEND('on'|'off', app.js 한 곳) — 'off' 면 v9.88 과 같다. 새 버튼·새 화면·서버·SQL·자바·매니페스트·권한 변경 없음 · versionCode 133
+  APP_VERSION = 'v9.90';        // v9.90(O-0809): 폰에서 채팅·공유함 첨부의 [⬇ 다운로드]가 끝나면, 한글·워드·엑셀·PPT·PDF 같은 문서 파일은 시스템 「열기」(열 수 있는 앱이 없으면 아무 일도 없던 것) 대신 스마트비서 문서 뷰어로 곧바로 연다(이미지·영상·APK·압축 등 문서가 아닌 파일은 예전과 같음, PC판도 예전과 같음). 스위치 DL_OPEN_VIEWER('on'|'off', app.js 한 곳) — 'off' 면 v9.89 와 같다 · versionCode 134
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -4274,6 +4275,10 @@
     return 'document';
   }
   function attachIcon(f) { var k = f.kind || fileKindOf(f.mime, f.name); return k === 'image' ? 'i-image' : k === 'video' ? 'i-video' : 'i-note'; }
+  /* v9.90(O-0809) 폰에서 [⬇ 다운로드]가 성공한 뒤 문서 파일(아래 isViewableDoc)이면 시스템 「열기」 대신 문서 뷰어(openDocFromChat)로 연다.
+   *   폰은 한글·워드 등을 열 수 있는 앱이 없는 경우가 많아 저장만 되고 아무 일도 없던 것을 고친다. 문서가 아닌 파일(이미지·영상·APK·압축…)·PC판·실패한 다운로드는 그대로.
+   *   'off' 면 v9.89 와 같다(저장 뒤 시스템 「열기」). */
+  var DL_OPEN_VIEWER = 'on';
   var DOC_VIEW_EXTS = ['hwp', 'hwpx', 'doc', 'docx', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pdf'];
   function isViewableDoc(f) {
     if (!f || !f.url) return false;
@@ -4334,8 +4339,9 @@
       }
       // 받은 파일(url 있음)이면 [다운로드] — 기기 다운로드 폴더로 저장(안드로이드·PC 공용, 2026-09-21)
       if (!isUp && f.url) {
+        var dlV = (DL_OPEN_VIEWER === 'on' && isViewableDoc(f)) ? ('" data-dl-viewer="1" data-dl-mime="' + esc(f.mime || '')) : '';   // v9.90(O-0809)
         chip += '<button type="button" class="attach-dl" data-dl-url="' + esc(f.url) +
-          '" data-dl-name="' + esc(f.name || '파일') + '">⬇ 다운로드</button>';
+          '" data-dl-name="' + esc(f.name || '파일') + dlV + '">⬇ 다운로드</button>';
       }
       return '<div class="attachitem">' + chip + '</div>';
     }).join('') + '</div>';
@@ -4374,7 +4380,7 @@
     if (url.indexOf('/storage/v1/object/public/') !== -1 && !/[?&]download=/.test(url)) fu = url + (url.indexOf('?') === -1 ? '?' : '&') + 'download=' + encodeURIComponent(fname);
     return !!window.open(fu, '_blank');
   }
-  function nativeDownload(url, fname) {
+  function nativeDownload(url, fname, vopt) {   // vopt(v9.90, O-0809) = 저장 성공 뒤 문서 뷰어로 열 첨부({url,name,mime,kind}). 없으면 예전처럼 시스템 「열기」
     var FD = window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
     if (!FD) {                                     // 플러그인 없는 옛 빌드 → 웹페이지로 받기
       toast(openInBrowserForDownload(url, fname) ? '웹페이지로 연결했습니다 — 거기서 받아 주세요.' : '다운로드에 실패했습니다 — 다시 눌러 주세요.', 4000);
@@ -4388,9 +4394,10 @@
     }
     var isApk = /\.apk$/i.test(fname);
     toast('다운로드 중… (' + fname + ')', 3000);
-    FD.download({ url: url, name: fname, open: true }).then(function (r) {
+    FD.download({ url: url, name: fname, open: !vopt }).then(function (r) {
       delete dlBusy[url];
       var saved = (r && r.name) || fname, how = r && r.open;
+      if (vopt) { toast('저장했습니다. 뷰어로 엽니다.', 3000, true); openDocFromChat(vopt); return; }   // v9.90(O-0809): 저장이 확인된 뒤에만(실패는 아래 catch — 뷰어를 열지 않는다)
       if (how === 'need_permission') {             // 처음 한 번: 스마트비서에 「이 출처 허용」이 꺼져 있음 → 설정 화면이 열려 있다
         dlPendingInstall = r.id;
         toast('다운로드 폴더에 저장했습니다(' + saved + '). 설치하려면 「이 출처 허용」을 켜고 돌아오세요 — 설치 화면을 바로 열어 드리겠습니다.', 7000);
@@ -4464,10 +4471,13 @@
     }
     return why + (code ? '(' + code + ')' : '');
   }
-  function downloadAttachment(url, name) {
+  function downloadAttachment(url, name, opt) {   // opt.viewer = 채팅·공유함 [⬇ 다운로드]에서 온 문서 파일(v9.90, O-0809) — 폰은 저장 뒤 뷰어로 연다. 다른 호출(실적 탭·뷰어 고친 파일 받기)은 opt 없음 = 예전과 같음
     if (!url) return;
     var fname = safeDownloadName(name || (url.split('/').pop().split('?')[0]) || 'download');
-    if (isNativeApp()) { nativeDownload(url, fname); return; }   // v6.7: 폰 = 네이티브 저장
+    if (isNativeApp()) {   // v6.7: 폰 = 네이티브 저장
+      var vopt = (opt && opt.viewer && DL_OPEN_VIEWER === 'on') ? { url: url, name: name || fname, mime: opt.mime || '', kind: 'document' } : null;
+      nativeDownload(url, fname, vopt); return;
+    }
     // ↓ PC판(크롬·PWA) — 예전 방식 그대로(fetch → Blob → <a download>, 크롬은 실제로 다운로드 폴더에 저장됨)
     toast('다운로드 중…');
     fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
@@ -7568,7 +7578,7 @@
       return;
     }
     var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
-    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name')); return; }   // [다운로드]
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '' } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어)
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     openAttachmentChip(b.getAttribute('data-att-url'), b.getAttribute('data-att-name'));   // v7.9: 폰은 APK 등 = 네이티브 저장
@@ -8854,7 +8864,7 @@
       return;
     }
     var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
-    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name')); return; }   // [다운로드]
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '' } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어)
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     openAttachmentChip(b.getAttribute('data-att-url'), b.getAttribute('data-att-name'));   // v7.9: 폰은 APK 등 = 네이티브 저장
