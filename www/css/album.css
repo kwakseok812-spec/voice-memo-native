@@ -1,5 +1,5 @@
 /* ============================================================================
- * album.css — 「사진첩」 (v9.69, O-0720 · v9.70 내려받기 단추 O-0723 · v9.77 하트 칩)
+ * album.css — 「사진첩」 (v9.69, O-0720 · v9.70 내려받기 단추 O-0723 · v9.77 하트 칩 · v9.93 영상 O-0816)
  * 모든 규칙은 #albumView(화면) · #albumLayer(큰 보기·창·안내 띠·떠 있는 단추) 안에서만 먹는다 — 다른 화면에 영향 없음.
  * 색 이름은 styles.css 의 변수(--text --muted --glass --glass-b --p1 --p2 ...)를 그대로 쓴다(밝은·어두운 화면 자동).
  * ==========================================================================*/
@@ -131,6 +131,34 @@ html[data-style="light"] #albumView, html[data-style="light"] #albumLayer { --ad
 .alb-cap .tag { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; background: rgba(255,255,255,.16); color: #d5dee8; font-size: 12px; font-weight: 700; }
 .alb-cap .tag.warn { background: #4a3413; color: #ffc779; }
 
+
+/* ----- v9.93 영상 (O-0816) ----- */
+/* 영상이 있는 목록은 줄이 더 길다(「사진 12장 · 영상 3개 · 확인 전 15장」) — 글자 크게에서 왼쪽 글만 줄바꿈하고 「이 단계 확인함」 단추는 한 줄로 둔다(영상 없는 목록은 예전 그대로) */
+.alb-line.hasv > span:first-child { min-width: 0; padding-right: 8px; word-break: keep-all; }
+.alb-line.hasv .alb-vfy { white-space: nowrap; flex: none; }
+/* 격자 칸 왼쪽 위 「▶ 2:57」 알약: 항상 어두운 바탕 + 흰 글씨(그림 위에서도 밝은·어두운 화면 모두 대비), 한 줄 고정·칸 폭을 넘지 않음 */
+.alb-tile .vb { position: absolute; left: 4px; top: 4px; max-width: calc(100% - 8px); padding: 2px 6px; border-radius: 999px; background: rgba(0,0,0,.64); color: #fff; font-size: 11px; letter-spacing: -.2px; font-weight: 800; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-variant-numeric: tabular-nums; pointer-events: none; }
+.alb-trow.vrow { flex-wrap: wrap; }   /* 휴지통의 영상 줄만 줄바꿈 허용(긴 확인 문구가 사진 줄처럼 한 줄에 갇히지 않게). 사진 줄 모양은 그대로 */
+.alb-trow.vrow .c { flex: 1 1 140px; min-width: 140px; }
+.alb-vtag { display: inline-block; margin-right: 6px; padding: 0 8px; border-radius: 999px; background: var(--glass-b); color: var(--text); font-size: 11.5px; font-weight: 800; line-height: 1.6; vertical-align: 1px; }
+.alb-btn.sm.vsure { flex: 1 0 100%; color: #fff; height: auto; min-height: 44px; padding: 8px 12px; white-space: normal; line-height: 1.35; text-align: center; }
+/* 큰 보기: 겉그림 위 가운데 큰 ▶ 와 안내 한 줄. 영상 줄이 아니면 보이지 않는다 */
+.alb-vvid { position: absolute; inset: 0; width: 100%; height: 100%; display: none; background: #000; object-fit: contain; }
+#albumLayer .alb-vw.vplaying .alb-vvid { display: block; animation: alb-fade .15s; }
+#albumLayer .alb-vw.vplaying #albImg { opacity: 0; }
+.alb-vplay { position: absolute; inset: 0; z-index: 2; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; pointer-events: none; }
+#albumLayer .alb-vw.isvid:not(.vplaying) .alb-vplay { display: flex; }
+#albumLayer .alb-vw.isvid .alb-zb { display: none; }
+.alb-pbig { pointer-events: auto; width: 76px; height: 76px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.9); background: rgba(0,0,0,.55); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 22px rgba(0,0,0,.5); animation: alb-breath 2.4s ease-in-out infinite; transition: transform .12s; }
+.alb-pbig svg { width: 36px; height: 36px; margin-left: 4px; }
+.alb-pbig:active { transform: scale(.93); animation: none; }
+.alb-pinfo { pointer-events: none; max-width: min(calc(100% - 112px), 340px); padding: 6px 14px; border-radius: 14px; background: rgba(0,0,0,.6); color: #fff; font-size: 13.5px; font-weight: 700; line-height: 1.5; text-align: center; word-break: keep-all; overflow-wrap: anywhere; }
+.alb-pinfo:empty { display: none; }
+.alb-pinfo.err { background: rgba(150,40,40,.88); font-size: 14px; }
+@keyframes alb-breath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.alb-vst.vplay { touch-action: manipulation; }
+
 /* ----- 움직임 줄이기 ----- */
 #albumView.alb-calm .alb-tile, #albumView.alb-calm .alb-tile img { animation: none; }
-@media (prefers-reduced-motion: reduce) { .alb-chip.heart .hg, .alb-tile, .alb-tile img, #albumLayer .alb-vw.show { animation: none !important; } .alb-vw2, #albImg.anim, .alb-chip, .alb-btn { transition: none !important; } }
+#albumLayer .alb-vw.calm .alb-pbig, #albumLayer .alb-vw.calm .alb-vvid { animation: none; }
+@media (prefers-reduced-motion: reduce) { .alb-chip.heart .hg, .alb-tile, .alb-tile img, #albumLayer .alb-vw.show, .alb-pbig, #albumLayer .alb-vw.vplaying .alb-vvid { animation: none !important; } .alb-vw2, #albImg.anim, .alb-chip, .alb-btn { transition: none !important; } }

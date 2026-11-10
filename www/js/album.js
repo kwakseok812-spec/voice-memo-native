@@ -12,6 +12,11 @@
  *         공유 단추·여러 장 한꺼번에 내려받기는 없다. 스위치 ALBUM_DL(app.js) 'off' 면 단추가 없어 v9.69 와 같다. 앱 안 잠금도 없다(건강·실적 탭과 같음).
  *       · v9.77(♥ 앨범): 단계 칩 맨 끝에 하트(♥) 칩 하나 — 분류 이름 '♥' 인 사진만 모아 보는 따로 앨범. 「전체」·「아무거나 보기」에는 섞이지 않는다(족보와 같은 방식). 날짜가 사진 파일의 촬영 기록(date_src 'exif')이면 「(촬영 기록 기준)」으로 표시.
  *         스위치 ALBUM_HEART(app.js) 'off' 면 하트 칩이 없고 ♥ 사진도 어디에도 보이지 않는다(서버 무관).
+ *       · v9.93(O-0816 영상): ♥ 앨범에 영상도 같이 — 표 album_photos 의 줄 하나가 영상이면 data.video(파일 이름·길이·크기)가 있고 큰 사진 칸(obj_p)·작은 그림 칸(obj_s)에는 겉그림이 들어 있다.
+ *         격자: 칸 왼쪽 위 「▶ 길이」 알약. 큰 보기: 겉그림 + 가운데 ▶ → 누르면 그때 처음 영상을 받기 시작(자동 재생·자동 내려받기 없음). 영상 파일은 비공개 보관함 album-video,
+ *         짧게(3시간) 유효한 주소는 서버 함수 album-video 가 연동 암호를 확인한 뒤 준다(사진 함수 album-file 은 그대로). 재생 중에는 확대·밀기·더블탭을 끄고(막대 조작과 겹치지 않게), 다른 칸으로 가거나 닫거나 앱이 숨으면 멈춘다.
+ *         서명 주소가 2시간 반 넘게 묵었거나 도중에 오류가 나면 새 주소를 받아 보던 자리부터 이어 재생(1번). 오류는 인터넷 · 주소 만료 · 형식 세 가지로 나눠 말한다. 영상은 ♥ 앨범에만 있다(고치기에서 분류 고정).
+ *         스위치 ALBUM_VIDEO(app.js) 'off' 면 영상 줄이 목록·숫자·휴지통 어디에도 보이지 않아 v9.92 와 같다(서버 무관).
  * 스위치: app.js 의 ALBUM_TAB ('on' | 'off') — 'off' 면 홈 칸이 보이지 않아 v9.68 과 같다.
  * app.js 연결: AlbumTab.init({toast, save}) · AlbumTab.open() · AlbumTab.back() (goBack 이 먼저 물어본다).
  * 시험: AlbumPure(순수 함수 묶음 — 날짜 표기·고치기 행·확대 계산·일괄 확인 대상·섞기 …)는 화면 없이 시험할 수 있게 밖으로 내놓았다.
@@ -27,6 +32,7 @@
   var TREE = '족보';
   var HEART = '♥';             /* ♥ — v9.77 하트 앨범의 분류 이름(서버 표 stage 값과 같다) */
   var HEART_ON = true;             /* 스위치 ALBUM_HEART — init 의 heart:false 로 끈다 */
+  var VIDEO_ON = true;             /* 스위치 ALBUM_VIDEO(v9.93) — init 의 video:false 로 끈다 */
   var PAGE = 24, THUMB_BATCH = 50, AHEAD = 3, BEHIND = 1, BIG_KEEP = 150, MAX_ZOOM = 5, DBL_ZOOM = 2.5;
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -62,7 +68,10 @@
   }
 
   function isLive(x) { return !!x && !x.deleted_at; }
-  function seen(x) { return HEART_ON || !x || x.stage !== HEART; }     /* v9.77: 스위치 ALBUM_HEART 'off' 면 ♥ 사진은 목록·숫자·휴지통 어디에도 없는 것으로 친다 */
+  /* v9.93 영상: 영상 줄은 data.video 가 있는 줄(분류가 아니라 이것으로 판단 — 옛 앱이 분류를 바꿔도 영상으로 보인다). 스위치가 꺼지면 영상 줄은 없는 것으로 친다 */
+  function rawVideo(x) { var d = x && x.data, v = isObj(d) ? d.video : null; return (isObj(v) && typeof v.name === 'string' && v.name) ? v : null; }
+  function isVideo(x) { return VIDEO_ON && !!rawVideo(x); }
+  function seen(x) { return (HEART_ON || !x || x.stage !== HEART) && (VIDEO_ON || !rawVideo(x)); }     /* v9.77: 스위치 ALBUM_HEART 'off' 면 ♥ 사진은 목록·숫자·휴지통 어디에도 없는 것으로 친다 · v9.93: ALBUM_VIDEO 'off' 면 영상 줄도 */
   function byOrd(a, b) { return (a.ord || 0) - (b.ord || 0) || String(a.id).localeCompare(String(b.id)); }
   /* tab: 'all'(족보·♥ 빼고 전부) · 단계 이름 · 족보 · ♥ */
   function listFor(items, tab) {
@@ -110,14 +119,46 @@
   function dlName(x) {
     if (!x) return 'album_photo.jpg';
     if (x.stage === TREE) return 'genealogy.jpg';
+    var ext = isVideo(x) ? '.mp4' : '.jpg';
     var en = STAGE_EN[x.stage] || 'photo', n = +x.ord, no = (isFinite(n) && n > 0) ? padNo(Math.floor(n)) : String(x.id || '').replace(/[^0-9a-z]/gi, '').slice(0, 8).toLowerCase();
     if (!no) no = '0000';
-    return 'album_' + en + '_' + no + '.jpg';
+    return 'album_' + en + '_' + no + ext;
   }
   /* 앱 저장 실패 사유(합니다체 문장) → 사진첩 말투(해요체) */
   function softenWhy(t) {
     return String(t == null ? '' : t).replace(/않습니다/g, '않아요').replace(/합니다/g, '해요').replace(/습니다/g, '어요').replace(/됩니다/g, '돼요');
   }
+
+  /* ---- v9.93 영상 순수 함수 ---- */
+  function fmtDur(sec) {                       /* 0:07 · 2:57 · 1:02:03 (반올림) */
+    var s = Math.round(+sec); if (!isFinite(s) || s < 0) s = 0;
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h ? h + ':' + (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r : m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function fmtMB(bytes) { var b = +bytes; return (isFinite(b) && b > 0) ? '약 ' + Math.max(1, Math.round(b / 1e6)) + 'MB' : ''; }
+  function videoBadge(x) { var v = isVideo(x) ? rawVideo(x) : null; return v ? '▶ ' + fmtDur(v.dur) : ''; }
+  function countParts(list) { var v = 0; list.forEach(function (x) { if (isVideo(x)) v++; }); return { photos: list.length - v, videos: v }; }
+  function countLabel(list) { var c = countParts(list); return c.videos ? '사진 ' + c.photos + '장 · 영상 ' + c.videos + '개' : list.length + '장'; }
+  function stageOptions(x) { return isVideo(x) ? [HEART] : STAGES.concat([TREE]).concat(HEART_ON ? [HEART] : []); }     /* 영상은 ♥ 앨범에만(고치기에서 분류 고정) */
+  function purgeSureText(x) { return isVideo(x) ? '정말 영구 삭제 — 영상 파일도 지워져요' : '정말 영구 삭제'; }
+  function playInfo(x, cellular) {
+    var v = rawVideo(x) || {}, mb = fmtMB(v.size);
+    if (cellular && mb) return '모바일 데이터로 ' + mb + '를 써요';
+    return '영상 · ' + fmtDur(v.dur) + (mb ? ' · ' + mb : '');
+  }
+  var URL_FRESH_MS = 150 * 60 * 1000;           /* 서명 주소는 3시간 유효 → 2시간 반이 지났으면 다시 받는다 */
+  function urlStale(signedAt, now) { return !signedAt || (now - signedAt) >= URL_FRESH_MS; }
+  function precheckKind(status) { return (status === 206 || status === 200) ? 'ok' : (status === 400 || status === 401 || status === 403 || status === 404) ? 'expired' : (status >= 500 ? 'server' : 'expired'); }
+  /* 영상 태그가 오류를 낸 뒤 사전 확인(Range 0-0)으로 원인 가르기: 확인 자체가 안 됨=인터넷 · 4xx·5xx=주소 만료·권한 · 통과했는데 오류=형식 */
+  function diagKind(status, fetchFailed) { return fetchFailed ? 'net' : (status >= 200 && status < 300) ? 'format' : 'expired'; }
+  var VERR = {
+    net: '인터넷이 필요해요 — 연결을 확인한 뒤 ▶를 다시 눌러 주세요.',
+    expired: '영상 주소를 새로 받지 못했어요. 잠시 뒤 다시 눌러 주세요.',
+    format: '이 폰에서는 이 영상을 재생하지 못해요(형식 문제). 내려받기로 저장해 다른 앱에서 볼 수 있어요.',
+    nofile: '이 영상 파일이 서버에 없어요.',
+    gone: '이 영상은 휴지통에 있거나 지워졌어요.'
+  };
+  function vidErrKind(e) { var k = e && e.kind; return (k === 'net' || k === 'nofile' || k === 'gone' || k === 'badpass') ? k : 'expired'; }
 
   function classifyFileErr(code) { return ({ bad_pass: 'badpass', no_file: 'nofile', gone: 'gone' })[code] || 'server'; }
   function mkErr(msg, kind) { var e = new Error(msg); e.alb = true; e.kind = kind; return e; }
@@ -130,7 +171,7 @@
       var b = {}, k; for (k in (body || {})) b[k] = body[k]; b.pass = pass;
       var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, dep.timeout || 20000) : null;
       var f = dep.fetch || global.fetch;
-      return f(c.url + '/functions/v1/album-file', {
+      return f(c.url + '/functions/v1/' + (dep.fn || 'album-file'), {
         method: 'POST', headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
         body: JSON.stringify(b), signal: ctl ? ctl.signal : undefined
       }).then(function (r) {
@@ -147,6 +188,8 @@
   }
 
   global.AlbumPure = {
+    setVideo: function (v) { VIDEO_ON = !!v; }, isVideo: isVideo, fmtDur: fmtDur, fmtMB: fmtMB, videoBadge: videoBadge, countParts: countParts, countLabel: countLabel, stageOptions: stageOptions, purgeSureText: purgeSureText,
+    playInfo: playInfo, urlStale: urlStale, precheckKind: precheckKind, diagKind: diagKind, VERR: VERR, vidErrKind: vidErrKind,
     STAGES: STAGES, TREE: TREE, HEART: HEART, setHeart: function (v) { HEART_ON = !!v; }, PAGE: PAGE, MAX_ZOOM: MAX_ZOOM, DBL_ZOOM: DBL_ZOOM, parseDate: parseDate, dateLong: dateLong, dateShort: dateShort, normDateInput: normDateInput, dateInfo: dateInfo,
     listFor: listFor, verifyTargets: verifyTargets, neighbors: neighbors, shuffle: shuffle, buildSaveRow: buildSaveRow, applyRow: applyRow,
     panLimit: panLimit, zoomAt: zoomAt, panTo: panTo, toggleZoom: toggleZoom, makeFileApi: makeFileApi, classifyFileErr: classifyFileErr, dlName: dlName, softenWhy: softenWhy
@@ -166,6 +209,7 @@
   function calm() { try { if (global.KScene && KScene.calm) return !!KScene.calm(); return !!(global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function online() { return typeof navigator === 'undefined' || navigator.onLine !== false; }
   var rpc = function () { return Promise.reject(mkErr('NO_ACH', 'server')); }, fileApi = makeFileApi({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
+  var videoApi = makeFileApi({ cfg: cfg, pass: syncPass, needPass: needPass, fn: 'album-video', fetch: function () { return global.fetch.apply(global, arguments); } });     /* v9.93: 영상 서명 주소·영구 삭제 창구(album-video) */
   function toast(msg, ms) { try { _toast(msg, ms); } catch (e) {} }
   function fmtDay(ms) { var d = new Date(ms); return (d.getMonth() + 1) + '월 ' + d.getDate() + '일'; }
   function itemById(id) { for (var i = 0; i < S.items.length; i++) if (S.items[i].id === id) return S.items[i]; return null; }
@@ -292,9 +336,10 @@
         '<div class="alb-vtop"><button type="button" class="alb-vb" data-act="vclose"><svg aria-hidden="true"><use href="#i-x"/></svg>닫기</button><span class="alb-pos" id="albPos"></span><span class="alb-vr">' + (S.save ? '<button type="button" class="alb-vb" id="albDl" data-act="vdl" aria-label="이 사진을 폰에 내려받기"><svg aria-hidden="true"><use href="#i-download"/></svg><span id="albDlT">내려받기</span></button>' : '') + '<button type="button" class="alb-vb sq" data-act="vmenu" aria-label="더 보기"><svg aria-hidden="true"><use href="#i-more"/></svg></button></span></div>' +
         '<div class="alb-menu" id="albMenu"><button type="button" data-act="vok">맞아요 (확인함)</button><button type="button" data-act="vedit">날짜·설명 고치기</button><button type="button" data-act="vtrash">휴지통으로 옮기기</button></div>' +
         '<div class="alb-vst" id="albVst"><button type="button" class="alb-arr l" data-act="prev" aria-label="이전 사진"><svg aria-hidden="true"><use href="#i-chev-l"/></svg></button>' +
-          '<div class="alb-vw2" id="albVw2"><img id="albImg" alt="" draggable="false"></div>' +
+          '<div class="alb-vw2" id="albVw2"><img id="albImg" alt="" draggable="false"><video id="albVid" class="alb-vvid" playsinline preload="none" controls controlslist="nodownload nofullscreen noremoteplayback" disablepictureinpicture disableremoteplayback></video></div>' +
           '<button type="button" class="alb-arr r" data-act="next" aria-label="다음 사진"><svg aria-hidden="true"><use href="#i-chev-r"/></svg></button>' +
           '<div class="alb-zb"><button type="button" data-act="zout" aria-label="축소">−</button><button type="button" data-act="zin" aria-label="확대">＋</button></div>' +
+          '<div class="alb-vplay" id="albVplay"><button type="button" class="alb-pbig" data-act="vplay" aria-label="영상 재생"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button><div class="alb-pinfo" id="albPinfo" role="status" aria-live="polite"></div></div>' +
           '<div class="alb-spin" id="albSpin" role="status"></div></div>' +
         '<div class="alb-cap"><div class="d" id="albD"></div><div class="m" id="albM"></div><div class="h" id="albH"></div></div>' +
       '</div>';
@@ -307,6 +352,7 @@
     wireZoom();
     try { new MutationObserver(function () { if (!shown()) { hideSheetNow(); closeViewer(true); updateFab(); } }).observe($('albumView'), { attributes: true, attributeFilter: ['style'] }); } catch (e) {}
     document.addEventListener('visibilitychange', function () { if (!document.hidden && shown() && Date.now() - S.lastLoadAt > 60000 && !S.sheet && !S.v.open) load(true); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) pauseVideo(); });     /* v9.93: 앱이 숨으면 영상은 멈춘다(소리가 남지 않게) */
     document.addEventListener('keydown', function (e) { if (!S.v.open) return; if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'Escape') closeViewer(); });
   }
   function renderAll() { if (!built) return; renderChips(); renderMain(); updateFab(); }
@@ -323,12 +369,13 @@
   }
   function tileHtml(x, i) {
     var d = dateInfo(x), lab = d.has ? '<span class="dt">' + esc(d.short) + (d.unc ? ' ?' : '') + '</span>' : (d.unc ? '<span class="dt">?</span>' : '');
-    return '<button type="button" class="alb-tile' + (d.unc ? ' unc' : '') + '" data-act="open" data-id="' + esc(x.id) + '" data-i="' + i + '" data-h="1" style="animation-delay:' + ((i % PAGE) * 12) + 'ms" aria-label="' + esc(x.caption) + '"><span class="ph"></span>' + lab + '</button>';
+    var vb = videoBadge(x);
+    return '<button type="button" class="alb-tile' + (d.unc ? ' unc' : '') + (vb ? ' vid' : '') + '" data-act="open" data-id="' + esc(x.id) + '" data-i="' + i + '" data-h="1" style="animation-delay:' + ((i % PAGE) * 12) + 'ms" aria-label="' + esc(x.caption) + '"><span class="ph"></span>' + (vb ? '<span class="vb">' + esc(vb) + '</span>' : '') + lab + '</button>';
   }
   function lineHtml(list) {
-    var n = verifyTargets(list).length, t = S.tab, h = '<span>' + list.length + '장' + (t !== 'all' && t !== TREE && n ? ' · 확인 전 ' + n + '장' : '') + '</span>';
+    var n = verifyTargets(list).length, t = S.tab, h = '<span>' + countLabel(list) + (t !== 'all' && t !== TREE && n ? ' · 확인 전 ' + n + '장' : '') + '</span>';
     h += (t !== 'all' && n && !S.offline) ? '<button type="button" class="alb-vfy" data-act="vfy">이 단계 확인함</button>' : '<span></span>';
-    return '<div class="alb-line" id="albLine">' + h + '</div>';
+    return '<div class="alb-line' + (countParts(list).videos ? ' hasv' : '') + '" id="albLine">' + h + '</div>';
   }
   function renderMain() {
     var m = $('albMain'); if (!m) return;
@@ -354,7 +401,7 @@
     m.innerHTML = h;
     hydrate(m); watch();
   }
-  function endText(list, n) { return n >= list.length ? '끝까지 봤어요 · ' + list.length + '장' : ''; }
+  function endText(list, n) { return n >= list.length ? '끝까지 봤어요 · ' + countLabel(list) : ''; }
   /* 끝에 닿으면 24장 더 — 보이지 않는 표식이 화면 가까이 오면 붙인다 */
   function more() {
     var list = S.list; if (loadingMore || S.shown >= list.length || !$('albGrid')) return;
@@ -393,7 +440,8 @@
   }
   function closeViewer(silent) {
     if (!S.v.open) return;
-    S.v.open = false; S.v.tok++; $('albVw').classList.remove('show'); $('albMenu').classList.remove('show'); pts = {}; resetZoom(false);
+    stopVideo(true);
+    S.v.open = false; S.v.tok++; $('albVw').classList.remove('show'); $('albVw').classList.remove('isvid'); $('albMenu').classList.remove('show'); pts = {}; resetZoom(false);
     if (!silent) { renderAll(); }
     updateFab();
   }
@@ -411,11 +459,12 @@
     var box = $('albVw2'), tok = S.v.tok, anim = dir && !calm();
     function paint() {
       if (tok !== S.v.tok) return;
-      resetZoom(false);
+      stopVideo(true); resetZoom(false);
+      var vid = isVideo(x); $('albVw').classList.toggle('isvid', vid); $('albVw').classList.toggle('calm', calm()); if (vid) setPlayUi(x);
       $('albD').textContent = x.caption; $('albM').innerHTML = captionHtml(x);
       var d = dateInfo(x), hint = '';
       if (d.unc) hint = '인화 글자 기준이라 실제 촬영일과 다를 수 있어요';
-      else if (S.hint) hint = '두 손가락으로 벌리거나 두 번 톡톡 누르면 확대돼요';
+      else if (S.hint && !vid) hint = '두 손가락으로 벌리거나 두 번 톡톡 누르면 확대돼요';
       $('albH').textContent = hint;
       $('albPos').textContent = S.v.random ? '무작위 · ' + (S.v.idx + 1) + '번째' : (S.v.idx + 1) + ' / ' + S.v.list.length;
       $('albVw').classList.toggle('first', S.v.idx === 0 && !S.v.random); $('albVw').classList.toggle('last', S.v.idx >= S.v.list.length - 1 && !S.v.random);
@@ -462,11 +511,110 @@
     var n = S.v.idx + d;
     if (n < 0) { toast('맨 앞 사진이에요'); return; }
     if (n >= S.v.list.length) { if (S.v.random) extendRandom(); else { toast('마지막 사진이에요'); return; } }
-    S.v.idx = n; $('albMenu').classList.remove('show'); showPhoto(d);
+    stopVideo(true); S.v.idx = n; $('albMenu').classList.remove('show'); showPhoto(d);
   }
   function shuffleOpen() {
     var all = listFor(S.items, 'all'); if (!all.length) return;
     openViewer(shuffle(all).slice(0, 200), 0, true);
+  }
+
+  /* =====================================================================
+   * 5-2. 영상 재생 (v9.93, O-0816) — 큰 보기 안에서. ▶ 를 누를 때 비로소 영상 주소를 받는다(자동 재생·자동 내려받기 없음 = 데이터 절약)
+   *   주소: 서버 함수 album-video(sign_video)가 연동 암호를 확인한 뒤 3시간 유효한 주소를 준다. 영상 주소는 앱 밖(다른 앱·브라우저)으로 내보내지 않는다.
+   *   사전 확인: 영상 주소에 Range: bytes=0-0 을 보내 상태 코드를 본다(문서 뷰어와 같은 방식). 만료·권한이면 새 주소를 한 번 더 받는다.
+   * ===================================================================*/
+  var VP = { on: false, tok: 0, url: null, at: 0, retried: false, busy: false, t: 0, resume: 0 };
+  function vidEl() { return $('albVid'); }
+  function cellular() { try { var c = global.navigator && (navigator.connection || navigator.mozConnection || navigator.webkitConnection); return !!c && c.type === 'cellular'; } catch (e) { return false; } }
+  function setPlayUi(x, errKind, msg, plain) {          /* 겉그림 화면 아래 안내 한 줄: 평소엔 「영상 · 길이 · 크기」, 오류면 그 문구(붉은 바탕). plain = 진행 안내라 붉게 하지 않음 */
+    var el = $('albPinfo'); if (!el) return;
+    var text = msg || (errKind ? (VERR[errKind] || VERR.expired) : (x && isVideo(x) ? playInfo(x, cellular()) : ''));
+    el.textContent = text; el.classList.toggle('err', !!(errKind || (msg && !plain)));
+  }
+  function setPlaying(on) {
+    VP.on = !!on; var vw = $('albVw'), st = $('albVst'); if (vw) vw.classList.toggle('vplaying', !!on); if (st) st.classList.toggle('vplay', !!on);
+    if (on) { pts = {}; swipe = null; pan = null; pinch = null; resetZoom(false); }
+  }
+  function pauseVideo() { if (!VP.on) return; var v = vidEl(); try { if (v) v.pause(); } catch (e) {} }
+  /* 재생을 멈추고 영상 연결을 끊는다(소리가 남지 않게). silent 가 아니면 겉그림 화면의 안내 줄을 되돌린다 */
+  function stopVideo(silent) {
+    VP.tok++; VP.busy = false; VP.url = null; VP.retried = false; VP.t = 0; VP.resume = 0;
+    var v = vidEl(), was = VP.on; setPlaying(false);
+    if (v) {
+      v.onerror = v.onplay = v.onplaying = v.onwaiting = v.onended = v.onloadedmetadata = v.ontimeupdate = null;
+      if (was || v.getAttribute('src')) { try { v.pause(); } catch (e) {} v.removeAttribute('src'); v.removeAttribute('poster'); try { v.load(); } catch (e) {} }
+    }
+    if (was) setSpin('');
+    if (!silent) { var x = curItem(); if (x) setPlayUi(x); }
+  }
+  function signVideoUrl(id) { return videoApi({ a: 'sign_video', id: id }).then(function (r) { if (!r || !r.url) throw mkErr('NO_URL', 'nofile'); return r.url; }); }
+  /* 사전 확인 → {status} 또는 {fail:true}(요청 자체가 안 감) */
+  function precheck(url) {
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
+    return global.fetch(url, { headers: { Range: 'bytes=0-0' }, signal: ctl ? ctl.signal : undefined }).then(function (r) {
+      if (tm) clearTimeout(tm);
+      try { if (r.body && r.body.cancel) r.body.cancel(); } catch (e) {}
+      return { status: r.status };
+    }, function () { if (tm) clearTimeout(tm); return { fail: true }; });
+  }
+  /* 새 주소를 받고 사전 확인까지 통과한 주소를 돌려준다. 만료·권한(4xx)이면 새 주소를 한 번 더 받는다 */
+  function acquire(x, tok) {
+    function once() {
+      return signVideoUrl(x.id).then(function (url) {
+        return precheck(url).then(function (pc) { return { url: url, k: pc.fail ? (online() ? 'ok' : 'net') : precheckKind(pc.status) }; });
+      });
+    }
+    return once().then(function (r) { return (r.k === 'expired' || r.k === 'server') ? once() : r; }).then(function (r) {
+      if (tok !== VP.tok) return null;
+      if (r.k === 'net') throw mkErr('NETWORK', 'net');
+      if (r.k !== 'ok') throw mkErr('EXPIRED', 'expired');
+      return r.url;
+    });
+  }
+  function failPlay(x, kind, tok) {
+    if (tok !== undefined && tok !== VP.tok) return;
+    stopVideo(true);
+    if (x && curItem() && curItem().id === x.id) setPlayUi(x, kind);
+  }
+  function attachUrl(url, tok, resumeT) {
+    var v = vidEl(), x = curItem(); if (!v || !x || tok !== VP.tok) return;
+    VP.url = url; VP.at = Date.now(); VP.busy = false; VP.resume = resumeT || 0;
+    v.onloadedmetadata = function () { if (tok !== VP.tok) return; if (VP.resume > 0) { try { v.currentTime = VP.resume; } catch (e) {} VP.resume = 0; } };
+    v.onplaying = function () { if (tok === VP.tok) setSpin(''); };
+    v.onwaiting = function () { if (tok === VP.tok) setSpin('불러오는 중…'); };
+    v.ontimeupdate = function () { if (tok === VP.tok && v.currentTime) VP.t = v.currentTime; };
+    v.onended = function () { if (tok === VP.tok) stopVideo(false); };       // 끝나면 겉그림 + ▶ 로 돌아와 다시 볼 수 있다
+    v.onerror = function () { if (tok === VP.tok) onVideoError(tok); };
+    v.onplay = function () { if (tok === VP.tok && !VP.busy && urlStale(VP.at, Date.now())) refreshPlay(tok); };   // 오래 멈췄다가 다시 재생 → 새 주소로 이어서
+    var im = $('albImg'); if (im && im.getAttribute('src')) v.setAttribute('poster', im.getAttribute('src'));
+    v.setAttribute('src', url); setPlaying(true); setSpin('불러오는 중…');
+    var pr; try { pr = v.play(); } catch (e) {}
+    if (pr && pr.catch) pr.catch(function () { if (tok === VP.tok) setSpin(''); });    // 자동 재생이 막히면 영상 막대의 재생 단추로 누르면 된다
+  }
+  /* 새 주소를 받아 같은 영상의 보던 자리부터 이어 재생 */
+  function refreshPlay(tok, atTime) {
+    var x = curItem(), v = vidEl(); if (!x || !v || tok !== VP.tok || VP.busy) return;
+    var t = atTime !== undefined ? atTime : (v.currentTime || VP.t || 0);
+    VP.busy = true; try { v.pause(); } catch (e) {}
+    setSpin('주소를 다시 받는 중…');
+    acquire(x, tok).then(function (url) { if (url) attachUrl(url, tok, t); }).catch(function (e) { failPlay(x, vidErrKind(e), tok); });
+  }
+  function onVideoError(tok) {
+    var x = curItem(), v = vidEl(); if (!x || tok !== VP.tok) return;
+    if (!online()) { failPlay(x, 'net', tok); return; }
+    if (!VP.retried) { VP.retried = true; VP.busy = false; refreshPlay(tok, (v && v.currentTime) || VP.t || 0); return; }       // 도중 오류는 새 주소로 한 번 다시
+    var url = VP.url; if (!url) { failPlay(x, 'expired', tok); return; }
+    precheck(url).then(function (pc) { failPlay(x, diagKind(pc.status, !!pc.fail), tok); });
+  }
+  function playCurrent() {
+    var x = curItem(); if (!x || !isVideo(x) || VP.on || VP.busy) return;
+    if (!online()) { setPlayUi(x, 'net'); return; }
+    var tok = ++VP.tok; VP.retried = false; VP.busy = true; VP.t = 0;
+    setPlayUi(x, null, '영상 주소를 받는 중이에요…', true);
+    acquire(x, tok).then(function (url) { if (url && tok === VP.tok) attachUrl(url, tok, 0); }).catch(function (e) {
+      if (tok !== VP.tok) return; VP.busy = false; var k = vidErrKind(e);
+      if (k === 'badpass') { stopVideo(true); setPlayUi(x, null, errText(e)); } else failPlay(x, k, tok);
+    });
   }
 
   /* ---- 확대: 두 손가락 · 더블탭 · 끌기 · 마우스 휠 · ＋/－ ---- */
@@ -480,6 +628,7 @@
   function ptMid() { var k = Object.keys(pts), a = pts[k[0]], b = pts[k[1]]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
   function tapEnd(e) {
     var p = relPoint(e), now = Date.now(), sz = imgSize();
+    if (isVideo(curItem())) { lastTap.t = 0; return; }       // v9.93: 영상 줄은 두 번 톡톡 확대 없음
     if (now - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 40) { setZoom(toggleZoom(Z, p.x, p.y, sz.w, sz.h), true); lastTap.t = 0; }
     else { lastTap = { t: now, x: p.x, y: p.y }; }
   }
@@ -487,10 +636,11 @@
     var st = $('albVst');
     st.addEventListener('pointerdown', function (e) {
       if (e.target.closest && e.target.closest('button')) return;
+      if (VP.on) return;                                      // v9.93: 영상이 재생 중이면 밀기·확대를 가로채지 않는다(막대 조작이 영상 태그로 간다)
       try { st.setPointerCapture(e.pointerId); } catch (x) {}
       pts[e.pointerId] = { x: e.clientX, y: e.clientY };
       var n = ptCount();
-      if (n === 2) { pinch = { d: ptDist(), s: Z.s }; swipe = null; pan = null; }
+      if (n === 2) { pinch = isVideo(curItem()) ? null : { d: ptDist(), s: Z.s }; swipe = null; pan = null; }
       else if (n === 1) { if (Z.s > 1.02) pan = { x: e.clientX, y: e.clientY, ox: Z.x, oy: Z.y }; else swipe = { x: e.clientX }; }
     });
     st.addEventListener('pointermove', function (e) {
@@ -515,14 +665,14 @@
       }
     }
     st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
-    st.addEventListener('wheel', function (e) { e.preventDefault(); var p = relPoint(e), sz = imgSize(); setZoom(zoomAt(Z, Z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), p.x, p.y, sz.w, sz.h), false); }, { passive: false });
+    st.addEventListener('wheel', function (e) { e.preventDefault(); if (isVideo(curItem())) return; var p = relPoint(e), sz = imgSize(); setZoom(zoomAt(Z, Z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), p.x, p.y, sz.w, sz.h), false); }, { passive: false });
   }
-  function zoomBtn(f) { var sz = imgSize(); setZoom(zoomAt(Z, Z.s * f, 0, 0, sz.w, sz.h), true); }
+  function zoomBtn(f) { if (isVideo(curItem())) return; var sz = imgSize(); setZoom(zoomAt(Z, Z.s * f, 0, 0, sz.w, sz.h), true); }
 
   /* =====================================================================
    * 6. 창(바닥 시트) · 안내 띠
    * ===================================================================*/
-  function openSheet(html) { S.sheet = true; $('albBox').innerHTML = html; $('albSheet').classList.add('show'); var bx = $('albBox'); bx.scrollTop = 0; updateFab(); }
+  function openSheet(html) { pauseVideo(); S.sheet = true; $('albBox').innerHTML = html; $('albSheet').classList.add('show'); var bx = $('albBox'); bx.scrollTop = 0; updateFab(); }
   function hideSheetNow() { S.sheet = false; var s = $('albSheet'); if (s) s.classList.remove('show'); }
   function closeSheet() { hideSheetNow(); updateFab(); }
   function undoToast(msg, ms, onUndo) {
@@ -539,13 +689,13 @@
   /* ---- 고치기 ---- */
   function openEdit(id) {
     var x = itemById(id); if (!x || !guardWrite()) return;
-    var opts = STAGES.concat([TREE]).concat(HEART_ON ? [HEART] : []).map(function (s) { return '<option value="' + esc(s) + '"' + (s === x.stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('');
+    var isV = isVideo(x), opts = stageOptions(x).map(function (s) { return '<option value="' + esc(s) + '"' + (s === x.stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('');
     var d = dateInfo(x);
     openSheet('<h2>날짜·설명 고치기</h2><div class="alb-note">날짜를 모르면 비워 두세요. 지어내지 않아요.</div>' +
       '<label class="alb-lbl" for="albFC">설명</label><textarea id="albFC" rows="3" maxlength="300">' + esc(x.caption) + '</textarea>' +
       '<label class="alb-lbl" for="albFD">날짜 <small>(예: 1993, 1993-02, 1993-02-22)</small></label><input id="albFD" type="text" inputmode="numeric" autocomplete="off" value="' + esc(x.date_text || '') + '" placeholder="모르면 비워 두기">' +
       '<div class="alb-err" id="albFErr" role="alert"></div>' +
-      '<label class="alb-lbl" for="albFS">단계</label><select id="albFS">' + opts + '</select>' +
+      '<label class="alb-lbl" for="albFS">단계</label><select id="albFS"' + (isV ? ' disabled' : '') + '>' + opts + '</select>' + (isV ? '<div class="alb-note">영상은 ♥ 앨범에만 있어요.</div>' : '') +
       (d.unc ? '<div class="alb-note">지금은 「날짜 불확실」로 표시돼 있어요. 날짜를 적으면 「직접 적은 날짜」로 바뀌어요.</div>' : '') +
       '<div class="alb-actions"><button type="button" class="alb-btn" data-act="save" data-id="' + esc(x.id) + '" id="albSave">저장</button><button type="button" class="alb-btn ghost" data-act="sclose">닫기</button></div>');
   }
@@ -580,10 +730,11 @@
   function syncDl() {
     var b = $('albDl'), t = $('albDlT'), x = curItem(); if (!b || !t) return;
     var busy = !!(x && dlBusy[x.id]);
+    b.setAttribute('aria-label', isVideo(x) ? '이 영상(줄인 사본)을 폰에 내려받기' : '이 사진을 폰에 내려받기');
     b.classList.toggle('busy', busy); b.disabled = busy; t.textContent = busy ? '받는 중…' : '내려받기';
   }
-  function dlWhy(e) {
-    if (e && e.alb) return errText(e);
+  function dlWhy(e, isV) {
+    if (e && e.alb) return isV ? (vidErrKind(e) === 'expired' ? '영상 주소를 받지 못했어요.' : VERR[vidErrKind(e)]) : errText(e);
     if (e && e.dlWhy) return softenWhy(e.dlWhy) + '.';
     return '폰에 저장하지 못했어요.';
   }
@@ -591,21 +742,24 @@
     var x = curItem(); if (!x || !S.save) return;
     if (dlBusy[x.id]) { toast('이미 받고 있어요'); return; }
     if (!online()) { toast('못 했어요 — ' + errText(mkErr('NETWORK', 'net')), 4200); return; }
-    var name = dlName(x); dlBusy[x.id] = 1; syncDl();
+    var name = dlName(x), isV = isVideo(x); dlBusy[x.id] = 1; syncDl();
     toast('내려받는 중이에요…', 2500);
     function done() { delete dlBusy[x.id]; syncDl(); }
-    signMany([x.id], 'p').then(function (urls) {
+    (isV ? signVideoUrl(x.id) : signMany([x.id], 'p').then(function (urls) {
       var u = urls[x.id]; if (!u) throw mkErr('NO_PHOTO', 'nofile');
-      return S.save(u, name);
+      return u;
+    })).then(function (u) {
+      return isV ? S.save(u, name, 'video/mp4') : S.save(u, name);       // v9.93: 영상은 형식(mp4)을 같이 알린다 — 사진 호출은 그대로
     }).then(function (r) {
       done(); var where = (r && r.where) || '다운로드 폴더', nm = (r && r.name) || name;
-      toast('저장했어요 (' + where + ' · ' + nm + ')', 5200);
-    }, function (e) { done(); toast('못 했어요 — ' + dlWhy(e), 5200); });
+      toast('저장했어요 (' + where + ' · ' + nm + ')' + (isV ? ' — 재생용으로 줄인 영상이에요. 원본은 공유함에 있어요.' : ''), isV ? 7000 : 5200);
+    }, function (e) { done(); toast('못 했어요 — ' + dlWhy(e, isV), isV ? 7000 : 5200); });
   }
 
   /* ---- 휴지통 ---- */
   function trashItem(id) {
     var x = itemById(id); if (!x || !guardWrite()) return;
+    pauseVideo();
     rpc('album_trash', { p_id: id, p_restore: false }).then(function (ok) {
       if (ok !== true) { toast('옮기지 못했어요 — 다시 불러온 뒤 해 주세요.'); load(true); return; }
       x.deleted_at = new Date().toISOString(); x.rev = (x.rev || 1) + 1; saveCache(S.items);
@@ -625,15 +779,18 @@
   function openTrash() {
     var l = S.items.filter(function (x) { return !!x.deleted_at && seen(x); }).sort(byOrd), h = '<h2>휴지통</h2><div class="alb-note">여기서 지우면 사진 파일까지 영구히 사라져요. 되돌릴 수 없어요.</div>';
     if (!l.length) h += '<div class="alb-empty sm">휴지통이 비어 있어요</div>';
-    l.forEach(function (x) { h += '<div class="alb-trow"><div class="c"><b>' + esc(x.caption) + '</b><small>' + esc(x.stage) + (x.date_text ? ' · ' + esc(dateLong(x.date_text)) : '') + (x.data && x.data.purged_at ? ' · 파일은 이미 지워졌어요' : '') + '</small></div><button type="button" class="alb-btn sm ghost" data-act="restore" data-id="' + esc(x.id) + '">되살리기</button><button type="button" class="alb-btn sm danger" data-act="purge1" data-id="' + esc(x.id) + '">영구 삭제…</button></div>'; });
+    l.forEach(function (x) { h += '<div class="alb-trow' + (isVideo(x) ? ' vrow' : '') + '"><div class="c"><b>' + (isVideo(x) ? '<span class="alb-vtag">▶ 영상</span>' : '') + esc(x.caption) + '</b><small>' + esc(x.stage) + (x.date_text ? ' · ' + esc(dateLong(x.date_text)) : '') + (x.data && x.data.purged_at ? ' · 파일은 이미 지워졌어요' : '') + '</small></div><button type="button" class="alb-btn sm ghost" data-act="restore" data-id="' + esc(x.id) + '">되살리기</button><button type="button" class="alb-btn sm danger" data-act="purge1" data-id="' + esc(x.id) + '">영구 삭제…</button></div>'; });
     h += '<div class="alb-actions"><button type="button" class="alb-btn ghost" data-act="settings">뒤로</button></div>';
     openSheet(h);
   }
   function purgeItem(id, btn) {
     if (!guardWrite()) return;
-    if (btn.getAttribute('data-sure') !== '1') { btn.setAttribute('data-sure', '1'); btn.textContent = '정말 영구 삭제'; setTimeout(function () { if (btn.isConnected) { btn.removeAttribute('data-sure'); btn.textContent = '영구 삭제…'; } }, 5000); return; }
+    var px = itemById(id), isV = isVideo(px);
+    if (btn.getAttribute('data-sure') !== '1') { btn.setAttribute('data-sure', '1'); btn.textContent = purgeSureText(px); if (isV) btn.classList.add('vsure'); setTimeout(function () { if (btn.isConnected) { btn.removeAttribute('data-sure'); btn.classList.remove('vsure'); btn.textContent = '영구 삭제…'; } }, 5000); return; }
     btn.classList.add('busy');
-    fileApi({ a: 'purge', id: id }).then(function () {       // 저장소 파일을 먼저 지운다 — 실패하면 여기서 멈춤(표에서 지우지 않음)
+    (isV ? videoApi({ a: 'purge_video', id: id }) : Promise.resolve()).then(function () {       // v9.93: 영상 파일 먼저 → 겉그림 → 표 순서. 앞 단계가 실패하면 멈춤(휴지통에 그대로)
+      return fileApi({ a: 'purge', id: id });
+    }).then(function () {       // 저장소 파일을 먼저 지운다 — 실패하면 여기서 멈춤(표에서 지우지 않음)
       return rpc('album_purge', { p_id: id });
     }).then(function (ok) {
       if (ok === true) { S.items = S.items.filter(function (x) { return x.id !== id; }); saveCache(S.items); renderAll(); toast('영구히 지웠어요'); openTrash(); }
@@ -666,8 +823,8 @@
   }
 
   function openSettings() {
-    var n = S.items.filter(function (x) { return !!x.deleted_at && seen(x); }).length, tot = S.items.filter(function (x) { return isLive(x) && seen(x); }).length;
-    openSheet('<h2>사진첩 설정</h2><div class="alb-note">사진 ' + tot + '장이 비공개 서버에 있어요. ' + (S.save ? '내려받기는 큰 보기의 내려받기 단추로 합니다(카톡 공유 단추는 없어요).' : '사진 내려받기·공유 단추는 없고, 원본은 PC에 있어요.') + '</div>' +
+    var n = S.items.filter(function (x) { return !!x.deleted_at && seen(x); }).length, liveL = S.items.filter(function (x) { return isLive(x) && seen(x); }), tot = liveL.length, cp = countParts(liveL);
+    openSheet('<h2>사진첩 설정</h2><div class="alb-note">' + (cp.videos ? '사진 ' + cp.photos + '장 · 영상 ' + cp.videos + '개가' : '사진 ' + tot + '장이') + ' 비공개 서버에 있어요. ' + (S.save ? '내려받기는 큰 보기의 내려받기 단추로 합니다(카톡 공유 단추는 없어요).' : '사진 내려받기·공유 단추는 없고, 원본은 PC에 있어요.') + '</div>' +
       '<button type="button" class="alb-setrow" data-act="trash"><span>휴지통</span><small>' + n + '장 · 되살리거나 영구히 지우기</small></button>' +
       '<div class="alb-actions"><button type="button" class="alb-btn ghost" data-act="sclose">닫기</button></div>');
   }
@@ -686,6 +843,7 @@
       case 'vfy': askVerify(); break;
       case 'vfyyes': doVerify(); break;
       case 'vclose': closeViewer(); break;
+      case 'vplay': playCurrent(); break;
       case 'vdl': $('albMenu').classList.remove('show'); downloadCurrent(); break;
       case 'vmenu': $('albMenu').classList.toggle('show'); break;
       case 'prev': go(-1); break;
@@ -710,6 +868,7 @@
   function init(o) {
     if (o && o.toast) _toast = o.toast;
     HEART_ON = !(o && o.heart === false);                              // v9.77: 스위치 ALBUM_HEART 'off' → heart:false
+    VIDEO_ON = !(o && o.video === false);                              // v9.93: 스위치 ALBUM_VIDEO 'off' → video:false (영상 줄이 없는 것으로 친다)
     S.save = (o && typeof o.save === 'function') ? o.save : null;      // v9.70: 없으면(스위치 ALBUM_DL 'off'·옛 연결) 내려받기 단추가 없다 — v9.69 와 같음
     if (global.AchPure && AchPure.makeRpc) rpc = AchPure.makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
     build();

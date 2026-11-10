@@ -3824,6 +3824,7 @@
   APP_VERSION = 'v9.90';        // v9.90(O-0809): 폰에서 채팅·공유함 첨부의 [⬇ 다운로드]가 끝나면, 한글·워드·엑셀·PPT·PDF 같은 문서 파일은 시스템 「열기」(열 수 있는 앱이 없으면 아무 일도 없던 것) 대신 스마트비서 문서 뷰어로 곧바로 연다(이미지·영상·APK·압축 등 문서가 아닌 파일은 예전과 같음, PC판도 예전과 같음). 스위치 DL_OPEN_VIEWER('on'|'off', app.js 한 곳) — 'off' 면 v9.89 와 같다 · versionCode 134
   APP_VERSION = 'v9.91';        // v9.91(O-0810): 수정 요청 화면(markup.js)에서 한 손가락은 표시, 두 손가락은 넘기기와 확대·축소로 바꿈. 위 띠의 [펜|손] 단추를 없애고(예전 방식은 스위치 MARKUP_GESTURE 'off'), 두 손가락을 떼면 문서가 조금 미끄러지는 관성 이동을 더함(스위치 MK_INERTIA 'off'). 일반 뷰어·전체화면·표 보기 손가락 동작과 표시 자료·서버·자바·권한은 그대로. 사용법 7장 문구 정리 · versionCode 135
   APP_VERSION = 'v9.92';        // v9.92(O-0812): 수정 요청 화면(markup.js)에 확대 자물쇠를 더함. 위 띠 [🔒 확대 잠김]이 기본(문서를 열 때마다 잠김 · 폭에 맞춘 크기로 고정 · 두 손가락은 위아래 넘기기만, 벌리기·오므리기는 무시하고 자물쇠가 살짝 흔들림). [🔓 확대 열림]으로 열면 v9.91 처럼 확대·이동 모두 됨, 다시 누르면 폭에 맞춰 잠김. 한 손가락 표시·일반 뷰어·전체화면·표 보기는 그대로. 스위치 MK_ZOOM_LOCK('on'|'off', markup.js 맨 위) — 'off' 면 v9.91 과 같다. 서버·자바·권한 변경 없음 · versionCode 136
+  APP_VERSION = 'v9.93';        // v9.93(O-0816): 사진첩 ♥ 앨범에 영상도 같이 — 격자 칸 왼쪽 위 「▶ 길이」 알약, 큰 보기에서 겉그림 + 가운데 ▶ 를 누르면 그때 처음 영상을 받아 재생(자동 재생·자동 내려받기 없음, 소리 켜짐, 재생 중 확대·밀기 끔, 막대로 건너뛰기, 끝나면 겉그림으로 돌아와 다시 보기). 영상은 줄인 사본이며 비공개 보관함 album-video 에서 서버 함수 album-video 가 연동 암호를 확인한 뒤 3시간 유효한 주소를 준다(사진 함수는 그대로). 주소가 묵었거나 도중 오류가 나면 새 주소로 보던 자리부터 이어 재생, 오류는 인터넷·주소 만료·형식 세 가지로 구분. 내려받기는 줄인 사본(mp4)을 사진과 같은 길로 저장하고 원본은 공유함에 있다고 알림. 고치기에서 영상은 분류 ♥ 고정, 휴지통에 「▶ 영상」 표시와 영구 삭제 문구(영상 파일도 지워짐)·순서(영상→겉그림→표). 앱 줄 숫자는 「사진 N장 · 영상 M개」. 새 권한·플러그인·매니페스트 없음. 스위치 ALBUM_VIDEO('on'|'off', app.js 한 곳) — 'off' 면 영상 줄이 어디에도 안 보여 v9.92 와 같다 · versionCode 137 (배포 전, push 안 함)
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10104,10 +10105,12 @@
   var ALBUM_DL = 'on';
   /* v9.77: 단계 칩 맨 끝의 하트(♥) 앨범. 'off' 면 하트 칩이 없고 ♥ 사진도 어디에도 안 보여 v9.76 과 같다(서버 무관). 분류 '♥'·날짜 출처 'exif' 는 서버 제약에 이미 추가돼 있다(album_heart_v1). */
   var ALBUM_HEART = 'on';
+  /* v9.93(O-0816): ♥ 앨범의 영상. 'off' 면 영상 줄이 목록·숫자·휴지통 어디에도 안 보여 v9.92 와 같다(서버 무관). 영상 파일은 비공개 보관함 album-video, 주소는 서버 함수 album-video(연동 암호 확인 · 3시간). */
+  var ALBUM_VIDEO = 'on';
   var albumView = $('albumView');
   /* 사진 한 장(서명 주소)을 폰에 저장 → Promise({ok, name, where}). 실패하면 reject(Error: dlWhy = 이유 한 줄 — 사진첩이 「못 했어요 — 이유」로 보여 준다).
    *   웹페이지(브라우저)로 넘기는 예전 대체 길은 쓰지 않는다 — 사진 주소를 밖으로 내보내지 않고, 실패는 조용히 넘기지 않는다. */
-  function albumSavePhoto(url, name) {
+  function albumSavePhoto(url, name, mime) {
     var fname = safeDownloadName(name || 'album_photo.jpg');
     function fail(why) { var er = new Error(why); er.dlWhy = why; return er; }
     if (!isNativeApp()) {
@@ -10122,7 +10125,7 @@
     }
     var FD = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
     if (!FD || !FD.download) return Promise.reject(fail('이 앱 버전은 폰에 저장하는 기능이 없습니다'));
-    return FD.download({ url: url, name: fname, open: false, mime: 'image/jpeg' }).then(function (r) {
+    return FD.download({ url: url, name: fname, open: false, mime: mime || 'image/jpeg' }).then(function (r) {
       return { ok: true, name: (r && r.name) || fname, where: '다운로드 폴더' };
     }, function (e) {
       if (e && e.code === 'CANCELLED') throw fail('내려받기를 취소했습니다');
@@ -10135,7 +10138,7 @@
   }
   if (ALBUM_TAB !== 'off' && window.AlbumTab && window.AchPure && $('btnAlbum')) {
     try {
-      AlbumTab.init({ toast: toast, save: ALBUM_DL !== 'off' ? albumSavePhoto : null, heart: ALBUM_HEART !== 'off' });
+      AlbumTab.init({ toast: toast, save: ALBUM_DL !== 'off' ? albumSavePhoto : null, heart: ALBUM_HEART !== 'off', video: ALBUM_VIDEO !== 'off' });
       var albGrid = $('homeTools'), albSub = albGrid && albGrid.querySelector('.tools-sub');
       if (albGrid && albSub) albGrid.insertBefore($('btnAlbum'), albSub);   // 홈 도구 맨 끝(승진 다음) — 기존 칸 자리는 그대로
       $('btnAlbum').style.display = ''; $('btnAlbum').addEventListener('click', openAlbum);
