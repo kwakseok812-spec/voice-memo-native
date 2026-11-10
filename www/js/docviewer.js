@@ -235,6 +235,7 @@
     if (lastPageT) { clearTimeout(lastPageT); lastPageT = null; }
     snapshotActive(true);                       // 나가기 직전 본 쪽을 바로 저장(최근 목록 「○쪽까지 보셨어요」)
     curKey = null; openIntent = null; pendingRestore = null;
+    if (!chatRet) docFrom = null;               // O-0823: 돌아갈 곳 표시는 뷰어가 닫히면 지운다(💬 로 채팅에 가는 길만 남김 — 왕복 뒤 뒤로 가기가 아직 필요)
     closeAsk(); closeEdit(); closeFix();
     if (global.SmartMarkup && SmartMarkup.isOpen()) { try { SmartMarkup.close({ quiet: !!chatRet }); } catch (e) {} }   // O-0544 (O-0548: 채팅으로 갈 때는 「남겨 둘게요」 안내 없이)
     if (tabs.length >= 2 || (parked && tabs.length)) { clearDocView(); liveTabId = null; }   // v8.1: 케이에게 묻고 나가면 1개라도 남긴다
@@ -261,7 +262,7 @@
     var cx = $('dvLoadCancel');
     if (cx) {                                    // v8.0: 탭이 있으면 「취소」= 보던 문서로 돌아감
       if (openIntent === 'new' && tabs.length) cx.textContent = '취소';
-      cx.onclick = function () { if (openIntent === 'new' && tabs.length) abortOpen(); else leaveViewer(); };
+      cx.onclick = function () { if (openIntent === 'new' && tabs.length) abortOpen(); else leaveToOrigin(); };   // O-0823: 열려던 문서를 포기하면 문서를 눌렀던 화면으로
     }
   }
   function setLoading(o) {
@@ -289,8 +290,8 @@
     $('dvErrClose').onclick = function () {
       hideOverlay();
       if (openIntent === 'restore') { failRestore(); return; }     // v8.0: 탭을 다시 그리지 못함 → 그 탭만 닫기
-      if (openIntent === 'new') { abortOpen(); return; }           // v8.0: 새 문서 실패 → 보던 탭으로(없으면 예전처럼 닫기)
-      if (!pdfDoc && !isExcelDoc) leaveViewer(); else refreshFname();
+      if (openIntent === 'new') { abortOpen(true); return; }       // v8.0: 새 문서 실패 → 보던 탭으로(없으면 닫기 — O-0823: 문서를 눌렀던 화면으로 + 안내)
+      if (!pdfDoc && !isExcelDoc) leaveToOrigin(true); else refreshFname();
     };
     if (retryFn) $('dvErrRetry').onclick = function () { hideOverlay(); try { retryFn(); } catch (e) {} };
   }
@@ -1335,7 +1336,10 @@
       if (t.key) { var pr = DocStore.touch(t.key, { lastPage: st.page }); if (touchRecent && pr && pr.then) pr.then(renderRecent); }
     }
   }
-  function beginOpen() { closeSheet(); snapshotActive(); liveTabId = null; openIntent = 'new'; pendingRestore = null; pendingPdfBlob = null; }
+  function beginOpen() {
+    if (!viewerOpen()) docFrom = null;   // O-0823: 뷰어가 닫혀 있다가 새로 열 때만 옛 돌아갈 곳을 비운다(이미 열린 뷰어에서 파일을 더 열면 처음 온 곳을 그대로)
+    closeSheet(); snapshotActive(); liveTabId = null; openIntent = 'new'; pendingRestore = null; pendingPdfBlob = null;
+  }
   function markRestored() { var t = activeTab(); if (t) liveTabId = t.id; openIntent = null; renderTabs(); }
   function commitNewTab(kind) {
     var info = curFileInfo || {};
@@ -1351,10 +1355,10 @@
     if (tabs.length === 2) toast('📑 두 번째 문서를 열었습니다. 위 탭을 눌러 왔다갔다 보세요.');
   }
   // 새 문서 열기를 그만둠(취소·실패·한도) → 보던 탭으로. 탭이 없으면 예전처럼 뷰어를 닫는다.
-  function abortOpen() {
+  function abortOpen(failed) {
     opToken++; cancelUpload(); releaseWake(); hideOverlay(); openIntent = null; pendingRestore = null; pendingPdfBlob = null;
     if (tabs.length) { activateTab(Math.max(0, Math.min(activeIdx, tabs.length - 1)), { noSnap: true }); return; }
-    leaveViewer();
+    leaveToOrigin(failed);   // O-0823: 탭이 없으면 문서를 눌렀던 화면으로(없으면 예전처럼 닫기)
   }
   function failRestore() {
     openIntent = null; var i = activeIdx;
@@ -1405,7 +1409,7 @@
     if (askEl && askEl.classList.contains('on')) { closeAsk(); return; }   // v8.1
     if (editEl && editEl.classList.contains('on')) { closeEdit(); return; }   // O-0171
     if (openIntent === 'new' && tabs.length) { abortOpen(); return; }
-    leaveViewer();
+    leaveToOrigin();   // O-0823: 폰 뒤로가기 · 머리줄 [←] 공통 — 채팅·공유함에서 문서를 눌러 왔으면 그 화면으로(아니면 문서 고르기)
   }
 
   // ---------- 탭 띠 ----------
@@ -1779,6 +1783,21 @@
    * 수정 요청 화면이었으면 그 화면(펜/손 · 적던 메모까지). 적어 둔 수정 요청은 원래 이 기기에 보관된다(markup.js IndexedDB).
    * 「케이에게 묻기」와 같은 「열어 둔 문서」 장치(parked)를 쓴다 — 돌아오는 길은 activateTab(보던 상태 복원) 하나. */
   var chatOpener = null, chatRet = null;
+  /* ============ O-0823 뷰어에서 뒤로 → 문서를 눌렀던 화면으로 ============
+   * 채팅·공유함의 [문서 보기]·[⬇ 다운로드 후 열기]·정리본 [문서 보기]/[✏️ 고치기]는 열 때 att.from({screen:'chat'|'locker', uid, view})을 함께 넘긴다.
+   *   그러면 뒤로(폰 뒤로가기·머리줄 [←]) · 변환 중 「취소하고 나가기」 · 오류 「확인」이 문서 고르기 화면이 아니라 그 화면으로 간다(채팅이면 문서를 누르던 때의 자리).
+   *   마지막 탭 ✕ 닫기 · 탭 복원 실패 · 회의록 목록/실적/문서 화면에서 연 문서(from 없음)는 예전과 같다.
+   * 💬(뷰어 → 채팅 → 뒤로)를 오가도 표시는 남는다 — leaveViewer 가 chatRet 이 있으면 지우지 않고, dropChatReturn(채팅에서 다른 길로 떠남)이 지운다.
+   * SmartDocs.leave()/leaveViewer() 자체는 채팅을 열지 않는다(openScreen 이 leave 를 부르므로 열면 무한 반복) — 이 길은 표시만 지운다. */
+  var docFrom = null, originOpener = null;
+  function leaveToOrigin(failed) {
+    var o = docFrom;
+    leaveViewer();                                                  // 표시는 여기서 지워진다(chatRet 이 있는 💬 길만 남음)
+    if (!o || chatRet || !originOpener) return;
+    var went = false;
+    try { went = !!originOpener(o); } catch (e) {}
+    if (went && failed) toast('문서를 열지 못했습니다.');
+  }
   function goChat() {
     if (!chatOpener) return;
     var t = activeTab();
@@ -2087,6 +2106,7 @@
   function viewChatAttachment(att) {
     if (!att || !att.url) { toast('열 수 있는 파일이 아닙니다.'); return; }
     beginOpen();                                                    // v8.0: 보던 문서는 탭으로 남긴다
+    if (att.from && typeof att.from === 'object') docFrom = att.from;   // O-0823: 누른 쪽이 알려 준 돌아갈 곳(채팅·공유함). 없으면 예전과 같다
     opToken++; var op = opToken; var name = att.name || '문서', src = srcBase(att.url);
     curOrig = null; curSrcFull = att.url; curPcPath = att.pc_path || null;   // O-0171: 편집하기 때 PC가 이 주소·경로에서 원본을 받는다
     showViewer(); setViewMode('pdf'); fnameLabel.textContent = name;
@@ -2208,6 +2228,7 @@
     initAsk();
     if (opts.edit) editOpts = opts.edit;                            // O-0171 PC에서 편집하기 — {download(url,name)}
     if (typeof opts.chat === 'function') chatOpener = opts.chat;    // O-0548 뷰어 → 채팅 바로 가기(채팅 화면을 여는 일은 app.js)
+    if (typeof opts.origin === 'function') originOpener = opts.origin;   // O-0823 뒤로 → 문서를 눌렀던 화면(채팅·공유함을 여는 일은 app.js)
     if ($('dvChat')) $('dvChat').onclick = function () { goChat(); };
     initEdit();
 
@@ -2322,7 +2343,8 @@
     setOrig: function (f) { var t = activeTab(); if (t && f) { t.orig = f; t.pcPath = null; t.srcFull = null; } },   // O-0544: 수정 요청 「원본 파일 고르기」
     goChat: goChat,                        // O-0548: 뷰어 → 채팅(지금 자리를 적어 둠)
     resumeFromChat: resumeFromChat,        // O-0548: 채팅에서 뒤로 → 보던 그대로
-    dropChatReturn: function () { chatRet = null; },   // O-0548: 채팅에서 뒤로 가기가 아닌 길로 떠나면 돌아올 자리를 버림
+    dropChatReturn: function () { chatRet = null; docFrom = null; },   // O-0548: 채팅에서 뒤로 가기가 아닌 길로 떠나면 돌아올 자리를 버림 (O-0823: 문서를 눌렀던 화면 표시도 — 새 문서는 이 뒤 viewChatAttachment 가 다시 채운다)
+    originState: function () { return docFrom ? { screen: docFrom.screen, uid: docFrom.uid || '' } : null; },   // O-0823 점검용
     askContext: askContext,                // v8.1(O-0154) 점검용 — 보던 문서·쪽·보낼 파일
     checkRef: checkRef,                    // v8.1: PC 변환본이 서버에 아직 있나(있으면 다시 올리지 않음)
     setAskHandler: function (fn) { askHandler = (typeof fn === 'function') ? fn : null; updateAskBtn(); },

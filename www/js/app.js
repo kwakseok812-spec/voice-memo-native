@@ -3826,6 +3826,7 @@
   APP_VERSION = 'v9.92';        // v9.92(O-0812): 수정 요청 화면(markup.js)에 확대 자물쇠를 더함. 위 띠 [🔒 확대 잠김]이 기본(문서를 열 때마다 잠김 · 폭에 맞춘 크기로 고정 · 두 손가락은 위아래 넘기기만, 벌리기·오므리기는 무시하고 자물쇠가 살짝 흔들림). [🔓 확대 열림]으로 열면 v9.91 처럼 확대·이동 모두 됨, 다시 누르면 폭에 맞춰 잠김. 한 손가락 표시·일반 뷰어·전체화면·표 보기는 그대로. 스위치 MK_ZOOM_LOCK('on'|'off', markup.js 맨 위) — 'off' 면 v9.91 과 같다. 서버·자바·권한 변경 없음 · versionCode 136
   APP_VERSION = 'v9.93';        // v9.93(O-0816): 사진첩 ♥ 앨범에 영상도 같이 — 격자 칸 왼쪽 위 「▶ 길이」 알약, 큰 보기에서 겉그림 + 가운데 ▶ 를 누르면 그때 처음 영상을 받아 재생(자동 재생·자동 내려받기 없음, 소리 켜짐, 재생 중 확대·밀기 끔, 막대로 건너뛰기, 끝나면 겉그림으로 돌아와 다시 보기). 영상은 줄인 사본이며 비공개 보관함 album-video 에서 서버 함수 album-video 가 연동 암호를 확인한 뒤 3시간 유효한 주소를 준다(사진 함수는 그대로). 주소가 묵었거나 도중 오류가 나면 새 주소로 보던 자리부터 이어 재생, 오류는 인터넷·주소 만료·형식 세 가지로 구분. 내려받기는 줄인 사본(mp4)을 사진과 같은 길로 저장하고 원본은 공유함에 있다고 알림. 고치기에서 영상은 분류 ♥ 고정, 휴지통에 「▶ 영상」 표시와 영구 삭제 문구(영상 파일도 지워짐)·순서(영상→겉그림→표). 앱 줄 숫자는 「사진 N장 · 영상 M개」. 새 권한·플러그인·매니페스트 없음. 스위치 ALBUM_VIDEO('on'|'off', app.js 한 곳) — 'off' 면 영상 줄이 어디에도 안 보여 v9.92 와 같다 · versionCode 137 (배포 전, push 안 함)
   APP_VERSION = 'v9.94';        // v9.94(O-0821): 홈 도구 칸 「OTT」와 「S-Office」의 자리를 서로 바꿈 — OTT 는 둘째 칸(회의록 옆), S-Office 는 OTT 가 있던 열두 번째 칸(규정 도우미 옆). 이름·그림·누르면 동작·칸 id 는 그대로, 순서만. 스위치 HOME_OTT_FIRST('on'|'off', app.js 한 곳) — 'off' 면 v9.93 순서 그대로 · versionCode 138
+  APP_VERSION = 'v9.95';        // v9.95(O-0823): 문서 뷰어에서 뒤로 가기(폰 뒤로가기·머리줄 [←])·변환 중 「취소하고 나가기」·오류 「확인」을 누르면 「문서 고르기」가 아니라 문서를 눌렀던 화면으로 — 채팅 [문서 보기]·정리본 [문서 보기]/[✏️ 고치기]·폰 [⬇ 다운로드] 뒤 자동 열기는 채팅의 그 자리(보던 말풍선의 화면 위치)로, 공유함 [문서 보기]는 공유함으로. 뷰어 [💬]를 오가도 이어지고, 마지막 탭 ✕ 닫기·회의록 목록/실적/문서 화면에서 연 문서는 예전과 같다. 새 단추·화면 없음. 스위치 DOC_BACK_TO_ORIGIN('on'|'off', app.js) — 'off' 면 v9.94 와 같다 · versionCode 139
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -4279,6 +4280,43 @@
     return 'document';
   }
   function attachIcon(f) { var k = f.kind || fileKindOf(f.mime, f.name); return k === 'image' ? 'i-image' : k === 'video' ? 'i-video' : 'i-note'; }
+  /* v9.95(O-0823) 문서 뷰어에서 뒤로 가면 「문서 고르기」가 아니라 문서를 눌렀던 화면으로 — 채팅 [문서 보기]·[⬇ 다운로드] 뒤 자동 열기·정리본 [문서 보기]/[✏️ 고치기]는 채팅의 그 자리(보던 말풍선의 화면 위치)로, 공유함 [문서 보기]·[⬇ 다운로드]는 공유함으로.
+   *   누른 쪽이 att.from 을 명시해 넘긴다(docFromHere) — 회의록 목록·실적·문서 화면에서 연 문서는 from 이 없어 예전과 같다(문서 고르기 → 홈). 뷰어 쪽 처리는 docviewer.js(leaveToOrigin).
+   *   'off' 면 from 을 만들지 않는다 = v9.94 와 같다. */
+  var DOC_BACK_TO_ORIGIN = 'on';
+  function docFromHere(screen, el) {
+    if (DOC_BACK_TO_ORIGIN !== 'on') return null;
+    try {
+      var bub = el && el.closest ? el.closest('.bubble[data-uid]') : null, uid = bub ? bub.getAttribute('data-uid') : '';
+      if (screen === 'locker') return { screen: 'locker', uid: uid, view: null };
+      return { screen: 'chat', uid: uid, view: chatCaptureView() };   // 누르는 순간 화면 맨 위에 보이던 말풍선과 그 화면 위치
+    } catch (e) { return null; }
+  }
+  function docFromAlive(from) {      // 폰 다운로드가 끝나 문서를 여는 순간, 눌렀던 화면이 아직 열려 있나
+    try { return !!from && isOpen(from.screen === 'locker' ? lockerView : chatView); } catch (e) { return false; }
+  }
+  function docBackTo(from) {         // 뷰어가 뒤로 → 눌렀던 화면으로(docviewer.js 의 leaveToOrigin 이 부른다). 갔으면 true, 못 갔으면 false(= 예전처럼 문서 고르기에 머묾)
+    try {
+      if (!from) return false;
+      if (from.screen === 'locker') { openLocker(); return true; }
+      if (from.screen === 'chat') {
+        var v = from.view || (from.uid ? { uid: from.uid, top: chatHeadOffset() } : null);
+        chatBackView = v; chatBackAt = Date.now(); chatBackUntil = chatBackAt + 6000;
+        openChat();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  // 채팅이 열린 직후 몇 초 동안, 다시 그려질 때마다 문서를 누르던 때의 자리로 맞춘다(말풍선 높이가 추정값이라 한 번에 안 맞을 수 있어 늦게 한두 번 더). 손으로 움직이면 멈춘다.
+  function chatBackApply() {
+    chatRestoreView(chatBackView);
+    [700, 1500].forEach(function (ms) {
+      setTimeout(function () {
+        if (chatBackView && Date.now() < chatBackUntil + 300 && chatUserTouchAt <= chatBackAt && isOpen(chatView) && chatLog && chatLog.querySelector('[data-uid="' + chatBackView.uid + '"]')) chatRestoreView(chatBackView);
+      }, ms);
+    });
+  }
   /* v9.90(O-0809) 폰에서 [⬇ 다운로드]가 성공한 뒤 문서 파일(아래 isViewableDoc)이면 시스템 「열기」 대신 문서 뷰어(openDocFromChat)로 연다.
    *   폰은 한글·워드 등을 열 수 있는 앱이 없는 경우가 많아 저장만 되고 아무 일도 없던 것을 고친다. 문서가 아닌 파일(이미지·영상·APK·압축…)·PC판·실패한 다운로드는 그대로.
    *   'off' 면 v9.89 와 같다(저장 뒤 시스템 「열기」). */
@@ -4401,7 +4439,11 @@
     FD.download({ url: url, name: fname, open: !vopt }).then(function (r) {
       delete dlBusy[url];
       var saved = (r && r.name) || fname, how = r && r.open;
-      if (vopt) { toast('저장했습니다. 뷰어로 엽니다.', 3000, true); openDocFromChat(vopt); return; }   // v9.90(O-0809): 저장이 확인된 뒤에만(실패는 아래 catch — 뷰어를 열지 않는다)
+      if (vopt) {
+        var vo = vopt;
+        if (vo.from && !docFromAlive(vo.from)) vo = { url: vo.url, name: vo.name, mime: vo.mime, kind: vo.kind };   // v9.95(O-0823): 받는 사이 다른 화면으로 갔으면 돌아갈 곳 표시 없이 예전처럼 열기(뒤로 가기가 엉뚱하게 채팅으로 가지 않게)
+        toast('저장했습니다. 뷰어로 엽니다.', 3000, true); openDocFromChat(vo); return;
+      }   // v9.90(O-0809): 저장이 확인된 뒤에만(실패는 아래 catch — 뷰어를 열지 않는다)
       if (how === 'need_permission') {             // 처음 한 번: 스마트비서에 「이 출처 허용」이 꺼져 있음 → 설정 화면이 열려 있다
         dlPendingInstall = r.id;
         toast('다운로드 폴더에 저장했습니다(' + saved + '). 설치하려면 「이 출처 허용」을 켜고 돌아오세요 — 설치 화면을 바로 열어 드리겠습니다.', 7000);
@@ -4479,7 +4521,7 @@
     if (!url) return;
     var fname = safeDownloadName(name || (url.split('/').pop().split('?')[0]) || 'download');
     if (isNativeApp()) {   // v6.7: 폰 = 네이티브 저장
-      var vopt = (opt && opt.viewer && DL_OPEN_VIEWER === 'on') ? { url: url, name: name || fname, mime: opt.mime || '', kind: 'document' } : null;
+      var vopt = (opt && opt.viewer && DL_OPEN_VIEWER === 'on') ? { url: url, name: name || fname, mime: opt.mime || '', kind: 'document', from: opt.from || null } : null;
       nativeDownload(url, fname, vopt); return;
     }
     // ↓ PC판(크롬·PWA) — 예전 방식 그대로(fetch → Blob → <a download>, 크롬은 실제로 다운로드 폴더에 저장됨)
@@ -4572,6 +4614,7 @@
   var chatNewDivUid = '';          // 「여기부터 새 메시지」 구분선을 붙일 말풍선 uid(이번 열람 동안 유지)
   var chatRenderedUids = null;     // 직전 렌더에 있던 말풍선 uid 맵(null=기준 없음 → 새 메시지 판정 안 함)
   var chatUserTouchAt = 0;         // 대표님이 마지막으로 직접 스크롤을 시작한 시각
+  var chatBackView = null, chatBackAt = 0, chatBackUntil = 0;   // v9.95(O-0823) 문서 뷰어에서 뒤로 와 채팅이 열린 직후 — 문서를 누르던 때의 자리({uid, top}) · 돌아온 시각 · 맞춰 두는 기한
   function markChatUserScroll() { chatUserTouchAt = Date.now(); }
   try {
     window.addEventListener('touchstart', markChatUserScroll, { passive: true });
@@ -5090,6 +5133,11 @@
     //   ⑥ 열기(open)인데 안읽음 없음 → 맨 아래(예전 그대로) / 복귀(resume)인데 없음 → ③~⑤ 규칙
     if (!viewOpen) { chatScrollBottom(); return; }
     // v8.3: 「저장한 답」에서 누른 대화로 가는 중이면(몇 초간) 다른 자동 스크롤보다 그 말풍선을 먼저 붙잡아 둔다
+    // v9.95(O-0823) 문서 뷰어에서 뒤로 와 채팅이 열린 직후(6초) — 문서를 누르던 때의 자리로. 손으로 움직였거나, 그 사이 새 답이 왔으면(안 보이는 새 답을 읽은 것으로 치지 않게 예전 방식 = 첫 안읽음부터) 건너뛴다. 말풍선을 못 찾아도 건너뛴다(기본 = 맨 아래/첫 안읽음)
+    if (chatBackView) {
+      if (Date.now() < chatBackUntil && chatUserTouchAt <= chatBackAt && !newMine && !(anchorOn && firstUnreadUid) && chatLog.querySelector('[data-uid="' + chatBackView.uid + '"]')) { chatBackApply(); markChatSeenRendered(); return; }
+      chatBackView = null;      // 기한이 지났거나 · 손으로 움직였거나 · 새 답/내 글이 있거나 · 말풍선이 없으면 더는 맞추지 않는다(늦은 재맞춤 예약도 이 값이 비면 멈춘다)
+    }
     if (chatJumpUid && Date.now() < chatJumpUntil && !newMine) { chatScrollToUid(chatJumpUid, false); markChatSeenRendered(); return; }
     if (newMine) { chatAnchorUntil = 0; chatScrollBottom(); }
     else if (anchorOn && firstUnreadUid) chatScrollToUid(firstUnreadUid, false);
@@ -7578,11 +7626,11 @@
     if (mb) { var bub = mb.closest('.bubble[data-uid]'); if (bub) openLockerActionSheet(bub.getAttribute('data-uid')); return; }
     var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
     if (dv) {                                        // 공유함 문서도 [뷰어로 보기] → 문서 뷰어로 표시(2026-09-21)
-      openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' });
+      openDocFromChat({ url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document', from: docFromHere('locker', dv) });   // v9.95(O-0823): 뒤로 = 공유함
       return;
     }
     var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
-    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '' } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어)
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '', from: docFromHere('locker', dl) } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어 · v9.95 O-0823: from)
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     openAttachmentChip(b.getAttribute('data-att-url'), b.getAttribute('data-att-name'));   // v7.9: 폰은 APK 등 = 네이티브 저장
@@ -8859,16 +8907,16 @@
     var vp = ev.target.closest ? ev.target.closest('[data-lid]') : null;
     if (vp) { onListenBtn(vp.getAttribute('data-lid'), vp); return; }
     var mof = ev.target.closest ? ev.target.closest('[data-mo-fix]') : null;
-    if (mof) { moOpenChecked({ url: mof.getAttribute('data-mo-url'), name: mof.getAttribute('data-view-name'), mime: mof.getAttribute('data-view-mime'), kind: 'document' }, true); return; }   // (O-0626)
+    if (mof) { moOpenChecked({ url: mof.getAttribute('data-mo-url'), name: mof.getAttribute('data-view-name'), mime: mof.getAttribute('data-view-mime'), kind: 'document', from: docFromHere('chat', mof) }, true); return; }   // (O-0626) (v9.95 O-0823: from = 뒤로 가면 이 채팅 자리로)
     var dv = ev.target.closest ? ev.target.closest('[data-view-url]') : null;
     if (dv) {                                        // [뷰어로 보기] → 문서 뷰어로 표시
-      var dva = { url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document' };
+      var dva = { url: dv.getAttribute('data-view-url'), name: dv.getAttribute('data-view-name'), mime: dv.getAttribute('data-view-mime'), kind: 'document', from: docFromHere('chat', dv) };   // v9.95(O-0823)
       if (MTG_OUT_ON === 'on' && window.MtgOut && MtgOut.isMtgName(dva.name)) { moOpenChecked(dva, false); return; }   // (O-0626) 맞춤 정리본은 주소(7일)부터 확인
       openDocFromChat(dva);
       return;
     }
     var dl = ev.target.closest ? ev.target.closest('[data-dl-url]') : null;
-    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '' } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어)
+    if (dl) { downloadAttachment(dl.getAttribute('data-dl-url'), dl.getAttribute('data-dl-name'), dl.getAttribute('data-dl-viewer') === '1' ? { viewer: true, mime: dl.getAttribute('data-dl-mime') || '', from: docFromHere('chat', dl) } : null); return; }   // [다운로드] (v9.90: 문서 파일이면 폰은 저장 뒤 뷰어 · v9.95 O-0823: from)
     var b = ev.target.closest ? ev.target.closest('[data-att-url]') : null;
     if (!b) return;
     openAttachmentChip(b.getAttribute('data-att-url'), b.getAttribute('data-att-name'));   // v7.9: 폰은 APK 등 = 네이티브 저장
@@ -10296,7 +10344,8 @@
   if (window.SmartDocs && SmartDocs.init) { try { SmartDocs.init({ toast: toast, confirm: function (t, m, label, fn, o) { openSheet(t, m, label, fn); if (o && o.positive && sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#' + (o.icon || 'i-check')); } },   // v8.7: 「스토어 열기」 같은 여는 동작은 빨간 휴지통 대신 보통 버튼
     ask: askKFromDoc,
     edit: { download: downloadAttachment },                      // O-0171 PC에서 편집하기 — 고친 파일 받기는 채팅 첨부와 같은 저장 경로
-    chat: function () { chatFromDocs = true; openChat(); } }); } catch (e) {} }   // O-0548 뷰어 [💬] → 채팅(뒤로 가면 보던 문서로)
+    chat: function () { chatFromDocs = true; openChat(); },
+    origin: docBackTo }); } catch (e) {} }   // v9.95(O-0823): 뷰어에서 뒤로 → 문서를 눌렀던 화면(채팅 그 자리·공유함)   // O-0548 뷰어 [💬] → 채팅(뒤로 가면 보던 문서로)
   /* v9.66(O-0696): 폰(네이티브)에 파일 한 개를 저장하는 공용 길 — S-Office 「사본 저장」이 쓰던 것을 이름 붙여 꺼냈다(동작 그대로).
    *   폰은 blob 다운로드가 파일을 못 만든다(v6.7) → 공유함에 올린 공개 주소를 네이티브 FileDownload 로 받는다. PC판은 blob + <a download>.
    *   승진 「백업 내려받기」도 이 함수를 쓴다(PromoTab.init 의 saveFile). */
