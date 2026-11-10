@@ -8,6 +8,8 @@
  *   · 되돌리기: MARKUP_ON = 'off' → [고치기]에 「표시해서 요청하기」가 안 보이고 길게 누르기도 꺼짐(지금의 [편집하기]와 같아짐).
  *   · O-0810 손가락 방식: 한 손가락 = 표시, 두 손가락 = 옮기기·확대·축소. [펜|손] 단추는 없다. MARKUP_GESTURE = 'off' → 옛 [펜|손] 방식(bindInput)이 그대로 돌아온다.
  *     MK_INERTIA = 'off' → 두 손가락을 떼면 바로 멈춘다(미끄러지는 효과만 끔).
+ *   · O-0812 확대 자물쇠: 위 띠의 [🔒 확대 잠김]. 기본 = 잠김(폭에 맞춘 크기로 고정, 두 손가락은 위아래 넘기기만, 벌리기·오므리기는 무시). [🔓]로 열면 확대·이동 모두 된다.
+ *     MK_ZOOM_LOCK = 'off' → 자물쇠 단추가 없어지고 v9.91 과 똑같이 두 손가락으로 늘 확대된다.
  * ==========================================================================*/
 (function (global) {
   'use strict';
@@ -17,12 +19,15 @@
   var MK_INERTIA_MAX = 3.2;    // 미끄러짐 시작 속도 상한(px/ms) — 너무 멀리 날아가지 않게
   var MK_INERTIA_DECAY = 0.94; // 16.7ms(한 프레임)마다 곱하는 값
   var MK_INERTIA_STOP = 0.018; // 이 속도(px/ms, 약 0.3px/프레임) 아래면 멈춘다
+  var MK_ZOOM_LOCK = 'on';     // O-0812 확대 자물쇠(스위치). 'on' = 열 때마다 잠김으로 시작, 잠김이면 두 손가락은 위아래 넘기기만. 'off' = 자물쇠 없음(v9.91 과 같다). MARKUP_GESTURE 가 'on' 일 때만 의미가 있다
   var MK_PALM = 96;            // 터치 닿은 크기(CSS px)가 이 이상이면 손바닥으로 보고 그 닿음만 무시. 짐작값이다 — 낮게 잡아 보통 손가락을 무시하는 쪽이 손바닥이 새는 것보다 해가 커서 설계안의 72에서 96으로 올렸다(실기기에서 조정, 0 = 끔)
   var MK_SECOND_PX = 30;       // 한 손가락이 그린 선이 이 길이(화면 px) 미만일 때 두 번째 손가락이 닿으면 선을 버리고 이동으로, 이상이면 두 번째 손가락을 무시 — 기준은 「두 번째 손가락이 닿는 그 순간」 하나뿐
   var MK_ZOOM_START = 0.08;    // 두 손가락 거리가 8% 넘게 변하면 확대·축소 시작(이동은 늘 함께 한다)
   var MK_PEN_HOLD_MS = 400;    // S펜을 뗀 뒤 이 시간 동안은 손가락 닿음을 무시
-  var GHINT_KEY = 'smart_markup_gesture_hint_v1', GIGN_KEY = 'smart_markup_gesture_ign_v1', GPALM_KEY = 'smart_markup_palm_notice_n';
+  var GHINT_KEY = 'smart_markup_gesture_hint_v1', GIGN_KEY = 'smart_markup_gesture_ign_v1', GPALM_KEY = 'smart_markup_palm_notice_n', LHINT_KEY = 'smart_markup_zoomlock_hint_v1', LNOTE_KEY = 'smart_markup_zoomlock_note_n';
   function gOn() { return MARKUP_GESTURE === 'on'; }
+  function zlOn() { return MK_ZOOM_LOCK === 'on' && MARKUP_GESTURE === 'on'; }      // O-0812 자물쇠 기능이 켜져 있나
+  function locked() { return zlOn() && S.lock !== false; }                          // O-0812 지금 확대가 잠겨 있나
   var LP_KEY = 'smart_markup_longpress', HELP_KEY = 'smart_markup_help_seen_v1', KEEP_MS = 7 * 24 * 3600 * 1000;
   var NS = 'http://www.w3.org/2000/svg';
   var doc = document;
@@ -38,7 +43,7 @@
 
   var host = {};          // app.js: send(payload)→Promise{rid}, cancel(rid)→Promise, status(rids)→Promise{rid:{status,job_status}}, openChat()
   var R = null;           // 화면 요소 묶음
-  var S = { zoom: 1, on: false, tool: 'pen', items: [], sent: [], sel: null, pages: [], pdf: null, d: null, memo: null, lp: null };
+  var S = { zoom: 1, on: false, tool: 'pen', items: [], sent: [], sel: null, pages: [], pdf: null, d: null, memo: null, lp: null, lock: true };
 
   /* ---------------- 보관(IndexedDB) ---------------- */
   var DB = (function () {
@@ -96,8 +101,8 @@
 
   // 띠: 손가락 방식이면 [펜|손] 단추 없이 안내 글 한 줄(앱 화면 문구에는 가운데 점을 쓰지 않는다), 옛 방식이면 지금 그대로
   function bandHtml(h) {
-    var seg = gOn() ? '' : '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div>';
-    var hint = gOn() ? '<div class="mk-band-hint"><span class="mk-state" id="mkState">한 손가락으로 표시하고,</span> <span id="mkHint">두 손가락으로 넘기거나 확대합니다</span></div>'
+    var seg = gOn() ? (zlOn() ? '<button class="mk-lock on" id="mkLock" data-a="lock" aria-pressed="true" aria-label="확대 잠금. 지금 잠겨 있습니다. 누르면 확대를 엽니다"><span class="mk-lk-ic" id="mkLockIc">🔒</span><span id="mkLockTx">확대 잠김</span></button>' : '') : '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div>';
+    var hint = gOn() ? '<div class="mk-band-hint"><span class="mk-state" id="mkState">한 손가락으로 표시하고,</span> <span id="mkHint">' + (zlOn() ? '두 손가락으로 위아래로 넘깁니다' : '두 손가락으로 넘기거나 확대합니다') + '</span></div>'
                      : '<div class="mk-band-hint"><span class="mk-state" id="mkState">펜 · 그리는 중</span> — <span id="mkHint">고칠 곳에 동그라미를 치거나 밑줄을 그어 주세요</span></div>';
     return h.replace('@SEG@', seg).replace('@HINT@', hint);
   }
@@ -133,8 +138,9 @@
     var b = e.target.closest ? e.target.closest('[data-a]') : null; if (!b || !R.root.contains(b)) return;
     var a = b.getAttribute('data-a');
     if (a === 'end') close();
-    else if (a === 'zin') setZoom(S.zoom * 1.4);
-    else if (a === 'zout') setZoom(S.zoom / 1.4);
+    else if (a === 'zin') { if (locked()) setLock(false, true); setZoom(S.zoom * 1.4); }          // O-0812 ＋ 는 일부러 누른 것이니 잠겨 있으면 열고 확대
+    else if (a === 'zout') { if (locked()) toast('폭에 맞춘 크기입니다. 확대하려면 자물쇠를 열어 주세요', null, null, 2200); else setZoom(S.zoom / 1.4); }
+    else if (a === 'lock') setLock(!locked());
     else if (a === 'help') help(0);
     else if (a === 'list') { renderAll(); openSheet('mkListSheet'); }
     else if (a === 'send') trySend();
@@ -177,6 +183,9 @@
     var rs = opts.restore || null;            // O-0548: 채팅에 다녀왔을 때 — 같은 쪽 · 같은 확대 · 같은 펜/손 · 적던 메모
     var tk = ++openSeq;                       // 열 때마다 번호표 — 닫힌 뒤(또는 다시 열린 뒤) 늦게 도착한 응답이 낡은 화면에 일하지 않게
     S.pdf = opts.pdfDoc; S.d = opts.doc || {}; S.on = true; S.sel = null; S.memo = null; S.zoom = (rs && rs.zoom) || 1;
+    S.lock = zlOn() ? (rs ? (rs.lock != null ? !!rs.lock : !(rs.zoom > 1.01)) : true) : false;   // O-0812 문서를 열 때마다 잠김으로 시작(기억하지 않음). 채팅에 다녀온 때만 그 상태 그대로
+    if (S.lock) S.zoom = 1;
+    updLockUI();
     $('mkName').textContent = S.d.name || '문서';
     R.root.classList.add('on');
     setTool((rs && rs.tool) || 'pen', true);
@@ -195,8 +204,9 @@
         openMemo(real || rs.memo.item, { text: rs.memo.text, isNew: !real });
       }, 300);
       var seen = lsGet(HELP_KEY, '') === '1';
-      if (!rs && !seen) { lsSet(HELP_KEY, '1'); lsSet(GHINT_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
+      if (!rs && !seen) { lsSet(HELP_KEY, '1'); lsSet(GHINT_KEY, '1'); lsSet(LHINT_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
       // O-0810: 처음 쓰는 분은 사용법이 저절로 열린다. 이미 사용법을 본 분만 방식이 바뀐 것을 한 번 알려 준다(길게 눌러 켠 때는 「켰습니다」 알림과 겹치니 다음 기회에)
+      else if (zlOn() && !rs && seen && lsGet(LHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(LHINT_KEY, '1'); lsSet(GHINT_KEY, '1'); toast('확대는 잠겨 있습니다. 필요하면 위 자물쇠를 열어 주세요', '사용법', function () { help(1); }, 4800); }   // O-0812 처음 한 번만(사용법을 처음 보는 분은 사용법 카드가 알려 준다)
       else if (gOn() && !rs && seen && lsGet(GHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(GHINT_KEY, '1'); toast('이제 한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', '사용법', function () { help(1); }, 4500); }
       if (statusT) clearInterval(statusT);
       statusT = setInterval(refreshStatus, 20000);
@@ -228,7 +238,7 @@
       var it = {}; for (var k in S.memo.item) if (S.memo.item.hasOwnProperty(k)) it[k] = S.memo.item[k];
       m = { item: it, text: $('mkMemoTxt').value, isNew: !S.memo.edit };
     }
-    return { page: P.n, off: (sc.scrollTop - P.el.offsetTop) / (P.scale || 1), left: sc.scrollLeft, zoom: S.zoom || 1, tool: S.tool, memo: m };
+    return { page: P.n, off: (sc.scrollTop - P.el.offsetTop) / (P.scale || 1), left: sc.scrollLeft, zoom: S.zoom || 1, lock: S.lock !== false, tool: S.tool, memo: m };
   }
   function back() {
     if (!R || !S.on) return false;
@@ -301,14 +311,39 @@
     placePop();
   }
   // 크게 · 작게(1~3배). 화면 가운데 보던 자리를 그대로 두고 다시 그린다. 펜 좌표는 PDF 단위라 그대로 맞는다.
-  function setZoom(z, ax, ay) {          // ax·ay: 고정할 화면 점(핀치 가운데 · 두 번 톡 한 곳). 없으면 화면 가운데
+  function setZoom(z, ax, ay, quiet) {   // ax·ay: 고정할 화면 점(핀치 가운데 · 두 번 톡 한 곳). 없으면 화면 가운데. quiet: 「○%로 보고 있습니다」 안내 없이
     z = Math.max(1, Math.min(3, Math.round(z * 100) / 100)); if (Math.abs(z - (S.zoom || 1)) < 0.01 || !S.on) return;
+    if (locked() && z > 1.01) return;                                  // O-0812 잠겨 있으면 어떤 길로도 폭 맞춤보다 커지지 않는다(안전망)
     var sc = R.scroll, rc = sc.getBoundingClientRect();
     var ox = (ax == null ? sc.clientWidth / 2 : ax - rc.left), oy = (ay == null ? sc.clientHeight / 2 : ay - rc.top);
     var ry = (sc.scrollTop + oy) / Math.max(1, sc.scrollHeight), rx = (sc.scrollLeft + ox) / Math.max(1, sc.scrollWidth);
     S.zoom = z; layout();
     sc.scrollTop = ry * sc.scrollHeight - oy; sc.scrollLeft = rx * sc.scrollWidth - ox;
-    toast(z <= 1.01 ? '폭에 맞췄습니다' : Math.round(z * 100) + '%로 보고 있습니다', null, null, 1200);
+    if (!quiet) toast(z <= 1.01 ? '폭에 맞췄습니다' : Math.round(z * 100) + '%로 보고 있습니다', null, null, 1200);
+  }
+  /* ---------------- O-0812 확대 자물쇠 ---------------- */
+  function updLockUI() {
+    var b = $('mkLock'); if (!b) return;
+    var lk = locked();
+    b.classList.toggle('on', lk); b.setAttribute('aria-pressed', lk ? 'true' : 'false');
+    b.setAttribute('aria-label', lk ? '확대 잠금. 지금 잠겨 있습니다. 누르면 확대를 엽니다' : '확대 잠금. 지금 열려 있습니다. 누르면 폭에 맞춰 잠급니다');
+    $('mkLockIc').textContent = lk ? '🔒' : '🔓'; $('mkLockTx').textContent = lk ? '확대 잠김' : '확대 열림';
+    var h = $('mkHint'); if (h) h.textContent = lk ? '두 손가락으로 위아래로 넘깁니다' : '두 손가락으로 넘기거나 확대합니다';
+  }
+  function lockNudge() { var b = $('mkLock'); if (!b || reduce()) return; b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge'); }
+  function setLock(v, quiet) {            // v: true = 잠금(폭에 맞춤으로 되돌림), false = 열기
+    if (!zlOn() || !S.on) return;
+    v = !!v; var was = locked();
+    S.lock = v; updLockUI();
+    var back = v && (S.zoom || 1) > 1.01;
+    if (back) setZoom(1, null, null, true);
+    if (!quiet && was !== v) toast(v ? (back ? '확대를 잠그고 폭에 맞췄습니다' : '확대를 잠갔습니다') : '잠금을 열었습니다. 두 손가락을 벌리면 커집니다', null, null, 2200);
+  }
+  // 잠겨 있는데 두 손가락을 벌리거나 오므린 때: 막았다는 것을 알린다(자물쇠 단추가 살짝 흔들리고, 처음 몇 번만 글로)
+  function gLockNotice() {
+    lockNudge();
+    var n = +lsGet(LNOTE_KEY, '0') || 0; if (n >= 3) return; lsSet(LNOTE_KEY, String(n + 1));
+    toast('확대가 잠겨 있습니다. 확대하려면 위 자물쇠를 열어 주세요', null, null, 2600);
   }
   function getPage(P) { if (P.page) return Promise.resolve(P.page); return S.pdf.getPage(P.n).then(function (pg) { P.page = pg; var vp = pg.getViewport({ scale: 1 }); if (Math.abs(vp.width - P.w) > 0.5 || Math.abs(vp.height - P.h) > 0.5) { P.w = vp.width; P.h = vp.height; P.svg.setAttribute('viewBox', '0 0 ' + P.w + ' ' + P.h); layout(); } return pg; }); }
   function renderPage(P) {
@@ -623,9 +658,11 @@
   function gPanMove(noZoom) {
     var p = G.pan, a = G.f[p.a], b = G.f[p.b]; if (!a || !b) return;
     var sc = p.sc, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), now = performance.now(), k = p.zoomOn ? p.kk : 1;
-    sc.scrollTop -= (my - p.my) / k; sc.scrollLeft -= (mx - p.mx) / k; p.mx = mx; p.my = my;
+    var lk = locked();
+    sc.scrollTop -= (my - p.my) / k; if (!lk) sc.scrollLeft -= (mx - p.mx) / k; p.mx = mx; p.my = my;      // O-0812 잠겨 있으면 위아래로만
     p.s.push({ t: now, x: mx, y: my }); while (p.s.length > 2 && now - p.s[0].t > 120) p.s.shift();
-    if (!noZoom && !p.zoomOn && Math.abs(d / p.d0 - 1) > MK_ZOOM_START) {
+    if (!noZoom && !p.zoomOn && lk && Math.abs(d / p.d0 - 1) > MK_ZOOM_START) { if (!p.lkNote) { p.lkNote = true; gLockNotice(); } }      // O-0812 잠겨 있으면 확대·축소는 시작하지 않는다(한 번 닿는 동안 한 번만 알림)
+    else if (!noZoom && !p.zoomOn && Math.abs(d / p.d0 - 1) > MK_ZOOM_START) {
       p.zoomOn = true; p.d0 = d; p.ox = mx; p.oy = my; var rc = sc.getBoundingClientRect(); sc.style.transformOrigin = (mx - rc.left) + 'px ' + (my - rc.top) + 'px';
     }
     if (p.zoomOn && !noZoom) { var z = Math.max(1, Math.min(3, p.z0 * d / p.d0)); p.kk = z / p.z0; sc.style.transform = 'scale(' + p.kk.toFixed(3) + ')'; }
@@ -645,6 +682,7 @@
   }
   function gInertia(vx, vy) {
     var sc = R && R.scroll; if (!sc || !S.on) return;
+    if (locked()) vx = 0;                                              // O-0812 잠겨 있으면 미끄러짐도 위아래로만
     var sp = Math.hypot(vx, vy); if (sp > MK_INERTIA_MAX) { vx *= MK_INERTIA_MAX / sp; vy *= MK_INERTIA_MAX / sp; }
     if (Math.hypot(vx, vy) < MK_INERTIA_STOP * 2) return;
     var st = { vx: vx, vy: vy, y: sc.scrollTop, x: sc.scrollLeft, ry: sc.scrollTop, rx: sc.scrollLeft, last: performance.now(), raf: 0 };
@@ -1126,14 +1164,14 @@
       '<rect x="20" y="10" width="140" height="150" rx="8" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="34" y="28" width="110" height="7" rx="3"/><rect x="34" y="44" width="90" height="7" rx="3"/><rect x="34" y="60" width="100" height="7" rx="3"/></g>' +
       '<rect x="26" y="126" width="72" height="24" rx="12" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><text x="62" y="142" font-size="11" font-weight="800" text-anchor="middle" fill="var(--ink)">✏️ 고치기</text>' +
       '<circle class="mk-tap" cx="62" cy="138" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/><rect x="176" y="40" width="104" height="70" rx="10" fill="var(--mk-red-bg)" stroke="var(--mk-red)" stroke-width="2"/><text x="228" y="70" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">표시해서</text><text x="228" y="88" font-size="12" font-weight="900" text-anchor="middle" fill="var(--mk-red)">요청하기</text>' },
-    gOn() ? { t: '표시와 넘기기', h: '한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', d: '한 손가락으로 동그라미를 치거나 밑줄을 그으면 표시가 됩니다. 두 손가락을 대고 밀어서 넘기고, 벌리면 커지고 오므리면 작아집니다. 위 ＋ －로도 바꿀 수 있습니다.', svg:
+    gOn() ? { t: '표시와 넘기기', h: zlOn() ? '한 손가락으로 표시하고, 두 손가락으로 넘깁니다. 확대는 자물쇠를 열 때만 됩니다' : '한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', d: zlOn() ? '한 손가락으로 동그라미를 치거나 밑줄을 그으면 표시가 됩니다. 두 손가락을 대고 밀면 위아래로 넘어가고, 확대는 처음에 잠겨 있습니다. 위 띠의 [확대 잠김]을 누르면 열려서 벌리면 커지고 오므리면 작아집니다. 다시 누르면 폭에 맞춰 잠깁니다.' : '한 손가락으로 동그라미를 치거나 밑줄을 그으면 표시가 됩니다. 두 손가락을 대고 밀어서 넘기고, 벌리면 커지고 오므리면 작아집니다. 위 ＋ －로도 바꿀 수 있습니다.', svg:
       '<rect x="10" y="12" width="132" height="148" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="22" y="30" width="108" height="7" rx="3"/><rect x="22" y="48" width="84" height="7" rx="3"/><rect x="22" y="66" width="100" height="7" rx="3"/></g>' +
       '<ellipse class="mk-draw" style="--len:190" cx="62" cy="52" rx="36" ry="16" fill="none" stroke="var(--mk-red)" stroke-width="3" stroke-linecap="round"/><circle class="mk-tap" cx="98" cy="52" r="3" fill="none" stroke="var(--mk-red)" stroke-width="2.5"/>' +
       '<text x="76" y="132" font-size="13" font-weight="900" text-anchor="middle" fill="var(--mk-red)">한 손가락은 표시</text>' +
       '<rect x="158" y="12" width="132" height="148" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/><g fill="var(--line)"><rect x="170" y="30" width="108" height="7" rx="3"/><rect x="170" y="48" width="84" height="7" rx="3"/></g>' +
       '<g class="mk-two"><circle cx="206" cy="86" r="9" fill="var(--brand)" opacity=".85"/><circle cx="242" cy="86" r="9" fill="var(--brand)" opacity=".85"/></g>' +
       '<path d="M224 62 V46 M218 52 L224 44 L230 52 M224 110 V126 M218 120 L224 128 L230 120" fill="none" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '<text x="224" y="150" font-size="13" font-weight="900" text-anchor="middle" fill="var(--brand)">두 손가락은 넘기기</text>' }
+      '<text x="224" y="150" font-size="13" font-weight="900" text-anchor="middle" fill="var(--brand)">두 손가락은 넘기기</text>' + (zlOn() ? '<text x="272" y="34" font-size="17" text-anchor="middle">🔒</text>' : '') }
     : { t: '펜과 손', h: '펜: 한 손가락으로 그립니다 · 손: 넘겨 봅니다', d: '위 띠의 [펜 | 손]으로 바꿉니다. 펜일 때 넘기려면 두 손가락으로 미십시오. 두 손가락을 벌리면 크게, 위 [＋ －]로도 바꿀 수 있습니다.', svg:
       '<rect x="60" y="40" width="180" height="70" rx="16" fill="var(--card)" stroke="var(--mk-red-line)" stroke-width="3"/><rect x="66" y="46" width="82" height="58" rx="12" fill="var(--mk-red)"/><text x="107" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">펜</text><text x="194" y="82" font-size="20" font-weight="900" text-anchor="middle" fill="var(--sub)">손</text>' +
       '<text x="150" y="140" font-size="12" font-weight="800" text-anchor="middle" fill="var(--sub)">지금 상태가 늘 글씨로 보입니다</text>' },
@@ -1276,6 +1314,6 @@
     setLongPress: function (on) { lsSet(LP_KEY, on ? '1' : '0'); },
     _dbg: function () { return S; },   // 점검용(시험에서 내부 상태 확인)
     _gdbg: function () { return { mode: G.mode, all: Object.keys(G.all), ign: Object.keys(G.ign), f: Object.keys(G.f), penId: G.penId, slen: G.slen, vel: G.vel, inertia: !!G.inertia, lastAct: G.lastAct }; },   // 점검용(O-0810 손가락 상태)
-    _state: function () { return { on: S.on, tool: S.tool, items: S.items.length, sent: S.sent.length, sel: S.sel ? S.sel.kind : null }; }   // 점검용
+    _state: function () { return { on: S.on, tool: S.tool, lock: locked(), zoom: S.zoom, items: S.items.length, sent: S.sent.length, sel: S.sel ? S.sel.kind : null }; }   // 점검용
   };
 })(window);

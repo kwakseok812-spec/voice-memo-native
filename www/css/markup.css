@@ -200,6 +200,14 @@
 /* O-0810 한 손가락 표시 · 두 손가락 이동: 수정 요청 화면에서는 늘 브라우저 스크롤·핀치를 끄고 markup.js 가 손가락을 처리(MARKUP_GESTURE='on' 일 때 .gest). 마우스 휠은 그대로 스크롤 */
 .mk-scroll.gest{touch-action:none; overscroll-behavior:contain}
 .mk-scroll.gest .mk-pg svg.mk-ov{pointer-events:auto; cursor:crosshair}
+/* O-0812 확대 자물쇠: 잠김 = 붉은 바탕에 흰 글씨(눈에 확 띔), 열림 = 흰 바탕에 파란 테두리. 위 띠의 [? 사용법] 옆(옛 [펜|손] 자리) */
+.mk-lock{flex:none; height:38px; display:inline-flex; align-items:center; gap:5px; padding:0 12px 0 10px; border-radius:999px; border:1.5px solid var(--brand); background:var(--card); color:var(--brand); font-size:14px; font-weight:900; cursor:pointer; white-space:nowrap; transition:background .15s, color .15s, border-color .15s, transform .12s}
+.mk-lock .mk-lk-ic{font-size:17px; line-height:1; display:inline-block}
+.mk-lock.on{background:var(--mk-red); border-color:var(--mk-red); color:#fff}
+.mk-lock:active{transform:scale(.93)}
+.mk-lock.nudge{animation:mkLockNudge .42s ease-in-out}
+@keyframes mkLockNudge{0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)}}
+@media (max-width:359px){ .mk-lock{padding:0 9px 0 8px; gap:3px; font-size:13px} .mk-help{padding:0 9px; font-size:13px} }
 .mk-two{animation:mkTwo 2.2s ease-in-out infinite}
 @keyframes mkTwo{0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)}}
 
