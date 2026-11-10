@@ -3825,6 +3825,7 @@
   APP_VERSION = 'v9.91';        // v9.91(O-0810): 수정 요청 화면(markup.js)에서 한 손가락은 표시, 두 손가락은 넘기기와 확대·축소로 바꿈. 위 띠의 [펜|손] 단추를 없애고(예전 방식은 스위치 MARKUP_GESTURE 'off'), 두 손가락을 떼면 문서가 조금 미끄러지는 관성 이동을 더함(스위치 MK_INERTIA 'off'). 일반 뷰어·전체화면·표 보기 손가락 동작과 표시 자료·서버·자바·권한은 그대로. 사용법 7장 문구 정리 · versionCode 135
   APP_VERSION = 'v9.92';        // v9.92(O-0812): 수정 요청 화면(markup.js)에 확대 자물쇠를 더함. 위 띠 [🔒 확대 잠김]이 기본(문서를 열 때마다 잠김 · 폭에 맞춘 크기로 고정 · 두 손가락은 위아래 넘기기만, 벌리기·오므리기는 무시하고 자물쇠가 살짝 흔들림). [🔓 확대 열림]으로 열면 v9.91 처럼 확대·이동 모두 됨, 다시 누르면 폭에 맞춰 잠김. 한 손가락 표시·일반 뷰어·전체화면·표 보기는 그대로. 스위치 MK_ZOOM_LOCK('on'|'off', markup.js 맨 위) — 'off' 면 v9.91 과 같다. 서버·자바·권한 변경 없음 · versionCode 136
   APP_VERSION = 'v9.93';        // v9.93(O-0816): 사진첩 ♥ 앨범에 영상도 같이 — 격자 칸 왼쪽 위 「▶ 길이」 알약, 큰 보기에서 겉그림 + 가운데 ▶ 를 누르면 그때 처음 영상을 받아 재생(자동 재생·자동 내려받기 없음, 소리 켜짐, 재생 중 확대·밀기 끔, 막대로 건너뛰기, 끝나면 겉그림으로 돌아와 다시 보기). 영상은 줄인 사본이며 비공개 보관함 album-video 에서 서버 함수 album-video 가 연동 암호를 확인한 뒤 3시간 유효한 주소를 준다(사진 함수는 그대로). 주소가 묵었거나 도중 오류가 나면 새 주소로 보던 자리부터 이어 재생, 오류는 인터넷·주소 만료·형식 세 가지로 구분. 내려받기는 줄인 사본(mp4)을 사진과 같은 길로 저장하고 원본은 공유함에 있다고 알림. 고치기에서 영상은 분류 ♥ 고정, 휴지통에 「▶ 영상」 표시와 영구 삭제 문구(영상 파일도 지워짐)·순서(영상→겉그림→표). 앱 줄 숫자는 「사진 N장 · 영상 M개」. 새 권한·플러그인·매니페스트 없음. 스위치 ALBUM_VIDEO('on'|'off', app.js 한 곳) — 'off' 면 영상 줄이 어디에도 안 보여 v9.92 와 같다 · versionCode 137 (배포 전, push 안 함)
+  APP_VERSION = 'v9.94';        // v9.94(O-0821): 홈 도구 칸 「OTT」와 「S-Office」의 자리를 서로 바꿈 — OTT 는 둘째 칸(회의록 옆), S-Office 는 OTT 가 있던 열두 번째 칸(규정 도우미 옆). 이름·그림·누르면 동작·칸 id 는 그대로, 순서만. 스위치 HOME_OTT_FIRST('on'|'off', app.js 한 곳) — 'off' 면 v9.93 순서 그대로 · versionCode 138
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10208,6 +10209,7 @@
    *     · 'brave' = v9.86 과 똑같은 「유튜브 · Brave로 열기」 줄(미니뷰에 문제가 있을 때 새 번호 하나로 예전 줄로 돌아가는 길). 아래 openBrave 코드는 지우지 않고 그대로 두 줄이 함께 쓴다. */
   var YT_MODE = 'tube';
   var VIDEO_TAB = 'on';
+  var HOME_OTT_FIRST = 'on';   // v9.94(O-0821): 'on' = 홈에서 OTT 칸과 S-Office 칸의 자리를 맞바꾼다 · 'off' = v9.93 순서
   var BRAVE_URL = 'https://www.youtube.com';
   var BRAVE_PKG = 'com.brave.browser';
   var braveLastTap = 0;
@@ -10242,6 +10244,16 @@
   if (VIDEO_TAB !== 'off' && $('btnVideoApps')) {
     var videoGrid = $('homeTools'), videoSub = videoGrid && videoGrid.querySelector('.tools-sub');
     if (videoGrid && videoSub) videoGrid.insertBefore($('btnVideoApps'), videoSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다
+    /* v9.94(O-0821): 「OTT」 ↔ 「S-Office」 자리 맞바꿈(대표님이 OTT 를 더 자주 쓰셔서). 두 칸 모두 칸 하나 크기라 이 한 번의 맞교환으로 끝난다 — 이름·그림·누르기·id 는 건드리지 않고 순서만.
+     * 스위치 HOME_OTT_FIRST: 'on' = OTT 가 S-Office 의 옛 자리(회의록 다음), S-Office 가 OTT 의 옛 자리 · 'off' = 이 블록이 아무것도 안 해 v9.93 순서 그대로(되돌리는 길 — 새 번호로 재배포). */
+    if (HOME_OTT_FIRST !== 'off') {
+      var swDocs = $('btnDocs'), swOtt = $('btnVideoApps');
+      if (swDocs && swOtt && swDocs.parentNode === videoGrid && swOtt.parentNode === videoGrid) {
+        var swNext = swDocs.nextSibling;
+        if (swNext === swOtt) videoGrid.insertBefore(swOtt, swDocs);
+        else { videoGrid.insertBefore(swDocs, swOtt); videoGrid.insertBefore(swOtt, swNext); }
+      }
+    }
     if (BRAVE_DIRECT) {   // v9.79 와 똑같은 「유튜브」 칸(되돌리는 길). phone-apps.js 가 없을 때도 이 모양으로 안전하게
       $('btnVideoApps').setAttribute('aria-label', '유튜브, Brave로 열기');
       $('btnVideoApps').querySelector('use').setAttribute('href', '#i-shield');
