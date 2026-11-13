@@ -382,7 +382,7 @@
     var yes = pick.filter(function (x) { return x.umbrella === 'yes'; })[0], maybe = pick.filter(function (x) { return x.umbrella === 'maybe'; })[0];
     var snow = pick.some(function (x) { return x.snow; });
     var cls = 'ok', ic = '☀️', tip = '우산 필요 없습니다';
-    if (yes) { cls = 'rain'; ic = snow ? '❄️' : '☂️'; tip = (snow ? '눈 소식 — ' : '') + '우산 챙기십시오' + (pick.length > 1 ? ' (' + yes.label + ')' : ''); }
+    if (yes) { cls = 'rain'; ic = snow ? '❄️' : '☂️'; tip = (snow ? '눈 소식 — ' : '') + '우산이 필요합니다' + (pick.length > 1 ? ' (' + yes.label + ')' : ''); }
     else if (maybe) { cls = 'maybe'; ic = '🌂'; tip = '작은 우산 있으면 좋습니다' + (pick.length > 1 ? ' (' + maybe.label + ')' : ''); }
     var n = wxNow(w), sep = '<span class="wx-sep"> · </span>';
     if (!n) {                                                      // 옛 요약(시간값 없음) → v8.4 모양 그대로
@@ -419,7 +419,7 @@
   function wxSheetBody() {
     var dg = st.digest && st.digest.date === todayKey() ? st.digest : null, w = wxData(dg);
     if (!w) return '<div class="wx-empty">날씨를 아직 받지 못했습니다. 잠시 뒤 다시 열어 주십시오.</div>';
-    var k = kst(), n = wxNow(w), um = { yes: '☂️ 우산 챙기십시오', maybe: '🌂 작은 우산 있으면 좋습니다', no: '우산 필요 없습니다' };
+    var k = kst(), n = wxNow(w), um = { yes: '☂️ 우산이 필요합니다', maybe: '🌂 작은 우산 있으면 좋습니다', no: '우산 필요 없습니다' };
     var hl = (w.today_hourly || []).filter(function (x) { return x && x.hour != null && x.temp != null; }), h = '';
     if (n) {
       var cd = wxCond(n.code, n.night), sub = [];
