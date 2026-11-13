@@ -2901,7 +2901,7 @@
     sh.className = 'sheet shin-sheet atm-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="보내기 고르기"><div class="sheet-head">무엇을 보낼까요?</div>' +
       '<button type="button" class="sheet-btn" data-atm="file"><svg class="atm-ic"><use href="#i-image"/></svg><span><b>파일·사진을 케이에게</b><small>채팅에 붙여 케이에게 보여 주기</small></span></button>' +
-      '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>PC가 명함 대장에 넣거나 사진을 정리(명함 스위치로 고름)</small></span></button>' +
+      '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>명함 사진은 그대로 등록됩니다. 명함이 아니면 다음 화면에서 「이 사진은 명함입니다」를 꺼 주십시오.</small></span></button>' +
       (SCAN_HUB === 'on' ? '<button type="button" class="sheet-btn" data-atm="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증 등록</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
       (docScanOn() && DOC_SCAN_CHAT === 'on' ? '<button type="button" class="sheet-btn" data-atm="docscan"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>📄 문서 스캔 (여러 장 → PDF)</b><small>종이 문서를 찍어 PDF 한 파일로 — 공유함에 넣기</small></span></button>' : '') +   // O-0576
