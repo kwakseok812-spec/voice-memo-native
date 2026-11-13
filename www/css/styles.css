@@ -1495,7 +1495,7 @@ html[data-style="light"] .wx-sheet .wx-h.cur{background:rgba(37,99,235,.10)}
 .tool .ic svg{width:22px;height:22px}
 .tool .ic.blue svg{color:var(--p1)} .tool .ic.cyan svg{color:var(--cyan)}
 .tool b{display:block;font-size:14px;font-weight:800;line-height:1.25;word-break:keep-all;overflow-wrap:break-word}
-.tool small{display:block;font-size:11px;font-weight:500;line-height:1.3;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
+.tool small{display:block;font-size:11.5px;font-weight:500;line-height:1.3;color:var(--dim);word-break:keep-all;overflow-wrap:break-word}
 .tool.wide{grid-column:1 / -1;flex-direction:row;align-items:center;text-align:left;gap:12px;min-height:64px;padding:11px 14px}
 .tool.wide .tw{min-width:0;flex:1}
 .tool.wide b{font-size:15px}
@@ -1504,7 +1504,7 @@ html[data-fs] .tool.wide small{font-size:calc(12.5px * var(--fsx))}
 html[data-fs] .tool b{font-size:calc(14px * var(--fsx))}
 html[data-fs] .tool small{font-size:calc(11px * var(--fsx))}
 html[data-fs] .tool.wide b{font-size:calc(15px * var(--fsx))}
-@media (max-width:360px){ .tools{gap:6px} .tool{padding:11px 2px 9px} .tool b{font-size:13px} .tool small{font-size:10.5px} .tool .ic{width:38px;height:38px} .tool.wide{padding:10px 12px;gap:10px} }
+@media (max-width:360px){ .tools{gap:6px} .tool{padding:11px 2px 9px} .tool b{font-size:13px} .tool small{font-size:11.5px} .tool .ic{width:38px;height:38px} .tool.wide{padding:10px 12px;gap:10px} }
 #homeProgress .sec-title{margin-top:24px}
 /* (O-0176 추가) 「다른 앱으로 열기」 소제목 · 오늘 한눈에·진행 중인 메모 접기 */
 .tools-sub{grid-column:1 / -1;margin:8px 2px -2px;font-size:13px;font-weight:700;color:var(--dim)}
