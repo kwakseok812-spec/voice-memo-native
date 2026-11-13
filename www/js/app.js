@@ -8972,6 +8972,7 @@
   // opts(v9.8, 선택): { cancelLabel: 맨 아래 닫기 단추의 글(기본 '취소'), positive: 확인 단추를 빨간 휴지통 대신 평소 모양으로, icon: 그때의 그림 }
   function openSheet(title, msg, confirmLabel, action, copyText, extra, opts) {
     if (!sheetEl) return;
+    if (sheetHintEl) sheetHintEl.classList.remove('kall');   // v9.97: 속도 시트만 낱말 단위 줄바꿈
     if (sheetConfirm) sheetConfirm.style.display = '';   // v9.97: 속도 시트가 숨긴 확인 단추를 다음 시트에서 되살림
     if (sheetReplyBtn) sheetReplyBtn.style.display = 'none';   // (O-0545) 답장은 말풍선 ⋯ 시트에서만(openMsgActionSheet 가 다시 켠다)
     sheetReplyUid = null;
@@ -10886,6 +10887,7 @@
     }).join('\n');
     openSheet('이 폰의 시작 속도', msg, '확인', null, all.length ? cp : null, null, { positive: true, cancelLabel: '닫기' });
     if (sheetMsg) sheetMsg.classList.add('pck');
+    if (sheetHintEl) sheetHintEl.classList.add('kall');
     if (sheetConfirm) sheetConfirm.style.display = 'none';   // 같은 일을 하는 [확인]·[닫기] 중 [확인] 없앰 → [복사]·[닫기]
   }
   try {
