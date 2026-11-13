@@ -74,6 +74,10 @@ section{animation:fade .28s ease}
 .brand{white-space:nowrap;min-width:0}
 .brand .ver-tag{margin-left:-2px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.2;letter-spacing:0;color:var(--muted);background:var(--ic-bg);border:1px solid var(--glass-b);font-variant-numeric:tabular-nums;flex:none}
 .brand .ver-tag:empty{display:none}
+.brand .ver-tag.tap{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s ease,background .12s ease}
+.brand .ver-tag.tap::after{content:'';position:absolute;inset:-10px -8px}   /* v9.97: 누를 자리를 알약보다 넓게 */
+.brand .ver-tag.tap:active{transform:scale(.94)}
+@media (prefers-reduced-motion:reduce){.brand .ver-tag.tap{transition:none}.brand .ver-tag.tap:active{transform:none}}
 .top-right{display:flex;align-items:center;gap:8px}
 .pill{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-b);font-size:13px;font-weight:700;color:var(--muted);backdrop-filter:blur(var(--blur-s));-webkit-backdrop-filter:blur(var(--blur-s))}
 .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);flex:none}

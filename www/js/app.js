@@ -3855,6 +3855,7 @@
   APP_VERSION = 'v9.94';        // v9.94(O-0821): 홈 도구 칸 「OTT」와 「S-Office」의 자리를 서로 바꿈 — OTT 는 둘째 칸(회의록 옆), S-Office 는 OTT 가 있던 열두 번째 칸(규정 도우미 옆). 이름·그림·누르면 동작·칸 id 는 그대로, 순서만. 스위치 HOME_OTT_FIRST('on'|'off', app.js 한 곳) — 'off' 면 v9.93 순서 그대로 · versionCode 138
   APP_VERSION = 'v9.95';        // v9.95(O-0823): 문서 뷰어에서 뒤로 가기(폰 뒤로가기·머리줄 [←])·변환 중 「취소하고 나가기」·오류 「확인」을 누르면 「문서 고르기」가 아니라 문서를 눌렀던 화면으로 — 채팅 [문서 보기]·정리본 [문서 보기]/[✏️ 고치기]·폰 [⬇ 다운로드] 뒤 자동 열기는 채팅의 그 자리(보던 말풍선의 화면 위치)로, 공유함 [문서 보기]는 공유함으로. 뷰어 [💬]를 오가도 이어지고, 마지막 탭 ✕ 닫기·회의록 목록/실적/문서 화면에서 연 문서는 예전과 같다. 새 단추·화면 없음. 스위치 DOC_BACK_TO_ORIGIN('on'|'off', app.js) — 'off' 면 v9.94 와 같다 · versionCode 139
   APP_VERSION = 'v9.96';        // v9.96(O-0854): 앱 전반 검토에서 나온 작은 고침 묶음 — 건강 「적어 두었습니다」 잘못 표시·혈당 방식 칩 키움 · 긴 안내 글은 더 오래 · 명함 검색이 끊기면 안내 · 회의록 제목 검색 · 채팅 ＋ 명함 문구 · 글꼴이 첫 화면을 막지 않음 · 폴드 펼침 홈 6칸 · 홈 칸 글씨 11.5px · PC 상태에서 그 자리 연동 암호 창 · 암호 창 설명 문구. 새 단추 없음(검색 칸 1개 제외). 서버·PC 쪽 변경 없음 · versionCode 140
+  APP_VERSION = 'v9.97';        // v9.97(O-0854 2차): 시작 속도 재기(홈 위 버전 알약 → 「이 폰의 시작 속도」) · 채팅 「오퍼스 5.5」 칩 이름 → 「중요 작업」 · 아이콘 길게 누르기 「케이에게 사진」 → 「건강 기록」 · S-Office 첫 화면 열기 방식 한 줄 · 말투 「~습니다」 통일 · versionCode 141
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10804,6 +10805,96 @@
     else { _vt.textContent = APP_VERSION; if (homeFooter && homeFooter.parentNode) homeFooter.parentNode.removeChild(homeFooter); }
   } catch (e) {}
   setTimeout(function () { try { if (getSyncPass()) refreshOrders(true); } catch (e) {} }, 1500);   // v5.8: 시작 시 홈 「작업 현황」 숫자
+
+  /* v9.97(O-0854 8번) 시작 속도 재기 — 앱이 켜질 때 스스로 시간을 재어 이 폰 안에만(localStorage smart_boot_log) 최근 10번을 남긴다.
+   *   홈 위쪽 버전 알약을 누르면 「이 폰의 시작 속도」 시트(최근 5번 + 평균 + [복사]). 서버·PC 로는 아무것도 보내지 않는다(새 길 없음 —
+   *   채팅으로 올리면 케이 답이 달리므로 이번 판은 [복사]만 둔다).
+   *   읽는 것은 브라우저가 이미 기록해 둔 값뿐이라 앱 동작에 영향이 없고, 못 잰 값은 0 이 아니라 「못 잼」으로 보인다(수칙 7).
+   *   BOOT_PROBE: 'on' = 기록 + 알약 누름 · 'off' = 기록 중단 · 알약 누름 반응 없음 (예전 모양 그대로) */
+  var BOOT_PROBE = 'on';
+  var BOOT_LOG_KEY = 'smart_boot_log', BOOT_LOG_MAX = 10;
+  var bootHomeMs = null;
+  try { if (window.performance && performance.now) bootHomeMs = Math.round(performance.now()); } catch (e) {}   // 홈이 그려진 시점(앱 시작부터 몇 ms)
+  function bootLogRead() { try { var a = JSON.parse(localStorage.getItem(BOOT_LOG_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function bootLogAdd(rec) {
+    try { var a = bootLogRead(); a.push(rec); if (a.length > BOOT_LOG_MAX) a = a.slice(a.length - BOOT_LOG_MAX); localStorage.setItem(BOOT_LOG_KEY, JSON.stringify(a)); } catch (e) {}
+  }
+  function bootNet() {
+    try { var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (!c) return ''; var t = c.effectiveType || ''; return t === '4g' ? '빠른 연결' : t === '3g' ? '느린 연결' : (t === '2g' || t === 'slow-2g') ? '아주 느린 연결' : ''; } catch (e) { return ''; }
+  }
+  function bootMeasure(kind) {   // 켠 뒤 3초쯤 지나 한 번 잰다(그때쯤이면 첫 글자·읽기 끝 기록이 다 있다)
+    try {
+      var rec = { t: Date.now(), v: APP_VERSION, k: kind, net: bootNet() };
+      var paint = performance.getEntriesByName('first-contentful-paint')[0];
+      var nav = (performance.getEntriesByType('navigation') || [])[0];
+      rec.fcp = paint ? Math.round(paint.startTime) : null;
+      rec.dcl = nav && nav.domContentLoadedEventEnd > 0 ? Math.round(nav.domContentLoadedEventEnd) : null;
+      rec.load = nav && nav.loadEventEnd > 0 ? Math.round(nav.loadEventEnd) : null;
+      rec.home = bootHomeMs;
+      var res = performance.getEntriesByType('resource') || [], fontMs = null, jsN = 0, jsB = 0;
+      for (var i = 0; i < res.length; i++) {
+        var r = res[i], nm = String(r.name || '');
+        if (/pretendard/i.test(nm) && /\.css(\?|$)/i.test(nm)) fontMs = Math.round(r.responseEnd - r.startTime);
+        if (r.initiatorType === 'script' || /\.js(\?|$)/i.test(nm)) { jsN++; jsB += (r.transferSize || r.encodedBodySize || r.decodedBodySize || 0); }
+      }
+      rec.font = fontMs; rec.jsN = jsN; rec.jsKb = Math.round(jsB / 1024);
+      bootLogAdd(rec);
+    } catch (e) {}
+  }
+  function bootMeasureBack() {   // 앱으로 돌아온 직후 3초 동안 나간 요청 수(브라우저의 자원 기록 개수 차이 — 따로 가로채지 않음)
+    try {
+      var n0 = performance.getEntriesByType('resource').length, t0 = Date.now();
+      setTimeout(function () {
+        try {
+          var n1 = performance.getEntriesByType('resource').length;
+          bootLogAdd({ t: t0, v: APP_VERSION, k: 'back', req: (n1 >= 240 ? null : Math.max(0, n1 - n0)), net: bootNet() });   // 기록 칸이 꽉 차면(250) 셀 수 없으므로 못 잼
+        } catch (e) {}
+      }, 3000);
+    } catch (e) {}
+  }
+  if (BOOT_PROBE === 'on') {
+    try {
+      setTimeout(function () { bootMeasure('start'); }, 3000);
+      var _bootHiddenAt = 0;
+      document.addEventListener('visibilitychange', function () {
+        try {
+          if (document.hidden) { _bootHiddenAt = Date.now(); return; }
+          if (_bootHiddenAt && Date.now() - _bootHiddenAt >= 20000) bootMeasureBack();   // 20초 넘게 뒤에 있다 돌아온 때만
+          _bootHiddenAt = 0;
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+  function bootSec(ms) { return (ms == null || isNaN(ms)) ? '못 잼' : (Math.round(ms / 100) / 10) + '초'; }
+  function bootWhen(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function bootLine(r) {
+    if (r.k === 'back') return bootWhen(r.t) + ' · 돌아옴 · 돌아온 뒤 3초 동안 요청 ' + (r.req == null ? '못 잼' : r.req + '건');
+    return bootWhen(r.t) + ' · 처음 켬 · 첫 글자 ' + bootSec(r.fcp) + ' · 홈 완성 ' + bootSec(r.home) + ' · 글꼴 ' + bootSec(r.font);
+  }
+  function openBootSheet() {
+    var all = bootLogRead(), starts = all.filter(function (r) { return r.k !== 'back'; });
+    var msg = '켜진 뒤 첫 글자가 나올 때까지, 홈이 다 나타날 때까지 몇 초 걸렸는지 이 폰이 스스로 재어 둔 기록입니다.\n\n';
+    if (!all.length) msg += '아직 기록이 없습니다. 앱을 껐다가 다시 켜서 몇 초 지나면 쌓입니다.';
+    else {
+      msg += all.slice(-5).reverse().map(bootLine).join('\n');
+      var avg = function (key) { var a = starts.map(function (r) { return r[key]; }).filter(function (v) { return v != null && !isNaN(v); }); return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : null; };
+      msg += '\n\n평균 (처음 켠 ' + starts.length + '번) · 첫 글자 ' + bootSec(avg('fcp')) + ' · 홈 완성 ' + bootSec(avg('home'));
+    }
+    var cp = '[시작 속도 기록] ' + APP_VERSION + '\n' + all.map(function (r) {
+      return r.k === 'back' ? bootLine(r) : bootLine(r) + ' · 문서 읽기 ' + bootSec(r.dcl) + ' · 전체 읽기 ' + bootSec(r.load) + ' · 프로그램 파일 ' + (r.jsN || 0) + '개 ' + (r.jsKb || 0) + 'KB' + (r.net ? ' · ' + r.net : '');
+    }).join('\n');
+    openSheet('이 폰의 시작 속도', msg, '확인', null, all.length ? cp : null, null, { positive: true, cancelLabel: '닫기' });
+    if (sheetMsg) sheetMsg.classList.add('pck');
+  }
+  try {
+    var _vt2 = $('appVerTop');
+    if (_vt2 && BOOT_PROBE === 'on') {
+      _vt2.classList.add('tap'); _vt2.setAttribute('role', 'button'); _vt2.setAttribute('tabindex', '0');
+      _vt2.setAttribute('title', APP_VERSION + ' · 누르면 이 폰의 시작 속도');
+      _vt2.addEventListener('click', function (ev) { try { ev.stopPropagation(); openBootSheet(); } catch (e) {} });
+      _vt2.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); try { openBootSheet(); } catch (e) {} } });
+    }
+  } catch (e) {}
 
   /* (O-0129) 홈 「오늘 한눈에」 카드(today-card.js)가 쓰는 창구 — 화면 이동·시트·초안만 넘긴다(데이터 쓰기 없음). */
   window.SmartHome = {
