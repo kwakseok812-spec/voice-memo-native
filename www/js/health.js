@@ -178,7 +178,7 @@
     return i;
   }
   function foldMode() { return HEALTH_FOLD === 'on' && mode === 'today'; }
-  // 접어 둘 끼니인가(안 적었고, 지금 시간대가 아니고, 대표님이 펼치지 않았음). 운동은 선택 칸이라 안 적었으면 늘 한 줄.
+  // 접어 둘 끼니인가(안 적었고, 지금 시간대가 아니고, 사용자가 펼치지 않았음). 운동은 선택 칸이라 안 적었으면 늘 한 줄.
   function mealFolded(k) {
     if (!foldMode() || !rec || isSet(rec[k]) || openMeals[k]) return false;
     if (k === 'exercise') return true;
@@ -846,7 +846,7 @@
     var presetSet = {}; presets.forEach(function (f) { presetSet[f] = 1; });
     var custom = sel.filter(function (t) { return !presetSet[t]; }).join(', ');
     var yv2 = ydayFood(k);
-    var canClose = isSet(rec[k]) || (foldMode() && (k === 'exercise' || SLOT_OF[k] !== slotNow()));     // v9.98: 대표님이 펼친 접힘 끼니는 다시 접을 수 있다
+    var canClose = isSet(rec[k]) || (foldMode() && (k === 'exercise' || SLOT_OF[k] !== slotNow()));     // v9.98: 사용자가 펼친 접힘 끼니는 다시 접을 수 있다
     return '<div class="hitem hmeal' + animCls(k) + '" data-k="' + k + '">' +
       '<div class="hitem-top"><span class="hlab">' + lab + '</span>' +
       '<span class="hitem-r">' + (canClose ? '<button type="button" class="hmeal-close">접기</button>' : '') + chk(k) + '</span></div>' +
