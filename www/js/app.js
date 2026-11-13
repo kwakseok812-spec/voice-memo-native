@@ -3961,9 +3961,9 @@
   function setOpusNext(on) {
     opusNext = !!on;
     if (chatOpusToggle) chatOpusToggle.setAttribute('aria-pressed', opusNext ? 'true' : 'false');
-    if (chatOpusLabel) chatOpusLabel.textContent = opusNext ? '오퍼스 5.5 켜짐' : '오퍼스 5.5';
+    if (chatOpusLabel) chatOpusLabel.textContent = opusNext ? '중요 작업 켜짐' : '중요 작업';   // v9.97(O-0854 7번): 칩 이름에서 모델 숫자를 뺌(값 'opus' 는 그대로)
     if (chatOpusHint) {
-      chatOpusHint.textContent = opusNext ? '다음에 보내는 1건을 오퍼스 5.5로 처리합니다' : '중요 작업일 때만 켜고 보내세요';
+      chatOpusHint.textContent = opusNext ? '다음에 보내는 1건을 중요 작업으로 처리합니다' : '중요한 일일 때만 켜고 보내십시오';
       chatOpusHint.className = 'opushint' + (opusNext ? ' on' : '');
     }
   }
@@ -5074,7 +5074,7 @@
       var shownTx = m.text ? scanBubbleText(m) : '';
       var inner = m.text ? (q ? chatTextHL(shownTx, q) : chatText(shownTx))
         : (m.vin ? '<span class="voicemark"><svg><use href="#i-mic"/></svg>음성 메시지</span>' : '');
-      if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">오퍼스 5.5</span><br>' + inner;   // v5.8
+      if (m.role === 'me' && m.opus && inner) inner = '<span class="opustag">중요 작업</span><br>' + inner;   // v5.8
       // O-0111: 긴 글은 접어 보이게 — 본문 글만 .bfold 로 감싼다(첨부·[듣기]는 접지 않고 항상 보임).
       //   전문은 DOM 에 그대로 있고 높이만 가린다. 실제 접기 판정은 그린 뒤 applyChatFolds()가 높이로 한다.
       if (m.text && !q && chatFoldMaybe(m.text)) inner = '<div class="bfold" data-fuid="' + msgUid(m) + '">' + inner + '</div>';
@@ -6813,9 +6813,9 @@
   function ordStatusHtml(st) { return '<span class="ordst ' + (ORD_ST_CLASS[st] || '') + '">' + esc(st || '?') + '</span>'; }
   function ordModelHtml(model, wantOpus) {
     var lb = modelLabel(model);
-    if (!lb && wantOpus) lb = '오퍼스 5.5 요청';
+    if (!lb && wantOpus) lb = '중요 작업 요청';
     if (!lb) return '';
-    return '<span class="ordmodel' + (/오퍼스/.test(lb) ? ' opus' : '') + '">' + esc(lb) + '</span>';
+    return '<span class="ordmodel' + (/오퍼스|중요 작업/.test(lb) ? ' opus' : '') + '">' + esc(lb) + '</span>';
   }
   /* v5.8 검수 표시: 진행 활동 · 완료 근거 · 감독관 재촉 · 소장 검토 → 카드만 보고
    *   「하고 있다(진행 중 N분째·최근 활동)」 / 「진짜 끝냈다(✅근거)」 / 「말로만 끝냈다(⚠️근거 없음·활동 없음)」가 구분되게. */
@@ -8778,7 +8778,7 @@
   // v5.8: 「오퍼스 5.5」 1회 지정 칩
   if (chatOpusToggle) chatOpusToggle.addEventListener('click', function () {
     setOpusNext(!opusNext);
-    if (opusNext) toast('다음에 보내는 1건을 오퍼스 5.5로 처리합니다(보내면 자동으로 꺼집니다).');
+    if (opusNext) toast('다음에 보내는 1건을 중요 작업으로 처리합니다(보내면 자동으로 꺼집니다).');
   });
   // v5.8: 작업 현황 열기(채팅 헤더 · 홈 카드)
   if ($('chatOrdersBtn')) $('chatOrdersBtn').addEventListener('click', function () { openOrders(true); });

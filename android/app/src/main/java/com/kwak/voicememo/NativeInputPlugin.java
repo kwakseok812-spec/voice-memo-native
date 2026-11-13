@@ -380,13 +380,13 @@ public class NativeInputPlugin extends Plugin {
         if (opusOn) {
             d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{ opusC1, opusC2 });
             opusChip.setTextColor(Color.WHITE);
-            opusChip.setText("✦ 오퍼스 5.5 켜짐 · 이번 1건");
+            opusChip.setText("✦ 중요 작업 켜짐 · 이번 1건");
         } else {
             d = new GradientDrawable();
             d.setColor(opusOffBg);
             d.setStroke(dp(1.5f), opusOffBorder);
             opusChip.setTextColor(opusOffFg);
-            opusChip.setText("✦ 오퍼스 5.5");
+            opusChip.setText("✦ 중요 작업");
         }
         d.setCornerRadius(dp(999));
         opusChip.setBackground(d);
