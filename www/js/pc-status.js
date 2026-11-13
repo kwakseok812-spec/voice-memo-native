@@ -574,7 +574,7 @@
     var say;
     if (notready) say = '서버에 PC 상태 기능이 아직 켜지지 않았습니다. 준비가 끝나면 이 화면에서 바로 보입니다.';
     else if (badpass) say = '연동 암호가 맞지 않아 PC 상태를 읽지 못했습니다.';
-    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다.' + (host.askPass ? ' 아래 [연동 암호 넣기]를 눌러 주십시오.' : ' 케이 채팅 화면에서 먼저 연동해 주십시오.');   // v9.96(O-0854 B-5): 다른 화면으로 보내지 않고 이 자리에서 암호 창
+    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다.' + (host.askPass ? ' 위쪽 [연동 암호 넣기]를 눌러 주십시오.' : ' 케이 채팅 화면에서 먼저 연동해 주십시오.');   // v9.96(O-0854 B-5): 다른 화면으로 보내지 않고 이 자리에서 암호 창
     else say = sayLine(data, j);
     setText('pcSay', say);
     var face = $('pcFace');
