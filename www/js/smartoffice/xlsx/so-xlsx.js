@@ -32,7 +32,7 @@
     return { wb: XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true, cellNF: true }) };
   }
   function lossReason(ext) {
-    if (ext === 'xls') return '옛 엑셀 파일(xls)은 보기만 할 수 있어요. 고치면 차트·그림이 사라질 수 있어서 막아 뒀어요.';
+    if (ext === 'xls') return '옛 엑셀 파일(xls)은 보기만 할 수 있습니다. 고치면 차트·그림이 사라질 수 있어서 막아 뒀습니다.';
     return '';
   }
 
@@ -338,19 +338,19 @@
     var XLSX = global.XLSX, t = txt.trim();
     if (t === '') return { empty: true };
     if (t.charAt(0) === '=') {
-      if (!S || S.mode !== 'patch') return { err: '이 파일 형식에서는 수식 입력을 지원하지 않아요.' };
+      if (!S || S.mode !== 'patch') return { err: '이 파일 형식에서는 수식 입력을 지원하지 않습니다.' };
       var fx = t.slice(1).trim(), q = 0, dp = 0, i2;
       for (i2 = 0; i2 < fx.length; i2++) { var ch = fx.charAt(i2); if (ch === '"') q ^= 1; else if (!q) { if (ch === '(') dp++; else if (ch === ')') dp--; if (dp < 0) break; } }
-      if (!fx || q || dp !== 0) return { err: '수식의 괄호나 따옴표가 맞지 않아요.' };
+      if (!fx || q || dp !== 0) return { err: '수식의 괄호나 따옴표가 맞지 않습니다.' };
       var outside = fx.replace(/"[^"]*"/g, '""');
-      if (/[;；，（）]/.test(outside) || /[+\-*\/^&,=<>]$/.test(outside) || /,\s*\)|\(\s*,/.test(outside)) return { err: '수식 모양이 이상해요. 쉼표(,)로 구분하고 영어 함수 이름을 써 주세요. 예: =SUM(B2:B5)' };
+      if (/[;；，（）]/.test(outside) || /[+\-*\/^&,=<>]$/.test(outside) || /,\s*\)|\(\s*,/.test(outside)) return { err: '수식 모양이 이상합니다. 쉼표(,)로 구분하고 영어 함수 이름을 써 주십시오. 예: =SUM(B2:B5)' };
       var fnr = /([^\s(+\-*\/^&,=<>:!]+)\(/g, fm2;
-      while ((fm2 = fnr.exec(outside))) if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(fm2[1]) && !/^'.*'$/.test(fm2[1])) return { err: '함수 이름은 영어로 써 주세요. (예: SUM, AVERAGE, IF)' };
+      while ((fm2 = fnr.exec(outside))) if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(fm2[1]) && !/^'.*'$/.test(fm2[1])) return { err: '함수 이름은 영어로 써 주십시오. (예: SUM, AVERAGE, IF)' };
       return { formula: fx };
     }
     if (ext !== 'csv' && old && old.t === 'n' && old.z && XLSX.SSF.is_date(old.z)) {
       var ds = parseDate(t);
-      if (ds == null) return { err: '날짜 칸이에요. 「2026-10-09」, 「2026/10/09」, 「10/09/26」(월/일/연), 「2026-10-09 14:30」처럼 적어 주세요.' };
+      if (ds == null) return { err: '날짜 칸입니다. 「2026-10-09」, 「2026/10/09」, 「10/09/26」(월/일/연), 「2026-10-09 14:30」처럼 적어 주십시오.' };
       var dc = { t: 'n', v: ds, z: old.z }; return { cell: dc };
     }
     if (ext !== 'csv' && old && old.t === 's') return { cell: { t: 's', v: txt } };      // 글자 칸은 글자로 둔다(앞자리 0·큰 수 보호)
@@ -358,7 +358,7 @@
     if (ext !== 'csv' && /^\d+$/.test(digits)) {
       if (/^0\d/.test(digits) && !(old && old.t === 'n')) return { cell: { t: 's', v: txt } };
       if (digits.length > 15) {
-        if (old && old.t === 'n') return { err: '16자리 이상 숫자는 숫자 칸에 정확히 넣을 수 없어요. (글자 칸에는 넣을 수 있어요)' };
+        if (old && old.t === 'n') return { err: '16자리 이상 숫자는 숫자 칸에 정확히 넣을 수 없습니다. (글자 칸에는 넣을 수 있습니다)' };
         return { cell: { t: 's', v: txt } };
       }
     }
@@ -435,7 +435,7 @@
     var before = capture(name, r, c);
     if (S.mode === 'patch') {
       var psh = S.an.sheets[name];
-      if (!psh || psh.readOnly) return { err: (psh && psh.why) || '이 시트는 고칠 수 없어요.' };
+      if (!psh || psh.readOnly) return { err: (psh && psh.why) || '이 시트는 고칠 수 없습니다.' };
       var blk = global.SOXlsxPatch.cellBlock(psh, a);
       if (blk) return { err: blk };
       var spec = res.formula != null ? { kind: 'f', f: res.formula } : res.empty ? { kind: 'empty' } :
@@ -485,9 +485,9 @@
     var ap = applyRes(sh.name, r, c, res);
     if (ap.err) { S.ctx.toast(ap.err, 4200); return false; }
     syncDirty();
-    if (res.formula != null) S.ctx.toast('수식을 넣었어요. 계산 결과는 엑셀에서 열면 나와요.', 3600);
-    else if (ap.hadFormula) S.ctx.toast('수식이 있던 칸이라, 이제 값만 남았어요.', 2600);
-    else if (willAffect) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요.', 3200); }
+    if (res.formula != null) S.ctx.toast('수식을 넣었습니다. 계산 결과는 엑셀에서 열면 나옵니다.', 3600);
+    else if (ap.hadFormula) S.ctx.toast('수식이 있던 칸이라, 이제 값만 남았습니다.', 2600);
+    else if (willAffect) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다.', 3200); }
     if (!stay && r + 1 < sh.nr) { select(r + 1, c, true); ensureVisible(); }
     else S.barOrig = S.el.inp.value;
     render(true); refreshEd();
@@ -508,13 +508,13 @@
     syncDirty(); jumpTo(st.name, st.r, st.c); refreshEd();
     S.ctx.toast(doneMsg + ' (' + st.a + ')', 1800);
   }
-  function undoEdit() { stepHistory(S.undo, S.redo, '되돌렸어요'); }
-  function redoEdit() { stepHistory(S.redo, S.undo, '다시 했어요'); }
+  function undoEdit() { stepHistory(S.undo, S.redo, '되돌렸습니다'); }
+  function redoEdit() { stepHistory(S.redo, S.undo, '다시 했습니다'); }
   function resetAll() {
     if (!S || !S.editing) return;
     var n = Object.keys(S.edits).length;
-    if (!n) { S.ctx.toast('고친 칸이 없어요.', 1800); return; }
-    S.ctx.confirm('모두 되돌릴까요?', '지금까지 고친 ' + n + '칸을 모두 처음 모양으로 돌려요. 이미 저장한 사본 파일은 그대로예요.', '모두 되돌리기', function () {
+    if (!n) { S.ctx.toast('고친 칸이 없습니다.', 1800); return; }
+    S.ctx.confirm('모두 되돌릴까요?', '지금까지 고친 ' + n + '칸을 모두 처음 모양으로 돌립니다. 이미 저장한 사본 파일은 그대로입니다.', '모두 되돌리기', function () {
       if (!S) return;
       Object.keys(S.orig).forEach(function (k) {
         var o = S.orig[k], ws = S.wb.Sheets[o.name]; if (!ws) return;
@@ -525,7 +525,7 @@
       if (S.an && S.an.sheets) Object.keys(S.patched).forEach(function (nm) { var p = S.an.sheets[nm]; if (p && p.orig != null) p.xml = p.orig; });
       S.edits = {}; S.patched = {}; S.undo = []; S.redo = []; S.orig = {}; S.origRef = {}; S.calcToasted = false;
       syncDirty(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
-      S.ctx.toast('고친 내용을 모두 되돌렸어요.', 2400);
+      S.ctx.toast('고친 내용을 모두 되돌렸습니다.', 2400);
     }, { danger: true });
   }
   function refreshEd() {
@@ -537,7 +537,7 @@
     if (!S || !S.editing) return;
     if (!commit(true)) return;
     S.el.inp.blur(); S.editing = false; refreshActions(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
-    S.ctx.toast(S.dirty ? '보기로 돌아왔어요. 고친 내용은 그대로 있어요.' : '보기로 돌아왔어요.', 2400);
+    S.ctx.toast(S.dirty ? '보기로 돌아왔습니다. 고친 내용은 그대로 있습니다.' : '보기로 돌아왔습니다.', 2400);
   }
 
   // ---- 찾기(시트 전체 칸 값 검색 → 칸으로 이동. 바꾸기는 없다) ----
@@ -567,7 +567,7 @@
     var q = S.el.fq.value.trim();
     if (!q) { S.finds = null; S.el.fcnt.textContent = ''; return; }
     S.finds = { q: q, list: findAll(q), i: -1 };
-    if (!S.finds.list.length) { S.el.fcnt.textContent = '없음'; S.ctx.toast('「' + q + '」을 찾지 못했어요.', 2000); return; }
+    if (!S.finds.list.length) { S.el.fcnt.textContent = '없음'; S.ctx.toast('「' + q + '」을 찾지 못했습니다.', 2000); return; }
     stepFind(1);
   }
   function stepFind(d) {
@@ -589,7 +589,7 @@
         Promise.resolve(ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv')).then(function (ok) {
           if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
           S.dirty = false; ctx.setDirty(false); refreshActions();
-          ctx.toast('사본으로 저장했어요. 원래 파일은 그대로예요.', 3000);
+          ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000);
         });
         return;
       } else {
@@ -602,28 +602,28 @@
           return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx')).then(function (ok) {
             if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
             S.dirty = false; ctx.setDirty(false); refreshActions();
-            ctx.toast('사본으로 저장했어요. 원래 파일은 그대로예요.', 3000);
+            ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000);
           });
-        }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); });
+        }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); });
         return;
       }
-    } catch (e) { ctx.busy(null); ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 4000); }
+    } catch (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); }
   }
   function askSave() {
     if (!S.editable || !S.dirty) return;
     if (S.editing && !commit(true)) return;
     var base = saveBase();
     var msg = S.ext === 'csv'
-      ? '고친 값을 새 CSV 파일(' + base + '_수정.csv)로 저장해요. 원래 파일은 그대로예요.'
-      : '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + base + '_수정.xlsx)로 저장해요. 글꼴·색·차트·그림은 그대로예요. ' +
-        (anyAffected() ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산돼요. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있어요. ' : '') +
-        '원래 파일은 그대로예요.';
+      ? '고친 값을 새 CSV 파일(' + base + '_수정.csv)로 저장합니다. 원래 파일은 그대로입니다.'
+      : '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + base + '_수정.xlsx)로 저장합니다. 글꼴·색·차트·그림은 그대로입니다. ' +
+        (anyAffected() ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있습니다. ' : '') +
+        '원래 파일은 그대로입니다.';
     S.ctx.confirmCopy('사본으로 저장할까요?', msg, '사본 저장', saveCopyNow);
   }
   function startEdit() {
     if (!S || !S.editable) return;
     S.editing = true; refreshActions(); select(S.sel.r, S.sel.c); refreshEd();
-    S.ctx.toast('고치기를 켰어요. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르세요.', 3600);
+    S.ctx.toast('고치기를 켰습니다. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르십시오.', 3600);
   }
   function refreshActions() {
     var list = [];
@@ -652,7 +652,7 @@
     var rep = { applied: 0, skipped: 0 };
     if (!S || !S.editable || !data || !Array.isArray(data.edits)) return rep;
     if (Array.isArray(data.names) && (data.names.length !== S.names.length || data.names.some(function (n, i) { return n !== S.names[i]; }))) {   // 시트 구성(수·이름)이 달라졌으면 적용하지 않는다
-      rep.skipped = data.edits.length; S.ctx.toast('문서의 시트 구성이 달라져 이어서 고치던 내용을 되살리지 않았어요.', 4200); return rep;
+      rep.skipped = data.edits.length; S.ctx.toast('문서의 시트 구성이 달라져 이어서 고치던 내용을 되살리지 않았습니다.', 4200); return rep;
     }
     var XLSX = global.XLSX;
     data.edits.forEach(function (e) {
@@ -672,8 +672,8 @@
     });
     if (rep.applied) {
       S.editing = true; syncDirty(); select(S.sel.r, S.sel.c, true); render(true); refreshEd();
-      S.ctx.toast('이어서 고치던 ' + rep.applied + '칸을 되살렸어요.' + (rep.skipped ? ' (' + rep.skipped + '칸은 맞는 칸이 없어 건너뛰었어요)' : ''), 4200);
-    } else if (rep.skipped) S.ctx.toast('이어서 고치던 내용을 되살리지 못했어요.', 3200);
+      S.ctx.toast('이어서 고치던 ' + rep.applied + '칸을 되살렸습니다.' + (rep.skipped ? ' (' + rep.skipped + '칸은 맞는 칸이 없어 건너뛰었습니다)' : ''), 4200);
+    } else if (rep.skipped) S.ctx.toast('이어서 고치던 내용을 되살리지 못했습니다.', 3200);
     return rep;
   }
 
@@ -762,7 +762,7 @@
     credits: [{ name: 'SheetJS Community Edition 0.18.5', license: 'Apache-2.0', note: '엑셀·CSV 읽기 (https://sheetjs.com)' }, { name: 'JSZip', license: 'MIT', note: '엑셀 파일(zip) 열기·사본 저장 (https://stuk.github.io/jszip/)' }],
     canOpen: function (ext) { return ext === 'xlsx' || ext === 'xls' || ext === 'csv'; },
     open: function (ctx) {
-      if (ctx.file && ctx.file.size > MAX_BYTES) { ctx.fallback('파일이 너무 커서(40MB 초과) 변환해서 보여 드려요.'); return; }
+      if (ctx.file && ctx.file.size > MAX_BYTES) { ctx.fallback('파일이 너무 커서(40MB 초과) 변환해서 보여 드립니다.'); return; }
       ctx.loadCss('js/smartoffice/xlsx/so-xlsx.css');
       var isX = ctx.ext === 'xlsx';
       var need = global.XLSX ? Promise.resolve() : ctx.loadScript('vendor/xlsx.full.min.js');
@@ -770,14 +770,14 @@
         .then(function () { return global.JSZip ? null : ctx.loadScript('vendor/so/docx/jszip.min.js'); });
       return need.then(function () { return ctx.file.arrayBuffer(); }).then(function (buf) {
         var res = readWorkbook(ctx, buf), wb = res.wb;
-        if (!wb || !wb.SheetNames || !wb.SheetNames.length) throw new Error('시트를 찾지 못했어요');
+        if (!wb || !wb.SheetNames || !wb.SheetNames.length) throw new Error('시트를 찾지 못했습니다');
         var an = isX ? global.JSZip.loadAsync(buf, { createFolders: false }).then(function (z) { return global.SOXlsxPatch.analyze(z).then(function (a) { return { zip: z, an: a }; }); })
-          .catch(function () { return { zip: null, an: { ok: false, reason: '파일 구조를 알아볼 수 없어요.' } }; }) : Promise.resolve(null);
+          .catch(function () { return { zip: null, an: { ok: false, reason: '파일 구조를 알아볼 수 없습니다.' } }; }) : Promise.resolve(null);
         return an.then(function (pk) {
           var reason = lossReason(ctx.ext), mode = '';
           if (isX) {
             if (pk.an.ok) mode = 'patch';
-            else reason = pk.an.reason + ' 고쳐서 저장하면 내용이 달라질 수 있어서, 보기만 할 수 있어요.';
+            else reason = pk.an.reason + ' 고쳐서 저장하면 내용이 달라질 수 있어서, 보기만 할 수 있습니다.';
           }
           S = { ctx: ctx, ext: ctx.ext, wb: wb, names: wb.SheetNames, vis: visibleSheets(wb), scale: 1, frz: { row: false, col: false },
             showHdr: hdrPref(), hw: 0, hh: 0, lp: false, lk: null, edits: {}, dirty: false, editing: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason, mode: mode,

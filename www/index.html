@@ -147,7 +147,7 @@
             <button class="orbbtn voice" id="btnVoiceChat" aria-label="소장 K(케이)와 대화">
               <span class="core kcore"><span class="kface wide" data-kface="home" data-kstill data-khd aria-hidden="true"></span></span>
               <!-- v9.54(O-0640): 사진 없는 글자 줄(스위치 HOME_CHAT_BAR). 켜져 있으면 위 사진(.core)은 숨고 이 줄만 보인다. 누르면 같은 단추(#btnVoiceChat)라 동작은 그대로, 안 읽은 건수는 app.js renderKBubble 이 배지에 적는다 -->
-              <span class="khbar" aria-hidden="true"><span class="khbar-ic"><svg><use href="#i-chat"/></svg></span><span class="khbar-tx"><b>소장 케이 채팅</b><small>무엇이든 편하게 말씀하세요</small></span><span class="khbar-badge" id="khBarBadge" hidden></span><svg class="khbar-go"><use href="#i-chev-r"/></svg></span>
+              <span class="khbar" aria-hidden="true"><span class="khbar-ic"><svg><use href="#i-chat"/></svg></span><span class="khbar-tx"><b>소장 케이 채팅</b><small>무엇이든 편하게 말씀하십시오</small></span><span class="khbar-badge" id="khBarBadge" hidden></span><svg class="khbar-go"><use href="#i-chev-r"/></svg></span>
             </button>
             <div class="orblabel">소장 K</div>
           </div>
@@ -251,7 +251,7 @@
     <!-- 회의자료는 「녹음 전(여기)」에도, 「녹음이 끝난 뒤(완료 화면)」에도 붙일 수 있다(2026-09-21). -->
     <section id="recPrep" style="display:none;">
       <div class="subbar"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 준비</span><span class="spacer"></span></div>
-      <div class="recdone-badge">🎙️ 준비되면 <span class="rp-dir">아래 </span><b>녹음 시작</b>을 눌러 주세요</div>
+      <div class="recdone-badge">🎙️ 준비되면 <span class="rp-dir">아래 </span><b>녹음 시작</b>을 눌러 주십시오</div>
       <div class="orbwrap" style="margin-top:22px">
         <button class="orbbtn" id="btnStartRec" aria-label="녹음 시작">
           <span class="ring r3"></span><span class="ring r2"></span><span class="ring"></span>
@@ -293,7 +293,7 @@
       <div class="subbar rec-sub"><button class="back" data-back><svg><use href="#i-chev-l"/></svg>뒤로</button><span class="title">녹음 중</span><span class="spacer"></span></div>
       <!-- v9.4 일하는 케이: 타이머 옆에서 받아 적는 케이. 한마디는 app.js 의 녹음 타이머가 맞춘다(「받아 적고 있습니다. N분째입니다.」) -->
       <div class="ksc rec" id="kscRec" data-pose="note" role="status">
-        <div class="ksc-l"><div class="timer" id="recTimer">00:00</div><div class="ksp"><b>케이</b><p>받아 적고 있습니다. 편하게 말씀하세요.</p></div></div>
+        <div class="ksc-l"><div class="timer" id="recTimer">00:00</div><div class="ksp"><b>케이</b><p>받아 적고 있습니다. 편하게 말씀하십시오.</p></div></div>
         <span class="kfigw"><img class="kfig" alt="케이" draggable="false"></span>
       </div>
       <div class="wave" id="recWave">
@@ -305,7 +305,7 @@
           <span class="core"><svg><use href="#i-stop"/></svg></span>
         </button>
         <div class="orblabel">정지</div>
-        <div class="orbhint">말씀이 끝나면 눌러 주세요</div>
+        <div class="orbhint">말씀이 끝나면 눌러 주십시오</div>
       </div>
       <div class="btnrow"><button class="btn text" id="btnCancelRec">녹음 취소</button></div>
     </section>
@@ -335,7 +335,7 @@
       </div>
       <!-- v3.8 임시 저장: 지금 보내지 않고 폰에 보관 → 나중에 회의자료를 붙여 보낼 수 있음 -->
       <button id="btnDraft" class="btn ghost" type="button"><svg><use href="#i-note"/></svg>임시 저장 (나중에 자료 붙여 보내기)</button>
-      <div class="draft-hint">회의자료(hwp 등)를 나중에 폰으로 옮겨 붙일 때 쓰세요. 임시 저장한 녹음은 <b>회의록</b> 맨 위 「진행 중」에 남고, <b>대표님이 보내기를 누를 때만</b> PC로 갑니다.</div>
+      <div class="draft-hint">회의자료(hwp 등)를 나중에 폰으로 옮겨 붙일 때 쓰십시오. 임시 저장한 녹음은 <b>회의록</b> 맨 위 「진행 중」에 남고, <b>대표님이 보내기를 누를 때만</b> PC로 갑니다.</div>
       <!-- 회의자료 입력: PPT·워드·PDF·한글 등 여러 개 선택 가능(버튼 누르면 바로 열림).
            accept는 반드시 */* — 확장자 목록을 쓰면 Capacitor WebView가 안드로이드에 MIME 매핑이 없는
            hwp/hwpx 등을 파일선택기에서 회색처리(안 보이게) 한다(뷰어 docFileInput과 동일 함정). -->
@@ -415,7 +415,7 @@
         </div>
         <!-- O-0189(v8.9) 듣는 중에만 보임: [다 말했어요] = 기다리지 않고 지금 보내기 · 「기다림」 칩 = 말 끝 기다림 짧게/보통/길게(누를 때마다 바뀜, 이 기기에 저장) -->
         <div class="kstage-act">
-          <button id="chatKStageSend" type="button" class="kstage-send">다 말했어요 · 지금 보내기</button>
+          <button id="chatKStageSend" type="button" class="kstage-send">다 말했습니다 · 지금 보내기</button>
           <button id="chatKStageWait" type="button" class="kstage-wait" aria-label="말 끝 기다림 바꾸기">기다림 보통 · 2초</button>
         </div>
       </div>
@@ -462,7 +462,7 @@
       <div id="lockerPendingStrip" class="pendstrip" style="display:none;"></div>
       <div class="chatbar">
         <button id="lockerAttach" class="iconbtn chatattach" aria-label="파일 올리기" title="파일 올리기"><svg><use href="#i-plus"/></svg></button>
-        <div class="input chatinput"><textarea id="lockerInput" rows="1" placeholder="여기에 글을 쓰거나 파일을 올리세요"></textarea></div>
+        <div class="input chatinput"><textarea id="lockerInput" rows="1" placeholder="여기에 글을 쓰거나 파일을 올리십시오"></textarea></div>
         <button id="lockerSend" class="chatsend" aria-label="올리기"><svg><use href="#i-send"/></svg></button>
       </div>
       <input type="file" id="lockerFileInput" multiple style="display:none">
@@ -548,7 +548,7 @@
         <button type="button" class="kw-fb" id="kwFull" aria-label="케이 전신 보기 — 누르면 인사합니다">
           <img id="kwFullImg" alt="케이 전신" draggable="false">
           <video id="kwFullVid" muted playsinline webkit-playsinline disablepictureinpicture preload="none"></video>
-          <span class="kw-fb-tag">전신<small id="kwFullTip">· 눌러 보세요</small></span>
+          <span class="kw-fb-tag">전신<small id="kwFullTip">· 눌러 보십시오</small></span>
         </button>
       </div>
       <!-- v9.6: 머리 고르기는 뺐다(대표님 2026-10-10 — 머리는 지금 모양으로 고정). 탭은 「옷 / 설정」 — 옷 탭에는 옷장만, 설정 탭에는 설정만 보인다(같은 설정이 두 곳에 보이지 않는다). -->
@@ -660,7 +660,7 @@
             <span class="chip">한글</span><span class="chip">워드</span><span class="chip">엑셀</span>
             <span class="chip">PPT</span><span class="chip">PDF</span><span class="chip">MD</span><span class="chip">HTML</span>
           </div>
-          <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르세요.<br>한글·워드·엑셀·PPT·PDF·MD·HTML 문서를 열 수 있어요. 어떻게 열지는 위 <b>열기 방식</b>에서 고릅니다.</div>
+          <div class="doc-open-hint">폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르십시오.<br>한글·워드·엑셀·PPT·PDF·MD·HTML 문서를 열 수 있습니다. 어떻게 열지는 위 <b>열기 방식</b>에서 고릅니다.</div>
         </div>
         <!-- v8.0(O-0153): 열어 둔 문서(탭 2개 이상 두고 뷰어를 나왔을 때) — docviewer.js renderOpenCard -->
         <div id="docOpenWrap" style="display:none;">

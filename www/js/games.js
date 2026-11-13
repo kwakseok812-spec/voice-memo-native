@@ -29,8 +29,8 @@
       ready: '__janggi', saves: [{ key: 'janggi.game.v1', arr: 'hist' }, { key: 'janggi.omok.game.v1', arr: 'moves' }], mode: '' }
   ];
   var TXT = {
-    head: '한 판 둘까요?', load: '판을 펴는 중이에요…', fail: '게임을 불러오지 못했어요', failTab: '인터넷 주소로 열기', badge: '두던 판이 있어요', close: '닫기',
-    tabFail: '주소를 열지 못했어요. 폰의 기본 브라우저가 있는지 확인해 주세요.', listFail: '게임 목록을 열지 못했어요 — 다시 눌러 주세요.', home: '홈'
+    head: '한 판 둘까요?', load: '판을 펴는 중입니다…', fail: '게임을 불러오지 못했습니다', failTab: '인터넷 주소로 열기', badge: '두던 판이 있습니다', close: '닫기',
+    tabFail: '주소를 열지 못했습니다. 폰의 기본 브라우저가 있는지 확인해 주십시오.', listFail: '게임 목록을 열지 못했습니다 — 다시 눌러 주십시오.', home: '홈'
   };
   var LOAD_HINT_MS = 600, LOAD_FAIL_MS = 3000, POLL_MS = 120, BACKDROP_GUARD_MS = 350;
 

@@ -152,7 +152,7 @@
     base = text ? '[공유받은 내용]\n' + text : '';
     setInput(base);
     showChips(files.length, !!text);
-    setTimeout(function () { toast('공유한 내용을 붙였습니다. 할 일을 고르거나 직접 적은 뒤 [보내기]를 누르세요.', 4000); }, 50);
+    setTimeout(function () { toast('공유한 내용을 붙였습니다. 할 일을 고르거나 직접 적은 뒤 [보내기]를 누르십시오.', 4000); }, 50);
   }
   function setInput(v) {
     var ta = $('chatInput'); if (!ta) return;
@@ -176,7 +176,7 @@
     var html = '<div class="sb-head"><svg><use href="#i-spark"/></svg><b>공유받은 내용 — 무엇을 할까요?</b>' +
                '<button type="button" class="sb-x" aria-label="칩 닫기"><svg><use href="#i-x"/></svg></button></div><div class="chips">';
     CHIPS.forEach(function (c) { html += '<button type="button" class="chip hchip" data-chip="' + c.id + '">' + c.label + '</button>'; });
-    html += '</div><small class="sb-hint">고치려면 입력창을 누르세요 · [보내기]를 눌러야 전송됩니다</small>';
+    html += '</div><small class="sb-hint">고치려면 입력창을 누르십시오 · [보내기]를 눌러야 전송됩니다</small>';
     row.innerHTML = html;
     row.addEventListener('click', function (ev) {
       if (ev.target.closest && ev.target.closest('.sb-x')) { hideChips(); return; }

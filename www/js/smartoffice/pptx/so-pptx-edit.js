@@ -224,7 +224,7 @@
       var a = z[0], b = z[1];
       var an = Object.keys(a.files).filter(function (n) { return !a.files[n].dir; });
       var bn = Object.keys(b.files).filter(function (n) { return !b.files[n].dir; });
-      if (an.length !== bn.length || an.some(function (n) { return !b.file(n); })) return { ok: false, why: '파일 목록이 달라졌어요' };
+      if (an.length !== bn.length || an.some(function (n) { return !b.file(n); })) return { ok: false, why: '파일 목록이 달라졌습니다' };
       var set = {}; changedPaths.forEach(function (p) { set[p] = 1; });
       return Promise.all(an.map(function (n) {
         if (set[n]) return b.file(n).async('string').then(function (s) {

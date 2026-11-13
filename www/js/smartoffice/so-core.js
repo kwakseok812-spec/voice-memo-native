@@ -151,13 +151,13 @@
     row.innerHTML =
       '<div class="so-seg" role="radiogroup" aria-label="열기 방식">' +
         '<button type="button" class="so-opt' + (m === 'convert' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'convert') + '" data-som="convert">' +
-          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줘요 · 원본 모양 그대로 · 수정 요청</span></button>' +
+          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 원본 모양 그대로 · 수정 요청</span></button>' +
         '<button type="button" class="so-opt' + (m === 'soffice' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'soffice') + '" data-som="soffice">' +
-          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고쳐요</span></button>' +
+          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고칩니다</span></button>' +
       '</div>' +
       '<div class="so-row-hint">' + (m === 'soffice'
-        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열려요.'
-        : '고른 문서를 PC가 PDF로 바꿔 보여 줘요(PC가 켜져 있어야 해요). 마지막에 고른 방식은 기억해 둬요.') +
+        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열립니다.'
+        : '고른 문서를 PC가 PDF로 바꿔 보여 줍니다(PC가 켜져 있어야 합니다). 마지막에 고른 방식은 기억해 둡니다.') +
         ' <button type="button" class="so-link" data-sinfo="1">' + SOFFICE_NAME + ' 정보</button> <button type="button" class="so-link" data-sochg="0" aria-expanded="true">접기</button></div>';
   }
   function renderRow() {
@@ -171,13 +171,13 @@
       '<div class="so-row-title">열기 방식</div>' +
       '<div class="so-seg" role="radiogroup" aria-label="열기 방식">' +
         '<button type="button" class="so-opt' + (m === 'convert' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'convert') + '" data-som="convert">' +
-          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줘요 · 원본 모양 그대로 · 수정 요청</span></button>' +
+          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 원본 모양 그대로 · 수정 요청</span></button>' +
         '<button type="button" class="so-opt' + (m === 'soffice' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'soffice') + '" data-som="soffice">' +
-          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고쳐요</span></button>' +
+          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고칩니다</span></button>' +
       '</div>' +
       '<div class="so-row-hint">' + (m === 'soffice'
-        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열려요.'
-        : '고른 문서를 PC가 PDF로 바꿔 보여 줘요(PC가 켜져 있어야 해요). 마지막에 고른 방식은 기억해 둬요.') +
+        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열립니다.'
+        : '고른 문서를 PC가 PDF로 바꿔 보여 줍니다(PC가 켜져 있어야 합니다). 마지막에 고른 방식은 기억해 둡니다.') +
         ' <button type="button" class="so-link" data-sinfo="1">' + SOFFICE_NAME + ' 정보</button></div>';
   }
   function onRowClick(e) {
@@ -196,8 +196,8 @@
     if (bypassFile === file) { bypassFile = null; return false; }
     if (!force && mode() !== 'soffice') return false;
     var id = EXT_MAP[extOf(file.name)];
-    if (id === 'hwp' && SO_HWP_READY !== 'on') { toast('한글 문서는 아직 준비 중이라 변환해서 보여 드려요.', 3600); return false; }   // 모듈 로딩을 시도하지 않는다
-    if (!id) { toast('이 형식은 ' + SOFFICE_NAME + '로 열 수 없어 변환해서 보여 드려요.', 3200); return false; }
+    if (id === 'hwp' && SO_HWP_READY !== 'on') { toast('한글 문서는 아직 준비 중이라 변환해서 보여 드립니다.', 3600); return false; }   // 모듈 로딩을 시도하지 않는다
+    if (!id) { toast('이 형식은 ' + SOFFICE_NAME + '로 열 수 없어 변환해서 보여 드립니다.', 3200); return false; }
     openWith(id, file);
     return true;
   }
@@ -258,7 +258,7 @@
     moduleFor(id).then(function (mod) {
       if (c !== cur) return;
       c.mod = mod;
-      if (typeof mod.canOpen === 'function' && mod.canOpen(ctx.ext) === false) { toConvert(file, SOFFICE_NAME + '가 이 형식은 아직 열지 못해 변환해서 보여 드려요.'); return; }
+      if (typeof mod.canOpen === 'function' && mod.canOpen(ctx.ext) === false) { toConvert(file, SOFFICE_NAME + '가 이 형식은 아직 열지 못해 변환해서 보여 드립니다.'); return; }
       ctx.busy((mod.label || '문서') + ' 여는 중…');
       var r;
       try { r = mod.open(ctx); } catch (e) { return failOpen(c, e); }
@@ -266,13 +266,13 @@
       else { ctx.busy(null); afterOpen(c); }
     }).catch(function () {
       if (c !== cur) return;
-      toConvert(file, SOFFICE_NAME + '가 아직 이 형식을 열 수 없어 변환해서 보여 드려요.');   // 모듈 파일 없음/불러오기 실패 = 임시 안전장치
+      toConvert(file, SOFFICE_NAME + '가 아직 이 형식을 열 수 없어 변환해서 보여 드립니다.');   // 모듈 파일 없음/불러오기 실패 = 임시 안전장치
     });
   }
   function failOpen(c, e) {
     if (c !== cur) return;
     try { console.warn('[S-Office] 열기 실패', e); } catch (x) {}
-    toConvert(c.file, SOFFICE_NAME + '로 열지 못해 변환해서 보여 드려요. (' + ((e && e.message) || '알 수 없는 오류') + ')');
+    toConvert(c.file, SOFFICE_NAME + '로 열지 못해 변환해서 보여 드립니다. (' + ((e && e.message) || '알 수 없는 오류') + ')');
   }
   function makeCtx(c, body) {
     var h = host;
@@ -303,7 +303,7 @@
         er.firstChild.textContent = msg || '열지 못했습니다.'; er.lastChild.textContent = sub || '';
         er.style.display = '';
       },
-      fallback: function (reason) { if (c === cur) toConvert(c.file, reason || (SOFFICE_NAME + '가 이 문서는 아직 열지 못해 변환해서 보여 드려요.')); },
+      fallback: function (reason) { if (c === cur) toConvert(c.file, reason || (SOFFICE_NAME + '가 이 문서는 아직 열지 못해 변환해서 보여 드립니다.')); },
       loadScript: loadScript, loadCss: loadCss,
       saveCopy: function (f, name) { return saveCopy(f, name, c); },
       setDirty: function (v) { c.dirty = !!v; if (c.dirty) startAuto(c); else stopAuto(c); },
@@ -405,8 +405,8 @@
   function recWarn(c, e) {
     if (!c || recWarned[c.recKey]) return;
     recWarned[c.recKey] = 1;
-    if (e && e.reason === 'snap') { toast('고친 내용을 임시 저장용으로 만들지 못했어요' + (e.err && e.err.message ? ' (' + e.err.message + ')' : '') + '. 「사본 저장」으로 꼭 저장해 주세요.', 5200); return; }
-    toast(e && e.reason === 'too_big' ? '고친 내용이 커서(50MB 초과) 자동 임시 저장을 하지 못했어요. 「사본 저장」으로 꼭 저장해 주세요.' : '고친 내용을 임시 저장하지 못했어요(저장 공간이 부족할 수 있어요). 「사본 저장」으로 꼭 저장해 주세요.', 5200);
+    if (e && e.reason === 'snap') { toast('고친 내용을 임시 저장용으로 만들지 못했습니다' + (e.err && e.err.message ? ' (' + e.err.message + ')' : '') + '. 「사본 저장」으로 꼭 저장해 주십시오.', 5200); return; }
+    toast(e && e.reason === 'too_big' ? '고친 내용이 커서(50MB 초과) 자동 임시 저장을 하지 못했습니다. 「사본 저장」으로 꼭 저장해 주십시오.' : '고친 내용을 임시 저장하지 못했습니다(저장 공간이 부족할 수 있습니다). 「사본 저장」으로 꼭 저장해 주십시오.', 5200);
   }
   // 지금 고친 내용을 한 번 임시 저장한다. snapshot() 은 바로 값을 주든 Promise 를 주든 받는다. 이미 진행 중이면 건너뛴다.
   function flush(c) {
@@ -439,7 +439,7 @@
       if (!rec || rec.fmt !== c.id) { c.recReady = true; return; }
       var ask = (typeof cfg.confirm === 'function');
       if (!ask) { c.recReady = true; return; }
-      cfg.confirm('이어서 고칠까요?', '저장된 시각: ' + fmtWhen(rec.savedAt) + '\n이 문서를 고치다가 닫기 전에 임시로 저장해 둔 내용이 있어요.', '이어서 고치기', function () {
+      cfg.confirm('이어서 고칠까요?', '저장된 시각: ' + fmtWhen(rec.savedAt) + '\n이 문서를 고치다가 닫기 전에 임시로 저장해 둔 내용이 있습니다.', '이어서 고치기', function () {
         c.recSheet = false;
         if (c !== cur) return;
         c.ctx.busy('고치던 내용을 불러오는 중…');
@@ -447,8 +447,8 @@
           if (c !== cur) return; c.ctx.busy(null); c.recReady = true;
           if (res === false || (res && typeof res.applied === 'number' && res.applied === 0)) return;   // 적용된 것이 없으면(구조가 달라졌거나 되살릴 칸이 없음) 모듈이 안내한 대로 두고 고친 상태로 만들지 않는다
           c.ctx.setDirty(true);
-          if (!res || typeof res !== 'object') toast('고치던 내용을 불러왔어요.', 2600);
-        }, function (e) { if (c !== cur) return; c.ctx.busy(null); c.recReady = true; toast('고치던 내용을 불러오지 못했어요.' + (e && e.message ? ' (' + e.message + ')' : ''), 4200); });
+          if (!res || typeof res !== 'object') toast('고치던 내용을 불러왔습니다.', 2600);
+        }, function (e) { if (c !== cur) return; c.ctx.busy(null); c.recReady = true; toast('고치던 내용을 불러오지 못했습니다.' + (e && e.message ? ' (' + e.message + ')' : ''), 4200); });
       }, { extra: { label: '지우고 처음부터', action: function () { c.recSheet = false; recDel(c.recKey); if (c === cur) c.recReady = true; } }, cancelLabel: '나중에' });
       c.recSheet = true;
       // 「나중에」(시트 닫기)를 고르면 recReady 가 false 로 남아, 이번에는 새 임시 저장을 하지 않고 옛 기록을 그대로 둔다
@@ -478,7 +478,7 @@
     pendList().then(function (all) {
       if (!all.length) return;
       var p = all[0], more = all.length > 1 ? ' (외 ' + (all.length - 1) + '개)' : '';
-      cfg.confirm('저장하지 못한 사본이 있어요', '「' + p.name + '」' + more + ' 사본을 전에 저장하지 못해 이 앱 안에 보관해 두었어요. 지금 다시 저장할까요?', '지금 저장', function () {
+      cfg.confirm('저장하지 못한 사본이 있습니다', '「' + p.name + '」' + more + ' 사본을 전에 저장하지 못해 이 앱 안에 보관해 두었습니다. 지금 다시 저장할까요?', '지금 저장', function () {
         saveCopy(new File([p.blob], p.name, { type: p.type }), p.name, null);
       }, { extra: { label: '보관본 지우기', action: function () { pendDel(p.id); } }, cancelLabel: '나중에' });
     });
@@ -487,7 +487,7 @@
   // ============ 사본 저장 + 저장 직후 안내 ============
   function canShareFile(file) { try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; } }
   function shareFile(file) {
-    try { navigator.share({ files: [file], title: file.name }).catch(function (e) { if (e && e.name !== 'AbortError') toast('공유하지 못했어요.', 3000); }); } catch (e) { toast('공유하지 못했어요.', 3000); }
+    try { navigator.share({ files: [file], title: file.name }).catch(function (e) { if (e && e.name !== 'AbortError') toast('공유하지 못했습니다.', 3000); }); } catch (e) { toast('공유하지 못했습니다.', 3000); }
   }
   function uniqName(n) {
     var dot = n.lastIndexOf('.'), base = dot > 0 ? n.slice(0, dot) : n, e = dot > 0 ? n.slice(dot) : '', i = 1, cand = n;
@@ -521,18 +521,18 @@
   function afterSave(res, file) {
     if (!res || res.quiet || typeof cfg.confirm !== 'function') return;
     var share = canShareFile(file);
-    cfg.confirm('저장했어요', (res.name || file.name) + '\n다운로드 폴더에 저장했어요.', res.open ? '열기' : '확인', function () {
-      if (res.open) { try { Promise.resolve(res.open()).catch(function () { toast('「내 파일 › 다운로드」에서 열어 주세요.', 4200); }); } catch (e) { toast('「내 파일 › 다운로드」에서 열어 주세요.', 4200); } }
+    cfg.confirm('저장했습니다', (res.name || file.name) + '\n다운로드 폴더에 저장했습니다.', res.open ? '열기' : '확인', function () {
+      if (res.open) { try { Promise.resolve(res.open()).catch(function () { toast('「내 파일 › 다운로드」에서 열어 주십시오.', 4200); }); } catch (e) { toast('「내 파일 › 다운로드」에서 열어 주십시오.', 4200); } }
     }, { extra: share ? { label: '공유', action: function () { shareFile(file); } } : null, cancelLabel: '닫기' });
   }
   function saveFailed(err, file, c) {
     var why = (err && (err.friendly || err.message)) || '알 수 없는 오류';
     pendPut(file).then(function (kept) {
       var share = canShareFile(file);
-      var msg = '「' + file.name + '」을 저장하지 못했어요. (' + why + ')\n' +
-        (kept ? '사본은 이 앱 안에 보관해 두었어요. 연결이 되면 [다시 시도]를 누르거나, 다음에 S-Office를 열 때 다시 저장할 수 있어요.' : '사본을 앱 안에 보관하지도 못했어요. 지금 [다시 시도]를 누르거나 [공유]로 다른 앱에 보내 두세요.');
-      if (typeof cfg.confirm !== 'function') { toast('저장하지 못했어요. (' + why + ')', 5000); return; }
-      cfg.confirm('저장하지 못했어요', msg, '다시 시도', function () { saveCopy(file, file.name, c); },
+      var msg = '「' + file.name + '」을 저장하지 못했습니다. (' + why + ')\n' +
+        (kept ? '사본은 이 앱 안에 보관해 두었습니다. 연결이 되면 [다시 시도]를 누르거나, 다음에 S-Office를 열 때 다시 저장할 수 있습니다.' : '사본을 앱 안에 보관하지도 못했습니다. 지금 [다시 시도]를 누르거나 [공유]로 다른 앱에 보내 두십시오.');
+      if (typeof cfg.confirm !== 'function') { toast('저장하지 못했습니다. (' + why + ')', 5000); return; }
+      cfg.confirm('저장하지 못했습니다', msg, '다시 시도', function () { saveCopy(file, file.name, c); },
         { extra: share ? { label: '공유', action: function () { shareFile(file); } } : null, cancelLabel: '닫기' });
     });
   }
@@ -544,7 +544,7 @@
     if (menuOpen()) { closeMenu(); return; }
     var m = host.querySelector('#soMenu'), c = cur, items = [];
     var canConv = !!c && !(global.SmartDocs && typeof SmartDocs.isViewable === 'function' && !SmartDocs.isViewable(c.file.name, c.file.type));
-    if (canConv) items.push('<button type="button" role="menuitem" data-m="convert"><b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줘요 · 폰 화면과 모양이 다를 때</span></button>');
+    if (canConv) items.push('<button type="button" role="menuitem" data-m="convert"><b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 폰 화면과 모양이 다를 때</span></button>');
     items.push('<button type="button" role="menuitem" data-m="info"><b>' + SOFFICE_NAME + ' 정보</b><span>출처와 라이선스</span></button>');
     m.innerHTML = items.join(''); m.style.display = '';
   }
@@ -555,7 +555,7 @@
     if (k === 'convert') {
       var c = cur; if (!c) return;
       var go = function () { toConvert(c.file, null); };
-      if (c.dirty) c.ctx.confirm('고친 내용이 저장되지 않았어요', '변환해서 보기로 열면 지금 화면의 고친 내용은 보이지 않아요. 먼저 「사본 저장」을 하셨나요?', '그래도 열기', go, { danger: true });
+      if (c.dirty) c.ctx.confirm('고친 내용이 저장되지 않았습니다', '변환해서 보기로 열면 지금 화면의 고친 내용은 보이지 않습니다. 먼저 「사본 저장」을 하셨습니까?', '그래도 열기', go, { danger: true });
       else go();
     }
   }
@@ -580,7 +580,7 @@
     var c = cur;
     if (c.backFn) { var handled = false; try { handled = c.backFn() === true; } catch (e) {} if (handled) return true; }
     if (c.dirty) {
-      c.ctx.confirm('고친 내용이 저장되지 않았어요', '닫으면 고친 내용이 사라집니다. 먼저 「사본 저장」을 하셨나요?', '그래도 닫기', function () { closeHost(false, true); }, { danger: true });
+      c.ctx.confirm('고친 내용이 저장되지 않았습니다', '닫으면 고친 내용이 사라집니다. 먼저 「사본 저장」을 하셨습니까?', '그래도 닫기', function () { closeHost(false, true); }, { danger: true });
       return true;
     }
     closeHost(); return true;

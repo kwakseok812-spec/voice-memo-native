@@ -103,7 +103,7 @@
   function bandHtml(h) {
     var seg = gOn() ? (zlOn() ? '<button class="mk-lock on" id="mkLock" data-a="lock" aria-pressed="true" aria-label="확대 잠금. 지금 잠겨 있습니다. 누르면 확대를 엽니다"><span class="mk-lk-ic" id="mkLockIc">🔒</span><span id="mkLockTx">확대 잠김</span></button>' : '') : '<div class="mk-seg" id="mkSeg" role="group" aria-label="펜 손 바꾸기"><div class="mk-knob"></div><button id="mkPen" class="on" aria-pressed="true">펜</button><button id="mkHand" aria-pressed="false">손</button></div>';
     var hint = gOn() ? '<div class="mk-band-hint"><span class="mk-state" id="mkState">한 손가락으로 표시하고,</span> <span id="mkHint">' + (zlOn() ? '두 손가락으로 위아래로 넘깁니다' : '두 손가락으로 넘기거나 확대합니다') + '</span></div>'
-                     : '<div class="mk-band-hint"><span class="mk-state" id="mkState">펜 · 그리는 중</span> — <span id="mkHint">고칠 곳에 동그라미를 치거나 밑줄을 그어 주세요</span></div>';
+                     : '<div class="mk-band-hint"><span class="mk-state" id="mkState">펜 · 그리는 중</span> — <span id="mkHint">고칠 곳에 동그라미를 치거나 밑줄을 그어 주십시오</span></div>';
     return h.replace('@SEG@', seg).replace('@HINT@', hint);
   }
   function build() {
@@ -139,7 +139,7 @@
     var a = b.getAttribute('data-a');
     if (a === 'end') close();
     else if (a === 'zin') { if (locked()) setLock(false, true); setZoom(S.zoom * 1.4); }          // O-0812 ＋ 는 일부러 누른 것이니 잠겨 있으면 열고 확대
-    else if (a === 'zout') { if (locked()) toast('폭에 맞춘 크기입니다. 확대하려면 자물쇠를 열어 주세요', null, null, 2200); else setZoom(S.zoom / 1.4); }
+    else if (a === 'zout') { if (locked()) toast('폭에 맞춘 크기입니다. 확대하려면 자물쇠를 열어 주십시오', null, null, 2200); else setZoom(S.zoom / 1.4); }
     else if (a === 'lock') setLock(!locked());
     else if (a === 'help') help(0);
     else if (a === 'list') { renderAll(); openSheet('mkListSheet'); }
@@ -196,7 +196,7 @@
       renderAll(); refreshStatus();
       if (!reduce()) { var f = $('mkFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
       var pend = S.items.filter(notSent).length;
-      if (!rs) kSay(pend ? '이어서 적어 주세요. 적어 둔 ' + pend + '건은 그대로 있습니다' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+      if (!rs) kSay(pend ? '이어서 적어 주십시오. 적어 둔 ' + pend + '건은 그대로 있습니다' : '어디를 고칠까요? 동그라미 쳐 주십시오', 'note');
       if (opts.how === 'long') { vibrate(); toast('수정 요청을 켰습니다', '끄기', close, 3000); }
       if (rs && rs.memo && rs.memo.item) setTimeout(function () {          // 적던 메모 다시 펼치기 — 고치던 것이면 보관된 그 항목에(사본 말고)
         if (!S.on) return;
@@ -206,7 +206,7 @@
       var seen = lsGet(HELP_KEY, '') === '1';
       if (!rs && !seen) { lsSet(HELP_KEY, '1'); lsSet(GHINT_KEY, '1'); lsSet(LHINT_KEY, '1'); if (opts.how === 'long') S.helpPending = true; else setTimeout(function () { if (S.on) help(0); }, 250); }
       // O-0810: 처음 쓰는 분은 사용법이 저절로 열린다. 이미 사용법을 본 분만 방식이 바뀐 것을 한 번 알려 준다(길게 눌러 켠 때는 「켰습니다」 알림과 겹치니 다음 기회에)
-      else if (zlOn() && !rs && seen && lsGet(LHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(LHINT_KEY, '1'); lsSet(GHINT_KEY, '1'); toast('확대는 잠겨 있습니다. 필요하면 위 자물쇠를 열어 주세요', '사용법', function () { help(1); }, 4800); }   // O-0812 처음 한 번만(사용법을 처음 보는 분은 사용법 카드가 알려 준다)
+      else if (zlOn() && !rs && seen && lsGet(LHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(LHINT_KEY, '1'); lsSet(GHINT_KEY, '1'); toast('확대는 잠겨 있습니다. 필요하면 위 자물쇠를 열어 주십시오', '사용법', function () { help(1); }, 4800); }   // O-0812 처음 한 번만(사용법을 처음 보는 분은 사용법 카드가 알려 준다)
       else if (gOn() && !rs && seen && lsGet(GHINT_KEY, '') !== '1' && opts.how !== 'long') { lsSet(GHINT_KEY, '1'); toast('이제 한 손가락으로 표시하고, 두 손가락으로 넘기거나 확대합니다', '사용법', function () { help(1); }, 4500); }
       if (statusT) clearInterval(statusT);
       statusT = setInterval(refreshStatus, 20000);
@@ -251,16 +251,16 @@
   function setTool(t, quiet) {
     if (gOn()) {          // O-0810: 도구 구분이 없다 — 늘 「표시(한 손가락)·이동(두 손가락)」. S.tool 은 'pen' 으로 고정(보관된 'hand'는 무시)
       S.tool = 'pen'; R.scroll.classList.toggle('gest', !!S.on); R.scroll.classList.remove('pen');
-      if (S.on && !quiet) kSay('어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+      if (S.on && !quiet) kSay('어디를 고칠까요? 동그라미 쳐 주십시오', 'note');
       return;
     }
     S.tool = t; var seg = $('mkSeg');
     seg.classList.toggle('hand', t === 'hand'); $('mkPen').classList.toggle('on', t === 'pen'); $('mkHand').classList.toggle('on', t === 'hand');
     $('mkPen').setAttribute('aria-pressed', t === 'pen'); $('mkHand').setAttribute('aria-pressed', t === 'hand');
     $('mkState').textContent = t === 'pen' ? '펜 · 그리는 중' : '손 · 넘겨 보는 중'; $('mkState').classList.toggle('hand', t === 'hand');
-    $('mkHint').textContent = t === 'pen' ? '고칠 곳에 동그라미를 치거나 밑줄을 그어 주세요' : '한 손가락으로 넘겨 보세요. 그리려면 [펜]';
+    $('mkHint').textContent = t === 'pen' ? '고칠 곳에 동그라미를 치거나 밑줄을 그어 주십시오' : '한 손가락으로 넘겨 보십시오. 그리려면 [펜]';
     R.scroll.classList.toggle('pen', S.on && t === 'pen');
-    if (S.on && !quiet) kSay(t === 'pen' ? '어디를 고칠까요? 동그라미 쳐 주세요' : '넘겨 보시다가 [펜]을 누르고 표시해 주세요', 'note');
+    if (S.on && !quiet) kSay(t === 'pen' ? '어디를 고칠까요? 동그라미 쳐 주십시오' : '넘겨 보시다가 [펜]을 누르고 표시해 주십시오', 'note');
   }
   function notSent(x) { return !x.status; }
 
@@ -343,7 +343,7 @@
   function gLockNotice() {
     lockNudge();
     var n = +lsGet(LNOTE_KEY, '0') || 0; if (n >= 3) return; lsSet(LNOTE_KEY, String(n + 1));
-    toast('확대가 잠겨 있습니다. 확대하려면 위 자물쇠를 열어 주세요', null, null, 2600);
+    toast('확대가 잠겨 있습니다. 확대하려면 위 자물쇠를 열어 주십시오', null, null, 2600);
   }
   function getPage(P) { if (P.page) return Promise.resolve(P.page); return S.pdf.getPage(P.n).then(function (pg) { P.page = pg; var vp = pg.getViewport({ scale: 1 }); if (Math.abs(vp.width - P.w) > 0.5 || Math.abs(vp.height - P.h) > 0.5) { P.w = vp.width; P.h = vp.height; P.svg.setAttribute('viewBox', '0 0 ' + P.w + ' ' + P.h); layout(); } return pg; }); }
   function renderPage(P) {
@@ -556,7 +556,7 @@
     G.f = {}; G.all = {}; G.mode = 'idle'; G.pri = null; G.pan = null; G.vel = null;
   }
   function gPalmNotice() { var n = +lsGet(GPALM_KEY, '0') || 0; if (n >= 3) return; lsSet(GPALM_KEY, String(n + 1)); toast('너무 크게 닿은 손가락은 쓰지 않았습니다', null, null, 2200); }
-  function gIgnHint() { if (lsGet(GIGN_KEY, '') === '1') return; lsSet(GIGN_KEY, '1'); toast('표시하는 중에는 다른 손가락을 쓰지 않습니다. 넘기려면 손을 떼고 두 손가락을 함께 대 주세요', null, null, 4200); }
+  function gIgnHint() { if (lsGet(GIGN_KEY, '') === '1') return; lsSet(GIGN_KEY, '1'); toast('표시하는 중에는 다른 손가락을 쓰지 않습니다. 넘기려면 손을 떼고 두 손가락을 함께 대 주십시오', null, null, 4200); }
   function gNewF(id, x, y, type, P, adopted) { return { id: id, x: x, y: y, sx: x, sy: y, t0: gNow(), type: type, P: P, adopted: !!adopted, pts: [] }; }
   function gDead(id) { G.lastAct = gNow(); if (G.mode === 'idle') { G.mode = 'dead'; G.all[id] = true; } else if (G.mode === 'dead') G.all[id] = true; else G.ign[id] = true; }
   function gDown(ev, sc) {
@@ -631,7 +631,7 @@
     }
   }
   function gTap() {          // 움직이지 않고 짧게 뗌 = 표시가 아님. 선택이 있으면 풀고 안내만(옛 방식에서 닿자마자 선택이 지워지던 효과를 탭으로 옮김)
-    clearSel(); kSay(S.items.length ? '다른 곳도 동그라미 쳐 주세요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note');
+    clearSel(); kSay(S.items.length ? '다른 곳도 동그라미 쳐 주십시오' : '어디를 고칠까요? 동그라미 쳐 주십시오', 'note');
   }
   function gEnd(ev) {
     var id = ev.pointerId, cancelled = ev.type === 'pointercancel';
@@ -745,13 +745,13 @@
     if (cancelled) { st.el.remove(); return; }
     var pts = st.pts, len = 0;
     for (var i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    if (len < 6) { st.el.remove(); kSay(S.items.length ? '다른 곳도 동그라미 쳐 주세요' : '어디를 고칠까요? 동그라미 쳐 주세요', 'note'); return; }
+    if (len < 6) { st.el.remove(); kSay(S.items.length ? '다른 곳도 동그라미 쳐 주십시오' : '어디를 고칠까요? 동그라미 쳐 주십시오', 'note'); return; }
     var a = pts[0], b = pts[pts.length - 1], closed = len > 50 && Math.hypot(a[0] - b[0], a[1] - b[1]) < Math.max(26, len * 0.22);
     var P = st.P;
     Promise.all([loadChars(P), loadSegs(P)]).then(function () {
       var ok = closed ? selectLoop(P, pts) : selectLine(P, a, b);
       st.el.classList.add('fade'); setTimeout(function () { st.el.remove(); }, 260);
-      if (!ok) kSay('글자가 없는 곳입니다. 글자 위에 그려 주세요', 'note');
+      if (!ok) kSay('글자가 없는 곳입니다. 글자 위에 그려 주십시오', 'note');
     });
   }
   function inPoly(x, y, pts) { var ins = false; for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) { var xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins; } return ins; }
@@ -855,7 +855,7 @@
     p.innerHTML = '<button class="go">수정 요청</button><button class="again">다시 그리기</button>';
     S.sel.P.el.appendChild(p);
     p.querySelector('.go').onclick = function () { openMemo(); };
-    p.querySelector('.again').onclick = function () { clearSel(); kSay('다시 동그라미 쳐 주세요', 'note'); };
+    p.querySelector('.again').onclick = function () { clearSel(); kSay('다시 동그라미 쳐 주십시오', 'note'); };
     placePop();
   }
   function placePop() {
@@ -907,7 +907,7 @@
     var h = '<div class="mk-ptitle"><span class="mk-grow">수정 요청 ' + circ(n) + '</span><span class="mk-pnote">' + it.page + '쪽</span></div>' +
       '<div class="mk-quote">' + (it.shot ? '<img alt="짚은 곳" src="' + it.shot + '">' : '') + '<div style="min-width:0"><div class="qm">짚은 글</div><div class="qt">' + q + '</div></div></div>' +
       '<div class="mk-qchips">' + CHIPS.map(function (c) { return '<button data-q="' + esc(c) + '">' + esc(c.replace(/: $/, '…')) + '</button>'; }).join('') + '</div>' +
-      '<div class="mk-memo"><textarea id="mkMemoTxt" placeholder="어떻게 고칠지 적어 주세요">' + esc(draft ? (draft.text || '') : (item ? item.note : '')) + '</textarea></div>' +
+      '<div class="mk-memo"><textarea id="mkMemoTxt" placeholder="어떻게 고칠지 적어 주십시오">' + esc(draft ? (draft.text || '') : (item ? item.note : '')) + '</textarea></div>' +
       '<button class="mk-mic" id="mkMic"><span class="dot"></span><span id="mkMicTxt">🎤 말로 적기</span></button>' +
       '<div class="mk-row2"><button class="mk-big gray" id="mkMemoCancel">취소</button><button class="mk-big red" id="mkMemoSave">저장</button></div>' +
       (!isNew ? '<button class="mk-del" id="mkMemoDel">이 수정 요청 빼기</button>' : '');
@@ -920,7 +920,7 @@
     $('mkMemoCancel').onclick = function () { stopMic(true); closeMemo(); if (S.sel) showPop(); };
     if ($('mkMemoDel')) $('mkMemoDel').onclick = function () { var t = S.memo.item; stopMic(true); closeMemo(); askRemove(t); };
     if (!wide) setTimeout(function () { try { $('mkMemoTxt').focus({ preventScroll: true }); } catch (e) {} }, 260);
-    kSay('어떻게 고칠까요? 글로 적거나 🎤로 말씀해 주세요', 'note');
+    kSay('어떻게 고칠까요? 글로 적거나 🎤로 말씀해 주십시오', 'note');
   }
   function closeMemo() { stopMic(true); closeSheets(); if (R) { $('mkSideMemo').innerHTML = ''; $('mkSide').classList.remove('memo-open'); } S.memo = null; }
   // 🎤 받아쓰기: 폰 앱(KSpeech 네이티브)만. PC판·옛 APK 는 글로.
@@ -928,16 +928,16 @@
   //   멈춤: 말(소리)이 시작된 뒤 2초 조용하면 / 준비된 뒤 8초 동안 말이 없으면 / 다시 누르면. 멈출 때는 인식기에 「마무리」를 시키고 마지막 글(final)까지 받아 넣는다.
   //   꺼지면 이유를 화면에 짧게(권한 없음 · 회의 녹음 중 · 음성 대화 중 · 잘 못 들음 등) — 조용히 꺼지지 않는다.
   var mic = null, MIC_QUIET_MS = 2000, MIC_NOSPEECH_MS = 8000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000;
-  var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
-                  nospeech: '말씀이 들리지 않아 멈췄습니다. 다시 누르고 말씀해 주세요', nomatch: '잘 알아듣지 못했습니다. 다시 누르고 또박또박 말씀해 주세요',
-                  busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
+  var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주십시오',
+                  nospeech: '말씀이 들리지 않아 멈췄습니다. 다시 누르고 말씀해 주십시오', nomatch: '잘 알아듣지 못했습니다. 다시 누르고 또박또박 말씀해 주십시오',
+                  busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주십시오', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
                   lang: '이 폰에서 한국어 받아쓰기를 쓸 수 없습니다', recording: '회의 녹음 중에는 받아쓰기를 쓸 수 없습니다' };
   function micLabel(t) { if (R && $('mkMicTxt')) $('mkMicTxt').textContent = t; }
   function toggleMic() {
     if (mic) { stopMic(false, 'tap'); return; }
     var KS = null; try { if (isNative() && Capacitor.Plugins) KS = Capacitor.Plugins.KSpeech || null; } catch (e) {}
-    if (!KS) { toast('이 기기에서는 글로 적어 주세요'); return; }
-    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 음성 대화를 끄거나 글로 적어 주세요', null, null, 3500); return; }
+    if (!KS) { toast('이 기기에서는 글로 적어 주십시오'); return; }
+    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 음성 대화를 끄거나 글로 적어 주십시오', null, null, 3500); return; }
     var ta = $('mkMemoTxt');
     var m = mic = { KS: KS, hs: [], ta: ta, base: ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', acc: '', cur: '', heard: false,
                     quietT: null, noSpT: null, finT: null, readyT: null, ready: false, stopping: false };
@@ -986,20 +986,20 @@
     if (mic === m) mic = null;
     if (m.heard && S.memo) S.memo.via = 'voice';          // 실제로 받아 적은 글이 있을 때만 「말로 적음」
     if (R && $('mkMic')) { $('mkMic').classList.remove('on'); micLabel('🎤 말로 적기'); }
-    if (reason && !cancel) toast(MIC_WHY[reason] || ('받아쓰기가 멈췄습니다' + (detail ? '(' + String(detail).slice(0, 40) + ')' : '') + '. 다시 누르거나 글로 적어 주세요'), null, null, 4000);
-    else if (!cancel && !m.heard) toast('받아 적은 말이 없습니다. 다시 누르고 말씀해 주세요', null, null, 3000);
+    if (reason && !cancel) toast(MIC_WHY[reason] || ('받아쓰기가 멈췄습니다' + (detail ? '(' + String(detail).slice(0, 40) + ')' : '') + '. 다시 누르거나 글로 적어 주십시오'), null, null, 4000);
+    else if (!cancel && !m.heard) toast('받아 적은 말이 없습니다. 다시 누르고 말씀해 주십시오', null, null, 3000);
   }
   function nextNum() { var m = 0; S.items.forEach(function (x) { if (x.n > m) m = x.n; }); return m + 1; }
   function saveMemo() {
     var note = $('mkMemoTxt').value.trim();
-    if (!note) { $('mkMemoTxt').focus(); toast('어떻게 고칠지 한 줄만 적어 주세요'); return; }
+    if (!note) { $('mkMemoTxt').focus(); toast('어떻게 고칠지 한 줄만 적어 주십시오'); return; }
     stopMic(true);
     var it = S.memo.item;
     if (S.memo.edit) { it.note = note; if (S.memo.via) it.via = 'voice'; persist(); renderAll(); closeMemo(); kSay(circ(it.n) + '번 메모를 바꿨습니다', 'note'); return; }
     it.n = nextNum(); it.note = note; it.via = S.memo.via || 'typed'; it.ts = Date.now();
     S.items.push(it); persist(); closeMemo(); clearSel(); renderAll(it.n);
     var cb = $('mkCount'); cb.classList.remove('bump'); void cb.offsetWidth; if (!reduce()) cb.classList.add('bump');
-    kSay(circ(it.n) + '번 적어 두었습니다. 다른 곳도 표시해 주세요', 'note');
+    kSay(circ(it.n) + '번 적어 두었습니다. 다른 곳도 표시해 주십시오', 'note');
   }
 
   /* ---------------- 핀·목록 ---------------- */
@@ -1024,12 +1024,12 @@
     var pend = S.items.filter(notSent).length;
     $('mkN').textContent = pend; $('mkSideN').textContent = pend; $('mkListN').textContent = pend;
     $('mkSideSend').textContent = pend ? 'PC로 보내기 (' + pend + '건)' : 'PC로 보내기'; $('mkListSend').textContent = $('mkSideSend').textContent;
-    var html = S.items.length ? S.items.map(itemHtml).join('') : '<div class="mk-empty">아직 적은 수정 요청이 없습니다.<br>고칠 곳에 동그라미를 쳐 보세요.</div>';
+    var html = S.items.length ? S.items.map(itemHtml).join('') : '<div class="mk-empty">아직 적은 수정 요청이 없습니다.<br>고칠 곳에 동그라미를 쳐 보십시오.</div>';
     $('mkListBody').innerHTML = html; $('mkSideList').innerHTML = html;
     [$('mkListBody'), $('mkSideList')].forEach(bindItems);
     var sent = S.items.filter(function (x) { return x.status === 'sent'; }).length, done = S.items.filter(function (x) { return x.status === 'done'; }).length;
     $('mkSent').classList.toggle('on', !!sent); $('mkSentTxt').textContent = 'PC가 고치는 중 · ' + sent + '건';
-    $('mkDone').classList.toggle('on', !!done && !sent); $('mkDoneTxt').textContent = 'PC 작업이 끝났습니다 · ' + done + '건 — 결과는 채팅에서 보세요';
+    $('mkDone').classList.toggle('on', !!done && !sent); $('mkDoneTxt').textContent = 'PC 작업이 끝났습니다 · ' + done + '건 — 결과는 채팅에서 보십시오';
   }
   function itemHtml(it) {
     var st = it.status === 'sent' ? '<span class="st">보냄 · PC가 고치는 중</span>' : it.status === 'done' ? '<span class="st">PC 작업 끝 · 결과는 채팅에</span>' : '';
@@ -1054,7 +1054,7 @@
   function askRemove(it) {
     ask('<div class="mk-ptitle">' + circ(it.n) + '번 수정 요청을 뺄까요?</div><div class="mk-pnote">「' + esc(cut(it.text, 40)) + '」 · ' + esc(it.note) + '</div>',
       [{ label: '빼기', cls: 'mk-big red', fn: function () { S.items = S.items.filter(function (x) { return x !== it; }); persist(); renderAll(); toast(circ(it.n) + '번을 뺐습니다');
-        var left = S.items.filter(notSent).length; kSay(circ(it.n) + '번을 뺐습니다. ' + (left ? '남은 건 ' + left + '건입니다' : '다시 표시해 주세요'), 'note'); } }]);
+        var left = S.items.filter(notSent).length; kSay(circ(it.n) + '번을 뺐습니다. ' + (left ? '남은 건 ' + left + '건입니다' : '다시 표시해 주십시오'), 'note'); } }]);
   }
 
   /* ---------------- 보내기·취소·상태 ---------------- */
@@ -1069,7 +1069,7 @@
   var EDIT_EXTS = ['hwp', 'hwpx', 'doc', 'docx', 'pdf'];
   function trySend() {
     var pend = S.items.filter(notSent);
-    if (!pend.length) { toast('먼저 고칠 곳을 표시해 주세요'); return; }
+    if (!pend.length) { toast('먼저 고칠 곳을 표시해 주십시오'); return; }
     closeSheets(); if (S.memo && S.memo.side) closeMemo();
     var s = S.d.src || {};
     if (!s.pcPath && !s.url && !s.file) {
@@ -1087,7 +1087,7 @@
     var ext = String(S.d.ext || '').toLowerCase();
     ask('<div class="mk-ptitle">수정 요청 ' + pend.length + '건을 PC로 보낼까요?</div>' +
       '<div class="mk-pnote">' + pend.slice(0, 3).map(function (x) { return circ(x.n) + ' ' + x.page + '쪽 「' + esc(cut(x.kind === 'table' ? (x.first || x.text) : x.text, 18)) + '」 → ' + esc(cut(x.note, 24)); }).join('<br>') + (pend.length > 3 ? '<br>…' : '') + '</div>' +
-      '<div class="mk-pnote">' + srcLine() + '. PC는 원본 대신 사본(_rev1)을 고쳐요.</div>' +
+      '<div class="mk-pnote">' + srcLine() + '. PC는 원본 대신 사본(_rev1)을 고칩니다.</div>' +
       (EDIT_EXTS.indexOf(ext) < 0 ? '<div class="mk-pnote">이 형식(' + esc(ext) + ')은 아직 PC가 직접 고치지 못합니다. 고칠 곳을 정리한 교정 표시 PDF로 돌려드리겠습니다.</div>' : ''),
       [{ label: 'PC로 보내기 (' + pend.length + '건)', cls: 'mk-big', fn: function () { doSend(pend, null); } }]);
   }
@@ -1112,7 +1112,7 @@
       setTimeout(function () { if (S.on) kSay('다른 곳도 더 적으실 수 있습니다', 'note', 'aside'); }, 1600);
     }).catch(function (e) {
       hideToast();
-      kSay('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요', 'note');
+      kSay('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오', 'note');
       toast('보내지 못했습니다: ' + ((e && (e.friendly || e.message)) || '알 수 없는 오류'), null, null, 4500);
     });
   }
@@ -1142,7 +1142,7 @@
         if (js === 'done' || js === 'need_approval' || st.status === '완료') { s.state = 'done'; S.items.forEach(function (x) { if (x.rid === s.rid) x.status = 'done'; }); changed = true; }
         else if (js === 'failed' || js === 'cancelled' || st.status === '실패' || st.status === '취소') {
           s.state = js || 'failed'; S.items.forEach(function (x) { if (x.rid === s.rid) { x.status = null; delete x.rid; } }); changed = true;
-          if (S.on) toast(js === 'cancelled' ? '보낸 요청이 취소되었습니다' : 'PC가 끝내지 못했습니다. 채팅의 이유를 보고 다시 보내 주세요');
+          if (S.on) toast(js === 'cancelled' ? '보낸 요청이 취소되었습니다' : 'PC가 끝내지 못했습니다. 채팅의 이유를 보고 다시 보내 주십시오');
         }
       });
       if (changed) { persist(); renderAll(); }
@@ -1215,7 +1215,7 @@
     Array.prototype.forEach.call($('mkHDots').children, function (d, k) { d.classList.toggle('on', k === hIdx); });
     $('mkHCount').textContent = (hIdx + 1) + ' / ' + HELP.length;
     $('mkHPrev').disabled = hIdx === 0;
-    $('mkHNext').textContent = hIdx === HELP.length - 1 ? (S.on ? '시작하기' : '다 봤어요') : '다음 ›';
+    $('mkHNext').textContent = hIdx === HELP.length - 1 ? (S.on ? '시작하기' : '다 봤습니다') : '다음 ›';
     $('mkHClose').style.display = hIdx === HELP.length - 1 ? 'none' : '';
   }
   // from: 'fix' = [✏️ 고치기] 시트에서 연 사용법(닫으면 그 시트로) · 없으면 수정 요청 띠
@@ -1229,7 +1229,7 @@
   function closeHelp() {
     $('mkHelp').classList.remove('on');
     if (!S.on) { R.root.classList.remove('on', 'help-only'); if (helpFrom && host.reopenFix) host.reopenFix(); helpFrom = null; return; }
-    kSay(S.tool === 'pen' || gOn() ? '어디를 고칠까요? 동그라미 쳐 주세요' : '넘겨 보시다가 [펜]을 누르고 표시해 주세요', 'note');
+    kSay(S.tool === 'pen' || gOn() ? '어디를 고칠까요? 동그라미 쳐 주십시오' : '넘겨 보시다가 [펜]을 누르고 표시해 주십시오', 'note');
   }
 
   /* ---------------- 뷰어 띠(적어 둔 요청·보낸 요청) ---------------- */

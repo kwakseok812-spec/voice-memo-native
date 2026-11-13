@@ -204,7 +204,7 @@
       if (!it || it.deleted_at) return;
       var r = { id: it.id, it: it, code: it.item_code, sub: it.sub_type, ay: it.academic_year, n: Math.max(1, Math.floor(num(it.participants)) || 1), v: isObj(it.value) ? it.value : {}, flags: isObj(it.flags) ? it.flags : {},
         score: 0, part: null, status: 'in', reasons: [], months: null, monthsRaw: null };
-      if (mode === 'official' && r.flags.excluded_default) { r.status = 'excluded'; r.reasons.push('기본은 점수에서 뺐어요(중복 의심)'); }
+      if (mode === 'official' && r.flags.excluded_default) { r.status = 'excluded'; r.reasons.push('기본은 점수에서 뺐습니다(중복 의심)'); }
       rows.push(r);
       (by[r.code] = by[r.code] || []).push(r);
     });
@@ -294,9 +294,9 @@
         r.score = rnd(pm.bases[k] * ratio); r.months = pm.eff[k]; r.monthsRaw = pm.raw[k];
         r.startLoss = pA.eff[k] - pB.eff[k]; r.futureLoss = pB.eff[k] - pm.eff[k];      // 현 직급 시작 때문에 빠진 달 / 아직 안 온 달
         if (mode !== 'official') return;
-        if (pA.eff[k] === 0 && pm.raw[k] > 0) r.reasons.push('겹치는 달은 점수가 더 높은 보직 한 곳만 인정해요');
+        if (pA.eff[k] === 0 && pm.raw[k] > 0) r.reasons.push('겹치는 달은 점수가 더 높은 보직 한 곳만 인정합니다');
         if (r.startLoss > 0) { r.status = 'partial'; r.reasons.push('현 직급 시작 이전 ' + r.startLoss + '개월은 빼고 ' + pB.eff[k] + '개월'); }
-        if (r.futureLoss > 0) r.reasons.push('아직 안 온 ' + r.futureLoss + '개월은 아직 안 셌어요(신청 마감 달까지 채우면 올라가요)');
+        if (r.futureLoss > 0) r.reasons.push('아직 안 온 ' + r.futureLoss + '개월은 아직 안 셌습니다(신청 마감 달까지 채우면 올라갑니다)');
       });
     })();
     /* 3-2 TFT · 3-3 정책연구 */
@@ -307,7 +307,7 @@
     live('3-3').forEach(function (r) {
       var ey = num(r.v.endYear) || num(r.v.completionYear), em = num(r.v.endMonth) || num(r.v.completionMonth);
       if (S && ey && !dayOK(ey, em || 12, 28)) { before(r, '최종 완성이 현 직급 이전'); return; }
-      if (!ey) r.reasons.push('날짜가 없어요');
+      if (!ey) r.reasons.push('날짜가 없습니다');
       r.score = R.policy_report;
     });
     /* 4부문 논문·지재권·공모 */
@@ -413,46 +413,46 @@
     var R = ctx.rules, T = tgt(R, ctx.target), list = [], rows = ctx.today.rows, ten = ctx.tenure, fe = ctx.fe, li = ctx.linkInfo || { mismatch: [], broken: [], leadUnknown: [], linked: 0 };
     var byId = {}; rows.forEach(function (r) { byId[r.id] = r; });
     /* 시작일 */
-    if (!ten.start) list.push({ k: 'start_missing', level: 'check', title: '현 직급 시작일이 입력 전이에요', text: '시작일을 넣으면 현 직급 이전 실적을 가려내고 승진임용 가능일을 계산해요(승진 시기 칸에서 넣을 수 있어요).' });
+    if (!ten.start) list.push({ k: 'start_missing', level: 'check', title: '현 직급 시작일이 입력 전입니다', text: '시작일을 넣으면 현 직급 이전 실적을 가려내고 승진임용 가능일을 계산합니다(승진 시기 칸에서 넣을 수 있습니다).' });
     /* 중복 의심 · 확인 전 */
     var dup = rows.filter(function (r) { return r.flags.dup_suspect; });
-    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐어요', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 곽호석 탭에는 한 편이에요. 삭제하지 않았고, 항목을 열어 「점수에 넣기」로 바꿀 수 있어요.' });
+    if (dup.length) list.push({ k: 'dup_suspect', level: 'check', title: '중복 의심 논문 ' + dup.length + '건 — 기본은 점수에서 뺐습니다', text: dup.map(function (r) { return '「' + (r.v.title || '') + '」 ' + (r.v.pubYear || '') + '.' + (r.v.pubMonth || ''); }).join(' / ') + ' — 곽호석 탭에는 한 편입니다. 삭제하지 않았고, 항목을 열어 「점수에 넣기」로 바꿀 수 있습니다.' });
     var unv = rows.filter(function (r) { return r.flags.unverified && r.status === 'in'; });
-    if (unv.length) list.push({ k: 'unverified', level: 'check', title: '확인 전 항목 ' + unv.length + '건(점수에는 포함)', text: unv.map(function (r) { return '「' + (r.v.title || '') + '」'; }).join(' · ') + ' — 게재 여부·증명서가 확인되면 항목을 열어 「확인됨」으로 바꿀 수 있어요.' });
+    if (unv.length) list.push({ k: 'unverified', level: 'check', title: '확인 전 항목 ' + unv.length + '건(점수에는 포함)', text: unv.map(function (r) { return '「' + (r.v.title || '') + '」'; }).join(' · ') + ' — 게재 여부·증명서가 확인되면 항목을 열어 「확인됨」으로 바꿀 수 있습니다.' });
     var nd = rows.filter(function (r) { return r.code === '3-3' && r.status === 'in' && !(num(r.v.endYear) || num(r.v.completionYear)); });
-    if (nd.length) list.push({ k: 'dates_missing', level: 'check', title: '날짜가 없는 정책연구 ' + nd.length + '건', text: '최종 완성일이 있으면 현 직급 기간 안인지 가릴 수 있어요(항목을 열어 날짜를 넣을 수 있어요).' });
+    if (nd.length) list.push({ k: 'dates_missing', level: 'check', title: '날짜가 없는 정책연구 ' + nd.length + '건', text: '최종 완성일이 있으면 현 직급 기간 안인지 가릴 수 있습니다(항목을 열어 날짜를 넣을 수 있습니다).' });
     /* 곽호석 탭 연결 */
-    if (li.mismatch.length) list.push({ k: 'link_mismatch', level: 'check', title: '연결된 논문과 승진 쪽에 적어 둔 값이 달라요 ' + li.mismatch.length + '건', text: li.mismatch.map(function (m) { var r = byId[m.id]; return '「' + (r ? (r.v.title || '') : '') + '」(' + m.fields.join('·') + ')'; }).join(' · ') + ' — 점수는 곽호석 탭 값으로 계산하고 있어요.' });
-    if (li.broken.length) list.push({ k: 'link_broken', level: 'check', title: '연결된 곽호석 탭 항목을 찾지 못한 승진 항목 ' + li.broken.length + '건', text: '곽호석 탭에서 지웠거나 휴지통에 있어요. 지금은 승진 쪽에 적어 둔 값으로 계산해요(항목을 열어 다시 연결하거나 연결을 끊을 수 있어요).' });
-    if (li.leadUnknown.length) list.push({ k: 'lead_unknown', level: 'info', title: '책임저자 표시를 정하지 않은 연결 논문 ' + li.leadUnknown.length + '편', text: '항목을 열어 「책임저자(제1저자 또는 교신저자)」를 정하면 필수 요건 판정에 쓰여요. 정하기 전에는 책임저자가 아닌 것으로 봐요.' });
-    if (ctx.suggestCount) list.push({ k: 'link_suggest', level: 'info', title: '곽호석 탭 논문과 연결할 수 있는 승진 항목 ' + ctx.suggestCount + '건', text: '같아 보이는 논문을 찾았어요. 점수판의 「연결 제안」에서 한 번에 확인할 수 있어요.' });
+    if (li.mismatch.length) list.push({ k: 'link_mismatch', level: 'check', title: '연결된 논문과 승진 쪽에 적어 둔 값이 다릅니다 ' + li.mismatch.length + '건', text: li.mismatch.map(function (m) { var r = byId[m.id]; return '「' + (r ? (r.v.title || '') : '') + '」(' + m.fields.join('·') + ')'; }).join(' · ') + ' — 점수는 곽호석 탭 값으로 계산하고 있습니다.' });
+    if (li.broken.length) list.push({ k: 'link_broken', level: 'check', title: '연결된 곽호석 탭 항목을 찾지 못한 승진 항목 ' + li.broken.length + '건', text: '곽호석 탭에서 지웠거나 휴지통에 있습니다. 지금은 승진 쪽에 적어 둔 값으로 계산합니다(항목을 열어 다시 연결하거나 연결을 끊을 수 있습니다).' });
+    if (li.leadUnknown.length) list.push({ k: 'lead_unknown', level: 'info', title: '책임저자 표시를 정하지 않은 연결 논문 ' + li.leadUnknown.length + '편', text: '항목을 열어 「책임저자(제1저자 또는 교신저자)」를 정하면 필수 요건 판정에 쓰입니다. 정하기 전에는 책임저자가 아닌 것으로 봅니다.' });
+    if (ctx.suggestCount) list.push({ k: 'link_suggest', level: 'info', title: '곽호석 탭 논문과 연결할 수 있는 승진 항목 ' + ctx.suggestCount + '건', text: '같아 보이는 논문을 찾았습니다. 점수판의 「연결 제안」에서 한 번에 확인할 수 있습니다.' });
     /* 임기 확인됨 */
     var conf = rows.filter(function (r) { return r.code === '3-1' && r.flags.term_confirmed; });
     if (conf.length) {
       var ev0 = isObj(conf[0].it.evidence) ? conf[0].it.evidence : {};
-      list.push({ k: 'term_confirmed', level: 'ok', title: '보직 임기: 확인됨' + (ev0.term_confirmed_by ? '(' + ev0.term_confirmed_by + ')' : ''), text: conf.map(function (r) { return r.v.positionName || '보직'; }).join('·') + ' 임기' + (ev0.term_note ? ' — ' + ev0.term_note : '') + ' · 입력된 기간을 그대로 인정했어요.' });
+      list.push({ k: 'term_confirmed', level: 'ok', title: '보직 임기: 확인됨' + (ev0.term_confirmed_by ? '(' + ev0.term_confirmed_by + ')' : ''), text: conf.map(function (r) { return r.v.positionName || '보직'; }).join('·') + ' 임기' + (ev0.term_note ? ' — ' + ev0.term_note : '') + ' · 입력된 기간을 그대로 인정했습니다.' });
     }
     /* 경계 항목 안내 */
     var part = rows.filter(function (r) { return r.status === 'partial' && r.code === '3-1' && r.startLoss > 0; });
-    if (part.length) list.push({ k: 'partial', level: 'info', title: '경계 항목은 시작일 이후만 인정했어요', text: part.map(function (r) { return (r.v.positionName || '보직') + ' ' + r.monthsRaw + '개월 중 ' + (r.monthsRaw - r.startLoss) + '개월'; }).join(', ') + ' (재임 개월 비율로 계산).' });
+    if (part.length) list.push({ k: 'partial', level: 'info', title: '경계 항목은 시작일 이후만 인정했습니다', text: part.map(function (r) { return (r.v.positionName || '보직') + ' ' + r.monthsRaw + '개월 중 ' + (r.monthsRaw - r.startLoss) + '개월'; }).join(', ') + ' (재임 개월 비율로 계산).' });
     var bef = rows.filter(function (r) { return r.status === 'before'; });
-    if (bef.length) list.push({ k: 'before', level: 'info', title: '현 직급 이전 실적 ' + bef.length + '건은 점수에 안 넣었어요', text: bef.map(function (r) { return rowLabel(r.it, R); }).join(' / ') });
+    if (bef.length) list.push({ k: 'before', level: 'info', title: '현 직급 이전 실적 ' + bef.length + '건은 점수에 안 넣었습니다', text: bef.map(function (r) { return rowLabel(r.it, R); }).join(' / ') });
     /* ---- 규정이 분명하지 않은 부분(참고) — 점수에는 위 기본값으로 반영했고, 행동은 필요 없어요 ---- */
     var tr = rows.filter(function (r) { return r.code === '1-4' && r.status === 'in'; });
     if (tr.length) {
       var hours = ctx.today.trainHours, days = tr.reduce(function (a, r) { return a + num(r.v.hours) / R.train.hours_per_day; }, 0);
-      list.push({ k: 'train_unit', level: 'ref', title: '현장연수 기준이 문서마다 달라요',
-        text: '임용규칙 별표 11은 「일수(' + T.label.replace(' 승진', '') + ' ' + T.train_days + '일)」, 세부 기준은 「시간(' + T.train_hours + '시간)」이라고 적혀 있어요. 입력된 ' + tr.length + '건은 ' + hours + '시간(= ' + money(days) + '일)이라 시간 기준은 ' + (hours >= T.train_hours ? '통과' : '미달') + ', 일수 기준은 ' + (days >= T.train_days ? '통과' : '미달(' + R.train.points + '점이 0점)') + '이에요. 지금은 시간 기준으로 계산했어요.' });
+      list.push({ k: 'train_unit', level: 'ref', title: '현장연수 기준이 문서마다 다릅니다',
+        text: '임용규칙 별표 11은 「일수(' + T.label.replace(' 승진', '') + ' ' + T.train_days + '일)」, 세부 기준은 「시간(' + T.train_hours + '시간)」이라고 적혀 있습니다. 입력된 ' + tr.length + '건은 ' + hours + '시간(= ' + money(days) + '일)이라 시간 기준은 ' + (hours >= T.train_hours ? '통과' : '미달') + ', 일수 기준은 ' + (days >= T.train_days ? '통과' : '미달(' + R.train.points + '점이 0점)') + '입니다. 지금은 시간 기준으로 계산했습니다.' });
     }
     if (fe.mixed.length && ten.start) {
       fe.mixed.forEach(function (ay) {
         var beforeMonths = Math.max(0, mi(ten.start.y, ten.start.m) - mi(ay, 3));
-        list.push({ k: 'eval_mixed', level: 'ref', title: '교수업적 순위: ' + ay + '학년도 일부는 현 직급 이전이에요',
-          text: ay + '학년도(' + ay + '.3~' + (ay + 1) + '.2) 안에 현 직급 시작(' + fmtDay(ten.start) + ') 이전 ' + beforeMonths + '개월이 들어 있어요. 규정(세부기준 공통 6)은 현 직급이 아닌 기간이 든 학년도의 평가를 반영하지 않는다고 하는데, 부교수 승진 직후 학년도를 어떻게 보는지는 분명하지 않아요. 지금은 이 학년도 값을 반영했어요.' });
+        list.push({ k: 'eval_mixed', level: 'ref', title: '교수업적 순위: ' + ay + '학년도 일부는 현 직급 이전입니다',
+          text: ay + '학년도(' + ay + '.3~' + (ay + 1) + '.2) 안에 현 직급 시작(' + fmtDay(ten.start) + ') 이전 ' + beforeMonths + '개월이 들어 있습니다. 규정(세부기준 공통 6)은 현 직급이 아닌 기간이 든 학년도의 평가를 반영하지 않는다고 하는데, 부교수 승진 직후 학년도를 어떻게 보는지는 분명하지 않습니다. 지금은 이 학년도 값을 반영했습니다.' });
       });
     }
     if (fe.partialYears.length) list.push({ k: 'eval_partial', level: 'ref', title: '부처장 재임이 학년도 일부만 걸치는 학년도',
-      text: fe.partialYears.map(function (e) { return e.ay + '학년도(' + e.cover + '개월)'; }).join(', ') + ' — 일부만 걸쳐도 그 학년도 평가를 빼는지는 분명하지 않아요. 지금은 일부만 걸쳐도 뺀다고 봤어요.' });
+      text: fe.partialYears.map(function (e) { return e.ay + '학년도(' + e.cover + '개월)'; }).join(', ') + ' — 일부만 걸쳐도 그 학년도 평가를 빼는지는 분명하지 않습니다. 지금은 일부만 걸쳐도 뺀다고 봤습니다.' });
     var groups = {};
     rows.forEach(function (r) { if (r.flags.series && r.status !== 'excluded') { var k = r.code + '|' + r.flags.series; (groups[k] = groups[k] || []).push(r); } });
     var effect = 0, gtxt = [];
@@ -460,12 +460,12 @@
       var g = groups[k]; if (g.length < 2) return;
       var each = g[0].score || 0, loss = each * (g.length - 1); effect += loss; gtxt.push(g[0].flags.series + ' ' + g.length + '건(' + R.names[g[0].code] + ')');
     });
-    if (gtxt.length) list.push({ k: 'series_dup', level: 'ref', title: '같은 사업의 연차별 실적 중복 가능성', text: '규정 공통 13번은 같은 사업의 연차별 실적을 부문별로 1회만 인정한다고 해요. ' + gtxt.join(', ') + '. 엄격히 보면 최대 −' + money(effect) + '점이고 합격에는 영향이 없어요. 지금은 깎지 않고 입력된 대로 뒀어요.', effect: effect });
+    if (gtxt.length) list.push({ k: 'series_dup', level: 'ref', title: '같은 사업의 연차별 실적 중복 가능성', text: '규정 공통 13번은 같은 사업의 연차별 실적을 부문별로 1회만 인정한다고 합니다. ' + gtxt.join(', ') + '. 엄격히 보면 최대 −' + money(effect) + '점이고 합격에는 영향이 없습니다. 지금은 깎지 않고 입력된 대로 뒀습니다.', effect: effect });
     var pr = rows.filter(function (r) { return r.code === '1-2' && r.status === 'in'; });
     if (pr.length >= 1) {
       var td = parseDay(ctx.todayStr), ing = pr.filter(function (r) { var st = semStart(r.ay, r.v.semester); if (!st || !td) return false; var en = st.m === 3 ? { y: st.y, m: 8, d: 31 } : { y: st.y + 1, m: 2, d: 28 }; return dayNum(td) >= dayNum(st) && dayNum(td) <= dayNum(en); });
       if (pr.length >= 2 || ing.length) list.push({ k: 'programs', level: 'ref', title: '교수법 프로그램 ' + pr.length + '건: ' + (pr.length * R.programs) + '점(최대 ' + R.programs + '점일 수도 있음, ±' + ((pr.length - 1) * R.programs) + ')',
-        text: (pr.length >= 2 ? '규정이 「' + R.programs + '점」만 말해서 합산인지 항목 최대인지 분명하지 않아요. ' : '') + (ing.length ? '진행 중인 학기(' + ing.map(function (r) { return r.ay + '학년도 ' + r.v.semester + '학기'; }).join(', ') + ') 실적이 학기가 끝나기 전에 인정되는지도 분명하지 않아요. ' : '') + '지금은 입력된 대로 합산해 계산했어요.' });
+        text: (pr.length >= 2 ? '규정이 「' + R.programs + '점」만 말해서 합산인지 항목 최대인지 분명하지 않습니다. ' : '') + (ing.length ? '진행 중인 학기(' + ing.map(function (r) { return r.ay + '학년도 ' + r.v.semester + '학기'; }).join(', ') + ') 실적이 학기가 끝나기 전에 인정되는지도 분명하지 않습니다. ' : '') + '지금은 입력된 대로 합산해 계산했습니다.' });
     }
     return list;
   }
@@ -475,12 +475,12 @@
   function sayText(ch, ten) {
     var fails = [], waits = [], k, order = ['total', 'sec3', 'lead', 'eval', 'tenure'], tenWait = ch.tenure.s === 'wait';
     for (var i = 0; i < order.length; i++) { k = order[i]; if (ch[k].s === 'fail') fails.push(k); else if (ch[k].s === 'unknown') waits.push(CHECK_NAMES[k]); }
-    var scoreOk = ch.total.s === 'pass' && ch.sec3.s === 'pass', lead = scoreOk ? '점수는 합격선을 넘었어요. ' : '';
-    var tenTxt = '재직 6년은 아직이에요' + (ten && ten.eligible ? ' (' + fmtDay(ten.eligible) + ' 가능).' : '.');
+    var scoreOk = ch.total.s === 'pass' && ch.sec3.s === 'pass', lead = scoreOk ? '점수는 합격선을 넘었습니다. ' : '';
+    var tenTxt = '재직 6년은 아직입니다' + (ten && ten.eligible ? ' (' + fmtDay(ten.eligible) + ' 가능).' : '.');
     if (!fails.length && tenWait) return lead + tenTxt + (waits.length ? ' 아직 확인 전인 것: ' + waits.join(', ') + '.' : '');
     if (fails.length) return '부족한 것: ' + fails.map(function (x) { return CHECK_NAMES[x]; }).join(', ') + '.' + (waits.length ? ' 확인 전인 것: ' + waits.join(', ') + '.' : '') + (tenWait ? ' ' + tenTxt : '');
     if (waits.length) return lead + '아직 확인 전인 것: ' + waits.join(', ') + '.';
-    return '모든 요건을 채웠어요.';
+    return '모든 요건을 채웠습니다.';
   }
 
   /* ---------- 한 번에 계산 ---------- */

@@ -107,7 +107,7 @@
         } else if (href.charAt(0) === '#') {
           var t = null; try { t = page.querySelector('[id="' + href.slice(1).replace(/"/g, '') + '"]'); } catch (x) {}
           if (t) t.scrollIntoView();
-        } else ctx.toast('이 링크는 열 수 없어요.');
+        } else ctx.toast('이 링크는 열 수 없습니다.');
       };
       page.addEventListener('click', onClick);
       draw(); setActs();

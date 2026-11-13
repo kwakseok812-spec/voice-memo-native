@@ -24,13 +24,13 @@
    * 1. 목록·순수 함수
    * ===================================================================*/
   var PC_DESC = '폰에서만 열립니다';
-  var PC_MSG = '폰에서만 열립니다 — 폰의 스마트비서에서 눌러 주세요.';
+  var PC_MSG = '폰에서만 열립니다 — 폰의 스마트비서에서 눌러 주십시오.';
   var OLD_APK_MSG = '앱을 새 버전으로 바꾸면 바로 열 수 있습니다.';
 
   /* OTT 시트 5줄(순서 그대로). brave:true = 기존 유튜브(Brave) 동작. 패키지는 플레이 스토어 앱 제목으로 확인한 값(설계안 3장). */
   var MINVIEW_PKG = 'com.kwak.tubelab';
   var MINVIEW_DESC = '유튜브 · 광고 없이';
-  var MINVIEW_MISSING_DESC = '미니뷰가 없어서 Brave로 열려요';
+  var MINVIEW_MISSING_DESC = '미니뷰가 없어서 Brave로 열립니다';
   var MINVIEW_PC_DESC = '새 탭으로 유튜브 열기';
   var ROW_MINVIEW = { id: 'minview', name: '미니뷰', pkg: MINVIEW_PKG, desc: MINVIEW_DESC, minview: true };   // v9.87(O-0794) 기본 첫 줄
   var ROW_BRAVE = { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true };                       // v9.86 까지의 첫 줄 — 지우지 않고 남겨 둔다(YT_MODE='brave' 일 때 init 이 이 줄로 바꿔 끼운다)
@@ -65,8 +65,8 @@
   function storeName(it) { return (it && (it.store || it.name)) || ''; }
   /* 조사 「을(를)」을 쓰지 않는다 — 「○○ 앱이 없습니다 / ○○ 앱을 열지 못했습니다」로 고정(앱 이름 끝소리와 무관하게 자연스럽다) */
   function missingTitle(n) { return n + ' 앱이 없습니다'; }
-  function missingMsg(n) { return '플레이 스토어에서 ' + n + ' 앱을 설치한 뒤 다시 눌러 주세요.'; }
-  function failMsg(n) { return n + ' 앱을 열지 못했습니다 — 다시 눌러 주세요.'; }
+  function missingMsg(n) { return '플레이 스토어에서 ' + n + ' 앱을 설치한 뒤 다시 눌러 주십시오.'; }
+  function failMsg(n) { return n + ' 앱을 열지 못했습니다 — 다시 눌러 주십시오.'; }
   /* 목록이 말이 되는가(중복·빠진 칸·패키지 모양). 문제 목록을 돌려준다(빈 배열 = 정상). */
   function validate() {
     var bad = [], ids = {}, pk = {};
@@ -128,9 +128,9 @@
   function toBrave(why) { try { ctx.openBrave({ noLock: true, from: 'minview', why: why }); } catch (e) {} }
   function minviewFallback(why) {
     if (why === 'not_installed') minviewMissing = true;
-    var msg = why === 'not_installed' ? '미니뷰가 없어서 Brave로 열었어요'
-      : why === 'not_allowed' ? '앱을 새 버전으로 바꾸면 미니뷰를 열 수 있어요 — 지금은 Brave로 열었어요'
-      : '미니뷰를 열지 못해 Brave로 열었어요';
+    var msg = why === 'not_installed' ? '미니뷰가 없어서 Brave로 열었습니다'
+      : why === 'not_allowed' ? '앱을 새 버전으로 바꾸면 미니뷰를 열 수 있습니다 — 지금은 Brave로 열었습니다'
+      : '미니뷰를 열지 못해 Brave로 열었습니다';
     try { ctx.toast(msg, 3200); } catch (e) {}
     toBrave(why);
   }

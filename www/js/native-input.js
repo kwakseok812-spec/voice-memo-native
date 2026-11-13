@@ -24,8 +24,8 @@
   // 대상별 웹 요소 매핑: 입력창 · 전송 · 첨부(＋) · 카메라(공유함엔 없음) · 안내문
   var MAP = {
     chat:   { input: 'chatInput',   send: 'chatSend',   attach: 'chatAttach',   cam: 'chatCam', hint: '메시지 입력', opus: true },
-    locker: { input: 'lockerInput', send: 'lockerSend', attach: 'lockerAttach', cam: null,      hint: '여기에 글을 쓰거나 파일을 올리세요' },
-    idea:   { input: 'ideaInput',   send: 'ideaSend',   attach: null,           cam: null,      hint: '떠오른 생각을 적어 주세요' }   // v5.5 아이디어 수첩
+    locker: { input: 'lockerInput', send: 'lockerSend', attach: 'lockerAttach', cam: null,      hint: '여기에 글을 쓰거나 파일을 올리십시오' },
+    idea:   { input: 'ideaInput',   send: 'ideaSend',   attach: null,           cam: null,      hint: '떠오른 생각을 적어 주십시오' }   // v5.5 아이디어 수첩
   };
   var current = null;      // 현재 열려 있는 입력 대상('chat' | 'locker')
   var hiddenBar = null;    // 네이티브 입력 중 숨겨둔 웹 하단 바(.chatbar) — 닫힐 때 복원
@@ -211,7 +211,7 @@
     NI.pickFiles({ accept: accept || '*/*', multiple: true }).then(function (res) {
       var list = (res && res.files) || [];
       var requested = (res && res.requested) || 0;
-      if (!list.length) { if (requested > 0) say('고른 파일을 읽지 못했습니다. 다시 시도해 주세요.'); return; }
+      if (!list.length) { if (requested > 0) say('고른 파일을 읽지 못했습니다. 다시 시도해 주십시오.'); return; }
       var big = list.filter(function (f) { return (f.size || 0) > NATIVE_PICK_MAX; });
       var ok = list.filter(function (f) { return (f.size || 0) <= NATIVE_PICK_MAX; });
       return Promise.all(ok.map(toFile)).then(function (files) {
@@ -219,13 +219,13 @@
         if (files.length) hook(files);
         var failed = ok.length - files.length + (requested > list.length ? requested - list.length : 0);
         if (big.length) {
-          say('300MB가 넘는 파일(' + big.length + '개)은 입력창을 닫고 아래 ＋ 버튼으로 붙여 주세요.', 4000);
+          say('300MB가 넘는 파일(' + big.length + '개)은 입력창을 닫고 아래 ＋ 버튼으로 붙여 주십시오.', 4000);
         } else if (failed > 0) {
-          say('파일 ' + failed + '개를 읽지 못했습니다. 다시 골라 주세요.', 3000);
+          say('파일 ' + failed + '개를 읽지 못했습니다. 다시 골라 주십시오.', 3000);
         }
       });
     }).catch(function () {
-      say('파일 선택 창을 열지 못했습니다. 입력창을 닫고 아래 ＋ 버튼을 눌러 주세요.', 3500);
+      say('파일 선택 창을 열지 못했습니다. 입력창을 닫고 아래 ＋ 버튼을 눌러 주십시오.', 3500);
     });
   }
 

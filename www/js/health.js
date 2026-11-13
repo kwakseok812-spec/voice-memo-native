@@ -346,7 +346,7 @@
     var c = cfg(); if (!c) return Promise.reject(new Error('NO_CONFIG'));
     var pass = syncPass();
     if (!pass) {
-      if (!quiet) needPass('건강 기록을 저장·조회하려면 PC 연동 암호를 입력해 주세요.');
+      if (!quiet) needPass('건강 기록을 저장·조회하려면 PC 연동 암호를 입력해 주십시오.');
       var e0 = new Error('NO_PASS'); e0.badpass = true; return Promise.reject(e0);
     }
     body.p_pass = pass;
@@ -358,7 +358,7 @@
     }).then(function (r) {
       noteServerClock(r, t0);
       if (r.status === 400 || r.status === 401 || r.status === 403) {
-        if (!quiet) needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했습니다. 다시 입력해 주세요.');
+        if (!quiet) needPass('연동 암호가 맞지 않아 건강 기록을 저장·조회하지 못했습니다. 다시 입력해 주십시오.');
         var e = new Error('BAD_PASSCODE'); e.badpass = true; throw e;
       }
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -933,7 +933,7 @@
     var box = $('hLocal');
     if (box) box.addEventListener('click', function () {
       if (!box.classList.contains('tap')) { wake(); return; }
-      needPass('건강 기록을 올리려면 PC 연동 암호를 입력해 주세요.', true);
+      needPass('건강 기록을 올리려면 PC 연동 암호를 입력해 주십시오.', true);
     });
 
     // 숫자 스텝퍼 + 직접 입력
@@ -1203,8 +1203,8 @@
     // v9.4: 못 불러왔을 때는 케이가 사과하고, 빈 화면은 케이가 안내한다. 폰에 적어 둔 것이 있으면(아래 목록이 있으면) 짧은 한 줄만.
     var sorry = '죄송합니다, ' + (cut ? '연결이 끊겨 ' : '') + '기록을 불러오지 못했습니다.';
     if (!rows.length) {
-      host.innerHTML = failed ? kEmpty('sorry', sorry + ' 「기록 보기」를 다시 눌러 주세요.')
-        : kEmpty('guide', '아직 적으신 기록이 없습니다. 「오늘 기록」에서 몇 가지만 눌러 보세요.');
+      host.innerHTML = failed ? kEmpty('sorry', sorry + ' 「기록 보기」를 다시 눌러 주십시오.')
+        : kEmpty('guide', '아직 적으신 기록이 없습니다. 「오늘 기록」에서 몇 가지만 눌러 보십시오.');
       return;
     }
     if (failed) html += '<div class="empty-note">' + esc(sorry + ' ' + (isNative() ? '폰' : '이 기기') + '에 적어 둔 것만 보여 드립니다.') + '</div>';
@@ -1248,7 +1248,7 @@
         if (on) m.rows.forEach(function (r) { html += dayRow(r, !!ov.pend[r.log_date], r.log_date === t); });
       });
       if (archBusy && !archAt) html += '<div class="empty-note">이전 달 기록을 가져오고 있습니다…</div>';
-      else if (archFail) html += '<div class="empty-note">이전 달 기록은 불러오지 못했습니다. 「기록 보기」를 다시 눌러 주세요.</div>';
+      else if (archFail) html += '<div class="empty-note">이전 달 기록은 불러오지 못했습니다. 「기록 보기」를 다시 눌러 주십시오.</div>';
     }
     html += '</div>';
     host.innerHTML = html;

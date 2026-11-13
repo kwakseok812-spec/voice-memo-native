@@ -72,7 +72,7 @@
     this._rec = null;                 // v9.8: 새로 시작하는 동안에는 지난 녹음기를 가리키지 않는다(alive 가 「모름」을 돌려주게)
 
     if (!RecordingModule.isSupported()) {
-      this.onError('이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 Chrome에서 열어 주세요.');
+      this.onError('이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 Chrome에서 열어 주십시오.');
       this.onStatus('error');
       return;
     }
@@ -114,9 +114,9 @@
       .catch(function (err) {
         var msg = '마이크를 사용할 수 없습니다.';
         if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
-          msg = '마이크 사용이 차단되었습니다. 주소창의 자물쇠(권한) 설정에서 마이크를 "허용"으로 바꿔 주세요.';
+          msg = '마이크 사용이 차단되었습니다. 주소창의 자물쇠(권한) 설정에서 마이크를 "허용"으로 바꿔 주십시오.';
         } else if (err && err.name === 'NotFoundError') {
-          msg = '마이크를 찾을 수 없습니다. 기기 마이크를 확인해 주세요.';
+          msg = '마이크를 찾을 수 없습니다. 기기 마이크를 확인해 주십시오.';
         }
         self.onError(msg);
         self.onStatus('error');

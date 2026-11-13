@@ -344,7 +344,7 @@
       if (k === 'when') {
         var isBad = BADDATE_RE.test(a.s.replace(/\s+/g, ' '));
         when = isBad ? 'bad' : /어제/.test(a.s) ? 'yesterday' : /그제|그저께/.test(a.s) ? 'dayBefore' : 'today'; whenX = true;
-        if (isBad) out.unread.push(a.s.replace(/\s+/g, ' ') + ' (날짜는 오늘·어제·그제까지 말씀해 주세요)');
+        if (isBad) out.unread.push(a.s.replace(/\s+/g, ' ') + ' (날짜는 오늘·어제·그제까지 말씀해 주십시오)');
         var rest = seg.replace(/^\s*(은|는|엔|에는|에|도|부터)(?=\s|$)/, '').replace(/¶/g, ' ').trim();
         if (pendMeas && pendMeas.idx === n - 1) {                       // 바로 앞이 값 없는 혈당·체중 낱말: 「체중은 오늘 안 쟀고」「혈당은 어제 95」
           var pm = pendMeas; pendMeas = null;
@@ -651,7 +651,7 @@
       row.none = isNoneVal(k, v) || (typeof v === 'string' && sq(v) === sq(noneWordOf(k)));
       row.tokens = row.none ? [] : tokensOf(v).filter(function (x) { return !(u.rm && u.rm.indexOf(x) >= 0); });
     }
-    if (row.baddate) { row.locked = true; row.lockWhy = '날짜는 오늘·어제·그제까지 말씀해 주세요'; row.checked = false; row.status = 'unknown'; row.display = displayOf(row); return row; }
+    if (row.baddate) { row.locked = true; row.lockWhy = '날짜는 오늘·어제·그제까지 말씀해 주십시오'; row.checked = false; row.status = 'unknown'; row.display = displayOf(row); return row; }
     if (b === undefined) { row.pending = true; row.checked = false; row.display = displayOf(row); return row; }
     if (!b || b.ok === false) {
       row.locked = true; row.lockWhy = '못 불러와서 저장하지 못했습니다'; row.checked = false; row.status = 'unknown'; row.display = displayOf(row); return row;
@@ -704,18 +704,18 @@
     if (st === 'diff') {
       if (row.mode === 'append') N.push('지금 기록: ' + bt + ' — 뒤에 덧붙입니다');
       else if (row.mode === 'replace') N.push('지금 기록: ' + bt + ' — 체크하면 바꿉니다');
-      else N.push('지금 기록: ' + bt + ' — 바꾸려면 체크해 주세요');
+      else N.push('지금 기록: ' + bt + ' — 바꾸려면 체크해 주십시오');
     }
-    if (fl.indexOf('new') >= 0) N.push('새 음식: ' + row.newFoods.join(', ') + (row.pchecked ? '' : ' — 맞게 들었는지 확인해 주세요'));
-    if (fl.indexOf('newex') >= 0) N.push('새 운동: ' + row.newEx.join(', ') + ' — 맞게 들었는지 확인해 주세요');
-    if (fl.indexOf('corr') >= 0) N.push('고쳐 말씀하신 것으로 봤습니다 — 맞는지 확인해 주세요');
-    if (fl.indexOf('neg') >= 0) N.push('안 먹었다고 말씀하셨습니다 — 기록하려면 체크해 주세요');
+    if (fl.indexOf('new') >= 0) N.push('새 음식: ' + row.newFoods.join(', ') + (row.pchecked ? '' : ' — 맞게 들었는지 확인해 주십시오'));
+    if (fl.indexOf('newex') >= 0) N.push('새 운동: ' + row.newEx.join(', ') + ' — 맞게 들었는지 확인해 주십시오');
+    if (fl.indexOf('corr') >= 0) N.push('고쳐 말씀하신 것으로 봤습니다 — 맞는지 확인해 주십시오');
+    if (fl.indexOf('neg') >= 0) N.push('안 먹었다고 말씀하셨습니다 — 기록하려면 체크해 주십시오');
     if (fl.indexOf('time-guess') >= 0) N.push('때를 말씀하지 않아 ' + (k === 'med_evening' ? '저녁약' : '아침약') + '으로 봤습니다');
-    if (row.kcands && fl.indexOf('confirm') >= 0) N.push('아침약인지 저녁약인지 골라 주세요');
+    if (row.kcands && fl.indexOf('confirm') >= 0) N.push('아침약인지 저녁약인지 골라 주십시오');
     if (fl.indexOf('guess') >= 0) N.push('항목 이름이 없는 숫자입니다. ' + LABEL[row.k0] + '으로 적을까요?');
-    if (fl.indexOf('confirm') >= 0 && row.cands) N.push(fl.indexOf('mixed') >= 0 ? '값과 「측정 안 함」을 함께 말씀하셨습니다. 맞는 쪽을 골라 주세요' : '두 가지로 말씀하셨습니다. 맞는 값을 골라 주세요');
-    if (row.range === 'warn') N.push(k === 'weight' && row.v <= 200 ? '지난 기록과 5kg 넘게 다릅니다. 숫자를 확인해 주세요' : '숫자를 확인해 주세요');
-    if (row.range === 'block') N.push('숫자를 확인해 주세요. 이 값으로는 저장할 수 없습니다');
+    if (fl.indexOf('confirm') >= 0 && row.cands) N.push(fl.indexOf('mixed') >= 0 ? '값과 「측정 안 함」을 함께 말씀하셨습니다. 맞는 쪽을 골라 주십시오' : '두 가지로 말씀하셨습니다. 맞는 값을 골라 주십시오');
+    if (row.range === 'warn') N.push(k === 'weight' && row.v <= 200 ? '지난 기록과 5kg 넘게 다릅니다. 숫자를 확인해 주십시오' : '숫자를 확인해 주십시오');
+    if (row.range === 'block') N.push('숫자를 확인해 주십시오. 이 값으로는 저장할 수 없습니다');
     if (b.note) N.push(b.note);
     row.display = displayOf(row);
     return row;
@@ -777,9 +777,9 @@
   // O-0736: 대표님 「녹음 듣는 시간이 너무 짧다」 — 말 사이 쉼 2초에 끊던 것을 7초로(「다 말했어요」를 누르면 바로 끝), 처음 말을 시작하기까지 12초, 한 번에 최대 5분.
   //   값을 바꿀 곳은 이 한 줄이다(받아쓰기 플러그인 KSpeech 자체는 쉼에서 스스로 끝나도 곧바로 다시 듣는 이어 듣기라 따로 고칠 것이 없다).
   var MIC_QUIET_MS = 7000, MIC_NOSPEECH_MS = 12000, MIC_MAX_MS = 300000, MIC_COUNT_MS = 3000, MIC_FINAL_WAIT_MS = 2500, MIC_READY_MS = 10000, UNDO_MS = 8000;
-  var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주세요',
+  var MIC_WHY = { permission: '마이크 권한이 없습니다. 폰 설정 → 애플리케이션 → 스마트비서 → 권한에서 마이크를 허용해 주십시오',
                   nospeech: '말씀이 들리지 않아 멈췄습니다', nomatch: '잘 알아듣지 못했습니다',
-                  busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주세요', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
+                  busy: '다른 곳에서 마이크를 쓰고 있습니다. 잠시 뒤 다시 눌러 주십시오', network: '인터넷 연결이 불안정해 받아쓰기가 멈췄습니다',
                   lang: '이 폰에서 한국어 받아쓰기를 쓸 수 없습니다', recording: '회의 녹음 중에는 받아쓰기를 쓸 수 없습니다' };
 
   var S = { open: false, phase: '', raw: '', rows: [], unread: [], ustate: {}, bases: {}, loading: {}, ctx: null, env: null, note: '', gen: 0, ignored: {} };
@@ -813,11 +813,11 @@
             '<div class="hv-clock" id="hvClock" aria-hidden="true"></div>' +
             '<div class="hv-live" id="hvLive" aria-live="polite"></div>' +
             '<div class="hv-hint" id="hvHint"></div>' +
-            '<div class="hv-acts"><button type="button" class="hv-btn pri" id="hvDone">다 말했어요</button><button type="button" class="hv-btn" id="hvCancel">취소</button></div>' +
+            '<div class="hv-acts"><button type="button" class="hv-btn pri" id="hvDone">다 말했습니다</button><button type="button" class="hv-btn" id="hvCancel">취소</button></div>' +
           '</div>' +
           '<div class="hv-msg" id="hvMsg" hidden></div>' +
           '<div class="hv-card" id="hvCard" hidden>' +
-            '<label class="hv-lab" for="hvHeard">들은 말 <small>(틀리게 적혔으면 고쳐 주세요 — 아래가 바로 다시 계산됩니다)</small></label>' +
+            '<label class="hv-lab" for="hvHeard">들은 말 <small>(틀리게 적혔으면 고쳐 주십시오 — 아래가 바로 다시 계산됩니다)</small></label>' +
             '<textarea id="hvHeard" class="hv-heard" rows="3" inputmode="text" autocomplete="off" placeholder="예: 공복혈당 98, 체중 71.2, 아침은 계란"></textarea>' +
             '<div class="hv-rows" id="hvRows"></div>' +
             '<div class="hv-unread" id="hvUnread"></div>' +
@@ -908,7 +908,7 @@
     S.raw = ''; S.note = note || '';
     setPhase('card'); setTitle('말씀하신 내용');
     $('hvHeard').value = '';
-    K('이렇게 적을까요? 말씀하신 내용을 적어 주세요.');
+    K('이렇게 적을까요? 말씀하신 내용을 적어 주십시오.');
     recompute();
     setTimeout(function () { try { if (S.open && S.phase === 'card' && !isNative()) $('hvHeard').focus({ preventScroll: true }); } catch (e) {} }, 260);
   }
@@ -916,23 +916,23 @@
     stopMic(true);
     if (!S.open) return;
     var KS = null; try { if (isNative() && root.Capacitor && root.Capacitor.Plugins) KS = root.Capacitor.Plugins.KSpeech || null; } catch (e) {}
-    if (!KS) { openType('이 기기에서는 받아쓰기를 쓸 수 없어 글로 적어 주세요'); return; }
-    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 글로 적어 주세요', 3500); openType('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 글로 적어 주세요'); return; }
+    if (!KS) { openType('이 기기에서는 받아쓰기를 쓸 수 없어 글로 적어 주십시오'); return; }
+    if (host.sttBusy && host.sttBusy()) { toast('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 글로 적어 주십시오', 3500); openType('음성 대화 중이라 받아쓰기를 켤 수 없습니다. 글로 적어 주십시오'); return; }
     S.ustate = {}; S.ignored = {}; S.lastIds = '';                      // 새로 말하면 이전 카드에서 만진 것은 이어 가지 않는다
     setPhase('listen'); setTitle('듣고 있습니다');
     $('hvLive').textContent = '준비 중입니다…';
     var first = lsGet(HINT_KEY) !== '1';
     $('hvHint').innerHTML = first
-      ? '이렇게 말씀해 보세요<br><b>「혈당 98, 체중은 안 쟀어, 아침은 양배추랑 계란 먹었어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 쭉 말씀하셔도 됩니다. 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」를 눌러 주세요.'
-      : '예: 「혈당 98, 체중은 안 쟀어, 아침은 계란」 — 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했어요」';
+      ? '이렇게 말씀해 보십시오<br><b>「혈당 98, 체중은 안 쟀어, 아침은 양배추랑 계란 먹었어, 오늘은 운동 안 했어」</b><br>한 번에 여러 가지를 쭉 말씀하셔도 됩니다. 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했습니다」를 눌러 주십시오.'
+      : '예: 「혈당 98, 체중은 안 쟀어, 아침은 계란」 — 쉬었다 말씀하셔도 계속 듣습니다. 다 끝나면 「다 말했습니다」';
     lsSet(HINT_KEY, '1');
-    K('듣고 있습니다. 편하게 말씀하세요.');
+    K('듣고 있습니다. 편하게 말씀하십시오.');
     var m = mic = { KS: KS, hs: [], acc: '', cur: '', heard: false, quietT: null, noSpT: null, finT: null, readyT: null, clockT: null, t0: Date.now(), lastAct: Date.now(), endNote: '', ready: false, stopping: false, ended: false };
     screenHold(true);
     function text() { return (m.acc + (m.acc && m.cur ? ' ' : '') + m.cur).trim(); }
     function show() {
       var t = text(); if (t) m.heard = true; var lv = $('hvLive');
-      if (lv && S.phase === 'listen') { lv.textContent = t || (m.ready ? '듣는 중… 편하게 말씀하세요' : '준비 중입니다…'); lv.scrollTop = lv.scrollHeight; }      // 길게 말하면 칸 안에서 스크롤 — 단추가 밀려 내려가지 않게
+      if (lv && S.phase === 'listen') { lv.textContent = t || (m.ready ? '듣는 중… 편하게 말씀하십시오' : '준비 중입니다…'); lv.scrollTop = lv.scrollHeight; }      // 길게 말하면 칸 안에서 스크롤 — 단추가 밀려 내려가지 않게
     }
     function quiet() { m.lastAct = Date.now(); clearTimeout(m.quietT); m.quietT = setTimeout(function () { m.quietT = null; if (mic === m) stopMic(false, 'quiet'); }, MIC_QUIET_MS); }
     function tick() {                                      // 듣는 시간(0:00)과 곧 마무리된다는 안내 — 0.5초마다
@@ -1004,8 +1004,8 @@
     var why = reason ? (MIC_WHY[reason] || ('받아쓰기가 멈췄습니다' + (detail ? '(' + String(detail).slice(0, 40) + ')' : ''))) : '';
     if (text) { S.raw = text; S.note = why ? why + ' — 여기까지 들은 말로 정리했습니다' : (m.endNote || ''); toCard(); return; }
     if (reason) showMsg('받아쓰기를 하지 못했습니다', esc(why) + '.', reason !== 'permission' && reason !== 'recording');
-    else showMsg('들은 말이 없습니다', '받아 적은 말이 없습니다. 이렇게 말씀해 보세요 — 「공복혈당 98, 체중 71.2, 아침은 계란」', true);
-    K(reason ? '받아쓰기를 하지 못했습니다.' : '잘 들리지 않았습니다. 다시 말씀해 주세요.');
+    else showMsg('들은 말이 없습니다', '받아 적은 말이 없습니다. 이렇게 말씀해 보십시오 — 「공복혈당 98, 체중 71.2, 아침은 계란」', true);
+    K(reason ? '받아쓰기를 하지 못했습니다.' : '잘 들리지 않았습니다. 다시 말씀해 주십시오.');
   }
 
   /* ---------- 확인 카드 ---------- */
@@ -1050,7 +1050,7 @@
       html += rowHtml(r, i);
     });
     if (!shown) {
-      html += '<div class="hv-empty"><b>기록할 내용을 찾지 못했습니다.</b><br>이렇게 말씀해 보세요 — 「공복혈당 98, 체중 71.2, 아침은 계란」<br>위의 들은 말을 고쳐도 됩니다.</div>';
+      html += '<div class="hv-empty"><b>기록할 내용을 찾지 못했습니다.</b><br>이렇게 말씀해 보십시오 — 「공복혈당 98, 체중 71.2, 아침은 계란」<br>위의 들은 말을 고쳐도 됩니다.</div>';
     }
     if (wait) html += '<div class="hv-wait">그날 기록을 확인하고 있습니다…</div>';
     var ids = S.rows.map(function (r) { return r.id; }).join(',');
@@ -1114,9 +1114,9 @@
   function doSave() {
     if (!S.open || S.phase !== 'card' || !H) return;
     var ops = opsOf(S.rows);
-    if (!ops.length) { toast('적을 칸을 체크해 주세요'); return; }
+    if (!ops.length) { toast('적을 칸을 체크해 주십시오'); return; }
     var res;
-    try { res = H.apply(ops); } catch (e) { toast('적지 못했습니다. 다시 눌러 주세요'); return; }
+    try { res = H.apply(ops); } catch (e) { toast('적지 못했습니다. 다시 눌러 주십시오'); return; }
     var n = res.n;
     closeSheet(false);
     showUndo('적고 있습니다… (' + n + '칸)', res, false);

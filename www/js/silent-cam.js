@@ -54,11 +54,11 @@
   /* ───────── 허락 ───────── */
   function deniedFlow(mode) {
     if (mode === 'photo') {
-      return sheet('카메라를 지금은 쓸 수 없어요', '일반 사진 찍기는 카메라 허락이 있어야 해요. 폰 설정에서 허락해 주시면 이 화면에서 바로 이어져요.', [
+      return sheet('카메라를 지금은 쓸 수 없습니다', '일반 사진 찍기는 카메라 허락이 있어야 합니다. 폰 설정에서 허락해 주시면 이 화면에서 바로 이어집니다.', [
         { label: '폰 설정에서 허락하기', value: 'settings', primary: true }, { label: '닫기', value: 'close' }
       ]).then(function (v) { if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} } return { kind: 'cancel' }; });
     }
-    return sheet('카메라를 지금은 쓸 수 없어요', '카메라 허락이 꺼져 있어요. 그래도 문서와 영수증은 사진을 골라 주시면 똑같이 펴 드려요.', [
+    return sheet('카메라를 지금은 쓸 수 없습니다', '카메라 허락이 꺼져 있습니다. 그래도 문서와 영수증은 사진을 골라 주시면 똑같이 펴 드립니다.', [
       { label: '사진 골라서 계속하기', value: 'gallery', primary: true }, { label: '폰 설정에서 허락하기', value: 'settings' }
     ]).then(function (v) {
       if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} return { kind: 'cancel' }; }
@@ -68,7 +68,7 @@
   function ensurePerm(mode, st) {             // → Promise<'ok' | result(= denied 안내 뒤 결과)>
     if (st.perm === 'granted') return Promise.resolve('ok');
     if (st.perm === 'denied') return deniedFlow(mode);
-    return sheet('카메라를 써도 될까요?', '문서와 영수증을 바로 찍어서 반듯하게 펴 드리려고요. 찍은 사진은 이 폰 안에서만 쓰고, 제가 보낸다고 하기 전에는 밖으로 안 나가요.', [
+    return sheet('카메라를 써도 될까요?', '문서와 영수증을 바로 찍어서 반듯하게 펴 드리려고 합니다. 찍은 사진은 이 폰 안에서만 쓰고, 제가 보낸다고 하기 전에는 밖으로 안 나갑니다.', [
       { label: '허용하기', value: 'ask', primary: true }, { label: '나중에', value: 'later' }
     ]).then(function (v) {
       if (v !== 'ask') return { kind: 'cancel' };
@@ -125,7 +125,7 @@
               return done({ kind: 'files', files: files, mode: r.mode || mode, action: r.action });
             }, function () {
               // 사진은 앱 안에 남아 있다(복구 목록). 다음에 앱을 열면 «찍어 둔 사진이 있어요»로 이어서 쓸 수 있다.
-              return sheet('사진을 불러오지 못했어요', '찍은 사진은 지워지지 않았어요. 앱을 다시 열면 이어서 쓸 수 있어요.', [{ label: '알겠어요', value: 'ok', primary: true }]).then(function () { return done({ kind: 'cancel', mode: r.mode || mode }); });
+              return sheet('사진을 불러오지 못했습니다', '찍은 사진은 지워지지 않았습니다. 앱을 다시 열면 이어서 쓸 수 있습니다.', [{ label: '알겠습니다', value: 'ok', primary: true }]).then(function () { return done({ kind: 'cancel', mode: r.mode || mode }); });
             });
           }
           return done({ kind: 'cancel', mode: r.mode || mode });
@@ -144,8 +144,8 @@
     return Promise.resolve(p.pending()).then(function (r) {
       if (!r || !r.has || r.cameraOpen || !r.pages || !r.pages.length) return false;
       var n = r.pages.length, mode = r.mode === 'receipt' ? 'receipt' : (r.mode === 'photo' ? 'photo' : 'doc');
-      var what = mode === 'photo' ? '찍어 둔 사진이 있어요' : '찍어 둔 ' + n + '쪽이 있어요';
-      var body = mode === 'photo' ? '아직 어디에도 저장하거나 보내지 않은 사진이에요. 채팅에 붙일까요?' : '앱이 잠깐 닫히는 바람에 이어서 쓰지 못한 사진이에요. 이어서 쓸까요?';
+      var what = mode === 'photo' ? '찍어 둔 사진이 있습니다' : '찍어 둔 ' + n + '쪽이 있습니다';
+      var body = mode === 'photo' ? '아직 어디에도 저장하거나 보내지 않은 사진입니다. 채팅에 붙일까요?' : '앱이 잠깐 닫히는 바람에 이어서 쓰지 못한 사진입니다. 이어서 쓸까요?';
       return sheet(what, body, [{ label: mode === 'photo' ? '채팅에 붙이기' : '이어서 쓰기', value: 'use', primary: true }, { label: '버리기', value: 'drop' }]).then(function (v) {
         if (v !== 'use') return Promise.resolve(p.discardAll()).then(function () { return true; });
         return readAll(r.pages).then(function (files) {

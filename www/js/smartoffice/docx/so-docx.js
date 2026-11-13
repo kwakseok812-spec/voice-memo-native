@@ -366,7 +366,7 @@
     if (!S || !S.tip) return;
     var z = '<span id="soDocxZoomLab">' + Math.round(scale * 100) + '%</span> · ' + S.pages + '쪽 · ';
     var t;
-    if (S.mode === 'edit') t = '고칠 문단을 누르세요 (점선 문단) · 고친 문단 ' + editCount() + '개';
+    if (S.mode === 'edit') t = '고칠 문단을 누르십시오 (점선 문단) · 고친 문단 ' + editCount() + '개';
     else if (S.disabled) t = '보기 전용 — ' + S.disabled;
     else t = '보기 · 글을 고칠 수 있는 문단 ' + S.nEdit + '개 (두 손가락으로 확대)';
     S.tip.innerHTML = z + t; S.tip.classList.remove('hide');
@@ -397,7 +397,7 @@
     if (!S || S.disabled) return;
     S.mode = 'edit'; wrap.classList.add('so-docx-editing');
     setActions(); setTip();
-    note('고칠 문단(점선)을 눌러 글을 고치세요. 그림·표 모양은 그대로 유지됩니다.', 3600);
+    note('고칠 문단(점선)을 눌러 글을 고치십시오. 그림·표 모양은 그대로 유지됩니다.', 3600);
   }
   function exitEdit() {
     if (!S) return; closeSheet();
@@ -448,8 +448,8 @@
       '<textarea class="so-docx-ta" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="enter"></textarea>' +
       '<div class="so-docx-sh-b"><button type="button" data-a="cancel">취소</button><button type="button" data-a="revert"' + ((xi in S.edits) ? '' : ' disabled') + '>원래 글로</button><button type="button" data-a="ok" class="primary">적용</button></div>';
     var noteT2 = [];
-    if (para.mixed) noteT2.push('한 문단에 글자 모양이 섞여 있어요. 바꾼 부분만 그 자리의 글자 모양으로 들어가고 나머지 글자는 그대로예요.');
-    noteT2.push('줄을 바꾸면 줄 나눔으로 들어가요.');
+    if (para.mixed) noteT2.push('한 문단에 글자 모양이 섞여 있습니다. 바꾼 부분만 그 자리의 글자 모양으로 들어가고 나머지 글자는 그대로입니다.');
+    noteT2.push('줄을 바꾸면 줄 나눔으로 들어갑니다.');
     sheet.querySelector('.so-docx-sh-n').textContent = noteT2.join(' ');
     var ta = sheet.querySelector('textarea'); ta.value = cur;
     var composing = false;                                               // 한글 조합 중에는 값이 아직 확정 전이므로, 단추를 눌러도 조합이 끝난 뒤에 읽는다
@@ -512,11 +512,11 @@
         return Promise.resolve(ctx.saveCopy(blob, outName)).then(function (ok) {
           if (ok === false) return;   // 저장이 실패하면 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
           ctx.setDirty(false);
-          ctx.toast('사본을 저장했어요: ' + outName, 3600);
+          ctx.toast('사본을 저장했습니다: ' + outName, 3600);
         });
       }).catch(function (e) {
         ctx.busy(null);
-        ctx.toast('저장하지 못했어요 — 원본은 그대로예요. (' + ((e && e.message) || e) + ')', 5200);
+        ctx.toast('저장하지 못했습니다 — 원본은 그대로입니다. (' + ((e && e.message) || e) + ')', 5200);
       });
     });
   }
@@ -593,7 +593,7 @@
         });
         S.nEdit = nEdit; S.exact = al.exact;
         if (doc.global) S.disabled = doc.global;
-        else if (!nEdit) S.disabled = '글을 고칠 수 있는 문단이 없어요.';
+        else if (!nEdit) S.disabled = '글을 고칠 수 있는 문단이 없습니다.';
         S.ready = true;
       });
     });
@@ -618,7 +618,7 @@
         var t = el.textContent.replace(/\s+/g, ' ').trim(), at = t.toLowerCase().indexOf(q);
         if (at >= 0 && hits.length < 40) hits.push({ el: el, t: t, at: at });
       });
-      if (!hits.length) { out.innerHTML = '<div class="so-docx-fe">찾는 글이 없어요.</div>'; return; }
+      if (!hits.length) { out.innerHTML = '<div class="so-docx-fe">찾는 글이 없습니다.</div>'; return; }
       hits.forEach(function (h, k) {
         var b = document.createElement('button'); b.type = 'button'; b.className = 'so-docx-nav-h'; b.setAttribute('data-hit', k);
         var a = Math.max(0, h.at - 12);
@@ -652,11 +652,11 @@
   function restore(data) {
     var ctx = ctxRef;
     if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
-    function fail(m) { if (ctx) ctx.toast(m || '저장해 둔 고친 내용이 이 문서와 맞지 않아 되살리지 않았어요.', 4600); return false; }
+    function fail(m) { if (ctx) ctx.toast(m || '저장해 둔 고친 내용이 이 문서와 맞지 않아 되살리지 않았습니다.', 4600); return false; }
     if (!data || data.fmt !== 'docx' || !data.edits || !data.edits.length) return Promise.resolve(false);
     return Promise.resolve(S && S.prepP).then(function () {
-      if (!S || !S.ready || !S.doc) return fail('문서 준비가 덜 돼서 고친 내용을 되살리지 못했어요.');
-      if (S.disabled) return fail('이 문서는 지금 보기만 돼서 고친 내용을 되살리지 않았어요.');
+      if (!S || !S.ready || !S.doc) return fail('문서 준비가 덜 돼서 고친 내용을 되살리지 못했습니다.');
+      if (S.disabled) return fail('이 문서는 지금 보기만 돼서 고친 내용을 되살리지 않았습니다.');
       if (data.n !== S.doc.paras.length || data.sig !== docSig()) return fail();
       var i, e;
       for (i = 0; i < data.edits.length; i++) {      // 먼저 전부 확인하고, 하나라도 어긋나면 하나도 적용하지 않는다
@@ -671,7 +671,7 @@
       });
       afterChange();
       if (S.mode !== 'edit') enterEdit();
-      ctx.toast('이어서 고칠 수 있게 고친 내용 ' + editCount() + '개 문단을 되살렸어요.', 3600);
+      ctx.toast('이어서 고칠 수 있게 고친 내용 ' + editCount() + '개 문단을 되살렸습니다.', 3600);
       return true;
     });
   }

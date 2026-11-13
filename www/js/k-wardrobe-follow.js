@@ -27,7 +27,7 @@
   var view, hero, seg, paneOutfit, grid, dock, card, lab, labName, labTip;
   var geoKey = '', aPx = 0, bPx = 1, lastP = -1, lastFade = -1, labKey = '', waitId = '', waitTimer = null;
   var cssSeen = '', cssMiss = 0;                        // CSS 방식이 실제로 도는지 본 자리(geoKey) · 잇달아 어긋난 횟수
-  var TIP = '전신 · 눌러 보세요';
+  var TIP = '전신 · 눌러 보십시오';
 
   function $(id) { return document.getElementById(id); }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }

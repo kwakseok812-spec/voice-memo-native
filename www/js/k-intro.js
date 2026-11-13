@@ -32,19 +32,19 @@
   var GREETINGS = [
     { id: 'g01', when: 'any',     text: '반갑습니다, 대표님.' },
     { id: 'g02', when: 'any',     text: '안녕하세요, 대표님. 케이입니다.' },
-    { id: 'g03', when: 'any',     text: '어서 오세요, 대표님.' },
+    { id: 'g03', when: 'any',     text: '어서 오십시오, 대표님.' },
     { id: 'g04', when: 'any',     text: '오늘도 화이팅입니다, 대표님!', nonight: true },
     { id: 'g05', when: 'any',     text: '대표님, 기다리고 있었습니다.' },
     { id: 'g06', when: 'morning', text: '좋은 아침입니다, 대표님.' },
-    { id: 'g07', when: 'morning', text: '대표님, 오늘 하루도 힘차게 시작하세요!' },
+    { id: 'g07', when: 'morning', text: '대표님, 오늘 하루도 힘차게 시작하십시오!' },
     { id: 'g08', when: 'day',     text: '오후 일도 제가 챙기겠습니다, 대표님.' },
-    { id: 'g09', when: 'day',     text: '오후도 힘내세요, 대표님!' },
+    { id: 'g09', when: 'day',     text: '오후도 힘내십시오, 대표님!' },
     { id: 'g10', when: 'evening', text: '오늘도 수고 많으셨습니다, 대표님.' },
-    { id: 'g11', when: 'evening', text: '편안한 저녁 되세요, 대표님.' },
+    { id: 'g11', when: 'evening', text: '편안한 저녁 되십시오, 대표님.' },
     { id: 'g12', dow: 1,          text: '한 주도 힘차게 시작하시길 바랍니다, 대표님!' },
     { id: 'g13', dow: 5,          text: '한 주 정말 수고 많으셨습니다, 대표님.' },
     { id: 'g14', when: 'night',   text: '늦은 시간입니다, 대표님.' },
-    { id: 'g15', when: 'night',   text: '대표님, 필요하신 것만 말씀하세요.' },
+    { id: 'g15', when: 'night',   text: '대표님, 필요하신 것만 말씀하십시오.' },
     { id: 'g16', when: 'night',   text: '늦은 시간에도 곁에 있겠습니다, 대표님.' }
   ];
 

@@ -43,7 +43,7 @@
         frame.srcdoc = docHead() + src;
         var pre = document.createElement('pre'); pre.className = 'so-html-src'; pre.textContent = src; pre.style.display = 'none';
         var tip = document.createElement('div'); tip.className = 'so-html-tip';
-        tip.textContent = '보기 전용 · 스크립트와 바깥 주소 요청은 막았어요';
+        tip.textContent = '보기 전용 · 스크립트와 바깥 주소 요청은 막았습니다';
         pre.style.fontSize = Math.round(13.5 * ZSTEPS[zi]) + 'px';
         var fab = document.createElement('div'); fab.className = 'so-html-fab';
         fab.innerHTML = '<button type="button" data-k="-" aria-label="글자 작게">가<small>−</small></button><button type="button" data-k="+" aria-label="글자 크게">가<small>＋</small></button>';

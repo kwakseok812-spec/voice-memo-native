@@ -136,7 +136,7 @@
           return window.SOPptxEdit.load(s.orig.slice(0), s.JSZip);
         }).then(function (info) {
           s.info = info; s.edits = info.slides.map(function () { return {}; });
-          if (info.slides.length !== s.slides.length) showTip('슬라이드 수가 화면과 달라 일부 미리보기가 어긋날 수 있어요', 6000);
+          if (info.slides.length !== s.slides.length) showTip('슬라이드 수가 화면과 달라 일부 미리보기가 어긋날 수 있습니다', 6000);
         });
       }
       function enterEdit() {
@@ -183,11 +183,11 @@
           '<select class="so-pe-sel" aria-label="슬라이드 고르기">' + opts + '</select>' +
           '<button type="button" class="so-pe-nb" data-d="1" aria-label="다음 장">›</button></div>' +
           '<div class="so-pe-prev"></div>' +
-          '<div class="so-pe-hint">글자만 고쳐요. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영해요. 줄바꿈은 줄바꿈으로 들어가요.' +
-          (notes.length ? '<br>이 장의 ' + esc(notes.join(' · ')) + '는 고칠 수 없어요.' : '') +
-          (lockedN ? '<br>자동 숫자(쪽 번호·날짜 등)나 수식이 든 문단 ' + lockedN + '개는 보기만 돼요.' : '') + '</div>' +
+          '<div class="so-pe-hint">글자만 고칩니다. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영합니다. 줄바꿈은 줄바꿈으로 들어갑니다.' +
+          (notes.length ? '<br>이 장의 ' + esc(notes.join(' · ')) + '는 고칠 수 없습니다.' : '') +
+          (lockedN ? '<br>자동 숫자(쪽 번호·날짜 등)나 수식이 든 문단 ' + lockedN + '개는 보기만 됩니다.' : '') + '</div>' +
           '<div class="so-pe-list"></div>' +
-          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · 표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없어요 · 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않아요</div>';
+          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · 표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없습니다 · 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다</div>';
         P.innerHTML = html;
         // 미리보기: 지금 화면에 그려진 장을 복사해서 폭에 맞춘다(고친 뒤 「보기」를 누르면 새로 그려짐)
         var pv = P.querySelector('.so-pe-prev'), src = s.slides[i];
@@ -196,10 +196,10 @@
           pv.appendChild(clone);
           var sw = src.offsetWidth || parseFloat(src.style.width) || 960, cw = Math.max(200, P.clientWidth - 16);
           pv.style.height = 'auto'; clone.style.zoom = String(Math.min(1, cw / sw));
-          if (s.drawnKey !== JSON.stringify(s.edits) && anyEdit(s)) pv.insertAdjacentHTML('beforeend', '<div class="so-pe-stale">미리보기는 고치기 전 모습이에요. 「보기」를 누르면 고친 모습으로 다시 그려요.</div>');
+          if (s.drawnKey !== JSON.stringify(s.edits) && anyEdit(s)) pv.insertAdjacentHTML('beforeend', '<div class="so-pe-stale">미리보기는 고치기 전 모습입니다. 「보기」를 누르면 고친 모습으로 다시 그립니다.</div>');
         }
         var list = P.querySelector('.so-pe-list');
-        if (!sl.paras.length) list.innerHTML = '<div class="so-pe-empty">이 장에는 고칠 수 있는 글자가 없어요.</div>';
+        if (!sl.paras.length) list.innerHTML = '<div class="so-pe-empty">이 장에는 고칠 수 있는 글자가 없습니다.</div>';
         sl.paras.forEach(function (p) {
           var card = document.createElement('div'); card.className = 'so-pe-card';
           var cur = Object.prototype.hasOwnProperty.call(ed, p.ord) ? ed[p.ord] : p.text;
@@ -207,7 +207,7 @@
           var ta = document.createElement('textarea'); ta.className = 'so-pe-ta'; ta.value = cur; ta.rows = 1; ta.spellcheck = false;
           if (p.locked) { ta.readOnly = true; ta.classList.add('lock'); }
           card.appendChild(ta);
-          if (p.locked) card.insertAdjacentHTML('beforeend', '<div class="so-pe-lockmsg">자동 숫자·수식이 들어 있어 보기만 돼요</div>');
+          if (p.locked) card.insertAdjacentHTML('beforeend', '<div class="so-pe-lockmsg">자동 숫자·수식이 들어 있어 보기만 됩니다</div>');
           function fit() {
             var vv = window.visualViewport, cap = Math.max(120, Math.round((vv ? vv.height : window.innerHeight) * 0.42));   // 키보드가 올라와도 한 칸이 화면을 다 채우지 않게
             ta.style.height = 'auto'; ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 44), cap) + 'px';
@@ -248,17 +248,17 @@
         });
       }
       function saveCopy() {
-        if (!s.info || !anyEdit(s)) { ctx.toast('아직 고친 곳이 없어요.'); return; }
+        if (!s.info || !anyEdit(s)) { ctx.toast('아직 고친 곳이 없습니다.'); return; }
         var name = (ctx.name || 'slides.pptx').replace(/\.pptx$/i, '') + '_수정.pptx';
         ctx.confirmCopy('사본으로 저장', '고친 글자를 담아 「' + name + '」로 저장합니다.\n글꼴·그림·도형·애니메이션은 그대로 두고 글자만 바꿉니다. 원본은 바꾸지 않습니다.', '사본 저장', function () {
           ctx.busy('사본을 만드는 중…');
           window.SOPptxEdit.build(s.info, s.edits).then(function (r) {
             return window.SOPptxEdit.verify(s.orig, r.bytes, r.changed, s.JSZip).then(function (v) {
-              if (!v.ok) throw new Error('검사에서 걸렸어요 (' + v.why + ') — 저장하지 않았습니다');
+              if (!v.ok) throw new Error('검사에서 걸렸습니다 (' + v.why + ') — 저장하지 않았습니다');
               ctx.busy(null);
               return Promise.resolve(ctx.saveCopy(new Blob([r.bytes], { type: MIME }), name)).then(function (ok) {
                 if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내
-                ctx.toast('사본을 만들었어요 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
+                ctx.toast('사본을 만들었습니다 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
               });
             });
           }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000); });
@@ -285,7 +285,7 @@
               if (at >= 0 && n.parentElement) hits.push({ k: k, el: n.parentElement, t: t, at: at });
             }
           });
-          if (!hits.length) { out.innerHTML = '<div class="so-pptx-fe">찾는 글이 없어요.</div>'; return; }
+          if (!hits.length) { out.innerHTML = '<div class="so-pptx-fe">찾는 글이 없습니다.</div>'; return; }
           hits.forEach(function (h, i) {
             var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-hit', i);
             var a = Math.max(0, h.at - 10);
@@ -328,7 +328,7 @@
         },
         restore: function (data) {
           if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
-          function fail() { ctx.toast('저장해 둔 고친 내용이 이 파일과 맞지 않아 되살리지 않았어요.', 4600); return false; }
+          function fail() { ctx.toast('저장해 둔 고친 내용이 이 파일과 맞지 않아 되살리지 않았습니다.', 4600); return false; }
           if (!data || data.fmt !== 'pptx' || !data.edits || !data.edits.length) return Promise.resolve(false);
           return loadEditor().then(function () {
             if (data.n !== s.info.slides.length || data.sig !== deckSig()) return fail();
@@ -344,13 +344,13 @@
             });
             ctx.setDirty(anyEdit(s));
             s.mode = 'one'; leaveEdit();
-            ctx.toast('이어서 고칠 수 있게 고친 글 ' + data.edits.length + '곳을 되살렸어요.', 3600);
+            ctx.toast('이어서 고칠 수 있게 고친 글 ' + data.edits.length + '곳을 되살렸습니다.', 3600);
             return true;
           }, function () { return fail(); });
         }
       };
 
-      showTip(slides().length + '장 · 「고치기」로 글자를 고칠 수 있어요 · 애니메이션·차트는 화면에 표시되지 않아요');
+      showTip(slides().length + '장 · 「고치기」로 글자를 고칠 수 있습니다 · 애니메이션·차트는 화면에 표시되지 않습니다');
       render();
     });
   }

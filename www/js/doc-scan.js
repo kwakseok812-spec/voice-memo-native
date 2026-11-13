@@ -88,7 +88,7 @@
   }
 
   /* ───────── B. 이미지 줄이기·세우기 ───────── */
-  var BAD = '사진을 읽지 못했습니다. 사진 파일(JPG·PNG 등)인지 확인해 주세요.';
+  var BAD = '사진을 읽지 못했습니다. 사진 파일(JPG·PNG 등)인지 확인해 주십시오.';
   function loadSource(file) {
     if (global.createImageBitmap) {
       return createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (b) {
@@ -661,7 +661,7 @@
   function autoOn() { return !!(S && S.opts.auto && S.cvOk !== false && S.set); }      // 칩·자동 처리를 쓰는 화면인가
   function cvUsable() { return !!(S && S.opts.auto && cvReady()); }                       // 자르기·보정을 실제로 할 수 있는가
   function isQuota(e) { return !!e && (e.name === 'QuotaExceededError' || /quota/i.test(String(e.message || ''))); }
-  var QUOTA_MSG = '저장 공간이 부족합니다. 불필요한 파일을 지운 뒤 다시 시도해 주세요.';
+  var QUOTA_MSG = '저장 공간이 부족합니다. 불필요한 파일을 지운 뒤 다시 시도해 주십시오.';
   function storageMsg(e, fb) { return isQuota(e) ? QUOTA_MSG : ((e && e.message) || fb || '처리하지 못했습니다.'); }   // O-0586: 영문 시스템 문구를 화면에 내지 않는다
   function ensureCv(retry) {                                                                    // opencv 불러오기(한 번). 실패하면 칩을 숨기고 한 번 안내
     var m = S;
@@ -769,8 +769,8 @@
       if (S !== mine) return;
       S.busy = false; S.prog = null; S.screen = 'list';
       if (pvOn() && n === 1 && okFiles === 1 && pvId != null && !quota) openPv(pvId); else render();   // v9.26: 한 장 찍은(다시 찍은) 직후 처리된 결과를 크게 보여 준다
-      if (quota) toast(replaceId != null ? QUOTA_MSG : '저장 공간이 부족해 ' + n + '장 중 ' + okFiles + '장만 담았습니다. 불필요한 파일을 지운 뒤 다시 시도해 주세요.', null, null, 8000);
-      else if (bad && bad === n) toast(n > 1 || !lastErr || !lastErr.message ? '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.' : storageMsg(lastErr, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
+      if (quota) toast(replaceId != null ? QUOTA_MSG : '저장 공간이 부족해 ' + n + '장 중 ' + okFiles + '장만 담았습니다. 불필요한 파일을 지운 뒤 다시 시도해 주십시오.', null, null, 8000);
+      else if (bad && bad === n) toast(n > 1 || !lastErr || !lastErr.message ? '사진을 읽지 못했습니다. 사진 파일인지 확인해 주십시오.' : storageMsg(lastErr, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주십시오.'));
       else if (bad) toast(bad + '장은 넣지 못했습니다.', null, null, 6000);
     });
   }
@@ -907,7 +907,7 @@
       if (S.opts.onRawFallback && e && e.message === BAD) { var rf = S.opts.onRawFallback; S.doneCalled = true; closeUi(false, false); try { rf(file); } catch (e2) {} return; }   // v9.73: 사진첩에서 고른 사진을 웹뷰가 못 읽으면(HEIC 등) 예전처럼 원본 그대로 보내기 창으로
       if (!isQuota(e)) relFile(file);
       S.busy = false; S.prog = null; S.screen = 'start'; render();
-      toast(storageMsg(e, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주세요.'));
+      toast(storageMsg(e, '사진을 읽지 못했습니다. 사진 파일인지 확인해 주십시오.'));
     });
   }
   function rcptGallery() {
@@ -937,7 +937,7 @@
       rcptFin(n.blob, n.w, n.h, r.how, r.corners);
     }).catch(function (e) {
       if (S !== mine) return;
-      S.busy = false; rcptLock(false); toast(storageMsg(e, '사진을 돌려 저장하지 못했습니다. 다시 눌러 주세요.'));
+      S.busy = false; rcptLock(false); toast(storageMsg(e, '사진을 돌려 저장하지 못했습니다. 다시 눌러 주십시오.'));
     });
   }
   function rcptLock(on) { if (!S) return; [].forEach.call(S.root.querySelectorAll('.dsc-top button, .dsc-body button, .dsc-foot button'), function (b) { b.disabled = !!on; }); }
@@ -988,7 +988,7 @@
     (async function () {
       var corners = isFullQuad(cr, ed.ow, ed.oh) ? null : cr, flat = flatOf(ed.cvs, { corners: corners }, DSC_OUT_SIDE), rv = ed.rotView || 0;
       try {
-        if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주세요.');
+        if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주십시오.');
         var oc = finishOut(flat.flat, { split: null, rot: 0 }, 'doc', DSC_OUT_SIDE); await tick();
         if (rv) oc = rotCv(oc, (360 - rv) % 360);                 // v9.73: 돌린 화면에서 맞춘 것을 «돌리기 전 편 사진»으로 되돌려 새 처음 사진(blob)으로 삼는다 — 각도(rot)는 그대로 유지
         var w = oc.width, h2 = oc.height, blob = await encodeOut(oc, 'doc', 0.80); freeCv(oc);
@@ -1018,7 +1018,7 @@
     var im = h('img', 'dsc-rcpt-img'); im.src = r.url; im.alt = '정리된 영수증 사진';
     if (ro) {                                                  // v9.73: 사진 칸은 높이가 고정이라 돌려도 아래 단추가 움직이지 않는다
       var box = h('div', 'dsc-rcpt-box'); box.appendChild(im);
-      if (r.slot) { var hi = h('div', 'dsc-rcpt-hint', '옆으로 누웠으면 아래 「돌리기」를, 거꾸로면 두 번 눌러 주세요.'); if (r.turned) hi.classList.add('dsc-gone'); box.appendChild(hi); }
+      if (r.slot) { var hi = h('div', 'dsc-rcpt-hint', '옆으로 누웠으면 아래 「돌리기」를, 거꾸로면 두 번 눌러 주십시오.'); if (r.turned) hi.classList.add('dsc-gone'); box.appendChild(hi); }
       c.appendChild(box);
     } else c.appendChild(im);
     c.appendChild(h('div', 'dsc-sub', (r.how === 'manual' ? '직접 맞춘 모서리로 펴고 보정했습니다' : r.corners ? '테두리를 찾아 펴고 보정했습니다' : (r.how === 'skip' || r.how === 'off' ? '찍은 그대로 줄였습니다' : '테두리를 찾지 못해 전체를 보정했습니다')) + ' · ' + mb(r.blob.size)));
@@ -1088,7 +1088,7 @@
     col.appendChild(h('div', 'dsc-sub', '종이 문서를 한 쪽씩 사진으로 찍어 PDF 한 파일로 만듭니다. 최대 ' + DSC_MAX_PAGES + '쪽.'));
     col.appendChild(h('button', 'dsc-btn dsc-pri dsc-big', '📷 카메라로 찍기', shoot));
     col.appendChild(h('button', 'dsc-btn dsc-big', '🖼 사진 여러 장 고르기', gallery));
-    col.appendChild(h('div', 'dsc-sub', global.SilentCam && global.SilentCam.usable() ? '찍은 사진은 사진첩에 남기지 않고 이 앱 안에서만 써요.' : '찍은 사진은 폰 사진첩에도 남을 수 있습니다.'));   // O-0576 · O-0607
+    col.appendChild(h('div', 'dsc-sub', global.SilentCam && global.SilentCam.usable() ? '찍은 사진은 사진첩에 남기지 않고 이 앱 안에서만 씁니다.' : '찍은 사진은 폰 사진첩에도 남을 수 있습니다.'));   // O-0576 · O-0607
     memNote(col);
   }
 
@@ -1149,8 +1149,8 @@
     S.pages.forEach(function (p) { var q = S.qmap && S.qmap[p.id]; if (q != null) { qSeen = true; if (q !== 'sharp') qBad++; } });
     if (qSeen) {
       var qc = h('div', 'dsc-card dsc-item');
-      if (qBad) { qc.appendChild(h('div', 'dsc-warn', '흐리거나 어두운 쪽이 ' + qBad + '개 있어요')); qc.appendChild(h('div', 'dsc-sub', '느낌표가 붙은 쪽을 눌러서 다시 찍을 수 있어요.')); }
-      else qc.appendChild(h('div', 'dsc-sub', '모든 쪽이 선명해요.'));
+      if (qBad) { qc.appendChild(h('div', 'dsc-warn', '흐리거나 어두운 쪽이 ' + qBad + '개 있습니다')); qc.appendChild(h('div', 'dsc-sub', '느낌표가 붙은 쪽을 눌러서 다시 찍을 수 있습니다.')); }
+      else qc.appendChild(h('div', 'dsc-sub', '모든 쪽이 선명합니다.'));
       col.appendChild(qc);
     }
     var imgs = [], cvOk = cvUsable();
@@ -1162,7 +1162,7 @@
       var t = h('div', 'dsc-info'), ln = h('div', 'dsc-line');
       ln.appendChild(h('span', 'dsc-num', (i + 1) + '쪽'));
       var pq = S.qmap && S.qmap[p.id];
-      if (pq && pq !== 'sharp') { var qbtn = h('button', 'dsc-badge', '! ' + (pq === 'dark' ? '어두워요' : '흐려요'), function () { if (!S.busy) retake(p.id); }); qbtn.setAttribute('aria-label', (i + 1) + '쪽이 ' + (pq === 'dark' ? '어두워요' : '흐려요') + ': 눌러서 다시 찍기'); ln.appendChild(qbtn); }
+      if (pq && pq !== 'sharp') { var qbtn = h('button', 'dsc-badge', '! ' + (pq === 'dark' ? '어둡습니다' : '흐립니다'), function () { if (!S.busy) retake(p.id); }); qbtn.setAttribute('aria-label', (i + 1) + '쪽이 ' + (pq === 'dark' ? '어둡습니다' : '흐립니다') + ': 눌러서 다시 찍기'); ln.appendChild(qbtn); }
       if (S.opts.auto) {
         var st = statusText(p);
         if (st === '테두리 확인' && cvOk) { var wb = h('button', 'dsc-badge', st, function () { openEdit(p); }); wb.setAttribute('aria-label', '테두리 확인: 자르기 화면 열기'); ln.appendChild(wb); }
@@ -1192,7 +1192,7 @@
     more.appendChild(h('button', 'dsc-btn', '📷 한 장 더', shoot));
     more.appendChild(h('button', 'dsc-btn', '🖼 사진 여러 장 고르기', gallery));
     col.appendChild(more);
-    if (S.opts.auto && cvOk && n) col.appendChild(h('div', 'dsc-sub', '원본으로 되돌리려면 🎨 보정에서 [원본]을 고른 뒤, ✂ 자르기에서 [전체]를 눌러 적용하세요.'));
+    if (S.opts.auto && cvOk && n) col.appendChild(h('div', 'dsc-sub', '원본으로 되돌리려면 🎨 보정에서 [원본]을 고른 뒤, ✂ 자르기에서 [전체]를 눌러 적용하십시오.'));
     var done = h('button', 'dsc-btn dsc-pri', '완료', function () { if (S.pages.length) { S.screen = 'name'; render(); } });
     if (!n) done.disabled = true;
     foot([done]);
@@ -1268,7 +1268,7 @@
     var sc = Math.min(availW / ed.ow, availH / ed.oh), dw = Math.round(ed.ow * sc), dh = Math.round(ed.oh * sc);
     if (ed.rec && ed.rec.rot) col.appendChild(h('div', 'dsc-sub', '돌리기 전 원본 방향으로 보여 드립니다.'));   // O-0586
     if (ed.rcpt && ed.rotView) col.appendChild(h('div', 'dsc-sub', '돌리신 방향 그대로 보여 드립니다.'));   // v9.73
-    col.appendChild(h('div', 'dsc-sub', ed.rcpt ? '네 모서리의 둥근 점을 손가락으로 끌어 영수증 테두리에 맞춘 뒤 [적용]을 누르세요.' + (dh > (window.innerHeight || 700) - 330 ? ' 사진이 길면 점이 없는 곳을 밀어 위아래로 움직이세요.' : '') : '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르세요.'));
+    col.appendChild(h('div', 'dsc-sub', ed.rcpt ? '네 모서리의 둥근 점을 손가락으로 끌어 영수증 테두리에 맞춘 뒤 [적용]을 누르십시오.' + (dh > (window.innerHeight || 700) - 330 ? ' 사진이 길면 점이 없는 곳을 밀어 위아래로 움직이십시오.' : '') : '네 모서리의 둥근 점을 손가락으로 끌어 문서 테두리에 맞춘 뒤 [적용]을 누르십시오.'));
     var stage = h('div', 'dsc-stage'); stage.style.width = dw + 'px'; stage.style.height = dh + 'px';
     ed.cvs.style.width = dw + 'px'; ed.cvs.style.height = dh + 'px'; ed.cvs.className = 'dsc-stage-img'; stage.appendChild(ed.cvs);
     var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
@@ -1335,7 +1335,7 @@
     if (ed.hasSplit) makeSplitHandle();
     col.appendChild(stage);
     var info = h('div', 'dsc-sub dsc-spinfo');
-    function paintInfo() { info.textContent = ed.hasSplit ? '주황 점선이 두 쪽으로 나누는 선입니다. 가운데 점을 좌우로 끌어 맞추세요. 적용하면 두 쪽이 됩니다.' : ''; info.style.display = ed.hasSplit ? '' : 'none'; }
+    function paintInfo() { info.textContent = ed.hasSplit ? '주황 점선이 두 쪽으로 나누는 선입니다. 가운데 점을 좌우로 끌어 맞추십시오. 적용하면 두 쪽이 됩니다.' : ''; info.style.display = ed.hasSplit ? '' : 'none'; }
     paintInfo(); col.appendChild(info);
     var spBtn = h('button', 'dsc-btn dsc-spbtn', '📖 두 쪽으로 나누기', function () {
       if (S.pages.length >= DSC_MAX_PAGES) return toast('최대 ' + DSC_MAX_PAGES + '쪽까지입니다. 나눌 수 없습니다.');
@@ -1360,22 +1360,22 @@
     DocScanCV.detect(ed.cvs).then(function (d) {
       if (S !== mine || S.ed !== ed) return;
       S.busy = false;
-      if (d.ok && d.score >= DocScanCV.DSCV_MIN_SCORE && d.how !== 'none') { ed.corners = d.corners.map(cp); place(); toast('테두리를 찾았습니다. 점을 확인해 주세요.'); }
-      else if (d.candidate && d.candidate.corners) { ed.corners = d.candidate.corners.map(cp); place(); toast('확실하지 않은 후보입니다. 점을 확인해 주세요.'); }
-      else toast('테두리를 찾지 못했습니다. 점을 끌어 맞춰 주세요.');
+      if (d.ok && d.score >= DocScanCV.DSCV_MIN_SCORE && d.how !== 'none') { ed.corners = d.corners.map(cp); place(); toast('테두리를 찾았습니다. 점을 확인해 주십시오.'); }
+      else if (d.candidate && d.candidate.corners) { ed.corners = d.candidate.corners.map(cp); place(); toast('확실하지 않은 후보입니다. 점을 확인해 주십시오.'); }
+      else toast('테두리를 찾지 못했습니다. 점을 끌어 맞춰 주십시오.');
     }, function () { if (S === mine) { S.busy = false; toast('테두리를 찾지 못했습니다.'); } });
   }
   function applyEdit() {
     var ed = S && S.ed, mine = S; if (!ed || S.busy) return;
     var cr = ed.corners.map(function (q) { return { x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 }; });
-    if (!quadValid(cr)) return toast('네 점이 꼬여 있습니다. 점을 다시 맞춰 주세요.');
+    if (!quadValid(cr)) return toast('네 점이 꼬여 있습니다. 점을 다시 맞춰 주십시오.');
     if (ed.rcpt) return applyRcptEdit(ed, cr);
     if (ed.newSplit && S.pages.length >= DSC_MAX_PAGES) return toast('최대 ' + DSC_MAX_PAGES + '쪽까지입니다.');
     S.busy = true; toast('적용하는 중입니다…', null, null, 20000);
     (async function () {
       var rec = ed.rec, corners = isFullQuad(cr, ed.ow, ed.oh) ? null : cr, flat = flatOf(ed.cvs, { corners: corners }, ed.hasSplit ? DSC_SPREAD_SIDE : DSC_OUT_SIDE);
       try {
-        if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주세요.');
+        if (flat.failed) throw new Error('이 모양으로는 펴지지 않습니다. 점을 다시 맞춰 주십시오.');
         var origB = rec.orig || outOf(rec), g = rec.split ? rec.split.g : 'm' + Date.now(), targets = [{ id: ed.id, rec: rec, side: ed.side }];
         if (ed.hasSplit && rec.split) {
           var sib = S.pages.filter(function (q) { return q.id !== ed.id && q.split && q.split.g === rec.split.g; })[0];
@@ -1450,7 +1450,7 @@
         var sw = h('label', 'dsc-swrow'), cb = h('input'); cb.type = 'checkbox'; cb.setAttribute('role', 'switch'); cb.id = 'dsc-all';
         cb.addEventListener('change', function () { all = cb.checked; });
         sw.appendChild(cb); sw.appendChild(h('span', '', '모든 쪽에 적용')); sh.appendChild(sw);
-        sh.appendChild(h('div', 'dsc-sub', '원본으로 되돌리려면 [원본]을 고른 뒤, ✂ 자르기에서 [전체]를 눌러 적용하세요.'));
+        sh.appendChild(h('div', 'dsc-sub', '원본으로 되돌리려면 [원본]을 고른 뒤, ✂ 자르기에서 [전체]를 눌러 적용하십시오.'));
         sh.appendChild(h('button', 'dsc-btn', '닫기', function () { closeLook(); }));
         S.root.appendChild(sh); S.sheet = sh; S.busy = false;
         function doLook(mode) {
@@ -1557,7 +1557,7 @@
   function onPop() {
     if (ignorePop > 0) { ignorePop--; return; }
     if (!S) return;
-    if (S.making) { history.pushState({ dsc: 1 }, ''); toast('작업 중입니다. 잠시만 기다려 주세요.'); return; }   // O-0576: PDF 작성 중만 막는다
+    if (S.making) { history.pushState({ dsc: 1 }, ''); toast('작업 중입니다. 잠시만 기다려 주십시오.'); return; }   // O-0576: PDF 작성 중만 막는다
     if (S.sheet) { history.pushState({ dsc: 1 }, ''); closeLook(); return; }   // O-0583: 보정 시트만 닫는다
     if (S.screen === 'edit' && !S.busy) { history.pushState({ dsc: 1 }, ''); leaveEdit(); return; }   // O-0583: 자르기 화면 → 목록
     if (S.screen === 'pv' && !S.busy) { history.pushState({ dsc: 1 }, ''); leavePv(); return; }   // v9.26: 미리보기 → 쪽 목록

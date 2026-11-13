@@ -23,8 +23,8 @@
    * 1. 순수 함수
    * ===================================================================*/
   var KEY = 'smart_hub_apps_v1';
-  var DEFAULT_WAIT = '처음 열 땐 30~60초 기다려 주세요';
-  var DEFAULT_COST = '질문을 보낼 때마다 약 15원이 들어요(누르기만 해서는 안 나가요)';
+  var DEFAULT_WAIT = '처음 열 땐 30~60초 기다려 주십시오';
+  var DEFAULT_COST = '질문을 보낼 때마다 약 15원이 듭니다(누르기만 해서는 안 나갑니다)';
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function isObj(o) { return !!o && typeof o === 'object' && !Array.isArray(o); }
@@ -74,10 +74,10 @@
   }
   /* 케이 한마디(실제 상태와 맞게). st: ok|cached|loading|refreshing */
   function sayFor(st, at, n) {
-    if (st === 'ok') return '목록을 최신으로 받았어요 (' + n + '개)';
-    if (st === 'refreshing') return '저장해 둔 목록이에요 — 최신으로 받는 중이에요';
-    if (st === 'cached') return '저장해 둔 목록이에요' + (fmtDay(at) ? ' (' + fmtDay(at) + ')' : '') + ' — 지금은 새로 못 받았어요';
-    return '목록을 가져오는 중이에요';
+    if (st === 'ok') return '목록을 최신으로 받았습니다 (' + n + '개)';
+    if (st === 'refreshing') return '저장해 둔 목록입니다 — 최신으로 받는 중입니다';
+    if (st === 'cached') return '저장해 둔 목록입니다' + (fmtDay(at) ? ' (' + fmtDay(at) + ')' : '') + ' — 지금은 새로 못 받았습니다';
+    return '목록을 가져오는 중입니다';
   }
 
   var HubPure = { safeUrl: safeUrl, normalize: normalize, fmtDay: fmtDay, sayFor: sayFor, esc: esc, KEY: KEY, DEFAULT_WAIT: DEFAULT_WAIT, DEFAULT_COST: DEFAULT_COST };
@@ -128,14 +128,14 @@
   var lastGo = 0;
   function openUrl(url) {
     var u = safeUrl(url);
-    if (!u) { ctx.toast('열 수 없는 주소예요. 목록을 새로 받아 보세요.', 3200); return false; }
+    if (!u) { ctx.toast('열 수 없는 주소입니다. 목록을 새로 받아 보십시오.', 3200); return false; }
     if (Date.now() - lastGo < 700) return false;      // 두 번 눌러도 한 번만
     lastGo = Date.now();
     var EA = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.ExternalApp;
     var native = !!(global.Capacitor && typeof global.Capacitor.isNativePlatform === 'function' && global.Capacitor.isNativePlatform());
     function viaWindow() {
       var w = null; try { w = global.open(u, '_blank', 'noopener'); } catch (e) {}
-      if (!w && native) ctx.toast('주소를 열지 못했어요. 폰의 기본 브라우저가 있는지 확인해 주세요.', 3600);
+      if (!w && native) ctx.toast('주소를 열지 못했습니다. 폰의 기본 브라우저가 있는지 확인해 주십시오.', 3600);
     }
     if (native && ctx.mode !== 'browser' && EA && EA.openTab) {
       EA.openTab({ url: u }).then(function (r) { if (!r || !r.opened) viaWindow(); }, function () { viaWindow(); });
@@ -156,11 +156,11 @@
     if (!ctx) return;
     var pass = ctx.getPass ? ctx.getPass() : '';
     if (S.m && S.m.reg) { goReg(S.m.reg); if (pass) load(false); return; }          // 저장해 둔 주소로 바로(주소는 서버 목록에서 받아 폰에 저장해 둔 것)
-    if (!pass) { ctx.toast('연동 암호를 넣으면 규정 도우미를 열 수 있어요.', 3600); if (ctx.showGate) ctx.showGate(true); return; }
-    ctx.toast('규정 도우미 주소를 확인하는 중이에요…', 2200);
+    if (!pass) { ctx.toast('연동 암호를 넣으면 규정 도우미를 열 수 있습니다.', 3600); if (ctx.showGate) ctx.showGate(true); return; }
+    ctx.toast('규정 도우미 주소를 확인하는 중입니다…', 2200);
     load(true).then(function () {
       if (S.m && S.m.reg) goReg(S.m.reg);
-      else ctx.toast('규정 도우미 주소를 불러오지 못했어요. 연결을 확인한 뒤 다시 눌러 주세요.', 4200);
+      else ctx.toast('규정 도우미 주소를 불러오지 못했습니다. 연결을 확인한 뒤 다시 눌러 주십시오.', 4200);
     });
   }
 
@@ -187,7 +187,7 @@
       if (act === 'retry') load(true);
       else if (act === 'gate' && ctx.showGate) ctx.showGate(true);
     });
-    var rf = $('hubRefresh'); if (rf) rf.addEventListener('click', function () { load(true).then(function (ok) { if (ok) ctx.toast('목록을 새로 받았어요.', 1600); }); });
+    var rf = $('hubRefresh'); if (rf) rf.addEventListener('click', function () { load(true).then(function (ok) { if (ok) ctx.toast('목록을 새로 받았습니다.', 1600); }); });
   }
 
   /* v9.80 「포인트 앱 바로 열기」 — 서버 목록과 독립(render 가 지우지 않는다). 카드 등장 움직임 없음(움직이지 않는 자리).
@@ -214,19 +214,19 @@
     var hasM = !!(S.m && S.m.cats.length);
     $('hubView').classList.toggle('calm', calm());
     if (st === 'nopass') {
-      say.textContent = '연동 암호를 넣으면 목록이 보여요';
-      html = errBlock('연동 암호가 필요해요', '이 폰에 연동 암호가 아직 없어요. 한 번만 넣으면 돼요.', '<button type="button" class="hub-btn" data-hubact="gate">연동 암호 넣기</button>');
+      say.textContent = '연동 암호를 넣으면 목록이 보입니다';
+      html = errBlock('연동 암호가 필요합니다', '이 폰에 연동 암호가 아직 없습니다. 한 번만 넣으면 됩니다.', '<button type="button" class="hub-btn" data-hubact="gate">연동 암호 넣기</button>');
     } else if (st === 'badpass') {
-      say.textContent = '연동 암호가 맞지 않아요';
-      html = errBlock('목록을 받지 못했어요', '연동 암호가 맞지 않는다고 서버가 답했어요. 암호를 다시 넣어 주세요.', '<button type="button" class="hub-btn" data-hubact="gate">연동 암호 다시 넣기</button>') + (hasM ? '' : '');
+      say.textContent = '연동 암호가 맞지 않습니다';
+      html = errBlock('목록을 받지 못했습니다', '연동 암호가 맞지 않는다고 서버가 답했습니다. 암호를 다시 넣어 주십시오.', '<button type="button" class="hub-btn" data-hubact="gate">연동 암호 다시 넣기</button>') + (hasM ? '' : '');
     } else if (!hasM) {
       if (st === 'loading' || st === 'idle') { say.textContent = sayFor('loading'); html = '<div class="hub-wait"><span class="hub-spin" aria-hidden="true"></span>목록을 가져오는 중…</div>'; }
-      else if (st === 'notready') { say.textContent = '서버 준비 중이에요'; html = errBlock('서버 준비 중이에요', '업무 앱 목록을 담을 서버 칸이 아직 열리지 않았어요.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 시도</button>'); }
-      else if (st === 'empty') { say.textContent = '목록이 아직 올라오지 않았어요'; html = errBlock('목록이 아직 없어요', '서버에 업무 앱 목록이 아직 올라오지 않았어요.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 시도</button>'); }
-      else { say.textContent = '목록을 못 불러왔어요'; html = errBlock('목록을 못 불러왔어요', st === 'badshape' ? '서버가 준 목록의 모양이 이상해서 쓰지 않았어요.' : '인터넷 연결이나 서버 상태를 확인하고 다시 시도해 주세요.', '<button type="button" class="hub-btn" data-hubact="retry">다시 시도</button>'); }
+      else if (st === 'notready') { say.textContent = '서버 준비 중입니다'; html = errBlock('서버 준비 중입니다', '업무 앱 목록을 담을 서버 칸이 아직 열리지 않았습니다.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 시도</button>'); }
+      else if (st === 'empty') { say.textContent = '목록이 아직 올라오지 않았습니다'; html = errBlock('목록이 아직 없습니다', '서버에 업무 앱 목록이 아직 올라오지 않았습니다.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 시도</button>'); }
+      else { say.textContent = '목록을 못 불러왔습니다'; html = errBlock('목록을 못 불러왔습니다', st === 'badshape' ? '서버가 준 목록의 모양이 이상해서 쓰지 않았습니다.' : '인터넷 연결이나 서버 상태를 확인하고 다시 시도해 주십시오.', '<button type="button" class="hub-btn" data-hubact="retry">다시 시도</button>'); }
     } else if (!S.m.enabled) {
-      say.textContent = '업무 앱은 지금 준비 중이에요';
-      html = errBlock('업무 앱은 지금 준비 중이에요', '목록이 잠시 꺼져 있어요. 다시 켜지면 이 화면에 나타나요.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 확인</button>');
+      say.textContent = '업무 앱은 지금 준비 중입니다';
+      html = errBlock('업무 앱은 지금 준비 중입니다', '목록이 잠시 꺼져 있습니다. 다시 켜지면 이 화면에 나타납니다.', '<button type="button" class="hub-btn ghost" data-hubact="retry">다시 확인</button>');
     } else {
       if (st !== 'badpass') say.textContent = sayFor(st === 'ok' ? 'ok' : (st === 'refreshing' ? 'refreshing' : 'cached'), S.at, S.m.count);
       var i = 0;
@@ -240,7 +240,7 @@
           i++;
         });
       });
-      if (st === 'cached' || st === 'offline') html += '<div class="hub-note">새로 받으려면 오른쪽 위 ⟳ 단추를 눌러 주세요.</div>';
+      if (st === 'cached' || st === 'offline') html += '<div class="hub-note">새로 받으려면 오른쪽 위 ⟳ 단추를 눌러 주십시오.</div>';
     }
     list.innerHTML = html;
   }

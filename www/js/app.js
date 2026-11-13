@@ -132,9 +132,9 @@
   function rpApp(card) { for (var i = 0; i < RP_CARDS.length; i++) if (RP_CARDS[i].v === card) return RP_CARDS[i].app; return ''; }
   function rpFields() { return rpOn() ? { card_pick: RP.card || '', memo_pick: String(RP.memo || '').trim() } : {}; }
   function rpHtml() {
-    return '<div class="scan-pick"><div class="label">어느 카드로 결제하셨나요? <span class="hint">(선택 · 한 번 누르면 기억합니다)</span></div><div class="scan-chips" data-rp-chips>' +
+    return '<div class="scan-pick"><div class="label">어느 카드로 결제하셨습니까? <span class="hint">(선택 · 한 번 누르면 기억합니다)</span></div><div class="scan-chips" data-rp-chips>' +
       RP_CARDS.map(function (c) { return '<button type="button" class="chip hchip scan-chip' + (RP.card === c.v ? ' on' : '') + '" data-rp-card="' + c.v + '" aria-pressed="' + (RP.card === c.v) + '">' + c.t + '</button>'; }).join('') + '</div>' +
-      '<div class="label">메모 <span class="hint">(선택 · 사용 목적 등 20자 이내 · 개인정보는 적지 마세요)</span></div>' +
+      '<div class="label">메모 <span class="hint">(선택 · 사용 목적 등 20자 이내 · 개인정보는 적지 마십시오)</span></div>' +
       '<div class="input filled"><input type="text" data-rp-memo maxlength="20" autocomplete="off" placeholder="예: 연구 회의 간식" value="' + esc(RP.memo) + '"></div></div>';
   }
   function rpBind(root) {          // root 안의 카드 칩·메모 칸을 묶는다(한 장 패널과 여러 장 화면이 같은 함수 하나)
@@ -419,7 +419,7 @@
     var min = Math.floor((sec || 0) / 60);
     if (REC_ROAM_V2 && recLost) { KScene.set('kscRec', 'sorry', '녹음이 멈춘 것 같습니다. 정지를 눌러 지금까지의 녹음을 확인해 주십시오.'); return; }
     // v9.8: 첫 1분의 한마디로 「나가도 녹음은 계속된다」를 알린다(따로 안내 줄을 만들지 않는다)
-    var first = REC_ROAM_V2 ? '받아 적고 있습니다. 다른 화면을 보셔도 계속 적겠습니다.' : '받아 적고 있습니다. 편하게 말씀하세요.';
+    var first = REC_ROAM_V2 ? '받아 적고 있습니다. 다른 화면을 보셔도 계속 적겠습니다.' : '받아 적고 있습니다. 편하게 말씀하십시오.';
     KScene.set('kscRec', 'note', min >= 1 ? '받아 적고 있습니다. ' + min + '분째입니다.' : first);
   }
   // elapsedMs: (v9.8) 이미 돌고 있던 녹음을 되찾을 때 — 그만큼 지난 것으로 시작한다. 평소에는 0.
@@ -856,7 +856,7 @@
   }
 
   if (!RecordingModule.isSupported()) {
-    showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 <b>Chrome</b>에서 열어 주세요.');
+    showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다. 갤럭시/안드로이드의 <b>Chrome</b>에서 열어 주십시오.');
     if (btnRecord) { btnRecord.disabled = true; btnRecord.style.opacity = '.5'; }
   }
 
@@ -975,7 +975,7 @@
     hideBanner();
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
-    setStatus('녹음 준비 — 시작을 눌러 주세요', 'idle');
+    setStatus('녹음 준비 — 시작을 눌러 주십시오', 'idle');
     try { recSpaceHint(); } catch (e) {}      // v9.10: 저장 공간이 모자라 보이면 한 줄(읽기만 — 시작을 막지 않는다)
     try { recPrepClip(); } catch (e) {}       // O-0616: 영상이 준비되면 「받아 적을 준비」 케이 한 줄(준비 안 되면 이 화면은 지금 그대로)
   });
@@ -1055,7 +1055,7 @@
   }
   function audioToMeeting(f) {
     if (!f) return;
-    if (isRecording) { toast('지금 녹음 중입니다. 녹음을 마친 뒤 다시 공유해 주세요.', 3500); return; }
+    if (isRecording) { toast('지금 녹음 중입니다. 녹음을 마친 뒤 다시 공유해 주십시오.', 3500); return; }
     if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
     hideBanner();
     pendingBlob = f; pendingMaterials = []; renderMatList();
@@ -1066,7 +1066,7 @@
     recPanelMode(true);
     openScreen(recordedPanel);
     setStatus('녹음 파일 — 제목 정하고 보내기', 'idle');
-    toast('제목을 확인하고, 필요하면 회의자료를 붙인 뒤 [PC로 보내 정리하기]를 누르세요.', 4000);
+    toast('제목을 확인하고, 필요하면 회의자료를 붙인 뒤 [PC로 보내 정리하기]를 누르십시오.', 4000);
   }
   function onRecorded(blob) {
     var wasLost = recLost;
@@ -1113,7 +1113,7 @@
   });
 
   if (btnSend) btnSend.addEventListener('click', function () {
-    if (!pendingBlob) { showBanner('먼저 녹음해 주세요.'); return; }
+    if (!pendingBlob) { showBanner('먼저 녹음해 주십시오.'); return; }
     var t = now();
     var memo = {
       id: OfficeBridge.uuid(), token: OfficeBridge.token(),
@@ -1138,7 +1138,7 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       renderHistory(); showHome();
-      showBanner('⚠️ 전송 실패 — ' + esc(friendlyErr(e)) + '<br>녹음은 안전하게 보관됐습니다 — <b>회의록</b> 맨 위 「진행 중」에서 다시 눌러 보세요.');
+      showBanner('⚠️ 전송 실패 — ' + esc(friendlyErr(e)) + '<br>녹음은 안전하게 보관됐습니다 — <b>회의록</b> 맨 위 「진행 중」에서 다시 눌러 보십시오.');
       setStatus('전송 실패', 'err');
     });
   });
@@ -1148,7 +1148,7 @@
    * 안전 핵심: draft 오디오는 IndexedDB 'drafts' 스토어(=flush 대상 아님)에 담겨
    *   대표님이 [PC 보내기]를 누르기 전까지 절대 자동 발송되지 않는다. 앱을 껐다 켜도 유지. */
   if (btnDraft) btnDraft.addEventListener('click', function () {
-    if (!pendingBlob) { showBanner('먼저 녹음해 주세요.'); return; }
+    if (!pendingBlob) { showBanner('먼저 녹음해 주십시오.'); return; }
     var t = now();
     var id = OfficeBridge.uuid(), tok = OfficeBridge.token();
     var title = (memoTitle.value || '').trim() || defaultTitle();
@@ -1160,7 +1160,7 @@
     var rc = (recCur && recFindApi()) ? recCur : null;    // v9.10: 일지 번호 · 진단 값을 임시저장에도 실어 둔다(나중에 보낼 때 meta.rec 로)
     if (rc) { rec.recSid = rc.gid; try { rec.recMeta = recMetaOf(rc); } catch (e) {} }
     OfficeBridge.saveDraft(rec).then(function (ok) {
-      if (!ok) { showBanner('임시 저장에 실패했습니다(저장 공간을 확인해 주세요). 녹음은 아직 화면에 있습니다.'); return; }
+      if (!ok) { showBanner('임시 저장에 실패했습니다(저장 공간을 확인해 주십시오). 녹음은 아직 화면에 있습니다.'); return; }
       HistoryModule.add({ id: id, token: tok, title: title, date: t.date, time: t.time, status: 'draft', kind: 'audio' });
       if (rc) { recCur = null; try { recFindHanded(rc.gid, id, 'draft'); } catch (e) {} }   // 임시저장에 들어간 것을 확인한 뒤에 「넘김」
       pendingBlob = null; pendingMaterials = [];          // 저장 성공 후에만 비운다(실패 시 녹음 보존)
@@ -1367,7 +1367,7 @@
   function draftSendFailed(id, err) {
     var why = friendlyErr(err);
     var tail = (err && err.reason === 'unreadable')
-      ? ' 폰 저장 공간·앱 상태 문제일 수 있으니 이 항목은 지우지 마시고 저에게 알려 주세요.'
+      ? ' 폰 저장 공간·앱 상태 문제일 수 있으니 이 항목은 지우지 마시고 저에게 알려 주십시오.'
       : ' 회의록 → 진행 중 → 이 항목 → <b>PC로 보내기</b>를 다시 누르면 이어서 보냅니다(이미 올라간 부분은 건너뜀).';
     HistoryModule.update(id, { status: 'draft', error: why }); renderHistory(); showHome();
     showBanner('⚠️ 전송 실패 — ' + esc(why) + '<br>임시 저장한 녹음은 폰에 그대로 있습니다.' + tail);
@@ -1430,7 +1430,7 @@
       var e = HistoryModule.get(id);
       if (e && e.status !== 'done') {
         HistoryModule.update(id, { status: 'failed',
-          error: 'PC가 이 녹음을 받지 못했습니다(전송이 서버까지 도달하지 못함). 다시 보내거나 삭제해 주세요.' });
+          error: 'PC가 이 녹음을 받지 못했습니다(전송이 서버까지 도달하지 못함). 다시 보내거나 삭제해 주십시오.' });
         renderHistory();
       }
     });
@@ -1467,7 +1467,7 @@
         // 포그라운드 대기화면 안내(1회) — 폴링은 멈추지 않는다(done/자동복구를 계속 감지해야 하므로).
         if (!bannerShown && isOpen(processing) && Date.now() - started > 5 * 60 * 1000) {
           bannerShown = true; showHome();
-          showBanner('아직 정리 중입니다. PC가 켜져 있는지 확인하고, 잠시 후 <b>회의록</b>에서 다시 확인해 주세요.');
+          showBanner('아직 정리 중입니다. PC가 켜져 있는지 확인하고, 잠시 후 <b>회의록</b>에서 다시 확인해 주십시오.');
         }
         // 러너웨이 방지: 행이 있어도(정상·느린 정리) 이 시간을 넘기면 폴링을 조용히 멈춘다.
         //   (남은 done 은 다음 앱 실행/열람 시 복원 폴러가 잡는다. 무행 실패는 위 STUCK_MS 로 이미 처리됨.)
@@ -1789,7 +1789,7 @@
     var x = SCAN_LINE_RE.exec(String(m.text));
     if (!x) {
       var ax = /^\s*#스캔\s+[0-9a-f]{8}\s+(맞음|정정|철회|모두맞음)(?:\s+\{[\s\S]*\})?\s*$/.exec(String(m.text));      // v9.32: 확인 단추가 보내는 줄
-      return ax ? (ax[1] === '맞음' ? '🧾 영수증 맞아요' : ax[1] === '모두맞음' ? '🧾 영수증 전부 맞아요' : ax[1] === '정정' ? '🧾 영수증 정정 요청' : '🧾 영수증 등록 취소 요청') : m.text;
+      return ax ? (ax[1] === '맞음' ? '🧾 영수증 맞습니다' : ax[1] === '모두맞음' ? '🧾 영수증 전부 맞습니다' : ax[1] === '정정' ? '🧾 영수증 정정 요청' : '🧾 영수증 등록 취소 요청') : m.text;
     }
     if (x[1] === '상담') return '🧾 영수증 상담 요청';
     if (x[1] !== '등록') return '🧾 영수증 등록 안 함';
@@ -2006,7 +2006,7 @@
         : '<button class="card doc ' + d[0] + '" disabled><span class="badge">' + d[1] + '</span><b>' + d[2] + '</b><small>대기</small></button>';
     });
     h += '</div>';
-    h += '<p class="savehint warn">폰에서는 <b>PDF</b>로 바로 보세요. Word·PPT는 PC(또는 오피스 앱)에서 열립니다.</p>';
+    h += '<p class="savehint warn">폰에서는 <b>PDF</b>로 바로 보십시오. Word·PPT는 PC(또는 오피스 앱)에서 열립니다.</p>';
     return h;
   }
   function wireDocButtons(host, e) {
@@ -2014,7 +2014,7 @@
       b.addEventListener('click', function () {
         var url = b.getAttribute('data-open');
         var w = window.open(url, '_blank');
-        setExportMsg(w ? '새 탭에서 열었습니다.' : '팝업이 막혔습니다 — 다시 눌러 주세요.', w ? 'ok' : 'err');
+        setExportMsg(w ? '새 탭에서 열었습니다.' : '팝업이 막혔습니다 — 다시 눌러 주십시오.', w ? 'ok' : 'err');
       });
     });
   }
@@ -2041,7 +2041,7 @@
     if (working) { pose = 'desk'; text = (allAudio ? '녹음 ' : '') + working + '건을 정리하고 있습니다. 끝나면 여기에 올려 두겠습니다.'; }
     else if (mtgState === 'loading') { pose = 'idle'; text = '회의록을 가져오고 있습니다.'; }
     else if (mtgState === 'nopass') { pose = 'guide'; text = '연동 암호를 넣어 주시면 정리된 회의록을 보여 드리겠습니다.'; }
-    else if (mtgState === 'fail') { pose = 'sorry'; text = '죄송합니다, 회의록을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'; }
+    else if (mtgState === 'fail') { pose = 'sorry'; text = '죄송합니다, 회의록을 불러오지 못했습니다. 잠시 뒤 다시 열어 주십시오.'; }
     else if (mtgState === 'ok' && meetingsRows.length) { pose = 'report'; text = '「' + cutText(meetingsRows[0].title || '회의 요약', 18) + '」 정리본이 준비돼 있습니다.'; }
     else if (mtgState === 'ok') { pose = 'guide'; text = '아직 정리본이 없습니다. 녹음하시면 제가 정리해 두겠습니다.'; }
     KScene.set('kscMeetings', pose, text);
@@ -2063,7 +2063,7 @@
     if (!pass) {
       host.innerHTML = '';                            // v9.4: 안내는 맨 위 케이가 말한다(같은 말을 두 번 하지 않게)
       mtgState = 'nopass'; meetingsScene();
-      showSyncGate(true, '회의록을 보려면 PC 연동 암호를 입력해 주세요.');
+      showSyncGate(true, '회의록을 보려면 PC 연동 암호를 입력해 주십시오.');
       return;
     }
     host.innerHTML = '';
@@ -2075,9 +2075,9 @@
     }).catch(function (e) {
       if (e && e.badpass) {                          // 암호 불일치/미설정 → 저장 암호 지우고 재입력 유도(기존 게이트)
         setSyncPass('');
-        host.innerHTML = '<p class="empty" style="padding:16px">암호가 맞지 않습니다. 다시 입력해 주세요.</p>';
+        host.innerHTML = '<p class="empty" style="padding:16px">암호가 맞지 않습니다. 다시 입력해 주십시오.</p>';
         mtgState = 'nopass'; meetingsScene();
-        if (isOpen($('meetingsView'))) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.');
+        if (isOpen($('meetingsView'))) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.');
       } else {
         host.innerHTML = '';
         mtgState = 'fail'; meetingsScene();
@@ -2226,13 +2226,13 @@
   function renameMeetingPrompt(idx) {
     var r = meetingsRows[idx]; if (!r) return;
     var pass = getSyncPass();
-    if (!pass) { showSyncGate(true, '이름을 변경하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (!pass) { showSyncGate(true, '이름을 변경하려면 PC 연동 암호를 입력해 주십시오.'); return; }
     modalTitle.textContent = '이름 변경';
     var cur = r.title || '';
     var html = '<div class="card rcard"><div class="h"><svg><use href="#i-note"/></svg>표시 이름 바꾸기</div>' +
       '<div style="padding:2px 2px 8px;line-height:1.6">앱에 보이는 <b>표시 이름</b>만 바뀝니다(PC에 저장된 원본 파일은 그대로입니다).</div>' +
       '<input id="mtgRenameInput" type="text" maxlength="120" value="' + esc(cur) + '" ' +
-      'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="새 이름을 입력하세요"></div>' +
+      'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="새 이름을 입력하십시오"></div>' +
       '<div class="btnrow">' +
       '<button id="mtgRenameSave" class="btn primary"><svg><use href="#i-check"/></svg>저장</button>' +
       '<button id="mtgRenameCancel" class="btn ghost sm"><svg><use href="#i-x"/></svg>취소</button>' +
@@ -2242,7 +2242,7 @@
     $('mtgRenameCancel').addEventListener('click', closeModal);
     $('mtgRenameSave').addEventListener('click', function () {
       var nt = ((inp && inp.value) || '').trim();
-      if (!nt) { toast('이름을 입력해 주세요.'); return; }
+      if (!nt) { toast('이름을 입력해 주십시오.'); return; }
       if (nt.length > 120) nt = nt.slice(0, 120);
       if (nt === (r.title || '')) { closeModal(); return; }   // 변화 없음
       OfficeBridge.renameMemo(r.id, nt, getSyncPass()).then(function (ok) {
@@ -2252,8 +2252,8 @@
         toast('이름을 바꿨습니다.');
       }).catch(function (e) {
         closeModal();
-        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-        else toast('이름 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+        else toast('이름 변경에 실패했습니다. 잠시 후 다시 시도해 주십시오.');
       });
     });
     modal.style.display = 'flex';
@@ -2263,7 +2263,7 @@
   function confirmDeleteMeeting(idx) {
     var r = meetingsRows[idx]; if (!r) return;
     var pass = getSyncPass();
-    if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주십시오.'); return; }
     openSheet('이 회의록을 삭제할까요?',
       '목록에서 사라집니다. 소프트삭제라 서버 원본과 PC 파일은 남아 있어(복구 가능) 안심하셔도 됩니다.',
       '삭제', function () {
@@ -2272,8 +2272,8 @@
           showMeetingsList(); renderMeetingsList();
           toast('삭제했습니다.');
         }).catch(function (e) {
-          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-          else toast('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+          else toast('삭제에 실패했습니다. 잠시 후 다시 시도해 주십시오.');
         });
       });
   }
@@ -2374,7 +2374,7 @@
       '이 메모는 지금 PC에서 정리 중입니다.<br>' +
       '만약 <b>10분 넘게 계속 “정리 중”에서 멈춰</b> 있다면, 전송이 PC까지 닿지 못했을 수 있습니다' +
       '(그럴 땐 잠시 뒤 자동으로 <b>실패</b>로 바뀌어 다시 보낼 수 있습니다).<br>' +
-      '지금 바로 정리하려면 아래 <b>삭제</b>로 이 항목을 지우고 다시 녹음해 보내 주세요.' +
+      '지금 바로 정리하려면 아래 <b>삭제</b>로 이 항목을 지우고 다시 녹음해 보내 주십시오.' +
       '</div></div>' +
       '<div class="btnrow">' +
       '<button id="mProcWait" class="btn primary"><svg><use href="#i-refresh"/></svg>계속 기다리기</button>' +
@@ -2402,7 +2402,7 @@
     var html = '<div class="card rcard"><div class="h"><svg><use href="#i-flag"/></svg>전송 실패</div>' +
       '<div style="padding:2px 2px 0;line-height:1.6">' +
       '이 항목을 PC로 보내지 못했습니다.<br><b>사유:</b> ' + reason + '<br><br>' +
-      '📶 인터넷 연결(와이파이·데이터)과 PC가 켜져 있는지 확인하고 <b>다시 보내기</b>를 눌러 주세요.<br>' +
+      '📶 인터넷 연결(와이파이·데이터)과 PC가 켜져 있는지 확인하고 <b>다시 보내기</b>를 눌러 주십시오.<br>' +
       '녹음·파일은 이 기기에 안전하게 보관돼 있습니다.' +
       '</div></div>' +
       '<div class="btnrow">' +
@@ -2443,11 +2443,11 @@
     }).then(function () {
       if (!handled) {                 // 못 보냈으면(대기열에 없음/또 실패) 실패로 되돌리고 사유 안내
         HistoryModule.update(id, { status: 'failed', error: failErr ? friendlyErr(failErr) : (e.error || null) }); renderHistory();
-        showBanner('⚠️ 다시 보내기에 실패했습니다. ' + (failErr ? esc(friendlyErr(failErr)) : '인터넷 연결과 PC 상태를 확인하고 잠시 후 다시 시도해 주세요.'));
+        showBanner('⚠️ 다시 보내기에 실패했습니다. ' + (failErr ? esc(friendlyErr(failErr)) : '인터넷 연결과 PC 상태를 확인하고 잠시 후 다시 시도해 주십시오.'));
       }
     }).catch(function () {
       if (!handled) { HistoryModule.update(id, { status: 'failed' }); renderHistory(); }
-      showBanner('⚠️ 다시 보내기에 실패했습니다. 인터넷 연결을 확인해 주세요.');
+      showBanner('⚠️ 다시 보내기에 실패했습니다. 인터넷 연결을 확인해 주십시오.');
     });
   }
 
@@ -2570,7 +2570,7 @@
       }).catch(function (e) {
         HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
         delete videoProg[memo.id]; renderHistory();
-        toast('긴 영상 업로드 실패 — 홈 「진행 중인 메모」에서 다시 시도해 주세요.');
+        toast('긴 영상 업로드 실패 — 홈 「진행 중인 메모」에서 다시 시도해 주십시오.');
       });
     });
     toast('긴 영상은 시간이 걸립니다. 다른 일 하셔도 됩니다 — 홈 「진행 중인 메모」에서 상태를 볼 수 있습니다.');
@@ -2594,7 +2594,7 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: friendlyErr(e) });
       delete videoProg[memo.id]; renderHistory();
-      toast('긴 음성 업로드 실패 — ' + friendlyErr(e) + ' 홈 「진행 중인 메모」에서 다시 보내 주세요.');
+      toast('긴 음성 업로드 실패 — ' + friendlyErr(e) + ' 홈 「진행 중인 메모」에서 다시 보내 주십시오.');
     });
     toast('긴 녹음은 조각으로 나눠 보냅니다. 다른 일 하셔도 됩니다 — 홈 「진행 중인 메모」에서 상태를 볼 수 있습니다.');
     showHome();
@@ -2652,13 +2652,13 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden && upWakeOn) uploadWake(true); });
   function audioUpText(info) {
     var n = Math.min(info.total, info.done), pct = info.size ? Math.min(99, Math.floor((info.sent / info.size) * 100)) : 0;
-    if (info.retry) return '올리는 중 ' + n + '/' + info.total + ' 조각 · 연결이 불안정해 다시 올리는 중… 화면을 켜 두세요';
+    if (info.retry) return '올리는 중 ' + n + '/' + info.total + ' 조각 · 연결이 불안정해 다시 올리는 중… 화면을 켜 두십시오';
     var est = '';
     if (info.eta != null && isFinite(info.eta)) {
       var m = Math.max(1, Math.ceil(info.eta / 60));
       est = ' · 약 ' + (m < 60 ? m + '분' : (Math.round(m / 6) / 10) + '시간');
     }
-    return '올리는 중 ' + n + '/' + info.total + ' 조각 · ' + pct + '%' + est + ' · 화면을 켜 두세요';
+    return '올리는 중 ' + n + '/' + info.total + ' 조각 · ' + pct + '%' + est + ' · 화면을 켜 두십시오';
   }
   if (OfficeBridge.setAudioUploadHooks) OfficeBridge.setAudioUploadHooks({
     wake: function (on) { uploadWake(on); },
@@ -2695,7 +2695,7 @@
           var e = HistoryModule.get(memo.id);
           if (e && e.status !== 'done') {
             if (e.status === 'failed') HistoryModule.update(memo.id, { status: 'pending', error: null });
-            videoProg[memo.id] = '이어서 올리는 중… 화면을 켜 두세요'; renderHistory();
+            videoProg[memo.id] = '이어서 올리는 중… 화면을 켜 두십시오'; renderHistory();
           }
         }
       });
@@ -2734,7 +2734,7 @@
     }).catch(function (e) {
       HistoryModule.update(memo.id, { status: 'failed', error: String(e && e.message || e) });
       renderHistory(); showHome();
-      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. 홈 <b>진행 중인 메모</b>에서 다시 눌러 주세요.');
+      showBanner('⚠️ 업로드 실패: ' + (e && e.message || e) + '. 홈 <b>진행 중인 메모</b>에서 다시 눌러 주십시오.');
     });
   }
   if ($('btnPhoto')) $('btnPhoto').addEventListener('click', function () { $('photoInput').click(); });
@@ -2861,7 +2861,7 @@
       openChat();
       onChatCamPicked([file]);
       if (window.SilentCam) SilentCam.release(file);
-    } catch (e) { toast('채팅에 붙이지 못했어요.'); }
+    } catch (e) { toast('채팅에 붙이지 못했습니다.'); }
   }
   function openCameraTab() {
     if (!silentTabOn()) { openScanTab(); return; }
@@ -2870,14 +2870,14 @@
     var left = (window.DocScan && DocScan.MAX_PAGES) || 100;
     var pre = (docScanOn() && DocScan.listSession) ? DocScan.listSession().then(function (r) { left = Math.max(0, left - ((r && r.pages && r.pages.length) || 0)); }, function () {}) : Promise.resolve();
     pre.then(function () {
-      if (left <= 0 && last === 'doc') { toast('문서 스캔에 이미 100쪽이 담겨 있어 더 담을 수 없어요.'); return { kind: 'cancel' }; }   // 열지 않는다
+      if (left <= 0 && last === 'doc') { toast('문서 스캔에 이미 100쪽이 담겨 있어 더 담을 수 없습니다.'); return { kind: 'cancel' }; }   // 열지 않는다
       return SilentCam.shoot({ mode: last, from: 'tab', multi: last === 'doc', left: left });
     }).then(function (r) {
       if (!r) return;
       if (r.mode) { try { localStorage.setItem(CAM_MODE_KEY, r.mode); } catch (e) {} }
       if (r.kind === 'fallback' || r.kind === 'gallery') { openScanTab(); return; }
       if (r.kind !== 'files' || !r.files || !r.files.length) return;
-      if (r.mode === 'photo') { chatAttachCaptured(r.files[0]); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); return; }
+      if (r.mode === 'photo') { chatAttachCaptured(r.files[0]); toast('채팅에 붙였습니다. 보내기를 눌러 주십시오.'); return; }
       if (r.mode === 'receipt') { if (SCAN_HUB === 'on') openReceiptScan(true, r.files[0]); else SilentCam.release(r.files[0]); return; }
       if (docScanOn()) openScanGeneral({ files: r.files });
       else r.files.forEach(function (f) { SilentCam.release(f); });     // 열 수 없으면 임시 파일도 바로 지운다
@@ -2890,7 +2890,7 @@
       return SilentCam.recover({
         doc: function (files) { if (docScanOn()) openScanGeneral({ files: files }); else files.forEach(function (f) { SilentCam.release(f); }); },
         receipt: function (file) { if (SCAN_HUB === 'on') openReceiptScan(true, file); },
-        photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였어요. 보내기를 눌러 주세요.'); }
+        photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였습니다. 보내기를 눌러 주십시오.'); }
       });
     }).catch(function () {});
   }
@@ -2982,7 +2982,7 @@
     if (st === 'duplicate') return mk('이미 같은 내역', 'warn');
     if (st === 'skipped') return mk('등록 안 함', 'warn');
     var risk = sc.risk || {};
-    if (!tc.app || sc.dup_of || risk.refund || risk.foreign || risk.amount_mismatch) return mk('확인해 주세요 ›', 'warn');
+    if (!tc.app || sc.dup_of || risk.refund || risk.foreign || risk.amount_mismatch) return mk('확인해 주십시오 ›', 'warn');
     return mk('읽음 ›', 'ok');
   }
   function rcbRender() {
@@ -3080,7 +3080,7 @@
       var pendingRead = rcb.items.some(function (it) { return it.st === 'reading' || it.st === 'uploading' || it.st === 'queued'; });
       if (!pendingRead && !announced) {
         announced = true;
-        if (!isOpen($('rcbWrap'))) toast('🧾 영수증 ' + rcb.items.length + '장을 읽었습니다 — 홈 「진행 중인 메모」에서 확인하세요.', 4000);
+        if (!isOpen($('rcbWrap'))) toast('🧾 영수증 ' + rcb.items.length + '장을 읽었습니다 — 홈 「진행 중인 메모」에서 확인하십시오.', 4000);
       }
       if (!work.length && !pendingRead) rcbStopPoll();
       if (Date.now() - rcb.started > 25 * 60 * 1000) rcbStopPoll();
@@ -3116,7 +3116,7 @@
   function rcbBack() {
     if (!rcb) { showHome(); setStatus('대기 중', 'idle'); return true; }
     if (rcb.step === 'pick') { rcbDiscard(); openChat(); return true; }
-    showHome(); setStatus('대기 중', 'idle'); toast('읽기는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true;
+    showHome(); setStatus('대기 중', 'idle'); toast('읽기는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하십시오.'); return true;
   }
 
   /* ---- 확인 말풍선 ---- */
@@ -3140,7 +3140,7 @@
       var m = marks[x.id], act;
       if (x.st === 'registered') {
         act = m === 'ok' ? '<span class="sa-done">✔ 확인함</span>' : m === 'fixed' ? '<span class="sa-done">✎ 정정함</span>' : m === 'revoked' ? '<span class="sa-done sa-bad">취소함</span>' :
-          '<button type="button" class="sa-b ok" data-sa-act="ok" data-sa-id="' + esc(x.id) + '">맞아요</button><button type="button" class="sa-b fix" data-sa-act="fix" data-sa-id="' + esc(x.id) + '">고쳐요</button>';
+          '<button type="button" class="sa-b ok" data-sa-act="ok" data-sa-id="' + esc(x.id) + '">맞습니다</button><button type="button" class="sa-b fix" data-sa-act="fix" data-sa-id="' + esc(x.id) + '">고칩니다</button>';
       } else if (x.st === 'failed') act = '<span class="sa-done sa-bad">읽지 못함</span>';
       else if (x.st === 'cancelled') act = '<span class="sa-done sa-bad">취소됨</span>';
       else act = '<button type="button" class="sa-b chk" data-sa-act="open" data-sa-id="' + esc(x.id) + '">확인하기</button>';
@@ -3149,7 +3149,7 @@
     }).join('');
     var all = (p.items.length > 1 && !p.research && unacked.length > 0) ?
       '<button type="button" class="btn primary sa-all" data-sa-act="all" data-sa-id="' + esc(unacked[0].id) + '" data-sa-total="' + unacked.reduce(function (s, x) { return s + (x.amount || 0); }, 0) + '" data-sa-n="' + unacked.length + '">' +
-      unacked.length + '장 전부 맞아요 (합계 ' + scanWon(unacked.reduce(function (s, x) { return s + (x.amount || 0); }, 0)) + '원)</button>' : '';
+      unacked.length + '장 전부 맞습니다 (합계 ' + scanWon(unacked.reduce(function (s, x) { return s + (x.amount || 0); }, 0)) + '원)</button>' : '';
     var note = p.fix ? '정정은 ' + (p.hours || 24) + '시간 안에 이 말풍선에서 할 수 있습니다.' : '정정은 학교 장부 화면에서 해 주십시오.';
     return '<div class="attachitem sa-item"><div class="sa-box' + (replyCalm() ? '' : ' sa-in') + '">' + rows +
       (p.items.length > 1 ? '<div class="sa-total">등록한 ' + reg.length + '장 합계 <b>' + scanWon(p.total || 0) + '원</b></div>' : '') + all +
@@ -3177,11 +3177,11 @@
     if (b.disabled) return true;
     if (act === 'ok') {
       b.disabled = true;
-      saSend('#스캔 ' + id + ' 맞음', '🧾 영수증 맞아요').then(function (ok) { if (ok) { saMark(id, 'ok'); saPaint(id, 'ok'); } else b.disabled = false; });
+      saSend('#스캔 ' + id + ' 맞음', '🧾 영수증 맞습니다').then(function (ok) { if (ok) { saMark(id, 'ok'); saPaint(id, 'ok'); } else b.disabled = false; });
     } else if (act === 'all') {
       b.disabled = true;
       var box = b.closest('.sa-box'), ids = Array.prototype.map.call(box ? box.querySelectorAll('.sa-b.ok') : [], function (x) { return x.getAttribute('data-sa-id'); });
-      saSend('#스캔 ' + id + ' 모두맞음', '🧾 영수증 ' + (b.getAttribute('data-sa-n') || '') + '장 전부 맞아요').then(function (ok) {
+      saSend('#스캔 ' + id + ' 모두맞음', '🧾 영수증 ' + (b.getAttribute('data-sa-n') || '') + '장 전부 맞습니다').then(function (ok) {
         if (ok) ids.forEach(function (i) { saMark(i, 'ok'); saPaint(i, 'ok'); }); else b.disabled = false;
       });
     } else if (act === 'fix' || act === 'open') {
@@ -3298,7 +3298,7 @@
   function clearSearch() {
     stopSearchPoll();   // 검색 중 나가도 뒤에서 계속 조회하지 않게
     // 검색 전 빈 화면: 무엇을 하는 화면인지 예시로 안내(2026-09-20)
-    if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하세요.<br>예: 홍길동, 셀트리온</div>';
+    if (searchResults) searchResults.innerHTML = '<div class="empty-note">찾으실 분의 이름이나 회사를 한글로 검색하십시오.<br>예: 홍길동, 셀트리온</div>';
     setSearchMsg('', '');
     if (searchInput) searchInput.value = '';
     try { clReset(); } catch (e) {}   // O-0667 v9.58: 전체 명단 상태도 함께 비움(연락처를 메모리에 남기지 않는다)
@@ -3310,7 +3310,7 @@
   function setSearchMsg(m, k) { if (searchMsg) { searchMsg.textContent = m || ''; searchMsg.className = 'exportmsg ' + (k || ''); } }
   function doSearch() {
     var q = (searchInput.value || '').trim();
-    if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하세요.', 'err'); return; }
+    if (!q) { setSearchMsg('이름이나 기관을 한글로 입력하십시오.', 'err'); return; }
     if (CL.mode !== 'search') clSetMode('search');   // O-0667: 명단 화면에서 글자를 넣고 [검색]을 누르면 「검색」 칸으로 넘어가 PC에 찾아 달라고 한다
     setSearchMsg('🔎 검색 중…', 'work'); searchResults.innerHTML = '';
     try { searchClip(); } catch (e) {}      // O-0616: 검색을 누른 순간에 찾아보는 케이 영상(준비되면 로딩 자리에 · 결과가 오면 바로 사라진다)
@@ -3345,7 +3345,7 @@
     }
     function mine() { return searchPollTimer === me; }   // 새 검색이 시작됐으면 이 폴링의 뒤늦은 응답은 버린다
     me = searchPollTimer = setInterval(function () {
-      if (Date.now() - started > 60000) { giveUp('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.'); return; }
+      if (Date.now() - started > 60000) { giveUp('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주십시오.'); return; }
       OfficeBridge.poll(id, tok).then(function (res) {
         if (!mine()) return;
         fails = 0;
@@ -3402,7 +3402,7 @@
       });
     }).catch(function () {
       btn.innerHTML = label; btn.disabled = false;
-      clMsg('사진을 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.');
+      clMsg('사진을 불러오지 못했습니다. 잠시 후 다시 눌러 주십시오.');
     });
   }
   function showCardPhotoModal(url) {
@@ -3578,13 +3578,13 @@
         if (gen !== CL.gen) return;
         var sj = (res && res.summary_json) || {};
         if (sj.mode !== 'list' || !Array.isArray(sj.cards)) {
-          fail(res && res.error ? '명단을 못 불러왔습니다 — PC에서 대장을 읽지 못했습니다.' : '명단을 못 불러왔습니다 — PC 프로그램이 아직 이 기능을 모르거나 꺼져 있습니다. 소장에게 알려 주세요.'); return;
+          fail(res && res.error ? '명단을 못 불러왔습니다 — PC에서 대장을 읽지 못했습니다.' : '명단을 못 불러왔습니다 — PC 프로그램이 아직 이 기능을 모르거나 꺼져 있습니다. 소장에게 알려 주십시오.'); return;
         }
-        if (typeof sj.count === 'number' && sj.count !== sj.cards.length) { fail('명단을 못 불러왔습니다 — 받은 명단이 중간에 잘렸습니다. 다시 불러와 주세요.'); return; }
+        if (typeof sj.count === 'number' && sj.count !== sj.cards.length) { fail('명단을 못 불러왔습니다 — 받은 명단이 중간에 잘렸습니다. 다시 불러와 주십시오.'); return; }
         var data = clNorm(sj.cards);
-        if (!data.length) { fail('명단이 비어 있습니다. PC의 명함 대장을 확인해 주세요.'); return; }
+        if (!data.length) { fail('명단이 비어 있습니다. PC의 명함 대장을 확인해 주십시오.'); return; }
         CL.data = data; CL.state = 'ok'; clRender();
-      }, function () { fail('명단을 못 불러왔습니다 — PC가 켜져 있는지 확인 후 다시 불러오세요.'); });
+      }, function () { fail('명단을 못 불러왔습니다 — PC가 켜져 있는지 확인 후 다시 불러오십시오.'); });
     }).catch(function (e) { fail('명단을 못 불러왔습니다 — 요청이 가지 않았습니다(' + (e && e.message || e) + ').'); });
   }
   function clPerson(c, ctx) {
@@ -3624,7 +3624,7 @@
     var chk = clCheck(list, [og, dn, dold, cg, [{ people: byName }]]), filtering = !!(CL.filter || CL.cat !== 'all');
     var nd = dn.filter(function (g) { return g.key; }).length, unk = 0; dn.forEach(function (g) { if (!g.key) unk = g.people.length; });
     CL.derived = { total: list.length, orgs: og.length, dates: nd, unknown: unk, check: chk, sort: sk, cat: CL.cat, filter: CL.filter };
-    var h = '<div class="cl-intro">대표님, 글자를 넣으면 이 명단 안에서 바로 걸러져요. PC 대장 전체에서 찾으시려면 [검색]을 눌러 주세요.</div>';
+    var h = '<div class="cl-intro">대표님, 글자를 넣으면 이 명단 안에서 바로 걸러집니다. PC 대장 전체에서 찾으시려면 [검색]을 눌러 주십시오.</div>';
     h += '<div class="cl-chips" role="group" aria-label="분류">';
     [['all', '전체'], ['univ', '대학'], ['biz', '업체'], ['etc', '기타']].forEach(function (x) {
       h += '<button type="button" class="chip cl-chip' + (CL.cat === x[0] ? ' on' : '') + '" data-cat="' + x[0] + '">' + x[1] + ' <b>' + f.cnt[x[0]] + '</b></button>';
@@ -3642,9 +3642,9 @@
     var sum = parts.join(' · ') + ((filtering && CL.data.length !== list.length) ? ' (전체 ' + CL.data.length + '명 중)' : '');
     var dirty = (sk !== 'org' || CL.cat !== 'all' || !!CL.filter);
     h += '<div class="cl-bar"><span class="cl-sum">' + esc(sum) + '</span>' + (dirty ? '<button type="button" class="cl-reset">초기화</button>' : '') + '</div>';
-    if (!chk.ok) h += '<div class="cl-warn">※ 명단 합계가 맞지 않습니다(전체 ' + chk.total + ' · 묶음별 ' + chk.sums.join('/') + '). 소장에게 알려 주세요.</div>';
+    if (!chk.ok) h += '<div class="cl-warn">※ 명단 합계가 맞지 않습니다(전체 ' + chk.total + ' · 묶음별 ' + chk.sums.join('/') + '). 소장에게 알려 주십시오.</div>';
     if (!list.length) {
-      h += '<div class="card"><p class="empty">조건에 맞는 명함이 없습니다.' + (dirty ? '<br>[초기화]를 눌러 처음 모습으로 돌아가 보세요.' : '') + '</p></div>';
+      h += '<div class="card"><p class="empty">조건에 맞는 명함이 없습니다.' + (dirty ? '<br>[초기화]를 눌러 처음 모습으로 돌아가 보십시오.' : '') + '</p></div>';
     } else if (sk === 'name') {
       var body = ''; byName.forEach(function (c) { body += clPerson(c, 'flat'); });
       h += '<div class="cl-grp open cl-flat"><div class="cl-body">' + body + '</div></div>';
@@ -4051,7 +4051,7 @@
         if (vqHasMore()) { setTimeout(vqPump, 150); return; }   // O-0177: 조각 하나가 막혀도 다음 조각으로
         if (convoOn && vqWaiting()) return;
         if (convoOn) scheduleNextListen(900);   // 자동재생 막혀도 대화 루프는 이어감
-        else if (my === kaiPlaySeq) toast('🔊 소리를 들으려면 "듣기"를 눌러 주세요.');   // 다른 소리가 대신 들어온 것이면 안내하지 않는다
+        else if (my === kaiPlaySeq) toast('🔊 소리를 들으려면 "듣기"를 눌러 주십시오.');   // 다른 소리가 대신 들어온 것이면 안내하지 않는다
       });
     } catch (e) {}
   }
@@ -4373,10 +4373,10 @@
           return '<button type="button" class="attach-dl navgo' + (k === (n.mode || 'public') ? ' on' : '') + '"' + data +
             ' data-nav-mode="' + k + '">' + NAV_LABEL[k] + '</button>';
         }).join('') + '</div>' +
-        (n.addr ? '<small class="navhint">' + esc(n.addr) + ' — 장소가 맞는지 확인하고 출발하세요</small>' : '');
+        (n.addr ? '<small class="navhint">' + esc(n.addr) + ' — 장소가 맞는지 확인하고 출발하십시오</small>' : '');
     } else {
       html = '<button type="button" class="attach navgo"' + data + ' data-nav-mode="">' + title + '<span class="asz">네이버 지도</span></button>' +
-        '<small class="navhint">지도에서 장소를 고른 뒤 [도착] → 길찾기를 누르세요</small>';
+        '<small class="navhint">지도에서 장소를 고른 뒤 [도착] → 길찾기를 누르십시오</small>';
     }
     return '<div class="attachitem navitem">' + html + '</div>';
   }
@@ -4385,7 +4385,7 @@
     if (!b) return false;
     var nav = null;
     try { nav = JSON.parse(b.getAttribute('data-nav') || 'null'); } catch (e) {}
-    if (!nav || !window.TodayCard || !TodayCard.openRoute) { toast('지도를 열지 못했습니다 — 다시 눌러 주세요.'); return true; }
+    if (!nav || !window.TodayCard || !TodayCard.openRoute) { toast('지도를 열지 못했습니다 — 다시 눌러 주십시오.'); return true; }
     TodayCard.openRoute(nav, b.getAttribute('data-nav-mode') || '');
     return true;
   }
@@ -4454,7 +4454,7 @@
   function nativeDownload(url, fname, vopt) {   // vopt(v9.90, O-0809) = 저장 성공 뒤 문서 뷰어로 열 첨부({url,name,mime,kind}). 없으면 예전처럼 시스템 「열기」
     var FD = window.Capacitor.Plugins && window.Capacitor.Plugins.FileDownload;
     if (!FD) {                                     // 플러그인 없는 옛 빌드 → 웹페이지로 받기
-      toast(openInBrowserForDownload(url, fname) ? '웹페이지로 연결했습니다 — 거기서 받아 주세요.' : '다운로드에 실패했습니다 — 다시 눌러 주세요.', 4000);
+      toast(openInBrowserForDownload(url, fname) ? '웹페이지로 연결했습니다 — 거기서 받아 주십시오.' : '다운로드에 실패했습니다 — 다시 눌러 주십시오.', 4000);
       return;
     }
     if (dlBusy[url]) { toast('이미 받는 중입니다 — 알림창에서 진행을 볼 수 있습니다.', 3000); return; }
@@ -4475,11 +4475,11 @@
       }   // v9.90(O-0809): 저장이 확인된 뒤에만(실패는 아래 catch — 뷰어를 열지 않는다)
       if (how === 'need_permission') {             // 처음 한 번: 스마트비서에 「이 출처 허용」이 꺼져 있음 → 설정 화면이 열려 있다
         dlPendingInstall = r.id;
-        toast('다운로드 폴더에 저장했습니다(' + saved + '). 설치하려면 「이 출처 허용」을 켜고 돌아오세요 — 설치 화면을 바로 열어 드리겠습니다.', 7000);
+        toast('다운로드 폴더에 저장했습니다(' + saved + '). 설치하려면 「이 출처 허용」을 켜고 돌아오십시오 — 설치 화면을 바로 열어 드리겠습니다.', 7000);
       } else if (how === 'opened') {
         toast('다운로드 폴더에 저장했습니다(' + saved + ')' + (isApk ? ' — 설치 화면을 열었습니다.' : '.'), 4000);
       } else {
-        toast('다운로드 폴더에 저장했습니다(' + saved + '). 「내 파일 › 다운로드」에서 열어 주세요.', 5000);
+        toast('다운로드 폴더에 저장했습니다(' + saved + '). 「내 파일 › 다운로드」에서 열어 주십시오.', 5000);
       }
     }).catch(function (e) {
       delete dlBusy[url];
@@ -4487,7 +4487,7 @@
       // 앱 저장이 안 되면 ① 웹페이지로 받기로 자동 전환(서버 파일은 그대로라 브라우저로는 받아진다)
       //   v7.9: 왜 안 됐는지도 함께 알린다(예전엔 사유를 버렸다).
       var why = dlFailReason(e);
-      toast(openInBrowserForDownload(url, fname) ? why + ' — 웹페이지로 연결했습니다. 거기서 받아 주세요.' : why + ' — 다시 눌러 주세요.', 8000);
+      toast(openInBrowserForDownload(url, fname) ? why + ' — 웹페이지로 연결했습니다. 거기서 받아 주십시오.' : why + ' — 다시 눌러 주십시오.', 8000);
     });
   }
   // 설정에서 「이 출처 허용」을 켜고 앱으로 돌아오면 → 받아 둔 APK 설치 화면을 한 번 더 연다(다시 받지 않음)
@@ -4498,8 +4498,8 @@
     if (!FD || !FD.open) return;
     FD.open({ id: String(id), mime: APK_MIME, askPermission: false }).then(function (r) {
       if (r && r.open === 'opened') toast('설치 화면을 열었습니다.', 3000);
-      else if (r && r.open === 'need_permission') toast('「이 출처 허용」이 아직 꺼져 있습니다. 켠 뒤 [⬇ 다운로드]를 다시 눌러 주세요(파일은 다운로드 폴더에 있습니다).', 7000);
-      else toast('파일은 다운로드 폴더에 있습니다 — 「내 파일 › 다운로드」에서 눌러 설치해 주세요.', 6000);
+      else if (r && r.open === 'need_permission') toast('「이 출처 허용」이 아직 꺼져 있습니다. 켠 뒤 [⬇ 다운로드]를 다시 눌러 주십시오(파일은 다운로드 폴더에 있습니다).', 7000);
+      else toast('파일은 다운로드 폴더에 있습니다 — 「내 파일 › 다운로드」에서 눌러 설치해 주십시오.', 6000);
     }).catch(function () {});
   }
   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
@@ -4517,7 +4517,7 @@
       if (fileKindOf('', name) === 'document' && CHIP_OPEN_EXTS.indexOf(ext) === -1) { downloadAttachment(url, name); return; }
     }
     var w = window.open(url, '_blank');
-    if (!w) toast('파일을 열지 못했습니다 — 다시 눌러 주세요.');
+    if (!w) toast('파일을 열지 못했습니다 — 다시 눌러 주십시오.');
   }
   // v7.9 네이티브 저장 실패 사유(FileDownloadPlugin 의 오류 코드) → 쉬운 말. 괄호 안 코드는 소장에게 알려 줄 때 쓴다.
   //   FAILED_n 의 n = 안드로이드 DownloadManager 사유(1000번대) 또는 서버 응답 번호(HTTP), WAITING_n = 시작 전 대기 사유.
@@ -4567,7 +4567,7 @@
       .catch(function () {
         // 폴백: 브라우저로 열어 저장(공유함 공개 주소면 원래 이름으로 — openInBrowserForDownload)
         var w = openInBrowserForDownload(url, fname);
-        toast(w ? '브라우저에서 저장해 주세요.' : '다운로드에 실패했습니다 — 다시 눌러 주세요.');
+        toast(w ? '브라우저에서 저장해 주십시오.' : '다운로드에 실패했습니다 — 다시 눌러 주십시오.');
       });
   }
   function anyAwaiting() { return chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token; }); }
@@ -4596,8 +4596,8 @@
       ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.focus(); ta.select();
       var ok = document.execCommand && document.execCommand('copy');
-      document.body.removeChild(ta); toast(ok ? '복사됐습니다.' : '복사하지 못했습니다. 글자를 길게 눌러 직접 복사해 주세요.');
-    } catch (e) { toast('복사하지 못했습니다. 글자를 길게 눌러 직접 복사해 주세요.'); }
+      document.body.removeChild(ta); toast(ok ? '복사됐습니다.' : '복사하지 못했습니다. 글자를 길게 눌러 직접 복사해 주십시오.');
+    } catch (e) { toast('복사하지 못했습니다. 글자를 길게 눌러 직접 복사해 주십시오.'); }
   }
   // 말풍선 하나를 통째로 복사할 텍스트(본문 + 첨부 이름·링크)
   function msgCopyText(m) {
@@ -5046,7 +5046,7 @@
     if (!chatMsgs.length && !q) {
       chatLog.innerHTML = chatLockHtml() + '<div class="chatintro">' +
         (window.KScene ? KScene.figHtml('guide', 'intro') : '<div class="chatintro-ic"><svg><use href="#i-spark"/></svg></div>') +
-        '<b>안녕하세요, 대표님</b><p>무엇이든 물어보시거나 일을 시켜 보세요.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
+        '<b>안녕하세요, 대표님</b><p>무엇이든 물어보시거나 일을 시켜 보십시오.<br>예: “내일 일정 정리해줘”, “학과 회의록 초안 만들어줘”.</p></div>';
       chatRenderedUids = {};
       return;
     }
@@ -5143,7 +5143,7 @@
         '<em class="tprog"' + (ptx ? '' : ' style="display:none"') + '>' + esc(ptx) + '</em></div>', ' ktyping');
       // 답이 늦으면(약 35초 이상) "멈춘 것처럼" 보이지 않게 안내를 함께 띄운다
       var slowWait = chatMsgs.some(function (m) { return m.role === 'me' && !m.answered && m.id && m.token && (Date.now() - (m.ts || 0) > 35000); });
-      if (kStatState === 'down') html += '<div class="waitnote down">PC가 응답하지 않아 지금은 답을 드리지 못합니다. PC가 켜져 있는지 확인해 주세요. 켜지면 이어서 답하겠습니다.</div>';
+      if (kStatState === 'down') html += '<div class="waitnote down">PC가 응답하지 않아 지금은 답을 드리지 못합니다. PC가 켜져 있는지 확인해 주십시오. 켜지면 이어서 답하겠습니다.</div>';
       else if (kStatState === 'login') html += '<div class="waitnote down">PC의 로그인이 풀려 지금은 답을 드리지 못합니다. PC에서 다시 로그인해 주시면 이어서 답하겠습니다.</div>';
       else if (slowWait) html += '<div class="waitnote">조금 더 걸립니다. 다른 일 보셔도 됩니다.</div>';
     } else if (kStatState === 'down') {                    // v8.4: 기다리는 답이 없어도 PC가 꺼져 있으면 맨 아래 한 줄로 알림
@@ -5310,7 +5310,7 @@
       errLog('글', e);
       var m = findMsg(id); if (m) { m.answered = true; m.nosrv = true; }
       giveBackReply(rt);                          // (O-0545) 못 보낸 답장은 띠로 되돌려 다시 쓰실 때 그대로 실리게
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });   // fe = 이 사과가 가리키는 못 보낸 말의 id(다시 보내기 성공 때 지움)
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주십시오.', ts: Date.now(), fe: id });   // fe = 이 사과가 가리키는 못 보낸 말의 id(다시 보내기 성공 때 지움)
       saveChatMsgs(); renderChat(); updateSendEnabled();
       return false;
     });
@@ -5391,7 +5391,7 @@
     if (vs) meMsg.vs = true;
     chatMsgs.push(meMsg); saveChatMsgs(); renderChat(); updateSendEnabled();
     var note = text;                              // 사진만 있고 말/글이 없으면 기본 질문
-    if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주세요.';
+    if (!note && !blob && imgs.length) note = '이 사진을 보고 설명해 주십시오.';
     var memo = { id: id, token: tok, thread: chatThread,
                  title: text ? text.slice(0, 20) : (blob ? '음성대화' : '사진'), note: note };
     var turnOpts = { audioBlob: blob, files: imgs, speak: convoOn, modelPref: o.opus ? 'opus' : null,
@@ -5406,7 +5406,7 @@
       keepAtt(meMsg, 'turn', imgs, memo, turnOpts);   // (v9.20) 다시 보내기용 보관(메모리만)
       giveBackReply(rt);                          // (O-0545)
       errLog('말·사진 한 턴', e);
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 말씀이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주십시오.', ts: Date.now(), fe: id });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
@@ -5452,9 +5452,9 @@
     t = String(t || '');
     var st = 'idle', big = '음성 대화', small = '';
     if (t.indexOf('말하는') !== -1) { st = 'talk'; big = '케이가 말하는 중…'; small = '말이 끝나면 다시 듣겠습니다'; stageLive(''); }
-    else if (t.indexOf('답하는') !== -1) { st = 'think'; big = '케이가 답하는 중…'; small = '잠시만 기다려 주세요'; }
+    else if (t.indexOf('답하는') !== -1) { st = 'think'; big = '케이가 답하는 중…'; small = '잠시만 기다려 주십시오'; }
     else if (t.indexOf('기다립니다') !== -1) { st = 'listen'; big = '듣는 중…'; small = '말씀을 기다리고 있습니다'; }
-    else if (t) { st = 'listen'; big = '듣는 중…'; small = '다 말씀하셨으면 아래 [다 말했어요]'; }
+    else if (t) { st = 'listen'; big = '듣는 중…'; small = '다 말씀하셨으면 아래 [다 말했습니다]'; }
     chatKStage.setAttribute('data-state', st);
     if (chatKStageText) chatKStageText.textContent = big;
     if (chatKStageHint) chatKStageHint.textContent = small;
@@ -5567,13 +5567,13 @@
     if (chatRecording || stt.on) {
       // v9.6: 이미 듣고 있던 중이면(음성 대화 중 대화를 펼쳐 「글」로 보내 목소리 답을 받은 경우 등) 듣기를 새로 열지는 않는다.
       //   다만 케이 목소리가 끝난 뒤의 차례(auto)인데 상태 알약이 「케이가 말하는 중…」으로 남아 있으면 아무도 되돌리지 않으므로, 여기서 듣는 문구로 되돌린다(문구는 듣기를 열 때 쓰는 것 그대로).
-      if (auto && convoOn && isOpen(chatView)) setConvoStatus('말씀하세요… (끝나면 자동으로 보냅니다)');
+      if (auto && convoOn && isOpen(chatView)) setConvoStatus('말씀하십시오… (끝나면 자동으로 보냅니다)');
       return;
     }
     if (!isOpen(chatView)) return;
     if (awaitingLive()) return;                   // 답 기다리는 중엔 안 들음
     if (kaiPlaying() || vqHasMore()) return;      // ⚠️ 케이 목소리 재생 중엔 녹음 안 함(자기 목소리 오인 방지) — O-0177 결정: 이 게이트 유지
-    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); if (convoOn) stopConvo(true); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주십시오.', REC_ROAM_V2 ? 3200 : 0); if (convoOn) stopConvo(true); return; }
     // O-0177 ②: 음성 대화 중이고 폰 받아쓰기가 되면 그걸로(실패하면 이 턴부터 아래 녹음 경로)
     if (auto && convoOn && sttUsable()) { unlockKaiAudio(); sttListen(); return; }
     startRecListen(auto);
@@ -5586,7 +5586,7 @@
     lsnSpoke = false; lsnSpeechMs = 0; lsnStartTs = Date.now(); lsnLastSound = Date.now(); lsnPendingSend = false; lsnReason = '';
     lsnVad = (window.KVad ? KVad.create(HF, lsnStartTs) : null);   // O-0177 ③ 소음 적응 판정(vad.js 없으면 아래 예전 판정)
     chatRecording = true; setChatMic(true);
-    if (auto) setConvoStatus('말씀하세요… (끝나면 자동으로 보냅니다)');
+    if (auto) setConvoStatus('말씀하십시오… (끝나면 자동으로 보냅니다)');
     stageLive('');
     r.start();
     stopAmpPoll();
@@ -5686,7 +5686,7 @@
     var now = Date.now();
     stt = { on: true, s: KVad.sttNew(now), timer: null, finishing: false, finWait: null, why: '', dg: null, od: null };
     setChatMic(true);
-    setConvoStatus('말씀하세요… (끝나면 자동으로 보냅니다)');
+    setConvoStatus('말씀하십시오… (끝나면 자동으로 보냅니다)');
     stageLive('');
     var w = endWaitMs();
     var me = stt;
@@ -5790,9 +5790,9 @@
   function listenMiss(reason) {
     if (convoOn) {
       convoMiss++;
-      if (convoMiss >= HF.MAX_MISS) { stopConvo(true); toast('말씀이 없어 대화를 멈췄습니다. 다시 시작하려면 「음성 대화」를 켜세요.'); }
+      if (convoMiss >= HF.MAX_MISS) { stopConvo(true); toast('말씀이 없어 대화를 멈췄습니다. 다시 시작하려면 「음성 대화」를 켜십시오.'); }
       else { setConvoStatus('말씀을 기다립니다…'); scheduleNextListen(500); }
-    } else if (reason === 'nospeech') toast('말씀이 안 들렸습니다. 다시 눌러 말씀해 주세요.');
+    } else if (reason === 'nospeech') toast('말씀이 안 들렸습니다. 다시 눌러 말씀해 주십시오.');
   }
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && convoOn && isOpen(chatView) && !stt.on && !chatRecording) scheduleNextListen(500);
@@ -5806,7 +5806,7 @@
    *   · 이미 듣는 중이면 안내만. */
   function onStageTap() {
     if (!VC.TAP_CUT || !convoOn) return;
-    if (stt.on || chatRecording) { toast('듣고 있습니다. 말씀하세요.'); return; }
+    if (stt.on || chatRecording) { toast('듣고 있습니다. 말씀하십시오.'); return; }
     vqCut();
     nextListenArmed = false;
     toast('듣고 있습니다.');
@@ -5855,7 +5855,7 @@
     if (REC_ROAM_V2 && isRecording) { toast(REC_BUSY_VOICE, 3200); return; }   // v9.8: 켜졌다 꺼지지 않게 누르는 순간 막는다
     convoOn = true; convoMiss = 0; updateConvoToggle();
     restartChatReconcile();                       // O-0177: 음성 대화 중엔 답 확인을 빠르게
-    toast('음성 대화를 시작합니다. 말씀하시면 자동으로 오갑니다. 끝내려면 다시 누르세요.');
+    toast('음성 대화를 시작합니다. 말씀하시면 자동으로 오갑니다. 끝내려면 다시 누르십시오.');
     // O-0177 ②: 받아쓰기 가능 여부를 먼저 확인(첫 확인만 0.1초 안팎) → 그다음 듣기 시작
     ksInit().then(function () {
       if (!convoOn) return;
@@ -5888,7 +5888,7 @@
   function toggleChatMic() {
     if (convoOn) { toast('음성 대화 중입니다.'); return; }
     if (anyAwaiting()) { toast('앞 답을 받은 뒤에 말할 수 있습니다.'); return; }
-    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? REC_BUSY_VOICE : '먼저 홈의 녹음을 마쳐 주십시오.', REC_ROAM_V2 ? 3200 : 0); return; }
     if (!chatRecording) startListen(false);
     else endListen('manualsend');
   }
@@ -6182,7 +6182,7 @@
     if (!arr.length) return;
     chatPendingImages = chatPendingImages.concat(arr);
     renderPending();
-    if (!removed) toast('사진을 붙였습니다. 말하거나 질문을 적어 보내세요.');
+    if (!removed) toast('사진을 붙였습니다. 말하거나 질문을 적어 보내십시오.');
   }
   function findMsg(id) { for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].id === id) return chatMsgs[i]; return null; }
   function startChatReconcile() {
@@ -6207,7 +6207,7 @@
       var limitMs = ((m.files || m.opus) ? 20 : 6) * 60 * 1000;   // v5.8: 오퍼스 지정도 첨부처럼 여유(창구 상한 10분)
       if ((nowT - (m.waitFrom || m.ts || 0)) > limitMs) {   // v8.2: 알림 답장은 앱이 넘겨받은 때(waitFrom)부터
         m.answered = true; m._polling = false; m._doneShown = true;
-        chatMsgs.push({ role: 'k', text: '죄송합니다, 제 답이 너무 늦어지고 있습니다. 다시 한 번 말씀해 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
+        chatMsgs.push({ role: 'k', text: '죄송합니다, 제 답이 너무 늦어지고 있습니다. 다시 한 번 말씀해 주십시오. (PC가 켜져 있는지 확인해 주십시오.)', ts: Date.now() });
         gaveUp = true;
       }
     });
@@ -6236,7 +6236,7 @@
         if (res && res.status === 'done') {
           m.answered = true; m._doneShown = true; m.prog = '';
           if (m.vin) m.text = (res.transcript || '').trim() || '(음성)';   // 음성 질문 → 전사문을 내 말풍선에 채움
-          var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '죄송합니다, 답을 만들지 못했습니다. 다시 한 번 말씀해 주세요.';
+          var reply = res.content_md || (res.summary_json && res.summary_json.reply) || '죄송합니다, 답을 만들지 못했습니다. 다시 한 번 말씀해 주십시오.';
           var atts = OfficeBridge.attachmentsFrom(res);   // 케이가 보낸 첨부(하향)
           var vurl = res.summary_json && res.summary_json.voice_url;   // 케이 목소리(mp3)
           var vparts = res.summary_json && Array.isArray(res.summary_json.voice_parts) ? res.summary_json.voice_parts : null;   // O-0177 ①
@@ -6245,7 +6245,7 @@
           // O-0210 ⑥: PC가 목소리를 못 만든 턴(voice_fail: 못 만든 조각 수, 전부면 -1)은 알려 준다. 옛 PC는 이 칸을 안 보낸다 = 예전 그대로.
           var vfail = res.summary_json ? Number(res.summary_json.voice_fail || 0) : 0;
           if (vfail && convoOn && !m.vcut && isOpen(chatView)) {
-            toast(vfail < 0 ? '목소리를 만들지 못했습니다. 답은 글로 남겼습니다.' : '목소리 일부를 만들지 못했습니다. 답 전체는 글로 확인해 주세요.');
+            toast(vfail < 0 ? '목소리를 만들지 못했습니다. 답은 글로 남겼습니다.' : '목소리 일부를 만들지 못했습니다. 답 전체는 글로 확인해 주십시오.');
           }
           if (m.vcut) { vurl = null; vparts = null; }   // O-0177 ④: 무대 탭으로 끊은 턴 — 답은 글로만
           var kmsg = { role: 'k', text: reply, ts: Date.now(), rid: m.id };   // v4.0: 답도 같은 행 id(삭제 시 함께 숨김)
@@ -6273,7 +6273,7 @@
           updateSendEnabled();
         } else if (Date.now() - (m.waitFrom || m.ts || 0) > ((m.files || m.opus) ? 20 : 6) * 60 * 1000) {   // 파일 첨부·오퍼스 지정은 여유롭게
           m.answered = true;
-          chatMsgs.push({ role: 'k', text: '죄송합니다, 제 답이 너무 늦어지고 있습니다. 다시 한 번 말씀해 주세요. (PC가 켜져 있는지 확인해 주세요.)', ts: Date.now() });
+          chatMsgs.push({ role: 'k', text: '죄송합니다, 제 답이 너무 늦어지고 있습니다. 다시 한 번 말씀해 주십시오. (PC가 켜져 있는지 확인해 주십시오.)', ts: Date.now() });
           saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
         }
       }).catch(function () { m._polling = false; });
@@ -6311,7 +6311,7 @@
     if (el) {
       el.textContent = p; el.style.display = p ? '' : 'none';
     }
-    if (convoOn && chatKStage && chatKStage.getAttribute('data-state') === 'think' && chatKStageHint) chatKStageHint.textContent = p || '잠시만 기다려 주세요';
+    if (convoOn && chatKStage && chatKStage.getAttribute('data-state') === 'think' && chatKStageHint) chatKStageHint.textContent = p || '잠시만 기다려 주십시오';
   }
 
   var kStatState = null, kStatData = null, kStatBusy = false, kStatMissing = false, kStatLast = 0;
@@ -6336,7 +6336,7 @@
   }
   function kLoginTail() {                                  // 자리에 있을 때(정상·바쁨) 상태 문장 뒤에 붙이는 한 줄
     var d = kStatData || {}, s = kLoginOf(d), l = d.login || {}, w;
-    if (s === 'dying') { w = kLoginWhen(l.answer_until); return ' 다만 PC의 로그인이 풀려' + (w ? ' ' + w + '까지만' : ' 곧') + ' 답할 수 있습니다. PC에서 다시 로그인해 주세요.'; }
+    if (s === 'dying') { w = kLoginWhen(l.answer_until); return ' 다만 PC의 로그인이 풀려' + (w ? ' ' + w + '까지만' : ' 곧') + ' 답할 수 있습니다. PC에서 다시 로그인해 주십시오.'; }
     if (s === 'soon') { w = kLoginWhen(l.login_until); return w ? ' PC의 로그인이 ' + w + '에 만료됩니다.' : ''; }
     return '';
   }
@@ -6351,7 +6351,7 @@
     if (kStatState === 'down') {
       var mins = 0;
       try { mins = Math.round((Date.parse(d.server_now) - Date.parse(d.updated_at)) / 60000); } catch (e) {}
-      return '🔴 PC가 ' + (mins > 0 && mins < 600 ? mins + '분째 ' : '') + '응답이 없어 지금은 제가 답을 드리지 못합니다. PC가 켜져 있는지, 인터넷이 되는지 확인해 주세요. 보내 두시면 PC가 켜진 뒤 답하겠습니다.';
+      return '🔴 PC가 ' + (mins > 0 && mins < 600 ? mins + '분째 ' : '') + '응답이 없어 지금은 제가 답을 드리지 못합니다. PC가 켜져 있는지, 인터넷이 되는지 확인해 주십시오. 보내 두시면 PC가 켜진 뒤 답하겠습니다.';
     }
     return '';
   }
@@ -6554,7 +6554,7 @@
     }
     if (e && e.badpass) {
       setSyncPass('');
-      if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.');
+      if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.');
     }
   }
   // 열 때 최신 한 쪽. done() 은 성공·실패와 무관하게 꼭 한 번 부른다(그다음 증분 조회를 잇게).
@@ -6605,7 +6605,7 @@
     }).catch(function (e) {
       chatOlderBusy = false;
       chatPageFail(e);
-      if (!(e && (e.missing || e.badpass))) toast('이전 대화를 불러오지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+      if (!(e && (e.missing || e.badpass))) toast('이전 대화를 불러오지 못했습니다. 잠시 뒤 다시 눌러 주십시오.');
       if (isOpen(chatView)) renderChat();
       if (cb) cb(false, 0);
     });
@@ -6709,7 +6709,7 @@
       syncLoading = false;
       if (e && e.badpass) {                          // 암호가 틀림(또는 서버 미설정) → 저장한 암호 지우고 재입력 유도
         setSyncPass('');
-        if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.');
+        if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.');
       }
     });
   }
@@ -6739,7 +6739,7 @@
   }
   if ($('syncGateSave')) $('syncGateSave').addEventListener('click', function () {
     var p = (($('syncGateInput') && $('syncGateInput').value) || '').trim();
-    if (!p) { showSyncGate(true, '암호를 입력해 주세요.'); return; }
+    if (!p) { showSyncGate(true, '암호를 입력해 주십시오.'); return; }
     setSyncPass(p); hideSyncGate();
     try { localStorage.setItem(SYNC_SINCE_KEY, new Date().toISOString()); } catch (e) {}  // 지금부터 동기화(과거 안 쏟음)
     toast('PC 연동 암호를 저장했습니다.');
@@ -6882,11 +6882,11 @@
     var id = esc(o.id), d = ordDecided[o.id];
     if (d && d.seq === (o.job_seq | 0)) {
       return '<div class="ord-sent">✓ ' + (d.k === 'revise' ? '수정 요청을' : '승인을') + ' 보냈습니다 · ' + esc(fmtKst(new Date(d.at).toISOString())) +
-        ' — 케이 답은 채팅에서 확인해 주세요</div>';
+        ' — 케이 답은 채팅에서 확인해 주십시오</div>';
     }
     var t = Date.parse(o.u || o.updated_at || '');
     if (!isNaN(t) && Date.now() - t > ORD_APPROVE_WINDOW_MS) {
-      return '<div class="ord-sent warn">결정을 기다린 지 이틀 가까이 지나 버튼으로는 이어받지 못합니다. 채팅으로 케이에게 말씀해 주세요.</div>';
+      return '<div class="ord-sent warn">결정을 기다린 지 이틀 가까이 지나 버튼으로는 이어받지 못합니다. 채팅으로 케이에게 말씀해 주십시오.</div>';
     }
     var busy = !!ordDecBusy[o.id];
     return '<div class="ord-actions">' +
@@ -6905,10 +6905,10 @@
   }
   function ordApproveText(o) { return '#' + (o.job_seq | 0) + ' 승인'; }
   function ordReviseText(o, t) {
-    return '#' + (o.job_seq | 0) + ' 수정 요청: ' + t + '\n(이 작업을 그대로 실행하지 말고, 위 내용대로 고쳐서 다시 보고해 주세요.)';
+    return '#' + (o.job_seq | 0) + ' 수정 요청: ' + t + '\n(이 작업을 그대로 실행하지 말고, 위 내용대로 고쳐서 다시 보고해 주십시오.)';
   }
   function ordDecideSend(o, kind, text) {
-    if (!getSyncPass()) { showSyncGate(true, (kind === 'revise' ? '수정 요청을' : '승인을') + ' 보내려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (!getSyncPass()) { showSyncGate(true, (kind === 'revise' ? '수정 요청을' : '승인을') + ' 보내려면 PC 연동 암호를 입력해 주십시오.'); return; }
     if (ordDecBusy[o.id]) return;
     ordDecBusy[o.id] = true; delete ordDecErr[o.id];
     ordDecideRedraw();
@@ -6922,10 +6922,10 @@
       delete ordDecBusy[o.id];
       if (ok) {
         ordDecided[o.id] = { k: kind, at: Date.now(), seq: (o.job_seq | 0) }; saveOrdDecided();
-        toast((kind === 'revise' ? '수정 요청을' : '승인을') + ' 케이에게 보냈습니다. 채팅에서 답을 확인하세요.');
+        toast((kind === 'revise' ? '수정 요청을' : '승인을') + ' 케이에게 보냈습니다. 채팅에서 답을 확인하십시오.');
       } else {
-        ordDecErr[o.id] = '보내지 못했습니다 — 인터넷 연결을 확인하고 다시 눌러 주세요.';
-        toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+        ordDecErr[o.id] = '보내지 못했습니다 — 인터넷 연결을 확인하고 다시 눌러 주십시오.';
+        toast('보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주십시오.');
       }
       ordDecideRedraw();
     });
@@ -6957,7 +6957,7 @@
     $('ordRevCancel').addEventListener('click', closeModal);
     function go() {
       var t = ((inp && inp.value) || '').replace(/\s+/g, ' ').trim();
-      if (!t) { toast('어떻게 고칠지 한 줄 적어 주세요.'); return; }
+      if (!t) { toast('어떻게 고칠지 한 줄 적어 주십시오.'); return; }
       if (t.length > 200) t = t.slice(0, 200);
       closeModal();
       ordDecideSend(o, 'revise', ordReviseText(o, t));
@@ -7019,7 +7019,7 @@
       else if (liveAny && Date.now() - (pollOrderCards._lastLive || 0) > 60000) { pollOrderCards._lastLive = Date.now(); if (isOpen(chatView)) renderChat(); }
     }).catch(function (e) {
       ordBusy = false;
-      if (e && e.badpass) { setSyncPass(''); if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(chatView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
     });
   }
 
@@ -7038,7 +7038,7 @@
     if (!(window.OfficeBridge && OfficeBridge.listOfficeOrders)) return;
     var pass = getSyncPass();
     if (!pass) {
-      if (!silent && isOpen(ordersView)) showSyncGate(true, '작업 현황을 보려면 PC 연동 암호를 입력해 주세요.');
+      if (!silent && isOpen(ordersView)) showSyncGate(true, '작업 현황을 보려면 PC 연동 암호를 입력해 주십시오.');
       if (ordersBody) ordersBody.innerHTML = '';     // v9.4: 안내는 맨 위 케이가 말한다
       ordersScene('nopass');
       return;
@@ -7050,8 +7050,8 @@
       try { if (window.TodayCard) TodayCard.setOrders(rows); } catch (e) {}   // (O-0129) 같은 결과로 「챙길 일」(추가 호출 없음)
     }).catch(function (e) {
       ordersBusy = false;
-      if (e && e.badpass) { setSyncPass(''); if (isOpen(ordersView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); return; }
-      if (ordersBody && !silent) { ordersBody.innerHTML = '<div class="ord-err">인터넷 연결을 확인하고 새로고침을 눌러 주세요.</div>'; ordersScene('fail'); }
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(ordersView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); return; }
+      if (ordersBody && !silent) { ordersBody.innerHTML = '<div class="ord-err">인터넷 연결을 확인하고 새로고침을 눌러 주십시오.</div>'; ordersScene('fail'); }
     });
   }
   /* v9.4 일하는 케이(작업 현황 맨 위) — 값은 방금 받은 목록(ordersRows)뿐:
@@ -7141,14 +7141,14 @@
   /* ---- v5.9 작업 현황 「지우기」 = 숨김(서버 hidden_at). 서버 원본 행·PC 지시 대장은 그대로 ----
    * ⚠️ confirm() 금지(앱 함정) → 기존 확인 시트(openSheet) 재사용. 암호 없거나 틀리면 기존 게이트. */
   function ordHideErr(e) {
-    if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); return; }
-    if (e && e.notready) { toast('서버 준비가 아직 되지 않았습니다(저에게 알려 주세요).'); return; }
-    toast('지우지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); return; }
+    if (e && e.notready) { toast('서버 준비가 아직 되지 않았습니다(저에게 알려 주십시오).'); return; }
+    toast('지우지 못했습니다. 잠시 후 다시 시도해 주십시오.');
   }
   function ordFind(id) { for (var i = 0; i < ordersRows.length; i++) if (ordersRows[i].id === id) return ordersRows[i]; return null; }
   function ordDoHide(ids, doneMsg) {
     var pass = getSyncPass();
-    if (!pass) { showSyncGate(true, '지우려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (!pass) { showSyncGate(true, '지우려면 PC 연동 암호를 입력해 주십시오.'); return; }
     OfficeBridge.hideOfficeOrders(ids, pass).then(function (n) {
       renderOrders(ordersRows.filter(function (o) { return ids.indexOf(o.id) === -1; }));   // 바로 화면에서 빼고
       refreshOrders(true);                                                                 // 서버 기준으로 다시 확인
@@ -7175,7 +7175,7 @@
   }
   function confirmRestoreOrders() {
     var pass = getSyncPass();
-    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주세요.'); return; }
+    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주십시오.'); return; }
     openSheet('지운 항목을 다시 보이게 할까요?', '작업 현황에서 지웠던 항목이 전부 목록으로 돌아옵니다.', '다시 보기', function () {
       OfficeBridge.restoreOfficeOrders(getSyncPass()).then(function (n) {
         refreshOrders(false);
@@ -7224,7 +7224,7 @@
     try {
       var a = JSON.parse(localStorage.getItem(LOCKER_MSGS_KEY) || '[]'); if (!Array.isArray(a)) return [];
       // v6.3: 올리던 중 앱·창이 닫혀 끝나지 못한 항목 → '올리는 중…'에 영원히 머물지 않게 실패로 표시
-      a.forEach(function (m) { if (m && m.uploading) { m.uploading = false; m.error = true; m.errorMsg = '앱이 닫혀 전송이 중간에 끊겼습니다. 파일을 다시 보내 주세요.'; delete m.progress; } });
+      a.forEach(function (m) { if (m && m.uploading) { m.uploading = false; m.error = true; m.errorMsg = '앱이 닫혀 전송이 중간에 끊겼습니다. 파일을 다시 보내 주십시오.'; delete m.progress; } });
       return a;
     } catch (e) { return []; }
   }
@@ -7448,7 +7448,7 @@
         toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
         docScanShare(file).then(function (saved) {
           var u = saved && saved[0] && saved[0].url;
-          if (u) nativeDownload(u, fname); else toast('저장 주소를 받지 못했습니다. 공유함에서 [⬇ 다운로드]를 눌러 주세요.', 5000);
+          if (u) nativeDownload(u, fname); else toast('저장 주소를 받지 못했습니다. 공유함에서 [⬇ 다운로드]를 눌러 주십시오.', 5000);
         }).catch(function () {});
       }
     } });
@@ -7486,7 +7486,7 @@
       }
     }).catch(function (e) {
       lockerLoading = false;
-      if (e && e.badpass) { setSyncPass(''); if (isOpen(lockerView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
+      if (e && e.badpass) { setSyncPass(''); if (isOpen(lockerView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
     });
   }
   function startLockerSync() {
@@ -7541,13 +7541,13 @@
   function openPcKClaude() {
     var w = null;
     try { w = window.open(PC_K_SESSION_URL || PC_K_OPEN_URL, '_blank'); } catch (e) {}
-    if (!w) toast('Claude 화면을 열지 못했습니다 — 다시 눌러 주세요.');
+    if (!w) toast('Claude 화면을 열지 못했습니다 — 다시 눌러 주십시오.');
   }
   if ($('btnPcK')) $('btnPcK').addEventListener('click', function () {
     openSheet('Claude Code 연결',
-      'PC 케이와 대화방(Claude 앱)에서 직접 일을 시키는 곳입니다. PC 화면을 직접 보며 조작하려면 「PC 원격 제어」를 누르세요.\n' +
-      '① Claude 앱이 열리면 새 작업 창은 ✕로 닫아 주세요.\n' +
-      '② Code 대화 목록에서 컴퓨터 표시(초록 점)가 붙은 「' + PC_K_SESSION_TITLE + '」을 고르세요.\n' +
+      'PC 케이와 대화방(Claude 앱)에서 직접 일을 시키는 곳입니다. PC 화면을 직접 보며 조작하려면 「PC 원격 제어」를 누르십시오.\n' +
+      '① Claude 앱이 열리면 새 작업 창은 ✕로 닫아 주십시오.\n' +
+      '② Code 대화 목록에서 컴퓨터 표시(초록 점)가 붙은 「' + PC_K_SESSION_TITLE + '」을 고르십시오.\n' +
       '③ 그 대화창에 바로 입력하시면 PC 케이에게 전달됩니다.',
       'Claude 앱 열기', openPcKClaude);
     if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄 안내(왼쪽 정렬·줄바꿈 유지·높이 제한 해제)
@@ -7559,7 +7559,7 @@
   if ($('btnPcScreen')) $('btnPcScreen').addEventListener('click', function () {
     if (window.SmartDocs && typeof SmartDocs.openRemote === 'function') { SmartDocs.openRemote(); return; }
     var w = null; try { w = window.open('https://remotedesktop.google.com/access', '_blank', 'noopener'); } catch (e) {}
-    if (!w) toast('원격 화면을 열지 못했습니다 — 「크롬 원격 데스크톱」 앱을 직접 열어 주세요.');
+    if (!w) toast('원격 화면을 열지 못했습니다 — 「크롬 원격 데스크톱」 앱을 직접 열어 주십시오.');
   });
   // v9.3(O-0247) 홈 「미러링」 — 폰 화면을 로키드 안경에 비추는 네이티브 화면을 연다(별도 앱 「미러링」 v0.4 를 앱 안으로 옮긴 것).
   //   칸은 처음에 숨겨져 있고(index.html), 폰 앱의 Mirror 플러그인이 「쓸 수 있음」(안드로이드 10 이상)이라고 답할 때만 보인다.
@@ -7573,9 +7573,9 @@
     if (!MP || typeof MP.status !== 'function' || typeof MP.open !== 'function') return;
     b.addEventListener('click', function () {
       try {
-        MP.open().then(function (r) { if (!r || !r.opened) toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주세요.'); })
-                 .catch(function () { toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주세요.'); });
-      } catch (e) { toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주세요.'); }
+        MP.open().then(function (r) { if (!r || !r.opened) toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주십시오.'); })
+                 .catch(function () { toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주십시오.'); });
+      } catch (e) { toast('미러링 화면을 열지 못했습니다 — 다시 눌러 주십시오.'); }
     });
     try {
       MP.status().then(function (r) {
@@ -7629,7 +7629,7 @@
         });
       }
       if (arr.length) onFiles(arr);
-      if (dirs) toast('폴더는 올릴 수 없습니다(' + dirs + '개 뺐습니다). 폴더 안 파일을 골라 끌거나, 압축(zip)해서 올려 주세요.');   // 폴더 안내가 뒤에 떠야 가려지지 않음
+      if (dirs) toast('폴더는 올릴 수 없습니다(' + dirs + '개 뺐습니다). 폴더 안 파일을 골라 끌거나, 압축(zip)해서 올려 주십시오.');   // 폴더 안내가 뒤에 떠야 가려지지 않음
     });
   }
   // 채팅: 드롭 → 기존 첨부 대기줄(chatPendingFiles)로 (전송 때 글과 함께 발송)
@@ -7640,12 +7640,12 @@
     var removed = fs.removed;
     if (!fs.length) return;
     lockerPendingFiles = lockerPendingFiles.concat(fs); renderLockerPending();
-    if (!removed) toast('파일을 붙였습니다. 보내기를 누르세요.');
+    if (!removed) toast('파일을 붙였습니다. 보내기를 누르십시오.');
   });
   if ($('lockerMenuBtn')) $('lockerMenuBtn').addEventListener('click', function () {
     var linked = !!getSyncPass();
     openSheet('공유함 메뉴',
-      linked ? 'PC와 폰이 연동되어 있습니다.' : 'PC(크롬)에서도 같은 공유함을 보려면 연동하세요.',
+      linked ? 'PC와 폰이 연동되어 있습니다.' : 'PC(크롬)에서도 같은 공유함을 보려면 연동하십시오.',
       '공유함 전체 삭제', clearAllLocker, null,
       { label: linked ? 'PC 연동 암호 변경' : 'PC 연동 암호 설정', action: function () { showSyncGate(true); } });
   });
@@ -7914,7 +7914,7 @@
   function kDecorRequestText(kind, text) { return '[케이 꾸미기 추가 요청] 옷: ' + text; }   // v9.6: 머리 부탁하기는 없앴다(머리 고정)
   function openKDecorRequest(kind) {
     modalTitle.textContent = '새 옷 부탁하기';
-    modalBody.innerHTML = '<div class="card rcard"><div class="h"><svg><use href="#i-plus"/></svg>어떤 옷을 원하세요?</div>' +
+    modalBody.innerHTML = '<div class="card rcard"><div class="h"><svg><use href="#i-plus"/></svg>어떤 옷을 원하십니까?</div>' +
       '<div style="padding:2px 2px 8px;line-height:1.6">한 줄로 적어 주시면 케이에게 보냅니다. 만들어지면 옷장에 추가됩니다(앱을 다시 열면 보입니다).</div>' +
       '<input id="kReqInput" type="text" maxlength="100" ' +
       'style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px" placeholder="' +
@@ -7927,13 +7927,13 @@
     $('kReqCancel').addEventListener('click', closeModal);
     function go() {
       var t = ((inp && inp.value) || '').replace(/\s+/g, ' ').trim();
-      if (!t) { toast('원하시는 옷을 적어 주세요.'); return; }
+      if (!t) { toast('원하시는 옷을 적어 주십시오.'); return; }
       if (t.length > 100) t = t.slice(0, 100);
       closeModal();
       unlockKaiAudio();
       sendPlainChat(kDecorRequestText(kind, t), false).then(function (ok) {
         if (ok) { if (kwFrom === 'home') toast('케이에게 채팅으로 보냈습니다. 만들면 알려 드리겠습니다.', 2600); else toast('요청을 보냈습니다. 만들면 알려 드리겠습니다.'); }   // v9.9: 홈에서 연 꾸미기에서는 채팅 화면이 안 보인다 → 어디로 보냈는지 한마디 더(옷을 고르던 화면은 그대로 둔다)
-        else toast('요청을 보내지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        else toast('요청을 보내지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주십시오.');
       });
     }
     $('kReqSend').addEventListener('click', go);
@@ -8102,7 +8102,7 @@
       var whyTx = why ? kvText(why, 40) : '다시 눌러\u00a0주십시오.';      // PC 가 사유를 주면 그 글(40자까지)
       toast(tw('바꾸지 못했습니다. ' + whyTx), 2800);
     } else {
-      toast('아직 바뀌지 않았습니다. 잠시 뒤 설정을 다시 열어 확인해 주세요.', 3200);
+      toast('아직 바뀌지 않았습니다. 잠시 뒤 설정을 다시 열어 확인해 주십시오.', 3200);
     }
     var nx = kvNext; kvNext = '';                     // O-0469: 바꾸는 중에 누른 줄이 있으면 이어서 그 줄로
     if (nx && ok !== null) { var c2 = kvCurrent(); if (c2 && kvRow(c2.blk, nx) && nx !== c2.blk.chosen) kvPick(nx); }
@@ -8131,7 +8131,7 @@
     var cur = kvCurrent(); if (!cur) return '';
     var row = kvRow(cur.blk, key); if (!row) return '';
     if (kvPending) {
-      if (!KV_PICK_FOLLOW) { toast('앞의 바꾸기가 끝난 뒤에 눌러 주세요.'); return 'busy'; }
+      if (!KV_PICK_FOLLOW) { toast('앞의 바꾸기가 끝난 뒤에 눌러 주십시오.'); return 'busy'; }
       kvNext = (key === kvPending.key) ? '' : key;    // 마지막에 누른 줄로 따라간다(바꾸는 중인 그 줄을 다시 누르면 이어서 바꿀 것을 지운다)
       renderKVoices(); return 'next';
     }
@@ -8709,7 +8709,7 @@
     }).catch(function (e) {
       aoSetting = false; el.disabled = false;
       paintKwAuto();
-      toast(e && e.notready ? '서버 준비가 안 되어 지금은 바꿀 수 없습니다.' : (e && e.badpass ? '연동 암호를 확인해 주세요.' : '연결이 안 되어 바꾸지 못했습니다. 잠시 뒤 다시 눌러 주세요.'), 3000);
+      toast(e && e.notready ? '서버 준비가 안 되어 지금은 바꿀 수 없습니다.' : (e && e.badpass ? '연동 암호를 확인해 주십시오.' : '연결이 안 되어 바꾸지 못했습니다. 잠시 뒤 다시 눌러 주십시오.'), 3000);
     });
   });
   /* 옷장에서 옷 한 벌을 입는다 — 옷장 칸을 누를 때와 패션쇼 「이 옷 입기」(O-0557)가 함께 쓰는 하나의 길(옷 맞추기 O-0487 도 KChar.setOutfit 의 onWear 로 그대로 따라간다) */
@@ -8717,7 +8717,7 @@
     if (!window.KChar || !id) return;
     var kmGhost = (window.KMotion && id !== KChar.outfit().id) ? KMotion.snap($('kwHero')) : null;   // v9.6(O-0387): 바꾸기 직전 모습을 한 장 떠 둔다(효과용 — 옷은 아래에서 즉시 바뀐다)
     var sr = KChar.setOutfit(id);
-    if (sr === 'pending') { toast('옷을 받고 있습니다. 잠시만 기다려 주세요.'); return; }        // v9.5: 서버 옷 — 사진을 다 받으면 바로 갈아입는다
+    if (sr === 'pending') { toast('옷을 받고 있습니다. 잠시만 기다려 주십시오.'); return; }        // v9.5: 서버 옷 — 사진을 다 받으면 바로 갈아입는다
     if (sr) { renderKWardrobe(); if (isOpen(chatView)) renderChat(); toast(KChar.outfit().name + josaRo(KChar.outfit().name) + ' 갈아입었습니다.');
       if (window.KMotion) KMotion.outfitSwap($('kwHero'), kmGhost); }                                 // 옷은 이미 바뀌었고, 그 위에 반짝임만 얹는다(0.6초 안)
   }
@@ -8860,7 +8860,7 @@
       return { name: f.name || '파일', size: f.size || 0, mime: f.type || '', kind: fileKindOf(f.type, f.name) };
     });
     var names = upFiles.map(function (f) { return f.name; });
-    var note = (userText ? (userText + '\n\n') : '') + '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨습니다. 확인해 주세요.';
+    var note = (userText ? (userText + '\n\n') : '') + '[파일 첨부] ' + names.join(', ') + ' — 대표님이 이 파일을 보내셨습니다. 확인해 주십시오.';
     var msg = { role: 'me', text: userText, ts: Date.now(), id: id, token: tok, answered: false, files: upFiles, up: true, uploading: true, opus: !!opus };
     if (rt) msg.rq = { id: rt.id, side: rt.side, snip: rt.snip, at: rt.at || 0 };
     chatMsgs.push(msg); saveChatMsgs(); renderChat(); updateSendEnabled();
@@ -8877,7 +8877,7 @@
       if (!chunked) keepAtt(msg, 'batch', files, memo, null);   // (v9.20) 다시 보내기용 보관(메모리만 · 큰 파일(조각 전송)은 제외)
       giveBackReply(rt);                          // (O-0545)
       errLog('파일', e);
-      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.', ts: Date.now(), fe: id });
+      chatMsgs.push({ role: 'k', text: '죄송합니다, 보내신 파일이 저에게 전송되지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주십시오.', ts: Date.now(), fe: id });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
     });
   }
@@ -8891,7 +8891,7 @@
     if (!arr.length) return;
     chatPendingFiles = chatPendingFiles.concat(arr);
     renderPending();
-    if (!removed) toast('파일을 붙였습니다. 글을 더 쓰거나 전송을 누르세요.');
+    if (!removed) toast('파일을 붙였습니다. 글을 더 쓰거나 전송을 누르십시오.');
   }
   if ($('chatAttach')) $('chatAttach').addEventListener('click', function () {
     openAttachMenu();                                        // (O-0176) 고르기 창: 케이에게 / 명함·사진 PC 정리 / 영상 정리
@@ -8912,7 +8912,7 @@
   // 케이가 보낸 첨부(하향) 탭 → 열기/저장 (기존 문서 버튼과 동일한 window.open 방식)
   if (chatLog) chatLog.addEventListener('click', function (ev) {
     var lockb = ev.target.closest ? ev.target.closest('.chatlockbtn') : null;   // v9.4(O-0353): 연동 암호 안내 줄 → 기존 연동 암호 창
-    if (lockb) { showSyncGate(true, '케이가 보낸 알림·보고를 보려면 PC 연동 암호를 입력해 주세요.'); return; }
+    if (lockb) { showSyncGate(true, '케이가 보낸 알림·보고를 보려면 PC 연동 암호를 입력해 주십시오.'); return; }
     var more = ev.target.closest ? ev.target.closest('.chatmorebtn') : null;   // v7.0: [이전 대화 더 보기]
     if (more) { loadOlderChat(); return; }
     var fb = ev.target.closest ? ev.target.closest('.bfoldbtn') : null;   // O-0111: [전체 보기 ▼]/[접기 ▲]
@@ -9420,7 +9420,7 @@
   if ($('chatMenuBtn')) $('chatMenuBtn').addEventListener('click', function () {
     var linked = !!getSyncPass();
     openSheet('대화 메뉴',
-      linked ? 'PC와 폰이 연동되어 있습니다.' : 'PC(크롬)에서도 같은 대화를 보려면 연동하세요.',
+      linked ? 'PC와 폰이 연동되어 있습니다.' : 'PC(크롬)에서도 같은 대화를 보려면 연동하십시오.',
       '대화 전체 삭제', openClearAllSheet, null,
       { label: linked ? 'PC 연동 암호 변경' : 'PC 연동 암호 설정', action: function () { showSyncGate(true); } });
   });
@@ -9574,7 +9574,7 @@
     if (isOpen(recordedPanel) && guardRecorded()) return true;                                          // v9.8: 아직 보내지 않은 녹음 — 한 번 묻는다
     if (isOpen($('rcbWrap'))) return rcbBack();      // v9.32: 영수증 묶음 화면
     if (rcbReturn && isOpen(resultWrap)) { rcbReturn = false; if (rcb && rcb.step === 'list') { openScreen($('rcbWrap')); rcbRender(); return true; } }   // v9.32: 확인 카드 → 묶음 목록
-    if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하세요.'); return true; }
+    if (isOpen(processing)) { showHome(); setStatus('대기 중', 'idle'); toast('정리는 뒤에서 계속됩니다 — 홈 「진행 중인 메모」에서 확인하십시오.'); return true; }
     // 문서 뷰어: 전체화면 → 뷰어 → 고르기 → 홈 순으로 한 단계씩 빠져나온다(docRoot는 고정 오버레이)
     if (chatFromDocs && isOpen(chatView)) {     // O-0548: 뷰어 [💬]로 온 채팅 → 보던 문서의 같은 쪽 · 같은 확대(수정 요청 화면이었으면 그 화면)로
       chatFromDocs = false; openScreen($('docsView'));
@@ -9645,7 +9645,7 @@
       if (isRecording) {
         // v9.8: 홈에 그대로 둔다(예전에는 녹음 화면으로 보내, 「뒤로」를 누를 때마다 홈↔녹음 화면을 오갔다)
         if (REC_ROAM_V2) { toast('녹음은 계속됩니다. 앱에서 나가시려면 홈 버튼을 눌러 주십시오.', 3500); return; }
-        openScreen(recView); toast('녹음 중입니다 — 정지 후 나가 주세요.'); return;
+        openScreen(recView); toast('녹음 중입니다 — 정지 후 나가 주십시오.'); return;
       }
       if (backExitArmed) { try { Capacitor.Plugins.App.exitApp(); } catch (e) {} }
       else {
@@ -9710,7 +9710,7 @@
     if (!(window.OfficeBridge && OfficeBridge.listIdeas)) return;
     var pass = getSyncPass();
     if (!pass) {
-      if (!silent && isOpen(ideasView)) showSyncGate(true, '아이디어 목록을 보려면 PC 연동 암호를 입력해 주세요.');
+      if (!silent && isOpen(ideasView)) showSyncGate(true, '아이디어 목록을 보려면 PC 연동 암호를 입력해 주십시오.');
       renderIdeas(); return;
     }
     if (ideaLoading) return; ideaLoading = true;
@@ -9738,7 +9738,7 @@
       ideaLoading = false;
       if (e && e.badpass) {
         setSyncPass('');
-        if (!silent && isOpen(ideasView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.');
+        if (!silent && isOpen(ideasView)) showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.');
       } else if (!silent) toast('아이디어 목록을 불러오지 못했습니다. 잠시 후 다시 시도합니다.');
       renderIdeas();
     });
@@ -9840,7 +9840,7 @@
     if (!html) {
       html = !getSyncPass()
         ? '<p class="empty-note">아이디어 목록을 보려면 PC 연동 암호가 필요합니다.</p>'
-        : '<p class="empty-note">' + (ideaFilter === 'all' ? '떠오른 생각을 말하거나 적어 보세요.<br>제가 어떻게 활용할지 제안해 드리겠습니다.' : '이 갈래의 아이디어가 아직 없습니다.') + '</p>';
+        : '<p class="empty-note">' + (ideaFilter === 'all' ? '떠오른 생각을 말하거나 적어 보십시오.<br>제가 어떻게 활용할지 제안해 드리겠습니다.' : '이 갈래의 아이디어가 아직 없습니다.') + '</p>';
     }
     ideaList.innerHTML = html;
     Array.prototype.forEach.call(ideaList.querySelectorAll('[data-iid]'), function (card) {
@@ -9869,7 +9869,7 @@
     if (ideaRecBtn) { ideaRecBtn.classList.toggle('stop', on); ideaRecBtn.classList.toggle('pulsing', on); }
     var ic = $('ideaRecIcon'); if (ic) ic.innerHTML = '<use href="#' + (on ? 'i-stop' : 'i-mic') + '"/>';
     if (ideaRecLabel) ideaRecLabel.textContent = on ? '듣고 있습니다 00:00' : '눌러서 말하기';
-    if (ideaRecHint) ideaRecHint.textContent = on ? '다 말씀하셨으면 한 번 더 누르세요 — 바로 보냅니다' : '한 번 누르면 바로 녹음, 다시 누르면 보냅니다';
+    if (ideaRecHint) ideaRecHint.textContent = on ? '다 말씀하셨으면 한 번 더 누르십시오 — 바로 보냅니다' : '한 번 누르면 바로 녹음, 다시 누르면 보냅니다';
   }
   function resetIdeaRecUI() {
     ideaRecording = false;
@@ -9879,9 +9879,9 @@
   }
   function startIdeaRec() {
     if (ideaRecording) return;
-    if (isRecording) { toast(REC_ROAM_V2 ? '회의 녹음 중에는 말로 남길 수 없습니다. 글로 적어 주십시오.' : '회의 녹음이 진행 중입니다. 먼저 마쳐 주세요.', REC_ROAM_V2 ? 3200 : 0); return; }
-    if (chatRecording) { toast('케이와 음성 대화 중입니다. 먼저 마쳐 주세요.'); return; }
-    if (!RecordingModule.isSupported()) { toast('이 기기에서는 녹음을 쓸 수 없습니다. 글로 적어 주세요.'); return; }
+    if (isRecording) { toast(REC_ROAM_V2 ? '회의 녹음 중에는 말로 남길 수 없습니다. 글로 적어 주십시오.' : '회의 녹음이 진행 중입니다. 먼저 마쳐 주십시오.', REC_ROAM_V2 ? 3200 : 0); return; }
+    if (chatRecording) { toast('케이와 음성 대화 중입니다. 먼저 마쳐 주십시오.'); return; }
+    if (!RecordingModule.isSupported()) { toast('이 기기에서는 녹음을 쓸 수 없습니다. 글로 적어 주십시오.'); return; }
     var r = ensureIdeaRecorder();
     ideaRecCancel = false; ideaRecording = true; ideaRecStart = Date.now();
     setIdeaRecUI(true);
@@ -9901,7 +9901,7 @@
     setIdeaRecUI(false);
     if (ideaRecCancel) { ideaRecCancel = false; return; }
     var dur = (ideaRecorder && ideaRecorder.lastDurationMs) || 0;
-    if (!blob || (blob.size || 0) < 1200 || (dur && dur < 700)) { toast('너무 짧습니다. 버튼을 누르고 말씀한 뒤 다시 눌러 주세요.'); return; }
+    if (!blob || (blob.size || 0) < 1200 || (dur && dur < 700)) { toast('너무 짧습니다. 버튼을 누르고 말씀한 뒤 다시 눌러 주십시오.'); return; }
     var t = now();
     var memo = { id: OfficeBridge.uuid(), token: OfficeBridge.token(), title: '아이디어', kind: 'idea',
                  ext: OfficeBridge.extFromBlob(blob), date: t.date, time: t.time, materials: [] };
@@ -9929,12 +9929,12 @@
       renderIdeas(); ideaSentToast(); startIdeaPoll();
     }).catch(function () {
       upsertIdeaLocal({ id: id, status: 'failed', err: '전송 실패(인터넷 확인). 적으신 글은 폰에 남아 있습니다.' });
-      renderIdeas(); toast('⚠️ 전송 실패 — 글은 남아 있습니다. [다시 보내기]를 눌러 주세요.');
+      renderIdeas(); toast('⚠️ 전송 실패 — 글은 남아 있습니다. [다시 보내기]를 눌러 주십시오.');
     });
   }
   if (ideaSendBtn) ideaSendBtn.addEventListener('click', function () {
     var text = ((ideaInput && ideaInput.value) || '').trim();
-    if (!text) { toast('아이디어를 적어 주세요.'); return; }
+    if (!text) { toast('아이디어를 적어 주십시오.'); return; }
     if (ideaInput) ideaInput.value = '';
     sendIdeaTextUI(text.slice(0, 4000));
   });
@@ -9950,7 +9950,7 @@
       upsertIdeaLocal({ id: id, status: 'sent', ts: Date.now() }); renderIdeas(); startIdeaPoll();
       setTimeout(function () { refreshIdeas(true); }, 4000);
     }).catch(function () {
-      upsertIdeaLocal({ id: id, status: 'failed' }); renderIdeas(); toast('아직 보내지 못했습니다. 잠시 후 다시 눌러 주세요.');
+      upsertIdeaLocal({ id: id, status: 'failed' }); renderIdeas(); toast('아직 보내지 못했습니다. 잠시 후 다시 눌러 주십시오.');
     });
   }
 
@@ -9959,7 +9959,7 @@
   function decideIdea(id, decision, choice) {
     var r = findIdeaRow(id), idea = ideaOf(r); if (!r || !idea) return;
     var pass = getSyncPass();
-    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주세요.'); return; }
+    if (!pass) { showSyncGate(true, 'PC 연동 암호를 입력해 주십시오.'); return; }
     var u = (idea.uses || [])[choice || 0] || {};
     var doIt = function () {
       OfficeBridge.setIdeaDecision(id, decision, decision === 'go' ? (choice || 0) : null, getSyncPass()).then(function (ok) {
@@ -9969,8 +9969,8 @@
         if (decision === 'hold') { toast('보류로 표시했습니다.'); return; }
         forwardIdeaToK(r, idea, choice || 0);
       }).catch(function (e) {
-        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-        else toast('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+        else toast('저장에 실패했습니다. 잠시 후 다시 시도해 주십시오.');
       });
     };
     if (decision !== 'go') { doIt(); return; }
@@ -9987,20 +9987,20 @@
                '진행할 방향: ' + (choice + 1) + ') ' + (u.tag || '') + ' ' + (u.what || '') + ' — ' + (u.how || '') + '\n' +
                (choice !== (idea.pick || 0) ? '(소장 추천은 ' + ((idea.pick || 0) + 1) + '번이었지만 이 방향으로 골랐습니다)\n' : '') +
                '말한 내용: ' + said + '\n' +
-               '소장님, 바로 만들지 말고 먼저 진행 계획(범위·일정·제가 승인할 것)을 정리해서 알려 주세요.';
+               '소장님, 바로 만들지 말고 먼저 진행 계획(범위·일정·제가 승인할 것)을 정리해서 알려 주십시오.';
     try {
       var cid = OfficeBridge.uuid(), tok = OfficeBridge.token();
       chatMsgs.push({ role: 'me', text: text, ts: Date.now(), id: cid, token: tok, answered: false });
       saveChatMsgs(); renderChat();
       OfficeBridge.sendChat(cid, tok, chatThread, text, { speak: false }).then(function () {
         startChatReconcile();
-        toast('진행 요청을 보냈습니다. 채팅에서 제 답을 확인하세요.');
+        toast('진행 요청을 보냈습니다. 채팅에서 제 답을 확인하십시오.');
       }).catch(function () {
         var m = findMsg(cid); if (m) m.answered = true;
         saveChatMsgs(); renderChat();
-        toast('결정은 저장됐지만 저에게 전달되지 않았습니다. 채팅으로 한 번 말씀해 주세요.');
+        toast('결정은 저장됐지만 저에게 전달되지 않았습니다. 채팅으로 한 번 말씀해 주십시오.');
       });
-    } catch (e) { toast('결정은 저장됐습니다. 저에게는 채팅으로 한 번 말씀해 주세요.'); }
+    } catch (e) { toast('결정은 저장됐습니다. 저에게는 채팅으로 한 번 말씀해 주십시오.'); }
   }
 
   /* ---- 삭제(소프트삭제 hide_memo 재사용 · 복구 가능) ---- */
@@ -10012,14 +10012,14 @@
       '삭제', function () {
         if (isLocal) { removeIdeaLocal(id); OfficeBridge.dropPending(id); renderIdeas(); toast('지웠습니다.'); return; }
         var pass = getSyncPass();
-        if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주세요.'); return; }
+        if (!pass) { showSyncGate(true, '삭제하려면 PC 연동 암호를 입력해 주십시오.'); return; }
         OfficeBridge.hideMemo(id, pass).then(function () {
           ideaRows = ideaRows.filter(function (x) { return x.id !== id; });
           OfficeBridge.dropPending(id);                             // 폰에 남은 원본(있으면)도 정리
           removeIdeaLocal(id); renderIdeas(); toast('지웠습니다.');
         }).catch(function (e) {
-          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-          else toast('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+          if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+          else toast('삭제에 실패했습니다. 잠시 후 다시 시도해 주십시오.');
         });
       });
   }
@@ -10105,7 +10105,7 @@
   function achViewerFull(name) {
     try {
       var tabsNow = window.SmartDocs && SmartDocs.openTabs ? SmartDocs.openTabs() : [], mx = (window.SmartDocs && SmartDocs.maxTabs) || ACH_VIEWER_TAB_MAX;
-      if (tabsNow.length >= mx && !tabsNow.some(function (t) { return t.name === name; })) return '문서 뷰어에 문서가 ' + mx + '개 열려 있어요. 뷰어 위쪽 탭의 ✕로 하나를 닫은 뒤 다시 눌러 주세요.';
+      if (tabsNow.length >= mx && !tabsNow.some(function (t) { return t.name === name; })) return '문서 뷰어에 문서가 ' + mx + '개 열려 있습니다. 뷰어 위쪽 탭의 ✕로 하나를 닫은 뒤 다시 눌러 주십시오.';
     } catch (e) {}
     return '';
   }
@@ -10155,7 +10155,7 @@
   var PERF_HINT_KEY = 'smart_perf_hint_v1';
   function perfHintOnce() {   // 「성과」를 처음 여는 한 번만 — 승진 칸이 어디 갔는지 한 줄로 알린다(저장이 막혀도 동작에는 영향 없음)
     try { if (localStorage.getItem(PERF_HINT_KEY)) return; localStorage.setItem(PERF_HINT_KEY, '1'); } catch (e) { return; }
-    try { toast('승진 점수판은 여기 ‘승진’ 탭으로 옮겼어요.', 3600, true); } catch (e) {}
+    try { toast('승진 점수판은 여기 ‘승진’ 탭으로 옮겼습니다.', 3600, true); } catch (e) {}
   }
   function openPerf(tab) {    // 알약 누름: 지금 화면의 스크롤을 기억하고 다른 쪽을 연다(홈 칸으로 열 때와 달리 검색어 등을 지우지 않는다). 뒤로 가기 기록은 쌓지 않는다
     var from = isOpen(achView) ? 'ach' : (isOpen(promoView) ? 'promo' : '');
@@ -10275,7 +10275,7 @@
       }
       if (HUB_REG !== 'off' && $('btnReg')) {
         if (hubGrid && hubSub) hubGrid.insertBefore($('btnReg'), hubSub);
-        $('btnReg').style.display = ''; $('btnReg').addEventListener('click', function () { try { HubApps.openReg(); } catch (e) { toast('규정 도우미를 열지 못했어요.'); } });
+        $('btnReg').style.display = ''; $('btnReg').addEventListener('click', function () { try { HubApps.openReg(); } catch (e) { toast('규정 도우미를 열지 못했습니다.'); } });
       }
     } catch (e) {}
   }
@@ -10305,17 +10305,17 @@
     else { var now = Date.now(); if (now - braveLastTap < 700) return; braveLastTap = now; }   // 700ms 안 두 번 누름 = 한 번만(Brave 탭이 겹쳐 열리지 않게)
     if (!isNativeApp()) {
       var w = null; try { w = window.open(BRAVE_URL, '_blank'); if (w) w.opener = null; } catch (e) {}   // 'noopener' 를 주면 열려도 null 이 돌아와 막힘과 구분이 안 된다 → 열린 뒤 opener 만 끊는다
-      toast(w ? (fromMv ? 'PC에서는 이 브라우저의 새 탭으로 유튜브를 엽니다(미니뷰·Brave 앱은 폰에서만).' : 'PC에서는 이 브라우저의 새 탭으로 엽니다(Brave 앱은 폰에서만).') : '새 탭을 열지 못했습니다 — 팝업 차단을 확인해 주세요.', 3000);
+      toast(w ? (fromMv ? 'PC에서는 이 브라우저의 새 탭으로 유튜브를 엽니다(미니뷰·Brave 앱은 폰에서만).' : 'PC에서는 이 브라우저의 새 탭으로 엽니다(Brave 앱은 폰에서만).') : '새 탭을 열지 못했습니다 — 팝업 차단을 확인해 주십시오.', 3000);
       return;
     }
     var EA = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ExternalApp;
     if (!EA || typeof EA.openInApp !== 'function') { toast('앱을 새 버전으로 바꾸면 Brave를 바로 열 수 있습니다.', 3000); return; }
-    var fail = function () { toast('Brave로 유튜브를 열지 못했습니다 — 다시 눌러 주세요.', 2800); };
+    var fail = function () { toast('Brave로 유튜브를 열지 못했습니다 — 다시 눌러 주십시오.', 2800); };
     try {
       EA.openInApp({ pkg: BRAVE_PKG, url: BRAVE_URL }).then(function (r) {
         if (r && r.opened) return;   // Brave 가 앞으로 나옴 — 말 없이 끝
         if (r && r.reason === 'not_installed') {
-          openSheet('Brave 앱이 없습니다', '플레이 스토어에서 Brave(무료)를 설치한 뒤 ' + (BRAVE_DIRECT ? '이 칸을 ' : '') + '다시 눌러 주세요.', '스토어 열기', function () {
+          openSheet('Brave 앱이 없습니다', '플레이 스토어에서 Brave(무료)를 설치한 뒤 ' + (BRAVE_DIRECT ? '이 칸을 ' : '') + '다시 눌러 주십시오.', '스토어 열기', function () {
             try { EA.openStore({ pkg: BRAVE_PKG }).catch(function () { toast('플레이 스토어를 열지 못했습니다.'); }); } catch (e) { toast('플레이 스토어를 열지 못했습니다.'); }
           }, null, null, { positive: true, icon: 'i-shield' });
           return;
@@ -10344,7 +10344,7 @@
       $('btnVideoApps').querySelector('b').textContent = '유튜브'; $('btnVideoApps').querySelector('small').textContent = 'Brave로 열기';
       $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', openBrave);
     } else {
-      $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', function () { try { PhoneApps.openVideoSheet(); } catch (e) { toast('OTT 목록을 열지 못했습니다 — 다시 눌러 주세요.'); } });
+      $('btnVideoApps').style.display = ''; $('btnVideoApps').addEventListener('click', function () { try { PhoneApps.openVideoSheet(); } catch (e) { toast('OTT 목록을 열지 못했습니다 — 다시 눌러 주십시오.'); } });
     }
   }
 
@@ -10366,7 +10366,7 @@
       $('btnGames').querySelector('small').textContent = GamesTab.tileSub();
       $('btnGames').setAttribute('aria-label', GamesTab.tileLabel());
       $('btnGames').style.display = '';
-      $('btnGames').addEventListener('click', function () { try { GamesTab.onTile(); } catch (e) { toast('게임 목록을 열지 못했어요 — 다시 눌러 주세요.'); } });
+      $('btnGames').addEventListener('click', function () { try { GamesTab.onTile(); } catch (e) { toast('게임 목록을 열지 못했습니다 — 다시 눌러 주십시오.'); } });
     } catch (e) {}
   }
 
@@ -10401,7 +10401,7 @@
         var saved = (r && r.name) || fname, id = r && r.id;
         return { ok: true, name: saved, open: (id != null && FD.open) ? function () { return FD.open({ id: String(id), mime: (r && r.mime) || file.type || '', askPermission: true }); } : null };
       }, function (e) {
-        if (e && e.code === 'CANCELLED') { var ce = new Error('다운로드를 취소했어요'); ce.friendly = '다운로드를 취소했어요'; throw ce; }   // 취소는 저장 성공이 아니다: 틀이 실패 흐름(앱 안 보관·다시 시도)으로 처리
+        if (e && e.code === 'CANCELLED') { var ce = new Error('다운로드를 취소했습니다'); ce.friendly = '다운로드를 취소했습니다'; throw ce; }   // 취소는 저장 성공이 아니다: 틀이 실패 흐름(앱 안 보관·다시 시도)으로 처리
         nativeDownload(url, fname); return { ok: true, quiet: true, name: fname };   // 앱 저장이 안 되면 웹페이지로 받기로 넘어간다(예전과 같음)
       });
     }
@@ -10410,7 +10410,7 @@
     if (!(opt && opt.quiet)) toast('폰에 저장하려면 먼저 공유함에 올립니다…', 3000);
     return docScanShare(file, !!(opt && opt.quiet)).then(function (saved) {
       var u = saved && saved[0] && saved[0].url;
-      if (!u) throw new Error('저장 주소를 받지 못했어요');
+      if (!u) throw new Error('저장 주소를 받지 못했습니다');
       return dl(u);
     });
   }
@@ -10450,13 +10450,13 @@
     if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 되지 않았습니다'));
     if (!getSyncPass()) {
       try { window.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: true } })); } catch (x) {}
-      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
+      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주십시오'; return Promise.reject(pe);
     }
     var d = p.doc || {}, s = d.src || {}, entries = [], src;
     if (s.pcPath) src = { type: 'pc_path', path: s.pcPath };
     else if (s.url) src = { type: 'url', url: s.url };
     else if (s.file) {
-      if ((s.file.size || 0) > CHAT_CHUNK_LIMIT) { var be = new Error('원본이 너무 큽니다'); be.friendly = '원본이 45MB를 넘어 폰에서 보낼 수 없습니다 — PC에 있는 파일로 열어 주세요'; return Promise.reject(be); }
+      if ((s.file.size || 0) > CHAT_CHUNK_LIMIT) { var be = new Error('원본이 너무 큽니다'); be.friendly = '원본이 45MB를 넘어 폰에서 보낼 수 없습니다 — PC에 있는 파일로 열어 주십시오'; return Promise.reject(be); }
       src = { type: 'upload', file: { name: d.name, size: s.file.size || 0 } };
     } else return Promise.reject(new Error('원본 파일이 없습니다'));
     var marks = (p.marks || []).map(function (m) {
@@ -10481,14 +10481,14 @@
       return { rid: id };
     }, function (e) {
       msg.answered = true; msg.uploading = false;
-      chatMsgs.push({ role: 'k', text: '수정 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 문서 화면에서 다시 눌러 주세요. 적어 두신 요청은 그대로 남아 있습니다.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '수정 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 문서 화면에서 다시 눌러 주십시오. 적어 두신 요청은 그대로 남아 있습니다.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
       throw e;
     });
   }
   function mkCancel(rid) {
     if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요합니다'));
-    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '✏️ 보낸 수정 요청을 취소해 주세요';
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '✏️ 보낸 수정 요청을 취소해 주십시오';
     chatMsgs.push({ role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true });
     saveChatMsgs(); if (isOpen(chatView)) renderChat();
     return OfficeBridge.sendChatDocAsk({ id: id, token: tok, thread: chatThread, title: '수정 요청 취소', note: note, extraMeta: { markup_cancel: { rid: rid } } }, [])
@@ -10528,7 +10528,7 @@
     if (!window.OfficeBridge) return Promise.reject(new Error('보내기 준비가 되지 않았습니다'));
     if (!getSyncPass()) {
       try { window.dispatchEvent(new CustomEvent('smartBadPass', { detail: { need: true } })); } catch (x) {}
-      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주세요'; return Promise.reject(pe);
+      var pe = new Error('연동 암호가 필요합니다'); pe.friendly = '연동 암호를 넣으신 뒤 다시 눌러 주십시오'; return Promise.reject(pe);
     }
     var ttl = cutText(p.memo_title || '회의', 30), lab = window.MtgOut ? MtgOut.label(p.fmt, p.out) : p.fmt;
     var note = (p.action === 'resend')
@@ -10546,14 +10546,14 @@
       return { rid: id };
     }, function (e) {
       msg.answered = true; msg.uploading = false;
-      chatMsgs.push({ role: 'k', text: '정리본 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 회의록 화면에서 다시 눌러 주세요.', ts: Date.now() });
+      chatMsgs.push({ role: 'k', text: '정리본 요청을 PC로 보내지 못했습니다(' + ((e && (e.friendly || e.message)) || '알 수 없는 오류') + '). 회의록 화면에서 다시 눌러 주십시오.', ts: Date.now() });
       saveChatMsgs(); if (isOpen(chatView)) renderChat(); updateSendEnabled();
       throw e;
     });
   }
   function moCancel(rid) {
     if (!window.OfficeBridge || !getSyncPass()) return Promise.reject(new Error('연동 암호가 필요합니다'));
-    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '📄 보낸 정리본 요청을 취소해 주세요';
+    var id = OfficeBridge.uuid(), tok = OfficeBridge.token(), note = '📄 보낸 정리본 요청을 취소해 주십시오';
     chatMsgs.push({ role: 'me', text: note, ts: Date.now(), id: id, token: tok, answered: false, files: [], up: true });
     saveChatMsgs(); if (isOpen(chatView)) renderChat();
     return OfficeBridge.sendChatDocAsk({ id: id, token: tok, thread: chatThread, title: '정리본 요청 취소', note: note, extraMeta: { meeting_out_cancel: { rid: rid } } }, [])
@@ -10577,10 +10577,10 @@
       }, 500);
     }
     function dead() {
-      openSheet('파일 주소가 만료됐어요', '맞춤 정리본의 열람 주소는 7일 동안만 열려 있어요. PC에서 같은 파일을 새 주소로 다시 받아 올까요? (다시 만드는 것이 아니라 약 20초면 와요.)',
+      openSheet('파일 주소가 만료됐습니다', '맞춤 정리본의 열람 주소는 7일 동안만 열려 있습니다. PC에서 같은 파일을 새 주소로 다시 받아 올까요? (다시 만드는 것이 아니라 약 20초면 옵니다.)',
         '다시 받기', function () {
-          MtgOut.resendFor(att, memo || null).then(function (r) { toast(r ? 'PC로 보냈습니다. 약 20초 뒤 채팅으로 와요.' : '다시 받기를 보내지 못했습니다.'); },
-            function () { toast('보내지 못했습니다. 인터넷 연결을 확인해 주세요.'); });
+          MtgOut.resendFor(att, memo || null).then(function (r) { toast(r ? 'PC로 보냈습니다. 약 20초 뒤 채팅으로 옵니다.' : '다시 받기를 보내지 못했습니다.'); },
+            function () { toast('보내지 못했습니다. 인터넷 연결을 확인해 주십시오.'); });
         }, null, null, { positive: true, icon: 'i-refresh' });
     }
     var done = false;
@@ -10660,7 +10660,7 @@
                        sheet: x.sheet || '', sheets: x.sheets || 0, active: !!x.active, reused: !!(r && !x.orig) });
       });
       (p.missing || []).forEach(function (n) { dropped.push(n); });
-      if (!entries.length) { fail('보던 문서를 보내지 못했습니다. 문서를 다시 열고 [케이에게 묻기]를 눌러 주세요.'); return; }
+      if (!entries.length) { fail('보던 문서를 보내지 못했습니다. 문서를 다시 열고 [케이에게 묻기]를 눌러 주십시오.'); return; }
       var hw = where || '문서';
       var head = '[문서 보며 질문] 대표님이 스마트비서 문서 뷰어에서 「' + act.name + '」 ' + hw +
                  (act.pages && !(act.kind === 'excel' && act.view !== 'pdf') ? '(전체 ' + act.pages + '쪽)' : '') + josaEulReul(hw) + ' 보다가 보내셨습니다.';
@@ -10680,7 +10680,7 @@
       });
     }).catch(function (e) {
       var why = (e && (e.friendly || e.message)) || String(e);
-      fail('문서를 케이에게 보내지 못했습니다(' + why + '). 인터넷 연결을 확인하고 문서 화면에서 다시 눌러 주세요.');
+      fail('문서를 케이에게 보내지 못했습니다(' + why + '). 인터넷 연결을 확인하고 문서 화면에서 다시 눌러 주십시오.');
     });
   }
   if ($('btnDocs')) $('btnDocs').addEventListener('click', openDocs);
@@ -10740,7 +10740,7 @@
   window.addEventListener('smartBadPass', function (ev) {
     var need = !!(ev && ev.detail && ev.detail.need);
     if (!need) setSyncPass('');
-    showSyncGate(true, need ? '보내려면 연동 암호가 필요합니다. 입력해 주세요.' : '암호가 맞지 않습니다. 다시 입력해 주세요.');
+    showSyncGate(true, need ? '보내려면 연동 암호가 필요합니다. 입력해 주십시오.' : '암호가 맞지 않습니다. 다시 입력해 주십시오.');
   });
   window.addEventListener('smartChatPush', function () {                          // 앱 열려 있을 때 수신 → 답 당겨오기
     startChatReconcile(); reconcileChat();
@@ -10961,9 +10961,9 @@
     return p;
   }
   function v83Fail(e, bodyEl, what) {
-    if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-    if (bodyEl) bodyEl.innerHTML = '<div class="empty-note">' + (e && e.notready ? '서버 준비가 아직 되지 않았습니다(저에게 알려 주세요).'
-      : (e && e.badpass ? '연동 암호를 넣으면 ' + what + '이(가) 보입니다.' : what + '을(를) 불러오지 못했습니다. 잠시 뒤 새로고침을 눌러 주세요.')) + '</div>';
+    if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+    if (bodyEl) bodyEl.innerHTML = '<div class="empty-note">' + (e && e.notready ? '서버 준비가 아직 되지 않았습니다(저에게 알려 주십시오).'
+      : (e && e.badpass ? '연동 암호를 넣으면 ' + what + '이(가) 보입니다.' : what + '을(를) 불러오지 못했습니다. 잠시 뒤 새로고침을 눌러 주십시오.')) + '</div>';
   }
 
   // ---------- ⭐ 저장 ----------
@@ -10992,8 +10992,8 @@
     }).catch(function (e) {
       if (on) delete starIds[memoId]; else starIds[memoId] = 1;
       saveStarIds(); if (isOpen(chatView)) renderChat();
-      if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-      else toast(e && e.notready ? '서버 준비가 아직 되지 않았습니다.' : (on ? '저장하지 못했습니다. 잠시 뒤 다시 해 주세요.' : '저장을 풀지 못했습니다.'));
+      if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+      else toast(e && e.notready ? '서버 준비가 아직 되지 않았습니다.' : (on ? '저장하지 못했습니다. 잠시 뒤 다시 해 주십시오.' : '저장을 풀지 못했습니다.'));
     });
   }
   var starsFromChat = false, starsRows = [], starsQTimer = 0, starsSeq = 0;
@@ -11021,7 +11021,7 @@
     var body = $('starsBody'); if (!body) return;
     if (!starsRows.length) {
       body.innerHTML = '<div class="empty-note">' + (q ? '“' + esc(q) + '”이(가) 들어간 저장한 답이 없습니다.'
-        : '아직 저장한 답이 없습니다.<br>채팅에서 케이 답의 [⋯] → 「⭐ 저장」을 눌러 보세요.') + '</div>';
+        : '아직 저장한 답이 없습니다.<br>채팅에서 케이 답의 [⋯] → 「⭐ 저장」을 눌러 보십시오.') + '</div>';
       return;
     }
     body.innerHTML = '<div class="ord-sec">' + (q ? '찾은 답' : '저장한 답') + ' <small>' + starsRows.length + '개 · 최근 저장순</small></div>' +
@@ -11122,7 +11122,7 @@
     try { if (window.TodayCard && TodayCard.setReminders) TodayCard.setReminders(remRows); } catch (e) {}   // (O-0176) 오늘 한눈에 한 줄도 맞춤
     var h = '<div class="ord-sec">예약 중 <small>' + act.length + '개 · 가까운 순</small></div>';
     h += act.length ? act.map(function (r) { return remItemHtml(r, true); }).join('')
-      : '<div class="empty-note">예약된 알림이 없습니다.<br>위 [말로 맡기기]를 누르고 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀해 보세요.</div>';
+      : '<div class="empty-note">예약된 알림이 없습니다.<br>위 [말로 맡기기]를 누르고 “내일 아침 8시에 우산 챙기라고 알려 줘”처럼 말씀해 보십시오.</div>';
     if (done.length) {
       h += '<div class="ord-sec">지난 알림 <small>최근 30일</small></div>' + done.map(function (r) { return remItemHtml(r, false); }).join('');
     }
@@ -11149,8 +11149,8 @@
         toast(ok ? '알림을 취소했습니다.' : '이미 지나갔거나 취소된 알림입니다.');
         loadReminders();
       }).catch(function (e) {
-        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주세요.'); }
-        else toast('취소하지 못했습니다. 잠시 뒤 다시 해 주세요.');
+        if (e && e.badpass) { setSyncPass(''); showSyncGate(true, '암호가 맞지 않습니다. 다시 입력해 주십시오.'); }
+        else toast('취소하지 못했습니다. 잠시 뒤 다시 해 주십시오.');
       });
     });
   });
@@ -11206,7 +11206,7 @@
       });
       if (failed.length) {
         chatMsgs.push({ role: 'k', ts: Date.now(),
-          text: '알림에서 보내신 답장 ' + failed.length + '건은 ' + (passFail ? '연동 암호 확인이 안 돼' : '인터넷 문제로') + ' 전송되지 않았습니다 — 「' + failed[0].slice(0, 40) + (failed[0].length > 40 ? '…' : '') + '」' + (failed.length > 1 ? ' 외' : '') + '. 필요하면 여기서 다시 보내 주세요.' });
+          text: '알림에서 보내신 답장 ' + failed.length + '건은 ' + (passFail ? '연동 암호 확인이 안 돼' : '인터넷 문제로') + ' 전송되지 않았습니다 — 「' + failed[0].slice(0, 40) + (failed[0].length > 40 ? '…' : '') + '」' + (failed.length > 1 ? ' 외' : '') + '. 필요하면 여기서 다시 보내 주십시오.' });
       }
       if (added || failed.length) {
         sortChatByTime(); saveChatMsgs();
@@ -11236,7 +11236,7 @@
       setTimeout(function () {
         var ok = false;
         try { ok = !!(window.SmartNativePick && SmartNativePick('chatCam', 'image/*')); } catch (e) {}
-        if (!ok) toast('아래 카메라 버튼을 눌러 사진을 골라 주세요.');
+        if (!ok) toast('아래 카메라 버튼을 눌러 사진을 골라 주십시오.');
       }, 350);
     } else if (name === 'health') {                // v9.97(O-0854 2번): 건강 기록 — 홈을 거치지 않고 건강 화면(오늘 기록)을 바로 연다(앱이 꺼져 있다가 켜질 때도 같은 길: MainActivity→launch 이벤트)
       openHealth();

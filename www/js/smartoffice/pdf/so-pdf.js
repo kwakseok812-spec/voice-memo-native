@@ -87,7 +87,7 @@
     S.mode = m; S.root.setAttribute('data-mode', m); select(null);
     Object.keys(S.modeBtns).forEach(function (k) { S.modeBtns[k].classList.toggle('on', k === m); });
     renderOpt();
-    var hint = { hl: '글 위를 손가락으로 쓸어 칠하세요. 화면을 넘기려면 「보기」를 누르세요.', text: '글을 넣을 자리를 한 번 누르세요.', memo: '메모를 붙일 자리를 한 번 누르세요.', sig: '서명을 넣을 자리를 한 번 누르세요.' }[m];
+    var hint = { hl: '글 위를 손가락으로 쓸어 칠하십시오. 화면을 넘기려면 「보기」를 누르십시오.', text: '글을 넣을 자리를 한 번 누르십시오.', memo: '메모를 붙일 자리를 한 번 누르십시오.', sig: '서명을 넣을 자리를 한 번 누르십시오.' }[m];
     if (hint) S.ctx.toast(hint, 2400);
   }
   function renderOpt() {
@@ -180,7 +180,7 @@
       if (e && e.name === 'RenderingCancelledException') return;
       P.failed = key;
       try { console.warn('[S-Office PDF] 쪽 그리기 실패', P.n, e); } catch (x) {}
-      if (!S.failedToasted) { S.failedToasted = true; S.ctx.toast('일부 쪽을 그리지 못했어요.', 3000); }
+      if (!S.failedToasted) { S.failedToasted = true; S.ctx.toast('일부 쪽을 그리지 못했습니다.', 3000); }
     }).then(function () { S.rendering = false; });
   }
   function isNear(P) { return P.vis; }
@@ -428,7 +428,7 @@
     var ta = el('textarea', 'sp-ta'); ta.rows = 4; ta.value = existing ? existing.text : '';
     ta.placeholder = type === 'memo' ? '메모 내용' : '넣을 글';
     wrap.appendChild(ta);
-    var asciiNote = el('div', 'sp-note', '영어·숫자는 글자로, 한글은 그림으로 들어가요(복사는 안 돼요).');
+    var asciiNote = el('div', 'sp-note', '영어·숫자는 글자로, 한글은 그림으로 들어갑니다(복사는 안 됩니다).');
     wrap.appendChild(asciiNote);
     var size = existing ? existing.size : S.size;
     if (!existing) {
@@ -444,7 +444,7 @@
       { label: '취소' },
       { label: '확인', primary: true, onClick: function () {
         var t = ta.value.replace(/\s+$/, '');
-        if (!t) { S.ctx.toast('내용을 먼저 적어 주세요.', 1800); return false; }
+        if (!t) { S.ctx.toast('내용을 먼저 적어 주십시오.', 1800); return false; }
         if (existing) {
           existing.text = t; layoutText(existing); remount(existing); commit(); select(existing.id);
         } else {
@@ -479,16 +479,16 @@
     cv.addEventListener('pointerdown', function (e) { drawing = true; last = pos(e); any = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} g.beginPath(); g.arc(last.x, last.y, 2.2, 0, 7); g.fillStyle = '#111'; g.fill(); e.preventDefault(); });
     cv.addEventListener('pointermove', function (e) { if (!drawing) return; var p = pos(e); g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); last = p; e.preventDefault(); });
     function stop() { drawing = false; } cv.addEventListener('pointerup', stop); cv.addEventListener('pointercancel', stop);
-    wrap.appendChild(el('div', 'sp-note', '위 칸에 손가락으로 서명하세요. 이 서명은 이 문서를 보는 동안만 기억해요.'));
+    wrap.appendChild(el('div', 'sp-note', '위 칸에 손가락으로 서명하십시오. 이 서명은 이 문서를 보는 동안만 기억합니다.'));
     dialog('서명 그리기', wrap, [
       { label: '지우기', onClick: function () { g.clearRect(0, 0, W, H); any = false; return false; } },
       { label: '취소' },
       { label: '완료', primary: true, onClick: function () {
-        if (!any) { S.ctx.toast('서명을 먼저 그려 주세요.', 1800); return false; }
+        if (!any) { S.ctx.toast('서명을 먼저 그려 주십시오.', 1800); return false; }
         var url = trimPad(cv);
-        if (!url) { S.ctx.toast('서명이 비어 있어요.', 1800); return false; }
+        if (!url) { S.ctx.toast('서명이 비어 있습니다.', 1800); return false; }
         S.sig = url; renderOpt();
-        if (placeAfter) placeSig(placeAfter.P, placeAfter.at); else S.ctx.toast('서명을 만들었어요. 넣을 자리를 한 번 누르세요.', 2400);
+        if (placeAfter) placeSig(placeAfter.P, placeAfter.at); else S.ctx.toast('서명을 만들었습니다. 넣을 자리를 한 번 누르십시오.', 2400);
       } }
     ], { wide: true, keep: function () { return any; } });     // 그리던 서명은 바깥을 잘못 눌러도 지워지지 않게
   }
@@ -524,7 +524,7 @@
 
   function save() {
     var ctx = S.ctx, cur = S;
-    if (!S.anns.length) { ctx.toast('아직 넣은 것이 없어요. 형광펜·글·메모·서명을 넣은 뒤 저장해 주세요.', 3000); return; }
+    if (!S.anns.length) { ctx.toast('아직 넣은 것이 없습니다. 형광펜·글·메모·서명을 넣은 뒤 저장해 주십시오.', 3000); return; }
     select(null);
     ctx.busy('새 파일 만드는 중…');
     var L, doc, font, byPage = {};
@@ -556,13 +556,13 @@
       return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name)).then(function (ok) {
         if (ok === false || S !== mySt) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
         S.savedRev = S.rev; ctx.setDirty(false);
-        ctx.toast('사본으로 저장했어요: ' + name + ' (원래 파일은 그대로)', 4200);
+        ctx.toast('사본으로 저장했습니다: ' + name + ' (원래 파일은 그대로)', 4200);
       });
     }).catch(function (e) {
       if (S !== cur || S.dead) return;
       ctx.busy(null);
       try { console.warn('[S-Office PDF] 저장 실패', e); } catch (x) {}
-      ctx.toast('저장하지 못했어요: ' + ((e && e.message) || e), 5000);
+      ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000);
     });
   }
   function toPdf(vp, x, y) { var p = vp.convertToPdfPoint(x, y); return { x: p[0], y: p[1] }; }
@@ -621,7 +621,7 @@
     var rep = { applied: 0, skipped: 0 };
     if (!S || S.dead || !S.pages.length || !data || !Array.isArray(data.anns)) return rep;
     if (typeof data.n === 'number' && data.n !== S.n) {   // 저장해 둔 쪽 수와 지금 문서가 다르면 적용하지 않는다
-      rep.skipped = data.anns.length; S.ctx.toast('문서의 쪽 수가 달라져(저장 ' + data.n + '쪽, 지금 ' + S.n + '쪽) 이어서 넣던 내용을 되살리지 않았어요.', 4200); return rep;
+      rep.skipped = data.anns.length; S.ctx.toast('문서의 쪽 수가 달라져(저장 ' + data.n + '쪽, 지금 ' + S.n + '쪽) 이어서 넣던 내용을 되살리지 않았습니다.', 4200); return rep;
     }
     var num = function (v) { return typeof v === 'number' && isFinite(v); }, hex = /^#[0-9a-fA-F]{6}$/, png = /^data:image\/png;base64,[A-Za-z0-9+\/=]+$/;
     data.anns.forEach(function (o) {
@@ -646,8 +646,8 @@
     });
     if (rep.applied) {
       commit();
-      S.ctx.toast('이어서 넣던 ' + rep.applied + '개를 되살렸어요.' + (rep.skipped ? ' (' + rep.skipped + '개는 건너뛰었어요)' : ''), 3600);
-    } else if (rep.skipped) S.ctx.toast('이어서 넣던 내용을 되살리지 못했어요.', 3200);
+      S.ctx.toast('이어서 넣던 ' + rep.applied + '개를 되살렸습니다.' + (rep.skipped ? ' (' + rep.skipped + '개는 건너뛰었습니다)' : ''), 3600);
+    } else if (rep.skipped) S.ctx.toast('이어서 넣던 내용을 되살리지 못했습니다.', 3200);
     return rep;
   }
 
@@ -682,7 +682,7 @@
       })(i);
       return chain.then(function () { return sizes; });
     }, function (e) {
-      if (e && e.name === 'PasswordException') { ctx.fallback('암호가 걸린 PDF는 S-Office가 열 수 없어서 변환해서 보여 드려요.'); return null; }
+      if (e && e.name === 'PasswordException') { ctx.fallback('암호가 걸린 PDF는 S-Office가 열 수 없어서 변환해서 보여 드립니다.'); return null; }
       throw e;
     }).then(function (sizes) {
       if (!sizes || S !== cur) return;

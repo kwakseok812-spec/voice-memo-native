@@ -23,15 +23,15 @@
   function analyze(zip) {
     var files = Object.keys(zip.files);
     function has(re) { return files.some(function (k) { return re.test(k); }); }
-    if (has(/^xl\/vbaProject/)) return Promise.resolve({ ok: false, reason: '매크로가 들어 있는 파일이에요.' });
-    if (has(/^xl\/pivot(Tables|Cache)\//) || has(/^xl\/(slicers|slicerCaches|timelines|timelineCaches)\//)) return Promise.resolve({ ok: false, reason: '피벗표(또는 슬라이서)가 들어 있는 파일이에요.' });
-    if (has(/^xl\/workbook\.bin$/)) return Promise.resolve({ ok: false, reason: '이진 형식(xlsb)이에요.' });
-    if (!zip.file('xl/workbook.xml') || !zip.file('xl/_rels/workbook.xml.rels')) return Promise.resolve({ ok: false, reason: '파일 구조를 알아볼 수 없어요.' });
+    if (has(/^xl\/vbaProject/)) return Promise.resolve({ ok: false, reason: '매크로가 들어 있는 파일입니다.' });
+    if (has(/^xl\/pivot(Tables|Cache)\//) || has(/^xl\/(slicers|slicerCaches|timelines|timelineCaches)\//)) return Promise.resolve({ ok: false, reason: '피벗표(또는 슬라이서)가 들어 있는 파일입니다.' });
+    if (has(/^xl\/workbook\.bin$/)) return Promise.resolve({ ok: false, reason: '이진 형식(xlsb)입니다.' });
+    if (!zip.file('xl/workbook.xml') || !zip.file('xl/_rels/workbook.xml.rels')) return Promise.resolve({ ok: false, reason: '파일 구조를 알아볼 수 없습니다.' });
     return Promise.all([zip.file('xl/workbook.xml').async('string'), zip.file('xl/_rels/workbook.xml.rels').async('string'),
       zip.file('[Content_Types].xml') ? zip.file('[Content_Types].xml').async('string') : Promise.resolve('')]).then(function (a) {
       var wb = a[0], rels = a[1], ct = a[2];
-      if (/macroEnabled/i.test(ct)) return { ok: false, reason: '매크로가 허용된 형식 파일이에요.' };
-      if (/<workbook\b[^>]*>/.test(wb) === false || /<[A-Za-z0-9_]+:workbook\b/.test(wb)) return { ok: false, reason: '파일 구조가 특이해요.' };
+      if (/macroEnabled/i.test(ct)) return { ok: false, reason: '매크로가 허용된 형식 파일입니다.' };
+      if (/<workbook\b[^>]*>/.test(wb) === false || /<[A-Za-z0-9_]+:workbook\b/.test(wb)) return { ok: false, reason: '파일 구조가 특이합니다.' };
       var relMap = {};
       (rels.match(/<Relationship\b[^>]*>/g) || []).forEach(function (t) {
         var id = attr(t, 'Id'), tg = attr(t, 'Target'), ty = attr(t, 'Type') || '';
@@ -51,7 +51,7 @@
       });
       return Promise.all(order.map(function (nm) {
         var sh = sheets[nm];
-        if (!sh.path || !zip.file(sh.path)) { sh.path = null; sh.readOnly = true; sh.why = '이 시트는 표가 아니라서(차트 시트 등) 고칠 수 없어요.'; return null; }
+        if (!sh.path || !zip.file(sh.path)) { sh.path = null; sh.readOnly = true; sh.why = '이 시트는 표가 아니라서(차트 시트 등) 고칠 수 없습니다.'; return null; }
         var relPath = sh.path.replace(/([^\/]+)$/, '_rels/$1.rels');
         var relP = zip.file(relPath) ? zip.file(relPath).async('string') : Promise.resolve('');
         return Promise.all([zip.file(sh.path).async('string'), relP]).then(function (pair) {
@@ -74,9 +74,9 @@
             if (ar) sh.arr.push({ r0: +ar[2], c0: colNum(ar[1]), r1: +(ar[4] || ar[2]), c1: colNum(ar[3] || ar[1]) });
           });
           var dec = /^\s*(?:﻿)?<\?xml[^>]*encoding="([^"]+)"/i.exec(xml);
-          if (dec && !/^utf-?8$/i.test(dec[1])) { sh.readOnly = true; sh.why = '이 시트의 글자 인코딩이 특이해서 고칠 수 없어요.'; }
-          else if (!/<sheetData[\s>\/]/.test(xml)) { sh.readOnly = true; sh.why = '이 시트의 구조가 특이해서 고칠 수 없어요.'; }
-          else if (/<sheetProtection\b/.test(xml)) { sh.readOnly = true; sh.why = '보호된 시트라서 고칠 수 없어요. (엑셀에서 보호를 풀어 주세요)'; }
+          if (dec && !/^utf-?8$/i.test(dec[1])) { sh.readOnly = true; sh.why = '이 시트의 글자 인코딩이 특이해서 고칠 수 없습니다.'; }
+          else if (!/<sheetData[\s>\/]/.test(xml)) { sh.readOnly = true; sh.why = '이 시트의 구조가 특이해서 고칠 수 없습니다.'; }
+          else if (/<sheetProtection\b/.test(xml)) { sh.readOnly = true; sh.why = '보호된 시트라서 고칠 수 없습니다. (엑셀에서 보호를 풀어 주십시오)'; }
           return Promise.all(sh.tablePromises);
         });
       })).then(function () { return { ok: true, sheets: sheets, order: order }; });
@@ -108,29 +108,29 @@
   }
   // 반환: { xml } 또는 { err }. info.hadFormula 로 기존 수식이 값으로 바뀐 것을 알린다.
   function patchCell(xml, ref, spec) {
-    var rm = /^([A-Z]+)(\d+)$/.exec(ref); if (!rm) return { err: '셀 주소를 알 수 없어요.' };
+    var rm = /^([A-Z]+)(\d+)$/.exec(ref); if (!rm) return { err: '셀 주소를 알 수 없습니다.' };
     var cn = colNum(rm[1]), rn = +rm[2];
-    if (spec.kind === 's' && String(spec.v).length > 32767) return { err: '한 칸에는 32,767자까지만 넣을 수 있어요.' };
+    if (spec.kind === 's' && String(spec.v).length > 32767) return { err: '한 칸에는 32,767자까지만 넣을 수 있습니다.' };
     var sdm = /<sheetData\b[^>]*?(\/?)>/.exec(xml);
-    if (!sdm) return { err: '시트 구조가 특이해서 고칠 수 없어요.' };
+    if (!sdm) return { err: '시트 구조가 특이해서 고칠 수 없습니다.' };
     if (sdm[1] === '/') xml = xml.slice(0, sdm.index) + '<sheetData></sheetData>' + xml.slice(sdm.index + sdm[0].length);
     var bodyStart = sdm.index + (sdm[1] === '/' ? '<sheetData>'.length : sdm[0].length);
     var sdEnd = xml.indexOf('</sheetData>', bodyStart);
-    if (sdEnd < 0) return { err: '시트 구조가 특이해서 고칠 수 없어요.' };
+    if (sdEnd < 0) return { err: '시트 구조가 특이해서 고칠 수 없습니다.' };
 
     // 행 찾기
     var rowRe = /<row\b[^>]*>/g, rowTag = null, rowIdx = -1, insertAt = sdEnd, m;
     rowRe.lastIndex = bodyStart;
     while ((m = rowRe.exec(xml)) && m.index < sdEnd) {
       var r = +attr(m[0], 'r');
-      if (!r) return { err: '행 번호가 없는 시트라서 고칠 수 없어요.' };
+      if (!r) return { err: '행 번호가 없는 시트라서 고칠 수 없습니다.' };
       if (r === rn) { rowTag = m[0]; rowIdx = m.index; break; }
       if (r > rn) { insertAt = m.index; break; }
     }
     var info = { hadFormula: false };
     if (rowIdx < 0) {
       var st0 = defaultStyle(xml, null, cn), at0 = ' r="' + ref + '"' + (st0 != null ? ' s="' + st0 + '"' : '');
-      var nc = cellXml(at0, spec); if (nc == null) return { err: '숫자를 넣을 수 없어요.' };
+      var nc = cellXml(at0, spec); if (nc == null) return { err: '숫자를 넣을 수 없습니다.' };
       if (spec.kind === 'empty') return { xml: xml, info: info, noop: true };
       xml = xml.slice(0, insertAt) + '<row r="' + rn + '">' + nc + '</row>' + xml.slice(insertAt);
       return { xml: widenDimension(xml, rn, cn), info: info };
@@ -141,19 +141,19 @@
       openTag = rowTag.replace(/\s*\/>$/, '>');
       rowEnd = rowIdx + rowTag.length; inner = '';
     } else {
-      var ce = xml.indexOf('</row>', rowIdx + rowTag.length); if (ce < 0) return { err: '시트 구조가 특이해서 고칠 수 없어요.' };
+      var ce = xml.indexOf('</row>', rowIdx + rowTag.length); if (ce < 0) return { err: '시트 구조가 특이해서 고칠 수 없습니다.' };
       rowEnd = ce + 6; inner = xml.slice(rowIdx + rowTag.length, ce);
     }
     // 셀 찾기
     var cellRe = /<c\b[^>]*>/g, pos = -1, cTag = null, cEnd = -1, ins = inner.length;
     while ((m = cellRe.exec(inner))) {
       var rr = /\sr="([A-Z]+)(\d+)"/.exec(m[0]);
-      if (!rr) return { err: '주소가 없는 칸이 있는 시트라서 고칠 수 없어요.' };
+      if (!rr) return { err: '주소가 없는 칸이 있는 시트라서 고칠 수 없습니다.' };
       var c = colNum(rr[1]);
       if (c === cn) {
         pos = m.index; cTag = m[0];
         if (/\/>$/.test(cTag)) cEnd = pos + cTag.length;
-        else { var e = inner.indexOf('</c>', pos + cTag.length); if (e < 0) return { err: '시트 구조가 특이해서 고칠 수 없어요.' }; cEnd = e + 4; }
+        else { var e = inner.indexOf('</c>', pos + cTag.length); if (e < 0) return { err: '시트 구조가 특이해서 고칠 수 없습니다.' }; cEnd = e + 4; }
         break;
       }
       if (c > cn) { ins = m.index; break; }
@@ -163,21 +163,21 @@
     var newInner;
     if (pos >= 0) {
       var body = inner.slice(pos + cTag.length, cEnd);
-      if (/\scm="/.test(cTag) || /\svm="/.test(cTag)) return { err: '이 칸은 특수한 칸(동적 배열 등)이라 고칠 수 없어요.' };
+      if (/\scm="/.test(cTag) || /\svm="/.test(cTag)) return { err: '이 칸은 특수한 칸(동적 배열 등)이라 고칠 수 없습니다.' };
       var fm = /<f\b([^>]*?)(\/?)>/.exec(body);
       if (fm) {
         var ft = attr(' ' + fm[1], 't');
-        if (ft === 'shared') return { err: '여러 칸이 함께 쓰는 수식(공유 수식)이라 고칠 수 없어요. 엑셀에서 고쳐 주세요.' };
-        if (ft === 'array') return { err: '배열 수식 칸이라 고칠 수 없어요. 엑셀에서 고쳐 주세요.' };
-        if (ft === 'dataTable') return { err: '데이터 표 칸이라 고칠 수 없어요.' };
+        if (ft === 'shared') return { err: '여러 칸이 함께 쓰는 수식(공유 수식)이라 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.' };
+        if (ft === 'array') return { err: '배열 수식 칸이라 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.' };
+        if (ft === 'dataTable') return { err: '데이터 표 칸이라 고칠 수 없습니다.' };
         info.hadFormula = true;
       }
       var attrs = cTag.replace(/^<c/, '').replace(/\s*\/?>$/, '').replace(/\st="[^"]*"/, '');
-      var nx = cellXml(attrs, spec); if (nx == null) return { err: '숫자를 넣을 수 없어요.' };
+      var nx = cellXml(attrs, spec); if (nx == null) return { err: '숫자를 넣을 수 없습니다.' };
       newInner = inner.slice(0, pos) + nx + inner.slice(cEnd);
     } else {
       var st1 = defaultStyle(xml, rowTag, cn), at1 = ' r="' + ref + '"' + (st1 != null ? ' s="' + st1 + '"' : '');
-      var nx2 = cellXml(at1, spec); if (nx2 == null) return { err: '숫자를 넣을 수 없어요.' };
+      var nx2 = cellXml(at1, spec); if (nx2 == null) return { err: '숫자를 넣을 수 없습니다.' };
       if (spec.kind === 'empty') return { xml: xml, info: info, noop: true };
       newInner = inner.slice(0, ins) + nx2 + inner.slice(ins);
       openTag = openTag.replace(/\sspans="[^"]*"/, '');     // 칸이 늘면 spans 힌트는 낡는다
@@ -224,8 +224,8 @@
   function cellBlock(sh, ref) {
     var m = /^([A-Z]+)(\d+)$/.exec(ref); if (!m || !sh) return '';
     var c = colNum(m[1]), r = +m[2], i;
-    for (i = 0; i < (sh.hdr || []).length; i++) { var h = sh.hdr[i]; if (r === h.r && c >= h.c0 && c <= h.c1) return '엑셀 표의 머리글(맨 윗줄 이름)은 표 정의와 맞아야 해서 여기서 고칠 수 없어요. 엑셀에서 고쳐 주세요.'; }
-    for (i = 0; i < (sh.arr || []).length; i++) { var a = sh.arr[i]; if (r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1) return '배열 수식이 차지한 칸이라 고칠 수 없어요. 엑셀에서 고쳐 주세요.'; }
+    for (i = 0; i < (sh.hdr || []).length; i++) { var h = sh.hdr[i]; if (r === h.r && c >= h.c0 && c <= h.c1) return '엑셀 표의 머리글(맨 윗줄 이름)은 표 정의와 맞아야 해서 여기서 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.'; }
+    for (i = 0; i < (sh.arr || []).length; i++) { var a = sh.arr[i]; if (r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1) return '배열 수식이 차지한 칸이라 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.'; }
     return '';
   }
 

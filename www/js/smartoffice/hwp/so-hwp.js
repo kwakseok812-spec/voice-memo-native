@@ -103,7 +103,7 @@
   function mkBtn(d0, host) {
     var b = el('button', d0.cls || '', d0.t); b.type = 'button'; b.setAttribute('aria-label', d0.label); b.title = d0.label;
     b.addEventListener('pointerdown', function (e) { e.preventDefault(); });       // 글자 칸의 포커스(키보드)를 빼앗지 않는다
-    b.addEventListener('click', function () { if (!clickIn(d0.sel)) st.ctx.toast('지금은 쓸 수 없어요.', 1800); else if (d0.state || /edit:undo|edit:redo|font-size/.test(d0.sel)) markDirty(); });
+    b.addEventListener('click', function () { if (!clickIn(d0.sel)) st.ctx.toast('지금은 쓸 수 없습니다.', 1800); else if (d0.state || /edit:undo|edit:redo|font-size/.test(d0.sel)) markDirty(); });
     host.appendChild(b); if (d0.state) st.tbBtns.push({ b: b, sel: d0.ss || d0.sel });
     return b;
   }
@@ -198,7 +198,7 @@
   function stopEdit(ctx) {
     if (!st) return;
     var go = function () { st.editing = false; applyMode(ctx); ctx.setDirty(false); };
-    if (st.dirty) ctx.confirm('고친 내용이 저장되지 않았어요', '보기로 돌아가도 고친 내용은 화면에 남지만, 닫으면 사라집니다.', '보기로', go); else go();
+    if (st.dirty) ctx.confirm('고친 내용이 저장되지 않았습니다', '보기로 돌아가도 고친 내용은 화면에 남지만, 닫으면 사라집니다.', '보기로', go); else go();
   }
 
   // 고친 문서 전체를 엔진의 내보내기로 바이트로 뽑는다(hwp 는 다시 읽어 쪽 수가 같은지 점검한 뒤)
@@ -215,11 +215,11 @@
   function snapshot() {
     var s = st;
     if (!s || !s.editor || !s.dirty || s.exporting || s.composing || s.snapOff) return Promise.resolve(null);     // 글자 조합 중에는 건드리지 않는다
-    if (s.ctx.file && s.ctx.file.size > SNAP_MAX_FILE) { s.snapOff = true; s.ctx.toast('문서가 커서 고친 내용 자동 보관은 건너뜁니다. 중간에 「사본 저장」을 눌러 주세요.', 5200); return Promise.resolve(null); }
+    if (s.ctx.file && s.ctx.file.size > SNAP_MAX_FILE) { s.snapOff = true; s.ctx.toast('문서가 커서 고친 내용 자동 보관은 건너뜁니다. 중간에 「사본 저장」을 눌러 주십시오.', 5200); return Promise.resolve(null); }
     s.exporting = true; var t0 = Date.now();
     return exportBytes().then(function (bytes) {
       s.exporting = false;
-      if (Date.now() - t0 > SNAP_SLOW_MS && !s.snapOff) { s.snapOff = true; s.ctx.toast('문서가 커서 화면이 멈출 수 있어 고친 내용 자동 보관을 멈춥니다. 중간에 「사본 저장」을 눌러 주세요.', 5200); }
+      if (Date.now() - t0 > SNAP_SLOW_MS && !s.snapOff) { s.snapOff = true; s.ctx.toast('문서가 커서 화면이 멈출 수 있어 고친 내용 자동 보관을 멈춥니다. 중간에 「사본 저장」을 눌러 주십시오.', 5200); }
       if (!bytes || bytes.length < 512) return null;
       return { blob: new Blob([bytes], { type: 'application/octet-stream' }), name: s.ctx.name, ext: s.ctx.ext };
     }, function () { s.exporting = false; return null; });
@@ -235,9 +235,9 @@
     }).then(function () {
       if (st !== s) return false;
       s.ctx.busy(null); s.dirty = true; s.ctx.setDirty(true); s.editing = true; applyMode(s.ctx);
-      s.ctx.toast('이전에 고치던 내용을 이어서 열었어요. 저장은 「사본 저장」으로 하세요.', 4600);
+      s.ctx.toast('이전에 고치던 내용을 이어서 열었습니다. 저장은 「사본 저장」으로 하십시오.', 4600);
       return true;
-    }).catch(function () { if (st === s) { s.ctx.busy(null); s.ctx.toast('고치던 내용을 불러오지 못해 원본을 열었어요.', 4600); } return false; });
+    }).catch(function () { if (st === s) { s.ctx.busy(null); s.ctx.toast('고치던 내용을 불러오지 못해 원본을 열었습니다.', 4600); } return false; });
   }
 
   function saveCopy(ctx) {
@@ -275,7 +275,7 @@
     layout();
 
     // 처음 열기는 번들이 커서(약 23MB) 몇 초 걸린다 — 단계 문구와 지난 시간을 보여 준다
-    var t0 = Date.now(), stage = '한글 화면을 준비하는 중… (처음 열 때는 조금 걸려요)';
+    var t0 = Date.now(), stage = '한글 화면을 준비하는 중… (처음 열 때는 조금 걸립니다)';
     var tick = setInterval(function () { if (!st) return; var sec = Math.round((Date.now() - t0) / 1000); ctx.busy(stage + (sec >= 2 ? '  ' + sec + '초' : '')); }, 1000);
     st.timers.push(tick); ctx.busy(stage);
 

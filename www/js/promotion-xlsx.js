@@ -78,7 +78,7 @@
     rows.push([]);
     rows.push(['구분', '오늘 기준(바닥값)', expLabel, '합격선']);
     rows.push(['총점', fx(A.today.total), fx(A.expected.total), fx(T.total)]);
-    if (A.bonus) rows.push(['총장 가점(총점에만 들어가요)', fx(A.bonus), fx(A.bonus), '']);
+    if (A.bonus) rows.push(['총장 가점(총점에만 들어갑니다)', fx(A.bonus), fx(A.bonus), '']);
     rows.push(['대학발전(부문 3)', fx(A.today.sec3), fx(A.expected.sec3), fx(T.sec3)]);
     rows.push([]);
     rows.push(['부문', '오늘 기준 인정 점수', expLabel + ' 인정 점수', '인정 한도', '항목 점수 합계(한도 적용 전)', '항목 수']);
@@ -91,24 +91,24 @@
     rows.push(['필수 요건', '판정', '현재', '기준', '설명']);
     /* 총점 */
     rows.push([CN.total, SW[c.total.s], fx(c.total.value), fx(c.total.need), c.total.s === 'pass'
-      ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많아요. ' + expLabel + '은 ' + fmt(A.expected.total) + '점이에요.'
-      : '합격선까지 ' + fmt(c.total.need - c.total.value) + '점이 모자라요.']);
+      ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다. ' + expLabel + '은 ' + fmt(A.expected.total) + '점입니다.'
+      : '합격선까지 ' + fmt(c.total.need - c.total.value) + '점이 모자랍니다.']);
     /* 대학발전 */
-    rows.push([CN.sec3, SW[c.sec3.s], fx(c.sec3.value), fx(c.sec3.need), '보직·TFT·정책연구 점수예요. 오늘 기준은 보직을 지금까지 재임한 개월만 세요. ' + expLabel + '은 ' + fmt(A.expected.sec3) + '점이에요.']);
+    rows.push([CN.sec3, SW[c.sec3.s], fx(c.sec3.value), fx(c.sec3.need), '보직·TFT·정책연구 점수입니다. 오늘 기준은 보직을 지금까지 재임한 개월만 셉니다. ' + expLabel + '은 ' + fmt(A.expected.sec3) + '점입니다.']);
     /* 책임저자 */
     var nl = c.lead.papers.length;
     var minL = num(R.qual && R.qual.min_lead_papers);
-    rows.push([CN.lead, SW[c.lead.s], nl, minL, 'SCI·등재급 책임저자(제1저자 또는 교신저자) 논문이 ' + nl + '편이에요. ' + minL + '편 이상이면 통과예요.' + (c.lead.manual ? ' 직접 확인으로 통과 처리돼 있어요.' : '')]);
+    rows.push([CN.lead, SW[c.lead.s], nl, minL, 'SCI·등재급 책임저자(제1저자 또는 교신저자) 논문이 ' + nl + '편입니다. ' + minL + '편 이상이면 통과입니다.' + (c.lead.manual ? ' 직접 확인으로 통과 처리돼 있습니다.' : '')]);
     /* 교수업적 순위 */
     var evTxt;
-    if (c.eval.s === 'unknown') evTxt = '판정할 학년도 값이 없어요' + (c.eval.exYears.length ? '(부처장 재임 학년도는 평가에서 빠져요)' : '') + '. 교수업적 순위가 입력되면 판정해요.';
-    else evTxt = c.eval.used.map(function (e) { return e.ay + '학년도 상위 ' + e.pct + '%'; }).join(', ') + ' 기준이에요. 평균이 상위 ' + c.eval.max + '% 이내(값이 작을수록 좋아요)면 통과예요.';
+    if (c.eval.s === 'unknown') evTxt = '판정할 학년도 값이 없습니다' + (c.eval.exYears.length ? '(부처장 재임 학년도는 평가에서 빠집니다)' : '') + '. 교수업적 순위가 입력되면 판정합니다.';
+    else evTxt = c.eval.used.map(function (e) { return e.ay + '학년도 상위 ' + e.pct + '%'; }).join(', ') + ' 기준입니다. 평균이 상위 ' + c.eval.max + '% 이내(값이 작을수록 좋습니다)면 통과입니다.';
     rows.push([CN.eval, SW[c.eval.s], c.eval.avg === null || c.eval.avg === undefined ? '' : fx(c.eval.avg), num(c.eval.max), evTxt]);
     /* 재직 */
     var tt;
-    if (ten.state === 'unknown') tt = '현 직급 시작일(부교수 임용일)이 입력 전이라 승진임용 가능일을 계산하지 못했어요.';
-    else tt = '현 직급 시작일 ' + global.PromoCalc.fmtDay(ten.start) + ' → 승진임용 가능일 ' + global.PromoCalc.fmtDay(ten.eligible) + '(' + num(R.tenure_years) + '년 이상 재직 뒤 첫 ' + num(R.promo_month) + '월 ' + num(R.promo_day) + '일자)' + (ten.state === 'pass' ? '이 지났어요.' : '이에요.');
-    rows.push([CN.tenure, SW[ten.state], '', num(R.tenure_years), tt + ' 기준은 ' + num(R.tenure_years) + '년이에요.']);
+    if (ten.state === 'unknown') tt = '현 직급 시작일(부교수 임용일)이 입력 전이라 승진임용 가능일을 계산하지 못했습니다.';
+    else tt = '현 직급 시작일 ' + global.PromoCalc.fmtDay(ten.start) + ' → 승진임용 가능일 ' + global.PromoCalc.fmtDay(ten.eligible) + '(' + num(R.tenure_years) + '년 이상 재직 뒤 첫 ' + num(R.promo_month) + '월 ' + num(R.promo_day) + '일자)' + (ten.state === 'pass' ? '이 지났습니다.' : '입니다.');
+    rows.push([CN.tenure, SW[ten.state], '', num(R.tenure_years), tt + ' 기준은 ' + num(R.tenure_years) + '년입니다.']);
     rows.push([]);
     rows.push(['한 줄 요약', A.say]);
     rows.push(['참고 계산이며 공식 판정이 아닙니다.']);
@@ -145,18 +145,18 @@
   function guideRows(o, R, now, nItems, nTrash) {
     return [
       ['승진 점수 내보내기 파일'],
-      ['스마트비서 「승진」 점수판의 점수와 항목을 엑셀로 옮긴 사본이에요. 참고용이며 공식 판정이 아니에요.'],
+      ['스마트비서 「승진」 점수판의 점수와 항목을 엑셀로 옮긴 사본입니다. 참고용이며 공식 판정이 아닙니다.'],
       ['만든 시각', timeText(now)],
       ['규정판', o.rulesVer || R.ver || ''],
       [],
       ['시트', '들어 있는 것'],
       [SHEET_SUM, '오늘 기준·임기 끝까지 예상 점수, 부문별 점수와 인정 한도, 필수 요건 판정'],
-      [SHEET_ITEMS, '입력한 승진 항목 ' + nItems + '건을 한 줄씩. 휴지통에 있는 항목(지금 ' + nTrash + '건)도 맨 아래에 함께 보이고 점수에는 안 들어가요.'],
+      [SHEET_ITEMS, '입력한 승진 항목 ' + nItems + '건을 한 줄씩. 휴지통에 있는 항목(지금 ' + nTrash + '건)도 맨 아래에 함께 보이고 점수에는 안 들어갑니다.'],
       [],
-      ['알아 두세요', '항목 점수를 모두 더해도 총점과 다를 수 있어요. 강의평가는 평균으로 계산하고, 일부 부문에는 인정 한도가 있기 때문이에요.'],
-      ['', '이 파일을 고쳐도 앱의 승진 자료는 바뀌지 않아요.'],
-      ['', '연동 암호와 저자 이름은 들어 있지 않아요.'],
-      ['', '서식은 단순해요(굵은 글씨·색 없음). 맨 윗줄이 머리글이고, 항목 목록의 머리글 칸에서 걸러 볼 수 있어요.']
+      ['알아 두십시오', '항목 점수를 모두 더해도 총점과 다를 수 있습니다. 강의평가는 평균으로 계산하고, 일부 부문에는 인정 한도가 있기 때문입니다.'],
+      ['', '이 파일을 고쳐도 앱의 승진 자료는 바뀌지 않습니다.'],
+      ['', '연동 암호와 저자 이름은 들어 있지 않습니다.'],
+      ['', '서식은 단순합니다(굵은 글씨·색 없음). 맨 윗줄이 머리글이고, 항목 목록의 머리글 칸에서 걸러 볼 수 있습니다.']
     ];
   }
 
@@ -164,7 +164,7 @@
   /* opts: { A: PromoCalc.computeAll 결과, items: 승진 항목 전부(휴지통 포함), rules, rulesVer, now: Date } */
   function model(o) {
     var PC = global.PromoCalc, A = o && o.A, R = (o && o.rules) || {};
-    if (!A || A.error) throw new Error('점수를 계산하지 못해 엑셀을 만들 수 없어요');
+    if (!A || A.error) throw new Error('점수를 계산하지 못해 엑셀을 만들 수 없습니다');
     var now = o.now || new Date(), items = o.items || [];
     var iRows = itemRows(o, A, R, PC), trashN = items.filter(function (x) { return x && x.deleted_at; }).length;
     var head = ITEM_HEAD, all = [head].concat(iRows);
