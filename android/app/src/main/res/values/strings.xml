@@ -12,6 +12,8 @@
     <string name="sc_record_long">바로 녹음 시작</string>
     <string name="sc_photo_short">케이에게 사진</string>
     <string name="sc_photo_long">케이에게 사진 보내기</string>
+    <string name="sc_health_short">건강 기록</string>
+    <string name="sc_health_long">오늘 건강 기록 적기</string>
     <string name="sc_today_short">오늘 한눈에</string>
     <string name="sc_today_long">오늘 일정·메일·할 일</string>
 

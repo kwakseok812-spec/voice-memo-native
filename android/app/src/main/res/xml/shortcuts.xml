@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- v8.2(O-0157) 앱 아이콘 길게 누르기 바로가기(최대 4개). 각 항목은 MainActivity 를 열고 k_shortcut 값으로 화면·동작을 고른다
-     (app.js 의 'launch' 처리: voice=케이 채팅+음성 대화 시작, record=녹음 바로 시작, photo=채팅+사진 고르기, today=홈 「오늘 한눈에」). -->
+     (v9.97(O-0854 2번): 「케이에게 사진」 자리를 「건강 기록」으로 바꿈 — app.js runShortcut 의 photo 분기는 홈 화면에 이미 끌어다 둔 옛 바로가기를 위해 남겨 둠)
+     (app.js 의 'launch' 처리: voice=케이 채팅+음성 대화 시작, record=녹음 바로 시작, health=건강 화면(오늘 기록), today=홈 「오늘 한눈에」). -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut android:shortcutId="voice" android:enabled="true" android:icon="@drawable/ic_sc_voice"
         android:shortcutShortLabel="@string/sc_voice_short" android:shortcutLongLabel="@string/sc_voice_long">
@@ -16,11 +17,11 @@
             <extra android:name="k_shortcut" android:value="record" />
         </intent>
     </shortcut>
-    <shortcut android:shortcutId="photo" android:enabled="true" android:icon="@drawable/ic_sc_photo"
-        android:shortcutShortLabel="@string/sc_photo_short" android:shortcutLongLabel="@string/sc_photo_long">
+    <shortcut android:shortcutId="health" android:enabled="true" android:icon="@drawable/ic_sc_health"
+        android:shortcutShortLabel="@string/sc_health_short" android:shortcutLongLabel="@string/sc_health_long">
         <intent android:action="com.kwak.voicememo.action.SHORTCUT"
             android:targetPackage="com.kwak.voicememo" android:targetClass="com.kwak.voicememo.MainActivity">
-            <extra android:name="k_shortcut" android:value="photo" />
+            <extra android:name="k_shortcut" android:value="health" />
         </intent>
     </shortcut>
     <shortcut android:shortcutId="today" android:enabled="true" android:icon="@drawable/ic_sc_today"

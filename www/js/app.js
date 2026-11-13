@@ -11238,6 +11238,8 @@
         try { ok = !!(window.SmartNativePick && SmartNativePick('chatCam', 'image/*')); } catch (e) {}
         if (!ok) toast('아래 카메라 버튼을 눌러 사진을 골라 주세요.');
       }, 350);
+    } else if (name === 'health') {                // v9.97(O-0854 2번): 건강 기록 — 홈을 거치지 않고 건강 화면(오늘 기록)을 바로 연다(앱이 꺼져 있다가 켜질 때도 같은 길: MainActivity→launch 이벤트)
+      openHealth();
     } else if (name === 'today') {                 // 홈 「오늘 한눈에」 카드로
       showHome();
       setTimeout(function () {
