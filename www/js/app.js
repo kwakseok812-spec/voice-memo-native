@@ -3324,12 +3324,23 @@
 
   function pollSearch(id, tok, onDone, onTimeout) {
     stopSearchPoll();   // 이전 검색 폴링이 남아 있으면 정리
-    var started = Date.now();
-    searchPollTimer = setInterval(function () {
+    var started = Date.now(), fails = 0, me = null;
+    // v9.96(O-0854 B-1): 60초 검사는 응답을 받았든 못 받았든 매번 한다 · 연달아 3번 못 받으면 바로 「연결이 끊겼습니다」(예전엔 응답 실패를 삼켜 「검색 중…」에 영영 멈췄다)
+    function giveUp(msg) {
+      stopSearchPoll(); dropSearchClip();
+      if (onTimeout) onTimeout(); else setSearchMsg(msg, 'err');
+    }
+    function mine() { return searchPollTimer === me; }   // 새 검색이 시작됐으면 이 폴링의 뒤늦은 응답은 버린다
+    me = searchPollTimer = setInterval(function () {
+      if (Date.now() - started > 60000) { giveUp('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.'); return; }
       OfficeBridge.poll(id, tok).then(function (res) {
+        if (!mine()) return;
+        fails = 0;
         if (res && res.status === 'done') { stopSearchPoll(); onDone(res); }
-        else if (Date.now() - started > 60000) { stopSearchPoll(); dropSearchClip(); if (onTimeout) onTimeout(); else setSearchMsg('시간이 걸립니다. PC가 켜져 있는지 확인 후 다시 검색해 주세요.', 'err'); }
-      }).catch(function () {});
+      }).catch(function () {
+        if (!mine()) return;
+        if (++fails >= 3) giveUp('연결이 끊겼습니다. 다시 눌러 주십시오.');
+      });
     }, 2000);
   }
   function renderSearchResults(matches, count, q) {
