@@ -58,6 +58,7 @@
   var SOFFICE_SUB = '문서 보기·고치기';       // 홈 도구 칸의 작은 글씨
   var SOFFICE_LONG = '스마트오피스';          // 풀이(정보 화면에서만)
   var SO_ON = 'on';                         // 스위치 — 'off' 면 통째로 꺼진 것과 같다
+  var SO_FIRST_SIMPLE = 'on';               // v9.97(O-0854 5번): 'on' = 첫 화면에 「열기 방식: … · 바꾸기」 한 줄만(마지막 방식으로 바로 열기) · 보안 안내는 [자세히] 뒤로 · 'off' = 예전 두 칸 선택·긴 안내 그대로
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
   var usedNames = {};                        // 이번에 저장한 사본 이름(같은 이름이 또 나오면 _수정(2))
@@ -117,11 +118,55 @@
   }
 
   // ============ 열기 방식 줄 (문서 뷰어 고르기 화면 #soModeRow) ============
+  var modeOpen = false;                      // v9.97: 「바꾸기」를 눌러 두 칸 선택을 펼친 동안만 true (고르면 다시 접힘)
+  var firstOrig = null;                      // v9.97: 첫 화면 안내 글(예전 모양)을 잠시 보관 — 스위치를 끄면 되돌린다
+  function simpleOn() { return SO_FIRST_SIMPLE === 'on'; }
+  function firstScreen() {                   // v9.97: 첫 화면의 안내 한 줄·보안 안내 접기 (SO_FIRST_SIMPLE)
+    var hint = document.querySelector('#docPick .doc-open-hint'), note = document.querySelector('#docPick .doc-note');
+    if (!firstOrig) firstOrig = { hint: hint ? hint.innerHTML : null, note: note ? note.innerHTML : null };
+    var on = simpleOn() && enabled();
+    if (hint && firstOrig.hint != null) hint.innerHTML = on ? '폰의 <b>파일</b>·<b>다운로드</b>·<b>카카오톡 저장함</b> 등에서 문서를 하나 고르십시오.' : firstOrig.hint;
+    if (note && firstOrig.note != null) {
+      if (on) {
+        note.innerHTML = '<div class="so-note-short">🔒 변환해서 보기는 PC가 잠깐 PDF로 바꾸며, 변환본은 이 폰에만 보관됩니다. 계약서·주민번호 등 민감 문서는 올리지 않으시길 권합니다. ' +
+          '<button type="button" class="so-link" data-sonote="1" aria-expanded="false">자세히</button></div>' +
+          '<div class="so-note-full" hidden>' + firstOrig.note + '</div>';
+        if (!note._soBound) { note._soBound = true; note.addEventListener('click', function (e) {
+          var b = e.target.closest ? e.target.closest('[data-sonote]') : null; if (!b) return;
+          var full = note.querySelector('.so-note-full'), open = full.hidden;
+          full.hidden = !open; b.textContent = open ? '접기' : '자세히'; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }); }
+      } else note.innerHTML = firstOrig.note;
+    }
+  }
+  function renderSimple(row, m) {            // v9.97: 한 줄 모양 — 문서 열기 단추·확장자 칩 바로 아래에 둔다
+    var card = document.querySelector('#docPick .doc-open');
+    if (card && card.parentNode && row.previousElementSibling !== card) card.parentNode.insertBefore(row, card.nextSibling);
+    row.classList.add('so-simple');
+    var nm = m === 'soffice' ? SOFFICE_NAME + '로 열기' : '변환해서 보기';
+    if (!modeOpen) {
+      row.innerHTML = '<div class="so-line"><span>열기 방식: <b>' + nm + '</b></span><button type="button" class="so-link" data-sochg="1" aria-expanded="false">바꾸기</button></div>';
+      return;
+    }
+    row.innerHTML =
+      '<div class="so-seg" role="radiogroup" aria-label="열기 방식">' +
+        '<button type="button" class="so-opt' + (m === 'convert' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'convert') + '" data-som="convert">' +
+          '<b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줘요 · 원본 모양 그대로 · 수정 요청</span></button>' +
+        '<button type="button" class="so-opt' + (m === 'soffice' ? ' on' : '') + '" role="radio" aria-checked="' + (m === 'soffice') + '" data-som="soffice">' +
+          '<b>' + SOFFICE_NAME + '로 열기</b><span>폰에서 바로 열고 · 간단히 고쳐요</span></button>' +
+      '</div>' +
+      '<div class="so-row-hint">' + (m === 'soffice'
+        ? SOFFICE_NAME + '가 열지 못하는 문서는 저절로 「변환해서 보기」로 열려요.'
+        : '고른 문서를 PC가 PDF로 바꿔 보여 줘요(PC가 켜져 있어야 해요). 마지막에 고른 방식은 기억해 둬요.') +
+        ' <button type="button" class="so-link" data-sinfo="1">' + SOFFICE_NAME + ' 정보</button> <button type="button" class="so-link" data-sochg="0" aria-expanded="true">접기</button></div>';
+  }
   function renderRow() {
     var row = $('soModeRow'); if (!row) return;
     if (!enabled()) { row.style.display = 'none'; row.innerHTML = ''; return; }
     var m = mode();
     row.style.display = '';
+    if (simpleOn()) { renderSimple(row, m); return; }
+    row.classList.remove('so-simple');
     row.innerHTML =
       '<div class="so-row-title">열기 방식</div>' +
       '<div class="so-seg" role="radiogroup" aria-label="열기 방식">' +
@@ -136,8 +181,10 @@
         ' <button type="button" class="so-link" data-sinfo="1">' + SOFFICE_NAME + ' 정보</button></div>';
   }
   function onRowClick(e) {
-    var b = e.target.closest ? e.target.closest('[data-som],[data-sinfo]') : null; if (!b) return;
+    var b = e.target.closest ? e.target.closest('[data-som],[data-sinfo],[data-sochg]') : null; if (!b) return;
     if (b.getAttribute('data-sinfo')) { showInfo(); return; }
+    if (b.hasAttribute('data-sochg')) { modeOpen = b.getAttribute('data-sochg') === '1'; renderRow(); return; }   // v9.97: 「바꾸기」·「접기」
+    modeOpen = false;                     // v9.97: 고르면 다시 한 줄로 접힌다
     setMode(b.getAttribute('data-som'));
   }
 
@@ -594,6 +641,7 @@
   }
   function mount() {
     fillNames();
+    try { firstScreen(); } catch (e) {}
     var row = $('soModeRow'); if (!row || row._soBound) { renderRow(); return; }
     row._soBound = true; row.addEventListener('click', onRowClick); renderRow();
   }
@@ -607,6 +655,7 @@
     intercept: intercept,
     mode: mode, setMode: setMode,
     enabled: enabled,
+    simple: function () { return simpleOn() && enabled(); },   // v9.97: 첫 화면이 「열기 방식 한 줄」 모양인지(안내 글이 어디서 바꾸는지 말할 때 씀)
     openFile: openFile,
     copyName: copyName,
     isOpen: function () { return !!(host && host.classList.contains('on') && (cur || (infoEl && infoEl.classList.contains('on')))); },

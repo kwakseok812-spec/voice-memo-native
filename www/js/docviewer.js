@@ -2095,7 +2095,7 @@
     if (!file) return;
     if (global.SOffice && SOffice.intercept(file)) return;   // S-Office: 「열기 방식」이 ②면 폰 안 뷰어가 맡는다(못 여는 형식은 ①로 되돌아옴)
     if (!isViewable(file.name, file.type)) {
-      var soHint = (global.SOffice && SOffice.enabled && SOffice.enabled() && SOffice.extMap && SOffice.extMap[extOf(file.name)]) ? ' 열기 방식을 「' + SOffice.NAME + '로 열기」로 바꾸면 열 수 있어요.' : '';   // md·html 등 ②로만 열리는 형식 안내
+      var soHint = (global.SOffice && SOffice.enabled && SOffice.enabled() && SOffice.extMap && SOffice.extMap[extOf(file.name)]) ? (SOffice.simple && SOffice.simple() ? ' 첫 화면의 열기 방식 줄에서 「바꾸기」를 눌러 「' : ' 열기 방식을 「') + SOffice.NAME + '로 열기」로 바꾸면 열 수 있어요.' : '';   // md·html 등 ②로만 열리는 형식 안내
       if (liveTabId) { toast('이 형식은 변환해서 보기로 열 수 없어요. (' + (extOf(file.name) || file.name) + ')' + soHint); return; }   // v8.0: 보던 문서는 그대로
       opToken++; showViewer(); setViewMode('pdf'); fnameLabel.textContent = file.name; showError('이 형식은 변환해서 보기로 열 수 없어요.', (extOf(file.name) || file.name) + soHint); return;
     }

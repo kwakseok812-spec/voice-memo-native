@@ -4,6 +4,13 @@
 /* ---- 열기 방식 줄 ---- */
 #soModeRow{margin:14px 0 4px}
 .so-row-title{font-size:13px;font-weight:800;color:var(--muted);margin:0 2px 8px;letter-spacing:.02em}
+#soModeRow.so-simple{margin:10px 0 2px}   /* v9.97 SO_FIRST_SIMPLE: 한 줄 모양 */
+.so-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px 2px 6px;font-size:14px;color:var(--muted);word-break:keep-all}
+.so-line b{color:var(--text);font-weight:800}
+.so-line .so-link,.so-simple .so-row-hint .so-link{margin:-12px 0}
+.so-note-short{word-break:keep-all}
+.so-note-short .so-link{padding:12px 4px}
+.so-note-full{margin-top:8px;padding-top:8px;border-top:1px solid var(--glass-b)}
 .so-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .so-opt{appearance:none;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:14px;
   padding:12px 12px 11px;text-align:left;font-family:inherit;cursor:pointer;min-height:64px;
