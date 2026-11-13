@@ -3396,6 +3396,9 @@
         btn.innerHTML = label; btn.disabled = false;
         if (url) showCardPhotoModal(url);
         else clMsg('사진을 찾지 못했습니다.');
+      }, function () {   // v9.96(O-0854): 연결이 끊기거나 60초가 지나면 단추를 다시 누를 수 있게 되돌린다
+        btn.innerHTML = label; btn.disabled = false;
+        clMsg('사진을 불러오지 못했습니다. 연결을 확인하고 다시 눌러 주십시오.');
       });
     }).catch(function () {
       btn.innerHTML = label; btn.disabled = false;
