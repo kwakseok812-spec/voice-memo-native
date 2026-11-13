@@ -658,7 +658,10 @@
       else if (dk.length) { el.textContent = hereWord() + ' 적어 둠'; el.className = 'hsave pend'; }
       else {
         var nt = srcNoteText();
-        el.textContent = nt || '적어 두었습니다'; el.className = 'hsave ok';
+        // v9.96(O-0854 B-3): 적힌 칸이 하나도 없는데 「적어 두었습니다」(초록)가 뜨지 않게 — 적은 것이 없으면 비워 둔다(혈당 방식 저장 안내는 그대로)
+        var anyDone = FIELDS.some(function (k) { return k !== 'skips' && isDone(rec, k); });
+        if (nt || anyDone) { el.textContent = nt || '적어 두었습니다'; el.className = 'hsave ok'; }
+        else { el.textContent = ''; el.className = 'hsave'; }
       }
       // v9.6(O-0387 3번): 「적고 있습니다…」에서 「적어 두었습니다」로 바뀌는 순간에만 살짝 떠오른다
       try { if (wasWork && el.className === 'hsave ok' && global.KMotion) global.KMotion.saved(el); } catch (e) {}
