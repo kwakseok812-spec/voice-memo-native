@@ -479,6 +479,8 @@
         <div class="sec-title mtg-sec">진행 중 <span id="mtgProgCount"></span></div>
         <div id="mtgProgress" class="list"></div>
         <div class="sec-title mtg-sec">정리된 회의록</div>
+        <!-- v9.96(O-0854 B-10): 제목 검색 — 이미 받아 온 목록 안에서 폰이 거른다(서버 호출 없음). 목록이 있을 때만 보인다(app.js renderMeetingsList) -->
+        <div id="mtgFindWrap" class="mtg-find" style="display:none"><div class="input filled"><svg class="lead"><use href="#i-search"/></svg><input id="mtgFind" type="search" enterkeyhint="search" autocomplete="off" placeholder="제목으로 찾기" aria-label="회의록 제목으로 찾기"></div></div>
       </div>
       <div id="meetingsList"></div>
       <details id="mtgLocalWrap" class="mtg-local" style="display:none;"><summary>이 폰에서 보낸 기록 <span id="mtgLocalCount"></span></summary><div id="mtgLocal" class="list"></div></details>

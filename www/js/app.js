@@ -2028,6 +2028,7 @@
    * 서버(list_recent_memos)를 단일 소스로 직접 보여준다(HistoryModule 병합 안 함).
    * 요약이 주(主), 원문(전사/상세)은 <details> 로 접어 옵션으로 펼친다. 삭제·재전송 없음. */
   var meetingsRows = [], meetingsDetailOpen = false;
+  var mtgQuery = '';   // v9.96(O-0854 B-10) 회의록 제목 검색어 — 받아 온 목록 안에서만 거른다
   /* v9.4 일하는 케이(회의록 맨 위) — 값은 이 화면이 이미 가진 것만:
    *   이 폰에서 보낸 녹음 중 「보내는 중·정리 중」인 수(HistoryModule — 임시 저장·실패는 세지 않는다) · 서버 정리본 목록(meetingsRows) · 불러오기 상태(mtgState). */
   var mtgState = '';                                 // '' 아직 | 'loading' | 'ok' | 'nopass' | 'fail' | 'na'(기능 없음)
@@ -2051,6 +2052,7 @@
     openScreen($('meetingsView'));
     showMeetingsList();
     mtgState = '';
+    mtgQuery = ''; try { var mf0 = $('mtgFind'); if (mf0) mf0.value = ''; } catch (e) {}   // 열 때마다 검색어는 비운다
     renderHistory();                                 // (O-0176) 맨 위 「진행 중」·맨 아래 「이 폰에서 보낸 기록」은 암호 없이도(이 폰 기록)
     var host = $('meetingsList'); if (!host) return;
     if (!(window.OfficeBridge && OfficeBridge.listRecentMemos)) {
@@ -2092,12 +2094,22 @@
     var lw = $('mtgLocalWrap'); if (lw) lw.style.display = (HistoryModule.list().some(function (e) { return e.status === 'done'; })) ? '' : 'none';
     scrollTop();
   }
+  function mtgNorm(t) { return String(t || '').replace(/\s+/g, '').toLowerCase(); }
+  (function () {   // v9.96(O-0854 B-10) 제목 검색 칸 — 글자를 넣는 대로 목록만 다시 그린다(서버 호출 없음)
+    var mf = $('mtgFind'); if (!mf) return;
+    mf.addEventListener('input', function () { mtgQuery = mf.value || ''; if (mtgState === 'ok' && !meetingsDetailOpen) renderMeetingsList(); });
+    mf.addEventListener('keydown', function (e) { if (e.key === 'Enter') { try { mf.blur(); } catch (x) {} } });
+  })();
   function renderMeetingsList() {
     var host = $('meetingsList'); if (!host) return;
     meetingsScene();
+    var fw = $('mtgFindWrap'); if (fw) fw.style.display = (mtgState === 'ok' && meetingsRows.length) ? '' : 'none';   // v9.96(O-0854 B-10)
     if (!meetingsRows.length) { host.innerHTML = ''; return; }     // v9.4: 「아직 정리본이 없습니다」는 맨 위 케이가 말한다
-    var lastDate = '', html = '';
+    var lastDate = '', html = '', shown = 0;
+    var qn = mtgNorm(mtgQuery);
     meetingsRows.forEach(function (r, idx) {
+      if (qn && mtgNorm(r.title || '회의 요약').indexOf(qn) < 0) return;   // v9.96(O-0854 B-10): 제목에 검색어가 든 것만(번호 idx 는 원래 목록 기준 그대로)
+      shown++;
       // v6.5 (O-0085): 날짜 묶음은 한국 날짜 기준. 카드의 시각(올린 시각=대표님께 의미 없는 숫자)은 빼고
       //   녹음 길이를 보여 준다 — '녹음 · 1시간 40분'. 길이를 모르면 '녹음'만.
       var kp = kstParts(r.created_at);
@@ -2110,6 +2122,7 @@
               '<span class="tx"><b>' + esc(r.title || '회의 요약') + '</b><small>' + esc(kb + (dur ? '  ·  ' + dur : '')) + moChip(r) + '</small></span>' +
               '<svg class="chev"><use href="#i-chev-r"/></svg></button>';
     });
+    if (qn && !shown) html = '<div class="card"><p class="empty">🔍 <b>"' + esc(mtgQuery.trim()) + '"</b> 이(가) 들어간 회의록이 없습니다.<br>제목의 <b>일부만</b> 넣어도 됩니다.</p></div>';
     host.innerHTML = html;
     Array.prototype.forEach.call(host.querySelectorAll('[data-mtg]'), function (b) {
       b.addEventListener('click', function () { openMeetingDetail(parseInt(b.getAttribute('data-mtg'), 10)); });

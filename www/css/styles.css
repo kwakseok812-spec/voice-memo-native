@@ -1535,6 +1535,7 @@ html[data-fs] .today .td-foldline{font-size:calc(14.5px * var(--fsx))}
 /* 회의록 화면: 진행 중 칸 · 정리된 회의록 · 이 폰에서 보낸 기록(접힘) */
 #meetingsView .mtg-sec{margin:16px 2px 8px;font-size:15.5px}
 #meetingsView .mtg-sec:first-child{margin-top:6px}
+#meetingsView .mtg-find{margin:0 0 6px} #meetingsView .mtg-find .input{min-height:48px;border-radius:16px} #meetingsView .mtg-find input{font-size:16px}   /* v9.96(O-0854 B-10) 제목 검색 칸 */
 #mtgProgress .empty-note{padding:10px 4px 4px;font-size:14px}
 #meetingsView .mtg-local{margin:18px 0 8px}
 #meetingsView .mtg-local summary{cursor:pointer;padding:10px 4px;font-size:14.5px;font-weight:700;color:var(--muted)}
