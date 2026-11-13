@@ -562,13 +562,13 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hstep .chip.hchip.hmskip{flex:none;height:44px;padding:0 11px;font-size:14.5px;white-space:nowrap}
 @media (max-width:380px){ .hstep{gap:7px} .hstep .chip.hchip.hmskip{padding:0 8px;font-size:13.5px} }
 /* v9.39(O-0623) 공복혈당 방식 칩 [채혈][리브레2] — 칸 제목 줄에 붙은 한 쌍. 켜진 쪽 파란 바탕이 150ms 동안 옆으로 미끄러진다(움직임 줄이기면 즉시) */
-.hsrc{position:relative;display:inline-flex;flex:none;align-items:center;height:30px;padding:2px;margin-left:auto;border-radius:999px;border:1px solid var(--glass-b2);background:var(--in-bg);isolation:isolate}
-.hsrc-th{position:absolute;z-index:-1;top:2px;bottom:2px;left:0;width:0;border-radius:999px;background:#2563EB;opacity:0;transition:transform .15s cubic-bezier(.2,.8,.2,1),width .15s cubic-bezier(.2,.8,.2,1),opacity .15s}
+.hsrc{position:relative;display:inline-flex;flex:none;align-items:center;height:42px;padding:2px;margin-left:auto;border-radius:999px;border:1px solid var(--glass-b2);background:var(--in-bg);isolation:isolate}   /* v9.96(O-0854 B-9): 칩 높이 24 → 36 (바깥 틀 30 → 42) */
+.hsrc-th{position:absolute;z-index:-1;top:2px;bottom:2px;left:0;width:0;border-radius:999px;background:#2563EB;box-shadow:0 1px 4px rgba(37,99,235,.5);opacity:0;transition:transform .15s cubic-bezier(.2,.8,.2,1),width .15s cubic-bezier(.2,.8,.2,1),opacity .15s}
 .hsrc.thumb-init .hsrc-th{transition:none}
 .hsrc.s-cgm .hsrc-th,.hsrc.s-blood .hsrc-th{opacity:1}
 .hsrc.pre .hsrc-th{opacity:.38}
-.hsrcb{position:relative;height:24px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer;transition:color .15s,transform .12s}
-.hsrcb::after{content:"";position:absolute;inset:-10px -2px}                         /* 누르는 자리 44px */
+.hsrcb{position:relative;height:36px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer;transition:color .15s,transform .12s}
+.hsrcb::after{content:"";position:absolute;inset:-4px -2px}                          /* 누르는 자리 44px (v9.96: 칩 36px + 위아래 4px) */
 .hsrcb:active{transform:scale(.96)}
 .hsrcb.on{color:#fff}
 .hsrc.pre .hsrcb.on{color:var(--text)}
