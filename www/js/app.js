@@ -863,10 +863,10 @@
   var recorder = new RecordingModule({
     kind: 'meeting',                     // v9.8: 회의 녹음(다른 종류의 녹음이 끼어들지 못하게 네이티브가 구분한다)
     onStatus: function (s) {
-      if (s === 'recording') { setStatus('녹음 중', 'rec'); if (REC_ROAM_V2 && isRecording) { recLive = true; recSessionSet(recStart); } }
+      if (s === 'recording') { setStatus('녹음 중', 'rec'); if (REC_ROAM_V2 && isRecording) { recLive = true; recSessionSet(recStart); } if (recLpHintWant && isRecording) { recLpHintWant = false; recLpHintShow(); } }
       else if (s === 'stopped') setStatus('녹음 완료', 'idle');
       else if (s === 'error') {
-        setStatus('오류', 'err');
+        setStatus('오류', 'err'); recLpHintWant = false;
         // 녹음 시작 실패(네이티브 reject 등) 정리: 타이머 계속 돌아 혼란주지 않게 상태를 되돌리고
         //   녹음/준비 화면이면 홈으로 복귀(실패 안내 배너는 onError 가 이미 표시). — 2026-09-21
         if (isRecording) { isRecording = false; recLost = false; recSessionClear(); stopRecTimer(); updateRecIndicator(); }
@@ -966,19 +966,67 @@
     if (docScanOn()) { b.style.display = ''; b.addEventListener('click', openScanForMeeting); }   // 스위치가 꺼졌거나 doc-scan.js 가 없으면 숨김 그대로
   });
 
-  // 홈에서 녹음 오브 → 바로 녹음하지 않고 「준비 화면」으로(자료 첨부 + [녹음 시작])
-  if (btnRecord) btnRecord.addEventListener('click', function () {
-    if (REC_ROAM_V2 && isRecording) { openScreen(recView); return; }      // v9.8: 녹음 중에는 돌아가는 길
-    if (btnRecord.disabled || isRecording) return;
-    // v9.8: 아직 보내지 않은 녹음이 남아 있으면(완료 화면을 다른 길로 떠난 경우) 새로 시작하기 전에 그 화면으로 — 새 녹음이 덮어쓰지 않게
-    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
+  /* v9.98(O-0854 4번) 회의 녹음 한 번에 시작 — REC_ONE_TAP = 'on': 홈 「회의 녹음」을 한 번 누르면 곧바로 녹음을 시작한다(아이콘 바로가기 「녹음」·[이어서 녹음]이 쓰던 같은 시작 처리기 btnStartRec).
+   *   길게 누르면(약 0.55초) 예전 「녹음 준비」 화면(케이 영상 · 회의자료 먼저 붙이기)이 열린다. 'off' = 예전 그대로(누르면 준비 화면).
+   *   잘못 눌렀을 때: 시작 10초 안의 [녹음 취소]는 묻지 않고 버린다(그 녹음은 서버·PC로 가지 않는다) · 10초 뒤는 예전과 같이 확인 창.
+   *   녹음 중 자료 붙이기 줄은 만들지 않았다(녹음 중 파일 고르기 창이 떠도 녹음이 이어지는지 실기기 미확인) — 자료는 「녹음 완료」 화면에서 붙인다. */
+  var REC_ONE_TAP = 'on';
+  var REC_LP_HINT_KEY = 'smart_rec_lp_hint';       // 「길게 누르면 자료를 먼저 붙일 수 있다」 안내를 한 번 보였음
+  var recLpT = null, recLpFired = false, recLpAt = 0, recLpGuard = 0, recLpHintWant = false;
+  function openRecPrep() {                          // 예전 「준비 화면」 열기(길게 누름 · 스위치 off)
     hideBanner();
     pendingMaterials = []; renderMatList();   // 준비 화면 진입 — 회의자료 첨부 새로 시작(녹음 전에도 붙일 수 있음)
     openScreen(recPrep);
     setStatus('녹음 준비 — 시작을 눌러 주십시오', 'idle');
     try { recSpaceHint(); } catch (e) {}      // v9.10: 저장 공간이 모자라 보이면 한 줄(읽기만 — 시작을 막지 않는다)
     try { recPrepClip(); } catch (e) {}       // O-0616: 영상이 준비되면 「받아 적을 준비」 케이 한 줄(준비 안 되면 이 화면은 지금 그대로)
-  });
+  }
+  function recLpHintShow() {                        // 녹음 화면에 처음 한 번만 — 길게 누르는 길 안내 한 줄
+    var el = $('recLpHint'); if (!el) return;
+    var seen = false; try { seen = !!localStorage.getItem(REC_LP_HINT_KEY); } catch (e) {}
+    el.hidden = true;
+    if (seen) return;
+    el.hidden = false;
+    try { localStorage.setItem(REC_LP_HINT_KEY, '1'); } catch (e) {}
+  }
+  function recHomeTap(prepOnly) {
+    if (REC_ROAM_V2 && isRecording) { openScreen(recView); return; }      // v9.8: 녹음 중에는 돌아가는 길
+    if (btnRecord.disabled || isRecording) return;
+    // v9.8: 아직 보내지 않은 녹음이 남아 있으면(완료 화면을 다른 길로 떠난 경우) 새로 시작하기 전에 그 화면으로 — 새 녹음이 덮어쓰지 않게
+    if (REC_ROAM_V2 && pendingBlob && !recPanelShared) { openScreen(recordedPanel); toast(tw('아직 보내지 않은 녹음이 있습니다.'), 3000); return; }
+    if (REC_ONE_TAP === 'on' && !prepOnly && btnStartRec) {
+      // 한 번에 시작: 막는 경우(보내지 않은 녹음 · 말로 입력 중 · 녹음 미지원)는 btnStartRec 처리기가 예전과 같은 말로 알린다
+      hideBanner(); pendingMaterials = []; renderMatList();
+      var was = isRecording;
+      btnStartRec.click();
+      if (isRecording && !was) recLpHintWant = true;   // 안내는 녹음기가 「시작됐다」고 알린 뒤에(마이크 허용 창에서 막히면 보이지도, 「봤다」고 적히지도 않게)
+      return;
+    }
+    openRecPrep();
+  }
+  if (btnRecord) {
+    btnRecord.addEventListener('click', function () {
+      if (recLpFired && Date.now() - recLpAt < 1500) { recLpFired = false; return; }   // 길게 눌러 준비 화면을 연 뒤 손을 뗄 때 따라오는 누름은 무시
+      recLpFired = false;
+      recHomeTap(false);
+    });
+    if (REC_ONE_TAP === 'on') {
+      var lpOff = function () { if (recLpT) { clearTimeout(recLpT); recLpT = null; } };
+      btnRecord.addEventListener('pointerdown', function () {
+        recLpFired = false; lpOff();
+        if (isRecording || btnRecord.disabled) return;
+        recLpT = setTimeout(function () {
+          recLpT = null;
+          if (isRecording || btnRecord.disabled) return;
+          recLpFired = true; recLpAt = Date.now(); recLpGuard = Date.now() + 900;
+          try { if (navigator.vibrate) navigator.vibrate(18); } catch (e) {}
+          recHomeTap(true);
+        }, 550);
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) { btnRecord.addEventListener(ev, lpOff); });
+      btnRecord.addEventListener('contextmenu', function (e) { e.preventDefault(); });   // 길게 눌렀을 때 폰의 글자 선택·메뉴가 뜨지 않게
+    }
+  }
   // O-0616 녹음 준비의 케이 영상(10/26 배치 개선): 영상이 받아져 있고 지금 틀 수 있으면(KClips.canPlay) 화면을 열자마자 #recPrep 에 has-clip 을 달아 둔다.
   //   → 위에서 아래로 케이(큰 전신 틀 + 옆 말풍선) · 회의자료 붙이기/스캔(한 줄 두 칸) · 맨 아래 녹음 시작(엄지 자리). 단추·ID·동작은 그대로, 배치만 바뀐다(styles.css 「녹음 준비 배치」).
   //   칸은 처음부터 잡아 두어 영상이 시작될 때 화면이 튀지 않고, 영상이 늦으면 칸에는 서 있는 케이 그림이 있다.
@@ -996,7 +1044,8 @@
     if (can) KClips.play('rec_prep', host, { delay: 350 });
   }
   // 준비 화면의 [녹음 시작] → 이때 실제 녹음 시작(붙여둔 회의자료는 그대로 유지)
-  if (btnStartRec) btnStartRec.addEventListener('click', function () {
+  if (btnStartRec) btnStartRec.addEventListener('click', function (ev) {
+    if (ev && ev.isTrusted && Date.now() < recLpGuard) return;      // v9.98: 길게 눌러 준비 화면이 열린 직후 손을 뗄 때 [녹음 시작] 자리로 따라온 누름은 무시
     if (isRecording) return;
     if (!RecordingModule.isSupported()) { showBanner('⚠️ 이 브라우저는 녹음을 지원하지 않습니다.'); return; }
     // v9.8: 아직 보내지 않은 녹음이 있으면 어느 길로 왔든(바로가기 포함) 새 녹음이 덮어쓰지 않게 그 녹음으로 데려간다
@@ -1012,6 +1061,7 @@
       try { kvPvStop(); } catch (e) {}
     }
     recCancelled = false; isRecording = true; recLost = false; recLive = false;
+    try { var lph = $('recLpHint'); if (lph) lph.hidden = true; } catch (e) {}      // v9.98: 이전 녹음에서 보인 안내 한 줄은 새 녹음에서 걷는다
     // v9.10: 일지를 적는 녹음인지 · 이어 녹음이면 어느 묶음인지를 녹음기에 알려 둔다(녹음 방식에는 닿지 않는다)
     try { recGroup = recFindApi() ? (recGroupNext || '') : ''; recGroupNext = ''; recorder.find = !!recFindApi(); recorder.group = recGroup; recorder.dropNext = false; recorder.last = null; } catch (e) {}
     openScreen(recView); startRecTimer();

@@ -2602,3 +2602,8 @@ html[data-fs]:not([data-homerow="off"]):not([data-homebar="off"]) .khbar-tx smal
 .cl-po{margin-left:8px;color:var(--muted);font-size:13px;font-weight:600;font-style:normal}
 .cl-pn{display:block}
 .cl-fold{flex:none}
+
+/* v9.98(O-0854 4번) 회의 녹음 한 번에 시작 — 길게 누를 때 글자 선택·메뉴가 뜨지 않게 + 녹음 화면의 처음 한 번 안내 한 줄 */
+#btnRecord{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+.rec-lp-hint{margin:6px 16px 0;text-align:center;font-size:13.5px;font-weight:600;line-height:1.5;color:var(--muted);word-break:keep-all}
+.rec-lp-hint[hidden]{display:none}
