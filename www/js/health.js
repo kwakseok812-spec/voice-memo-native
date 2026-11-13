@@ -150,6 +150,52 @@
   var rec = null;             // 지금 입력 화면에 떠 있는 날짜의 기록(오늘 또는 고치는 중인 지난 날짜)
   var mode = 'today';         // 'today' | 'past'
   var openMeals = {};         // 이번에 연 화면에서 펼쳐 둔 끼니(다시 그려도 접히지 않게)
+
+  /* ---------- v9.98(O-0854 1번) 건강 화면 줄이기 ----------
+   * HEALTH_FOLD = 'on' : 오늘 기록 화면에서 「지금 시간대의 아직 안 적은 끼니」만 펼치고 나머지는 한 줄로 접는다(눌러서 펼침 · 「모두 펼치기」).
+   *                      'off' = 예전 모양(안 적은 끼니는 전부 펼침). 지난 날짜를 고치는 중에는 이 스위치와 관계없이 예전처럼 전부 펼친다.
+   * HEALTH_YDAY_COPY = 'on' : 접힌·펼친 끼니에 [어제와 같게]. 'off' = 이 단추만 끔.
+   * 시간대(한국 시각, 자정을 넘기지 않는다 — 앱의 「오늘」이 자정에 바뀌므로): 00~11시 아침 · 11~16시 점심 · 16~21시 저녁 · 21~24시 밤(간식)
+   * [어제와 같게] 규칙(바꾸지 말 것):
+   *   복사하는 것 = 그 끼니의 음식 글 칸 하나뿐(아침·점심·저녁·간식 중 눌린 끼니만).
+   *   복사하지 않는 것 = 공복혈당·체중·수면 · 혈당 방식 · 「측정 안 함」 · 복약·영양제 · 운동 · 「안 먹음」 · 「없음」(그날 사실을 대신 적는 셈이라 단추를 숨긴다).
+   *   이미 적힌 끼니에는 단추가 없다(덮어쓰기 없음). 어제 기록을 못 구하면(서버 못 불러옴 + 폰에도 없음) 단추를 숨긴다 — 없는 기록을 빈 기록처럼 보이지 않게.
+   *   복사된 글도 평소와 같은 저장 길(setField → scheduleSave)을 탄다. 음식 빈도 학습(foodBump)은 올리지 않는다. */
+  var HEALTH_FOLD = 'on';
+  var HEALTH_YDAY_COPY = 'on';
+  var SLOT_START_H = [0, 11, 16, 21];
+  var SLOT_OF = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
+  var SLOT_FROM = ['', '11시부터', '16시부터', '21시부터'];
+  var YDAY_UNDO_MS = 6000;
+  var ydayNote = null;        // {k, date, v, until} — 방금 [어제와 같게]로 적은 끼니(되돌리기 표시용)
+  var ydayNoteT = null;
+  var foldAnim = {};          // 방금 접거나 펼친 끼니 — 그 한 번만 살짝 움직인다(다시 그릴 때마다 움직이지 않게)
+  function animCls(k) { if (!foldAnim[k]) return ''; delete foldAnim[k]; return calmNow() ? '' : ' hfold-in'; }
+  function kstHour() { var n = Date.now(); return Math.floor(((n + tzMs(n)) % 86400000) / 3600000); }
+  function slotNow() {        // 지금 시간대 번호 0..3
+    var h = kstHour(), i = 0;
+    for (var j = 0; j < SLOT_START_H.length; j++) if (h >= SLOT_START_H[j]) i = j;
+    return i;
+  }
+  function foldMode() { return HEALTH_FOLD === 'on' && mode === 'today'; }
+  // 접어 둘 끼니인가(안 적었고, 지금 시간대가 아니고, 대표님이 펼치지 않았음). 운동은 선택 칸이라 안 적었으면 늘 한 줄.
+  function mealFolded(k) {
+    if (!foldMode() || !rec || isSet(rec[k]) || openMeals[k]) return false;
+    if (k === 'exercise') return true;
+    return SLOT_OF[k] !== slotNow();
+  }
+  var YDAY_LABEL = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
+  // 어제 그 끼니의 음식 글(복사할 수 있는 것만). 없으면 ''.
+  function ydayFood(k) {
+    if (HEALTH_YDAY_COPY !== 'on' || !foldMode() || !rec || !(k in SLOT_OF)) return '';
+    if (isSet(rec[k]) || SLOT_OF[k] > slotNow()) return '';          // 이미 적었거나 아직 오지 않은 시간대
+    var y = daysAgoStr(1), row = findRow(y) || loadLocal(y, false);
+    var v = row ? row[k] : null;
+    if (typeof v !== 'string') return '';
+    v = v.trim();
+    if (!v || isSkip(v) || v === noneOf(k)) return '';              // 「안 먹음」·「없음」은 복사하지 않는다
+    return v;
+  }
   var skipPrev = {};          // v9.5.1: 이번에 연 화면에서 「안 먹음」을 누르기 직전의 식단 글(잘못 눌렀을 때 다시 누르면 그대로 돌아오게)
   var rangeRows = [];         // 서버에서 받은 최근 30일 행(최신순) — 기록 보기 · ＋/− 시작값 · 지난 날짜 열기에 함께 쓴다
   var saveTimer = null, saveTimerDate = null;
@@ -770,6 +816,15 @@
   function mealBlock(k, label, withNone) {
     var lab = label + (k === 'snack' || k === 'exercise' ? ' <small>선택</small>' : '') + pendTag();
     var skip = skipOn(k, rec[k]);
+    if (mealFolded(k)) {                       // v9.98: 안 적은 끼니를 한 줄로 접은 모양
+      var fs = SLOT_OF[k], cur = slotNow(), late = (fs !== undefined && fs < cur), yv = ydayFood(k);
+      var st = k === 'exercise' ? '눌러서 적기' : late ? '아직 안 적음' : SLOT_FROM[fs];
+      return '<div class="hitem hmeal efold' + (late ? ' miss' : '') + animCls(k) + '" data-k="' + k + '">' +
+        '<div class="efold-row"><button type="button" class="efold-main" aria-expanded="false" aria-label="' + label + ' ' + st + ' · 펼치기">' +
+        '<span class="hlab">' + lab + '</span><span class="efold-st">' + st + '</span></button>' +
+        '<span class="efold-btns">' + (yv ? '<button type="button" class="hyday" data-k="' + k + '" aria-label="' + label + ' 어제와 같게">어제와 같게</button>' : '') +
+        '<button type="button" class="efold-open" aria-label="' + label + ' 적기">적기</button></span></div></div>';
+    }
     if (isSet(rec[k]) && !openMeals[k]) {
       return '<div class="hitem hmeal fold' + (skip ? ' skip' : '') + '" data-k="' + k + '">' +
         '<button type="button" class="hmeal-sum" aria-expanded="false" aria-label="' + label + ' 고치기">' +
@@ -790,9 +845,13 @@
     // 직접입력: 프리셋에 없는 선택 토큰만 표시
     var presetSet = {}; presets.forEach(function (f) { presetSet[f] = 1; });
     var custom = sel.filter(function (t) { return !presetSet[t]; }).join(', ');
-    return '<div class="hitem hmeal" data-k="' + k + '">' +
+    var yv2 = ydayFood(k);
+    var canClose = isSet(rec[k]) || (foldMode() && (k === 'exercise' || SLOT_OF[k] !== slotNow()));     // v9.98: 대표님이 펼친 접힘 끼니는 다시 접을 수 있다
+    return '<div class="hitem hmeal' + animCls(k) + '" data-k="' + k + '">' +
       '<div class="hitem-top"><span class="hlab">' + lab + '</span>' +
-      '<span class="hitem-r">' + (isSet(rec[k]) ? '<button type="button" class="hmeal-close">접기</button>' : '') + chk(k) + '</span></div>' +
+      '<span class="hitem-r">' + (canClose ? '<button type="button" class="hmeal-close">접기</button>' : '') + chk(k) + '</span></div>' +
+      (yv2 ? '<div class="hyday-line"><span class="hyday-tx">어제 ' + YDAY_LABEL[k] + ': ' + esc(yv2) + '</span>' +
+        '<button type="button" class="hyday" data-k="' + k + '" aria-label="' + label + ' 어제와 같게">어제와 같게</button></div>' : '') +
       '<div class="chips hchips">' + chips + '</div>' +
       '<div class="input filled hcustom"><input class="hcustomin" value="' + esc(custom) + '" placeholder="직접 입력 (쉼표로 여러 개)" aria-label="' + label + ' 직접 입력"></div>' +
       '</div>';
@@ -808,6 +867,17 @@
   function togCls(v) { return v === true ? 'on' : v === false ? 'off' : ''; }
   function togTxt(v) { return v === true ? '복용함 ✓' : v === false ? '미복용' : '눌러서 기록'; }
 
+  // [어제와 같게]를 누른 뒤 약 6초 동안 보이는 안내 + [되돌리기]. 그 끼니 글이 그 사이 다른 값으로 바뀌었으면 보이지 않는다.
+  function ydayNoteHtml() {
+    var n = ydayNote;
+    if (!n || !rec || n.date !== rec.log_date || Date.now() > n.until || rec[n.k] !== n.v) return '';
+    return '<div class="hyday-note" id="hYdayNote" role="status"><span>어제 ' + YDAY_LABEL[n.k] + ' 식단을 그대로 적었습니다. 줄을 누르면 고칠 수 있습니다.</span>' +
+      '<button type="button" class="hyday-undo">되돌리기</button></div>';
+  }
+  function ydayNoteClear() {
+    ydayNote = null; clearTimeout(ydayNoteT); ydayNoteT = null;
+    var el = $('hYdayNote'); if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
   function renderToday() {
     var host = $('hToday'); if (!host || !rec) return;
     var past = mode === 'past';
@@ -842,7 +912,8 @@
       togCell('supplement', '영양제') +
       '</div>' +
 
-      '<div class="hsec">식단</div>' +
+      '<div class="hsec hsec-r"><span>식단</span>' + (['breakfast', 'lunch', 'dinner', 'snack'].some(mealFolded) ? '<button type="button" class="hfold-all">모두 펼치기</button>' : '') + '</div>' +
+      ydayNoteHtml() +
       '<div class="hgroup">' +
       mealBlock('breakfast', '아침', false) +
       mealBlock('lunch', '점심', false) +
@@ -928,6 +999,24 @@
     // 지난 날짜 고치는 중: [오늘로 돌아가기](위·아래)
     Array.prototype.forEach.call(host.querySelectorAll('[data-act="today"]'), function (b) {
       b.addEventListener('click', function () { open(); try { global.scrollTo(0, 0); } catch (e) {} });
+    });
+    // v9.98: 식단 제목 줄 「모두 펼치기」 · [어제와 같게] 뒤 [되돌리기]
+    var fall = host.querySelector('.hfold-all');
+    if (fall) fall.addEventListener('click', function () {
+      if (moved()) return;
+      ['breakfast', 'lunch', 'dinner', 'snack'].forEach(function (k) { if (mealFolded(k)) { openMeals[k] = 1; foldAnim[k] = 1; } });
+      renderToday();
+    });
+    var und = host.querySelector('.hyday-undo');
+    if (und) und.addEventListener('click', function () {
+      if (moved()) return;
+      var n = ydayNote, t = T();
+      if (!n || t.log_date !== n.date || t !== rec) { ydayNoteClear(); return; }
+      if (t[n.k] === n.v) {                           // 복사한 그대로일 때만 비운다(그 사이 직접 고쳤으면 고친 것을 지우지 않는다)
+        setField(t, n.k, null);
+        delete openMeals[n.k]; foldAnim[n.k] = 1;
+        ydayNoteClear(); renderToday(); scheduleSave(t);
+      } else ydayNoteClear();
     });
     // 「폰에만 저장됨」 줄: 연동 암호가 없어서 못 올린 경우 누르면 암호 창
     var box = $('hLocal');
@@ -1022,10 +1111,34 @@
     Array.prototype.forEach.call(host.querySelectorAll('.hmeal'), function (block) {
       var k = block.getAttribute('data-k');
       function newBlock(h) { return h.querySelector('.hmeal[data-k="' + k + '"]'); }
+      // v9.98(O-0854 1번): [어제와 같게] — 그 끼니의 음식 글만 어제 것으로 적는다(규칙은 위 「HEALTH_YDAY_COPY」 주석). 접힌 줄·펼친 칸 어느 쪽에서든 같다.
+      var yb = block.querySelector('.hyday');
+      if (yb) yb.addEventListener('click', function () {
+        if (moved(function (h) { var nb = h.querySelector('.hyday[data-k="' + k + '"]'); if (nb) nb.click(); })) return;
+        var t = T(); if (t !== rec || mode !== 'today') return;
+        var v = ydayFood(k); if (!v) return;
+        var before = recordedCount();
+        setField(t, k, v);
+        delete openMeals[k]; foldAnim[k] = 1;
+        ydayNote = { k: k, date: t.log_date, v: t[k], until: Date.now() + YDAY_UNDO_MS };
+        clearTimeout(ydayNoteT); ydayNoteT = setTimeout(ydayNoteClear, YDAY_UNDO_MS);
+        renderToday();
+        try { if (global.KMotion) { var hh = $('hToday'), cc = hh && hh.querySelector('.hmeal[data-k="' + k + '"] .hchk'); if (cc) global.KMotion.checkDraw(cc); } } catch (e) {}
+        lastCount = before; paintSay(true);
+        scheduleSave(t);
+      });
+      // v9.98: 접힌 줄을 누르면(줄 전체 또는 [적기]) 그 끼니만 펼친다
+      var efr = block.querySelector('.efold-row');
+      if (efr) {
+        Array.prototype.forEach.call(efr.querySelectorAll('.efold-main,.efold-open'), function (b) {
+          b.addEventListener('click', function () { if (moved()) return; openMeals[k] = 1; foldAnim[k] = 1; renderToday(); });
+        });
+        return;
+      }
       var sum = block.querySelector('.hmeal-sum');
       if (sum) { sum.addEventListener('click', function () { if (moved() || rec !== T()) return; openMeals[k] = 1; renderToday(); }); return; }
       var cl = block.querySelector('.hmeal-close');
-      if (cl) cl.addEventListener('click', function () { if (moved() || rec !== T()) return; delete openMeals[k]; renderToday(); });
+      if (cl) cl.addEventListener('click', function () { if (moved() || rec !== T()) return; delete openMeals[k]; if (!isSet(rec[k])) foldAnim[k] = 1; renderToday(); });
       Array.prototype.forEach.call(block.querySelectorAll('.hchip'), function (chip) {
         chip.addEventListener('click', function () {
           var food = chip.getAttribute('data-food');
@@ -1466,7 +1579,7 @@
     flushSaveTimer();
     var ds = todayStr();
     rec = loadLocal(ds, true) || blankRecord(ds);
-    mode = 'today'; openMeals = {}; skipPrev = {};
+    mode = 'today'; openMeals = {}; skipPrev = {}; foldAnim = {}; ydayNoteClear();
     switchTab('today');
     renderToday();
     var fresh = refreshFromServer();
@@ -1490,7 +1603,7 @@
     var r = loadLocal(ds, false) || blankRecord(ds);
     var row = findRow(ds);
     if (row) applyServer(r, row);                   // 방금 본 목록의 값으로 먼저 그리고
-    rec = r; mode = 'past'; openMeals = {}; skipPrev = {};
+    rec = r; mode = 'past'; openMeals = {}; skipPrev = {}; foldAnim = {}; ydayNoteClear();
     switchTab('past');
     renderToday();
     try { global.scrollTo(0, 0); } catch (e) {}

@@ -631,6 +631,29 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hmeal-chev{width:16px;height:16px;flex:none;color:var(--dim)}
 .hmeal-close{position:relative;height:30px;padding:0 11px;border-radius:999px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .hmeal-close::after{content:"";position:absolute;inset:-8px -6px}
+/* v9.98(O-0854 1번) 건강 화면 줄이기 — 안 적은 끼니의 접힌 한 줄 · [어제와 같게] · 모두 펼치기 */
+.hsec-r{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hfold-all{position:relative;flex:none;height:30px;padding:0 4px;border:0;background:transparent;color:var(--cyan);font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.hfold-all::after{content:"";position:absolute;inset:-8px -8px}
+.hmeal.efold{padding:4px 0}
+.efold-row{display:flex;align-items:center;flex-wrap:wrap;gap:0 8px;min-height:50px}
+.efold-main{flex:1 1 0;min-width:max-content;display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.efold-main .hlab{flex:none}
+.efold-st{min-width:0;font-size:13.5px;font-weight:700;color:var(--dim)}
+.efold.miss .efold-st{color:var(--warn-t)}
+.efold.miss .efold-st::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:6px;vertical-align:1px}
+.efold-btns{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}
+.efold-open,.hyday{position:relative;flex:none;height:34px;padding:0 11px;border-radius:999px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-family:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer}
+.efold-open::after,.hyday::after{content:"";position:absolute;inset:-5px -3px}
+.hyday{border-color:var(--cyan);color:var(--cyan)}
+.efold-open:active,.hyday:active,.hfold-all:active{opacity:.7}
+.hyday-line{display:flex;align-items:center;gap:10px;margin:2px 0 8px}
+.hyday-tx{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hyday-note{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;padding:10px 12px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);font-size:13.5px;font-weight:600;line-height:1.5;color:var(--text);word-break:keep-all}
+.hyday-undo{position:relative;flex:none;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--cyan);background:transparent;color:var(--cyan);font-family:inherit;font-size:13.5px;font-weight:800;white-space:nowrap;cursor:pointer}
+.hyday-undo::after{content:"";position:absolute;inset:-5px -3px}
+@keyframes hfoldIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.hfold-in{animation:hfoldIn .16s ease-out}
 
 /* v9.4(O-0344) 지난 날짜를 고치는 중 — 오늘 것으로 착각하지 않게 맨 위 띠 + 맨 아래 한 줄 + 날짜 색 */
 .hpast{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:10px 10px 10px 14px;border-radius:16px;border:1.5px solid var(--warn);background:var(--warn-bg)}
