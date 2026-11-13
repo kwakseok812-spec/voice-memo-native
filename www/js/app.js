@@ -9479,6 +9479,12 @@
   /* v9.10: 안내 글이 좁은 폭(폰 390px — 안내 상자 195px)에서 낱말 중간에 꺾이지 않게 한다. 낱말 안 글자 사이에 이음 문자(U+2060)를 넣어 띄어쓰기에서만 줄이 나뉜다.
    *   한 줄에 붙여 둘 두 낱말은 글에 \u00a0(줄이 나뉘지 않는 띄어쓰기)로 적는다. .toast 스타일은 그대로다 — 이번 판에서 새로 넣거나 고친 글에만 쓴다(v9.8 의 「위\u2060쪽」과 같은 방법). */
   function tw(s) { return String(s).replace(/([^ ])(?=[^ ])/g, '$1\u2060'); }
+  var TOAST_AUTO_MS = 'on';   // v9.96(O-0854 B-2) 'off' 면 예전처럼 늘 1.8초
+  function toastAutoMs(msg) {   // 20자까지 1.8초 · 넘는 글자 하나당 0.06초 · 최대 6초 (이음 문자 U+2060 은 세지 않는다)
+    if (TOAST_AUTO_MS !== 'on') return 1800;
+    var n = String(msg == null ? '' : msg).replace(/[⁠ \s]/g, '').length;
+    return Math.min(6000, 1800 + Math.max(0, n - 20) * 60);
+  }
   function toast(msg, ms, wide) {  // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
     if (!toastEl) return;
     toastEl.style.width = wide ? 'max-content' : ''; toastEl.style.maxWidth = wide ? '86vw' : '';   // 넓은 한 줄은 이 요소에만 값을 준다(styles.css 의 .toast 는 그대로 둔다)
@@ -9488,7 +9494,7 @@
     toastTimer = setTimeout(function () {
       toastEl.classList.remove('show');
       setTimeout(function () { toastEl.style.display = 'none'; }, 250);
-    }, ms || 1800);
+    }, ms || toastAutoMs(msg));   // v9.96(O-0854 B-2): 시간을 안 준 안내는 글자 수에 맞춰 — 짧은 글 1.8초 그대로
   }
   /* 녹음 화면에서 뒤로가기 → 갇히지 않게 선택지를 준다(2026-09-21):
    *   · [녹음 정지하고 나가기] → 정지(→ 완료 화면에서 제목·보내기)
