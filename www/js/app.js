@@ -9482,7 +9482,7 @@
   var TOAST_AUTO_MS = 'on';   // v9.96(O-0854 B-2) 'off' 면 예전처럼 늘 1.8초
   function toastAutoMs(msg) {   // 20자까지 1.8초 · 넘는 글자 하나당 0.06초 · 최대 6초 (이음 문자 U+2060 은 세지 않는다)
     if (TOAST_AUTO_MS !== 'on') return 1800;
-    var n = String(msg == null ? '' : msg).replace(/[⁠ \s]/g, '').length;
+    var n = String(msg == null ? '' : msg).replace(/[\u2060\u00a0\s]/g, '').length;
     return Math.min(6000, 1800 + Math.max(0, n - 20) * 60);
   }
   function toast(msg, ms, wide) {  // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
