@@ -886,7 +886,7 @@
     document.addEventListener('visibilitychange', function () { if (!document.hidden && isShown()) { schedule(0); } });
   }
   // v9.96(O-0854 B-5): 연동 암호가 없으면 다른 화면으로 보내지 않고 이 자리에서 암호 창을 띄운다(app.js 의 기존 암호 창). 저장되면 app.js 가 resume() 을 불러 바로 다시 읽는다.
-  function askPass() { try { if (host.askPass) host.askPass('PC 상태를 보려면 PC 연동 암호를 입력해 주십시오.'); } catch (e) {} }
+  function askPass() { try { if (host.askPass) host.askPass(''); } catch (e) {} }
   function resume() { if (isShown()) poll(true); }
   function open() {
     build();
