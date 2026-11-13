@@ -456,7 +456,7 @@
   /* =====================================================================
    * 2. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true, diskExt: true, procDesc: true };
+  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, kstat: function () { return null; }, power: true, disk: true, diskExt: true, procDesc: true };
   var $ = function (id) { return document.getElementById(id); };
   var built = false, inited = false;
   var data = null;                // 마지막으로 받은 get_pc_status 결과(+_at: 받은 폰 시각)
@@ -519,7 +519,7 @@
     $('pcFoldBtn').addEventListener('click', function () { foldOpen = !foldOpen; renderFold(); });
     $('pcBtnClaude').addEventListener('click', function () { onPow('claude_restart'); });
     $('pcBtnPc').addEventListener('click', function () { onPow('pc_reboot'); });
-    $('pcAgain').addEventListener('click', function () { poll(true); });
+    $('pcAgain').addEventListener('click', function () { if (!host.getPass() && host.askPass) askPass(); else poll(true); });
     $('pcShCancel').addEventListener('click', closeSheet);
     $('pcShGo').addEventListener('click', sendRequest);
     $('pcSheet').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
@@ -568,12 +568,13 @@
     else stx = statusLine(j);
     if (netErr && !notready && !badpass && !noPass && data) stx += ' · 서버에 연결하지 못했습니다';
     setText('pcStatTx', stx);
-    $('pcAgain').style.display = (st === 'down' || st === 'none' || netErr || notready) ? '' : 'none';
+    $('pcAgain').style.display = (st === 'down' || st === 'none' || netErr || notready || (noPass && host.askPass)) ? '' : 'none';
+    $('pcAgain').textContent = (noPass && !notready && !badpass && host.askPass) ? '연동 암호 넣기' : '다시 확인';   // v9.96(O-0854 B-5)
     // 케이 한 줄·표정
     var say;
     if (notready) say = '서버에 PC 상태 기능이 아직 켜지지 않았습니다. 준비가 끝나면 이 화면에서 바로 보입니다.';
     else if (badpass) say = '연동 암호가 맞지 않아 PC 상태를 읽지 못했습니다.';
-    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다. 케이 채팅 화면에서 먼저 연동해 주십시오.';
+    else if (noPass) say = '연동 암호를 넣으면 PC 상태가 보입니다.' + (host.askPass ? ' 아래 [연동 암호 넣기]를 눌러 주십시오.' : ' 케이 채팅 화면에서 먼저 연동해 주십시오.');   // v9.96(O-0854 B-5): 다른 화면으로 보내지 않고 이 자리에서 암호 창
     else say = sayLine(data, j);
     setText('pcSay', say);
     var face = $('pcFace');
@@ -775,7 +776,7 @@
   function sendRequest() {
     if (!sheet.open || sheet.sending) return;
     var kind = sheet.kind, pass = host.getPass(), go = $('pcShGo');
-    if (!pass) { $('pcShErr').textContent = '연동 암호가 없습니다. 케이 채팅에서 먼저 연동해 주십시오'; return; }
+    if (!pass) { if (host.askPass) { closeSheet(); askPass(); } else $('pcShErr').textContent = '연동 암호가 없습니다. 케이 채팅에서 먼저 연동해 주십시오'; return; }   // v9.96(O-0854 B-5)
     var B = bridge(); if (!B || !B.pcPowerRequest) { $('pcShErr').textContent = '이 앱 버전은 지원하지 않습니다'; return; }
     sheet.sending = true; go.disabled = true; var goTx = go.textContent; go.textContent = '보내는 중…'; $('pcShErr').textContent = '';
     var sentAt = nowServer();
@@ -884,11 +885,15 @@
     build(); homeDot();
     document.addEventListener('visibilitychange', function () { if (!document.hidden && isShown()) { schedule(0); } });
   }
+  // v9.96(O-0854 B-5): 연동 암호가 없으면 다른 화면으로 보내지 않고 이 자리에서 암호 창을 띄운다(app.js 의 기존 암호 창). 저장되면 app.js 가 resume() 을 불러 바로 다시 읽는다.
+  function askPass() { try { if (host.askPass) host.askPass('PC 상태를 보려면 PC 연동 암호를 입력해 주십시오.'); } catch (e) {} }
+  function resume() { if (isShown()) poll(true); }
   function open() {
     build();
     openedAt = Date.now(); lastState = ''; lastCmdSig = ''; foldOpen = false; netErr = false; badpass = false; notready = false;
     if (host.openScreen) host.openScreen();
     render(); poll(true);
+    if (!host.getPass()) askPass();
   }
   function back() {
     if (sheet.open) { closeSheet(); return true; }
@@ -897,7 +902,7 @@
   }
 
   global.PcStatus = {
-    init: init, open: open, back: back, homeDot: homeDot,
+    init: init, open: open, back: back, homeDot: homeDot, resume: resume,
     _test: { render: render, setData: function (d) { data = d; if (d) d._at = d._at || Date.now(); render(); }, openSheet: openSheet, state: function () { return { data: data, sheet: sheet, notready: notready, trackId: trackId, foldOpen: foldOpen }; }, setOpenedAt: function (t) { openedAt = t; }, poll: poll, setFold: function (b) { foldOpen = !!b; render(); } }
   };
 })(typeof window !== 'undefined' ? window : this);

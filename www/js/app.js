@@ -6744,6 +6744,7 @@
     if (isOpen(chatView)) renderChat();               //   채팅 맨 위 「연동 암호를 넣으면 …」 안내 줄을 내린다
     try { if (window.KChar && KChar.assets) KChar.assets.refresh(); } catch (e) {}     // v9.5: 케이 자산(자세 그림·영상·새 옷)도 암호가 있어야 받는다
     try { if (window.HealthTab && HealthTab.flush) HealthTab.flush(); } catch (e) {}   // v9.4(O-0344): 암호가 없어 폰에만 남아 있던 건강 기록 올리기
+    try { if (isOpen($('pcView')) && window.PcStatus && PcStatus.resume) PcStatus.resume(); } catch (e) {}   // v9.96(O-0854 B-5): PC 상태 화면에서 넣었으면 바로 다시 읽는다
     if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ideasView'))) refreshIdeas(false);  // v5.5: 아이디어 화면에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ordersView'))) refreshOrders(false); // v5.8: 작업 현황에서 암호를 넣었으면 바로 다시 불러온다
@@ -10244,7 +10245,7 @@
   }
   if (PC_MON_UI !== 'off' && window.PcStatus && $('btnPcStatus')) {
     try {
-      PcStatus.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off', disk: PC_DISK_UI !== 'off', diskExt: PC_DISK_EXT_UI !== 'off', procDesc: PC_PROC_DESC_UI !== 'off' });
+      PcStatus.init({ toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen(pcView); }, kstat: function () { return kStatState; }, power: PC_POWER_UI !== 'off', disk: PC_DISK_UI !== 'off', diskExt: PC_DISK_EXT_UI !== 'off', procDesc: PC_PROC_DESC_UI !== 'off' });
       $('btnPcStatus').style.display = ''; $('btnPcStatus').addEventListener('click', openPcStatus);
     } catch (e) {}
   }
