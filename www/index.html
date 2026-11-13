@@ -28,7 +28,10 @@
   <meta name="apple-mobile-web-app-title" content="스마트비서">
 
   <!-- 글꼴: Pretendard(시안 기준) — 없으면 맑은 고딕 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <!-- v9.96(O-0854 B-6): 글꼴 스타일은 첫 화면을 막지 않게 늦게 붙인다(media=print 로 받다가 다 오면 전체로). 신호가 약하면 맑은 고딕으로 먼저 그리고, 글꼴이 오면 바뀐다.
+       되돌리기: 이 두 줄을 예전의 일반 <link rel="stylesheet" href="…pretendard.min.css"> 한 줄로 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"></noscript>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/docviewer.css">
   <link rel="stylesheet" href="css/smartoffice.css"><!-- S-Office 공통 틀(열기 방식 줄·전체 화면 틀·정보) -->
