@@ -321,6 +321,7 @@ html[data-style="light"] .sheet-box{background:var(--bg0)}
 .pendchip button{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
 /* PC 연동 암호 입력칸 */
 #syncGate{z-index:1200}
+#syncGate .sheet-msg{word-break:keep-all}   /* v9.96(O-0854): 「같은 암호」가 낱말 중간에서 꺾이지 않게(이 창에만) */
 .sync-input{width:100%;height:52px;border-radius:16px;border:1px solid var(--glass-b);background:var(--in-bg);color:var(--text);font-size:17px;font-weight:700;text-align:center;letter-spacing:2px;padding:0 14px;box-sizing:border-box}
 .sync-input:focus{outline:none;border-color:var(--glass-b2);box-shadow:0 0 0 3px var(--focus)}
 
