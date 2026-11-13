@@ -1075,7 +1075,7 @@
   });
   function cancelRecNow() {
     if (!isRecording) { showHome(); return; }
-    recCancelled = true; isRecording = false; recLost = false; stopRecTimer(); recSessionClear();
+    recCancelled = true; isRecording = false; recLost = false; recLpHintWant = false; stopRecTimer(); recSessionClear();
     try { recorder.dropNext = true; recGroup = ''; } catch (e) {}   // v9.10: 버린 녹음은 일지에 「버림」으로 — 끊긴 녹음 목록에 오르지 않게
     try { recorder.stop(); } catch (e) {}
     pendingBlob = null; pendingMaterials = []; showHome(); setStatus('대기 중', 'idle');

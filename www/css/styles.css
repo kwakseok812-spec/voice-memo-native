@@ -616,7 +616,7 @@ html[data-style="light"] .bubble.k,html[data-style="light"] .chatattach,html[dat
 .hlast{min-width:0;font-size:13px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hlast:empty{display:none}
 .hpend{display:none;font-style:normal;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--warn-bg);color:var(--warn-t);font-size:12.5px;font-weight:800;white-space:nowrap;vertical-align:1px}
-.pend > .hitem-top .hpend,.pend > .hmeal-sum .hpend,.htcell.pend .hpend,.hpend.on{display:inline-block}
+.pend > .hitem-top .hpend,.pend > .hmeal-sum .hpend,.pend > .efold-row .hpend,.htcell.pend .hpend,.hpend.on{display:inline-block}
 .htcell .hpend{align-self:center;margin:-2px 0 0;padding:0 7px}
 .pend > .hitem-top .hlast{display:none}                 /* 안 올라간 칸은 「지난 기록」 안내 자리에 「폰에만」 표시가 온다(한 줄 유지) */
 .hlab{white-space:nowrap}
