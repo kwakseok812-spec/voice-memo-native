@@ -115,7 +115,7 @@
     var fill = fillOf(cell); if (fill) st += 'background-color:' + fill + ';color:#111;';
     var sty = styleAt(sh, r, c);
     if (sty) {
-      if (sty.fs) st += 'font-size:' + Math.round(sty.fs * 4 / 3 * S.scale * 10) / 10 + 'px;'; if (sty.fn) st += 'font-family:"' + String(sty.fn).replace(/["\\]/g, '') + '",sans-serif;'; if (sty.b) st += 'font-weight:800;'; if (sty.i) st += 'font-style:italic;'; if (sty.u) st += 'text-decoration:underline;';
+      if (sty.fs) st += 'font-size:' + Math.round(sty.fs * 4 / 3 * S.scale * 10) / 10 + 'px;'; if (sty.fn) st += 'font-family:"' + String(sty.fn).replace(/["\\]/g, '') + '",sans-serif;'; if (sty.b) st += 'font-weight:800;'; if (sty.i) st += 'font-style:italic;'; if (sty.u || sty.st) st += 'text-decoration:' + (sty.u ? 'underline' : '') + (sty.u && sty.st ? ' ' : '') + (sty.st ? 'line-through' : '') + ';';
       if (sty.bg) st += 'background-color:' + sty.bg + ';color:' + (sty.color || '#111') + ';'; else if (sty.color) st += 'color:' + sty.color + ';';
       if (sty.h) st += 'text-align:' + sty.h + ';'; if (sty.wrap) st += 'white-space:pre-wrap;line-height:1.25;';
       if (sty.bl) st += 'border-left:1px solid #222;'; if (sty.br) st += 'border-right:1px solid #222;'; if (sty.bt) st += 'border-top:1px solid #222;'; if (sty.bb) st += 'border-bottom:1px solid #222;';
@@ -247,7 +247,7 @@
   function onTap(e) {
     if (S.lp) { S.lp = false; return; }                 // 길게 눌러 상세를 연 뒤의 손 뗌은 무시
     var fvEl = e.target && e.target.closest ? e.target.closest('.sx-fv') : null;
-    if (!fvEl && e.target && e.target.closest) { var fhc = e.target.closest('.sx-fh'); if (fhc && e.clientX >= fhc.getBoundingClientRect().right - 44) fvEl = fhc.querySelector('.sx-fv'); }      // v10.7 다듬기: ▽ 는 눈에 보이는 크기(22px)는 그대로 두고, 누르는 자리는 칸 오른쪽 44px 로 넓힌다(손가락용)
+    if (!fvEl && e.target && e.target.closest) { var fhc = e.target.closest('.sx-fh'); if (fhc && e.clientX >= fhc.getBoundingClientRect().right - Math.min(44, fhc.getBoundingClientRect().width * 0.4)) fvEl = fhc.querySelector('.sx-fv'); }      // v10.7 다듬기: ▽ 는 눈에 보이는 크기(22px)는 그대로 두고, 누르는 자리는 칸 오른쪽 44px 로 넓힌다(손가락용)
     var res = pickAt(e.clientX, e.clientY, e.target);
     if (!res) return;
     if (fvEl && S.editing && S.ui && S.ui.filterCol) { S.ui.filterCol(Number(fvEl.getAttribute('data-fc'))); return; }      // 머리줄 ▽ → 그 열 필터
