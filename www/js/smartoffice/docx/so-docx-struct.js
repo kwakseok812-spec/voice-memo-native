@@ -63,7 +63,7 @@
   function innermost(rs, at) { var best = null; rs.forEach(function (r) { if (r.s <= at && at < r.e && (!best || r.s > best.s)) best = r; }); return best; }
   function sameParent(xml, p, q) { var tcs = ranges(xml, 'w:tc'), a = innermost(tcs, p.s), b = innermost(tcs, q.s); return (a ? a.s : -1) === (b ? b.s : -1); }
   function P(xml, xi) { var ps = paras(xml); if (!ps[xi]) throw new Error('문단을 찾지 못했습니다'); return ps[xi]; }
-  function pText(pxml) { var o = ''; (pxml.match(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>|<w:tab\s*\/>|<w:br\b[^>]*\/>/g) || []).forEach(function (t) { o += /^<w:t/.test(t) ? unesc(t.replace(/<[^>]+>/g, '')) : (/^<w:tab/.test(t) ? '\t' : '\n'); }); return o; }
+  function pText(pxml) { var o = ''; (pxml.match(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>|<w:tab\s*\/>|<w:br\b[^>]*\/>/g) || []).forEach(function (t) { o += /^<w:t[\s>]/.test(t) ? unesc(t.replace(/<[^>]+>/g, '')) : (/^<w:tab/.test(t) ? '\t' : '\n'); }); return o; }
 
   // ============================== 문단 속성(pPr) ==============================
   var PPR_ORDER = ['pStyle', 'keepNext', 'keepLines', 'pageBreakBefore', 'framePr', 'widowControl', 'numPr', 'suppressLineNumbers', 'pBdr', 'shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'overflowPunct', 'topLinePunct', 'autoSpaceDE', 'autoSpaceDN', 'bidi', 'adjustRightInd', 'snapToGrid', 'spacing', 'ind', 'contextualSpacing', 'mirrorIndents', 'suppressOverlap', 'jc', 'textDirection', 'textAlignment', 'textboxTightWrap', 'outlineLvl', 'divId', 'cnfStyle', 'rPr', 'sectPr', 'pPrChange'];
@@ -404,8 +404,7 @@
   }
   function scalePicture(xml, xi, factor) {
     var p = P(xml, xi), s = xml.slice(p.s, p.e);
-    if (/<wp:anchor\b/.test(s)) return { err: '글 위에 떠 있는 그림(글 뒤·앞 배치)은 폰에서 크기를 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
-    if (!/<wp:inline\b/.test(s)) return { err: '이 문단에는 글자처럼 놓인 그림이 없습니다.' };
+    if (!/<wp:(?:inline|anchor)\b/.test(s)) return { err: '이 문단에는 크기를 바꿀 그림이 없습니다.' };
     var ns = s.replace(/(<wp:extent\b[^>]*\scx=")(\d+)("[^>]*\scy=")(\d+)(")/g, function (m, a, x, b, y, c) { return a + Math.round(x * factor) + b + Math.round(y * factor) + c; })
       .replace(/(<a:ext\b[^>]*\scx=")(\d+)("[^>]*\scy=")(\d+)(")/g, function (m, a, x, b, y, c) { return a + Math.round(x * factor) + b + Math.round(y * factor) + c; });
     return { xml: xml.slice(0, p.s) + ns + xml.slice(p.e) };
@@ -755,7 +754,590 @@
     return { ok: true };
   }
 
+  // ============================== v10.8 (3회차): 표 열 너비·행 높이·맞춤·표 모양 · 기호·날짜 · 첫 쪽 다르게 · 배경 글자 · 책갈피 · 그림·표 이름 · 목차 ==============================
+  function gridOf(tblXml) { var m = /<w:tblGrid>([\s\S]*?)<\/w:tblGrid>/.exec(tblXml); return m ? (m[1].match(/<w:gridCol\b[^>]*>/g) || []).map(function (g) { return +(attrOf(g, 'w') || 0); }) : null; }
+  function spanOf(tcXml) { return +(attrOf((/<w:gridSpan\b[^>]*>/.exec(tcXml.slice(0, 600)) || [''])[0], 'val') || 1); }
+  // 고른 칸이 든 표의 모양 읽기: {cols, rows, colIdx, rowIdx, widths(twip), total, rowH:{val,rule}|null}
+  function tableGeom(xml, xi) {
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var t = b.xml, rows = rowsOfTbl(t), grid = gridOf(t);
+    if (!grid || !grid.length) return { err: '이 표는 칸 폭 정보가 없어 폰에서는 폭을 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    if (/<w:gridBefore\b|<w:gridAfter\b/.test(t)) return { err: '줄 앞뒤가 비어 있는 특수한 표라 폰에서는 폭을 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    var rowS = b.tr.s - b.tbl.s, rowIdx = -1, i; for (i = 0; i < rows.length; i++) if (rows[i].s === rowS) rowIdx = i;
+    if (rowIdx < 0) return { err: '표 줄을 찾지 못했습니다.' };
+    var cells = cellsOfRow(t.slice(rows[rowIdx].s, rows[rowIdx].e)), cellS = b.tc.s - b.tbl.s - rows[rowIdx].s, colIdx = -1, pos = 0;
+    for (i = 0; i < cells.length; i++) { if (cells[i].s === cellS) { colIdx = pos; break; } pos += spanOf(t.slice(rows[rowIdx].s + cells[i].s, rows[rowIdx].s + cells[i].e)); }
+    if (colIdx < 0) return { err: '표 칸을 찾지 못했습니다.' };
+    var rx = t.slice(rows[rowIdx].s, rows[rowIdx].e), th = /<w:trHeight\b[^>]*>/.exec(rx.replace(/<w:tc\b[\s\S]*$/, ''));
+    return { b: b, t: t, rows: rows, grid: grid, colIdx: colIdx, rowIdx: rowIdx, rowH: th ? { val: +(attrOf(th[0], 'val') || 0), rule: attrOf(th[0], 'hRule') || 'atLeast' } : null, total: grid.reduce(function (a, c) { return a + c; }, 0) };
+  }
+  function tableGeomInfo(xml, xi) { var g = tableGeom(xml, xi); if (g.err) return null; return { cols: g.grid.length, rows: g.rows.length, colIdx: g.colIdx, rowIdx: g.rowIdx, widths: g.grid, total: g.total, rowH: g.rowH }; }
+  // 표 전체의 칸 폭을 새 값(grid)으로 쓴다: tblGrid · 모든 칸 tcW · tblW · 고정 배치
+  function writeGrid(xml, g, grid) {
+    var t = g.t, tot = grid.reduce(function (a, c) { return a + c; }, 0), rows = rowsOfTbl(t), out = '', last = 0;
+    rows.forEach(function (rs) {
+      var rx = t.slice(rs.s, rs.e), cells = cellsOfRow(rx), nr = '', lc = 0, pos = 0;
+      cells.forEach(function (c) {
+        var cx = rx.slice(c.s, c.e), sp = spanOf(cx), w = 0, k; for (k = pos; k < pos + sp; k++) w += grid[k] || 0; pos += sp;
+        nr += rx.slice(lc, c.s) + setTcPr(cx, 'tcW', '<w:tcW w:w="' + w + '" w:type="dxa"/>'); lc = c.e;
+      });
+      nr += rx.slice(lc);
+      out += t.slice(last, rs.s) + nr; last = rs.e;
+    });
+    out += t.slice(last);
+    out = out.replace(/<w:tblGrid>[\s\S]*?<\/w:tblGrid>/, '<w:tblGrid>' + grid.map(function (w) { return '<w:gridCol w:w="' + w + '"/>'; }).join('') + '</w:tblGrid>');
+    var pm = /<w:tblPr\b[\s\S]*?<\/w:tblPr>|<w:tblPr\s*\/>/.exec(out);
+    if (pm) { var np = setProp(pm[0], 'w:tblPr', TBLPR_ORDER, 'tblW', '<w:tblW w:w="' + tot + '" w:type="dxa"/>'); np = setProp(np, 'w:tblPr', TBLPR_ORDER, 'tblLayout', '<w:tblLayout w:type="fixed"/>'); out = out.slice(0, pm.index) + np + out.slice(pm.index + pm[0].length); }
+    return xml.slice(0, g.b.tbl.s) + out + xml.slice(g.b.tbl.e);
+  }
+  // 열 너비: o = {delta:twip} 고른 칸의 열을 넓히거나 좁힘(옆 열이 대신 줄고 늘어 표 전체 폭은 그대로) · {equal:true} 모든 열을 같게 · {fit:true} 표 폭을 본문 폭에 맞춤
+  function setColWidth(xml, xi, o) {
+    var g = tableGeom(xml, xi); if (g.err) return g;
+    if ((g.t.slice(1).match(/<w:tbl>/g) || []).length) return { err: '표 안에 또 표가 있어 폰에서는 폭을 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    var grid = g.grid.slice(), n = grid.length, MIN = 500, i;
+    if (o.equal) { var each = Math.floor(g.total / n); for (i = 0; i < n; i++) grid[i] = each; grid[n - 1] += g.total - each * n; }
+    else if (o.fit) { var tw = textWidth(xml), k = tw / g.total, s = 0; for (i = 0; i < n; i++) { grid[i] = Math.round(grid[i] * k); s += grid[i]; } grid[n - 1] += tw - s; }
+    else {
+      if (n < 2) return { err: '열이 하나뿐인 표는 폭을 나눌 수 없습니다.' };
+      var ci = g.colIdx, ni = ci + 1 < n ? ci + 1 : ci - 1, d = Math.round(o.delta || 0);
+      if (grid[ci] + d < MIN) d = MIN - grid[ci];
+      if (grid[ni] - d < MIN) d = grid[ni] - MIN;
+      if (!d) return { err: '더 이상 ' + (o.delta > 0 ? '넓힐' : '좁힐') + ' 수 없습니다(옆 열이 너무 좁아집니다).' };
+      grid[ci] += d; grid[ni] -= d;
+    }
+    return { xml: writeGrid(xml, g, grid), colIdx: g.colIdx };
+  }
+  // 행 높이: o = {twip:number|null(자동), rule:'atLeast'|'exact', all:true(표 전체 줄)}
+  function setRowHeight(xml, xi, o) {
+    var g = tableGeom(xml, xi); if (g.err) return g;
+    var t = g.t, out = '', last = 0;
+    g.rows.forEach(function (rs, idx) {
+      if (!o.all && idx !== g.rowIdx) return;
+      var rx = t.slice(rs.s, rs.e), head = /^<w:tr\b[^>]*>/.exec(rx)[0], rest = rx.slice(head.length), pex = /^\s*<w:tblPrEx\b[\s\S]*?<\/w:tblPrEx>/.exec(rest), pexs = pex ? pex[0] : '';
+      rest = rest.slice(pexs.length);
+      var pm = /^\s*<w:trPr\b[\s\S]*?<\/w:trPr>|^\s*<w:trPr\s*\/>/.exec(rest), box = pm ? pm[0].trim() : '', after = pm ? rest.slice(pm[0].length) : rest, inner = '';
+      if (box && !/\/>$/.test(box.slice(0, box.indexOf('>') + 1))) inner = box.slice(box.indexOf('>') + 1, box.lastIndexOf('</w:trPr>'));
+      inner = inner.replace(/<w:trHeight\b[^>]*\/>/g, '');
+      if (o.twip) inner += '<w:trHeight w:val="' + Math.round(o.twip) + '"' + (o.rule === 'exact' ? ' w:hRule="exact"' : ' w:hRule="atLeast"') + '/>';
+      var nbox = inner ? '<w:trPr>' + inner + '</w:trPr>' : '';
+      out += t.slice(last, rs.s) + head + pexs + nbox + after; last = rs.e;
+    });
+    out += t.slice(last);
+    return { xml: xml.slice(0, g.b.tbl.s) + out + xml.slice(g.b.tbl.e) };
+  }
+  function setTableAlign(xml, xi, al) {
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var pm = /<w:tblPr\b[\s\S]*?<\/w:tblPr>|<w:tblPr\s*\/>/.exec(b.xml); if (!pm) return { err: '이 표는 속성이 없어 맞춤을 바꿀 수 없습니다.' };
+    var np = setProp(pm[0], 'w:tblPr', TBLPR_ORDER, 'jc', al === 'left' ? null : '<w:jc w:val="' + al + '"/>');
+    var nt = b.xml.slice(0, pm.index) + np + b.xml.slice(pm.index + pm[0].length);
+    return { xml: xml.slice(0, b.tbl.s) + nt + xml.slice(b.tbl.e) };
+  }
+  // 표 모양 본보기: kind = grid(격자) | headgrid(제목 줄 강조 + 격자) | band(줄무늬) | bandoff(줄무늬 없애기) | hlines(가로선만)
+  function tableLook(xml, xi, kind) {
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    if ((b.xml.slice(1).match(/<w:tbl>/g) || []).length) return { err: '표 안에 또 표가 있어 폰에서는 모양을 한 번에 바꿀 수 없습니다.' };
+    var r;
+    if (kind === 'grid') return setTableBorders(xml, xi, { on: true, sz: 4, color: '808080' });
+    if (kind === 'headgrid') { r = setTableBorders(xml, xi, { on: true, sz: 4, color: '808080' }); if (r.err) return r; return headerRow(r.xml, xi); }
+    if (kind === 'hlines') {
+      var pm = /<w:tblPr\b[\s\S]*?<\/w:tblPr>|<w:tblPr\s*\/>/.exec(b.xml); if (!pm) return { err: '이 표는 속성이 없어 모양을 바꿀 수 없습니다.' };
+      var ln = function (n) { return '<w:' + n + ' w:val="single" w:sz="6" w:space="0" w:color="808080"/>'; }, nl = function (n) { return '<w:' + n + ' w:val="nil"/>'; };
+      var tb = '<w:tblBorders>' + ln('top') + nl('left') + ln('bottom') + nl('right') + ln('insideH') + nl('insideV') + '</w:tblBorders>';
+      var np = setProp(pm[0], 'w:tblPr', TBLPR_ORDER, 'tblBorders', tb), nt = b.xml.slice(0, pm.index) + np + b.xml.slice(pm.index + pm[0].length);
+      nt = nt.replace(/<w:tcBorders>[\s\S]*?<\/w:tcBorders>/g, '');
+      return { xml: xml.slice(0, b.tbl.s) + nt + xml.slice(b.tbl.e) };
+    }
+    if (kind === 'band' || kind === 'bandoff') {
+      var rows = rowsOfTbl(b.xml), t = b.xml, out = '', last = 0;
+      rows.forEach(function (rs, idx) {
+        if (kind === 'band' && (idx === 0 || idx % 2 === 0)) return;           // 둘째·넷째… 줄만 연하게 칠한다(첫 줄은 제목 줄이라 건드리지 않음)
+        var rx = t.slice(rs.s, rs.e);
+        if (kind === 'band') rx = rx.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, function (tc) { return /<w:shd\b[^>]*w:fill="(?!auto)[0-9A-Fa-f]{6}"/.test(tc) ? tc : setTcPr(tc, 'shd', '<w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/>'); });
+        else rx = rx.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, function (tc) { return /<w:shd\b[^>]*w:fill="F2F2F2"/.test(tc) ? setTcPr(tc, 'shd', null).replace(/<w:tcPr\s*\/>/, '') : tc; });
+        out += t.slice(last, rs.s) + rx; last = rs.e;
+      });
+      out += t.slice(last);
+      return { xml: xml.slice(0, b.tbl.s) + out + xml.slice(b.tbl.e) };
+    }
+    return { err: '알 수 없는 표 모양입니다.' };
+  }
+
+  // ---- 기호 · 날짜: 고른 문단 맨 끝에 글을 붙인다(마지막 글 조각의 서식을 이어받음) ----
+  function appendText(xml, xi, text) {
+    var p = P(xml, xi), ps = xml.slice(p.s, p.e); text = String(text == null ? '' : text); if (!text) return { err: '넣을 글이 없습니다.' };
+    var rs = ps.match(/<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?<w:t\b[\s\S]*?<\/w:r>/g), rpr = '';
+    if (rs) { var m = /<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(rs[rs.length - 1]); if (m) rpr = m[0].replace(/<w:(?:rStyle|vertAlign)\b[^>]*\/>/g, ''); }
+    var run = '<w:r>' + rpr + '<w:t xml:space="preserve">' + esc(text) + '</w:t></w:r>', head = /^<w:p\b[^>]*?>/.exec(ps)[0];
+    if (/\/>$/.test(head)) { var np = head.replace(/\s*\/>$/, '>') + run + '</w:p>'; return { xml: xml.slice(0, p.s) + np + xml.slice(p.e) }; }
+    return { xml: xml.slice(0, p.e - 6) + run + xml.slice(p.e - 6) };
+  }
+
+  // ---- 첫 쪽 다르게(머리글·바닥글) / 배경 글자(워터마크) ----
+  var SECT_AFTER_TITLEPG = ['textDirection', 'bidi', 'rtlGutter', 'docGrid', 'printerSettings', 'sectPrChange'];
+  function firstSect(xml) { return /<w:sectPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:sectPr>)/.exec(xml); }
+  function readTitlePg(xml) { var m = firstSect(xml); return !!(m && /<w:titlePg\b/.test(m[0])); }
+  async function setTitlePg(pkg, on) {
+    var x = await must(pkg, 'word/document.xml'), m = firstSect(x); if (!m || /\/>$/.test(m[0])) return { err: '이 문서에서 쪽 설정을 찾지 못했습니다.' };
+    var sp = m[0].replace(/<w:titlePg\b[^>]*\/>/g, '');
+    if (on) {
+      var re = new RegExp('<w:(?:' + SECT_AFTER_TITLEPG.join('|') + ')\\b'), at = re.exec(sp);
+      sp = at ? sp.slice(0, at.index) + '<w:titlePg/>' + sp.slice(at.index) : sp.replace(/<\/w:sectPr>$/, '<w:titlePg/></w:sectPr>');
+    }
+    pkg.write('word/document.xml', x.slice(0, m.index) + sp + x.slice(m.index + m[0].length)); return { ok: true, on: !!on };
+  }
+  var VML_NS = { v: 'xmlns:v="urn:schemas-microsoft-com:vml"', o: 'xmlns:o="urn:schemas-microsoft-com:office:office"', w10: 'xmlns:w10="urn:schemas-microsoft-com:office:word"' };
+  function wmRuns(text, color) {
+    var len = Math.max(4, text.length), w = Math.min(470, 66 * len), h = Math.round(w / len * 1.05);
+    return '<w:r><w:rPr><w:noProof/></w:rPr><w:pict><v:shapetype id="_x0000_t136" coordsize="21600,21600" o:spt="136" adj="10800" path="m@7,l@8,m@5,21600l@6,21600e"><v:formulas><v:f eqn="sum #0 0 10800"/><v:f eqn="prod #0 2 1"/><v:f eqn="sum 21600 0 @1"/><v:f eqn="sum 0 0 @2"/><v:f eqn="sum 21600 0 @3"/><v:f eqn="if @0 @3 0"/><v:f eqn="if @0 21600 @1"/><v:f eqn="if @0 0 @2"/><v:f eqn="if @0 @4 21600"/><v:f eqn="mid @5 @6"/><v:f eqn="mid @8 @5"/><v:f eqn="mid @7 @8"/><v:f eqn="mid @6 @7"/><v:f eqn="sum @6 0 @5"/></v:formulas><v:path textpathok="t" o:connecttype="custom" o:connectlocs="@9,0;@10,10800;@11,21600;@12,10800" o:connectangles="270,180,90,0"/><v:textpath on="t" fitshape="t"/><v:handles><v:h position="#0,bottomRight" xrange="6629,14971"/></v:handles><o:lock v:ext="edit" text="t" shapetype="t"/></v:shapetype>' +
+      '<v:shape id="PowerPlusWaterMarkObject1" o:spid="_x0000_s2049" type="#_x0000_t136" style="position:absolute;margin-left:0;margin-top:0;width:' + w + 'pt;height:' + h + 'pt;rotation:315;z-index:-251658752;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" o:allowincell="f" fillcolor="#' + color + '" stroked="f"><v:fill opacity=".5"/><v:textpath style="font-family:&quot;맑은 고딕&quot;;font-size:1pt" string="' + esc(text) + '"/><w10:wrap anchorx="margin" anchory="margin"/></v:shape></w:pict></w:r>';
+  }
+  var WM_RE = /<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?PowerPlusWaterMarkObject[\s\S]*?<\/w:r>/g;
+  // 문서 안 모든 머리글 파트(기본·첫 쪽·짝수 쪽) [{type, path}]
+  async function allHeaderParts(pkg) {
+    var xml = await must(pkg, 'word/document.xml'), rx = await must(pkg, 'word/_rels/document.xml.rels'), rels = {}, out = [], seen = {};
+    (rx.match(/<Relationship\b[^>]*>/g) || []).forEach(function (r) { rels[attrOf(r, 'Id')] = attrOf(r, 'Target'); });
+    (xml.match(/<w:headerReference\b[^>]*>/g) || []).forEach(function (t) {
+      var tg = rels[attrOf(t, 'id')]; if (!tg) return; var path = 'word/' + tg.replace(/^\.?\//, ''); if (seen[path]) return; seen[path] = 1; out.push({ type: attrOf(t, 'type') || 'default', path: path });
+    });
+    return out;
+  }
+  async function ensureFirstHeader(pkg) {            // 「첫 쪽 다르게」가 켜져 있고 첫 쪽 머리글이 없으면 빈 첫 쪽 머리글을 만든다
+    var parts = await allHeaderParts(pkg); if (parts.some(function (p) { return p.type === 'first'; })) return;
+    var n = 1; while (pkg.list().indexOf('word/header' + n + '.xml') >= 0) n++;
+    var path = 'word/header' + n + '.xml';
+    pkg.write(path, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr xmlns:w="' + W_NS + '" xmlns:r="' + R_NS + '"><w:p/></w:hdr>');
+    var rp = 'word/_rels/document.xml.rels', rx = await must(pkg, rp), rid = nextRid(rx);
+    pkg.write(rp, rx.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="' + RT + 'header" Target="header' + n + '.xml"/></Relationships>'));
+    var ct = await must(pkg, '[Content_Types].xml'); pkg.write('[Content_Types].xml', ct.replace('</Types>', '<Override PartName="/' + path + '" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'));
+    var dx = await must(pkg, 'word/document.xml'), sm = firstSect(dx); if (!sm) return;
+    var open = /^<w:sectPr\b[^>]*>/.exec(sm[0])[0];
+    pkg.write('word/document.xml', dx.slice(0, sm.index) + open + '<w:headerReference w:type="first" r:id="' + rid + '"/>' + sm[0].slice(open.length) + dx.slice(sm.index + sm[0].length));
+  }
+  async function readWatermark(pkg) {
+    var parts = await allHeaderParts(pkg);
+    for (var i = 0; i < parts.length; i++) { var hx = await pkg.read(parts[i].path); if (hx) { var m = /PowerPlusWaterMarkObject[\s\S]*?<v:textpath\b[^>]*\sstring="([^"]*)"/.exec(hx); if (m) return unesc(m[1]); } }
+    return null;
+  }
+  // text 가 비면 배경 글자를 없앤다. 모든 머리글(기본·첫 쪽·짝수 쪽)에 넣는다
+  async function setWatermark(pkg, text, color) {
+    text = String(text || '').trim(); color = color || 'BFBFBF';
+    var parts = await allHeaderParts(pkg), i, hx;
+    for (i = 0; i < parts.length; i++) { hx = await pkg.read(parts[i].path); if (hx && /PowerPlusWaterMarkObject/.test(hx)) pkg.write(parts[i].path, hx.replace(WM_RE, '')); }
+    if (!text) return { ok: true, removed: true };
+    if (!parts.length) { var r = await setHF(pkg, 'header', ['']); if (r && r.err) return r; }
+    var dxx = await must(pkg, 'word/document.xml'); if (readTitlePg(dxx)) await ensureFirstHeader(pkg);
+    parts = await allHeaderParts(pkg);
+    for (i = 0; i < parts.length; i++) {
+      var path = parts[i].path; hx = await must(pkg, path);
+      var root = /<w:hdr\b[^>]*>/.exec(hx); if (!root) return { err: '머리글 파트를 읽지 못했습니다.' };
+      var open = root[0]; Object.keys(VML_NS).forEach(function (pfx) { if (!new RegExp('xmlns:' + pfx + '=').test(open)) open = open.replace(/>$/, ' ' + VML_NS[pfx] + '>'); });
+      hx = open + hx.slice(root[0].length);
+      var pm = /<w:p\b[^>]*?(?:\/>|>[\s\S]*?<\/w:p>)/.exec(hx.slice(open.length)); if (!pm) { hx = hx.replace(/<\/w:hdr>\s*$/, '<w:p/></w:hdr>'); pm = /<w:p\b[^>]*?(?:\/>|>[\s\S]*?<\/w:p>)/.exec(hx.slice(open.length)); }
+      var ps = open.length + pm.index, pe = ps + pm[0].length, para = pm[0];
+      if (/\/>$/.test(para.slice(0, para.indexOf('>') + 1))) para = para.replace(/\s*\/>$/, '></w:p>');
+      para = para.replace(/<\/w:p>$/, wmRuns(text, color).replace('PowerPlusWaterMarkObject1', 'PowerPlusWaterMarkObject' + (i + 1)).replace('_x0000_s2049', '_x0000_s' + (2049 + i)) + '</w:p>');
+      pkg.write(path, hx.slice(0, ps) + para + hx.slice(pe));
+    }
+    return { ok: true };
+  }
+
+  // ---- 책갈피 ----
+  function listBookmarks(xml) {
+    var out = [], ps = paras(xml);
+    ps.forEach(function (p, i) { (xml.slice(p.s, p.e).match(/<w:bookmarkStart\b[^>]*>/g) || []).forEach(function (t) { var nm = unesc(attrOf(t, 'name') || ''); if (nm && nm.charAt(0) !== '_') out.push({ name: nm, id: attrOf(t, 'id'), para: i }); }); });
+    return out;
+  }
+  function addBookmark(xml, xi, name) {
+    name = String(name || '').trim().replace(/\s+/g, '_');
+    if (!name) return { err: '책갈피 이름을 적어 주십시오.' };
+    if (!/^[A-Za-z가-힣][A-Za-z0-9가-힣_]{0,39}$/.test(name)) return { err: '책갈피 이름은 글자로 시작하고 글자·숫자·밑줄(_)만 쓸 수 있으며 40자까지입니다.' };
+    if (listBookmarks(xml).some(function (b) { return b.name === name; })) return { err: '이미 있는 이름입니다. 다른 이름을 적어 주십시오.' };
+    var p = P(xml, xi), ps = xml.slice(p.s, p.e), mx = 0; (xml.match(/<w:bookmarkStart\b[^>]*\sw:id="(\d+)"/g) || []).forEach(function (s) { mx = Math.max(mx, +/(\d+)/.exec(s)[1]); });
+    var id = mx + 1, st = '<w:bookmarkStart w:id="' + id + '" w:name="' + esc(name) + '"/>', en = '<w:bookmarkEnd w:id="' + id + '"/>', head = /^<w:p\b[^>]*?>/.exec(ps)[0], np;
+    if (/\/>$/.test(head)) np = head.replace(/\s*\/>$/, '>') + st + en + '</w:p>';
+    else { var pp = pPrOf(ps); np = ps.slice(0, pp.e) + st + ps.slice(pp.e, ps.length - 6) + en + '</w:p>'; }
+    return { xml: xml.slice(0, p.s) + np + xml.slice(p.e), name: name };
+  }
+  function deleteBookmark(xml, name) {
+    var re = new RegExp('<w:bookmarkStart\\b[^>]*w:name="' + String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[^>]*/>'), m = re.exec(xml); if (!m) return { err: '책갈피를 찾지 못했습니다.' };
+    var id = attrOf(m[0], 'id'), x = xml.replace(m[0], '').replace(new RegExp('<w:bookmarkEnd\\b[^>]*w:id="' + id + '"[^>]*/>'), ''); return { xml: x };
+  }
+  // 문서 안 책갈피로 가는 링크: 고른 문단 맨 끝에 글(링크)을 붙인다
+  function addAnchorLink(xml, xi, text, bm) {
+    text = String(text || '').trim(); if (!text) return { err: '링크로 보일 글을 적어 주십시오.' };
+    if (!listBookmarks(xml).some(function (b) { return b.name === bm; })) return { err: '그 책갈피를 찾지 못했습니다.' };
+    var p = P(xml, xi), ps = xml.slice(p.s, p.e), run = '<w:hyperlink w:anchor="' + esc(bm) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + esc(text) + '</w:t></w:r></w:hyperlink>', head = /^<w:p\b[^>]*?>/.exec(ps)[0];
+    if (/\/>$/.test(head)) return { xml: xml.slice(0, p.s) + head.replace(/\s*\/>$/, '>') + run + '</w:p>' + xml.slice(p.e) };
+    return { xml: xml.slice(0, p.e - 6) + run + xml.slice(p.e - 6) };
+  }
+
+  // ---- 그림·표 이름(캡션): 「그림 1」 + 글. 같은 이름표의 번호는 문서 순서대로 다시 매긴다 ----
+  STYLE_NAMES.caption = ['caption', '캡션', '그림 설명'];
+  STYLE_DEF.caption = '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="35"/><w:qFormat/><w:pPr><w:spacing w:before="60" w:after="200" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>';
+  function renumberSeq(xml, label) {
+    var n = 0, esl = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var re = new RegExp('<w:fldSimple\\b[^>]*w:instr="\\s*SEQ\\s+' + esl + '(?![A-Za-z0-9_])[^"]*"[^>]*>(?:(?!<\\/w:fldSimple>)[\\s\\S])*?<\\/w:fldSimple>', 'g');
+    return xml.replace(re, function (f) { n++; return f.replace(/(<w:t\b[^>]*>)\d+(<\/w:t>)/, '$1' + n + '$2'); });
+  }
+  // above=true 면 고른 문단 위에, 아니면 아래에 넣는다(그림은 보통 아래, 표는 위)
+  async function addCaption(pkg, xi, label, text, above) {
+    label = String(label || '그림').trim() || '그림'; text = String(text || '').trim();
+    if (!/^[A-Za-z가-힣]{1,10}$/.test(label)) return { err: '이름표는 글자 10자까지(예: 그림, 표)만 쓸 수 있습니다.' };
+    var sid = await ensureStyle(pkg, 'caption'), x = await must(pkg, 'word/document.xml'), p = P(x, xi);
+    if (p.anc.indexOf('w:txbxContent') >= 0) return { err: '텍스트 상자 안에는 넣을 수 없습니다.' };
+    var kn = above ? '<w:keepNext/>' : '';
+    var par = '<w:p><w:pPr>' + (sid ? '<w:pStyle w:val="' + sid + '"/>' : '') + kn + (sid ? '' : '<w:spacing w:after="200"/>') + '</w:pPr><w:r>' + (sid ? '' : '<w:rPr><w:b/><w:sz w:val="20"/></w:rPr>') + '<w:t xml:space="preserve">' + esc(label) + ' </w:t></w:r><w:fldSimple w:instr=" SEQ ' + esc(label) + ' \\* ARABIC "><w:r><w:rPr><w:noProof/></w:rPr><w:t>1</w:t></w:r></w:fldSimple>' + (text ? '<w:r><w:t xml:space="preserve"> ' + esc(text) + '</w:t></w:r>' : '') + '</w:p>';
+    var at = above ? p.s : p.e;
+    if (p.anc.indexOf('w:tc') >= 0) {                               // 표 칸 안의 문단 → 표 전체의 위 또는 아래
+      var tbs = ranges(x, 'w:tbl').filter(function (r) { return r.s <= p.s && p.s < r.e; }).sort(function (u, v) { return u.s - v.s; });
+      if (tbs.length) at = above ? tbs[0].s : tbs[0].e;
+    }
+    x = x.slice(0, at) + par + x.slice(at);
+    pkg.write('word/document.xml', renumberSeq(x, label)); return { ok: true, newXi: above ? xi : xi + 1 };
+  }
+
+  // ---- 목차 ----
+  function headingLevels(sx) {                       // styleId → 1~9
+    var map = {}; if (!sx) return map;
+    (sx.match(/<w:style\b[^>]*>[\s\S]*?<\/w:style>/g) || []).forEach(function (s) {
+      var id = attrOf(s.match(/^<w:style\b[^>]*>/)[0], 'styleId'), nm = /<w:name\s+w:val="([^"]*)"/.exec(s), m = nm && /^(?:heading|제목)\s*(\d)$/i.exec(nm[1]);
+      if (m) map[id] = +m[1];
+    });
+    return map;
+  }
+  function headingList(xml, sx, maxLv) {
+    var map = headingLevels(sx), out = [], ps = paras(xml);
+    ps.forEach(function (p, i) {
+      if (p.anc.indexOf('w:tc') >= 0 || p.anc.indexOf('w:txbxContent') >= 0) return;
+      var s = xml.slice(p.s, p.e), st = /<w:pStyle\s+w:val="([^"]*)"/.exec(s), lv = st && map[st[1]] ? map[st[1]] : 0;
+      if (!lv) { var ol = /<w:outlineLvl\s+w:val="(\d)"/.exec(s); if (ol) lv = +ol[1] + 1; }
+      if (!lv || lv > maxLv) return;
+      var t = pText(s.replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')).replace(/\s+/g, ' ').trim(); if (t) out.push({ xi: i, lv: lv, text: t });
+    });
+    return out;
+  }
+  function tocField(xml) {                            // 첫 목차 필드의 문단 범위 {a,b,endAt,tail,entries:[{text,page}]} (없으면 null). 워드는 필드 끝을 다음 글 문단 앞머리에 두기도 한다 → tail
+    var ps = paras(xml), a = -1, i, j;
+    for (i = 0; i < ps.length && a < 0; i++) { var s0 = xml.slice(ps[i].s, ps[i].e); if (/<w:instrText\b[^>]*>\s*TOC\b/.test(s0) || /<w:fldSimple\b[^>]*w:instr="\s*TOC\b/.test(s0)) a = i; }
+    if (a < 0) return null;
+    var b = a, simple = /<w:fldSimple\b[^>]*w:instr="\s*TOC\b/.test(xml.slice(ps[a].s, ps[a].e)), endAt = ps[a].e;
+    if (!simple) {
+      var depth = 0, done = false;
+      for (i = a; i < ps.length && !done; i++) {
+        var s = xml.slice(ps[i].s, ps[i].e), re = /<w:fldChar\b[^>]*w:fldCharType="(begin|end)"/g, m;
+        while ((m = re.exec(s))) {
+          depth += m[1] === 'begin' ? 1 : -1;
+          if (depth === 0) { done = true; b = i; var rs = s.lastIndexOf('<w:r', m.index), re2 = s.indexOf('</w:r>', m.index); endAt = ps[i].s + (re2 >= 0 ? re2 + 6 : m.index + m[0].length); break; }
+        }
+      }
+      if (!done) return null;
+    }
+    var entries = [];
+    for (j = a; j <= b; j++) { var q = pText(xml.slice(ps[j].s, j === b ? endAt : ps[j].e)).replace(/\r?\n/g, ''), parts = q.split('\t'); if (parts[0].trim()) entries.push({ text: parts[0].trim(), page: parts.length > 1 ? parts[parts.length - 1].trim() : '' }); }
+    var tail = xml.slice(endAt, ps[b].e), hasTail = /<w:(?:t|drawing|pict|hyperlink|fldChar|fldSimple|br|tab|bookmarkStart)\b/.test(tail);
+    return { a: a, b: b, endAt: endAt, hasTail: hasTail, entries: entries };
+  }
+  function tocParas(heads, oldEntries, tocStyles, tw) {
+    var used = {}, pageOf = function (t) { for (var k = 0; k < oldEntries.length; k++) if (!used[k] && oldEntries[k].text.replace(/\s+/g, ' ') === t && /^\d+$/.test(oldEntries[k].page)) { used[k] = 1; return oldEntries[k].page; } return ''; };
+    var instr = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>', out = [];
+    if (!heads.length) return '<w:p>' + instr + '<w:r><w:t>(제목 스타일을 쓴 글이 없어 목차가 비어 있습니다)</w:t></w:r></w:p><w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    heads.forEach(function (h, i) {
+      var pg = pageOf(h.text), sid = tocStyles[h.lv] || null, ind = (h.lv - 1) * 220;
+      var ppr = '<w:pPr>' + (sid ? '<w:pStyle w:val="' + sid + '"/>' : '') + '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="' + tw + '"/></w:tabs>' + (!sid && ind ? '<w:ind w:left="' + ind + '"/>' : '') + '</w:pPr>';
+      out.push('<w:p>' + ppr + (i === 0 ? instr : '') + '<w:r><w:t xml:space="preserve">' + esc(h.text) + '</w:t></w:r>' + (pg ? '<w:r><w:tab/></w:r><w:r><w:t>' + pg + '</w:t></w:r>' : '') + '</w:p>');
+    });
+    out.push('<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>');
+    return out.join('');
+  }
+  function tocStyleIds(sx) { var o = {}; (sx || '').replace(/<w:style\b[^>]*>[\s\S]*?<\/w:style>/g, function (s) { var nm = /<w:name\s+w:val="([^"]*)"/.exec(s), m = nm && /^toc (\d)$/i.exec(nm[1]); if (m) o[+m[1]] = attrOf(s.match(/^<w:style\b[^>]*>/)[0], 'styleId'); return s; }); return o; }
+  // 고른 문단 아래에 목차를 넣는다(제목 스타일 1~3단계). 쪽 번호는 워드에서 필드를 갱신하면 채워진다
+  async function insertToc(pkg, xi) {
+    var x = await must(pkg, 'word/document.xml'), sx = await pkg.read('word/styles.xml');
+    if (tocField(x)) return { err: '이 문서에는 이미 목차가 있습니다. 「목차 갱신」을 눌러 주십시오.' };
+    var ps = paras(x), p = ps[xi]; if (!p) return { err: '문단을 찾지 못했습니다.' };
+    if (p.anc.indexOf('w:tc') >= 0) return { err: '표 안에는 목차를 넣을 수 없습니다.' };
+    var heads = headingList(x, sx, 3), xml = tocParas(heads, [], tocStyleIds(sx), textWidth(x));
+    pkg.write('word/document.xml', x.slice(0, p.e) + xml + x.slice(p.e)); return { ok: true, n: heads.length, newXi: xi + 1 };
+  }
+  async function updateToc(pkg) {
+    var x = await must(pkg, 'word/document.xml'), sx = await pkg.read('word/styles.xml'), f = tocField(x);
+    if (!f) return { err: '이 문서에는 목차가 없습니다. 먼저 「목차 넣기」를 눌러 주십시오.' };
+    var ps = paras(x);
+    if (ps[f.a].anc.join('/') !== 'w:document/w:body') return { err: '표나 상자 안에 있는 목차는 폰에서 갱신할 수 없습니다.' };
+    var lastKept = f.hasTail ? f.b - 1 : f.b;
+    var heads = headingList(x, sx, 3).filter(function (h) { return h.xi < f.a || h.xi > lastKept; }), xml = tocParas(heads, f.entries, tocStyleIds(sx), textWidth(x));
+    var rest = '', to = ps[f.b].e;
+    if (f.hasTail) {                                  // 필드 끝 뒤에 남은 글(워드가 같은 문단에 둔 제목)은 그대로 둔다
+      var pstr = x.slice(ps[f.b].s, ps[f.b].e), pp = pPrOf(pstr), head = /^<w:p\b[^>]*?>/.exec(pstr)[0];
+      rest = head + (pp ? pp.xml : '') + x.slice(f.endAt, ps[f.b].e);
+    }
+    pkg.write('word/document.xml', x.slice(0, ps[f.a].s) + xml + rest + x.slice(to)); return { ok: true, n: heads.length };
+  }
+
+  // ============================== v10.8 (3회차): 메모 · 변경 내용(수락·거절) · 서식 따라 하기 · 단 나누기 · 그림 배치·크기 ==============================
+  // ---- 메모(주석) ----
+  var CM_PART = 'word/comments.xml', CM_AUTHOR = '메모';
+  async function ensureCommentsPart(pkg) {
+    var cur = await pkg.read(CM_PART); if (cur != null) return cur;
+    var base = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:comments xmlns:w="' + W_NS + '" xmlns:r="' + R_NS + '"></w:comments>';
+    pkg.write(CM_PART, base);
+    var rp = 'word/_rels/document.xml.rels', rx = await must(pkg, rp), id = nextRid(rx);
+    pkg.write(rp, rx.replace('</Relationships>', '<Relationship Id="' + id + '" Type="' + RT + 'comments" Target="comments.xml"/></Relationships>'));
+    var ct = await must(pkg, '[Content_Types].xml');
+    if (ct.indexOf('/' + CM_PART) < 0) pkg.write('[Content_Types].xml', ct.replace('</Types>', '<Override PartName="/' + CM_PART + '" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>'));
+    return base;
+  }
+  function commentBodies(cx) {
+    var out = [];
+    (cx.match(/<w:comment\b[^>]*?>[\s\S]*?<\/w:comment>/g) || []).forEach(function (c) {
+      var open = c.match(/^<w:comment\b[^>]*>/)[0];
+      out.push({ id: attrOf(open, 'id'), author: unesc(attrOf(open, 'author') || ''), date: attrOf(open, 'date') || '', text: (c.match(/<w:p\b[\s\S]*?<\/w:p>/g) || []).map(function (p) { return pText(p); }).join('\n').trim(), xml: c });
+    });
+    return out;
+  }
+  // 문서의 메모 목록 [{id, author, date, text, para}] (붙은 문단 순서)
+  async function readComments(pkg) {
+    var cx = await pkg.read(CM_PART); if (cx == null) return [];
+    var x = await must(pkg, 'word/document.xml'), bodies = commentBodies(cx), at = {};
+    paras(x).forEach(function (p, i) { (x.slice(p.s, p.e).match(/<w:commentReference\b[^>]*>/g) || []).forEach(function (t) { at[attrOf(t, 'id')] = i; }); });
+    return bodies.map(function (b) { return { id: b.id, author: b.author, date: b.date, text: b.text, para: at[b.id] != null ? at[b.id] : -1 }; }).sort(function (a, b) { return (a.para < 0 ? 1e9 : a.para) - (b.para < 0 ? 1e9 : b.para); });
+  }
+  async function addComment(pkg, xi, text) {
+    text = String(text || '').trim(); if (!text) return { err: '메모 내용을 적어 주십시오.' };
+    var cx = await ensureCommentsPart(pkg), x = await must(pkg, 'word/document.xml'), p = P(x, xi), ps = x.slice(p.s, p.e);
+    if (p.anc.some(function (n) { return n === 'w:txbxContent'; })) return { err: '텍스트 상자 안에는 메모를 달 수 없습니다.' };
+    var mx = -1; (cx.match(/<w:comment\b[^>]*\sw:id="(\d+)"/g) || []).concat(x.match(/<w:comment(?:RangeStart|RangeEnd|Reference)\b[^>]*\sw:id="(\d+)"/g) || []).forEach(function (s) { mx = Math.max(mx, +/(\d+)/.exec(s)[1]); });
+    var id = mx + 1, head = /^<w:p\b[^>]*?>/.exec(ps)[0], st = '<w:commentRangeStart w:id="' + id + '"/>', en = '<w:commentRangeEnd w:id="' + id + '"/><w:r><w:commentReference w:id="' + id + '"/></w:r>', np;
+    if (/\/>$/.test(head)) np = head.replace(/\s*\/>$/, '>') + st + en + '</w:p>';
+    else { var pp = pPrOf(ps); np = ps.slice(0, pp.e) + st + ps.slice(pp.e, ps.length - 6) + en + '</w:p>'; }
+    pkg.write('word/document.xml', x.slice(0, p.s) + np + x.slice(p.e));
+    var d = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    var body = '<w:comment w:id="' + id + '" w:author="' + CM_AUTHOR + '" w:date="' + d + '" w:initials="메"><w:p><w:r><w:annotationRef/></w:r><w:r><w:t xml:space="preserve">' + esc(text).replace(/\r?\n/g, '</w:t><w:br/><w:t xml:space="preserve">') + '</w:t></w:r></w:p></w:comment>';
+    pkg.write(CM_PART, cx.replace(/<\/w:comments>\s*$/, body + '</w:comments>')); return { ok: true, id: String(id) };
+  }
+  async function editComment(pkg, id, text) {
+    text = String(text || '').trim(); if (!text) return { err: '메모 내용을 적어 주십시오.' };
+    var cx = await pkg.read(CM_PART); if (cx == null) return { err: '메모를 찾지 못했습니다.' };
+    var re = new RegExp('<w:comment\\b[^>]*\\sw:id="' + id + '"[^>]*>[\\s\\S]*?<\\/w:comment>'), m = re.exec(cx); if (!m) return { err: '메모를 찾지 못했습니다.' };
+    if ((m[0].match(/<w:p\b/g) || []).length > 1 || /<w:(drawing|pict|fldChar|hyperlink)\b/.test(m[0])) return { err: '이 메모에는 여러 문단·그림·링크가 있어 폰에서는 고칠 수 없습니다. 지우고 새로 달아 주십시오.' };
+    var open = m[0].match(/^<w:comment\b[^>]*>/)[0], pm = /<w:p\b[^>]*?>(?:<w:pPr\b[\s\S]*?<\/w:pPr>)?/.exec(m[0]), phead = pm ? pm[0] : '<w:p>';
+    var ar = /<w:r\b[^>]*>(?:<w:rPr\b[\s\S]*?<\/w:rPr>)?<w:annotationRef\s*\/><\/w:r>/.exec(m[0]);
+    var nb = open + phead + (ar ? ar[0] : '<w:r><w:annotationRef/></w:r>') + '<w:r><w:t xml:space="preserve">' + esc(text).replace(/\r?\n/g, '</w:t><w:br/><w:t xml:space="preserve">') + '</w:t></w:r></w:p></w:comment>';
+    pkg.write(CM_PART, cx.replace(m[0], function () { return nb; })); return { ok: true };
+  }
+  async function deleteComment(pkg, id) {
+    var cx = await pkg.read(CM_PART), x = await must(pkg, 'word/document.xml');
+    x = x.replace(new RegExp('<w:commentRangeStart\\b[^>]*\\sw:id="' + id + '"[^>]*\\/>'), '').replace(new RegExp('<w:commentRangeEnd\\b[^>]*\\sw:id="' + id + '"[^>]*\\/>'), '')
+      .replace(new RegExp('<w:r\\b[^>]*>(?:<w:rPr\\b[\\s\\S]*?<\\/w:rPr>)?<w:commentReference\\b[^>]*\\sw:id="' + id + '"[^>]*\\/><\\/w:r>'), '');
+    pkg.write('word/document.xml', x);
+    if (cx != null) {
+      var m = new RegExp('<w:comment\\b[^>]*\\sw:id="' + id + '"[^>]*>[\\s\\S]*?<\\/w:comment>').exec(cx);
+      if (m) {
+        var pid = (m[0].match(/w14:paraId="([0-9A-Fa-f]+)"/g) || []).map(function (s) { return /"([^"]+)"/.exec(s)[1]; });
+        pkg.write(CM_PART, cx.replace(m[0], ''));
+        for (var f of ['word/commentsExtended.xml', 'word/commentsIds.xml', 'word/commentsExtensible.xml']) {
+          var ex = await pkg.read(f); if (ex == null) continue;
+          pid.forEach(function (q) { ex = ex.replace(new RegExp('<w1[0-9]:(?:commentEx|commentId|commentExtensible)\\b[^>]*paraId="' + q + '"[^>]*\\/>', 'g'), ''); });
+          pkg.write(f, ex);
+        }
+      }
+    }
+    return { ok: true };
+  }
+
+  // ---- 변경 내용(변경 추적) 수락·거절 ----
+  var REV_RE = /<w:(ins|del|moveFrom|moveTo|rPrChange|pPrChange|sectPrChange|tblPrChange|tblPrExChange|tcPrChange|trPrChange|numberingChange|tblGridChange)\b[^>]*?(\/?)>/g;
+  function revText(kind, inner) {
+    var t;
+    if (kind === 'del' || kind === 'moveFrom') t = (inner.match(/<w:delText\b[^>]*>[\s\S]*?<\/w:delText>/g) || []).map(function (s) { return unesc(s.replace(/<[^>]+>/g, '')); }).join('');
+    else t = pText(inner);
+    return t.replace(/\s+/g, ' ').trim();
+  }
+  // 문서의 변경 목록 [{ord, kind:'ins'|'del'|'move'|'fmt'|'other', author, date, text, para, mark}] — 문서 순서
+  function listChanges(xml) {
+    var out = [], re = new RegExp(REV_RE.source, 'g'), m, ord = 0, ps = paras(xml), pi = 0;
+    while ((m = re.exec(xml))) {
+      var name = m[1], self = m[2] === '/', open = m[0], inner = '';
+      if (!self) { var e = elemEnd(xml, m.index); if (e > 0) inner = xml.slice(m.index + open.length, e - ('</w:' + name + '>').length); }
+      while (pi < ps.length - 1 && ps[pi].e <= m.index) pi++;
+      var kind = name === 'ins' ? 'ins' : name === 'del' ? 'del' : /^move/.test(name) ? 'move' : /^(rPr|pPr)Change$/.test(name) ? 'fmt' : 'other';
+      var tx = (kind === 'fmt' || kind === 'other') ? '' : revText(name, inner);
+      out.push({ ord: ord++, kind: kind, name: name, author: unesc(attrOf(open, 'author') || ''), date: attrOf(open, 'date') || '', text: tx, para: ps.length && ps[pi].s <= m.index && m.index < ps[pi].e ? pi : -1, mark: self });
+    }
+    return out;
+  }
+  // 변경 처리: accept 면 수락, 아니면 거절. only 가 숫자(ord)면 그 하나만. 돌려주는 값 {xml, done, skipped}
+  function resolveChanges(xml, accept, only) {
+    var ord = 0, done = 0, skipped = 0, tg = (only == null) ? null : +only;
+    var fixDel = function (s) { return s.replace(/<w:delText\b/g, '<w:t').replace(/<\/w:delText>/g, '</w:t>').replace(/<w:delInstrText\b/g, '<w:instrText').replace(/<\/w:delInstrText>/g, '</w:instrText>'); };
+    function proc(str) {
+      var re = new RegExp(REV_RE.source, 'g'), out = '', pos = 0, m;
+      while ((m = re.exec(str))) {
+        var name = m[1], self = m[2] === '/', open = m[0], my = ord++, hit = tg == null || tg === my;
+        out += str.slice(pos, m.index);
+        if (self) {
+          pos = re.lastIndex;
+          if (hit && ((name === 'ins' && accept) || (name === 'del' && !accept))) { out += ''; done++; }
+          else if (hit) { out += open; skipped++; }
+          else out += open;
+          continue;
+        }
+        var e = elemEnd(str, m.index); if (e < 0) { out += str.slice(m.index); pos = str.length; break; }
+        var close = '</w:' + name + '>', inner = str.slice(m.index + open.length, e - close.length), pin = proc(inner), rep;
+        if (!hit) rep = open + pin + close;
+        else if (name === 'ins' || name === 'moveTo') { rep = accept ? pin : ''; done++; }
+        else if (name === 'del' || name === 'moveFrom') { rep = accept ? '' : fixDel(pin); done++; }
+        else if (accept) { rep = ''; done++; }
+        else { rep = open + pin + close; skipped++; }                      // 서식 변경 거절은 아래 「서식 되돌리기」에서 따로 한다
+        out += rep; pos = e; re.lastIndex = e;
+      }
+      return out + str.slice(pos);
+    }
+    var nx = proc(xml);
+    if (!/<w:move(?:From|To)\b/.test(nx)) nx = nx.replace(/<w:move(?:From|To)Range(?:Start|End)\b[^>]*\/>/g, '');
+    return { xml: nx, done: done, skipped: skipped };
+  }
+  // 서식 변경 모두 거절: 바뀌기 전 서식(rPrChange·pPrChange 안에 저장됨)으로 되돌린다
+  function revertFormatChanges(xml) {
+    var n = 0;
+    xml = xml.replace(/<w:rPr>((?:(?!<\/w:rPr>)[\s\S])*?)<w:rPrChange\b[^>]*>\s*(<w:rPr\b[\s\S]*?<\/w:rPr>|<w:rPr\s*\/>)?\s*<\/w:rPrChange>\s*<\/w:rPr>/g, function (a, cur, old) { n++; return old && !/\/>$/.test(old) ? old : ''; });
+    xml = xml.replace(/<w:pPr>((?:(?!<\/w:pPr>)[\s\S])*?)<w:pPrChange\b[^>]*>\s*<w:pPr\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:pPr>)\s*<\/w:pPrChange>\s*<\/w:pPr>/g, function (a, cur, old) {
+      n++; var rp = (/<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(cur) || [''])[0], sp = (/<w:sectPr\b[\s\S]*?<\/w:sectPr>/.exec(cur) || [''])[0], inner = (old || '') + rp + sp; return inner ? '<w:pPr>' + inner + '</w:pPr>' : '';
+    });
+    return { xml: xml, n: n };
+  }
+  async function readTrack(pkg) { var sx = await pkg.read('word/settings.xml'); return !!(sx && /<w:trackRevisions\b(?![^>]*w:val="(?:0|false|off)")/.test(sx)); }
+  var SETTINGS_AFTER_TRACK = ['doNotTrackMoves', 'doNotTrackFormatting', 'documentProtection', 'autoFormatOverride', 'styleLockTheme', 'styleLockQFSet', 'defaultTabStop', 'autoHyphenation', 'consecutiveHyphenLimit', 'hyphenationZone', 'doNotHyphenateCaps', 'showEnvelope', 'summaryLength', 'clickAndTypeStyle', 'defaultTableStyle', 'evenAndOddHeaders', 'bookFoldRevPrinting', 'bookFoldPrinting', 'bookFoldPrintingSheets', 'drawingGridHorizontalSpacing', 'drawingGridVerticalSpacing', 'displayHorizontalDrawingGridEvery', 'displayVerticalDrawingGridEvery', 'doNotUseMarginsForDrawingGridOrigin', 'drawingGridHorizontalOrigin', 'drawingGridVerticalOrigin', 'doNotShadeFormData', 'noPunctuationKerning', 'characterSpacingControl', 'printTwoOnOne', 'strictFirstAndLastChars', 'noLineBreaksAfter', 'noLineBreaksBefore', 'savePreviewPicture', 'doNotValidateAgainstSchema', 'saveInvalidXml', 'ignoreMixedContent', 'alwaysShowPlaceholderText', 'doNotDemarcateInvalidXml', 'saveXmlDataOnly', 'useXSLTWhenSaving', 'saveThroughXslt', 'showXMLTags', 'alwaysMergeEmptyNamespace', 'updateFields', 'hdrShapeDefaults', 'footnotePr', 'endnotePr', 'compat', 'docVars', 'rsids', 'mathPr', 'attachedSchema', 'themeFontLang', 'clrSchemeMapping', 'doNotIncludeSubdocsInStats', 'doNotAutoCompressPictures', 'forceUpgrade', 'captions', 'readModeInkLockDown', 'smartTagType', 'schemaLibrary', 'shapeDefaults', 'doNotEmbedSmartTags', 'decimalSymbol', 'listSeparator'];
+  async function setTrack(pkg, on) {
+    var sx = await pkg.read('word/settings.xml'); if (sx == null) return { err: '문서 설정 파일(settings.xml)이 없어 바꿀 수 없습니다.' };
+    sx = sx.replace(/<w:trackRevisions\b[^>]*\/>/g, '');
+    if (on) {
+      var m = new RegExp('<w:(?:' + SETTINGS_AFTER_TRACK.join('|') + ')\\b').exec(sx);
+      sx = m ? sx.slice(0, m.index) + '<w:trackRevisions/>' + sx.slice(m.index) : sx.replace(/<\/w:settings>\s*$/, '<w:trackRevisions/></w:settings>');
+    }
+    pkg.write('word/settings.xml', sx); return { ok: true, on: !!on };
+  }
+
+  // ---- 서식 따라 하기: 한 문단의 문단·글자 서식을 담아 다른 문단에 입힌다 ----
+  function copyFormat(xml, xi) {
+    var p = P(xml, xi), ps = xml.slice(p.s, p.e), pp = pPrOf(ps), inner = '';
+    if (pp && pp.xml && !/\/>$/.test(pp.xml.slice(0, pp.xml.indexOf('>') + 1))) inner = pp.xml.slice(pp.xml.indexOf('>') + 1, pp.xml.lastIndexOf('</w:pPr>'));
+    var kids = kidsOf(inner, 0, inner.length).filter(function (k) { return ['w:rPr', 'w:sectPr', 'w:pPrChange', 'w:numPr'].indexOf(k.name) < 0; }).map(function (k) { return { name: k.name.replace(/^w:/, ''), xml: inner.slice(k.s, k.e) }; });
+    var rs = ps.match(/<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?<w:t\b[\s\S]*?<\/w:r>/g), rpr = '';
+    if (rs) { var m = /<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(rs[0]); if (m) rpr = m[0].replace(/<w:rPrChange\b[\s\S]*?<\/w:rPrChange>/g, ''); }
+    return { kids: kids, rpr: rpr, text: pText(ps).slice(0, 14) };
+  }
+  function pasteFormat(xml, a, b, clip) {
+    if (!clip) return { err: '먼저 따라 할 문단을 골라 「서식 복사」를 눌러 주십시오.' };
+    return { xml: mapParas(xml, a, b, function (p) {
+      var out = withPPr(p, function (old) {
+        var inner = '', keep = [];
+        if (old && !/\/>$/.test(old.slice(0, old.indexOf('>') + 1))) inner = old.slice(old.indexOf('>') + 1, old.lastIndexOf('</w:pPr>'));
+        kidsOf(inner, 0, inner.length).forEach(function (k) { var nm = k.name.replace(/^w:/, ''); if (['numPr', 'rPr', 'sectPr', 'pPrChange'].indexOf(nm) >= 0) keep.push({ name: nm, xml: inner.slice(k.s, k.e) }); });
+        var all = clip.kids.concat(keep).sort(function (x, y) { return PPR_ORDER.indexOf(x.name) - PPR_ORDER.indexOf(y.name); });
+        return all.length ? '<w:pPr>' + all.map(function (k) { return k.xml; }).join('') + '</w:pPr>' : '<w:pPr/>';
+      }).replace(/<w:pPr\/>/g, '');
+      return out.replace(/<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, function (r) {
+        if (!/<w:t\b/.test(r) || /<w:(?:footnoteReference|endnoteReference|drawing|pict|fldChar)\b/.test(r)) return r;
+        var body = r.replace(/<w:rPr\b[\s\S]*?<\/w:rPr>|<w:rPr\s*\/>/, '');
+        return body.replace(/^(<w:r\b[^>]*>)/, '$1' + clip.rpr);
+      });
+    }) };
+  }
+
+  // ---- 글을 신문처럼 칸 나누기(다단) ----
+  var SECT_COLS_AFTER = ['pgSz', 'pgMar', 'paperSrc', 'pgBorders', 'lnNumType', 'pgNumType'];
+  function sectWithCols(sp, n) {
+    var cols = n > 1 ? '<w:cols w:num="' + n + '" w:space="720"/>' : '<w:cols w:space="720"/>';
+    sp = sp.replace(/<w:cols\b[^>]*?(?:\/>|>[\s\S]*?<\/w:cols>)/, '');
+    var at = -1; SECT_COLS_AFTER.forEach(function (nm) { var m = new RegExp('<w:' + nm + '\\b[^>]*?\\/>|<w:' + nm + '\\b[^>]*>[\\s\\S]*?<\\/w:' + nm + '>').exec(sp); if (m) at = Math.max(at, m.index + m[0].length); });
+    if (at < 0) { var d = /<w:(?:formProt|vAlign|noEndnote|titlePg|textDirection|bidi|rtlGutter|docGrid|printerSettings)\b/.exec(sp); at = d ? d.index : sp.lastIndexOf('</w:sectPr>'); }
+    return sp.slice(0, at) + cols + sp.slice(at);
+  }
+  function readCols(xml) { var m = firstSect(xml); if (!m) return 1; var c = /<w:cols\b[^>]*>/.exec(m[0]); return c ? +(attrOf(c[0], 'num') || 1) : 1; }
+  async function setColumnsWhole(pkg, n) {
+    var x = await must(pkg, 'word/document.xml'), k = 0;
+    x = x.replace(/<w:sectPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:sectPr>)/g, function (sp) { if (/\/>$/.test(sp)) return sp; k++; return sectWithCols(sp, n); });
+    if (!k) return { err: '이 문서에서 쪽 설정을 찾지 못했습니다.' };
+    pkg.write('word/document.xml', x); return { ok: true, sections: k };
+  }
+  function addSectToPara(pStr, sect) { return withPPr(pStr, function (ppr) { return setProp(ppr, 'w:pPr', PPR_ORDER, 'sectPr', sect) || '<w:pPr/>'; }).replace(/<w:pPr\/>/g, ''); }
+  // 고른 문단 a..b 만 n 단으로: 앞뒤를 「이어서」 구역으로 나눈다. 구역이 하나뿐인 문서·표 밖 문단만
+  function setColumnsRange(xml, a, b, n) {
+    var ps = paras(xml), last = /<w:sectPr\b[^>]*?>[\s\S]*?<\/w:sectPr>(?=\s*<\/w:body>)/.exec(xml), i;
+    if (!ps[a] || !ps[b]) return { err: '문단을 찾지 못했습니다.' };
+    if (!last || (xml.match(/<w:sectPr\b/g) || []).length !== 1) return { err: '구역이 여러 개인 문서는 폰에서 일부만 칸을 나눌 수 없습니다. 「문서 전체」를 쓰거나 「수정 요청」으로 맡겨 주십시오.' };
+    for (i = a; i <= b; i++) if (ps[i].anc.join('/') !== 'w:document/w:body') return { err: '표 안의 문단은 칸을 나눌 수 없습니다. 표 밖 문단을 고르십시오.' };
+    var base = last[0], noTP = base.replace(/<w:titlePg\b[^>]*\/>/g, ''), oc = readColsOf(base);
+    var cont = function (sp) { sp = sp.replace(/<w:type\b[^>]*\/>/, ''); var at = /<w:pgSz\b/.exec(sp); return at ? sp.slice(0, at.index) + '<w:type w:val="continuous"/>' + sp.slice(at.index) : sp; };
+    var noRef = function (sp) { return sp.replace(/<w:(?:headerReference|footerReference|titlePg)\b[^>]*\/>/g, ''); };
+    var atEnd = /^(?:\s|<w:bookmarkEnd\b[^>]*\/>)*$/.test(xml.slice(ps[b].e, last.index)), out = xml;
+    if (atEnd) out = out.slice(0, last.index) + sectWithCols(a > 0 ? cont(noTP) : base, n) + out.slice(last.index + last[0].length);
+    else {
+      out = out.slice(0, last.index) + cont(noTP) + out.slice(last.index + last[0].length);
+      var pb = ps[b], bs = sectWithCols(a > 0 ? cont(noRef(base)) : base, n);
+      out = out.slice(0, pb.s) + addSectToPara(out.slice(pb.s, pb.e), bs) + out.slice(pb.e);
+    }
+    if (a > 0) {
+      var pa = ps[a - 1], orig = sectWithCols(base, oc);
+      if (pa.anc.join('/') === 'w:document/w:body') out = out.slice(0, pa.s) + addSectToPara(out.slice(pa.s, pa.e), orig) + out.slice(pa.e);
+      else out = out.slice(0, ps[a].s) + '<w:p><w:pPr>' + orig + '</w:pPr></w:p>' + out.slice(ps[a].s);
+    }
+    return { xml: out };
+  }
+  function readColsOf(sp) { var c = /<w:cols\b[^>]*>/.exec(sp); return c ? +(attrOf(c[0], 'num') || 1) : 1; }
+
+  // ---- 그림 배치(글자처럼 / 글 옆 / 가운데 / 글 뒤)와 크기 ----
+  function pickDrawing(s) {
+    var m = /<wp:(inline|anchor)\b[^>]*>[\s\S]*?<\/wp:\1>/.exec(s); if (!m) return null;
+    var open = /^<wp:(?:inline|anchor)\b[^>]*>/.exec(m[0])[0], inner = m[0].slice(open.length, m[0].length - ('</wp:' + m[1] + '>').length);
+    var ext = /<wp:extent\b[^>]*\/>/.exec(inner), eff = /<wp:effectExtent\b[^>]*\/>/.exec(inner), dp = /<wp:docPr\b[^>]*\/>|<wp:docPr\b[\s\S]*?<\/wp:docPr>/.exec(inner), cn = /<wp:cNvGraphicFramePr\b[^>]*\/>|<wp:cNvGraphicFramePr\b[\s\S]*?<\/wp:cNvGraphicFramePr>/.exec(inner), gr = /<a:graphic\b[\s\S]*<\/a:graphic>/.exec(inner);
+    if (!ext || !dp || !gr) return null;
+    return { kind: m[1], s: m.index, e: m.index + m[0].length, ns: (open.match(/\sxmlns:\w+="[^"]*"/g) || []).join(''), ext: ext[0], eff: eff ? eff[0] : '<wp:effectExtent l="0" t="0" r="0" b="0"/>', dp: dp[0], cn: cn ? cn[0] : '<wp:cNvGraphicFramePr/>', gr: gr[0] };
+  }
+  function readPicLayout(xml, xi) {
+    var p = P(xml, xi), s = xml.slice(p.s, p.e), d = pickDrawing(s); if (!d) return null;
+    var cx = +(attrOf(d.ext, 'cx') || 0), tw = textWidth(xml) * 635, mode = 'inline';
+    if (d.kind === 'anchor') { var a = /<wp:anchor\b[^>]*>/.exec(s)[0], al = /<wp:positionH\b[^>]*>\s*<wp:align>(\w+)<\/wp:align>/.exec(s); mode = attrOf(a, 'behindDoc') === '1' ? 'behind' : (/<wp:wrapTopAndBottom\b/.test(s) ? 'center' : (/<wp:wrapSquare\b|<wp:wrapTight\b|<wp:wrapThrough\b/.test(s) ? (al && al[1] === 'right' ? 'right' : 'left') : 'other')); }
+    return { mode: mode, cx: cx, pct: tw ? Math.round(cx / tw * 100) : 0 };
+  }
+  function setPicLayout(xml, xi, mode) {
+    var p = P(xml, xi), s = xml.slice(p.s, p.e), d = pickDrawing(s); if (!d) return { err: '이 문단에는 그림이 없습니다. 그림이 든 문단을 먼저 고르십시오.' };
+    var rep, dpid = +(/\sid="(\d+)"/.exec(d.dp) || [0, 1])[1];
+    if (mode === 'inline') rep = '<wp:inline distT="0" distB="0" distL="0" distR="0"' + d.ns + '>' + d.ext + d.eff + d.dp + d.cn + d.gr + '</wp:inline>';
+    else {
+      var al = mode === 'right' ? 'right' : (mode === 'left' ? 'left' : 'center'), wrap = mode === 'center' ? '<wp:wrapTopAndBottom/>' : (mode === 'behind' ? '<wp:wrapNone/>' : '<wp:wrapSquare wrapText="bothSides"/>');
+      rep = '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="' + (251658240 + dpid) + '" behindDoc="' + (mode === 'behind' ? '1' : '0') + '" locked="0" layoutInCell="1" allowOverlap="0"' + d.ns + '><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="margin"><wp:align>' + al + '</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' + d.ext + d.eff + wrap + d.dp + d.cn + d.gr + '</wp:anchor>';
+    }
+    return { xml: xml.slice(0, p.s) + s.slice(0, d.s) + rep + s.slice(d.e) + xml.slice(p.e) };
+  }
+  // 그림을 본문 폭의 pct % 로
+  function setPicWidth(xml, xi, pct) {
+    var p = P(xml, xi), s = xml.slice(p.s, p.e), d = pickDrawing(s); if (!d) return { err: '이 문단에는 그림이 없습니다. 그림이 든 문단을 먼저 고르십시오.' };
+    var cx = +attrOf(d.ext, 'cx'), target = Math.round(textWidth(xml) * 635 * pct / 100); if (!cx) return { err: '그림 크기를 읽지 못했습니다.' };
+    return scalePicture(xml, xi, target / cx);
+  }
+
+  // ---- 기호 · 날짜 목록(화면의 「기호·날짜」 시트와 글 고치기 시트가 함께 쓴다) ----
+  var SYMBOLS = [
+    ['문서 기호', ['※', '○', '●', '◦', '▪', '▫', '■', '□', '◆', '◇', '★', '☆', '▶', '▷', '◀', '◁', '▲', '△', '▼', '▽']],
+    ['번호', ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '㉠', '㉡', '㉢', '㉣', '㉤', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ']],
+    ['화살표·줄임', ['→', '←', '↑', '↓', '↔', '⇒', '⇐', '～', '·', '…', '‥', '—', '–', '∼']],
+    ['괄호', ['「', '」', '『', '』', '〈', '〉', '《', '》', '【', '】', '〔', '〕', '（', '）']],
+    ['단위·수학', ['℃', '㎡', '㎏', '㎖', '㎎', '㎝', '㎜', '㎞', '₩', '±', '×', '÷', '≤', '≥', '≠', '≒', '°', '‰', '∴', '∵']]
+  ];
+  function dateChoices(d) {
+    d = d || new Date(); var y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate(), wk = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()], h = d.getHours(), mi = d.getMinutes(), p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    return [y + '. ' + m + '. ' + dd + '.', y + '년 ' + m + '월 ' + dd + '일', y + '-' + p2(m) + '-' + p2(dd), m + '월 ' + dd + '일(' + wk + ')', y + '년 ' + m + '월 ' + dd + '일(' + wk + ')', (h < 12 ? '오전 ' : '오후 ') + (h % 12 || 12) + ':' + p2(mi), p2(h) + ':' + p2(mi)];
+  }
+
   global.SODocxStruct = {
+    SYMBOLS: SYMBOLS, dateChoices: dateChoices,
+    tableGeomInfo: tableGeomInfo, setColWidth: setColWidth, setRowHeight: setRowHeight, setTableAlign: setTableAlign, tableLook: tableLook, appendText: appendText,
+    readTitlePg: readTitlePg, setTitlePg: setTitlePg, readWatermark: readWatermark, setWatermark: setWatermark, listBookmarks: listBookmarks, addBookmark: addBookmark, deleteBookmark: deleteBookmark, addAnchorLink: addAnchorLink,
+    addCaption: addCaption, insertToc: insertToc, updateToc: updateToc, tocField: tocField, headingList: headingList,
+    readComments: readComments, addComment: addComment, editComment: editComment, deleteComment: deleteComment, listChanges: listChanges, resolveChanges: resolveChanges, revertFormatChanges: revertFormatChanges, readTrack: readTrack, setTrack: setTrack,
+    copyFormat: copyFormat, pasteFormat: pasteFormat, readCols: readCols, setColumnsWhole: setColumnsWhole, setColumnsRange: setColumnsRange, readPicLayout: readPicLayout, setPicLayout: setPicLayout, setPicWidth: setPicWidth,
     pageSetup: pageSetup, readPage: readPage, pageColor: pageColor, sectionBreakAfter: sectionBreakAfter, addLink: addLink, insertNote: insertNote, readNotes: readNotes, editNote: editNote, deleteNote: deleteNote,
     fmtPartial: fmtPartial, copyParas: copyParas, pasteBlock: pasteBlock, dupParas: dupParas, copyTable: copyTable, dupTable: dupTable, setCellShade: setCellShade, setTableBorders: setTableBorders, headerRow: headerRow,
     paras: paras, newPara: newPara, insertPara: insertPara, deleteParas: deleteParas, moveParas: moveParas, pageBreakAfter: pageBreakAfter, ensureStyle: ensureStyle, setStyle: setStyle,
