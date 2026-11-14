@@ -107,3 +107,11 @@ html[data-style="dark"] .spx-sw{background:#05060c}
 @media (min-width:600px){.spx-ob{min-height:56px}.spx-ob .l{font-size:12px}}
 @media (prefers-reduced-motion:reduce){.spx-ob:active,.spx-b:active{transform:none}.spx-show-h{transition:none}}
 .so-pptx-host.spx-host .so-pptx-hudb{display:none}
+/* O-0861 v10.7: 글자 일부만 꾸미기 줄(글 화면) */
+.so-pe-rf{position:sticky;top:0;z-index:3;background:var(--bg0,#fff);border:1.5px solid var(--glass-b2,#c9c9d4);border-radius:12px;padding:8px;margin:0 0 10px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.so-pe-rfl{font-size:13px;font-weight:700;color:var(--text,#222);margin-bottom:6px;word-break:keep-all;line-height:1.4}
+.so-pe-rfb{display:flex;flex-wrap:wrap;gap:6px}
+.so-pe-rfx{appearance:none;min-height:46px;min-width:56px;padding:0 12px;border-radius:12px;border:1.5px solid var(--glass-b,#c9c9d4);background:var(--glass,#f3f4fa);color:var(--text,#222);font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}
+.so-pe-rfx:active{background:var(--glass2,#e5e7f2);transform:scale(.96)}
+.so-pe-rfx.bold{font-weight:900}.so-pe-rfx.it{font-style:italic}.so-pe-rfx.ul{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){.so-pe-rfx:active{transform:none}}

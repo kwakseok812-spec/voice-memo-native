@@ -133,11 +133,11 @@
               });
             });
           });
-        }).catch(function (e) { fin(); ctx.toast('고치지 못했습니다: ' + ((e && e.message) || e), 5200); return false; });
+        }).catch(function (e) { fin(); ctx.explainFail('고치지 못했습니다', e, 5200); return false; });
       }
       function swapTo(bytes, label) {
         if (s.busyRun) return Promise.resolve(false); s.busyRun = true; ctx.busy(label);
-        return adopt(bytes).then(function () { s.busyRun = false; ctx.busy(null); ctx.setDirty(s.pkgOps > 0); return true; }, function (e) { s.busyRun = false; ctx.busy(null); ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); return false; });
+        return adopt(bytes).then(function () { s.busyRun = false; ctx.busy(null); ctx.setDirty(s.pkgOps > 0); return true; }, function (e) { s.busyRun = false; ctx.busy(null); ctx.explainFail('되돌리지 못했습니다', e, 4200); return false; });
       }
       function undoOp() {
         return loadEditorBase().then(flushEdits).then(function () {
@@ -255,7 +255,7 @@
       }
       function enterEdit() {
         ctx.busy('고칠 글자를 찾는 중…');
-        loadEditor().then(function () { ctx.busy(null); if (structOn()) { s.editing = true; stage.style.display = 'none'; nav.style.display = 'none'; tip.classList.add('hide'); if (s.panel) s.panel.style.display = 'none'; showEditor2(); } else showEdit(); }, function (e) { ctx.busy(null); ctx.toast('고치기를 열지 못했습니다: ' + ((e && e.message) || e), 4200); });
+        loadEditor().then(function () { ctx.busy(null); if (structOn()) { s.editing = true; stage.style.display = 'none'; nav.style.display = 'none'; tip.classList.add('hide'); if (s.panel) s.panel.style.display = 'none'; showEditor2(); } else showEdit(); }, function (e) { ctx.busy(null); ctx.explainFail('고치기를 열지 못했습니다', e, 4200); });
       }
       function slideTitle(i) {
         var sl = s.info.slides[i], p = sl.paras[0];
@@ -281,6 +281,49 @@
         ]);
         renderEdit();
       }
+      // ---- 글자 일부만 꾸미기(O-0861 v10.7): 글 카드에서 글자를 끌어 고른 뒤 단추로 그 부분에만 적용 ----
+      var RF_FONTS = ['맑은 고딕', '바탕', '돋움', '굴림', '궁서', 'Arial', 'Times New Roman'], RF_COLORS = [['검정', '000000'], ['빨강', 'E02020'], ['파랑', '1C5FD6'], ['초록', '1B8A3A'], ['주황', 'EE7A00'], ['보라', '7A3FC4'], ['회색', '777777'], ['흰색', 'FFFFFF']], RF_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 44, 54];
+      function rfLabel() {
+        var r = s.rsel;
+        if (!r || r.slide !== s.idx) return '고른 글자가 없습니다 — 아래 글칸에서 꾸밀 글자를 끌어 고르십시오';
+        var t = r.text.replace(/\s+/g, ' '); return '고른 글자: 「' + (t.length > 14 ? t.slice(0, 14) + '…' : t) + '」 ' + (r.to - r.from) + '자';
+      }
+      function paintRunBar() { var l = s.panel && s.panel.querySelector('.so-pe-rfl'); if (l) l.textContent = rfLabel(); }
+      function applyRun(f, msg) {
+        var r = s.rsel;
+        if (!r || r.slide !== s.idx) { ctx.toast('먼저 아래 글칸에서 꾸밀 글자를 끌어서 고르십시오.', 3000); return Promise.resolve(false); }
+        var snap = { slide: r.slide, ord: r.ord, from: r.from, to: r.to, text: r.text };
+        return run('글자 서식', function (pkg) { var pth = s.info.slides[snap.slide].path; return pkg.read(pth).then(function (x) { pkg.write(pth, window.SOPptxStruct.formatRun(x, snap.ord, snap.from, snap.to, f)); return {}; }); }, function (res) {
+          if (res && res.err) { ctx.toast(res.err, 4200); return; }
+          ctx.toast(msg || '고른 글자의 서식을 바꿨습니다', 2400);
+          s.rsel = snap; renderEdit();
+          var card = s.panel && s.panel.querySelector('.so-pe-card[data-ord="' + snap.ord + '"] textarea'); if (card) { try { card.setSelectionRange(snap.from, snap.to); } catch (e) {} }
+        });
+      }
+      function rfSheet(title, build) {
+        var body = document.createElement('div'); body.className = 'spx'; build(body);
+        ctx.sheet({ title: title, body: body, buttons: [{ label: '닫기' }], wide: true });
+      }
+      function rfGroup(body, label, items, fn) {
+        var l = document.createElement('div'); l.className = 'spx-l'; l.textContent = label; body.appendChild(l);
+        var row = document.createElement('div'); row.className = 'spx-r'; body.appendChild(row);
+        items.forEach(function (it) { var b = document.createElement('button'); b.type = 'button'; b.className = 'spx-b'; b.textContent = it[0]; b.onclick = function () { fn(it[1], it[0]); }; row.appendChild(b); });
+      }
+      function buildRunBar(slideIdx) {
+        var bar = document.createElement('div'); bar.className = 'so-pe-rf';
+        bar.innerHTML = '<div class="so-pe-rfl"></div><div class="so-pe-rfb"></div>';
+        var row = bar.querySelector('.so-pe-rfb');
+        function add(label, cls, fn) { var b = document.createElement('button'); b.type = 'button'; b.className = 'so-pe-rfx' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('pointerdown', function (e) { e.preventDefault(); }); b.onclick = fn; row.appendChild(b); }
+        add('굵게', 'bold', function () { applyRun({ bold: true }, '고른 글자를 굵게 했습니다'); });
+        add('기울임', 'it', function () { applyRun({ italic: true }, '고른 글자를 기울였습니다'); });
+        add('밑줄', 'ul', function () { applyRun({ underline: true }, '고른 글자에 밑줄을 넣었습니다'); });
+        add('일반', '', function () { applyRun({ bold: false, italic: false, underline: false }, '고른 글자의 굵게·기울임·밑줄을 풀었습니다'); });
+        add('색', '', function () { rfSheet('고른 글자 색', function (b) { rfGroup(b, '글자 색', RF_COLORS, function (v) { applyRun({ color: v }, '고른 글자의 색을 바꿨습니다'); }); }); });
+        add('크기', '', function () { rfSheet('고른 글자 크기', function (b) { rfGroup(b, '글자 크기(pt)', RF_SIZES.map(function (z) { return [String(z), z]; }), function (v) { applyRun({ size: v }, '고른 글자의 크기를 바꿨습니다'); }); }); });
+        add('글꼴', '', function () { rfSheet('고른 글자 글꼴', function (b) { rfGroup(b, '글꼴', RF_FONTS.map(function (z) { return [z, z]; }), function (v) { applyRun({ font: v }, '고른 글자의 글꼴을 바꿨습니다'); }); }); });
+        bar.querySelector('.so-pe-rfl').textContent = rfLabel();
+        return bar;
+      }
       function renderEdit() {
         var i = s.idx, sl = s.info.slides[i], ed = s.edits[i], P = s.panel;
         var n = s.info.slides.length;
@@ -297,8 +340,8 @@
           '<select class="so-pe-sel" aria-label="슬라이드 고르기">' + opts + '</select>' +
           '<button type="button" class="so-pe-nb" data-d="1" aria-label="다음 장">›</button></div>' +
           '<div class="so-pe-prev"></div>' +
-          '<div class="so-pe-hint">글자만 고칩니다. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영합니다. 줄바꿈은 줄바꿈으로 들어갑니다.' +
-          (notes.length ? '<br>이 장의 ' + esc(notes.join(' · ')) + '는 고칠 수 없습니다.' : '') +
+          '<div class="so-pe-hint">' + (structOn() ? '글을 고칩니다. 글자 모양은 그대로 두고 바뀐 부분만 반영합니다. 글자 일부만 굵게·색 등으로 꾸미려면 아래 칸에서 글자를 끌어 고른 뒤 「고른 글자 꾸미기」 단추를 누릅니다.' : '글자만 고칩니다. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영합니다.') + ' 줄바꿈은 줄바꿈으로 들어갑니다.' +
+          (notes.length ? '<br>이 장의 ' + esc(window.SOffice && window.SOffice.josa ? window.SOffice.josa(notes.join(' · '), '는') : notes.join(' · ') + '는') + ' 고칠 수 없습니다.' : '') +
           (lockedN ? '<br>자동 숫자(쪽 번호·날짜 등)나 수식이 든 문단 ' + lockedN + '개는 보기만 됩니다.' : '') + '</div>' +
           '<div class="so-pe-list"></div>' +
           '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · ' + (structOn() ? '표의 줄·칸과 슬라이드 추가·삭제·순서는 편집 화면 아래 도구줄의 「표」「슬라이드」에서 바꿉니다' : '표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없고, 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다') + '</div>';
@@ -313,6 +356,7 @@
           if (s.drawnKey !== JSON.stringify(s.edits) && anyEdit(s)) pv.insertAdjacentHTML('beforeend', '<div class="so-pe-stale">미리보기는 고치기 전 모습입니다. 「보기」를 누르면 고친 모습으로 다시 그립니다.</div>');
         }
         var list = P.querySelector('.so-pe-list');
+        if (structOn() && sl.paras.length) { var rf = buildRunBar(i); list.parentNode.insertBefore(rf, list); }
         if (!sl.paras.length) list.innerHTML = '<div class="so-pe-empty">이 장에는 고칠 수 있는 글자가 없습니다.</div>';
         var flt = s.filter && s.filter.slide === i ? s.filter : null;
         if (flt) list.insertAdjacentHTML('beforebegin', '<div class="so-pe-hint">선택한 도형의 글만 보고 있습니다. <button type="button" class="so-pe-all so-link">이 장 전체 보기</button> <button type="button" class="so-pe-add so-link">＋ 줄 추가</button></div>');
@@ -320,7 +364,8 @@
           if (flt && (p.ord < flt.from || p.ord >= flt.from + flt.count)) return;
           var card = document.createElement('div'); card.className = 'so-pe-card';
           var cur = Object.prototype.hasOwnProperty.call(ed, p.ord) ? ed[p.ord] : p.text;
-          card.innerHTML = '<div class="so-pe-lab"><span class="so-pe-kind">' + esc(p.kind) + '</span> <span class="so-pe-shape">' + esc(p.shape) + '</span><span class="so-pe-mark">고침</span><button type="button" class="so-pe-undo">되돌리기</button>' + (structOn() ? '<button type="button" class="so-pe-del">줄 지우기</button>' : '') + '</div>';
+          card.dataset.ord = p.ord;
+          card.innerHTML = '<div class="so-pe-lab"><span class="so-pe-kind">' + esc(p.kind) + '</span> <span class="so-pe-shape">' + esc(structOn() ? window.SOPptxStruct.friendlyName(p.shape, null, '') : p.shape) + '</span><span class="so-pe-mark">고침</span><button type="button" class="so-pe-undo">되돌리기</button>' + (structOn() ? '<button type="button" class="so-pe-del">줄 지우기</button>' : '') + '</div>';
           var ta = document.createElement('textarea'); ta.className = 'so-pe-ta'; ta.value = cur; ta.rows = 1; ta.spellcheck = false;
           if (p.locked) { ta.readOnly = true; ta.classList.add('lock'); }
           card.appendChild(ta);
@@ -339,6 +384,9 @@
             card.classList.toggle('changed', ch);
             ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
           }
+          function recSel() { if (!structOn() || p.locked) return; var a = ta.selectionStart, b = ta.selectionEnd; if (b > a) { s.rsel = { slide: i, ord: p.ord, from: a, to: b, text: ta.value.slice(a, b), len: ta.value.length }; paintRunBar(); } else if (s.rsel && s.rsel.ord === p.ord && document.activeElement === ta) { s.rsel = null; paintRunBar(); } }
+          ['select', 'keyup', 'mouseup', 'touchend', 'blur'].forEach(function (ev) { ta.addEventListener(ev, function () { setTimeout(recSel, ev === 'blur' ? 0 : 30); }); });
+          ta.addEventListener('input', function () { if (s.rsel && s.rsel.ord === p.ord) { s.rsel = null; paintRunBar(); } });
           ta.addEventListener('input', sync);
           card.querySelector('.so-pe-undo').addEventListener('click', function () { delete ed[p.ord]; ta.value = p.text; mark(); fit(); });
           var dl = card.querySelector('.so-pe-del');
@@ -393,7 +441,7 @@
         window.SOPptxEdit.build(s.info, s.edits).then(function (r) {
           return drawDeck(host, s, r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength));
         }).then(function () { s.drawnKey = k; ctx.busy(null); s.mode = 'one'; render(); }, function (e) {
-          ctx.busy(null); ctx.toast('다시 그리지 못했습니다: ' + ((e && e.message) || e), 4200);
+          ctx.busy(null); ctx.explainFail('다시 그리지 못했습니다', e, 4200);
           drawDeck(host, s, s.cur).then(function () { render(); }, function () { render(); });
         });
       }
@@ -405,7 +453,7 @@
             if (!v.ok) throw new Error('점검에서 걸렸습니다 (' + v.why + ') — 저장하지 않았습니다');
             ctx.busy(null);
             return Promise.resolve(ctx.saveCopy(new Blob([s.cur], { type: MIME }), name)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); ctx.toast('사본을 만들었습니다', 3000); });
-          }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000); });
+          }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다', e, 5000); });
         });
       }
       function saveCopy() {
@@ -423,7 +471,7 @@
                 ctx.toast('사본을 만들었습니다 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
               });
             });
-          }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000); });
+          }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다', e, 5000); });
         });
       }
 

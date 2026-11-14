@@ -202,7 +202,7 @@
   async function duplicateSlide(pkg, idx) {
     var d = await readDeck(pkg), src = d.slides[idx]; if (!src) throw new Error('슬라이드를 찾지 못했습니다');
     var xml = await must(pkg, src.path), rels = await pkg.read(relsPathOf(src.path)) || emptyRels(), rl = parseRels(rels);
-    var why = dupBlock(xml, rl); if (why) return { err: '이 슬라이드에는 ' + why + '이(가) 있어서 폰에서는 복제할 수 없습니다. 순서 바꾸기와 지우기는 할 수 있습니다.' };
+    var why = dupBlock(xml, rl); if (why) return { err: '이 슬라이드에는 ' + (global.SOffice && global.SOffice.josa ? global.SOffice.josa(why, '이') : why + '이(가)') + ' 있어서 폰에서는 복제할 수 없습니다. 순서 바꾸기와 지우기는 할 수 있습니다.' };
     var num = nextNum(pkg, 'ppt/slides/', 'slide', 'xml'), path = 'ppt/slides/slide' + num + '.xml';
     var notesRel = rl.filter(function (r) { return relKind(r.type) === 'notesSlide'; })[0];
     var newRels = rels;
@@ -314,7 +314,7 @@
       if (!g && ph && phGeom) { g = phGeom(ph[0]); inherited = !!g; }
       var text = ''; (c.xml.match(/<a:t(?:\s[^>]*)?>[\s\S]*?<\/a:t>/g) || []).forEach(function (t) { text += unescX(t.replace(/<[^>]+>/g, '')) + ' '; });
       var ed = !(k === 'chart' || k === 'smart' || k === 'ole' || k === 'other');
-      return { id: shapeId(c.xml), name: shapeName(c.xml), kind: k, name_: c.name, g: g, inherited: inherited, text: text.trim(), isPh: !!ph, phTag: ph ? ph[0] : '', canMove: ed && !!g, canText: k === 'text' || k === 'ph' || k === 'shape' || k === 'table', canFill: k === 'text' || k === 'ph' || k === 'shape' };
+      return { id: shapeId(c.xml), name: shapeName(c.xml), label: friendlyName(shapeName(c.xml), k, ph ? ph[0] : ''), canLine: k === 'text' || k === 'ph' || k === 'shape' || k === 'line', kind: k, name_: c.name, g: g, inherited: inherited, text: text.trim(), isPh: !!ph, phTag: ph ? ph[0] : '', canMove: ed && !!g, canText: k === 'text' || k === 'ph' || k === 'shape' || k === 'table', canFill: k === 'text' || k === 'ph' || k === 'shape' };
     }).filter(function (s) { return s.id; });
   }
   function findShape(xml, id) { var t = topShapes(xml); for (var i = 0; i < t.length; i++) if (shapeId(t[i].xml) === id) return t[i]; return null; }
@@ -350,7 +350,7 @@
   function addTextBox(xml, g, text) {
     var id = maxId(xml) + 1;
     var sp = '<p:sp>' + nvBlock(id, '글 상자 ' + (id - 1), ' txBox="1"') + '<p:spPr><a:xfrm><a:off x="' + g.x + '" y="' + g.y + '"/><a:ext cx="' + g.w + '" cy="' + g.h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>' +
-      '<p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr><a:lstStyle/>' + para(text || '글을 입력하세요', ' sz="2000"') + '</p:txBody></p:sp>';
+      '<p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr><a:lstStyle/>' + para(text || '여기에 글을 씁니다', ' sz="2000"') + '</p:txBody></p:sp>';
     return { xml: insertShape(xml, sp), id: id };
   }
   var SHAPES = { rect: '네모', roundRect: '둥근 네모', ellipse: '동그라미', triangle: '삼각형', rightArrow: '오른쪽 화살표', star5: '별', diamond: '마름모' };
@@ -457,6 +457,11 @@
         inner = after ? inner.slice(0, after.index) + fillX + inner.slice(after.index) : inner + fillX;
       }
     }
+    if (f.font) {
+      inner = inner.replace(/<a:(?:latin|ea|cs)\b[^>]*?\/>/g, '');
+      var fx = '<a:latin typeface="' + escX(f.font) + '"/><a:ea typeface="' + escX(f.font) + '"/>', at2 = /<a:(?:sym|hlinkClick|hlinkMouseOver|rtl|extLst)\b/.exec(inner);
+      inner = at2 ? inner.slice(0, at2.index) + fx + inner.slice(at2.index) : inner + fx;
+    }
     return t + (inner ? '>' + inner + '</' + tag + '>' : '/>');
   }
   var PPR_BU_ORDER = '(?:tabLst|defRPr|extLst)';
@@ -484,7 +489,7 @@
         var np = editPPr(pm ? pm[0] : null, f);
         inner = pm ? np + inner.slice(pm[0].length) : np + inner;
       }
-      if (f.bold != null || f.italic != null || f.underline != null || f.size != null || f.color) {
+      if (f.bold != null || f.italic != null || f.underline != null || f.size != null || f.color || f.font) {
         inner = inner.replace(/<a:r>(<a:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:rPr>))?/g, function (mm, rp) { return '<a:r>' + editRPr(rp || null, 'a:rPr', f); });
         inner = inner.replace(/<a:endParaRPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:endParaRPr>)/g, function (e) { return editRPr(e, 'a:endParaRPr', f); });
         if (!/<a:endParaRPr\b/.test(inner) && !/<a:r>/.test(inner)) inner += editRPr(null, 'a:endParaRPr', f);
@@ -516,7 +521,8 @@
     var rm = /<a:r>(<a:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:rPr>))/.exec(x) || /(<a:endParaRPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:endParaRPr>))/.exec(x), rp = rm ? rm[1] : '';
     var pm = /<a:pPr\b([^>]*)>/.exec(x), col = /<a:solidFill><a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(rp);
     var szm = /\ssz="(\d+)"/.exec(rp);
-    return { bold: /\sb="1"/.test(rp), italic: /\si="1"/.test(rp), underline: /\su="(?!none)/.test(rp), size: szm ? +szm[1] / 100 : null, color: col ? col[1].toUpperCase() : null, align: pm && /\salgn="(\w+)"/.exec(pm[1]) ? /\salgn="(\w+)"/.exec(pm[1])[1] : null, bullet: /<a:buChar\b/.test(x) };
+    var fm = /<a:latin\b[^>]*?\stypeface="([^"]*)"/.exec(rp);
+    return { font: fm ? unescX(fm[1]) : null, bold: /\sb="1"/.test(rp), italic: /\si="1"/.test(rp), underline: /\su="(?!none)/.test(rp), size: szm ? +szm[1] / 100 : null, color: col ? col[1].toUpperCase() : null, align: pm && /\salgn="(\w+)"/.exec(pm[1]) ? /\salgn="(\w+)"/.exec(pm[1])[1] : null, bullet: /<a:buChar\b/.test(x) };
   }
   // 줄(문단) 하나 더하기: 마지막 문단 서식을 이어받는다. cell 이 있으면 그 칸 안에
   function addParagraph(xml, id, text, cell) {
@@ -726,10 +732,10 @@
       '<p:bodyStyle>' + lvl(2800, 457200, -228600, true) + '</p:bodyStyle><p:otherStyle><a:defPPr><a:defRPr lang="ko-KR"/></a:defPPr>' + lvl(1800, 457200, 0, false) + '</p:otherStyle></p:txStyles></p:sldMaster>';
     f['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = rels([['slideLayout', '../slideLayouts/slideLayout1.xml'], ['slideLayout', '../slideLayouts/slideLayout2.xml'], ['slideLayout', '../slideLayouts/slideLayout3.xml'], ['slideLayout', '../slideLayouts/slideLayout4.xml'], ['theme', '../theme/theme1.xml']]);
     var tpl = function (name, type, shapes) { return H + '<p:sldLayout ' + A + ' ' + Rn + ' ' + P + ' type="' + type + '" preserve="1"><p:cSld name="' + name + '"><p:spTree>' + spTreeHead() + shapes + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>'; };
-    var emptyTx = function (sz) { return '<p:txBody><a:bodyPr/><a:lstStyle>' + (sz ? '<a:lvl1pPr marL="0" indent="0" algn="ctr"><a:buNone/><a:defRPr sz="' + sz + '"/></a:lvl1pPr>' : '') + '</a:lstStyle><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>클릭하여 입력</a:t></a:r></a:p></p:txBody>'; };
-    f['ppt/slideLayouts/slideLayout1.xml'] = tpl('제목 슬라이드', 'title', phSp(2, 'Title 1', '<p:ph type="ctrTitle"/>', [1524000, 1122363, 9144000, 2387600], '<p:txBody><a:bodyPr anchor="b"/><a:lstStyle><a:lvl1pPr algn="ctr"><a:defRPr sz="6000"/></a:lvl1pPr></a:lstStyle><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 입력하세요</a:t></a:r></a:p></p:txBody>') + phSp(3, 'Subtitle 2', '<p:ph type="subTitle" idx="1"/>', [1524000, 3602038, 9144000, 1655762], emptyTx(2400)));
-    f['ppt/slideLayouts/slideLayout2.xml'] = tpl('제목 및 내용', 'obj', phSp(2, 'Title 1', '<p:ph type="title"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 입력하세요</a:t></a:r></a:p></p:txBody>') + phSp(3, 'Content Placeholder 2', '<p:ph idx="1"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr lvl="0"/><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>내용을 입력하세요</a:t></a:r></a:p></p:txBody>'));
-    f['ppt/slideLayouts/slideLayout3.xml'] = tpl('제목만', 'titleOnly', phSp(2, 'Title 1', '<p:ph type="title"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 입력하세요</a:t></a:r></a:p></p:txBody>'));
+    var emptyTx = function (sz) { return '<p:txBody><a:bodyPr/><a:lstStyle>' + (sz ? '<a:lvl1pPr marL="0" indent="0" algn="ctr"><a:buNone/><a:defRPr sz="' + sz + '"/></a:lvl1pPr>' : '') + '</a:lstStyle><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>여기에 씁니다</a:t></a:r></a:p></p:txBody>'; };
+    f['ppt/slideLayouts/slideLayout1.xml'] = tpl('제목 슬라이드', 'title', phSp(2, 'Title 1', '<p:ph type="ctrTitle"/>', [1524000, 1122363, 9144000, 2387600], '<p:txBody><a:bodyPr anchor="b"/><a:lstStyle><a:lvl1pPr algn="ctr"><a:defRPr sz="6000"/></a:lvl1pPr></a:lstStyle><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 씁니다</a:t></a:r></a:p></p:txBody>') + phSp(3, 'Subtitle 2', '<p:ph type="subTitle" idx="1"/>', [1524000, 3602038, 9144000, 1655762], emptyTx(2400)));
+    f['ppt/slideLayouts/slideLayout2.xml'] = tpl('제목 및 내용', 'obj', phSp(2, 'Title 1', '<p:ph type="title"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 씁니다</a:t></a:r></a:p></p:txBody>') + phSp(3, 'Content Placeholder 2', '<p:ph idx="1"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr lvl="0"/><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>내용을 씁니다</a:t></a:r></a:p></p:txBody>'));
+    f['ppt/slideLayouts/slideLayout3.xml'] = tpl('제목만', 'titleOnly', phSp(2, 'Title 1', '<p:ph type="title"/>', null, '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" altLang="en-US"/><a:t>제목을 씁니다</a:t></a:r></a:p></p:txBody>'));
     f['ppt/slideLayouts/slideLayout4.xml'] = tpl('빈 화면', 'blank', '');
     [1, 2, 3, 4].forEach(function (i) { f['ppt/slideLayouts/_rels/slideLayout' + i + '.xml.rels'] = rels([['slideMaster', '../slideMasters/slideMaster1.xml']]); });
     f['ppt/slides/slide1.xml'] = newSlideXml([{ ph: '<p:ph type="ctrTitle"/>', name: 'Title' }, { ph: '<p:ph type="subTitle" idx="1"/>', name: 'Subtitle' }]);
@@ -737,11 +743,190 @@
     return f;
   }
 
+  // ============================== 쉬운 이름 · 글자 일부 서식 · 선 모양 · 복사·붙여넣기 · 표 칸 합치기 (v10.7) ==============================
+  var PH_NAME = { title: '제목', ctrTitle: '제목', subTitle: '부제목', body: '본문', obj: '본문', pic: '그림 자리', dt: '날짜', ftr: '바닥글', sldNum: '쪽 번호', chart: '차트 자리', tbl: '표 자리', media: '동영상 자리', clipArt: '그림 자리', dgm: 'SmartArt 자리' };
+  var KIND_NAME = { text: '글 상자', ph: '본문', shape: '도형', pic: '그림', table: '표', line: '선', group: '묶음 도형', chart: '차트', smart: 'SmartArt', ole: '삽입 개체', other: '개체' };
+  function friendlyName(name, kind, phTag) {                   // 문서 안의 영어 기본 이름(Content Placeholder 2 …)을 쉬운 우리말로
+    name = String(name || ''); var num = /(\d+)\s*$/.exec(name), n = num ? ' ' + num[1] : '';
+    if (/[가-힣]/.test(name)) return name;
+    if (phTag) { var ty = attrOf(phTag, 'type'); return (ty ? (PH_NAME[ty] || '본문') : '본문') + n; }
+    var m = [[/^(?:ctr\s*)?title/i, '제목'], [/^sub\s*title/i, '부제목'], [/(?:content|text|object)\s*placeholder/i, '본문'], [/picture\s*placeholder/i, '그림 자리'], [/date\s*placeholder/i, '날짜'], [/footer\s*placeholder/i, '바닥글'], [/slide\s*number/i, '쪽 번호'],
+      [/connector|line\b|arrow\s*line/i, '선'], [/text\s*box|textbox/i, '글 상자'], [/table/i, '표'], [/picture|image|photo|graphic/i, '그림'], [/group/i, '묶음 도형'], [/chart/i, '차트'], [/diagram|smart/i, 'SmartArt'], [/\bobject|\bole\b/i, '삽입 개체'],
+      [/rectangle|oval|ellipse|triangle|diamond|arrow|star|shape|flowchart|callout|rounded|pentagon|hexagon|heart|cloud|rect\b/i, '도형']];
+    for (var i = 0; i < m.length; i++) if (m[i][0].test(name)) return m[i][1] + n;
+    return (KIND_NAME[kind] || '개체') + n;
+  }
+  function setNumAttr(at, name, v) { var re = new RegExp('(\\s' + name + '=")[^"]*(")'); if (re.test(at)) return at.replace(re, function (m, a, b) { return a + v + b; }); return /\/?>$/.test(at) ? at.replace(/\s*(\/?>)$/, ' ' + name + '="' + v + '"$1') : at + ' ' + name + '="' + v + '"'; }
+
+  // ---- 글자 일부만 서식: ord 번째 문단의 [from,to) 글자(줄바꿈도 한 글자)에만 적용. 앞뒤 글자의 서식은 그대로 ----
+  function formatRun(xml, ord, from, to, f) {
+    var re = /<a:p(?:\s[^>]*[^>\/])?>[\s\S]*?<\/a:p>/g, m, i = 0, SE = global.SOPptxEdit;
+    if (!SE || !SE._parse) throw new Error('글자 고치기 부품을 찾지 못했습니다');
+    while ((m = re.exec(xml))) {
+      if (i++ !== ord) continue;
+      var pp = SE._parse(m[0]);
+      if (!pp) throw new Error('이 문단은 일부 글자만 꾸밀 수 없습니다');
+      if (pp.locked) throw new Error('자동 숫자·수식이 든 문단은 일부 글자만 꾸밀 수 없습니다(문단 전체는 「서식」에서 바꿉니다)');
+      if (!(to > from)) throw new Error('먼저 꾸밀 글자를 고르십시오');
+      var pos = 0, out = [];
+      pp.items.forEach(function (it) {
+        if (it.k === 'br') { out.push(it); pos += 1; return; }
+        var a = pos, b = pos + it.text.length; pos = b;
+        if (b <= from || a >= to || a === b) { out.push(it); return; }
+        var s1 = Math.max(from, a) - a, e1 = Math.min(to, b) - a;
+        if (s1 > 0) out.push({ k: 'r', pre: it.pre, text: it.text.slice(0, s1) });
+        out.push({ k: 'r', pre: '<a:r>' + editRPr(it.pre.slice(5) || null, 'a:rPr', f), text: it.text.slice(s1, e1) });
+        if (e1 < it.text.length) out.push({ k: 'r', pre: it.pre, text: it.text.slice(e1) });
+      });
+      var merged = []; out.forEach(function (x) { var pv = merged[merged.length - 1]; if (pv && pv.k === 'r' && x.k === 'r' && pv.pre === x.pre) pv.text += x.text; else merged.push({ k: x.k, pre: x.pre, text: x.text, raw: x.raw }); });
+      var inner = merged.map(function (it) { return it.k === 'br' ? it.raw : it.pre + '<a:t>' + escX(it.text) + '</a:t></a:r>'; }).join('');
+      return xml.slice(0, m.index) + pp.open + pp.prefix + inner + pp.suffix + pp.close + xml.slice(m.index + m[0].length);
+    }
+    throw new Error('문단을 찾지 못했습니다');
+  }
+
+  // ---- 테두리 굵기·모양: o = { w: pt, dash: 'solid'|'dash'|'sysDot'|'dashDot' } ----
+  function setLineStyle(xml, id, o) {
+    var sh = findShape(xml, id); if (!sh) throw new Error('도형을 찾지 못했습니다');
+    var x = sh.xml, r = spPrRange(x); if (!r) throw new Error('이 개체에는 테두리를 줄 수 없습니다');
+    var sp = x.slice(r.s, r.e), wEmu = o.w != null ? Math.round(o.w * 12700) : null;
+    if (/<a:ln\b/.test(sp)) {
+      sp = sp.replace(/<a:ln\b([^>]*?)(\/>|>[\s\S]*?<\/a:ln>)/, function (mm, at, rest) {
+        if (wEmu != null) at = setNumAttr(at, 'w', wEmu);
+        var inner = rest === '/>' ? '' : rest.slice(1, rest.length - 7);
+        if (/^\s*<a:noFill\/>/.test(inner) || !FILL_RE.test(inner)) inner = inner.replace(/^\s*<a:noFill\/>/, '') .replace(/^/, '<a:solidFill><a:srgbClr val="404040"/></a:solidFill>');
+        if (o.dash) {
+          inner = inner.replace(/<a:prstDash\b[^>]*\/>|<a:custDash>[\s\S]*?<\/a:custDash>/g, '');
+          var d = '<a:prstDash val="' + o.dash + '"/>', fm = FILL_RE.exec(inner);
+          inner = fm ? inner.slice(0, fm.index + fm[0].length) + d + inner.slice(fm.index + fm[0].length) : d + inner;
+        }
+        return '<a:ln' + at + '>' + inner + '</a:ln>';
+      });
+    } else {
+      var lnx = '<a:ln w="' + (wEmu != null ? wEmu : 12700) + '"><a:solidFill><a:srgbClr val="404040"/></a:solidFill>' + (o.dash ? '<a:prstDash val="' + o.dash + '"/>' : '') + '</a:ln>';
+      if (r.self) sp = sp.replace(/<p:spPr\s*\/>/, '<p:spPr>' + lnx + '</p:spPr>');
+      else { var eff = /<a:(?:effectLst|effectDag|scene3d|sp3d|extLst)\b/.exec(sp); sp = eff ? sp.slice(0, eff.index) + lnx + sp.slice(eff.index) : sp.replace(/<\/p:spPr>$/, lnx + '</p:spPr>'); }
+    }
+    return xml.slice(0, sh.s) + x.slice(0, r.s) + sp + x.slice(r.e) + xml.slice(sh.e);
+  }
+
+  // ---- 복사·붙여넣기: 개체를 담아 두었다가(clip) 같은 장·다른 장에 붙인다. 그림·링크는 붙이는 장에 관계를 새로 만든다 ----
+  async function copyShape(pkg, slidePath, id, geom) {
+    var xml = await must(pkg, slidePath), sh = findShape(xml, id); if (!sh) throw new Error('개체를 찾지 못했습니다');
+    var k = kindOf(sh);
+    if (k === 'chart' || k === 'smart' || k === 'ole' || k === 'other') return { err: '이 개체(' + (KIND_NAME[k] || '개체') + ')는 폰에서 복사할 수 없습니다. 지우기·순서 바꾸기는 됩니다.' };
+    var rels = parseRels(await pkg.read(relsPathOf(slidePath)) || ''), used = {}, list = [], m, rr = /\br:(?:embed|link|id)="([^"]+)"/g;
+    while ((m = rr.exec(sh.xml))) used[m[1]] = 1;
+    Object.keys(used).forEach(function (rid) {
+      var rl = rels.filter(function (q) { return q.id === rid; })[0]; if (!rl) return;
+      list.push({ id: rid, type: rl.type, external: rl.mode === 'External', target: rl.mode === 'External' ? rl.target : resolvePath(slidePath, rl.target) });
+    });
+    for (var i = 0; i < list.length; i++) if (!list[i].external && /\/(chart|diagram\w*|oleObject|package|video|audio|media|slide|notesSlide)$/.test(list[i].type)) return { err: '동영상·소리·삽입 개체나 다른 슬라이드로 가는 링크가 든 개체는 폰에서 복사할 수 없습니다.' };
+    return { xml: sh.xml, kind: k, name: friendlyName(shapeName(sh.xml), k, (/<p:ph\b[^>]*?\/?>/.exec(sh.xml) || [''])[0]), rels: list, slide: slidePath, geom: geom || null };
+  }
+  async function pasteShape(pkg, slidePath, clip, off) {
+    var xml = await must(pkg, slidePath), x = clip.xml, top = maxId(xml), n = 0, rp = relsPathOf(slidePath), rx = await pkg.read(rp) || emptyRels(), map = {};
+    x = x.replace(/(<p:cNvPr\b[^>]*?\sid=")(\d+)(")/g, function (mm, a, v, b) { n++; return a + (top + n) + b; });
+    var newId = top + 1;
+    clip.rels.forEach(function (rl) {
+      var ex = null, existing = parseRels(rx);
+      existing.forEach(function (q) { if (q.type === rl.type && !ex) { var same = rl.external ? (q.mode === 'External' && q.target === rl.target) : (q.mode !== 'External' && resolvePath(slidePath, q.target) === rl.target); if (same) ex = q; } });
+      if (ex) { map[rl.id] = ex.id; return; }
+      var rid = nextRid(rx), tag = '<Relationship Id="' + rid + '" Type="' + rl.type + '" Target="' + escX(rl.external ? rl.target : relTarget(slidePath, rl.target)) + '"' + (rl.external ? ' TargetMode="External"' : '') + '/>';
+      rx = rx.replace('</Relationships>', tag + '</Relationships>'); map[rl.id] = rid;
+    });
+    x = x.replace(/\b(r:(?:embed|link|id)=")([^"]+)(")/g, function (mm, a, v, b) { return map[v] ? a + map[v] + b : mm; });
+    if (off && (off.dx || off.dy)) { x = x.replace(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/, function (mm, ox, oy) { return '<a:off x="' + (+ox + off.dx) + '" y="' + (+oy + off.dy) + '"/>'; }); }
+    pkg.write(rp, rx);
+    var nx = insertShape(xml, x);
+    if (!/<a:off\s/.test(x) && clip.geom) nx = setGeom(nx, newId, { x: Math.round(clip.geom.x + (off ? off.dx : 0)), y: Math.round(clip.geom.y + (off ? off.dy : 0)), w: Math.round(clip.geom.w), h: Math.round(clip.geom.h) });   // 위치를 배치에서 물려받는 개체(제목·본문 자리)는 위치를 적어 줘야 겹치지 않는다
+    pkg.write(slidePath, nx);
+    return { id: newId };
+  }
+
+  // ---- 표 칸 합치기·나누기 (r, c = 0부터, 합쳐져 덮인 칸도 한 칸으로 센다) ----
+  function tableMerge(xml, id, op, r, c) {                     // op: right | down | splitH | splitV — 반환 {xml}|{err}
+    var sh = findShape(xml, id); if (!sh) throw new Error('도형을 찾지 못했습니다');
+    var x = sh.xml, tm = /<a:tbl>[\s\S]*<\/a:tbl>/.exec(x); if (!tm) throw new Error('표가 아닙니다');
+    var rowRe = /<a:tr\b[\s\S]*?<\/a:tr>/g, rows = [], mm;
+    while ((mm = rowRe.exec(tm[0]))) rows.push({ s: mm.index, e: mm.index + mm[0].length, x: mm[0] });
+    function cellsOf(row) { var out = [], q, cr = /<a:tc\b[\s\S]*?<\/a:tc>/g; while ((q = cr.exec(row.x))) out.push({ s: q.index, e: q.index + q[0].length, x: q[0] }); return out; }
+    var grid = rows.map(cellsOf);
+    if (!grid[r] || !grid[r][c]) return { err: '칸을 찾지 못했습니다.' };
+    function open(t) { return /^<a:tc\b[^>]*>/.exec(t)[0]; }
+    function plain(t) { return !/\s(?:gridSpan|rowSpan|hMerge|vMerge)="/.test(open(t)); }
+    function paras(t) { return t.match(/<a:p(?:\s[^>]*[^>\/])?>[\s\S]*?<\/a:p>/g) || []; }
+    function withText(p) { return /<a:t(?:\s[^>]*)?>[^<]*\S[^<]*<\/a:t>/.test(p); }
+    function moveText(a, b) {                                   // b 의 글을 a 로 옮기고 b 는 비운다 → [a', b']
+      var pb = paras(b).filter(withText), na = a;
+      if (pb.length) {
+        var body = paras(a).filter(withText).concat(pb).join('');
+        var first = /<a:txBody>(<a:bodyPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:bodyPr>)\s*(?:<a:lstStyle\s*\/>|<a:lstStyle>[\s\S]*?<\/a:lstStyle>)?)/.exec(a);
+        na = a.replace(/<a:txBody>[\s\S]*<\/a:txBody>/, '<a:txBody>' + (first ? first[1] : '<a:bodyPr/><a:lstStyle/>') + body + '</a:txBody>');
+      }
+      return [na, blankCell(b)];
+    }
+    function setOpen(t, fn) { var o = open(t); return fn(o) + t.slice(o.length); }
+    var edit = {}, a = grid[r][c].x;
+    if (op === 'right' || op === 'down') {
+      var br = op === 'right' ? r : r + 1, bc = op === 'right' ? c + 1 : c;
+      if (!grid[br] || !grid[br][bc]) return { err: op === 'right' ? '오른쪽에 합칠 칸이 없습니다.' : '아래에 합칠 칸이 없습니다.' };
+      var b = grid[br][bc].x;
+      if (!plain(a) || !plain(b)) return { err: '이미 합쳐진 칸이 걸려 있어 폰에서는 더 합칠 수 없습니다. 먼저 「합치기 풀기」로 풀거나 「수정 요청」으로 맡겨 주십시오.' };
+      var mt = moveText(a, b); a = mt[0]; b = mt[1];
+      a = setOpen(a, function (o) { return op === 'right' ? setNumAttr(o, 'gridSpan', 2) : setNumAttr(o, 'rowSpan', 2); });
+      b = setOpen(b, function (o) { return op === 'right' ? setNumAttr(o, 'hMerge', 1) : setNumAttr(o, 'vMerge', 1); });
+      edit[r + ',' + c] = a; edit[br + ',' + bc] = b;
+    } else {
+      var o0 = open(a), gs = +(attrOf(o0, 'gridSpan') || 1), rs = +(attrOf(o0, 'rowSpan') || 1);
+      if (/\s(?:hMerge|vMerge)="/.test(o0)) return { err: '합쳐진 칸의 왼쪽 위 칸을 골라 주십시오.' };
+      if ((op === 'splitH' && gs < 2) || (op === 'splitV' && rs < 2)) return { err: op === 'splitH' ? '가로로 합쳐진 칸이 아닙니다.' : '세로로 합쳐진 칸이 아닙니다.' };
+      var i, j;
+      for (i = 0; i < (op === 'splitV' ? rs : 1); i++) for (j = 0; j < (op === 'splitH' ? gs : 1); j++) {
+        if (!i && !j) continue; var rr2 = r + i, cc2 = c + j; if (!grid[rr2] || !grid[rr2][cc2]) continue;
+        edit[rr2 + ',' + cc2] = setOpen(grid[rr2][cc2].x, function (o) { return o.replace(/\s(?:hMerge|vMerge)="[^"]*"/g, ''); });
+      }
+      edit[r + ',' + c] = setOpen(a, function (o) { return op === 'splitH' ? o.replace(/\sgridSpan="[^"]*"/, '') : o.replace(/\srowSpan="[^"]*"/, ''); });
+    }
+    var out = '', last = 0;
+    rows.forEach(function (row, ri) {
+      var rx = row.x, acc = '', lc = 0;
+      grid[ri].forEach(function (cell, ci) { var k = ri + ',' + ci; if (edit[k] != null) { acc += rx.slice(lc, cell.s) + edit[k]; lc = cell.e; } });
+      acc += rx.slice(lc); out += tm[0].slice(last, row.s) + acc; last = row.e;
+    });
+    out += tm[0].slice(last);
+    return { xml: xml.slice(0, sh.s) + x.slice(0, tm.index) + out + x.slice(tm.index + tm[0].length) + xml.slice(sh.e) };
+  }
+  function cellSpans(xml, id) {                                  // 화면용: 표의 칸마다 합침 상태
+    var sh = findShape(xml, id); if (!sh) return null;
+    return (sh.xml.match(/<a:tr\b[\s\S]*?<\/a:tr>/g) || []).map(function (row) { return (row.match(/<a:tc\b[^>]*>/g) || []).map(function (o) { return { gs: +(attrOf(o, 'gridSpan') || 1), rs: +(attrOf(o, 'rowSpan') || 1), cov: /\s(?:hMerge|vMerge)="(?:1|true)"/.test(o) }; }); });
+  }
+
+  // ---- 글 세로 맞춤: anchor = 't' | 'ctr' | 'b' (도형 안 글, 표는 고른 칸 또는 표 전체) ----
+  function setAnchor(xml, id, anchor, cell) {
+    var sh = findShape(xml, id); if (!sh) throw new Error('도형을 찾지 못했습니다');
+    var x = sh.xml, nx;
+    if (/<a:tbl>/.test(x)) {
+      var s = 0, e = x.length;
+      if (cell) { var cr = cellRange(x, cell.r, cell.c); if (!cr) throw new Error('칸을 찾지 못했습니다'); s = cr.s; e = cr.e; }
+      var seg = x.slice(s, e).replace(/<a:tc\b[\s\S]*?<\/a:tc>/g, function (tc) {
+        if (/<a:tcPr\b/.test(tc)) return tc.replace(/<a:tcPr\b([^>]*?)(\/?)>/, function (m, at, sl) { return '<a:tcPr' + setNumAttr(at, 'anchor', anchor) + sl + '>'; });
+        return tc.replace(/<\/a:tc>$/, '<a:tcPr anchor="' + anchor + '"/></a:tc>');
+      });
+      nx = x.slice(0, s) + seg + x.slice(e);
+    } else {
+      if (!/<a:bodyPr\b/.test(x)) throw new Error('이 개체에는 글을 넣을 수 없습니다');
+      nx = x.replace(/<a:bodyPr\b([^>]*?)(\/?)>/, function (m, at, sl) { return '<a:bodyPr' + setNumAttr(at, 'anchor', anchor) + sl + '>'; });
+    }
+    return xml.slice(0, sh.s) + nx + xml.slice(sh.e);
+  }
+
   global.SOPptxStruct = {
     readDeck: readDeck, listSlides: listSlides, listLayouts: listLayouts, addSlide: addSlide, duplicateSlide: duplicateSlide, deleteSlide: deleteSlide, moveSlide: moveSlide, hideSlide: hideSlide,
     readSlide: readSlide, listShapes: listShapes, removeShape: removeShape, setGeom: setGeom, clampGeom: clampGeom, addTextBox: addTextBox, addAutoShape: addAutoShape, addLine: addLine,
     addPicture: addPicture, addTable: addTable, setFill: setFill, setLineColor: setLineColor, formatText: formatText, readFormat: readFormat, addParagraph: addParagraph, removeParagraph: removeParagraph,
     tableEdit: tableEdit, reorderShape: reorderShape, paraRange: paraRange, slideNotes: slideNotes, setNotes: setNotes, newPresentationFiles: newPresentationFiles, SHAPES: SHAPES, EMU: EMU,
+    setAnchor: setAnchor, friendlyName: friendlyName, formatRun: formatRun, setLineStyle: setLineStyle, copyShape: copyShape, pasteShape: pasteShape, tableMerge: tableMerge, cellSpans: cellSpans,
     _topShapes: topShapes, _dupBlock: dupBlock
   };
 })(typeof window !== 'undefined' ? window : globalThis);
