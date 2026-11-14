@@ -106,6 +106,68 @@
     }
     c.enumerateIndirectObjects().forEach(function (e) { if (!seen[e[0].toString()]) c.delete(e[0]); });
   }
+  // 쪽을 새로 그려 바꾼 뒤(쪽 크기 맞추기·영역 가리기) 책갈피·링크·이름 있는 도착지가 옛 쪽을 가리키지 않게 새 쪽으로 이어 준다.
+  // map: { '옛 쪽 개체 번호': 새 쪽 PDFRef } — 고친 도착지 수를 돌려준다.
+  function remapDests(L, doc, map) {
+    var c = doc.context, N = L.PDFName.of, fixed = 0, seen = {};
+    function lk(o) { return o instanceof L.PDFRef ? c.lookup(o) : o; }
+    function fixArr(a) {
+      a = lk(a); if (!(a instanceof L.PDFArray) || !a.size()) return;
+      var f = a.get(0); if (f instanceof L.PDFRef) { var nr = map[f.toString()]; if (nr) { a.set(0, nr); fixed++; } }
+    }
+    function fixDest(d) { d = lk(d); if (d instanceof L.PDFArray) fixArr(d); else if (d instanceof L.PDFDict) { var dd = d.get(N('D')); if (dd) fixArr(dd); } }
+    function fixHolder(h) {
+      h = lk(h); if (!(h instanceof L.PDFDict)) return;
+      var d = h.get(N('Dest')); if (d) fixDest(d);
+      var a = lk(h.get(N('A')));
+      if (a instanceof L.PDFDict) { var s = a.get(N('S')); if (s && String(s) === '/GoTo') { var dd = a.get(N('D')); if (dd) fixDest(dd); } }
+    }
+    try {
+      var ol = lk(doc.catalog.get(N('Outlines')));
+      if (ol instanceof L.PDFDict) {
+        var stack = [ol.get(N('First'))];
+        while (stack.length) {
+          var r = stack.pop(); if (!r) continue; var key = r.toString(); if (seen[key]) continue; seen[key] = 1;
+          var it = lk(r); if (!(it instanceof L.PDFDict)) continue;
+          fixHolder(it); stack.push(it.get(N('First'))); stack.push(it.get(N('Next')));
+        }
+      }
+    } catch (e) {}
+    try { doc.getPages().forEach(function (pg) { var an = pg.node.Annots && pg.node.Annots(); if (!an) return; for (var i = 0; i < an.size(); i++) { var a = lk(an.get(i)); if (a instanceof L.PDFDict && String(a.get(N('Subtype'))) === '/Link') fixHolder(a); } }); } catch (e) {}
+    try {
+      var oa = doc.catalog.get(N('OpenAction')); if (oa) fixDest(oa);
+      var dests = lk(doc.catalog.get(N('Dests'))); if (dests instanceof L.PDFDict) dests.entries().forEach(function (e) { fixDest(e[1]); });
+      var nm = lk(doc.catalog.get(N('Names'))), nd = nm instanceof L.PDFDict ? lk(nm.get(N('Dests'))) : null;
+      if (nd instanceof L.PDFDict) {
+        var st2 = [nd], guard = 0;
+        while (st2.length && guard++ < 5000) {
+          var t = lk(st2.pop()); if (!(t instanceof L.PDFDict)) continue;
+          var ks = lk(t.get(N('Kids'))); if (ks instanceof L.PDFArray) for (var k = 0; k < ks.size(); k++) st2.push(ks.get(k));
+          var ns = lk(t.get(N('Names'))); if (ns instanceof L.PDFArray) for (var m = 1; m < ns.size(); m += 2) fixDest(ns.get(m));
+        }
+      }
+    } catch (e) {}
+    return fixed;
+  }
+  // 옛 쪽의 주석(링크·입력 칸·메모·표시 등)을 새 쪽으로 옮기고 위치를 f(x,y) 로 바꾼다. 팝업은 옮기지 않는다
+  function moveAnnots(L, doc, oldPg, newPg, f) {
+    var c = doc.context, N = L.PDFName.of, an = oldPg.node.Annots && oldPg.node.Annots(), out = [];
+    if (!an) return 0;
+    function nums(a) { var r = []; if (a instanceof L.PDFArray) for (var i = 0; i < a.size(); i++) { var v = c.lookup(a.get(i)); r.push(v && v.asNumber ? v.asNumber() : 0); } return r; }
+    for (var i = 0; i < an.size(); i++) {
+      var ref = an.get(i), a = c.lookup(ref); if (!(a instanceof L.PDFDict)) continue;
+      var st = String(a.get(N('Subtype'))); if (st === '/Popup') continue;
+      var rc = nums(c.lookup(a.get(N('Rect')))); if (rc.length !== 4) continue;
+      var p1 = f(rc[0], rc[1]), p2 = f(rc[2], rc[3]);
+      a.set(N('Rect'), c.obj([Math.min(p1[0], p2[0]), Math.min(p1[1], p2[1]), Math.max(p1[0], p2[0]), Math.max(p1[1], p2[1])]));
+      var qp = a.get(N('QuadPoints')); if (qp) { var q = nums(c.lookup(qp)), nq = []; for (var k = 0; k + 1 < q.length; k += 2) { var pp = f(q[k], q[k + 1]); nq.push(pp[0], pp[1]); } a.set(N('QuadPoints'), c.obj(nq)); }
+      try { a.delete(N('Popup')); } catch (e) {}
+      if (a.has(N('P'))) a.set(N('P'), newPg.ref);
+      out.push(ref);
+    }
+    if (out.length) newPg.node.set(N('Annots'), c.obj(out));
+    return out.length;
+  }
   function textPng(text, pt, color) {            // 글을 그림으로(한글 가능): 1pt = 4픽셀
     var px = Math.max(8, Math.round(pt * 4)), cv = document.createElement('canvas'), g = cv.getContext('2d');
     g.font = px + 'px ' + FAMILY; var w = Math.ceil(g.measureText(text).width) + 8; cv.width = Math.min(w, 8000); cv.height = Math.ceil(px * 1.4);
@@ -185,7 +247,7 @@
 
     function bake(t) {
       ctx.busy('가린 곳을 굳히는 중…');
-      var L, doc, nums = Object.keys(rects).filter(function (k) { return rects[k].length; }).map(Number).sort(function (a, b) { return a - b; }), oldNodes = [], seqP = Promise.resolve();
+      var L, doc, nums = Object.keys(rects).filter(function (k) { return rects[k].length; }).map(Number).sort(function (a, b) { return a - b; }), oldNodes = [], destMap = {}, seqP = Promise.resolve();
       return api.loadLib().then(function (l) { L = l; return api.getBytes(); }).then(function (b) { return L.PDFDocument.load(b, { updateMetadata: false }); }).then(function (d) {
         doc = d;
         nums.forEach(function (n, idx) {
@@ -202,6 +264,7 @@
               });
             }).then(function (r) {
               var old = doc.getPage(n - 1), np = doc.insertPage(n - 1, [r.w, r.h]); np.drawImage(r.img, { x: 0, y: 0, width: r.w, height: r.h });
+              destMap[old.ref.toString()] = np.ref;
               oldNodes.push(doc.getPage(n)); doc.removePage(n);
             });
           });
@@ -209,6 +272,7 @@
         return seqP;
       }).then(function () {
         var Nm = L.PDFName.of, c = doc.context;
+        remapDests(L, doc, destMap);      // 책갈피·링크가 새로 그린 쪽을 가리키게 이어 준다
         // 지운 쪽의 옛 내용·자원·주석·섬네일을 비우고, 글이 남을 수 있는 구조(태그 트리·입력 칸 값)를 정리한다
         oldNodes.forEach(function (pg) { try { var d = pg.node; d.set(Nm('Contents'), c.register(c.stream(new Uint8Array(0)))); ['Resources', 'Annots', 'Thumb', 'Metadata', 'PieceInfo', 'StructParents'].forEach(function (k) { try { d.delete(Nm(k)); } catch (e) {} }); } catch (e) {} });
         try { var form = doc.getForm(); form.getFields().forEach(function (f) { var onOld = false; f.acroField.getWidgets().forEach(function (w) { var P = w.P(); oldNodes.forEach(function (o) { if (P && o.ref && P.toString() === o.ref.toString()) onOld = true; }); }); if (onOld) { try { form.removeField(f); } catch (e) {} } }); } catch (e) {}
@@ -311,12 +375,12 @@
     // ---- 쪽 크기 맞추기 ----
     var g3 = grp('쪽 크기 맞추기 — 모든 쪽을 같은 종이 크기로');
     chips(g3, [['a4', 'A4'], ['a3', 'A3'], ['b5', 'B5'], ['letter', 'Letter']], 'fit', st.fit);
-    g3.appendChild(el('div', 'so-sheet-note', '쪽의 가로·세로 방향은 그대로 두고, 내용을 비율대로 키우거나 줄여 가운데에 놓습니다. 이 과정에서 쪽 안의 링크와 입력 칸은 사라질 수 있습니다.'));
+    g3.appendChild(el('div', 'so-sheet-note', '쪽의 가로·세로 방향은 그대로 두고, 내용을 비율대로 키우거나 줄여 가운데에 놓습니다. 링크·입력 칸·주석과 책갈피(목차)는 새 쪽으로 옮겨 이어집니다.'));
     act(g3, '모든 쪽 크기 맞추기', function () {
       var SZ = { a4: [595.28, 841.89], a3: [841.89, 1190.55], b5: [498.9, 708.66], letter: [612, 792] }[st.fit] || [595.28, 841.89];
       var go = function () {
         H.run('쪽 크기 맞추기', function (L, doc) {
-          var pages = doc.getPages(), embedP = [];
+          var pages = doc.getPages(), embedP = [], destMap = {};
           pages.forEach(function (pg) { var cb = pg.getCropBox ? pg.getCropBox() : pg.getMediaBox(); embedP.push({ left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height }); });
           return Promise.all(pages.map(function (pg, i) { return doc.embedPage(pg, embedP[i]); })).then(function (eps) {
             var oldNodes = pages.slice();
@@ -325,15 +389,19 @@
               var Tw = land ? SZ[1] : SZ[0], Th = land ? SZ[0] : SZ[1], k = Math.min(Tw / vs.w, Th / vs.h);
               var nw = rot === 90 || rot === 270 ? Th : Tw, nh = rot === 90 || rot === 270 ? Tw : Th;
               var np = doc.insertPage(i, [nw, nh]); if (rot) np.setRotation(L.degrees(rot));
-              np.drawPage(eps[i], { x: (nw - cw * k) / 2, y: (nh - ch * k) / 2, xScale: k, yScale: k });
+              var ox = (nw - cw * k) / 2, oy = (nh - ch * k) / 2;
+              np.drawPage(eps[i], { x: ox, y: oy, xScale: k, yScale: k });
+              destMap[pg.ref.toString()] = np.ref;
+              moveAnnots(L, doc, pg, np, function (x, y) { return [ox + (x - cb.left) * k, oy + (y - cb.bottom) * k]; });     // 링크·입력 칸·주석을 새 쪽으로 옮긴다
             });
             for (var i = oldNodes.length - 1; i >= 0; i--) doc.removePage(oldNodes.length + i);
+            remapDests(L, doc, destMap);            // 책갈피·링크 도착지를 새 쪽으로 이어 준다
             try { var Nm = L.PDFName.of; doc.catalog.delete(Nm('StructTreeRoot')); } catch (e) {}
             return doc.flush().then(function () { gcDoc(L, doc); return ''; });      // 끼워 넣은 쪽을 먼저 실제 개체로 만든 뒤에 안 쓰는 개체를 지운다(안 그러면 옛 쪽 내용이 먼저 지워져 오류)
           });
         }, '쪽 크기를 맞췄습니다.');
       };
-      ctx.confirm('모든 쪽을 ' + st.fit.toUpperCase().replace('LETTER', 'Letter') + ' 크기로 맞출까요?', '내용은 비율대로 가운데에 놓입니다. 쪽 안의 링크·입력 칸은 사라질 수 있습니다. 되돌리려면 ↶ 를 쓰십시오.', '맞추기', go, { cancelLabel: '취소' });
+      ctx.confirm('모든 쪽을 ' + st.fit.toUpperCase().replace('LETTER', 'Letter') + ' 크기로 맞출까요?', '내용은 비율대로 가운데에 놓입니다. 쪽 안의 링크·입력 칸·주석과 책갈피(목차)는 새 쪽으로 옮겨 이어집니다(일부 특수한 주석은 사라질 수 있습니다). 되돌리려면 ↶ 를 쓰십시오.', '맞추기', go, { cancelLabel: '취소' });
     });
 
     // ---- 문서 정보 ----
@@ -461,26 +529,161 @@
     else run();
   }
 
-  // ======================================================================== 책갈피(목차) 보기
+  // ======================================================================== 책갈피(목차) 보기 · 만들기 · 이름 바꾸기 · 지우기
+  // pdf.js 가 읽은 목차를 { title, page, items } 나무로 바꾼다(쪽 번호를 못 찾으면 page=0 → 끊긴 책갈피)
+  function readTree(pdf, ol) {
+    var count = 0;
+    function conv(items) {
+      return Promise.all(items.map(function (it) {
+        if (count++ > 600) return Promise.resolve(null);
+        return resolvePage(pdf, it.dest).then(function (n) {
+          return (it.items && it.items.length ? conv(it.items) : Promise.resolve([])).then(function (kids) { return { title: (it.title || '').trim() || '(제목 없음)', page: n, items: kids.filter(Boolean) }; });
+        });
+      }));
+    }
+    return conv(ol || []).then(function (a) { return a.filter(Boolean); });
+  }
+  // 나무를 새 목차로 써 넣는다(옛 목차는 지우고 같은 모양으로 다시 만든다 — 글자색·굵기 같은 꾸밈은 기본으로 돌아간다)
+  function writeOutline(L, doc, tree) {
+    var c = doc.context, N = L.PDFName.of, pages = doc.getPages();
+    try { doc.catalog.delete(N('Outlines')); } catch (e) {}
+    if (!tree.length) return;
+    var rootRef = c.nextRef();
+    function total(nodes) { var t = 0; nodes.forEach(function (n) { t += 1 + total(n.items || []); }); return t; }
+    function build(nodes, parentRef) {
+      var refs = nodes.map(function () { return c.nextRef(); });
+      nodes.forEach(function (n, i) {
+        var pg = pages[Math.max(0, Math.min(pages.length - 1, (n.page || 1) - 1))];
+        var d = c.obj({ Parent: parentRef });
+        d.set(N('Title'), L.PDFHexString.fromText(n.title));
+        d.set(N('Dest'), c.obj([pg.ref, 'Fit']));
+        if (i > 0) d.set(N('Prev'), refs[i - 1]);
+        if (i < nodes.length - 1) d.set(N('Next'), refs[i + 1]);
+        if (n.items && n.items.length) { var kr = build(n.items, refs[i]); d.set(N('First'), kr[0]); d.set(N('Last'), kr[kr.length - 1]); d.set(N('Count'), c.obj(total(n.items))); }
+        c.assign(refs[i], d);
+      });
+      return refs;
+    }
+    var top = build(tree, rootRef), root = c.obj({ Type: 'Outlines' });
+    root.set(N('First'), top[0]); root.set(N('Last'), top[top.length - 1]); root.set(N('Count'), c.obj(total(tree)));
+    c.assign(rootRef, root); doc.catalog.set(N('Outlines'), rootRef);
+  }
+  function editOutline(api, goPage, label, mut, okMsg) {
+    var ctx = api.ctx;
+    var go = function () {
+      ctx.busy(label + ' 중…'); var L, doc;
+      return api.pdfDoc().getOutline().then(function (ol) { return readTree(api.pdfDoc(), ol); }).then(function (tree) {
+        return api.loadLib().then(function (l) { L = l; return api.getBytes(); }).then(function (b) { return L.PDFDocument.load(b, { updateMetadata: false }); }).then(function (d) {
+          doc = d; var err = mut(tree); if (err) throw new Error(err); writeOutline(L, doc, tree); return doc.save();
+        });
+      }).then(function (out) {
+        return api.pdfjs.getDocument({ data: out.slice(), isEvalSupported: false }).promise.then(function (pd) { var n = pd.numPages; try { pd.destroy(); } catch (e) {} if (n !== doc.getPageCount()) throw new Error('쪽 수 점검 실패'); return api.applyBytes(out, label); });
+      }).then(function () { ctx.busy(null); ctx.toast(okMsg + ' (되돌리려면 ↶)', 3200); setTimeout(function () { outlineSheet(api, goPage); }, 250); })
+        .catch(function (e) { ctx.busy(null); ctx.toast('하지 못했습니다 — ' + ((e && e.message) || e) + ' 문서는 그대로입니다.', 5200); });
+    };
+    if (api.hasAnns && api.hasAnns()) ctx.confirm('넣은 것이 있습니다', '넣은 형광펜·글·서명을 먼저 문서에 합친 뒤 책갈피를 고칩니다. 합친 뒤에도 「되돌리기」로 취소할 수 있습니다.', '합치고 고치기', function () { ctx.busy('합치는 중…'); api.flattenAnns().then(function () { ctx.busy(null); go(); }, function (e) { ctx.busy(null); ctx.toast('합치지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }, { cancelLabel: '취소' });
+    else go();
+  }
+  function nodeAt(tree, path) { var n = null, list = tree; for (var i = 0; i < path.length; i++) { n = list[path[i]]; if (!n) return null; list = n.items || []; } return n; }
   function outlineSheet(api, goPage) {
-    var ctx = api.ctx, pdf = api.pdfDoc();
-    return pdf.getOutline().then(function (ol) {
-      if (!ol || !ol.length) { ctx.toast('이 PDF에는 책갈피(목차)가 없습니다.', 2800); return; }
-      var body = el('div', 'spd'), count = 0;
-      function walk(items, depth) {
-        items.forEach(function (it) {
+    var ctx = api.ctx, pdf = api.pdfDoc(), canEdit = !!(api.loadLib && api.applyBytes);
+    return pdf.getOutline().then(function (ol) { return readTree(pdf, ol); }).then(function (tree) {
+      var body = el('div', 'spd'), nm = el('input', 'spd-in wide'), cur = api.curPage ? api.curPage() : 1;
+      if (canEdit) {
+        nm.type = 'text'; nm.maxLength = 120; nm.placeholder = '책갈피 이름'; nm.setAttribute('aria-label', '책갈피 이름'); nm.value = '';
+        body.appendChild(nm);
+        var add = el('button', 'spd-b big', cur + '쪽에 책갈피 추가'); add.type = 'button';
+        add.onclick = function () { var t = nm.value.trim() || (cur + '쪽'); ctx.closeSheet(); setTimeout(function () { editOutline(api, goPage, '책갈피 추가', function (tr) { tr.push({ title: t, page: cur, items: [] }); }, '책갈피를 추가했습니다.'); }, 60); };
+        body.appendChild(add);
+      }
+      var count = 0;
+      if (!tree.length) body.appendChild(el('div', 'so-sheet-note', '이 PDF에는 책갈피(목차)가 없습니다.' + (canEdit ? ' 위에 이름을 쓰고 「책갈피 추가」를 누르면 지금 보는 쪽에 만듭니다.' : '')));
+      function walk(items, depth, path) {
+        items.forEach(function (it, idx) {
           if (count > 600) return; count++;
-          var b = el('button', 'spd-b big sp-ol', ''); b.type = 'button'; b.style.textAlign = 'left'; b.style.paddingLeft = (12 + depth * 18) + 'px'; b.textContent = (it.title || '(제목 없음)').trim() || '(제목 없음)';
-          b.onclick = function () {
-            resolvePage(pdf, it.dest).then(function (n) { if (n) { ctx.closeSheet(); setTimeout(function () { goPage(n); }, 80); } else ctx.toast('이 책갈피가 가리키는 쪽을 찾지 못했습니다.', 2800); });
-          };
-          body.appendChild(b);
-          if (it.items && it.items.length) walk(it.items, depth + 1);
+          var row = el('div', 'spd-r'), my = path.concat(idx);
+          var b = el('button', 'spd-b big sp-ol' + (it.page ? '' : ' off'), ''); b.type = 'button'; b.style.textAlign = 'left'; b.style.flex = '1'; b.style.paddingLeft = (12 + depth * 18) + 'px';
+          b.textContent = it.title + (it.page ? '  · ' + it.page + '쪽' : '  · (끊김)');
+          b.onclick = function () { if (it.page) { ctx.closeSheet(); setTimeout(function () { goPage(it.page); }, 80); } else ctx.toast('이 책갈피가 가리키는 쪽을 찾지 못했습니다.', 2800); };
+          row.appendChild(b);
+          if (canEdit) {
+            var rn = el('button', 'spd-b', '이름'); rn.type = 'button'; rn.setAttribute('aria-label', '책갈피 이름 바꾸기');
+            rn.onclick = function () { var t = nm.value.trim(); if (!t) { ctx.toast('위 칸에 새 이름을 쓴 뒤 「이름」을 누르십시오.', 2800); return; } ctx.closeSheet(); setTimeout(function () { editOutline(api, goPage, '책갈피 이름', function (tr) { var n = nodeAt(tr, my); if (!n) return '책갈피를 찾지 못했습니다'; n.title = t; }, '책갈피 이름을 바꿨습니다.'); }, 60); };
+            var mv = el('button', 'spd-b', cur + '쪽으로'); mv.type = 'button'; mv.setAttribute('aria-label', '이 책갈피를 지금 쪽으로');
+            mv.onclick = function () { ctx.closeSheet(); setTimeout(function () { editOutline(api, goPage, '책갈피 쪽 바꾸기', function (tr) { var n = nodeAt(tr, my); if (!n) return '책갈피를 찾지 못했습니다'; n.page = cur; }, '책갈피가 ' + cur + '쪽을 가리킵니다.'); }, 60); };
+            var rm = el('button', 'spd-b', '지우기'); rm.type = 'button'; rm.setAttribute('aria-label', '책갈피 지우기');
+            rm.onclick = function () { ctx.closeSheet(); setTimeout(function () { editOutline(api, goPage, '책갈피 지우기', function (tr) { var par = my.length > 1 ? nodeAt(tr, my.slice(0, -1)).items : tr; par.splice(my[my.length - 1], 1); }, '책갈피를 지웠습니다(딸린 하위 책갈피도 함께 지워집니다).'); }, 60); };
+            row.appendChild(rn); row.appendChild(mv); row.appendChild(rm);
+          }
+          body.appendChild(row);
+          if (it.items && it.items.length) walk(it.items, depth + 1, my);
         });
       }
-      walk(ol, 0);
+      walk(tree, 0, []);
+      if (canEdit) body.appendChild(el('div', 'so-sheet-note', '책갈피를 고치면 목차를 같은 모양으로 다시 만들어 넣으며, 글자색 같은 꾸밈은 기본으로 돌아갑니다. 이름을 바꾸려면 위 칸에 새 이름을 쓰고 그 줄의 「이름」을 누르십시오. 저장은 「사본 저장」으로 합니다.'));
       ctx.sheet({ title: '책갈피(목차)', body: body, buttons: [{ label: '닫기' }], wide: true });
     }).catch(function (e) { ctx.toast('책갈피를 읽지 못했습니다 — ' + ((e && e.message) || e), 3600); });
+  }
+
+  // ======================================================================== 글 뽑기 → 마크다운
+  function pdfToMarkdown(pdf, onProgress) {
+    var n = pdf.numPages, pagesLines = [], sizes = {}, chain = Promise.resolve();
+    for (var i = 1; i <= n; i++) (function (i) {
+      chain = chain.then(function () {
+        if (onProgress) onProgress(i, n);
+        return pdf.getPage(i).then(function (pg) { return pg.getTextContent().then(function (tc) {
+          var rows = [];
+          tc.items.forEach(function (it) {
+            var t = String(it.str || ''); if (!t.trim()) return;
+            var h = Math.abs(it.transform[3]) || it.height || 10, y = it.transform[5], x = it.transform[4], row = null;
+            for (var k = rows.length - 1; k >= 0 && k >= rows.length - 4; k--) if (Math.abs(rows[k].y - y) < h * 0.45) { row = rows[k]; break; }
+            if (!row) { row = { y: y, x: x, h: h, parts: [] }; rows.push(row); }
+            row.parts.push({ x: x, s: t, w: it.width || 0 }); if (h > row.h) row.h = h;
+            var key = Math.round(h * 2) / 2; sizes[key] = (sizes[key] || 0) + t.length;
+          });
+          rows.sort(function (a, b) { return b.y - a.y; });
+          pagesLines.push(rows.map(function (r) {
+            r.parts.sort(function (a, b) { return a.x - b.x; });
+            var txt = '', end = null;
+            r.parts.forEach(function (p) { if (end != null && p.x - end > r.h * 0.25 && !/\s$/.test(txt) && !/^\s/.test(p.s)) txt += ' '; txt += p.s; end = p.x + p.w; });
+            return { t: txt.replace(/\s+/g, ' ').trim(), y: r.y, h: r.h, x: r.parts[0].x };
+          }).filter(function (r) { return r.t; }));
+          try { pg.cleanup(); } catch (e) {}
+        }); });
+      });
+    })(i);
+    return chain.then(function () {
+      var body = 12, best = 0; Object.keys(sizes).forEach(function (k) { if (sizes[k] > best) { best = sizes[k]; body = +k; } });
+      var out = [], chars = 0, bulletRe = /^[•·○●▪■◦\-–—]\s+/;
+      pagesLines.forEach(function (lines, pi) {
+        var par = [], prev = null, inList = false;
+        function flush() { if (par.length) { out.push(par.join(' ')); par = []; } }
+        lines.forEach(function (ln) {
+          var ratio = ln.h / body, head = ratio >= 1.25 && ln.t.length <= 90, bullet = bulletRe.test(ln.t), num = /^\d{1,2}[.)]\s+\S/.test(ln.t);
+          var gap = prev ? (prev.y - ln.y) : 0;
+          if (!bullet) inList = false;
+          if (head) { flush(); out.push((ratio >= 1.7 ? '# ' : ratio >= 1.4 ? '## ' : '### ') + ln.t); }
+          else if (bullet) { flush(); var li = '- ' + ln.t.replace(bulletRe, ''); if (inList && out.length) out[out.length - 1] += '\n' + li; else out.push(li); inList = true; prev = ln; chars += ln.t.length; return; }
+          else if (num) { flush(); par.push(ln.t); }
+          else { if (prev && gap > body * 2.2) flush(); par.push(ln.t); }
+          prev = ln; chars += ln.t.length;
+        });
+        flush(); if (pi < n - 1) out.push('---');
+      });
+      var md = out.join('\n\n');
+      return { md: md, chars: chars, pages: n };
+    });
+  }
+  function exportMarkdown(api, baseName) {
+    var ctx = api.ctx;
+    ctx.confirm('글을 마크다운으로 뽑을까요?', 'PDF 속의 글자를 뽑아 제목·문단·목록 모양으로 정리한 .md 사본을 만듭니다(원본 PDF는 바뀌지 않습니다).\n\n· 글자가 들어 있는 PDF만 됩니다. 스캔한 그림 PDF는 글을 뽑을 수 없습니다.\n· 제목은 글자 크기로 짐작하므로 틀릴 수 있고, 표·그림은 담기지 않습니다.', '뽑아서 저장', function () {
+      ctx.busy('글을 뽑는 중…');
+      pdfToMarkdown(api.pdfDoc(), function (i, n) { ctx.busy('글을 뽑는 중… (' + i + '/' + n + ')'); }).then(function (r) {
+        ctx.busy(null);
+        if (r.chars < 5) { ctx.toast('뽑을 글이 거의 없습니다. 스캔한 그림 PDF는 글을 뽑을 수 없습니다.', 4200); return; }
+        return Promise.resolve(ctx.saveCopy(new Blob([r.md + '\n'], { type: 'text/markdown' }), String(baseName || 'document').replace(/\.pdf$/i, '') + '.md', { exact: true })).then(function (ok) { if (ok !== false) ctx.toast('마크다운 사본을 저장했습니다(' + r.pages + '쪽, 글자 ' + r.chars + '자). 파일 열기에서 열어 볼 수 있습니다.', 4200); });
+      }).catch(function (e) { ctx.busy(null); ctx.toast('글을 뽑지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+    }, { cancelLabel: '취소' });
   }
   function resolvePage(pdf, dest) {
     var p = typeof dest === 'string' ? pdf.getDestination(dest) : Promise.resolve(dest);
@@ -488,6 +691,6 @@
   }
   function hasOutline(pdf) { return pdf.getOutline().then(function (o) { return !!(o && o.length); }, function () { return false; }); }
 
-  global.SOPdfTools = { extend: extend, redact: redact, openWithPassword: openWithPassword, outlineSheet: outlineSheet, hasOutline: hasOutline,
-    _t: { compressBytes: compressBytes, encryptBytes: encryptBytes, decryptBytes: decryptBytes, gcDoc: gcDoc, qpdfRun: qpdfRun } };
+  global.SOPdfTools = { extend: extend, redact: redact, openWithPassword: openWithPassword, outlineSheet: outlineSheet, exportMarkdown: exportMarkdown, hasOutline: hasOutline,
+    _t: { pdfToMarkdown: pdfToMarkdown, writeOutline: writeOutline, readTree: readTree, remapDests: remapDests, compressBytes: compressBytes, encryptBytes: encryptBytes, decryptBytes: decryptBytes, gcDoc: gcDoc, qpdfRun: qpdfRun } };
 })(window);

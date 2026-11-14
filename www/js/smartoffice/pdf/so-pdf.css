@@ -15,6 +15,7 @@ html[data-style="dark"] .sp-cv{filter:brightness(.88)}       /* 어두운 화면
 .sp-ann::before{content:'';position:absolute;inset:-10px}    /* 작은 글·메모도 손가락으로 잡기 쉽게 누름 범위를 넓힘 */
 .sp-hl{position:absolute;mix-blend-mode:multiply;opacity:.45;border-radius:2px}
 .sp-hl::before{display:none}
+.sp-hl.sp-ln{mix-blend-mode:normal;opacity:1;border-radius:0}
 .sp-ghost{pointer-events:none}
 .sp-tx{white-space:pre;font-family:Helvetica,Arial,"Malgun Gothic","Noto Sans KR","Noto Sans CJK KR","Apple SD Gothic Neo",sans-serif;overflow:visible}
 .sp-tx.memo{background:#fff28c;border:1px solid #d9b51a;border-radius:2px}

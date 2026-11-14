@@ -25,7 +25,7 @@
   // ---------------------------------------------------------------- 상태
   function newState(ctx) {
     return { ctx: ctx, dead: false, pdf: null, bytes: null, n: 0, pages: [], maxW: 1, z: 1, s: 1, fit: 1, mode: 'hand',
-      bigDoc: false, hlColor: HL_COLORS[0], txColor: TX_COLORS[0], size: 14, sig: null, anns: [], hist: [[]], rev: 0, savedRev: 0, sel: null,
+      bigDoc: false, hlColor: HL_COLORS[0], hlStyle: 'hl', ulColor: TX_COLORS[1], txColor: TX_COLORS[0], size: 14, sig: null, anns: [], hist: [[]], rev: 0, savedRev: 0, sel: null,
       rendering: false, pinch: null, dlg: null, idc: 0, curPage: 1, io: null, ro: null, failedToasted: false, cache: null,
       bytes: null, workStack: [], savedWork: 0, form: null, pagesBack: null, bucket: 0 };
   }
@@ -84,17 +84,23 @@
     Object.keys(S.modeBtns).forEach(function (k) { S.modeBtns[k].classList.toggle('on', k === m); });
     if (S.moreBtn) S.moreBtn.classList.toggle('on', !S.modeBtns[m]);
     renderOpt();
-    var hint = { hl: '글 위를 손가락으로 쓸어 칠하십시오. 화면을 넘기려면 「보기」를 누르십시오.', text: '글을 넣을 자리를 한 번 누르십시오.', memo: '메모를 붙일 자리를 한 번 누르십시오.', sig: '서명을 넣을 자리를 한 번 누르십시오.' }[m];
+    var hint = { hl: '글 위를 손가락으로 쓸어 칠하십시오(형광·밑줄·취소선은 아래에서 고릅니다). 화면을 넘기려면 「보기」를 누르십시오.', text: '글을 넣을 자리를 한 번 누르십시오.', memo: '메모를 붙일 자리를 한 번 누르십시오.', sig: '서명을 넣을 자리를 한 번 누르십시오.' }[m];
     if (hint) S.ctx.toast(hint, 2400);
   }
   function renderOpt() {
     var o = S.opt; o.innerHTML = '';
     var m = S.mode;
     if (m === 'hl' || m === 'text') {
-      var cols = m === 'hl' ? HL_COLORS : TX_COLORS, cur = m === 'hl' ? S.hlColor : S.txColor;
+      if (m === 'hl' && plus()) {          // 형광펜 · 밑줄 · 취소선 (같은 도구에서 고른다 — 새 단추 없음)
+        [['hl', '형광'], ['ul', '밑줄'], ['st', '취소선']].forEach(function (d) {
+          var sb = el('button', 'sp-link' + (S.hlStyle === d[0] ? ' on' : ''), d[1]); sb.type = 'button'; sb.style.fontWeight = S.hlStyle === d[0] ? '700' : '400';
+          sb.onclick = function () { S.hlStyle = d[0]; renderOpt(); }; o.appendChild(sb);
+        });
+      }
+      var cols = m === 'hl' ? (S.hlStyle === 'hl' ? HL_COLORS : TX_COLORS.slice(1)) : TX_COLORS, cur = m === 'hl' ? (S.hlStyle === 'hl' ? S.hlColor : S.ulColor) : S.txColor;
       cols.forEach(function (c) {
         var b = el('button', 'sp-chip' + (c === cur ? ' on' : '')); b.type = 'button'; b.style.backgroundColor = c; b.setAttribute('aria-label', '색');
-        b.onclick = function () { if (m === 'hl') S.hlColor = c; else S.txColor = c; renderOpt(); };
+        b.onclick = function () { if (m === 'hl') { if (S.hlStyle === 'hl') S.hlColor = c; else S.ulColor = c; } else S.txColor = c; renderOpt(); };
         o.appendChild(b);
       });
     }
@@ -279,7 +285,9 @@
   function mount(a) {
     var P = S.pages[a.page - 1], e;
     if (a.type === 'hl') {
-      e = el('div', 'sp-ann sp-hl'); e.style.background = a.color;
+      e = el('div', 'sp-ann sp-hl' + (a.style ? ' sp-ln' : '')); e.style.background = a.color;
+      if (a.style === 'ul') { e.style.background = 'none'; e.style.borderBottom = '2px solid ' + a.color; e.style.boxSizing = 'border-box'; }
+      else if (a.style === 'st') e.style.background = 'linear-gradient(transparent calc(50% - 1px), ' + a.color + ' calc(50% - 1px), ' + a.color + ' calc(50% + 1px), transparent calc(50% + 1px))';
     } else if (a.type === 'stamp') {
       e = el('img', 'sp-ann sp-stamp'); e.src = a.img; e.draggable = false;
     } else {
@@ -383,7 +391,7 @@
       var st = px(ev), sx = ev.clientX, sy = ev.clientY, moved = false, box = null, done = false;
       if (m === 'hl') {
         ev.preventDefault();
-        box = el('div', 'sp-hl sp-ghost'); box.style.background = S.hlColor; P.ov.appendChild(box);
+        box = el('div', 'sp-hl sp-ghost'); box.style.background = S.hlStyle === 'hl' ? S.hlColor : S.ulColor; if (S.hlStyle !== 'hl') box.style.opacity = '.25'; P.ov.appendChild(box);
         try { d.setPointerCapture(ev.pointerId); } catch (x) {}
       }
       function end() { d.removeEventListener('pointermove', mv); d.removeEventListener('pointerup', up); d.removeEventListener('pointercancel', cx); S.draw = null; }
@@ -400,7 +408,9 @@
           if (r.w < 6 && r.h < 6) return;
           if (r.h < 14) { r.y = r.y - (14 - r.h) / 2; r.h = 14; }
           r.y = clamp(r.y, 0, Math.max(0, P.h - r.h));
-          addAnn({ type: 'hl', page: P.n, x: r.x, y: r.y, w: r.w, h: r.h, color: S.hlColor });
+          var ls = S.hlStyle === 'ul' || S.hlStyle === 'st' ? S.hlStyle : null;
+          if (ls && r.h > 34) { r.y = r.y + (r.h - 22) / 2; r.h = 22; }      // 밑줄·취소선은 글 한 줄 높이로만
+          addAnn({ type: 'hl', page: P.n, x: r.x, y: r.y, w: r.w, h: r.h, color: ls ? S.ulColor : S.hlColor, style: ls || undefined });
           return;
         }
         if (moved) return;                 // 스크롤이었음
@@ -482,14 +492,14 @@
       quick.appendChild(b);
     });
     wrap.appendChild(quick);
-    if (plus() && S.pdf && S.pdf.getOutline) {      // 책갈피(목차)가 있으면 목록으로 보기
+    if (plus() && S.pdf && S.pdf.getOutline) {      // 책갈피(목차) 보기·만들기·고치기 (없어도 새로 만들 수 있다)
       var cur = S;
-      toolsMod().then(function (T) { return T.hasOutline(cur.pdf).then(function (ok) {
-        if (!ok || S !== cur || !quick.parentNode) return;
-        var ob = el('button', 'sp-sz', '책갈피(목차) 보기'); ob.type = 'button';
-        ob.onclick = function () { closeDlg(); T.outlineSheet({ ctx: cur.ctx, pdfDoc: function () { return cur.pdf; } }, goPage); };
+      toolsMod().then(function (T) {
+        if (S !== cur || !quick.parentNode) return;
+        var ob = el('button', 'sp-sz', '책갈피(목차)'); ob.type = 'button';
+        ob.onclick = function () { closeDlg(); T.outlineSheet(pagesApi(), goPage); };
         quick.appendChild(ob);
-      }); }).catch(function () {});
+      }).catch(function () {});
     }
     dialog('쪽 이동', wrap, [{ label: '취소' }, { label: '이동', primary: true, onClick: function () { goPage(+inp.value); } }]);
     setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 60);
@@ -608,6 +618,11 @@
       var p1 = toPdf(vp, a.x, a.y), p2 = toPdf(vp, a.x + a.w, a.y + a.h);
       return { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y), width: Math.abs(p2.x - p1.x), height: Math.abs(p2.y - p1.y) };
     }
+    if (a.type === 'hl' && (a.style === 'ul' || a.style === 'st')) {
+      var lc = rgbOf(a.color), yy = a.style === 'ul' ? a.y + a.h - 1 : a.y + a.h / 2, q1 = toPdf(vp, a.x, yy), q2 = toPdf(vp, a.x + a.w, yy);
+      page.drawLine({ start: { x: q1.x, y: q1.y }, end: { x: q2.x, y: q2.y }, thickness: 1.3, color: L.rgb(lc[0], lc[1], lc[2]) });
+      return;
+    }
     if (a.type === 'hl') {
       var c = rgbOf(a.color), r = boxRect();
       page.drawRectangle({ x: r.x, y: r.y, width: r.width, height: r.height, color: L.rgb(c[0], c[1], c[2]), opacity: 0.45, blendMode: L.BlendMode.Multiply });
@@ -646,7 +661,7 @@
     if (!S || S.dead || S.decrypted || (!S.anns.length && !S.workStack.length)) return null;   // 암호를 풀어 연 문서는 암호 없는 사본이 앱 안에 남지 않게 임시 보관하지 않는다
     var list = S.anns.map(function (a) {
       var o = { t: a.type, p: a.page, x: a.x, y: a.y };
-      if (a.type === 'hl') { o.w = a.w; o.h = a.h; o.c = a.color; }
+      if (a.type === 'hl') { o.w = a.w; o.h = a.h; o.c = a.color; if (a.style) o.s = a.style; }
       else if (a.type === 'stamp') { o.w = a.w; o.h = a.h; o.img = a.img; if (a.fill) o.fill = a.fill; }
       else { o.text = a.text; o.size = a.size; o.c = a.color; o.maxw = a.maxw; }
       return o;
@@ -673,7 +688,7 @@
         var a = { type: o.t, page: P.n, x: o.x, y: o.y };
         if (o.t === 'hl') {
           if (!num(o.w) || !num(o.h) || !hex.test(o.c || '')) { rep.skipped++; return; }
-          a.w = clamp(o.w, 1, P.w); a.h = clamp(o.h, 1, P.h); a.color = o.c;
+          a.w = clamp(o.w, 1, P.w); a.h = clamp(o.h, 1, P.h); a.color = o.c; if (o.s === 'ul' || o.s === 'st') a.style = o.s;
         } else if (o.t === 'stamp') {
           if (!num(o.w) || !num(o.h) || typeof o.img !== 'string' || !png.test(o.img)) { rep.skipped++; return; }
           a.w = clamp(o.w, 8, P.w); a.h = clamp(o.h, 8, P.h); a.img = o.img;
@@ -748,7 +763,7 @@
       hasAnns: function () { return S.anns.length > 0; },
       flattenAnns: function () { return buildOutput().then(function (out) { return applyBytes(out, '반영'); }); },
       applyBytes: function (b, label) { return applyBytes(b, label); },
-      pageCount: function () { return S.n; }, pdfDoc: function () { return S.pdf; }, goPage: goPage,
+      pageCount: function () { return S.n; }, curPage: function () { return S.curPage || 1; }, pdfDoc: function () { return S.pdf; }, goPage: goPage,
       PDFName: function (n) { return global.PDFLib.PDFName.of(n); },
       onPagesBack: function (fn) { S.pagesBack = fn; }, pagesClosed: function () { S.pagesBack = null; },
       formOn: function () { return !!S.form; }, formStop: formStop, formStart: formStart,
@@ -941,6 +956,7 @@
     open: openDoc,
     snapshot: snapshot,
     restore: restore,
+    exportMd: function () { if (!S || S.dead || !plus()) return; toolsMod().then(function (T) { T.exportMarkdown(pagesApi(), S.ctx.name); }).catch(function (e) { S.ctx.toast('글 뽑기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); },
     close: teardown
   });
 })(window);
