@@ -2885,14 +2885,15 @@
   function openScanTab() {
     if (!scanTabOn()) return;
     photoAsScan = false; photoAsCard = false; filePanelFromChat = false;          // 지난번에 사진 고르기를 그냥 닫았으면 남은 영수증 모드를 지움
-    var hasR = SCAN_HUB === 'on', hasD = docScanOn();
-    if (!hasR && !hasD) { toast('스캔을 지금은 쓸 수 없습니다.'); return; }
+    var hasR = SCAN_HUB === 'on', hasD = docScanOn(), hasC = SCAN_CARD === 'on';
+    if (!hasR && !hasD && !hasC) { toast('스캔을 지금은 쓸 수 없습니다.'); return; }
     var old = document.querySelector('.stab-sheet'); if (old) { try { old.remove(); } catch (e) {} }
     var sh = document.createElement('div');
     sh.className = 'sheet shin-sheet atm-sheet stab-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="스캔 고르기"><div class="sheet-head">무엇을 스캔할까요?</div>' +
       (hasR ? '<button type="button" class="sheet-btn" data-stab="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증</b><small>한 장 찍으면 반듯하게 펴서 케이가 읽고, 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       (hasD ? '<button type="button" class="sheet-btn" data-stab="doc"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>문서</b><small>종이 문서를 여러 장 찍어 PDF 한 파일로 만듭니다</small></span></button>' : '') +
+      (hasC ? '<button type="button" class="sheet-btn" data-stab="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함</b><small>명함 사진을 골라 보내면 PC가 명함 대장에 등록합니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn atm-close" data-stab="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('[data-stab]') : null;
@@ -2901,6 +2902,7 @@
       var k = b && b.getAttribute('data-stab');
       if (k === 'receipt') openReceiptScan();
       else if (k === 'doc' && docScanOn()) openScanGeneral();
+      else if (k === 'card' && SCAN_CARD === 'on') cardPick();                  // v9.99: 눌린 그 자리에서 사진 고르기를 연다(누름 안이라 폰이 막지 않는다)
     });
     document.body.appendChild(sh);
     sh.style.display = 'flex';
