@@ -735,6 +735,7 @@
     var m = host.querySelector('#soMenu'), c = cur, items = [];
     var canConv = !!c && !(global.SmartDocs && typeof SmartDocs.isViewable === 'function' && !SmartDocs.isViewable(c.file.name, c.file.type));
     if (canConv) items.push('<button type="button" role="menuitem" data-m="convert"><b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 폰 화면과 모양이 다를 때</span></button>');
+    if (c && c.mod && typeof c.mod.exportPdf === 'function') items.push('<button type="button" role="menuitem" data-m="pdf"><b>PDF로 내보내기</b><span>화면에 보이는 모양 그대로 PDF 사본 · 글자는 그림으로 담김</span></button>');
     items.push('<button type="button" role="menuitem" data-m="info"><b>' + SOFFICE_NAME + ' 정보</b><span>출처와 라이선스</span></button>');
     if (fixAvail(c)) items.push('<button type="button" role="menuitem" data-m="fix" class="so-menu-fix"><b>수정 요청</b><span>폰에서 못 하는 수정은 표시해서 맡깁니다 · 화면이 「변환한 보기」로 바뀝니다</span></button>');
     m.innerHTML = items.join(''); m.style.display = '';
@@ -743,6 +744,7 @@
     var b = e.target.closest ? e.target.closest('[data-m]') : null; if (!b) return;
     var k = b.getAttribute('data-m'); closeMenu();
     if (k === 'info') { showInfo(); return; }
+    if (k === 'pdf') { if (cur && cur.mod && typeof cur.mod.exportPdf === 'function') cur.mod.exportPdf(); return; }
     if (k === 'fix') { if (cur) requestFix(cur); return; }
     if (k === 'convert') {
       var c = cur; if (!c) return;

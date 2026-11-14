@@ -416,6 +416,56 @@
     setActions(); setTip();
   }
 
+  // ---- PDF 로 내보내기(그림 방식, O-0861 v10.8): 화면에 그려진 쪽을 쪽마다 한 장의 그림으로 찍어 PDF 에 담는다.
+  //      글자가 그림이라 PDF 에서 글자를 고르거나 검색할 수 없다. 쪽 나뉨은 이 화면 기준이다(워드·한컴과 조금 다를 수 있음).
+  var PDF_CLEAN = ['so-docx-ok', 'so-docx-sel', 'so-docx-edited', 'so-docx-cur', 'so-docx-hit'];
+  function blobToDataUrl(url) {
+    return fetch(url).then(function (r) { return r.blob(); }).then(function (b) { return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(b); }); });
+  }
+  function pageToJpeg(sec, css) {
+    var cs = window.getComputedStyle(sec), W = Math.round(parseFloat(cs.width)) || 794, H = Math.round(parseFloat(cs.minHeight) || parseFloat(cs.height)) || 1123;
+    var c = sec.cloneNode(true); c.style.margin = '0'; c.style.boxShadow = 'none'; c.style.zoom = '1'; c.style.background = '#fff'; c.style.color = '#000';
+    PDF_CLEAN.forEach(function (k) { [].slice.call(c.querySelectorAll('.' + k)).forEach(function (e) { e.classList.remove(k); }); });
+    var imgs = [].slice.call(c.querySelectorAll('img')), jobs = imgs.map(function (im) { var s = im.getAttribute('src') || ''; return /^blob:/.test(s) ? blobToDataUrl(s).then(function (d) { im.setAttribute('src', d); }) : Promise.resolve(); });
+    return Promise.all(jobs).then(function () {
+      var html = new XMLSerializer().serializeToString(c);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '"><foreignObject x="0" y="0" width="' + W + '" height="' + H + '"><div xmlns="http://www.w3.org/1999/xhtml"><style>' + css.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</style>' + html + '</div></foreignObject></svg>';
+      return new Promise(function (res, rej) {
+        var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('쪽을 그림으로 만들지 못했습니다')); };
+        im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      }).then(function (im) {
+        var k = Math.min(1.6, Math.sqrt(12e6 / (W * H))), cv = document.createElement('canvas'); cv.width = Math.round(W * k); cv.height = Math.round(H * k);
+        var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.scale(k, k); cx.drawImage(im, 0, 0);
+        return new Promise(function (res, rej) { cv.toBlob(function (b) { if (!b) { rej(new Error('쪽 그림을 저장하지 못했습니다')); return; } b.arrayBuffer().then(function (ab) { res({ bytes: new Uint8Array(ab), W: W, H: H }); }, rej); }, 'image/jpeg', 0.82); });
+      });
+    });
+  }
+  function exportPdf() {
+    var ctx = ctxRef; if (!ctx || !S) return;
+    if (!S.ready || !pageEls.length) { ctx.toast('문서를 다 불러온 뒤에 눌러 주십시오.', 2600); return; }
+    var base = String(ctx.name || 'document').replace(/\.docx$/i, ''), nPages = pageEls.length;
+    ctx.confirm('PDF로 내보낼까요?', '지금 화면에 보이는 모양 그대로 ' + nPages + '쪽짜리 PDF 사본을 만듭니다(원본 문서는 바뀌지 않습니다).\n\n· 글자가 그림으로 담겨서 PDF에서 글자를 고르거나 검색할 수 없습니다.\n· 쪽 나뉨은 폰 화면 기준이라 워드와 조금 다를 수 있습니다.\n· 정확한 모양의 PDF가 필요하면 ⋯ 메뉴의 「변환해서 보기」를 쓰십시오.', '내보내기', function () {
+      ctx.busy('PDF 만드는 중… (0/' + nPages + ')');
+      var css = [].slice.call((S.styleBox || document).querySelectorAll('style')).map(function (x) { return x.textContent; }).filter(function (t) { return /docx/.test(t); }).join('\n');
+      var pages = [], chain = Promise.resolve();
+      return ctx.loadScript('vendor/so/pdf/pdf-lib.min.js').then(function () {
+        pageEls.forEach(function (sec, i) {
+          chain = chain.then(function () { ctx.busy('PDF 만드는 중… (' + (i + 1) + '/' + nPages + ')'); return pageToJpeg(sec, css).then(function (p) { pages.push(p); }); });
+        });
+        return chain;
+      }).then(function () {
+        var PL = window.PDFLib; return PL.PDFDocument.create().then(function (doc) {
+          var seq = Promise.resolve();
+          pages.forEach(function (p) { seq = seq.then(function () { return doc.embedJpg(p.bytes).then(function (im) { var w = p.W * 0.75, h = p.H * 0.75, pg = doc.addPage([w, h]); pg.drawImage(im, { x: 0, y: 0, width: w, height: h }); }); }); });
+          return seq.then(function () { return doc.save(); });
+        });
+      }).then(function (u8) {
+        ctx.busy(null);
+        return Promise.resolve(ctx.saveCopy(new Blob([u8], { type: 'application/pdf' }), base + '.pdf', { exact: true })).then(function (ok) { if (ok !== false) ctx.toast('PDF 사본을 저장했습니다(' + pages.length + '쪽). 원래 문서는 그대로입니다.', 3600); });
+      }).catch(function (e) { ctx.busy(null); ctx.explainFail('PDF를 만들지 못했습니다(원본은 그대로입니다)', e, 5200); });
+    }, { cancelLabel: '취소' });
+  }
+
   // ---- 문단 고치는 시트 (textarea: 폰 한글 조합 입력이 가장 안정적. contenteditable 은 docx-preview 가 만든 DOM·CSS zoom 위에서 커서·조합이 흔들려 쓰지 않음)
   //      시트는 화면 맨 아래 고정(position:fixed)이 아니라 틀 안에 두고, 키보드가 올라오면 visualViewport 로 높이를 재서 키보드 바로 위로 올린다.
   var sheet = null, sheetVV = null, sheetCur = null, curTa = null;
@@ -1030,6 +1080,7 @@
         });
       });
     },
+    exportPdf: function () { exportPdf(); },
     close: function () {
       if (bar && bar.parentNode) bar.parentNode.removeChild(bar); bar = null; ui = null; unbindKeys();
       cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = [];
