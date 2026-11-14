@@ -191,14 +191,43 @@
     await registerSlide(pkg, d, atIndex, path, atIndex > 0 ? d.slides[atIndex - 1].id : null);
     return { index: atIndex, path: path };
   }
-  // 복제를 막는 내용(차트·SmartArt·개체 삽입·동영상·소리)이 있으면 이유를 돌려준다
+  // 복제를 막는 내용(삽입 개체·새 형식 차트)이 있으면 이유를 돌려준다. 차트·SmartArt·동영상·소리는 복제할 수 있다(O-0861 v10.8: 차트·SmartArt 부품을 따로 복사)
   function dupBlock(xml, rels) {
-    if (/<c:chart[\s>]/.test(xml)) return '차트';
-    if (/<dgm:relIds/.test(xml)) return 'SmartArt';
     if (/<p:oleObj[\s>]/.test(xml)) return '삽입된 개체(표·문서)';
-    if (/<a:videoFile|<a:audioFile|<p14:media|<p:movie/.test(xml)) return '동영상·소리';
-    for (var i = 0; i < rels.length; i++) { var k = relKind(rels[i].type); if (/^(chart|chartEx|diagramData|diagramLayout|diagramColors|diagramQuickStyle|oleObject|package|video|audio|media|vmlDrawing|tags)$/.test(k) && k !== 'tags') return k === 'vmlDrawing' ? '옛 형식 개체' : '차트·개체'; }
+    for (var i = 0; i < rels.length; i++) { var k = relKind(rels[i].type); if (k === 'chartEx') return '새 형식 차트'; if (/^(oleObject|package|vmlDrawing)$/.test(k)) return k === 'vmlDrawing' ? '옛 형식 개체' : '삽입된 개체(표·문서)'; }
     return null;
+  }
+  // 복제할 때 새 슬라이드가 따로 가져야 하는 부품(차트·SmartArt와 그 딸린 부품)
+  var OWNED_KIND = /^(chart|chartUserShapes|diagramData|diagramLayout|diagramQuickStyle|diagramColors|diagramDrawing|chartStyle|chartColorStyle|themeOverride)$/;
+  function reEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&'); }
+  function freeName(pkg, p) {                                // 같은 폴더·같은 이름 뒤 번호만 올려 빈 이름을 찾는다
+    var m = /^(.*\/)([^\/]*?)(\d*)(\.[^.\/]+)$/.exec(p); if (!m) return p + '_2';
+    var re = new RegExp('^' + reEsc(m[1] + m[2]) + '(\\d*)' + reEsc(m[4]) + '$'), mx = 0;
+    pkg.list().forEach(function (q) { var mm = re.exec(q); if (mm) mx = Math.max(mx, mm[1] ? +mm[1] : 0); });
+    return m[1] + m[2] + (mx + 1) + m[4];
+  }
+  // 부품 하나를 새 이름으로 복사하고 그 부품이 가진 관계(rels)도 따라 복사한다. 반환: 새 경로. ctx.ct 는 [Content_Types].xml 문자열(복사하며 갱신)
+  async function clonePart(pkg, src, done, ctx) {
+    if (done[src]) return done[src];
+    var dst = freeName(pkg, src); done[src] = dst;
+    var isText = /\.(xml|rels|vml)$/i.test(src), data;
+    if (isText) data = await pkg.read(src); else { if (!pkg.readBin) throw new Error('이 환경에서는 ' + src + ' 를 복사할 수 없습니다'); data = await pkg.readBin(src); }
+    if (data == null) throw new Error('문서 안에 ' + src + ' 이(가) 없습니다');
+    if (isText) pkg.write(dst, data); else pkg.writeBin(dst, data);
+    var cm = new RegExp('<Override\\b[^>]*PartName="/' + reEsc(src) + '"[^>]*>').exec(ctx.ct);
+    if (cm) { var ty = attrOf(cm[0], 'ContentType'); ctx.ct = ctAdd(ctx.ct, '/' + dst, ty); }
+    var rp = relsPathOf(src), rx = await pkg.read(rp);
+    if (rx != null) {
+      var nx = rx, rls = parseRels(rx);
+      for (var i = 0; i < rls.length; i++) {
+        var r = rls[i]; if (r.mode === 'External') continue;
+        var abs = resolvePath(src, r.target); if (!abs) continue;
+        var kind = relKind(r.type), nd = (OWNED_KIND.test(kind) || kind === 'package') ? await clonePart(pkg, abs, done, ctx) : abs;
+        nx = nx.replace(r.raw, r.raw.replace(/Target="[^"]*"/, 'Target="' + escX(relTarget(dst, nd)) + '"'));
+      }
+      pkg.write(relsPathOf(dst), nx);
+    }
+    return dst;
   }
   async function duplicateSlide(pkg, idx) {
     var d = await readDeck(pkg), src = d.slides[idx]; if (!src) throw new Error('슬라이드를 찾지 못했습니다');
@@ -208,6 +237,16 @@
     var notesRel = rl.filter(function (r) { return relKind(r.type) === 'notesSlide'; })[0];
     var newRels = rels;
     if (notesRel) newRels = newRels.replace(notesRel.raw, '');                // 노트는 아래에서 새로 만들어 이어 붙인다
+    // 차트·SmartArt 는 슬라이드마다 자기 부품이 있어야 하므로 따로 복사하고 새 슬라이드가 그것을 가리키게 한다(동영상·그림은 같은 파일을 함께 쓴다)
+    var own = rl.filter(function (r) { return r.mode !== 'External' && OWNED_KIND.test(relKind(r.type)); });
+    if (own.length) {
+      var cx = { ct: await must(pkg, '[Content_Types].xml') }, done = {};
+      for (var i = 0; i < own.length; i++) {
+        var abs = resolvePath(src.path, own[i].target), nd = await clonePart(pkg, abs, done, cx);
+        newRels = newRels.replace(own[i].raw, own[i].raw.replace(/Target="[^"]*"/, 'Target="' + escX(relTarget(path, nd)) + '"'));
+      }
+      pkg.write('[Content_Types].xml', cx.ct);
+    }
     pkg.write(path, xml); pkg.write(relsPathOf(path), newRels);
     if (notesRel) {
       var np = resolvePath(src.path, notesRel.target), nx = await pkg.read(np);
@@ -955,7 +994,322 @@
     pkg.write(rp, rx.replace(m[0], rel)); return { ok: true };
   }
 
+  // ============================== v10.8 (3회차): 표 열 너비·줄 높이 · 묶기·풀기 · 그림 자르기 · 그림자·그러데이션 · 순서 한 칸 · 정렬·간격 · 쪽 번호·날짜·바닥글 · 슬라이드 크기 · 링크 · 화면 전환 ==============================
+  var FIRST_OFFEXT = /<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"\s*\/>\s*<a:ext\s+cx="(\d+)"\s+cy="(\d+)"\s*\/>/;
+  // ---- 표 열 너비 · 줄 높이 ----
+  function tblShape(xml, id) { var sh = findShape(xml, id); if (!sh || sh.name !== 'p:graphicFrame' || !/<a:tbl[\s>]/.test(sh.xml)) return null; return sh; }
+  function tableGeom(xml, id) {
+    var sh = tblShape(xml, id); if (!sh) return null;
+    var cols = (sh.xml.match(/<a:gridCol\b[^>]*>/g) || []).map(function (g) { return +(attrOf(g, 'w') || 0); }), rows = (sh.xml.match(/<a:tr\b[^>]*>/g) || []).map(function (g) { return +(attrOf(g, 'h') || 0); });
+    return { cols: cols, rows: rows, frame: xfOf(sh.xml, 'p:graphicFrame') };
+  }
+  function writeTable(xml, id, cols, rows) {
+    var sh = tblShape(xml, id), x = sh.xml, ci = 0, ri = 0;
+    if (cols) x = x.replace(/<a:gridCol\b([^>]*?)(\/?)>/g, function (m, at, sl) { var w = cols[ci++]; return '<a:gridCol' + (w == null ? at : setNumAttr(at, 'w', w)) + sl + '>'; });
+    if (rows) x = x.replace(/<a:tr\b([^>]*?)>/g, function (m, at) { var h = rows[ri++]; return '<a:tr' + (h == null ? at : setNumAttr(at, 'h', h)) + '>'; });
+    var out = xml.slice(0, sh.s) + x + xml.slice(sh.e), g = xfOf(x, 'p:graphicFrame');
+    if (g) {
+      var nw = cols ? cols.reduce(function (a, c) { return a + c; }, 0) : g.w, nh = rows ? rows.reduce(function (a, c) { return a + c; }, 0) : g.h;
+      if (nw !== g.w || nh !== g.h) out = setGeom(out, id, { x: g.x, y: g.y, w: nw, h: nh });
+    }
+    return out;
+  }
+  // o = {col:0부터 번호, delta:EMU}(고른 열을 넓히거나 좁힘. 옆 열이 대신 줄어 표 전체 폭은 그대로) · {equal:true} · {fit:W}(표 폭을 W 로)
+  function setTableCols(xml, id, o) {
+    var g = tableGeom(xml, id); if (!g) return { err: '표를 찾지 못했습니다.' };
+    var cols = g.cols.slice(), n = cols.length, MIN = 300000, tot = cols.reduce(function (a, c) { return a + c; }, 0), i;
+    if (!n) return { err: '표의 열 정보를 읽지 못했습니다.' };
+    if (o.equal) { var each = Math.floor(tot / n); for (i = 0; i < n; i++) cols[i] = each; cols[n - 1] += tot - each * n; }
+    else if (o.fit) { var k = o.fit / tot, s = 0; for (i = 0; i < n; i++) { cols[i] = Math.round(cols[i] * k); s += cols[i]; } cols[n - 1] += o.fit - s; }
+    else {
+      if (n < 2) return { err: '열이 하나뿐인 표는 폭을 나눌 수 없습니다.' };
+      var ci = Math.max(0, Math.min(n - 1, o.col || 0)), ni = ci + 1 < n ? ci + 1 : ci - 1, d = Math.round(o.delta || 0);
+      if (cols[ci] + d < MIN) d = MIN - cols[ci]; if (cols[ni] - d < MIN) d = cols[ni] - MIN;
+      if (!d) return { err: '더 이상 ' + (o.delta > 0 ? '넓힐' : '좁힐') + ' 수 없습니다(옆 열이 너무 좁아집니다).' };
+      cols[ci] += d; cols[ni] -= d;
+    }
+    return { xml: writeTable(xml, id, cols, null) };
+  }
+  // o = {row:0부터, h:EMU(최소 높이)} · {all:true, h}
+  function setTableRows(xml, id, o) {
+    var g = tableGeom(xml, id); if (!g) return { err: '표를 찾지 못했습니다.' };
+    var rows = g.rows.slice(), h = Math.max(91440, Math.round(o.h || 91440)), i;
+    if (o.all) for (i = 0; i < rows.length; i++) rows[i] = h; else { var r = Math.max(0, Math.min(rows.length - 1, o.row || 0)); rows[r] = h; }
+    return { xml: writeTable(xml, id, null, rows) };
+  }
+
+  // ---- 묶기 · 풀기 ----
+  function groupable(sh) { return /^p:(sp|pic|cxnSp|grpSp)$/.test(sh.name) && !/<p:ph\b/.test(sh.xml) && !!xfOf(sh.xml, sh.name); }
+  function groupShapes(xml, ids) {
+    var uniq = {}, items = []; ids.forEach(function (i) { if (!uniq[i]) { uniq[i] = 1; var s = findShape(xml, i); if (s) items.push(s); } });
+    if (items.length < 2) return { err: '묶으려면 도형을 두 개 이상 고르십시오.' };
+    for (var k = 0; k < items.length; k++) if (!groupable(items[k])) return { err: '자리표시자(제목·본문 칸), 표, 차트 같은 개체는 묶을 수 없습니다. 도형·글 상자·그림·선만 묶을 수 있습니다.' };
+    items.sort(function (a, b) { return a.s - b.s; });
+    var x0 = 1e12, y0 = 1e12, x1 = -1e12, y1 = -1e12;
+    items.forEach(function (it) { var g = xfOf(it.xml, it.name); x0 = Math.min(x0, g.x); y0 = Math.min(y0, g.y); x1 = Math.max(x1, g.x + g.w); y1 = Math.max(y1, g.y + g.h); });
+    var gid = maxId(xml) + 1, w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
+    var gx = '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="' + gid + '" name="Group ' + gid + '"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="' + x0 + '" y="' + y0 + '"/><a:ext cx="' + w + '" cy="' + h + '"/><a:chOff x="' + x0 + '" y="' + y0 + '"/><a:chExt cx="' + w + '" cy="' + h + '"/></a:xfrm></p:grpSpPr>' + items.map(function (it) { return it.xml; }).join('') + '</p:grpSp>';
+    var out = '', cur = 0;
+    items.forEach(function (it, i) { out += xml.slice(cur, it.s); if (i === items.length - 1) out += gx; cur = it.e; });
+    return { xml: out + xml.slice(cur), id: gid };
+  }
+  function ungroupShape(xml, id) {
+    var sh = findShape(xml, id); if (!sh || sh.name !== 'p:grpSp') return { err: '묶인 도형을 먼저 고르십시오.' };
+    var gp = /<p:grpSpPr\b[\s\S]*?<\/p:grpSpPr>/.exec(sh.xml); if (!gp) return { err: '묶음의 위치 정보를 읽지 못했습니다.' };
+    var xf = /<a:xfrm\b([^>]*)>\s*<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"\s*\/>\s*<a:ext\s+cx="(\d+)"\s+cy="(\d+)"\s*\/>\s*<a:chOff\s+x="(-?\d+)"\s+y="(-?\d+)"\s*\/>\s*<a:chExt\s+cx="(\d+)"\s+cy="(\d+)"\s*\/>/.exec(gp[0]);
+    if (!xf) return { err: '이 묶음은 위치 정보가 특수해 폰에서는 풀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    if (/\srot="|\sflipH="|\sflipV="/.test(xf[1])) return { err: '돌리거나 뒤집은 묶음은 폰에서 풀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    var ox = +xf[2], oy = +xf[3], ex = +xf[4], ey = +xf[5], cx0 = +xf[6], cy0 = +xf[7], cex = +xf[8] || ex, cey = +xf[9] || ey, sx = ex / cex, sy = ey / cey;
+    var from = sh.xml.indexOf('</p:grpSpPr>') + 12, to = sh.xml.lastIndexOf('</p:grpSp>'), kids = childrenOf(sh.xml, from, to).filter(function (c) { return /^p:(sp|pic|graphicFrame|grpSp|cxnSp)$|^mc:AlternateContent$/.test(c.name); });
+    if (!kids.length) return { err: '묶음 안에 도형이 없습니다.' };
+    var ids = [];
+    var out = kids.map(function (c) {
+      var kx = sh.xml.slice(c.s, c.e); ids.push(shapeId(kx));
+      return kx.replace(FIRST_OFFEXT, function (m, x, y, cx, cy) { return '<a:off x="' + Math.round(ox + (+x - cx0) * sx) + '" y="' + Math.round(oy + (+y - cy0) * sy) + '"/><a:ext cx="' + Math.round(cx * sx) + '" cy="' + Math.round(cy * sy) + '"/>'; });
+    }).join('');
+    return { xml: xml.slice(0, sh.s) + out + xml.slice(sh.e), ids: ids };
+  }
+
+  // ---- 그림 자르기(비율 본보기): mode = '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | 'orig'(원래 비율로) ----
+  function cropPicture(xml, id, mode) {
+    var sh = findShape(xml, id); if (!sh || sh.name !== 'p:pic') return { err: '그림을 먼저 고르십시오.' };
+    var g = xfOf(sh.xml, 'p:pic'); if (!g) return { err: '이 그림의 크기를 읽지 못했습니다.' };
+    var bf = /<p:blipFill\b[\s\S]*?<\/p:blipFill>/.exec(sh.xml); if (!bf) return { err: '이 그림의 그림 정보를 읽지 못했습니다.' };
+    var sr = /<a:srcRect\b[^>]*\/>/.exec(bf[0]), l = 0, t = 0, r = 0, b = 0;
+    if (sr) { l = +(attrOf(sr[0], 'l') || 0); t = +(attrOf(sr[0], 't') || 0); r = +(attrOf(sr[0], 'r') || 0); b = +(attrOf(sr[0], 'b') || 0); }
+    var vw = 1 - (l + r) / 100000, vh = 1 - (t + b) / 100000; if (vw <= 0.02 || vh <= 0.02) return { err: '이 그림은 이미 많이 잘려 있어 더 자를 수 없습니다. 먼저 「원래 비율로」를 누르십시오.' };
+    var nx = g.x, ny = g.y, nw = g.w, nh = g.h, nl = 0, nt = 0, nr = 0, nb = 0;
+    if (mode === 'orig') { var af = (g.w / g.h) * (vh / vw); nh = Math.round(g.w / af); ny = Math.round(g.y + (g.h - nh) / 2); }
+    else {
+      var m = /^(\d+):(\d+)$/.exec(mode); if (!m) return { err: '알 수 없는 비율입니다.' };
+      var A = +m[1] / +m[2], ac = g.w / g.h;
+      if (A < ac) { nw = Math.round(g.h * A); nx = Math.round(g.x + (g.w - nw) / 2); } else { nh = Math.round(g.w / A); ny = Math.round(g.y + (g.h - nh) / 2); }
+      var dvw = vw * (nw / g.w), dvh = vh * (nh / g.h), ex = (vw - dvw) / 2, ey = (vh - dvh) / 2;
+      nl = Math.round(l + ex * 100000); nr = Math.round(r + ex * 100000); nt = Math.round(t + ey * 100000); nb = Math.round(b + ey * 100000);
+    }
+    var tag = (nl || nt || nr || nb) ? '<a:srcRect' + (nl ? ' l="' + nl + '"' : '') + (nt ? ' t="' + nt + '"' : '') + (nr ? ' r="' + nr + '"' : '') + (nb ? ' b="' + nb + '"' : '') + '/>' : '';
+    var nbf = bf[0].replace(/<a:srcRect\b[^>]*\/>/, '');
+    nbf = tag ? nbf.replace(/(<a:blip\b[^>]*?(?:\/>|>[\s\S]*?<\/a:blip>))/, '$1' + tag) : nbf;
+    var x2 = sh.xml.replace(bf[0], nbf), out = xml.slice(0, sh.s) + x2 + xml.slice(sh.e);
+    return { xml: setGeom(out, id, { x: nx, y: ny, w: nw, h: nh }) };
+  }
+  function readCrop(xml, id) { var sh = findShape(xml, id); if (!sh || sh.name !== 'p:pic') return null; return /<a:srcRect\b[^>]*\/>/.test(sh.xml); }
+
+  // ---- 그림자 · 그러데이션 ----
+  function effectInsertPos(sp) { var m = /<a:(?:effectDag|scene3d|sp3d|extLst)\b/.exec(sp); return m ? m.index : sp.lastIndexOf('</p:spPr>'); }
+  function setShadow(xml, id, kind) {                          // kind = 'none' | 'soft' | 'hard'
+    var sh = findShape(xml, id); if (!sh) return { err: '도형을 찾지 못했습니다.' };
+    if (sh.name === 'p:graphicFrame' || sh.name === 'p:grpSp') return { err: '표·차트·묶음 도형에는 그림자를 줄 수 없습니다. 안의 도형에 주십시오.' };
+    var x = sh.xml, r = spPrRange(x); if (!r) return { err: '이 도형에는 그림자를 줄 수 없습니다.' };
+    var sp = x.slice(r.s, r.e); if (r.self) sp = sp.replace(/<p:spPr\s*\/>/, '<p:spPr></p:spPr>');
+    sp = sp.replace(/<a:effectLst\b[\s\S]*?<\/a:effectLst>|<a:effectLst\s*\/>/, '');
+    var eff = null;
+    if (kind === 'soft') eff = '<a:effectLst><a:outerShdw blurRad="63500" dist="38100" dir="2700000" algn="tl" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr></a:outerShdw></a:effectLst>';
+    else if (kind === 'hard') eff = '<a:effectLst><a:outerShdw blurRad="0" dist="50800" dir="2700000" algn="tl" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw></a:effectLst>';
+    else if (/<a:effectRef\s+idx="[1-9]/.test(x)) eff = '<a:effectLst/>';               // 도형 스타일이 주는 그림자를 끈다
+    if (eff) { var at = effectInsertPos(sp); sp = sp.slice(0, at) + eff + sp.slice(at); }
+    if (!/<a:|\S/.test(sp.replace(/<\/?p:spPr>/g, ''))) sp = '<p:spPr/>';
+    return { xml: xml.slice(0, sh.s) + x.slice(0, r.s) + sp + x.slice(r.e) + xml.slice(sh.e) };
+  }
+  function readShadow(xml, id) { var sh = findShape(xml, id); if (!sh) return null; var m = /<a:effectLst>[\s\S]*?<a:outerShdw\b([^>]*)>/.exec(sh.xml); return m ? (/blurRad="0"/.test(m[1]) ? 'hard' : 'soft') : null; }
+  function setFillXml(xml, id, fill) {
+    var sh = findShape(xml, id); if (!sh) return { err: '도형을 찾지 못했습니다.' };
+    if (sh.name === 'p:graphicFrame' || sh.name === 'p:grpSp') return { err: '이 개체에는 색을 입힐 수 없습니다.' };
+    var x = sh.xml, r = spPrRange(x); if (!r) return { err: '이 도형에는 색을 넣을 수 없습니다.' };
+    var sp = x.slice(r.s, r.e);
+    if (r.self) sp = sp.replace(/<p:spPr\s*\/>/, '<p:spPr>' + fill + '</p:spPr>');
+    else {
+      var open = /^<p:spPr\b[^>]*>/.exec(sp)[0], body = sp.slice(open.length, sp.length - 9), lnKeep = [];
+      body = body.replace(/<a:ln\b[\s\S]*?<\/a:ln>|<a:ln\b[^>]*\/>/, function (m) { lnKeep.push(m); return '\u0001'; });
+      if (FILL_RE.test(body)) body = body.replace(FILL_RE, fill);
+      else { var geom = /<a:(?:prstGeom|custGeom)\b[\s\S]*?<\/a:(?:prstGeom|custGeom)>/.exec(body), xf = /<a:xfrm\b[\s\S]*?<\/a:xfrm>/.exec(body), at = geom ? geom.index + geom[0].length : (xf ? xf.index + xf[0].length : 0); body = body.slice(0, at) + fill + body.slice(at); }
+      sp = open + body.replace('\u0001', lnKeep[0] || '') + '</p:spPr>';
+    }
+    return { xml: xml.slice(0, sh.s) + x.slice(0, r.s) + sp + x.slice(r.e) + xml.slice(sh.e) };
+  }
+  // 두 색이 위→아래(ang 90)·왼→오른쪽(ang 0)·대각(ang 45)으로 이어지는 채우기
+  function setGradient(xml, id, c1, c2, ang) {
+    var g = '<a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:srgbClr val="' + c1 + '"/></a:gs><a:gs pos="100000"><a:srgbClr val="' + c2 + '"/></a:gs></a:gsLst><a:lin ang="' + Math.round((ang || 0) * 60000) + '" scaled="0"/></a:gradFill>';
+    return setFillXml(xml, id, g);
+  }
+  function readFillKind(xml, id) { var sh = findShape(xml, id); if (!sh) return null; var r = spPrRange(sh.xml); if (!r) return null; var sp = sh.xml.slice(r.s, r.e); return /<a:gradFill\b/.test(sp) ? 'grad' : (/<a:solidFill\b/.test(sp.replace(/<a:ln\b[\s\S]*?<\/a:ln>/, '')) ? 'solid' : null); }
+
+  // ---- 앞으로·뒤로 한 칸 ----
+  function stepShape(xml, id, dir) {
+    var tops = topShapes(xml), i = -1; tops.forEach(function (t, k) { if (shapeId(t.xml) === id) i = k; });
+    if (i < 0) return { err: '도형을 찾지 못했습니다.' };
+    var j = i + dir; if (j < 0 || j >= tops.length) return { err: dir > 0 ? '이미 맨 앞입니다.' : '이미 맨 뒤입니다.' };
+    var A = tops[Math.min(i, j)], B = tops[Math.max(i, j)];
+    return { xml: xml.slice(0, A.s) + B.xml + xml.slice(A.e, B.s) + A.xml + xml.slice(B.e) };
+  }
+
+  // ---- 정렬 · 간격 맞춤 (items = [{id, g:{x,y,w,h}}]) ----
+  function alignShapes(xml, items, mode) {
+    var its = items.filter(function (i) { return i.g; }); if (its.length < 2) return { err: '두 개 이상 골라 주십시오.' };
+    var x0 = Math.min.apply(null, its.map(function (i) { return i.g.x; })), x1 = Math.max.apply(null, its.map(function (i) { return i.g.x + i.g.w; })), y0 = Math.min.apply(null, its.map(function (i) { return i.g.y; })), y1 = Math.max.apply(null, its.map(function (i) { return i.g.y + i.g.h; }));
+    var out = xml;
+    its.forEach(function (i) {
+      var g = { x: i.g.x, y: i.g.y, w: i.g.w, h: i.g.h };
+      if (mode === 'left') g.x = x0; else if (mode === 'right') g.x = x1 - g.w; else if (mode === 'hcenter') g.x = Math.round((x0 + x1) / 2 - g.w / 2);
+      else if (mode === 'top') g.y = y0; else if (mode === 'bottom') g.y = y1 - g.h; else if (mode === 'vcenter') g.y = Math.round((y0 + y1) / 2 - g.h / 2);
+      var ng = { x: Math.round(g.x), y: Math.round(g.y), w: Math.round(g.w), h: Math.round(g.h) };
+      if (ng.x !== i.g.x || ng.y !== i.g.y || ng.w !== i.g.w || ng.h !== i.g.h) out = setGeom(out, i.id, ng);
+    });
+    return { xml: out };
+  }
+  function distributeShapes(xml, items, axis) {                // axis = 'h' | 'v' — 첫·끝 도형은 두고 사이 간격을 같게
+    var its = items.filter(function (i) { return i.g; }); if (its.length < 3) return { err: '간격을 같게 하려면 세 개 이상 골라 주십시오.' };
+    var key = axis === 'h' ? 'x' : 'y', len = axis === 'h' ? 'w' : 'h';
+    its.sort(function (a, b) { return a.g[key] - b.g[key]; });
+    var first = its[0].g[key], last = its[its.length - 1].g[key] + its[its.length - 1].g[len], sum = 0; its.forEach(function (i) { sum += i.g[len]; });
+    var gap = (last - first - sum) / (its.length - 1), pos = first, out = xml;
+    its.forEach(function (i) { var g = { x: i.g.x, y: i.g.y, w: i.g.w, h: i.g.h }; g[key] = Math.round(pos); pos += i.g[len] + gap; var ng = { x: g.x, y: g.y, w: Math.round(g.w), h: Math.round(g.h) }; if (ng.x !== i.g.x || ng.y !== i.g.y) out = setGeom(out, i.id, ng); });
+    return { xml: out };
+  }
+
+  // ---- 슬라이드 번호 · 날짜 · 바닥글 ----
+  var GUID_NUM = '{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}', GUID_DT = '{5A1E4B1D-6C0A-4E3B-9E55-7B2B8B1B8F10}';
+  function footerContent(kind, spec) {
+    var rp = '<a:rPr lang="ko-KR" altLang="en-US"/>';
+    if (kind === 'sldNum') return '<a:fld id="' + GUID_NUM + '" type="slidenum">' + rp + '<a:t>‹#›</a:t></a:fld><a:endParaRPr lang="ko-KR" altLang="en-US"/>';
+    if (kind === 'dt') return spec && spec.auto ? '<a:fld id="' + GUID_DT + '" type="datetime1">' + rp + '<a:t>' + escX(spec.text || '') + '</a:t></a:fld><a:endParaRPr lang="ko-KR" altLang="en-US"/>' : '<a:r>' + rp + '<a:t>' + escX((spec && spec.text) || '') + '</a:t></a:r><a:endParaRPr lang="ko-KR" altLang="en-US"/>';
+    return '<a:r>' + rp + '<a:t>' + escX(spec || '') + '</a:t></a:r><a:endParaRPr lang="ko-KR" altLang="en-US"/>';
+  }
+  var FOOT_NAME = { sldNum: '슬라이드 번호 ', dt: '날짜 ', ftr: '바닥글 ' };
+  // o = {num: true|false|undefined(그대로), date: false|{auto:bool,text}|undefined, footer: false|'글'|undefined, skipFirst: bool, only: 슬라이드 번호(0부터)|undefined(전체)}
+  async function setFooters(pkg, o) {
+    var d = await readDeck(pkg), done = 0, noLayout = 0;
+    for (var si = 0; si < d.slides.length; si++) {
+      if (o.only != null && o.only !== si) continue;
+      var path = d.slides[si].path, xml = await must(pkg, path), rels = parseRels(await pkg.read(relsPathOf(path)) || ''), lr = rels.filter(function (r) { return relKind(r.type) === 'slideLayout'; })[0];
+      var lx = lr ? await pkg.read(resolvePath(path, lr.target)) : null, kinds = [['sldNum', o.num === undefined ? undefined : (o.num ? true : false)], ['dt', o.date], ['ftr', o.footer]], changed = false;
+      for (var ki = 0; ki < kinds.length; ki++) {
+        var kind = kinds[ki][0], spec = kinds[ki][1]; if (spec === undefined) continue;
+        var want = !!spec && !(si === 0 && o.skipFirst), tops = listShapesRaw(xml), ex = tops.filter(function (t) { var m = /<p:ph\b[^>]*?\/?>/.exec(t.xml); return m && attrOf(m[0], 'type') === kind; });
+        if (!want) { ex.slice().sort(function (a, b) { return b.s - a.s; }).forEach(function (t) { xml = xml.slice(0, t.s) + xml.slice(t.e); changed = true; }); continue; }
+        if (ex.length) {                                      // 이미 있으면 글만 바꾼다
+          if (kind === 'sldNum') continue;
+          var t0 = ex[0], nx = t0.xml.replace(/(<p:txBody>[\s\S]*?<a:lstStyle\s*\/?>(?:[\s\S]*?<\/a:lstStyle>)?)[\s\S]*?(<\/p:txBody>)/, function (m, a, b) { return a + '<a:p>' + footerContent(kind, spec) + '</a:p>' + b; });
+          xml = xml.slice(0, t0.s) + nx + xml.slice(t0.e); changed = true; continue;
+        }
+        var lph = null; if (lx) { var re = /<p:sp>[\s\S]*?<\/p:sp>/g, mm; while ((mm = re.exec(lx))) { var ph = /<p:ph\b[^>]*?\/?>/.exec(mm[0]); if (ph && attrOf(ph[0], 'type') === kind) { lph = ph[0]; break; } } }
+        if (!lph) { noLayout++; continue; }
+        var nid = maxId(xml) + 1, sp = '<p:sp><p:nvSpPr><p:cNvPr id="' + nid + '" name="' + FOOT_NAME[kind] + nid + '"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr>' + lph + '</p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p>' + footerContent(kind, spec) + '</a:p></p:txBody></p:sp>';
+        xml = insertShape(xml, sp); changed = true;
+      }
+      if (changed) { pkg.write(path, xml); done++; }
+    }
+    return { ok: true, slides: done, noLayout: noLayout };
+  }
+  function listShapesRaw(xml) { return topShapes(xml).filter(function (t) { return t.name === 'p:sp'; }); }
+  async function readFooters(pkg, idx) {
+    var d = await readDeck(pkg), s = d.slides[idx]; if (!s) return {};
+    var xml = await must(pkg, s.path), out = { num: false, date: false, footer: '' };
+    listShapesRaw(xml).forEach(function (t) { var m = /<p:ph\b[^>]*?\/?>/.exec(t.xml); if (!m) return; var ty = attrOf(m[0], 'type'); if (ty === 'sldNum') out.num = true; else if (ty === 'dt') out.date = true; else if (ty === 'ftr') out.footer = unescX((t.xml.match(/<a:t(?:\s[^>]*)?>[\s\S]*?<\/a:t>/g) || []).map(function (q) { return q.replace(/<[^>]+>/g, ''); }).join('')); });
+    return out;
+  }
+
+  // ---- 슬라이드 크기(내용을 같은 비율로 줄이거나 늘리고 가운데에 놓는다) ----
+  var SLIDE_SIZES = { wide: { cx: 12192000, cy: 6858000, name: '와이드 16:9', type: null }, std: { cx: 9144000, cy: 6858000, name: '표준 4:3', type: 'screen4x3' }, a4: { cx: 10692000, cy: 7560000, name: 'A4 가로', type: 'A4' } };
+  function scaleTopXfrm(xml, s, ox, oy) {
+    var tops = topShapes(xml).slice().sort(function (a, b) { return b.s - a.s; }), out = xml;
+    tops.forEach(function (t) {
+      var x = t.xml;
+      if (t.name === 'mc:AlternateContent') return;
+      x = x.replace(FIRST_OFFEXT, function (m, X, Y, CX, CY) { return '<a:off x="' + Math.round(+X * s + ox) + '" y="' + Math.round(+Y * s + oy) + '"/><a:ext cx="' + Math.round(CX * s) + '" cy="' + Math.round(CY * s) + '"/>'; });
+      if (t.name === 'p:graphicFrame' && /<a:tbl[\s>]/.test(x)) { x = x.replace(/<a:gridCol\b([^>]*?)>/g, function (m, at) { var w = attrOf('<a:gridCol' + at + '>', 'w'); return '<a:gridCol' + (w ? setNumAttr(at, 'w', Math.round(+w * s)) : at) + '>'; }).replace(/<a:tr\b([^>]*?)>/g, function (m, at) { var h = attrOf('<a:tr' + at + '>', 'h'); return '<a:tr' + (h ? setNumAttr(at, 'h', Math.round(+h * s)) : at) + '>'; }); }
+      out = out.slice(0, t.s) + x + out.slice(t.e);
+    });
+    return out;
+  }
+  function scaleFonts(xml, s) { return s === 1 ? xml : xml.replace(/(<a:(?:rPr|defRPr|endParaRPr|lvl\dpPr|pPr)\b[^>]*?\ssz=")(\d+)(")/g, function (m, a, v, b) { return a + Math.max(100, Math.round(+v * s / 100) * 100) + b; }); }
+  async function setSlideSize(pkg, key) {
+    var sz = SLIDE_SIZES[key]; if (!sz) return { err: '알 수 없는 크기입니다.' };
+    var pres = await must(pkg, 'ppt/presentation.xml'), m = /<p:sldSz\b[^>]*?\/>/.exec(pres); if (!m) return { err: '슬라이드 크기 정보를 읽지 못했습니다.' };
+    var W = +attrOf(m[0], 'cx'), H = +attrOf(m[0], 'cy'); if (W === sz.cx && H === sz.cy) return { err: '지금 이미 이 크기입니다.' };
+    var s = Math.min(sz.cx / W, sz.cy / H), ox = (sz.cx - s * W) / 2, oy = (sz.cy - s * H) / 2, parts = pkg.list().filter(function (p) { return /^ppt\/(slides\/slide|slideLayouts\/slideLayout|slideMasters\/slideMaster)\d+\.xml$/.test(p); });
+    for (var i = 0; i < parts.length; i++) { var x = await pkg.read(parts[i]); if (x == null) continue; x = scaleFonts(scaleTopXfrm(x, s, ox, oy), s); pkg.write(parts[i], x); }
+    pkg.write('ppt/presentation.xml', pres.replace(m[0], '<p:sldSz cx="' + sz.cx + '" cy="' + sz.cy + '"' + (sz.type ? ' type="' + sz.type + '"' : '') + '/>'));
+    return { ok: true, scale: Math.round(s * 100), from: [W, H], to: [sz.cx, sz.cy] };
+  }
+  async function readSlideSize(pkg) { var pres = await must(pkg, 'ppt/presentation.xml'), m = /<p:sldSz\b[^>]*?\/>/.exec(pres); if (!m) return null; var W = +attrOf(m[0], 'cx'), H = +attrOf(m[0], 'cy'), name = null; Object.keys(SLIDE_SIZES).forEach(function (k) { if (SLIDE_SIZES[k].cx === W && SLIDE_SIZES[k].cy === H) name = SLIDE_SIZES[k].name; }); return { W: W, H: H, name: name }; }
+
+  // ---- 링크 ----
+  var RT_HL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+  function cleanUrl(u) { u = String(u || '').trim(); if (!/^(https?:\/\/|mailto:|tel:)/i.test(u)) { if (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(u)) u = 'https://' + u; else return null; } return u; }
+  function stripLinks(x) { return x.replace(/<a:hlinkClick\b[^>]*?(?:\/>|>[\s\S]*?<\/a:hlinkClick>)/g, ''); }
+  function addHlinkToRPr(rpr, tag) {
+    if (/\/>$/.test(rpr)) return rpr.replace(/\s*\/>$/, '>') + tag + '</a:rPr>';
+    var at = /<a:(?:rtl|extLst)\b/.exec(rpr); return at ? rpr.slice(0, at.index) + tag + rpr.slice(at.index) : rpr.replace(/<\/a:rPr>$/, tag + '</a:rPr>');
+  }
+  // spec = {url} | {slide:0부터 번호} | {jump:'next'|'prev'|'first'|'last'} | {remove:true} ; mode = 'text'(도형 안 글 전체) | 'shape'(도형 자체를 누르면)
+  async function setLink(pkg, slidePath, id, spec, mode) {
+    var xml = await must(pkg, slidePath), sh = findShape(xml, id); if (!sh) return { err: '도형을 찾지 못했습니다.' };
+    if (sh.name === 'p:graphicFrame' || sh.name === 'mc:AlternateContent') return { err: '표·차트는 폰에서 링크를 걸 수 없습니다. 도형이나 글 상자에 걸어 주십시오.' };
+    var rp = relsPathOf(slidePath), rx = await pkg.read(rp) || emptyRels(), tag = '', x = stripLinks(sh.xml);
+    if (!spec.remove) {
+      if (spec.url != null) {
+        var u = cleanUrl(spec.url); if (!u) return { err: '주소는 https:// 로 시작하게 적어 주십시오.' };
+        var ex = parseRels(rx).filter(function (q) { return q.type === RT_HL && q.mode === 'External' && q.target === u; })[0], rid;
+        if (ex) rid = ex.id; else { rid = nextRid(rx); rx = rx.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="' + RT_HL + '" Target="' + escX(u) + '" TargetMode="External"/></Relationships>'); }
+        tag = '<a:hlinkClick r:id="' + rid + '"/>';
+      } else if (spec.slide != null) {
+        var d = await readDeck(pkg), tg = d.slides[spec.slide]; if (!tg) return { err: '가려는 슬라이드를 찾지 못했습니다.' };
+        var rel = relTarget(slidePath, tg.path), ex2 = parseRels(rx).filter(function (q) { return relKind(q.type) === 'slide' && q.target === rel; })[0], rid2;
+        if (ex2) rid2 = ex2.id; else { rid2 = nextRid(rx); rx = rx.replace('</Relationships>', '<Relationship Id="' + rid2 + '" Type="' + R + 'slide" Target="' + escX(rel) + '"/></Relationships>'); }
+        tag = '<a:hlinkClick r:id="' + rid2 + '" action="ppaction://hlinksldjump"/>';
+      } else if (spec.jump) tag = '<a:hlinkClick r:id="" action="ppaction://hlinkshowjump?jump=' + ({ next: 'nextslide', prev: 'previousslide', first: 'firstslide', last: 'lastslide' }[spec.jump] || 'nextslide') + '"/>';
+      else return { err: '링크 내용이 없습니다.' };
+      if (mode === 'shape') {
+        var cm = /<p:cNvPr\b[^>]*?(\/?)>/.exec(x); if (!cm) return { err: '도형의 정보를 읽지 못했습니다.' };
+        x = cm[1] === '/' ? x.replace(cm[0], cm[0].replace(/\s*\/>$/, '>') + tag + '</p:cNvPr>') : x.replace(cm[0], cm[0] + tag);
+      } else {
+        var n = 0;
+        x = x.replace(/<a:r>(<a:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:rPr>))?/g, function (m, rpr) { n++; return '<a:r>' + addHlinkToRPr(rpr || '<a:rPr lang="ko-KR" altLang="en-US"/>', tag); });
+        if (!n) return { err: '이 도형에는 글이 없어 글에 링크를 걸 수 없습니다. 「도형 전체」에 걸거나 글을 먼저 넣어 주십시오.' };
+      }
+    }
+    pkg.write(rp, rx); pkg.write(slidePath, xml.slice(0, sh.s) + x + xml.slice(sh.e)); return { ok: true };
+  }
+  async function readLink(pkg, slidePath, id) {
+    var xml = await must(pkg, slidePath), sh = findShape(xml, id); if (!sh) return null;
+    var m = /<a:hlinkClick\b[^>]*?\/?>/.exec(sh.xml); if (!m) return null;
+    var rid = attrOf(m[0], 'r:id'), act = attrOf(m[0], 'action') || '', rels = parseRels(await pkg.read(relsPathOf(slidePath)) || ''), rl = rels.filter(function (q) { return q.id === rid; })[0];
+    if (/hlinkshowjump/.test(act)) return { jump: /jump=(\w+)/.exec(act)[1] };
+    if (/hlinksldjump/.test(act) && rl) { var d = await readDeck(pkg), tp = resolvePath(slidePath, rl.target), k = -1; d.slides.forEach(function (q, i) { if (q.path === tp) k = i; }); return { slide: k }; }
+    return rl ? { url: rl.target } : null;
+  }
+
+  // ---- 화면 전환 ----
+  var TR_KINDS = { fade: '<p:fade/>', push: '<p:push dir="{d}"/>', wipe: '<p:wipe dir="{d}"/>', cover: '<p:cover dir="{d}"/>', pull: '<p:pull dir="{d}"/>', split: '<p:split orient="horz" dir="out"/>', zoom: '<p:zoom dir="in"/>', randomBar: '<p:randomBar dir="horz"/>' };
+  function setTransitionXml(xml, t) {
+    var x = xml.replace(/<mc:AlternateContent\b[^>]*>(?:(?!<\/mc:AlternateContent>)[\s\S])*?<p:transition\b[\s\S]*?<\/mc:AlternateContent>/g, '').replace(/<p:transition\b[^>]*?(?:\/>|>[\s\S]*?<\/p:transition>)/g, '');
+    var el = null;
+    if (t && t.kind && t.kind !== 'none' && TR_KINDS[t.kind]) el = TR_KINDS[t.kind].replace('{d}', t.dir || 'l');
+    var adv = t && t.advTm ? Math.round(t.advTm) : null;
+    if (!el && !adv) return x;
+    var tr = '<p:transition' + (t && t.spd ? ' spd="' + t.spd + '"' : '') + (t && t.advClick === false ? ' advClick="0"' : '') + (adv ? ' advTm="' + adv + '"' : '') + (el ? '>' + el + '</p:transition>' : '/>');
+    var at = x.indexOf('</p:clrMapOvr>'); if (at >= 0) at += 14; else { at = x.indexOf('</p:cSld>'); if (at < 0) throw new Error('슬라이드 구조를 읽지 못했습니다'); at += 9; var cm = /^<p:clrMapOvr\b[^>]*?\/>/.exec(x.slice(at)); if (cm) at += cm[0].length; }
+    return x.slice(0, at) + tr + x.slice(at);
+  }
+  function readTransitionXml(xml) {
+    var x = xml.replace(/<mc:AlternateContent\b[^>]*>[\s\S]*?<\/mc:AlternateContent>/g, function (a) { var f = /<mc:Fallback>([\s\S]*?)<\/mc:Fallback>/.exec(a); return /<p:transition\b/.test(a) ? (f ? f[1] : '') : a; });
+    var m = /<p:transition\b([^>]*?)(\/?)>/.exec(x); if (!m) return { kind: 'none', spd: null, advTm: null };
+    var inner = m[2] === '/' ? '' : x.slice(m.index + m[0].length, Math.max(m.index + m[0].length, x.indexOf('</p:transition>', m.index))), k = (/<p:(\w+)\b/.exec(inner) || [])[1], tag = '<x' + m[1] + '>';
+    return { kind: TR_KINDS[k] ? k : (k ? 'other' : 'none'), spd: attrOf(tag, 'spd'), advTm: attrOf(tag, 'advTm') ? +attrOf(tag, 'advTm') : null };
+  }
+  // which = 슬라이드 번호(0부터) | 'all'
+  async function setTransition(pkg, which, t) {
+    var d = await readDeck(pkg), n = 0;
+    for (var i = 0; i < d.slides.length; i++) { if (which !== 'all' && which !== i) continue; var x = await must(pkg, d.slides[i].path); pkg.write(d.slides[i].path, setTransitionXml(x, t)); n++; }
+    return { ok: true, n: n };
+  }
+
   global.SOPptxStruct = {
+    tableGeom: tableGeom, setTableCols: setTableCols, setTableRows: setTableRows, groupShapes: groupShapes, ungroupShape: ungroupShape, cropPicture: cropPicture, readCrop: readCrop,
+    setShadow: setShadow, readShadow: readShadow, setGradient: setGradient, readFillKind: readFillKind, stepShape: stepShape, alignShapes: alignShapes, distributeShapes: distributeShapes,
+    setFooters: setFooters, readFooters: readFooters, SLIDE_SIZES: SLIDE_SIZES, setSlideSize: setSlideSize, readSlideSize: readSlideSize, setLink: setLink, readLink: readLink,
+    setTransition: setTransition, readTransitionXml: readTransitionXml, setTransitionXml: setTransitionXml, groupable: groupable,
     readDeck: readDeck, listSlides: listSlides, listLayouts: listLayouts, addSlide: addSlide, duplicateSlide: duplicateSlide, deleteSlide: deleteSlide, moveSlide: moveSlide, hideSlide: hideSlide,
     readSlide: readSlide, listShapes: listShapes, removeShape: removeShape, setGeom: setGeom, clampGeom: clampGeom, addTextBox: addTextBox, addAutoShape: addAutoShape, addLine: addLine,
     addPicture: addPicture, addTable: addTable, setFill: setFill, setLineColor: setLineColor, formatText: formatText, readFormat: readFormat, addParagraph: addParagraph, removeParagraph: removeParagraph,

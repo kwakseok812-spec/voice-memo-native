@@ -66,10 +66,10 @@
       var slides = function () { return s.slides; };
       function structOn() { return !!(ctx.flag && ctx.flag('pptx') && window.SOPptxUI && window.SOPptxStruct); }
       function u8ab(u8) { return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength); }
-      function roPkg(zip) { return { read: function (q) { var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } }; }
+      function roPkg(zip) { return { read: function (q) { var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, readBin: function (q) { var f = zip.file(q); return f ? f.async('uint8array') : Promise.resolve(null); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } }; }
       function rwPkg(zip) {
         var cache = {};
-        return { read: function (q) { if (q in cache) return Promise.resolve(cache[q]); var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); },
+        return { read: function (q) { if (q in cache) return Promise.resolve(cache[q]); var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, readBin: function (q) { var f = zip.file(q); return f ? f.async('uint8array') : Promise.resolve(null); },
           write: function (q, x) { cache[q] = x; zip.file(q, x, { createFolders: false }); }, writeBin: function (q, b) { zip.file(q, b, { binary: true, createFolders: false }); },
           remove: function (q) { delete cache[q]; zip.remove(q); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } };
       }
