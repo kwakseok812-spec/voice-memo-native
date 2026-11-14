@@ -6,6 +6,7 @@
 (function (global) {
   'use strict';
   var CFG = { on: false, engine: 'auto', zoom: 'on', layout: 'auto' };
+  var cardOpt = false;                    // 이번 카메라 호출에 「명함」 칸이 있었나(안내 글용)
   var busy = false;                       // 카메라 화면이 열려 있거나 열리는 중
   var CSS_ID = 'silentcam-css';
 
@@ -58,7 +59,7 @@
         { label: '폰 설정에서 허락하기', value: 'settings', primary: true }, { label: '닫기', value: 'close' }
       ]).then(function (v) { if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} } return { kind: 'cancel' }; });
     }
-    return sheet('카메라를 지금은 쓸 수 없습니다', mode === 'card' ? '카메라 허락이 꺼져 있습니다. 그래도 명함은 사진을 골라 주시면 똑같이 등록해 드립니다.' : '카메라 허락이 꺼져 있습니다. 그래도 문서와 영수증은 사진을 골라 주시면 똑같이 펴 드립니다.', [
+    return sheet('카메라를 지금은 쓸 수 없습니다', '카메라 허락이 꺼져 있습니다. 그래도 ' + (cardOpt ? '문서·영수증·명함은' : '문서와 영수증은') + ' 사진을 골라 주시면 똑같이 처리해 드립니다.', [
       { label: '사진 골라서 계속하기', value: 'gallery', primary: true }, { label: '폰 설정에서 허락하기', value: 'settings' }
     ]).then(function (v) {
       if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} return { kind: 'cancel' }; }
@@ -110,6 +111,7 @@
     if (!usable()) return Promise.resolve({ kind: 'fallback', why: CFG.on ? 'noplugin' : 'off' });
     if (busy) return Promise.resolve({ kind: 'cancel', mode: opt.mode });
     var p = P(), mode = opt.mode || 'doc';
+    cardOpt = !!opt.card;
     busy = true;
     function done(r) { busy = false; return r; }
     return p.status().then(function (st) {

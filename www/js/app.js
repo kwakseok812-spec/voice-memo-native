@@ -2808,7 +2808,7 @@
       }
       if (photoAsCard) {                                        // (O-0176) 채팅 ＋ 「명함 등록」 — 명함 스위치를 켠 채로(끄면 일반 사진 PC 정리)
         if ($('isCard')) $('isCard').checked = true;
-        if ($('filePanelTitle')) $('filePanelTitle').textContent = SCAN_CARD === 'on' ? '명함 등록' : '명함 등록 · 사진 PC 정리';     // v9.99: 머리줄에서 안 잘리게 짧게
+        if ($('filePanelTitle')) $('filePanelTitle').textContent = (SCAN_CARD === 'on' && !filePanelFromChat) ? '명함 등록' : '명함 등록 · 사진 PC 정리';     // v9.99: 머리줄에서 안 잘리게 짧게
       }
     } else filePanelFromChat = false;
     photoAsCard = false; photoAsScan = false; this.value = '';
@@ -2921,8 +2921,8 @@
     var old = document.querySelector('.stab-sheet'); if (old) { try { old.remove(); } catch (e) {} }
     var sh = document.createElement('div');
     sh.className = 'sheet shin-sheet atm-sheet stab-sheet';
-    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="명함 사진 고르기"><div class="sheet-head">폰에 있는 명함 사진을 고르시겠습니까?</div>' +
-      '<button type="button" class="sheet-btn" data-cgs="pick"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 사진 고르기</b><small>카톡으로 받은 명함 이미지도 됩니다. 여러 장을 한꺼번에 고를 수 있습니다</small></span></button>' +
+    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="명함 사진 고르기"><div class="sheet-head">명함 사진 고르기</div>' +
+      '<button type="button" class="sheet-btn" data-cgs="pick"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>폰의 사진에서 고르기</b><small>카톡으로 받은 명함 이미지도 됩니다. 여러 장을 한꺼번에 고를 수 있습니다</small></span></button>' +
       '<button type="button" class="sheet-btn atm-close" data-cgs="close">닫기</button></div>';
     sh.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('[data-cgs]') : null;
@@ -2987,7 +2987,7 @@
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="보내기 고르기"><div class="sheet-head">무엇을 보낼까요?</div>' +
       '<button type="button" class="sheet-btn" data-atm="file"><svg class="atm-ic"><use href="#i-image"/></svg><span><b>파일·사진을 케이에게</b><small>채팅에 붙여 케이에게 보여 주기</small></span></button>' +
       (SCAN_CARD === 'on'
-        ? '<button type="button" class="sheet-btn" data-atm="photo"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>사진을 PC로 보내 정리</b><small>PC가 사진을 정리합니다. 명함 사진이면 명함 대장에 등록됩니다. 홈의 스캔에서 「명함」으로 찍어 등록할 수도 있습니다.</small></span></button>'
+        ? '<button type="button" class="sheet-btn" data-atm="photo"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>사진을 PC로 보내 정리</b><small>명함 사진은 그대로 등록됩니다. 명함이 아니면 다음 화면에서 「이 사진은 명함입니다」를 꺼 주십시오. 홈의 스캔에서 「명함」으로 찍어 등록할 수도 있습니다.</small></span></button>'
         : '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>명함 사진은 그대로 등록됩니다. 명함이 아니면 다음 화면에서 「이 사진은 명함입니다」를 꺼 주십시오.</small></span></button>') +
       (SCAN_HUB === 'on' ? '<button type="button" class="sheet-btn" data-atm="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증 등록</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
@@ -3000,7 +3000,7 @@
       var k = b && b.getAttribute('data-atm');
       if (k === 'file') $('chatFileInput').click();
       else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
-      else if (k === 'photo' && SCAN_CARD === 'on') { photoAsCard = false; filePanelFromChat = true; $('photoInput').click(); }      // v9.99: 명함 스위치를 끈 채(예전 「사진 PC 정리」와 같음) — 파일 창 안 스위치로 켤 수도 있고, 켜지 않아도 PC 가 사진이 명함이면 등록한다
+      else if (k === 'photo' && SCAN_CARD === 'on') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }      // v9.99: v9.98 과 같이 명함 스위치를 켠 채(note 「명함」 → PC 의 명함 완료·실패 알림 장치가 걸림). 명함이 아니면 파일 창에서 끈다
       else if (k === 'receipt' && SCAN_HUB === 'on') openReceiptScan();
       else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
       else if (k === 'docscan' && docScanOn() && DOC_SCAN_CHAT === 'on') openScanGeneral();   // O-0576
@@ -10127,9 +10127,9 @@
       // v9.29(O-0607): 새 카메라를 쓸 수 있으면 칸 이름이 「카메라」(문서·영수증·사진) + 「새로」. 못 쓰면 예전 「스캔」 그대로(스위치 off·PC판)
       if (silentTabOn()) {
         var tb = $('btnScanTab'), nm = tb.querySelector('b'), sm = tb.querySelector('small');
-        if (nm) nm.textContent = '카메라'; if (sm) sm.textContent = '문서·영수증·사진';
+        if (nm) nm.textContent = '카메라'; if (sm) sm.textContent = SCAN_CARD === 'on' ? '문서·영수증·명함' : '문서·영수증·사진';
         var nw = document.createElement('span'); nw.className = 'nw'; nw.textContent = '새로'; tb.appendChild(nw);
-        tb.setAttribute('aria-label', '카메라: 문서, 영수증, 사진');
+        tb.setAttribute('aria-label', SCAN_CARD === 'on' ? '카메라: 문서, 영수증, 명함, 사진' : '카메라: 문서, 영수증, 사진');
       }
     }
     if ($('btnIdeas')) $('btnIdeas').style.display = on ? 'none' : '';
