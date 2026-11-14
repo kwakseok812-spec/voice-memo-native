@@ -393,5 +393,104 @@
     setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) {} }, 220);
   }
 
-  global.SOPdfPages = { openPages: openPages, formMode: formMode, perRow: perRow };
+
+  // ============================== v10.8: 꾸미기 — 쪽 번호 · 글자 도장(워터마크) · 잘라내기 · 빈 쪽 ==============================
+  // 한글·긴 글은 글꼴을 들이지 않고 「그림」으로 그려 넣는다(양식 칸 채우기와 같은 방식). 쪽 번호는 숫자뿐이라 PDF 기본 글꼴(Helvetica)로 쓴다.
+  function stampPng(text, size, color) {
+    var cv = document.createElement('canvas'), S = 1400; cv.width = S; cv.height = S;
+    var g = cv.getContext('2d'); g.translate(S / 2, S / 2); g.rotate(-Math.PI / 4);
+    var fs = 220; g.font = '800 ' + fs + 'px ' + FAMILY; var w = g.measureText(text).width; while (w > S * 0.95 && fs > 30) { fs -= 10; g.font = '800 ' + fs + 'px ' + FAMILY; w = g.measureText(text).width; }
+    g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 0, 0);
+    return cv.toDataURL('image/png');
+  }
+  function dataToBytes(url) { var b = atob(url.split(',')[1]), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  var MMPT = 72 / 25.4;
+  // 보이는 모양(돌려 놓은 쪽 포함) 기준 좌표 → 쪽 안 좌표. rot = 쪽을 돌려 놓은 각도(시계 방향 0·90·180·270). 보이는 쪽의 왼쪽 아래가 (0,0)
+  function toPage(rot, W, H, vx, vy) {
+    if (rot === 90) return { x: W - vy, y: vx, a: 90 };
+    if (rot === 180) return { x: W - vx, y: H - vy, a: 180 };
+    if (rot === 270) return { x: vy, y: H - vx, a: 270 };
+    return { x: vx, y: vy, a: 0 };
+  }
+  function visSize(rot, W, H) { return rot === 90 || rot === 270 ? { w: H, h: W } : { w: W, h: H }; }
+  function pageRot(pg) { var a = (pg.getRotation().angle || 0) % 360; return a < 0 ? a + 360 : a; }
+  function decorate(api) {
+    var ctx = api.ctx;
+    ctx.busy('문서를 확인하는 중…');
+    readInfo(api).catch(function () { return { signed: false }; }).then(function (info) {
+      ctx.busy(null);
+      if (info.signed) { signedBlock(api); return; }
+      var go = function () { buildDeco(api, info); };
+      if (api.hasAnns()) ctx.confirm('넣은 것이 있습니다', '넣은 형광펜·글·서명을 먼저 문서에 합친 뒤 꾸밉니다. 합친 뒤에도 「되돌리기」로 취소할 수 있습니다.', '문서에 합치고 꾸미기', function () { ctx.busy('넣은 것을 문서에 합치는 중…'); api.flattenAnns().then(function () { ctx.busy(null); go(); }, function (e) { ctx.busy(null); ctx.toast('합치지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }, { cancelLabel: '취소' });
+      else go();
+    });
+  }
+  function buildDeco(api, info) {
+    var ctx = api.ctx, body = el('div', 'spd'), st = { pos: 'c', fmt: 'n', start: 1, skip: false, wm: '', wmC: '#888888', top: 0, bottom: 0, left: 0, right: 0, blank: 1 };
+    function lab(t) { body.appendChild(el('div', 'spd-l', t)); }
+    function chips(list, key, cur) { var row = el('div', 'spd-r'); list.forEach(function (o) { var b = el('button', 'spd-b' + (o[0] === cur ? ' on' : ''), o[1]); b.type = 'button'; b.onclick = function () { st[key] = o[0]; [].forEach.call(row.children, function (x) { x.classList.toggle('on', x === b); }); }; row.appendChild(b); }); body.appendChild(row); }
+    function num(label, key, min, max, unit) { var row = el('div', 'spd-r'), i = el('input', 'spd-in'); i.type = 'number'; i.inputMode = 'decimal'; i.min = min; i.max = max; i.value = st[key]; i.setAttribute('aria-label', label); i.oninput = function () { st[key] = parseFloat(i.value) || 0; }; row.appendChild(el('span', 'spd-u', label)); row.appendChild(i); row.appendChild(el('span', 'spd-u', unit)); body.appendChild(row); }
+    function act(text, fn, cls) { var b = el('button', 'spd-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { ctx.closeSheet(); setTimeout(fn, 60); }; body.appendChild(b); }
+    function run(label, mut, okMsg) {
+      ctx.busy(label + ' 중…'); var L, doc;
+      return api.loadLib().then(function (l) { L = l; return api.getBytes(); }).then(function (b) { return L.PDFDocument.load(b, { updateMetadata: false }); }).then(function (d) { doc = d; return mut(L, d); }).then(function (note) {
+        return doc.save().then(function (out) {
+          return api.pdfjs.getDocument({ data: out.slice(), isEvalSupported: false }).promise.then(function (pd) { var n = pd.numPages; try { pd.destroy(); } catch (e) {} if (n !== doc.getPageCount()) throw new Error('쪽 수 점검 실패'); return api.applyBytes(out, label); });
+        }).then(function () { ctx.busy(null); ctx.toast(okMsg + (note ? ' ' + note : '') + ' (되돌리려면 ↶)', 3600); });
+      }).catch(function (e) { ctx.busy(null); ctx.toast('하지 못했습니다 — ' + ((e && e.message) || e) + ' 문서는 그대로입니다.', 5200); });
+    }
+    lab('쪽 번호'); chips([['l', '아래 왼쪽'], ['c', '아래 가운데'], ['r', '아래 오른쪽']], 'pos', st.pos);
+    chips([['n', '1'], ['of', '1 / 전체'], ['dash', '- 1 -']], 'fmt', st.fmt); num('시작 번호', 'start', 1, 9999, '');
+    var sk = el('button', 'spd-b', '첫 쪽에는 번호 안 넣기'); sk.type = 'button'; sk.onclick = function () { st.skip = !st.skip; sk.classList.toggle('on', st.skip); }; body.appendChild(sk);
+    act('쪽 번호 넣기', function () {
+      run('쪽 번호', function (L, doc) {
+        return doc.embedFont(L.StandardFonts.Helvetica).then(function (font) {
+          var pages = doc.getPages(), n = pages.length, skipped = 0;
+          pages.forEach(function (pg, i) {
+            if (st.skip && i === 0) return;
+            var no = (st.start || 1) + i - (st.skip ? 1 : 0), t = st.fmt === 'of' ? no + ' / ' + (n + (st.start || 1) - 1 - (st.skip ? 1 : 0)) : (st.fmt === 'dash' ? '- ' + no + ' -' : String(no));
+            var sz = 10, w = font.widthOfTextAtSize(t, sz), box = pg.getSize(), rot = pageRot(pg), vs = visSize(rot, box.width, box.height), vx = st.pos === 'l' ? 36 : (st.pos === 'r' ? vs.w - 36 - w : (vs.w - w) / 2), q = toPage(rot, box.width, box.height, vx, 22);
+            pg.drawText(t, { x: q.x, y: q.y, size: sz, font: font, color: L.rgb(0.2, 0.2, 0.2), rotate: L.degrees(q.a) });
+          });
+          return skipped ? '(돌려 놓은 ' + skipped + '쪽은 번호를 넣지 않았습니다)' : '';
+        });
+      }, '쪽 번호를 넣었습니다.');
+    }, 'on');
+    lab('글자 도장(워터마크) — 한글도 됩니다. 글을 그림으로 대각선에 옅게 넣습니다');
+    var wi = el('input', 'spd-in wide'); wi.type = 'text'; wi.maxLength = 20; wi.placeholder = '예: 초안 · 대외비 · DRAFT'; wi.setAttribute('aria-label', '도장 글'); wi.oninput = function () { st.wm = wi.value; }; body.appendChild(wi);
+    chips([['#888888', '회색'], ['#d33', '빨강'], ['#1c5fd6', '파랑']], 'wmC', st.wmC);
+    act('모든 쪽에 도장 넣기', function () {
+      var t = st.wm.trim(); if (!t) { ctx.toast('도장에 쓸 글을 적어 주십시오.', 2600); return; }
+      run('글자 도장', function (L, doc) {
+        return doc.embedPng(dataToBytes(stampPng(t, 0, st.wmC))).then(function (img) {
+          doc.getPages().forEach(function (pg) { var b = pg.getSize(), rot = pageRot(pg), vs = visSize(rot, b.width, b.height), s = Math.min(vs.w, vs.h) * 0.95, c = toPage(rot, b.width, b.height, vs.w / 2, vs.h / 2), th = c.a * Math.PI / 180, hx = s / 2, hy = s / 2; pg.drawImage(img, { x: c.x - (hx * Math.cos(th) - hy * Math.sin(th)), y: c.y - (hx * Math.sin(th) + hy * Math.cos(th)), width: s, height: s, rotate: L.degrees(c.a), opacity: 0.28 }); });
+          return '';
+        });
+      }, '글자 도장을 넣었습니다.');
+    }, 'on');
+    lab('잘라내기 — 가장자리를 줄여 보이는 영역만 작게(mm)'); num('위', 'top', 0, 100, 'mm'); num('아래', 'bottom', 0, 100, 'mm'); num('왼쪽', 'left', 0, 100, 'mm'); num('오른쪽', 'right', 0, 100, 'mm');
+    act('모든 쪽 잘라내기', function () {
+      if (!(st.top || st.bottom || st.left || st.right)) { ctx.toast('줄일 가장자리(mm)를 하나 이상 적어 주십시오.', 2800); return; }
+      run('잘라내기', function (L, doc) {
+        var bad = 0;
+        doc.getPages().forEach(function (pg) {
+          var mb = pg.getMediaBox(), cb = pg.getCropBox ? pg.getCropBox() : mb, rot = pageRot(pg), m = { left: st.left, right: st.right, top: st.top, bottom: st.bottom }, pl, pr, pt, pb;
+          if (rot === 90) { pl = m.top; pr = m.bottom; pb = m.left; pt = m.right; } else if (rot === 180) { pl = m.right; pr = m.left; pb = m.top; pt = m.bottom; } else if (rot === 270) { pl = m.bottom; pr = m.top; pb = m.right; pt = m.left; } else { pl = m.left; pr = m.right; pb = m.bottom; pt = m.top; }
+          var x = cb.x + pl * MMPT, y = cb.y + pb * MMPT, w = cb.width - (pl + pr) * MMPT, h = cb.height - (pt + pb) * MMPT;
+          if (w < 50 || h < 50) { bad++; return; }
+          pg.setCropBox(x, y, w, h);
+        });
+        if (bad === doc.getPageCount()) throw new Error('너무 많이 잘라 남는 영역이 없습니다');
+        return bad ? '(너무 작아지는 ' + bad + '쪽은 그대로 두었습니다)' : '';
+      }, '잘라냈습니다(내용은 지워지지 않고 보이는 영역만 줄었습니다).');
+    }, 'on');
+    lab('빈 쪽 넣기(맨 끝에)'); num('쪽 수', 'blank', 1, 20, '쪽');
+    act('빈 쪽 넣기', function () {
+      run('빈 쪽', function (L, doc) { var last = doc.getPages()[doc.getPageCount() - 1], b = last.getSize(); for (var i = 0; i < Math.max(1, Math.min(20, Math.round(st.blank || 1))); i++) doc.addPage([b.width, b.height]); return ''; }, '빈 쪽을 넣었습니다.');
+    });
+    body.appendChild(el('div', 'so-sheet-note', '모든 쪽에 적용됩니다. 문서는 그대로 두고 이 화면에서 바꾼 뒤 「사본 저장」으로 새 파일에 저장합니다. 특정 쪽에만 넣으려면 먼저 「쪽 정리」에서 나누기로 따로 만드십시오.'));
+    ctx.sheet({ title: '꾸미기', body: body, buttons: [{ label: '닫기' }], wide: true });
+  }
+
+  global.SOPdfPages = { openPages: openPages, formMode: formMode, perRow: perRow, decorate: decorate };
 })(window);

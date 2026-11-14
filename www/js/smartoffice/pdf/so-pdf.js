@@ -715,6 +715,7 @@
     setMode('hand');
     pagesMod().then(function (M) { M.openPages(pagesApi()); }).catch(function (e) { S.ctx.toast('쪽 정리를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
   }
+  function openDecorate() { if (S.form) formStop(); setMode('hand'); pagesMod().then(function (M) { M.decorate(pagesApi()); }).catch(function (e) { S.ctx.toast('꾸미기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
   function toggleForm() { pagesMod().then(function (M) { M.formMode(pagesApi()); }).catch(function (e) { S.ctx.toast('양식 채우기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
   function pagesApi() {
     return {
@@ -734,9 +735,9 @@
     var row = S.row; row.innerHTML = ''; S.modeBtns = {}; S.moreBtn = null; S.undoBtn = null; S.formBtn = null;
     var D = {
       hand: { i: '✋', l: '보기', mode: 'hand' }, hl: { i: '🖍', l: '형광펜', mode: 'hl' }, text: { i: 'T', l: '글', mode: 'text' }, memo: { i: '📝', l: '메모', mode: 'memo' }, sig: { i: '✍', l: '서명', mode: 'sig' },
-      undo: { i: '↶', l: '되돌리기', run: undo, undo: true }, pages: { i: '▦', l: '쪽 정리', run: openPagesScreen }, form: { i: '✎', l: '양식 채우기', run: toggleForm, form: true }, pic: { i: '🖼', l: '사진', run: addPhoto }
+      undo: { i: '↶', l: '되돌리기', run: undo, undo: true }, pages: { i: '▦', l: '쪽 정리', run: openPagesScreen }, form: { i: '✎', l: '양식 채우기', run: toggleForm, form: true }, deco: { i: '✦', l: '꾸미기', run: openDecorate }, pic: { i: '🖼', l: '사진', run: addPhoto }
     };
-    var list = plus() ? ['hand', 'hl', 'text', 'memo', 'sig', 'undo', 'pages', 'pic', 'form'] : ['hand', 'hl', 'text', 'memo', 'sig', 'undo'];   // 접은 폰 6칸은 예전 그대로(메모 한 번), 새 도구는 더보기
+    var list = plus() ? ['hand', 'hl', 'text', 'memo', 'sig', 'undo', 'pages', 'pic', 'form', 'deco'] : ['hand', 'hl', 'text', 'memo', 'sig', 'undo'];   // 접은 폰 6칸은 예전 그대로(메모 한 번), 새 도구는 더보기
     var n = plus() ? perRowN() : 99, shown = list.length > n ? list.slice(0, n) : list, rest = list.length > n ? list.slice(n) : [];
     S.bucket = perRowN();
     function mk(id, host, inSheet) {
