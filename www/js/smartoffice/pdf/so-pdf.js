@@ -817,7 +817,7 @@
     var w = S.workStack[S.workStack.length - 1]; if (!w) return;
     S.ctx.busy('이전 상태로 되돌리는 중…');
     (w.bytes ? Promise.resolve(w.bytes) : S.ctx.file.arrayBuffer().then(function (b) { return new Uint8Array(b); })).then(function (bytes) {
-      S.workStack.pop(); return applyBytes(bytes, '되돌림', true).then(function () { S.ctx.busy(null); S.ctx.toast('쪽 정리를 되돌렸습니다', 2200); });
+      S.workStack.pop(); return applyBytes(bytes, '되돌림', true).then(function () { S.ctx.busy(null); S.ctx.toast('되돌렸습니다' + (w.label && w.label !== '되돌림' ? ' — ' + w.label : ''), 2200); });
     }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('되돌리지 못했습니다 — ' + ((e && e.message) || e), 4200); });
   }
   // ---- 양식 칸(입력 칸) 표시 · 채움 ----
