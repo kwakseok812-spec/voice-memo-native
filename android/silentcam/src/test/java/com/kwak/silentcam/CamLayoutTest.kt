@@ -16,6 +16,20 @@ class CamLayoutTest {
     private val long = CamLayout.LONG_ASPECT
     private val base = CamLayout.BASE_ASPECT
 
+    @Test fun segCell_cardChipFitsNarrowScreens() {
+        // 세 칸(v9.98): 360 → 216/3 = 72, 펼친 화면(750)은 252 상한 → 84
+        assertEquals(72, CamLayout.segCellDp(360, false))
+        assertEquals(84, CamLayout.segCellDp(750, false))
+        // 네 칸(명함): 360 → 216/4 = 54, 펼친 화면은 300 상한 → 75
+        assertEquals(54, CamLayout.segCellDp(360, true))
+        assertEquals(75, CamLayout.segCellDp(750, true))
+        // 폴드 접은(겉) 화면 가정 폭 344 → 200/4 = 50. 「일반 사진」(10sp, 약 43dp)이 들어가야 한다
+        assertEquals(50, CamLayout.segCellDp(344, true))
+        assertTrue(CamLayout.segCellDp(344, true) >= 48)
+        assertEquals(252, CamLayout.segCapDp(false))
+        assertEquals(300, CamLayout.segCapDp(true))
+    }
+
     @Test fun normalize_unknownFallsBackToBig() {
         assertEquals(CamLayout.BIG, CamLayout.normalize(null))
         assertEquals(CamLayout.BIG, CamLayout.normalize("엉뚱한값"))

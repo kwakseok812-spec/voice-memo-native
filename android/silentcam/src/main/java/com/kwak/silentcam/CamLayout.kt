@@ -49,6 +49,17 @@ object CamLayout {
         return min(ZOOM_PILL_W_DP, fit)
     }
 
+    /**
+     * 모드 알약(문서 | 영수증 | [명함 |] 일반 사진) 한 칸의 가로(dp). 알약은 윗줄에서 ✕ · ⚡ · ⚙(각 48)를 뺀 가운데 칸에 들어가고,
+     * 세 칸일 때 252dp · 네 칸일 때 300dp 를 넘지 않는다(펼친 화면에서 길게 늘어나지 않게). 글자는 칸에 맞춰 14sp → (세 칸 11 · 네 칸 10)sp 로 줄어든다.
+     */
+    const val SEG_SIDE_DP = 144
+    fun segCapDp(cardOn: Boolean): Int = if (cardOn) 300 else 252
+    fun segCellDp(screenWidthDp: Int, cardOn: Boolean): Int {
+        val count = if (cardOn) 4 else 3
+        return min(segCapDp(cardOn), max(0, screenWidthDp - SEG_SIDE_DP)) / count
+    }
+
     /** 위 묶음 높이(상태바 제외). tab = 홈에서 열림(모드 알약 있음), doc = 문서 모드, notice = 알림 띠가 떠 있음. */
     fun topDp(tab: Boolean, doc: Boolean, notice: Boolean): Int =
         BAR_DP + (if (tab && doc) CHIP_ROW_DP else 0) + (if (notice) NOTICE_DP else 0)

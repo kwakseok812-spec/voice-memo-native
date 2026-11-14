@@ -36,7 +36,7 @@ import java.io.File;
  *  - JS: Capacitor.Plugins.SilentCamera
  *      status()            → {available, perm:'granted'|'prompt'|'denied', freeBytes, sdk}
  *      requestPermission() → {granted}
- *      open({mode,from,multi,left,title,engine,resume,zoom:'on'|'off'}) → {action:'done'|'send'|'cancel'|'denied'|'error', mode, pages:[{path,q,w,h,size,shake,zoom}]}
+ *      open({mode,from,multi,left,title,engine,resume,zoom:'on'|'off',card:true|false}) → {action:'done'|'send'|'cancel'|'denied'|'error', mode, pages:[{path,q,w,h,size,shake,zoom}]}
  *      pending()           → {has, cameraOpen, mode, from, multi, updated, pages:[...]}
  *      release({path}) / discardAll() / sweep() / openAppSettings()
  */
@@ -102,6 +102,7 @@ public class SilentCameraPlugin extends Plugin {
             it.putExtra(SilentCameraActivity.X_RESUME, call.getBoolean("resume", false));
             it.putExtra(SilentCameraActivity.X_ZOOM, call.getString("zoom", "on"));
             it.putExtra(SilentCameraActivity.X_LAYOUT, call.getString("layout", "auto"));
+            it.putExtra(SilentCameraActivity.X_CARD, call.getBoolean("card", false));
             startActivityForResult(call, it, "onCameraResult");
         } catch (Exception e) {
             JSObject r = new JSObject(); r.put("action", "error"); r.put("reason", "open_failed"); call.resolve(r);

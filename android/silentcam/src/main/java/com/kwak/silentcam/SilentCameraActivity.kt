@@ -88,7 +88,7 @@ import kotlin.math.sqrt
  * 스마트비서의 «소리 없는 카메라» 화면 (O-0607, v9.29).
  *  - 앱이 내는 소리는 전혀 없다(MediaActionSound 등을 쓰지 않는다 — 시제품 camtest 와 같은 방식).
  *  - 한 화면이 세 입구를 받는다: 홈 「카메라」 칸(from=tab: 모드 3가지 고르기) · 스캔 화면의 「한 장 더/다시 찍기」 · 영수증 「다시 찍기」(from=scan: 모드 고정).
- *  - 모드: doc(문서·여러 장 이어 찍기 가능) / receipt(한 장) / photo(일반 사진 — 번쩍임과 진동을 끌 수 없음).
+ *  - 모드: doc(문서·여러 장 이어 찍기 가능) / receipt(한 장) / card(명함 한 장 — 영수증과 같게 찍고 확인, 안내선 없음, X_CARD 옵션이 있을 때만 알약에 나옴) / photo(일반 사진 — 번쩍임과 진동을 끌 수 없음).
  *  - 사진은 쪽마다 filesDir/silentcam/ 에 JPEG 로 저장하고 복구 목록(session.json)에 바로 적는다. 결과는 경로 목록(JSON)만 돌려준다.
  *  - 화면 글은 케이 말투. «무음/소리 없이» 같은 낱말은 화면에 쓰지 않는다.
  */
@@ -96,7 +96,8 @@ class SilentCameraActivity : ComponentActivity() {
 
     companion object {
         @Volatile var isOpen = false
-        const val X_MODE = "mode"           // doc | receipt | photo
+        const val X_MODE = "mode"           // doc | receipt | card | photo
+        const val X_CARD = "card"           // true 면 모드 알약에 「명함」 칸을 더한다(웹 스위치 SCAN_CARD · 없거나 false 면 v9.98 과 같은 세 칸)
         const val X_FROM = "from"           // tab | scan
         const val X_MULTI = "multi"
         const val X_LEFT = "left"           // 앞으로 더 담을 수 있는 쪽 수(문서)
@@ -118,6 +119,7 @@ class SilentCameraActivity : ComponentActivity() {
     // ───────── 상태 ─────────
     private lateinit var prefs: SharedPreferences
     private var mode = "doc"
+    private var cardOn = false
     private var from = "tab"
     private var multi = true
     private var left = Session.MAX_PAGES
@@ -201,6 +203,8 @@ class SilentCameraActivity : ComponentActivity() {
     private lateinit var chipDoc: TextView
     private lateinit var chipRcpt: TextView
     private lateinit var chipPhoto: TextView
+    private var chipCard: TextView? = null
+    private lateinit var galleryBtn: TextView
     private lateinit var multiRow: LinearLayout
     private lateinit var multiChip: TextView
     private lateinit var infoTv: TextView
@@ -237,7 +241,9 @@ class SilentCameraActivity : ComponentActivity() {
         isOpen = true
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         mode = intent.getStringExtra(X_MODE) ?: "doc"
-        if (mode != "doc" && mode != "receipt" && mode != "photo") mode = "doc"
+        if (mode != "doc" && mode != "receipt" && mode != "photo" && mode != "card") mode = "doc"
+        cardOn = intent.getBooleanExtra(X_CARD, false)
+        if (mode == "card" && !cardOn && !intent.getBooleanExtra(X_RESUME, false)) mode = "doc"
         from = intent.getStringExtra(X_FROM) ?: "tab"
         multi = intent.getBooleanExtra(X_MULTI, mode == "doc")
         left = intent.getIntExtra(X_LEFT, Session.MAX_PAGES).coerceIn(0, Session.MAX_PAGES)
@@ -458,7 +464,9 @@ class SilentCameraActivity : ComponentActivity() {
         chipDoc = chip("문서") { setMode("doc") }
         chipRcpt = chip("영수증") { setMode("receipt") }
         chipPhoto = chip("일반 사진") { setMode("photo") }
-        modeRow.addView(chipDoc); modeRow.addView(chipRcpt); modeRow.addView(chipPhoto)
+        modeRow.addView(chipDoc); modeRow.addView(chipRcpt)
+        if (cardOn) { val cc = chip("명함") { setMode("card") }; chipCard = cc; modeRow.addView(cc) }
+        modeRow.addView(chipPhoto)
         top.addView(modeRow)
 
         multiRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), dp(4)) }
@@ -491,6 +499,8 @@ class SilentCameraActivity : ComponentActivity() {
             setOnClickListener { if (pages.isNotEmpty()) peek(pages.size - 1) }
         }
         bottomBar.addView(lastThumb, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
+        galleryBtn = makeGalleryBtn()
+        bottomBar.addView(galleryBtn, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
         shutter = FrameLayout(this).apply {
             contentDescription = "찍기"
             isClickable = true
@@ -545,7 +555,7 @@ class SilentCameraActivity : ComponentActivity() {
         }
     }
 
-    /** 모드 알약의 한 칸: 누르는 칸 높이 48, 폭은 세 칸이 나눠 가짐, 글자는 14sp(글자 크기를 키운 폰에서는 11sp 까지 줄어듦). */
+    /** 모드 알약의 한 칸: 누르는 칸 높이 48, 폭은 세 칸(명함 칸이 있으면 네 칸)이 나눠 가짐, 글자는 14sp(글자 크기를 키운 폰에서는 11sp, 네 칸이면 10sp 까지 줄어듦). */
     private fun segChip(label: String, onClick: () -> Unit): TextView = tv(label, 14f, Color.WHITE, true).apply {
         gravity = Gravity.CENTER
         maxLines = 1
@@ -555,8 +565,21 @@ class SilentCameraActivity : ComponentActivity() {
         isFocusable = true
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(0, dp(CamLayout.TOUCH_DP), 1f)
-        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 11, 14, 1, TypedValue.COMPLEX_UNIT_SP)
+        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, if (cardOn) 10 else 11, 14, 1, TypedValue.COMPLEX_UNIT_SP)
         pressFx(this)
+    }
+
+    /** 명함 모드에서 아직 한 장도 안 찍었을 때만 보이는 [사진 불러오기] — 폰에 있는 사진(카톡으로 받은 명함 등)으로 등록하는 길. 누르면 카메라를 닫고 웹이 사진 고르기를 연다. */
+    private fun makeGalleryBtn(): TextView = tv("사진\n불러오기", 12f, Color.WHITE, true).apply {
+        gravity = Gravity.CENTER
+        maxLines = 2
+        setPadding(dp(2), 0, dp(2), 0)
+        background = round(0x33FFFFFF, 10, 0x66FFFFFF)
+        contentDescription = "사진 불러오기"
+        isClickable = true
+        isFocusable = true
+        visibility = View.GONE
+        setOnClickListener { if (!busy && pages.isEmpty()) finishWith("gallery") }
     }
 
     private fun pillC(color: Int): InsetDrawable = InsetDrawable(round(color, 16), 0, dp(8), 0, dp(8))     // 보이는 높이 32, 누르는 칸 48
@@ -580,7 +603,7 @@ class SilentCameraActivity : ComponentActivity() {
             visibility = if (from == "tab") View.GONE else View.VISIBLE
         }
         mid.addView(titleTv, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
-        segBox = CapFrame(this, 252).apply {
+        segBox = CapFrame(this, CamLayout.segCapDp(cardOn)).apply {
             background = InsetDrawable(round(0x73000000, 17), 0, dp(7), 0, dp(7))
             visibility = if (from == "tab") View.VISIBLE else View.GONE
         }
@@ -590,7 +613,9 @@ class SilentCameraActivity : ComponentActivity() {
         chipDoc = segChip("문서") { setMode("doc") }
         chipRcpt = segChip("영수증") { setMode("receipt") }
         chipPhoto = segChip("일반 사진") { setMode("photo") }
-        modeRow.addView(chipDoc); modeRow.addView(chipRcpt); modeRow.addView(chipPhoto)
+        modeRow.addView(chipDoc); modeRow.addView(chipRcpt)
+        if (cardOn) { val cc = segChip("명함") { setMode("card") }; chipCard = cc; modeRow.addView(cc) }
+        modeRow.addView(chipPhoto)
         segBox.addView(modeRow, FrameLayout.LayoutParams(-1, dp(CamLayout.TOUCH_DP), Gravity.CENTER_VERTICAL))
         segBox.addOnLayoutChangeListener(View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionHl(false) })
         mid.addView(segBox, FrameLayout.LayoutParams(-1, dp(CamLayout.TOUCH_DP), Gravity.CENTER))
@@ -654,6 +679,8 @@ class SilentCameraActivity : ComponentActivity() {
             setOnClickListener { if (pages.isNotEmpty()) peek(pages.size - 1) }
         }
         bottomBar.addView(lastThumb, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
+        galleryBtn = makeGalleryBtn()
+        bottomBar.addView(galleryBtn, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
         shutter = FrameLayout(this).apply {
             contentDescription = "찍기"
             isClickable = true
@@ -808,11 +835,11 @@ class SilentCameraActivity : ComponentActivity() {
     private fun positionHl(animate: Boolean) {
         val w = segBox.width
         if (w <= 0) return
-        val cell = w / 3f
+        val cell = w / (if (cardOn) 4f else 3f)
         val lp = segHl.layoutParams
         val hw = (cell - dp(4)).toInt()
         if (lp.width != hw) { lp.width = hw; segHl.layoutParams = lp }
-        val idx = when (mode) { "doc" -> 0; "receipt" -> 1; else -> 2 }
+        val idx = when (mode) { "doc" -> 0; "receipt" -> 1; "card" -> if (cardOn) 2 else 1; else -> if (cardOn) 3 else 2 }
         val tx = idx * cell + dp(2)
         segHl.animate().cancel()
         if (!animate || reduceMotion() || lastSeg < 0 || idx == lastSeg) segHl.translationX = tx
@@ -1084,6 +1111,7 @@ class SilentCameraActivity : ComponentActivity() {
     // ───────── 모드·글 ─────────
     private fun baseTitle(): String = customTitle ?: when (mode) {
         "receipt" -> "영수증 스캔"
+        "card" -> "명함 스캔"
         "photo" -> "일반 사진"
         else -> "문서 스캔"
     }
@@ -1109,7 +1137,7 @@ class SilentCameraActivity : ComponentActivity() {
 
     private fun applyMode() {
         modeRow.visibility = if (from == "tab") View.VISIBLE else View.GONE
-        guide.on = mode != "photo"
+        guide.on = mode != "photo" && mode != "card"          // 명함은 가로로 놓아 세로 안내선이 맞지 않는다
         fun paint(c: TextView, sel: Boolean) {
             if (compact) { c.alpha = if (!sel && pages.isNotEmpty()) 0.4f else 1f; c.contentDescription = c.text.toString() + if (sel) " 선택됨" else ""; return }
             c.background = if (sel) round(0xFF3B82F6.toInt(), 22) else round(0x33FFFFFF, 22, 0x55FFFFFF)
@@ -1118,6 +1146,7 @@ class SilentCameraActivity : ComponentActivity() {
         }
         paint(chipDoc, mode == "doc")
         paint(chipRcpt, mode == "receipt")
+        chipCard?.let { paint(it, mode == "card") }
         paint(chipPhoto, mode == "photo")
     }
 
@@ -1145,6 +1174,7 @@ class SilentCameraActivity : ComponentActivity() {
             mode == "doc" && from == "scan" -> "이 쪽만 다시 찍고 원래 자리에 넣어요"
             mode == "doc" -> "한 장씩 확인해요"
             mode == "receipt" -> "한 장 찍고 확인한 뒤 영수증 칸으로 이어져요"
+            mode == "card" -> "한 장 찍고 확인한 뒤 명함 등록으로 이어져요"
             else -> "찍으면 먼저 미리보기가 나와요"
         }
         // 알림 띠(우선순위: 한도 → 저장 공간 → 일반 사진 표시)
@@ -1176,6 +1206,7 @@ class SilentCameraActivity : ComponentActivity() {
             lastThumb.visibility = View.VISIBLE
             thumbs[pages[n - 1].path]?.let { lastThumb.setImageBitmap(it) }
         } else lastThumb.visibility = View.INVISIBLE
+        galleryBtn.visibility = if (mode == "card" && from == "tab" && n == 0) View.VISIBLE else View.GONE
         flashBtn.text = when (flashMode) { ImageCapture.FLASH_MODE_AUTO -> "⚡ 자동"; ImageCapture.FLASH_MODE_ON -> "⚡ 켬"; else -> "⚡ 끔" }
         if (compact) styleCompactAfterRefresh()
         updateGuideText()
@@ -1189,6 +1220,7 @@ class SilentCameraActivity : ComponentActivity() {
             darkLive && flashMode == ImageCapture.FLASH_MODE_OFF -> "조금 어두워요. 밝은 쪽으로 가거나 불빛을 켜 볼까요?"
             zoomOn && zoomWanted >= ZOOM_COARSE_FROM -> "많이 확대했어요. 글자가 거칠면 가까이 다가가 주세요"
             mode == "receipt" -> "영수증이 세로로 꽉 차게 비춰 주세요"
+            mode == "card" -> "명함을 가로로 꽉 차게 비춰 주세요"
             mode == "photo" -> "찍을 장면을 비춰 주세요"
             else -> "문서 전체가 들어오게 비춰 주세요"
         }
@@ -1715,7 +1747,7 @@ class SilentCameraActivity : ComponentActivity() {
         }
 
         col.addView(statusTv)
-        val useLabel = (if (warn) "그래도 " else "") + (if (mode == "receipt") "이 사진으로 계속" else "사용하기")
+        val useLabel = (if (warn) "그래도 " else "") + (if (mode == "receipt" || mode == "card") "이 사진으로 계속" else "사용하기")
         val auto = prefs.getBoolean("auto", false) && !warn
         if (auto) {
             col.addView(autoNote)
