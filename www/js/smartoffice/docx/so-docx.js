@@ -405,7 +405,7 @@
     if (!S || S.disabled) return;
     S.mode = 'edit'; wrap.classList.add('so-docx-editing');
     setActions(); setTip();
-    if (structOn()) { mountBar(); ctxRef.onSave(function () { saveEdits(); }); note('문단을 한 번 누르면 고르고, 같은 문단을 한 번 더 누르면 글을 고칩니다. 아래 단추로 문단·표·그림·서식을 고칩니다.', 4600); }
+    if (structOn()) { mountBar(); ctxRef.onSave(function () { saveEdits(); }); note('고치기를 켰습니다. 아래 단추로 문단·표·그림·서식을 고칩니다.', 3600); }
     else note('고칠 문단(점선)을 눌러 글을 고치십시오. 그림·표 모양은 그대로 유지됩니다.', 3600);
   }
   function exitEdit() {
@@ -658,7 +658,7 @@
         return checkPkg(b).then(function (v) {
           if (!v.ok) throw new Error('점검에서 걸렸습니다 (' + v.why + ') — 저장하지 않았습니다');
           ctx.busy(null);
-          return Promise.resolve(ctx.saveCopy(new Blob([b], { type: DOCX_MIME }), outName)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); S.edits = {}; ctx.toast('사본을 저장했습니다', 3600); setActions(); setTip(); });
+          return Promise.resolve(ctx.saveCopy(new Blob([b], { type: DOCX_MIME }), outName)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); S.edits = {}; ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3600); setActions(); setTip(); });
         });
       }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다(원본은 그대로입니다)', e, 5200); });
     });
@@ -729,7 +729,7 @@
         return Promise.resolve(ctx.saveCopy(blob, outName)).then(function (ok) {
           if (ok === false) return;   // 저장이 실패하면 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
           ctx.setDirty(false);
-          ctx.toast('사본을 저장했습니다: ' + outName, 3600);
+          ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3600);
         });
       }).catch(function (e) {
         ctx.busy(null);
@@ -906,6 +906,17 @@
     canOpen: function (ext) { return ext === 'docx'; },
     snapshot: snapshot,
     restore: restore,
+    reveal: function (topY) {                           // v10.7 다듬기: 서식·표 시트를 열어 둔 동안 고른 문단이 시트 밑에 깔리면 시트 위로 올려 준다
+      if (!ctxRef || !ctxRef.body) return;
+      var b = ctxRef.body; if (!topY) { b.style.paddingBottom = ''; return; }      // 시트를 닫으면 덧댄 아래 여백을 되돌린다
+      if (!S || !S.sel || !S.doc || !wrap) return;
+      var f = S.doc.paras[S.sel.a], l = S.doc.paras[S.sel.b];
+      if (!f || !f.r || !l || !l.r) return;
+      b.style.paddingBottom = Math.max(0, Math.round(b.getBoundingClientRect().bottom - topY + 10)) + 'px';      // 문서 끝 근처 문단도 시트 위로 올릴 수 있게 아래 여백을 시트 높이만큼 덧댄다
+      var lim = topY - 10, h = b.getBoundingClientRect(), rb = l.r.getBoundingClientRect().bottom;
+      if (rb > lim) b.scrollTop += rb - lim;
+      var rt = f.r.getBoundingClientRect().top; if (rt < h.top + 6) b.scrollTop -= (h.top + 6 - rt);
+    },
     open: function (ctx) {
       ctxRef = ctx;
       S = { mode: 'view', edits: {}, ready: false, disabled: null, nEdit: 0, pages: 0, tip: null, cur: null, curBlob: null, undo: [], redo: [], pkgOps: 0, sel: null };

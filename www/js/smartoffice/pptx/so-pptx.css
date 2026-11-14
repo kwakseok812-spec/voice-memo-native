@@ -66,6 +66,7 @@ html[data-style="dark"] .so-pe-prev{background:#05060c}
 .spx-thn{font-size:11px;font-weight:700}
 .spx-sw{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;background:#d9dae2;padding:6px;touch-action:none}
 html[data-style="dark"] .spx-sw{background:#05060c}
+#soRoot.so-keepup .spx-sw{align-items:flex-start}   /* v10.7 다듬기: 서식·색 시트를 열어 둔 동안 슬라이드를 위쪽에 붙여 고른 도형이 시트 밑으로 안 들어가게 */
 .spx-stage{position:relative;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.3);overflow:hidden}
 .spx-ov{position:absolute;inset:0}
 .spx-box{position:absolute;box-sizing:border-box;border:1px dashed rgba(47,111,237,.45);touch-action:none;cursor:pointer}

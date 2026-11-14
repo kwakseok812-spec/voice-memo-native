@@ -566,7 +566,7 @@
       return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name)).then(function (ok) {
         if (ok === false || S !== mySt) return false;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
         S.savedRev = S.rev; S.savedWork = S.workStack.length; ctx.setDirty(false);
-        ctx.toast('사본으로 저장했습니다 (원래 파일은 그대로)', 4200);
+        ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 4200);
         return true;
       });
     }).catch(function (e) {

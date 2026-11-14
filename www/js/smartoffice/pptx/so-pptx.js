@@ -340,11 +340,11 @@
           '<select class="so-pe-sel" aria-label="슬라이드 고르기">' + opts + '</select>' +
           '<button type="button" class="so-pe-nb" data-d="1" aria-label="다음 장">›</button></div>' +
           '<div class="so-pe-prev"></div>' +
-          '<div class="so-pe-hint">' + (structOn() ? '글을 고칩니다. 글자 모양은 그대로 두고 바뀐 부분만 반영합니다. 글자 일부만 굵게·색 등으로 꾸미려면 아래 칸에서 글자를 끌어 고른 뒤 「고른 글자 꾸미기」 단추를 누릅니다.' : '글자만 고칩니다. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영합니다.') + ' 줄바꿈은 줄바꿈으로 들어갑니다.' +
+          '<div class="so-pe-hint">' + (structOn() ? '글을 고칩니다. 일부 글자만 꾸미려면 아래 칸에서 글자를 끌어 고른 뒤 「고른 글자 꾸미기」를 누릅니다.' : '글자만 고칩니다. 글꼴·색·크기와 그림·도형은 그대로 두고, 한 문단 안에서 바뀐 부분만 반영합니다.') + ' 줄바꿈은 줄바꿈으로 들어갑니다.' +
           (notes.length ? '<br>이 장의 ' + esc(window.SOffice && window.SOffice.josa ? window.SOffice.josa(notes.join(' · '), '는') : notes.join(' · ') + '는') + ' 고칠 수 없습니다.' : '') +
           (lockedN ? '<br>자동 숫자(쪽 번호·날짜 등)나 수식이 든 문단 ' + lockedN + '개는 보기만 됩니다.' : '') + '</div>' +
           '<div class="so-pe-list"></div>' +
-          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · ' + (structOn() ? '표의 줄·칸과 슬라이드 추가·삭제·순서는 편집 화면 아래 도구줄의 「표」「슬라이드」에서 바꿉니다' : '표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없고, 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다') + '</div>';
+          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · ' + (structOn() ? '슬라이드는 도구줄의 「슬라이드」, 표는 「표」(폰에서는 「더보기」 안)에서 바꿉니다' : '표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없고, 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다') + '</div>';
         P.innerHTML = html;
         // 미리보기: 지금 화면에 그려진 장을 복사해서 폭에 맞춘다(고친 뒤 「보기」를 누르면 새로 그려짐)
         var pv = P.querySelector('.so-pe-prev'), src = s.slides[i];
@@ -452,7 +452,7 @@
           flushEdits().then(function () { return checkPkg(s.cur); }).then(function (v) {
             if (!v.ok) throw new Error('점검에서 걸렸습니다 (' + v.why + ') — 저장하지 않았습니다');
             ctx.busy(null);
-            return Promise.resolve(ctx.saveCopy(new Blob([s.cur], { type: MIME }), name)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); ctx.toast('사본을 만들었습니다', 3000); });
+            return Promise.resolve(ctx.saveCopy(new Blob([s.cur], { type: MIME }), name)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000); });
           }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다', e, 5000); });
         });
       }
@@ -468,7 +468,7 @@
               ctx.busy(null);
               return Promise.resolve(ctx.saveCopy(new Blob([r.bytes], { type: MIME }), name)).then(function (ok) {
                 if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내
-                ctx.toast('사본을 만들었습니다 (고친 슬라이드 ' + r.changed.length + '장, 나머지 ' + v.untouched + '개 파일은 원본과 같음)', 4200);
+                ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다. 고친 슬라이드는 ' + r.changed.length + '장이고 나머지는 원본과 같습니다.', 4200);
               });
             });
           }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다', e, 5000); });

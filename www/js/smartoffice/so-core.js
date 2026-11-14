@@ -604,7 +604,8 @@
   function closeSheet(viaBack) {
     if (!sheetEl) return;
     var el = sheetEl, o = sheetOpt; sheetEl = null; sheetOpt = null;
-    el.classList.remove('on');
+    el.classList.remove('on'); if (host) host.classList.remove('so-keepup');
+    if (o && o.keep) { try { var mm = cur && cur.mod; if (mm && typeof mm.reveal === 'function') mm.reveal(0); } catch (e) {} }      // 열어 둔 시트를 닫으면 형식 모듈이 덧댄 여백을 되돌린다
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
     if (o && typeof o.onClose === 'function') { try { o.onClose(!!viaBack); } catch (e) {} }
   }
@@ -627,6 +628,10 @@
     back.addEventListener('pointerdown', function (e) { if (e.target === back && !(o.keep && o.keep())) closeSheet(true); });
     sheetEl = back; sheetOpt = o;
     requestAnimationFrame(function () { requestAnimationFrame(function () { back.classList.add('on'); }); });
+    if (o.keep) {      // v10.7 다듬기: 열어 둔 채 이어서 쓰는 시트는 고른 도형·칸·문단이 시트 밑에 깔리지 않게 — PPT 는 슬라이드를 위쪽에 붙이고(CSS), 워드·엑셀은 고른 자리를 시트 위로 올린다(형식 모듈의 reveal)
+      host.classList.add('so-keepup');
+      setTimeout(function () { try { if (sheetEl !== back) return; var m = cur && cur.mod; if (m && typeof m.reveal === 'function') m.reveal(back.getBoundingClientRect().bottom - box.offsetHeight); /* 시트가 올라오는 움직임과 상관없이 「다 올라온 뒤의 윗선」 */ } catch (e) {} }, 280);
+    }
     return { el: box, close: closeSheet, buttons: bs };
   }
 
@@ -641,7 +646,7 @@
   function explainFail(c, head, e, ms) {
     var why = whyText(e);
     if (c === cur && cfg.confirm && fixAvail(c) && why.indexOf('문서 안의 구조') === 0) { cfg.confirm(head, why + '.\n\n한 번 더 해 보시거나, 계속 안 되면 「수정 요청」으로 맡겨 주십시오.', '수정 요청', function () { requestFix(c); }, { cancelLabel: '닫기' }); return; }
-    toast(head + ': ' + why + (why.indexOf('문서 안의 구조') === 0 ? '. 한 번 더 해 보십시오' : ''), ms || 5200);
+    toast(head + ': ' + why + (why.indexOf('문서 안의 구조') === 0 ? '. 한 번 더 해 보시고, 안 되면 「사본 저장」으로 지금 내용을 저장해 두십시오' : ''), ms || 5200);
   }
   function fixAvail(c) {
     c = c || cur;

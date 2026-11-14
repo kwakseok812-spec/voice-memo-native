@@ -247,6 +247,7 @@
   function onTap(e) {
     if (S.lp) { S.lp = false; return; }                 // 길게 눌러 상세를 연 뒤의 손 뗌은 무시
     var fvEl = e.target && e.target.closest ? e.target.closest('.sx-fv') : null;
+    if (!fvEl && e.target && e.target.closest) { var fhc = e.target.closest('.sx-fh'); if (fhc && e.clientX >= fhc.getBoundingClientRect().right - 44) fvEl = fhc.querySelector('.sx-fv'); }      // v10.7 다듬기: ▽ 는 눈에 보이는 크기(22px)는 그대로 두고, 누르는 자리는 칸 오른쪽 44px 로 넓힌다(손가락용)
     var res = pickAt(e.clientX, e.clientY, e.target);
     if (!res) return;
     if (fvEl && S.editing && S.ui && S.ui.filterCol) { S.ui.filterCol(Number(fvEl.getAttribute('data-fc'))); return; }      // 머리줄 ▽ → 그 열 필터
@@ -765,7 +766,7 @@
         '<div class="sx-scroll"><div class="sx-spacer"><div class="sx-layer"></div></div></div>' +
         '<div class="sx-fz sx-fr" style="display:none"></div><div class="sx-fz sx-fc" style="display:none"></div><div class="sx-fz sx-fx" style="display:none"></div>' +
       '</div>' +
-      '<div class="sx-bottom"><div class="sx-ops" style="display:none"></div><div class="sx-tools sx-tabrow"><div class="sx-tabs"></div></div>' +
+      '<div class="sx-bottom"><div class="sx-ops so-clear" style="display:none"></div><div class="sx-tools sx-tabrow so-clear"><div class="sx-tabs"></div></div>' +
       '<div class="sx-tools sx-toolrow"><button type="button" class="sx-chip sx-zoom" data-z="-" aria-label="축소">−</button><span class="sx-pct">100%</span><button type="button" class="sx-chip sx-zoom" data-z="+" aria-label="확대">＋</button>' +
         '<button type="button" class="sx-chip" data-f="find">찾기</button><button type="button" class="sx-chip" data-f="fit">화면에 맞춤</button>' +
         '<button type="button" class="sx-chip' + (S.showHdr ? ' on' : '') + '" data-f="hdr" aria-pressed="' + S.showHdr + '">머리글 표시</button>' +
@@ -1034,6 +1035,17 @@
     },
     snapshot: snapshot,
     restore: restore,
+    reveal: function (topY) {                           // v10.7 다듬기: 서식 시트를 열어 둔 동안 고른 칸·범위가 시트 밑에 깔리면 화면에 그려진 칸의 실제 위치를 재서 시트 위로 올려 준다
+      if (!S || !S.el || !S.sel) return;
+      if (!topY) { S.el.sc.style.paddingBottom = ''; return; }      // 시트를 닫으면 덧댄 아래 여백을 되돌린다
+      S.el.sc.style.paddingBottom = Math.max(0, Math.round(S.el.sc.getBoundingClientRect().bottom - topY + 10)) + 'px';      // 마지막 줄 근처 칸도 시트 위로 올릴 수 있게 아래 여백을 시트 높이만큼 덧댄다
+      var cells = S.el.layer.querySelectorAll('.sx-c.sel,.sx-c.rg'), k, lo = 1e9, hi = -1e9, q, gt = S.el.sc.getBoundingClientRect().top;
+      for (k = 0; k < cells.length; k++) { q = cells[k].getBoundingClientRect(); if (q.height > 0) { lo = Math.min(lo, q.top); hi = Math.max(hi, q.bottom); } }
+      if (hi < 0) return;
+      var d = hi - (topY - 8); if (d <= 0) return;
+      d = Math.min(d, Math.max(0, lo - gt - 2));
+      if (d > 0) S.el.sc.scrollTop += d;
+    },
     _state: function () { return S; },                  // 점검용(시험에서 상태를 들여다본다)
     close: function () {
       if (!S) return;

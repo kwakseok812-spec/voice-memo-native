@@ -9662,6 +9662,7 @@
             if (!/so-main|so-body/.test(String(e.className))) top = Math.min(top, e.getBoundingClientRect().top);
           }
           var shs = document.querySelectorAll('.so-sheet'), q2; for (k = 0; k < shs.length; k++) { q2 = shs[k].getBoundingClientRect(); if (q2.height > 0 && q2.top < vh - 24 && q2.top > vh * 0.2) top = Math.min(top, q2.top); }   // 떠 있는 시트가 있으면 시트 위에 띄운다
+          var clr = document.querySelectorAll('#soRoot .so-clear'), q3; for (k = 0; k < clr.length; k++) { q3 = clr[k].getBoundingClientRect(); if (q3.height > 0 && q3.top > vh * 0.4 && q3.bottom > vh * 0.5) top = Math.min(top, q3.top); }   // v10.7 다듬기: 도구줄 위에 붙은 「맥락 줄」(PPT)·시트 탭 줄·도구 줄(엑셀)도 안 가리게 그 위로
           toastEl.style.setProperty('--so-band-b', Math.max(0, Math.round(vh - top)) + 'px');
         } catch (x) { toastEl.style.setProperty('--so-band-b', '84px'); }
       };

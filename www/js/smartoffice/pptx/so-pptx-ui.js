@@ -31,7 +31,7 @@
     // ---------------- 화면 틀 ----------------
     function build() {
       root = el('div', 'spx-ed');
-      root.innerHTML = '<div class="spx-strip" role="list"></div><div class="spx-sw"><div class="spx-stage"></div></div><div class="spx-ctx"><span class="spx-ctxt"></span><span class="spx-ctxb"></span></div><div class="spx-tools"></div>';
+      root.innerHTML = '<div class="spx-strip" role="list"></div><div class="spx-sw"><div class="spx-stage"></div></div><div class="spx-ctx so-clear"><span class="spx-ctxt"></span><span class="spx-ctxb"></span></div><div class="spx-tools"></div>';
       host.appendChild(root);
       root.querySelector('.spx-sw').addEventListener('pointerdown', function (e) { if (e.target === e.currentTarget || e.target.classList.contains('spx-stage') || e.target.classList.contains('spx-ov')) { if (st.sel != null) { st.sel = null; st.cell = null; paintSel(); renderCtx(); } } });
     }
