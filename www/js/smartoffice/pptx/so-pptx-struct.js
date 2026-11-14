@@ -573,7 +573,7 @@
   // ============================== 표 줄·칸 ==============================
   function tblBlock(shapeXml) {
     var tbl = /<a:tbl>[\s\S]*<\/a:tbl>/.exec(shapeXml); if (!tbl) return null;
-    if (/\s(?:gridSpan|rowSpan|hMerge|vMerge)="/.test(tbl[0])) return { err: '이 표에는 합쳐진 칸이 있어서 폰에서는 줄·칸을 바꾸기 어렵습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    if (/\s(?:gridSpan|rowSpan|hMerge|vMerge)="/.test(tbl[0])) return { err: '이 표에는 합쳐진 칸이 있어서 줄·칸 넣고 빼기가 어렵습니다. 「표」 시트의 「합치기 풀기」로 먼저 풀거나, 「수정 요청」으로 맡겨 주십시오.' };
     return { tbl: tbl[0], at: tbl.index };
   }
   function blankCell(tc) {

@@ -280,6 +280,7 @@
       global.addEventListener('resize', function () { if (U.row && U.bucket !== perRow()) { renderRow(); U.refresh(); } });
     };
     U.refresh = function () {
+      if (!S()) return;                         // 문서를 닫은 뒤 화면 크기가 바뀌는 때 오는 호출
       setTimeout(refillSheet, 0);
       if (!U.lab) return; var r = rg(), s = S();
       U.lab.textContent = s && s.rangeMode ? '범위의 끝 문단을 눌러 주십시오…' : (r ? '고른 문단 ' + (r.a + 1) + (r.b > r.a ? '~' + (r.b + 1) + ' (' + (r.b - r.a + 1) + '개)' : '') + (r.b === r.a ? ' · 한 번 더 누르면 글 고치기' : '') : '문단을 한 번 누르면 고릅니다 · 점선 문단은 한 번 더 누르면 글을 고칩니다');
