@@ -24,6 +24,7 @@
 .so-link{appearance:none;border:0;background:none;padding:12px 8px;min-height:44px;margin:-12px 0 -12px 0;color:var(--p1);font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:inherit}
 @media (prefers-reduced-motion:reduce){.so-opt{transition:none}.so-opt:active{transform:none}}
 
+
 /* ---- 전체 화면 틀 ---- */
 #soRoot{display:none;position:fixed;inset:0;z-index:130;flex-direction:column;background:var(--page-bg);color:var(--text);
   padding:var(--sat,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
@@ -95,5 +96,5 @@
 .so-sheet-btn:disabled{opacity:.45}
 @media (prefers-reduced-motion:reduce){.so-sheet,.so-sheet-back,.so-newchip{transition:none}.so-newchip:active,.so-sheet-btn:active{transform:none}}
 /* v10.3(O-0861): S-Office 안내(토스트)는 아래 도구줄을 가리지 않게 머리줄 바로 아래(문서 위쪽)에 띄운다 */
-.toast.so-up{bottom:auto;top:calc(118px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-10px)}
+.toast.so-up{bottom:auto;top:44vh;transform:translateX(-50%) translateY(-10px);background:#0b1020;border:1.5px solid rgba(255,255,255,.55);box-shadow:0 6px 22px rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none}   /* O-0861 v10.4 보완: 입력줄·되돌리기 줄·도구줄을 가리지 않게 화면 가운데쯤(본문 위)에, 어두운 화면에서도 또렷하게 */
 .toast.so-up.show{transform:translateX(-50%) translateY(0)}

@@ -109,7 +109,7 @@
     var fill = fillOf(cell); if (fill) st += 'background-color:' + fill + ';color:#111;';
     var sty = styleAt(sh, r, c);
     if (sty) {
-      if (sty.b) st += 'font-weight:800;'; if (sty.i) st += 'font-style:italic;'; if (sty.u) st += 'text-decoration:underline;';
+      if (sty.fs) st += 'font-size:' + Math.round(sty.fs * 4 / 3 * S.scale * 10) / 10 + 'px;'; if (sty.fn) st += 'font-family:"' + String(sty.fn).replace(/["\\]/g, '') + '",sans-serif;'; if (sty.b) st += 'font-weight:800;'; if (sty.i) st += 'font-style:italic;'; if (sty.u) st += 'text-decoration:underline;';
       if (sty.bg) st += 'background-color:' + sty.bg + ';color:' + (sty.color || '#111') + ';'; else if (sty.color) st += 'color:' + sty.color + ';';
       if (sty.h) st += 'text-align:' + sty.h + ';'; if (sty.wrap) st += 'white-space:pre-wrap;line-height:1.25;';
       if (sty.bl) st += 'border-left:1px solid #222;'; if (sty.br) st += 'border-right:1px solid #222;'; if (sty.bt) st += 'border-top:1px solid #222;'; if (sty.bb) st += 'border-bottom:1px solid #222;';
@@ -206,6 +206,7 @@
     S.el.inp.value = barText(cell); S.barOrig = S.el.inp.value;
     S.el.inp.readOnly = !(S.editable && S.editing);
     S.el.ok.disabled = !(S.editable && S.editing);
+    if (S.ui) S.ui.refresh();
     if (!noRender) render(true);
   }
   function ensureVisible() {
@@ -663,14 +664,14 @@
     if (!S || !S.editable) return;
     S.editing = true; refreshActions(); select(S.sel.r, S.sel.c); refreshEd();
     if (S.ui) S.ui.refresh();
-    S.ctx.toast(plusOn() ? '고치기를 켰습니다. 칸을 눌러 내용을 바꾸고 ✓를 누르십시오. 줄·칸·서식 도구는 아래에 있습니다.' : '고치기를 켰습니다. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르십시오.', 3600);
+    S.ctx.toast(plusOn() ? '고치기를 켰습니다. 칸을 한 번 누르면 고르고, 같은 칸을 한 번 더 누르면 글·숫자를 입력합니다. 입력한 뒤 ✓를 누르십시오. 줄·칸·서식 도구는 아래에 있습니다.' : '고치기를 켰습니다. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르십시오.', 3600);
   }
   function refreshActions() {
     var list = [];
     if (S.editable && !S.editing) {
       list.push({ label: '고치기', onClick: startEdit });
       if (S.dirty) list.push({ label: '사본 저장', primary: true, onClick: askSave });
-    } else if (S.editable) list.push({ label: '사본 저장', primary: S.dirty, disabled: !S.dirty, onClick: askSave });
+    } else if (S.editable) list.push({ label: '사본 저장', primary: S.dirty, onClick: function () { if (!S.dirty) { S.ctx.toast('아직 고친 곳이 없어 저장할 것이 없습니다. 칸을 고치면 「사본 저장」이 켜집니다.', 3200); return; } askSave(); } });
     else list.push({ label: '보기 전용', disabled: true, onClick: function () {} });
     S.ctx.setActions(list);
   }
@@ -788,7 +789,7 @@
     });
     S.el.sc.addEventListener('scroll', schedule, { passive: true });
     S.el.wrap.addEventListener('click', function (e) { if (e.target.closest('.sx-fz') || e.target.closest('.sx-scroll')) onTap(e); });
-    S.el.ok.onclick = function () { commit(); };
+    S.el.ok.onclick = function () { var done = commit(); if (done !== false) { try { S.el.inp.blur(); } catch (e) {} } };      // ✓ 를 누르면 입력창을 내려 키보드가 닫히고 아래 도구줄이 다시 보인다
     S.el.undoB.onclick = undoEdit; S.el.redoB.onclick = redoEdit; S.el.allB.onclick = resetAll; S.el.viewB.onclick = leaveEdit;
     q('.sx-fprev').onclick = function () { stepFind(-1); }; q('.sx-fnext').onclick = function () { stepFind(1); };
     q('.sx-fx').onclick = function () { toggleFind(); };

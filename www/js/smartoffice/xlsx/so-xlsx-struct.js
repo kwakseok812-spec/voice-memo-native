@@ -251,7 +251,7 @@
   var WHY = {
     obj: '이 시트에는 그림·차트·엑셀 표·메모 같은 개체가 있어서, 중간에 줄이나 칸을 넣고 빼면 그 개체가 어긋날 수 있습니다.',
     chart: '차트가 이 시트의 칸을 가리키고 있어서, 중간에 줄이나 칸을 넣고 빼면 차트가 어긋날 수 있습니다.',
-    dyn: '글자로 칸 주소를 만드는 수식(INDIRECT·OFFSET 등)이 있어서, 중간에 줄이나 칸을 넣고 빼면 숫자가 어긋날 수 있습니다.',
+    dyn: '칸 주소를 글자로 조합해서 찾아가는 수식(주소를 문자로 만들어 쓰는 함수)이 있어서, 중간에 줄이나 칸을 넣고 빼면 숫자가 어긋날 수 있습니다.',
     wholeline: '줄 전체나 칸 전체를 가리키는 수식이 있어서 중간에 넣고 빼기가 어렵습니다.',
     deleted: '수식이 지우려는 칸을 직접 쓰고 있어서, 지우면 계산이 깨집니다. 수식을 먼저 고쳐 주십시오.',
     shared: '수식 구조가 특이해서 중간에 줄이나 칸을 넣고 빼기가 어렵습니다.',
@@ -412,11 +412,13 @@
     var key = s + '|' + JSON.stringify(ch); if (this.cache[key] != null) return this.cache[key];
     var xf = this.xfs[s] || this.xfs[0], open = /^<xf\b[^>]*>/.exec(xf)[0].replace(/\/>$/, '>'), body = /^<xf\b[^>]*?(?:\/>|>([\s\S]*?)<\/xf>)$/.exec(xf)[1] || '';
     var fontId = +(attrOf(open, 'fontId') || 0), fillId = +(attrOf(open, 'fillId') || 0), borderId = +(attrOf(open, 'borderId') || 0), nfId = +(attrOf(open, 'numFmtId') || 0);
-    if (ch.bold != null || ch.italic != null || ch.color !== undefined) {
+    if (ch.bold != null || ch.italic != null || ch.color !== undefined || ch.fontName || ch.fontSize) {
       var kids = fontKids(this.fonts[fontId] || '<font/>');
       if (ch.bold != null) { if (ch.bold) kids.b = '<b/>'; else delete kids.b; }
       if (ch.italic != null) { if (ch.italic) kids.i = '<i/>'; else delete kids.i; }
       if (ch.color !== undefined) { if (ch.color) kids.color = '<color rgb="' + argb(ch.color) + '"/>'; else delete kids.color; }
+      if (ch.fontName) { kids.name = '<name val="' + escX(ch.fontName) + '"/>'; delete kids.scheme; delete kids.charset; }
+      if (ch.fontSize) kids.sz = '<sz val="' + ch.fontSize + '"/>';
       fontId = this.add('fonts', buildFont(kids)); open = setAttr(open, 'applyFont', '1');
     }
     if (ch.bg !== undefined) {
@@ -451,6 +453,7 @@
     var open = /^<xf\b[^>]*>/.exec(xf)[0], o = {};
     var kids = fontKids(this.fonts[+(attrOf(open, 'fontId') || 0)] || '<font/>');
     if (kids.b) o.b = true; if (kids.i) o.i = true; if (kids.u) o.u = true;
+    var szm = kids.sz && /\sval="([\d.]+)"/.exec(kids.sz); if (szm) o.fs = +szm[1]; var fnm = kids.name && /\sval="([^"]*)"/.exec(kids.name); if (fnm) o.fn = unescX(fnm[1]);
     var cm = kids.color && /\srgb="([0-9A-Fa-f]{8})"/.exec(kids.color); if (cm) o.color = '#' + cm[1].slice(2);
     var fill = this.fills[+(attrOf(open, 'fillId') || 0)] || '', fm = /<patternFill\b[^>]*patternType="solid"[^>]*>\s*<fgColor\b[^>]*rgb="([0-9A-Fa-f]{8})"/.exec(fill); if (fm) o.bg = '#' + fm[1].slice(2);
     var am = /<alignment\b[^>]*>/.exec(xf); if (am) { var h = attrOf(am[0], 'horizontal'); if (h === 'center' || h === 'left' || h === 'right' || h === 'centerContinuous') o.h = h === 'centerContinuous' ? 'center' : h; if (/wrapText="(1|true)"/.test(am[0])) o.wrap = true; }
@@ -467,7 +470,7 @@
       return Promise.all([pkg.read(tgt.path), pkg.read('xl/styles.xml')]).then(function (a) {
         var sd = parseSheet(a[0]); if (!sd) return { err: WHY.sheet };
         if (!a[1]) return { err: '서식 정보를 찾지 못했습니다.' };
-        var st = new Styles(a[1]); if (!st.hasAll) return { err: '서식 정보가 특이해서 서식을 바꿀 수 없습니다.' };
+        var st = new Styles(a[1]); if (!st.hasAll) return { err: '이 문서의 서식 정보가 특이해서 폰에서는 서식을 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
         var area = (rng.r1 - rng.r0 + 1) * (rng.c1 - rng.c0 + 1); if (area > 200000) return { err: '한 번에 서식을 바꿀 수 있는 칸은 20만 칸까지입니다.' };
         for (var r = rng.r0; r <= rng.r1; r++) {
           var row = getRow(sd, r, true);
@@ -562,7 +565,7 @@
         var ex = expandShared(xml0, tgt.name); if (ex.err) return { err: WHY.shared };
         var xml = ex.xml, sd = parseSheet(xml); if (!sd) return { err: WHY.sheet };
         var i, j, row, ferr = false;
-        if ((xml.match(/<mergeCell\b[^>]*?\sref="[^"]*"/g) || []).some(function (t) { var m = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(attrOf(t, 'ref')); var c0 = colNum(m[1]), r0 = +m[2], c1 = m[3] ? colNum(m[3]) : c0, r1 = m[4] ? +m[4] : r0; return !(r1 < rng.r0 || r0 > rng.r1 || c1 < rng.c0 || c0 > rng.c1); })) return { err: '합쳐진 칸이 있어서 정렬할 수 없습니다.' };
+        if ((xml.match(/<mergeCell\b[^>]*?\sref="[^"]*"/g) || []).some(function (t) { var m = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(attrOf(t, 'ref')); var c0 = colNum(m[1]), r0 = +m[2], c1 = m[3] ? colNum(m[3]) : c0, r1 = m[4] ? +m[4] : r0; return !(r1 < rng.r0 || r0 > rng.r1 || c1 < rng.c0 || c0 > rng.c1); })) return { err: '정렬할 범위에 합쳐진 칸이 있어서 정렬할 수 없습니다. 도구줄 「칸 합치기」의 「합치기 풀기」로 먼저 푼 뒤 정렬하십시오. 합친 채로 정렬해야 하면 「수정 요청」으로 맡겨 주십시오.' };
         var moved = {};
         for (i = rng.r0; i <= rng.r1; i++) {
           row = getRow(sd, i, false); moved[i] = [];
@@ -730,7 +733,84 @@
     return { xml: serializeSheet(sd), n: n };
   }
 
+  // ============================== 줄·열 숨기기 · 자동 필터 ==============================
+  function sheetTarget(pkg, sheetName) {
+    return wbInfo(pkg).then(function (info) { var tgt = null; info && info.sheets.forEach(function (s) { if (sameName(s.name, sheetName)) tgt = s; }); return tgt && tgt.path ? tgt : null; });
+  }
+  function setRowsHidden(pkg, sheetName, r0, r1, hide) {
+    return sheetTarget(pkg, sheetName).then(function (tgt) {
+      if (!tgt) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml) {
+        var sd = parseSheet(xml); if (!sd) return { err: WHY.sheet };
+        for (var r = r0; r <= r1; r++) { var row = getRow(sd, r, !!hide); if (!row) continue; row.open = hide ? setAttr(row.open, 'hidden', '1') : delAttr(row.open, 'hidden'); }
+        var out = serializeSheet(sd); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true };
+      });
+    });
+  }
+  function setColsHidden(pkg, sheetName, c0, c1, hide) {
+    return sheetTarget(pkg, sheetName).then(function (tgt) {
+      if (!tgt) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml) {
+        var cols = (xml.match(/<col\b[^>]*\/>/g) || []).map(function (t) { return { min: +attrOf(t, 'min'), max: +attrOf(t, 'max'), tag: t }; }), out = [], covered = {};
+        cols.forEach(function (cl) {
+          var lo = Math.max(cl.min, c0), hi = Math.min(cl.max, c1);
+          if (hi < lo) { out.push(cl); return; }
+          if (cl.min < lo) out.push({ min: cl.min, max: lo - 1, tag: setAttr(setAttr(cl.tag, 'min', String(cl.min)), 'max', String(lo - 1)) });
+          var mid = setAttr(setAttr(cl.tag, 'min', String(lo)), 'max', String(hi)); mid = hide ? setAttr(mid, 'hidden', '1') : delAttr(mid, 'hidden');
+          out.push({ min: lo, max: hi, tag: mid }); for (var k = lo; k <= hi; k++) covered[k] = 1;
+          if (cl.max > hi) out.push({ min: hi + 1, max: cl.max, tag: setAttr(setAttr(cl.tag, 'min', String(hi + 1)), 'max', String(cl.max)) });
+        });
+        if (hide) { var k = c0; while (k <= c1) { if (covered[k]) { k++; continue; } var e = k; while (e + 1 <= c1 && !covered[e + 1]) e++; out.push({ min: k, max: e, tag: '<col min="' + k + '" max="' + e + '" width="9.140625" hidden="1" customWidth="1"/>' }); k = e + 1; } }
+        out.sort(function (a, b) { return a.min - b.min; });
+        xml = xml.replace(/<cols\b[^>]*?(?:\/>|>[\s\S]*?<\/cols>)/, '');
+        if (out.length) xml = insertWsElement(xml, 'cols', '<cols>' + out.map(function (x) { return x.tag; }).join('') + '</cols>');
+        pkg.write(tgt.path, xml); return { ok: true };
+      });
+    });
+  }
+  function showAllHidden(pkg, sheetName) {            // 시트의 숨긴 줄·열을 모두 보이게
+    return sheetTarget(pkg, sheetName).then(function (tgt) {
+      if (!tgt) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml) {
+        xml = xml.replace(/<col\b[^>]*\/>/g, function (t) { return delAttr(t, 'hidden'); }).replace(/<row\b[^>]*>/g, function (t) { return delAttr(t, 'hidden'); });
+        pkg.write(tgt.path, xml); return { ok: true };
+      });
+    });
+  }
+  // 자동 필터: rng = {r0,c0,r1,c1}(1부터)|null(끄기). criteria = { 열번호(rng.c0 기준 0부터): [표시 글자…] }, hiddenRows = 필터로 숨길 줄 번호 목록(1부터)
+  function setFilter(pkg, sheetName, rng, criteria, hiddenRows) {
+    return sheetTarget(pkg, sheetName).then(function (tgt) {
+      if (!tgt) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml) {
+        var old = /<autoFilter\b([^>]*?)(?:\/>|>[\s\S]*?<\/autoFilter>)/.exec(xml), oref = old ? attrOf(old[0].match(/^<autoFilter\b[^>]*>/)[0], 'ref') : null;
+        if (/<tableParts\b/.test(xml)) return { err: '이 시트에는 엑셀 표(자동 필터가 따로 달린 표)가 있어서 폰에서는 필터를 바꿀 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+        xml = xml.replace(/<autoFilter\b[^>]*?(?:\/>|>[\s\S]*?<\/autoFilter>)/, '');
+        var sd = parseSheet(xml); if (!sd) return { err: WHY.sheet };
+        var m = oref && /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(oref);
+        if (m) for (var r = +m[2] + 1; r <= +m[4]; r++) { var row = getRow(sd, r, false); if (row) row.open = delAttr(row.open, 'hidden'); }     // 옛 필터가 숨긴 줄은 먼저 모두 보이게
+        var out = serializeSheet(sd);
+        if (rng) {
+          var cs = Object.keys(criteria || {}).map(Number).sort(function (a, b) { return a - b; }).map(function (k) {
+            return '<filterColumn colId="' + k + '"><filters>' + criteria[k].map(function (v) { return '<filter val="' + escX(v) + '"/>'; }).join('') + '</filters></filterColumn>';
+          }).join('');
+          var ref = colName(rng.c0) + rng.r0 + ':' + colName(rng.c1) + rng.r1;
+          out = insertWsElement(out, 'autoFilter', '<autoFilter ref="' + ref + '"' + (cs ? '>' + cs + '</autoFilter>' : '/>'));
+          var sd2 = parseSheet(out); (hiddenRows || []).forEach(function (r) { var row = getRow(sd2, r, false); if (row) row.open = setAttr(row.open, 'hidden', '1'); }); out = serializeSheet(sd2);
+        }
+        pkg.write(tgt.path, out); return { ok: true };
+      });
+    });
+  }
+  function readFilter(xml) {                          // 시트 XML 에서 지금 걸린 자동 필터: {ref:{r0,c0,r1,c1}, criteria:{열:[글자]}}|null
+    var m = /<autoFilter\b[^>]*?(?:\/>|>[\s\S]*?<\/autoFilter>)/.exec(xml || ''); if (!m) return null;
+    var open = m[0].match(/^<autoFilter\b[^>]*>/)[0], rm = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(attrOf(open, 'ref') || ''); if (!rm) return null;
+    var crit = {}; (m[0].match(/<filterColumn\b[\s\S]*?<\/filterColumn>/g) || []).forEach(function (fc) {
+      var id = +attrOf(fc.match(/^<filterColumn\b[^>]*>/)[0], 'colId'); if (/<(customFilters|top10|dynamicFilter|colorFilter|iconFilter)\b/.test(fc)) crit[id] = null; else crit[id] = (fc.match(/<filter\b[^>]*\sval="[^"]*"/g) || []).map(function (t) { return unescX(attrOf(t, 'val')); });
+    });
+    return { ref: { c0: colNum(rm[1]), r0: +rm[2], c1: colNum(rm[3]), r1: +rm[4] }, criteria: crit };
+  }
   var api = {
+    setRowsHidden: setRowsHidden, setColsHidden: setColsHidden, showAllHidden: showAllHidden, setFilter: setFilter, readFilter: readFilter,
     setCachedValues: setCachedValues,
     colNum: colNum, colName: colName, escX: escX, unescX: unescX, WHY: WHY,
     parseSheet: parseSheet, serializeSheet: serializeSheet, getRow: getRow, getCell: getCell, setDimension: setDimension, dimensionOf: dimensionOf,

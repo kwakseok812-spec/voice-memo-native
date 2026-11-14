@@ -8,6 +8,8 @@
   var TXT = [['검정', '#000000'], ['빨강', '#E02020'], ['파랑', '#1C5FD6'], ['초록', '#1B8A3A'], ['주황', '#EE7A00'], ['보라', '#7A3FC4'], ['회색', '#777777'], ['기본', null]];
   var BG = [['없음', null], ['노랑', '#FFF2A8'], ['연두', '#D8F0C0'], ['하늘', '#CFE5FF'], ['분홍', '#FFD6E0'], ['살구', '#FFDDB0'], ['회색', '#E5E7EB'], ['남색', '#BBD4F5']];
   var NF = [['일반', 'General'], ['1,234', '#,##0'], ['소수 2자리', '#,##0.00'], ['퍼센트', '0%'], ['원', '#,##0"원"'], ['날짜', 'yyyy-mm-dd']];
+  var FONTS = ['맑은 고딕', '바탕', '돋움', '굴림', 'Arial', 'Times New Roman'];
+  var SIZES = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28];
   var ALIGN = [['왼쪽', 'left'], ['가운데', 'center'], ['오른쪽', 'right'], ['기본', '']];
 
   function create(env) {
@@ -33,6 +35,8 @@
     function applyFmt(ch, msg) { run('서식', function (pkg) { return ST.applyStyle(pkg, nameNow(), rg1(), ch); }, msg || '서식을 바꿨습니다'); }
     function isBold() { var s = S(), sh = s.sh, st = null; try { var r = rg0(); st = envStyleAt(sh, r.r0, r.c0); } catch (e) {} return !!(st && st.b); }
     function envStyleAt(sh, r, c) { return env.styleAt ? env.styleAt(sh, r, c) : null; }
+    function curSize() { try { var r = rg0(), st = envStyleAt(S().sh, r.r0, r.c0); return (st && st.fs) || 11; } catch (e) { return 11; } }
+    function stepSize(d) { applyFmt({ fontSize: Math.max(6, Math.min(72, curSize() + d)) }, '글자 크기를 바꿨습니다'); }
     function fmtSheet() {
       var body = el('div', 'sxu'), close = function () { S().ctx.closeSheet(); };
       function group(label) { body.appendChild(el('div', 'sxu-l', label)); var row = el('div', 'sxu-r'); body.appendChild(row); return row; }
@@ -47,7 +51,9 @@
       var g4 = group('정렬'); ALIGN.forEach(function (a) { opt(g4, a[0], function () { applyFmt({ align: a[1] }); }); });
       var g5 = group('숫자 모양'); NF.forEach(function (n) { opt(g5, n[0], function () { applyFmt({ nf: n[1] }); }); });
       var g6 = group('테두리'); opt(g6, '모두', function () { applyFmt({ borderMode: 'all' }, '테두리를 넣었습니다'); }); opt(g6, '바깥쪽', function () { applyFmt({ borderMode: 'outer' }, '바깥 테두리를 넣었습니다'); }); opt(g6, '없음', function () { applyFmt({ borderMode: 'none' }, '테두리를 없앴습니다'); });
-      var g7 = group('칸 합치기'); opt(g7, '합치기', mergeCells); opt(g7, '합치기 풀기', unmerge);
+      var g8 = group('글꼴'); FONTS.forEach(function (f) { opt(g8, f, function () { applyFmt({ fontName: f }, '글꼴을 바꿨습니다'); }); });
+      var g9 = group('글자 크기'); opt(g9, '작게 −', function () { stepSize(-1); }); opt(g9, '크게 ＋', function () { stepSize(1); }); SIZES.forEach(function (z) { opt(g9, String(z), function () { applyFmt({ fontSize: z }, '글자 크기를 ' + z + '으로 바꿨습니다'); }); });
+      body.appendChild(el('div', 'so-sheet-note', '칸 합치기는 도구줄의 「칸 합치기」(또는 더보기)에서 합니다.'));
       body.appendChild(el('div', 'so-sheet-note', '고른 곳(' + rangeText() + ')에 적용됩니다. 칸 하나만 골랐으면 그 칸에만, 줄 번호·열 글자나 「범위」로 고르면 그 범위 전체에 적용됩니다.'));
       S().ctx.sheet({ title: '서식', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
@@ -81,6 +87,60 @@
       S().ctx.sheet({ title: '줄·칸 넣고 빼기', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
 
+    // ---------------- 숨기기 · 보이기 ----------------
+    function hideSheet() {
+      var r = rg1(), body = el('div', 'sxu'), g = el('div', 'sxu-g');
+      function add(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g.appendChild(b); }
+      add('고른 줄 숨기기', function () { run('줄 숨기기', function (pkg) { return ST.setRowsHidden(pkg, nameNow(), r.r0, r.r1, true); }, (r.r1 - r.r0 + 1) + '줄을 숨겼습니다(보이려면 「숨긴 줄·열 보이기」)'); });
+      add('고른 열 숨기기', function () { run('열 숨기기', function (pkg) { return ST.setColsHidden(pkg, nameNow(), r.c0, r.c1, true); }, (r.c1 - r.c0 + 1) + '열을 숨겼습니다(보이려면 「숨긴 줄·열 보이기」)'); });
+      add('고른 범위의 숨긴 줄·열 보이기', function () { run('보이기', function (pkg) { return ST.setRowsHidden(pkg, nameNow(), Math.max(1, r.r0 - 1), r.r1 + 1, false).then(function () { return ST.setColsHidden(pkg, nameNow(), Math.max(1, r.c0 - 1), r.c1 + 1, false); }); }, '고른 범위 둘레의 숨긴 줄·열을 보이게 했습니다'); });
+      add('시트의 숨긴 줄·열 모두 보이기', function () { run('모두 보이기', function (pkg) { return ST.showAllHidden(pkg, nameNow()); }, '숨긴 줄·열을 모두 보이게 했습니다'); });
+      body.appendChild(g);
+      body.appendChild(el('div', 'so-sheet-note', '고른 곳(' + rangeText() + ')의 줄·열이 대상입니다. 숨겨도 내용은 지워지지 않고, 수식 계산에도 그대로 쓰입니다. 숨긴 줄·열 옆의 줄·열을 함께 고른 뒤 「고른 범위의 숨긴 줄·열 보이기」를 누르면 그 사이가 보입니다.'));
+      S().ctx.sheet({ title: '숨기기·보이기', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 자동 필터 ----------------
+    function sheetXml() { var s = S(), psh = s.an && s.an.sheets && s.an.sheets[s.sh.name]; return psh ? psh.xml : null; }
+    function shown(sh, r, c) { var cl = env.cellOf(sh, r, c); return cl ? (cl.w != null ? String(cl.w) : (cl.v == null ? '' : String(cl.v))) : ''; }
+    function filterSheet() {
+      var s = S(), sh = s.sh, xml = sheetXml(), cur = xml ? ST.readFilter(xml) : null, body = el('div', 'sxu');
+      if (xml == null) { toast('이 문서에서는 필터를 쓸 수 없습니다.', 3000); return; }
+      function go(label, rng, crit, hid, msg) { run(label, function (pkg) { return ST.setFilter(pkg, nameNow(), rng, crit, hid); }, msg); }
+      if (!cur) {
+        var r = rg0(), reg = (r.r1 > r.r0 || r.c1 > r.c0) ? r : currentRegion(sh, r.r0, r.c0);
+        body.appendChild(el('div', 'sxu-l', '자동 필터 범위: ' + env.addr(reg.r0, reg.c0) + ':' + env.addr(reg.r1, reg.c1) + ' (맨 위 줄이 머리글)'));
+        var g0 = el('div', 'sxu-g'), b0 = el('button', 'sxu-b big on', '자동 필터 켜기'); b0.type = 'button'; b0.onclick = function () { s.ctx.closeSheet(); setTimeout(function () { go('필터', { r0: reg.r0 + 1, c0: reg.c0 + 1, r1: reg.r1 + 1, c1: reg.c1 + 1 }, {}, [], '자동 필터를 켰습니다. 다시 「필터」를 눌러 열을 고르고 값을 고릅니다'); }, 60); }; g0.appendChild(b0); body.appendChild(g0);
+        body.appendChild(el('div', 'so-sheet-note', '필터를 켠 뒤 열을 골라 보고 싶은 값만 체크하면 나머지 줄이 숨겨집니다(내용은 지워지지 않습니다). 범위를 먼저 「범위」로 고르면 그 범위로 켭니다.'));
+        s.ctx.sheet({ title: '자동 필터', body: body, buttons: [{ label: '닫기' }], wide: true }); return;
+      }
+      var rg = cur.ref, crit = {}; Object.keys(cur.criteria).forEach(function (k) { crit[k] = cur.criteria[k]; });
+      if (Object.keys(crit).some(function (k) { return crit[k] == null; })) { body.appendChild(el('div', 'so-sheet-note', '이 필터에는 조건(숫자 범위·색 등)이 있어 폰에서는 값을 바꿀 수 없습니다. 끄기만 할 수 있습니다. 바꾸려면 「수정 요청」으로 맡겨 주십시오.')); }
+      body.appendChild(el('div', 'sxu-l', '필터 범위 ' + env.addr(rg.r0 - 1, rg.c0 - 1) + ':' + env.addr(rg.r1 - 1, rg.c1 - 1) + ' · 열을 고르십시오'));
+      var cols = el('div', 'sxu-r'); body.appendChild(cols);
+      var area = el('div', 'sxu-fv'); body.appendChild(area);
+      function hiddenFor(c2) {
+        var hid = []; for (var r = rg.r0 + 1; r <= rg.r1; r++) { var ok = true; Object.keys(c2).forEach(function (k) { if (c2[k] && c2[k].indexOf(shown(sh, r - 1, rg.c0 - 1 + (+k))) < 0) ok = false; }); if (!ok) hid.push(r); } return hid;
+      }
+      function pickCol(k) {
+        area.innerHTML = ''; var vals = [], seen = {}; for (var r = rg.r0 + 1; r <= rg.r1 && vals.length < 300; r++) { var v = shown(sh, r - 1, rg.c0 - 1 + k); if (!seen[v]) { seen[v] = 1; vals.push(v); } }
+        vals.sort(function (a, b) { var na = parseFloat(a), nb = parseFloat(b); return !isNaN(na) && !isNaN(nb) ? na - nb : String(a).localeCompare(String(b), 'ko'); });
+        var on = {}; var curv = crit[k]; vals.forEach(function (v) { on[v] = curv ? curv.indexOf(v) >= 0 : true; });
+        area.appendChild(el('div', 'sxu-l', env.colName(rg.c0 - 1 + k) + ' 열(' + shown(sh, rg.r0 - 1, rg.c0 - 1 + k) + ')의 값 — 보고 싶은 값만 체크'));
+        var list = el('div', 'sxu-r'); area.appendChild(list);
+        vals.forEach(function (v) { var b = el('button', 'sxu-b' + (on[v] ? ' on' : ''), v === '' ? '(빈 칸)' : v); b.type = 'button'; b.onclick = function () { on[v] = !on[v]; b.classList.toggle('on', on[v]); }; list.appendChild(b); });
+        var g = el('div', 'sxu-g'); area.appendChild(g);
+        var ap = el('button', 'sxu-b big on', '이 열 필터 적용'); ap.type = 'button'; ap.onclick = function () {
+          var pick = vals.filter(function (v) { return on[v]; }); if (!pick.length) { toast('보일 값을 하나 이상 체크해 주십시오.', 2800); return; }
+          var c2 = Object.assign({}, crit); if (pick.length === vals.length) delete c2[k]; else c2[k] = pick;
+          s.ctx.closeSheet(); setTimeout(function () { go('필터', rg, c2, hiddenFor(c2), '필터를 적용했습니다(숨겨진 줄은 내용이 그대로 있습니다)'); }, 60);
+        };
+        var cl = el('button', 'sxu-b big', '이 열 조건 지우기'); cl.type = 'button'; cl.onclick = function () { var c2 = Object.assign({}, crit); delete c2[k]; s.ctx.closeSheet(); setTimeout(function () { go('필터', rg, c2, hiddenFor(c2), '이 열의 조건을 지웠습니다'); }, 60); };
+        g.appendChild(ap); g.appendChild(cl);
+      }
+      for (var k = 0; k <= rg.c1 - rg.c0 && k < 40; k++) (function (k) { var b = el('button', 'sxu-b', env.colName(rg.c0 - 1 + k) + ' ' + shown(sh, rg.r0 - 1, rg.c0 - 1 + k)); b.type = 'button'; b.onclick = function () { [].forEach.call(cols.children, function (x) { x.classList.remove('on'); }); b.classList.add('on'); pickCol(k); }; cols.appendChild(b); })(k);
+      var g2 = el('div', 'sxu-g'), off = el('button', 'sxu-b big danger', '자동 필터 끄기(숨긴 줄 모두 보이기)'); off.type = 'button'; off.onclick = function () { s.ctx.closeSheet(); setTimeout(function () { go('필터', null, {}, [], '자동 필터를 껐습니다'); }, 60); }; g2.appendChild(off); body.appendChild(g2);
+      s.ctx.sheet({ title: '자동 필터', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
     // ---------------- 줄 높이 · 칸 너비 ----------------
     function sizeSheet() {
       var body = el('div', 'sxu'), r1 = rg1();
@@ -187,9 +247,9 @@
       fmt: { g: 'Aa', l: '서식', run: fmtSheet }, rc: { g: '▤', l: '줄·칸', run: rcSheet }, range: { g: '⬚', l: '범위', run: rangeBtn },
       fill: { g: '⤓', l: '채우기', run: fillDown }, sum: { g: '∑', l: '합계', run: autoSum }, sheet: { g: '▭', l: '시트', run: sheetSheet },
       merge: { g: '⊞', l: '칸 합치기', run: mergeBtn }, size: { g: '↔', l: '크기', run: sizeSheet }, sort: { g: '↕', l: '정렬', run: sortSheet },
-      repl: { g: '⇄', l: '바꾸기', run: replaceBtn }, endrow: { g: '＋줄', l: '맨 끝 줄', run: appendRow }
+      repl: { g: '⇄', l: '바꾸기', run: replaceBtn }, endrow: { g: '＋줄', l: '맨 끝 줄', run: appendRow }, filter: { g: '▽', l: '필터', run: filterSheet }, hide: { g: '◌', l: '숨기기', run: hideSheet }
     };
-    var ORDER = ['fmt', 'rc', 'range', 'fill', 'sum', 'sheet', 'merge', 'size', 'sort', 'repl', 'endrow'];
+    var ORDER = ['fmt', 'rc', 'range', 'fill', 'sum', 'sheet', 'merge', 'size', 'sort', 'filter', 'hide', 'repl', 'endrow'];
     function mkBtn(id, host, inSheet) {
       var it = ITEMS[id], b = el('button', inSheet ? 'sxu-mb' : 'sxu-ob'); b.type = 'button'; b.setAttribute('aria-label', it.l); b.dataset.id = id;
       b.appendChild(el('span', 'g', it.g)); b.appendChild(el('span', 'l', it.l));
@@ -218,7 +278,7 @@
       U.host.style.display = s.editing ? '' : 'none';
       if (U.bucket !== perRow()) render();
       var r = rg0(), info = (s.rg ? '고른 범위 ' : '고른 칸 ') + rangeText() + (s.rg ? ' (' + (r.r1 - r.r0 + 1) + '줄 × ' + (r.c1 - r.c0 + 1) + '칸)' : '');
-      U.lab.textContent = s.rangeMode ? '범위의 끝 칸을 눌러 주십시오…' : info;
+      U.lab.textContent = s.rangeMode ? '범위의 끝 칸을 눌러 주십시오…' : info + (s.rg ? '' : ' · 한 번 더 누르면 입력');
       if (U.rangeB) { U.rangeB.classList.toggle('on', !!(s.rg || s.rangeMode)); U.rangeB.querySelector('.l').textContent = (s.rg || s.rangeMode) ? '범위 풀기' : '범위'; }
     };
     return U;
