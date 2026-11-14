@@ -22,3 +22,40 @@
 .so-hwp-wrap.editing .so-hwp-tb2{display:none;bottom:54px}
 .so-hwp-wrap.editing.more .so-hwp-tb2{display:flex}
 .so-hwp-tb .more{flex:0 0 44px;font-size:20px}
+
+/* ---- O-0861(v10.2) 맥락 도구줄(SO_HWP_TOOLS) — 가로로 밀지 않고 한 줄에 6(접은 폰)/10(펼침)/12(DeX)개 + 「더보기」 ---- */
+.so-hwp-tb.tools{overflow:hidden;gap:3px;padding:4px 6px}
+.so-hwp-tb.tools button{flex:1 1 0;min-width:0;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;
+  transition:transform .12s ease, background .15s ease}
+.so-hwp-tb.tools button:disabled{opacity:.38}
+.so-hwp-tb .t-g{font-size:17px;line-height:1.05;font-weight:800}
+.so-hwp-tb .t-l{font-size:10px;line-height:1.1;font-weight:700;opacity:.85;white-space:nowrap}
+.so-hwp-tb button.clr .t-g{color:#e02020;text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:2px}
+.so-hwp-tb button.on .t-g,.so-hwp-tb button.on .t-l{color:#fff}
+.so-hwp-banner{position:absolute;left:8px;right:8px;top:8px;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 8px 14px;border-radius:14px;
+  background:var(--float-bg, rgba(30,36,60,.94));color:var(--text,#111);font-size:14px;font-weight:700;box-shadow:var(--float-sh,0 4px 14px rgba(0,0,0,.25));animation:so-hwp-ban .2s ease}
+.so-hwp-banner button{appearance:none;border:1px solid var(--glass-b2,rgba(0,0,0,.18));background:var(--glass,#eee);color:var(--text,#111);border-radius:10px;min-height:44px;min-width:56px;font-family:inherit;font-weight:800;font-size:14px}
+@keyframes so-hwp-ban{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.so-hwp-banner{animation:none}.so-hwp-tb.tools button{transition:none}}
+/* 시트 안: 더보기 격자 · 표 만들기 · 색 */
+.so-hwp-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.so-hwp-mb{appearance:none;display:flex;align-items:center;gap:10px;min-height:52px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;padding:0 12px;cursor:pointer;text-align:left}
+.so-hwp-mb .t-g{font-size:18px;font-weight:800;min-width:34px;text-align:center}
+.so-hwp-mb .t-l{font-size:14px;font-weight:800;opacity:1}
+.so-hwp-mb:active{transform:scale(.97)}
+.so-sheet-note{margin:10px 2px 0;font-size:12.5px;line-height:1.55;color:var(--dim)}
+.so-step{display:flex;align-items:center;gap:10px;margin:6px 0}
+.so-step-l{flex:0 0 40px;font-size:15px;font-weight:800}
+.so-step-b{appearance:none;width:52px;height:52px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-size:22px;font-weight:800;font-family:inherit;cursor:pointer}
+.so-step-b:disabled{opacity:.35}
+.so-step-b:active{transform:scale(.95)}
+.so-step-v{flex:1;text-align:center;font-size:24px;font-weight:800}
+.so-tbl-prev{display:grid;gap:3px;margin:12px 0 2px;padding:8px;border-radius:12px;background:var(--glass)}
+.so-tbl-prev i{display:block;height:14px;border:1.5px solid var(--dim);border-radius:3px;background:var(--page-bg)}
+.so-tbl-prev s{grid-column:1/-1;text-decoration:none;font-size:12px;color:var(--dim);text-align:center}
+.so-clr{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.so-clr-b{appearance:none;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:64px;padding:8px 4px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;font-weight:800;font-size:12.5px;cursor:pointer}
+.so-clr-b i{display:block;width:30px;height:30px;border-radius:50%;border:2px solid var(--glass-b2,rgba(0,0,0,.2))}
+.so-clr-b:active{transform:scale(.95)}
+.so-clr .so-sheet-note{grid-column:1/-1}
+@media (prefers-reduced-motion:reduce){.so-hwp-mb:active,.so-step-b:active,.so-clr-b:active{transform:none}}

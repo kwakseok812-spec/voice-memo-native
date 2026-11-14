@@ -59,6 +59,10 @@
   var SOFFICE_LONG = '스마트오피스';          // 풀이(정보 화면에서만)
   var SO_ON = 'on';                         // 스위치 — 'off' 면 통째로 꺼진 것과 같다
   var SO_FIRST_SIMPLE = 'on';               // v9.97(O-0854 5번): 'on' = 첫 화면에 「열기 방식: … · 바꾸기」 한 줄만(마지막 방식으로 바로 열기) · 보안 안내는 [자세히] 뒤로 · 'off' = 예전 두 칸 선택·긴 안내 그대로
+  var SO_EDIT_PLUS = 'on';                  // O-0861(v10.2): 'off' = 편집 보강(표·그림·쪽 정리·새 문서·「수정 요청」·저장 이름 규칙·단축키)이 통째로 사라지고 v10.1과 같다
+  var SO_HWP_TOOLS = 'on';                  // 한글 표·그림·글자 색·새 문서 단추 — 'off' = 예전 한글 도구줄
+  var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
+  var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
   var usedNames = {};                        // 이번에 저장한 사본 이름(같은 이름이 또 나오면 _수정(2))
@@ -140,8 +144,8 @@
     }
   }
   function renderSimple(row, m) {            // v9.97: 한 줄 모양 — 문서 열기 단추·확장자 칩 바로 아래에 둔다
-    var card = document.querySelector('#docPick .doc-open');
-    if (card && card.parentNode && row.previousElementSibling !== card) card.parentNode.insertBefore(row, card.nextSibling);
+    var card = document.querySelector('#docPick .doc-open'), nr = $('soNewRow'), anchor = (nr && nr.previousElementSibling === card) ? nr : card;   // 「＋ 새 문서」 줄이 있으면 그 아래
+    if (card && card.parentNode && row.previousElementSibling !== anchor) card.parentNode.insertBefore(row, anchor.nextSibling);
     row.classList.add('so-simple');
     var nm = m === 'soffice' ? SOFFICE_NAME + '로 열기' : '변환해서 보기';
     if (!modeOpen) {
@@ -191,17 +195,17 @@
   // ============ 열기 가로채기 (docviewer.js handleLocalFile 첫 줄에서 부른다) ============
   //   true  = S-Office 가 맡았다(기존 변환 흐름은 타지 않는다)
   //   false = 기존 그대로(①)
-  function intercept(file, force) {
+  function intercept(file, force, opts) {
     if (!enabled() || !file) return false;
     if (bypassFile === file) { bypassFile = null; return false; }
     if (!force && mode() !== 'soffice') return false;
     var id = EXT_MAP[extOf(file.name)];
     if (id === 'hwp' && SO_HWP_READY !== 'on') { toast('한글 문서는 아직 준비 중이라 변환해서 보여 드립니다.', 3600); return false; }   // 모듈 로딩을 시도하지 않는다
     if (!id) { toast('이 형식은 ' + SOFFICE_NAME + '로 열 수 없어 변환해서 보여 드립니다.', 3200); return false; }
-    openWith(id, file);
+    openWith(id, file, opts);
     return true;
   }
-  function openFile(file) { return intercept(file, true); }   // 최근 연 문서에서 다시 열 때(열기 방식과 상관없이 S-Office 로)
+  function openFile(file, opts) { return intercept(file, true, opts); }   // 최근 연 문서에서 다시 열 때(열기 방식과 상관없이 S-Office 로)
   function toConvert(file, reason) {
     closeHost(true);
     if (reason) toast(reason, 4200);
@@ -241,7 +245,7 @@
     host.querySelector('#soMenu').addEventListener('click', onMenuClick);
     return host;
   }
-  function openWith(id, file) {
+  function openWith(id, file, opts) {
     closeHost(true);
     var token = ++seq;
     buildHost(); host.classList.add('on');
@@ -249,7 +253,7 @@
     host.querySelector('#soErr').style.display = 'none';
     host.querySelector('#soTitle').textContent = file.name || '문서';
     host.querySelector('#soActions').innerHTML = '';
-    var c = { id: id, mod: null, file: file, dirty: false, backFn: null, token: token, recKey: recKey(file), recReady: false, timer: 0 };
+    var c = { id: id, mod: null, file: file, dirty: false, backFn: null, token: token, recKey: recKey(file), recReady: false, timer: 0, opts: opts || {}, newBase: (opts && opts.newBase) || '' };
     closeMenu();
     cur = c;
     var ctx = makeCtx(c, body);
@@ -277,7 +281,7 @@
   function makeCtx(c, body) {
     var h = host;
     var ctx = {
-      file: c.file, name: c.file.name || '문서', ext: extOf(c.file.name), body: body,
+      file: c.file, name: c.file.name || '문서', ext: extOf(c.file.name), body: body, opts: c.opts,
       setTitle: function (s) { if (c === cur) h.querySelector('#soTitle').textContent = s || ''; },
       setActions: function (list) {
         if (c !== cur) return;
@@ -305,10 +309,20 @@
       },
       fallback: function (reason) { if (c === cur) toConvert(c.file, reason || (SOFFICE_NAME + '가 이 문서는 아직 열지 못해 변환해서 보여 드립니다.')); },
       loadScript: loadScript, loadCss: loadCss,
-      saveCopy: function (f, name) { return saveCopy(f, name, c); },
+      saveCopy: function (f, name, o) { return saveCopy(f, name, c, o); },   // o = { exact:true } 이면 모듈이 준 이름을 그대로 쓴다(나누기처럼 「_수정」이 아닌 새 파일)
       setDirty: function (v) { c.dirty = !!v; if (c.dirty) startAuto(c); else stopAuto(c); },
       onBack: function (fn) { c.backFn = (typeof fn === 'function') ? fn : null; },
       confirm: function (t, m, label, fn, o) { if (typeof cfg.confirm === 'function') cfg.confirm(t, m, label, fn, o); else fn(); },
+      // ---- v10.2(O-0861) 편집 보강 공통 도구 ----
+      flag: function (k) { return flagOn(k); },
+      copyName: function (ext) { return c.newBase ? newDocName(c.newBase, ext || extOf(c.file.name)) : copyName(c.file.name, ext); },   // 저장될 이름을 미리 보여 줄 때(예약하지 않는다)
+      isNew: !!c.newBase,
+      sheet: function (o) { return openSheet(c, o); },          // 아래에서 올라오는 시트 { title, body(Node), buttons:[{label,primary,danger,onClick→false면 닫지 않음}], onClose, wide }
+      closeSheet: function () { closeSheet(); },
+      onSave: function (fn) { c.saveFlow = (typeof fn === 'function') ? fn : null; },       // Ctrl+S 가 부를 「사본 저장」 흐름
+      setSaver: function (fn) { c.saver = (typeof fn === 'function') ? fn : null; },       // 「수정 요청」으로 넘어가기 전에 저장해 두는 일(확인창 없이, Promise<true|false>)
+      requestFix: function () { requestFix(c); },
+      fixAvail: function () { return fixAvail(c); },
       // 사본 저장 확인창: 모듈의 확인 문구 뒤에 공유함 업로드 안내를 붙인다(PC 브라우저에서는 붙이지 않음)
       confirmCopy: function (t, m, label, fn) { var n = noticeText(); ctx.confirm(t, n ? (m + '\n\n' + n) : m, '사본 저장', fn); },   // 저장 단추 이름은 모든 형식 「사본 저장」으로 통일
       // 확인창이 없는 저장(예: PDF)용: 처음 한 번만 안내 확인
@@ -332,12 +346,25 @@
   }
   // ============ 사본 이름 ============
   //   모듈이 이름을 주면 그대로 존중한다. 안 주면 「원래이름_수정.확장자」, 이번에 같은 이름을 이미 저장했으면 「_수정(2)」.
+  //   v10.2(O-0861): 「_수정」 파일을 다시 고쳐도 _수정을 또 붙이지 않고 번호만 올린다 — 보고서.hwp → 보고서_수정.hwp → 보고서_수정(2).hwp → (3).
+  //   스위치(SO_EDIT_PLUS)가 꺼져 있으면 예전처럼 매번 _수정을 붙인다.
   function copyName(orig, ext) {
     var n = String(orig || 'document'), dot = n.lastIndexOf('.');
     var base = dot > 0 ? n.slice(0, dot) : n;
     var e = ext ? ('.' + String(ext).replace(/^\./, '')) : (dot > 0 ? n.slice(dot) : '');
-    var cand = base + '_수정' + e, i = 1;
-    while (usedNames[cand]) { i++; cand = base + '_수정(' + i + ')' + e; }
+    var root = base, i = 1;
+    if (SO_EDIT_PLUS === 'on') {
+      var m = /^(.*)_수정(?:\((\d+)\))?$/.exec(base);
+      if (m && m[1]) { root = m[1]; i = (m[2] ? parseInt(m[2], 10) : 1) + 1; }
+    }
+    var cand = i > 1 ? root + '_수정(' + i + ')' + e : root + '_수정' + e;
+    while (usedNames[cand]) { i++; cand = root + '_수정(' + i + ')' + e; }
+    return cand;
+  }
+  function stamp() { var d = new Date(), z = function (v) { return ('0' + v).slice(-2); }; return z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()); }
+  function newDocName(label, ext) {          // 새 문서는 「_수정」이 아니라 만든 시각 꼬리표(같은 이름을 다시 만들어도 덮어쓰지 않게)
+    var cand = label + '_' + stamp() + '.' + ext, i = 1, b = label + '_' + stamp();
+    while (usedNames[cand]) { i++; cand = b + '(' + i + ').' + ext; }
     return cand;
   }
 
@@ -496,9 +523,13 @@
     return cand;
   }
   // 반환: Promise — 저장이 끝났으면 true, 실패했으면 false(실패 안내 시트는 틀이 띄운다). 모듈은 true 일 때만 성공 안내·setDirty(false) 를 한다.
-  function saveCopy(f, name, c) {
+  function saveCopy(f, name, c, o) {
     var file = (f instanceof File) ? f : new File([f], name || 'document', { type: (f && f.type) || 'application/octet-stream' });
     var want = name;
+    if (SO_EDIT_PLUS === 'on' && c && !(o && o.exact)) {            // v10.2: 이름은 모든 형식이 틀 한 곳의 규칙을 따른다(모듈이 준 이름은 참고만)
+      var ex = extOf(name || file.name) || extOf(c.file.name);
+      want = c.newBase ? newDocName(c.newBase, ex) : copyName(c.file.name, ex);
+    } else
     if (!want && c && (!file.name || file.name === 'document' || file.name === c.file.name)) want = copyName(c.file.name, (file.name.indexOf('.') > 0 ? extOf(file.name) : '') || extOf(c.file.name));   // 이름을 안 준 경우만 「원래이름_수정」
     if (want && usedNames[want]) want = uniqName(want);   // 같은 이름을 한 번 더 저장할 때만 _수정(2)
     if (want && file.name !== want) file = new File([file], want, { type: file.type });
@@ -537,6 +568,111 @@
     });
   }
 
+  // ============ O-0861(v10.2) 편집 보강 공통 도구 — 시트 · 수정 요청 · 새 문서 · 단축키 ============
+  function flagOn(k) {
+    if (SO_EDIT_PLUS !== 'on') return false;
+    if (k === 'hwp') return SO_HWP_TOOLS === 'on';
+    if (k === 'pdf') return SO_PDF_PAGES === 'on';
+    if (k === 'newdoc') return SO_NEW_DOC === 'on';
+    return true;
+  }
+  // ---- 아래에서 올라오는 시트(손가락 단추 44px 이상 · 0.2초 · 「움직임 줄이기」는 CSS가 지킨다) ----
+  var sheetEl = null, sheetOpt = null;
+  function closeSheet(viaBack) {
+    if (!sheetEl) return;
+    var el = sheetEl, o = sheetOpt; sheetEl = null; sheetOpt = null;
+    el.classList.remove('on');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+    if (o && typeof o.onClose === 'function') { try { o.onClose(!!viaBack); } catch (e) {} }
+  }
+  function openSheet(c, o) {
+    o = o || {};
+    buildHost(); closeSheet();
+    var back = document.createElement('div'); back.className = 'so-sheet-back';
+    var box = document.createElement('div'); box.className = 'so-sheet' + (o.wide ? ' wide' : ''); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    if (o.title) { var t = document.createElement('div'); t.className = 'so-sheet-t'; t.textContent = o.title; box.appendChild(t); }
+    if (o.body) { var bd = document.createElement('div'); bd.className = 'so-sheet-body'; bd.appendChild(o.body); box.appendChild(bd); }
+    var bs = document.createElement('div'); bs.className = 'so-sheet-btns';
+    (o.buttons || []).forEach(function (b) {
+      var x = document.createElement('button'); x.type = 'button'; x.className = 'so-sheet-btn' + (b.primary ? ' primary' : '') + (b.danger ? ' danger' : ''); x.textContent = b.label;
+      if (b.disabled) x.disabled = true;
+      x.onclick = function () { var r; try { r = b.onClick ? b.onClick() : true; } catch (e) { toast('실행하지 못했습니다: ' + ((e && e.message) || e)); r = false; } if (r !== false) closeSheet(); };
+      bs.appendChild(x);
+    });
+    if (bs.childNodes.length) box.appendChild(bs);
+    back.appendChild(box); host.appendChild(back);
+    back.addEventListener('pointerdown', function (e) { if (e.target === back && !(o.keep && o.keep())) closeSheet(true); });
+    sheetEl = back; sheetOpt = o;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { back.classList.add('on'); }); });
+    return { el: box, close: closeSheet, buttons: bs };
+  }
+
+  // ---- 「수정 요청」 — 폰에서 못 하는 수정을 PC가 처음 파일에 고치는 기존 흐름(표시해서 요청하기)으로 잇는다 ----
+  function fixAvail(c) {
+    c = c || cur;
+    return SO_EDIT_PLUS === 'on' && !!c && !c.newBase && !!(global.SmartDocs && typeof SmartDocs.openFix === 'function' && typeof SmartDocs.handleLocalFile === 'function');
+  }
+  function goFix(c) {
+    var file = c.file;
+    toConvert(file, null);
+    var t0 = Date.now(), iv = setInterval(function () {       // PC 변환이 끝나 문서가 뜨면 「표시해서 요청하기」 시트를 바로 띄운다
+      try {
+        var tabs = (SmartDocs.openTabs && SmartDocs.openTabs()) || [];
+        for (var i = 0; i < tabs.length; i++) if (tabs[i].name === file.name && tabs[i].active && tabs[i].live) { clearInterval(iv); SmartDocs.openFix(); return; }
+        if (Date.now() - t0 > 120000 || (SmartDocs.isViewerOpen && !SmartDocs.isViewerOpen() && Date.now() - t0 > 4000)) clearInterval(iv);
+      } catch (e) { clearInterval(iv); }
+    }, 500);
+  }
+  function requestFix(c) {
+    if (!fixAvail(c)) { toast('이 문서는 「수정 요청」으로 넘길 수 없습니다.', 2800); return; }
+    var go = function () { goFix(c); };
+    var title = '「수정 요청」으로 넘어갈까요?';
+    if (!c.dirty) {
+      c.ctx.confirm(title, '화면이 「PC가 변환한 보기」로 바뀝니다. 표시한 곳을 PC가 고쳐 줍니다.', '계속', go, { cancelLabel: '취소' });
+      return;
+    }
+    var keeps = !!(c.mod && typeof c.mod.snapshot === 'function' && c.recReady);
+    var msg = '폰에서 고치던 내용이 있습니다. 「수정 요청」은 처음 파일을 PC가 고치는 일이라 지금까지 고친 내용은 들어가지 않습니다.';
+    var leave = function () { if (keeps) toast('고친 내용은 7일 동안 앱에 자동 보관됩니다. 같은 파일을 다시 열면 이어 고칠 수 있습니다.', 4600); go(); };
+    if (typeof c.saver === 'function') {
+      c.ctx.confirm('고치던 내용이 있습니다', msg, '사본으로 저장하고 넘어가기', function () {
+        Promise.resolve().then(function () { return c.saver(); }).then(function (ok) { if (ok !== false) go(); }, function () {});   // 저장이 성공한 뒤에만 넘어간다
+      }, { extra: { label: '저장 안 하고 넘어가기', action: leave }, cancelLabel: '취소' });
+    } else {
+      c.ctx.confirm('고치던 내용이 있습니다', msg + '\n먼저 이 화면에서 「사본 저장」을 하실 수도 있습니다.', '저장 안 하고 넘어가기', leave, { danger: true, cancelLabel: '취소' });
+    }
+  }
+
+  // ---- 새 문서 — 「＋ 새 문서」 줄(문서 뷰어 첫 화면). 준비된 형식(템플릿이 있는 형식)만 보인다 ----
+  var NEW_DOCS = [
+    { id: 'hwp', chip: '한글', label: '새 한글 문서', ext: 'hwp', url: 'vendor/so/templates/blank.hwp', mime: 'application/x-hwp', flag: 'hwp' }
+  ];
+  function newDocList() { return NEW_DOCS.filter(function (d) { return flagOn('newdoc') && flagOn(d.flag) && (d.id !== 'hwp' || SO_HWP_READY === 'on'); }); }
+  function renderNewRow() {
+    var row = $('soNewRow'); if (!row) return;
+    var list = newDocList();
+    if (!list.length) { row.style.display = 'none'; row.innerHTML = ''; return; }
+    row.style.display = '';
+    row.innerHTML = '<span class="so-new-t">＋ 새 문서</span><span class="so-new-chips">' +
+      list.map(function (d) { return '<button type="button" class="so-newchip" data-sonew="' + d.id + '">' + d.chip + '</button>'; }).join('') + '</span>';
+  }
+  function newDoc(id) {
+    var d = null; newDocList().forEach(function (x) { if (x.id === id) d = x; });
+    if (!d) { toast('이 형식의 새 문서는 아직 만들 수 없습니다.', 2800); return false; }
+    fetch(d.url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('양식 파일을 읽지 못했습니다(' + r.status + ')'); return r.blob(); }).then(function (b) {
+      var f = new File([b], d.label + '.' + d.ext, { type: d.mime });
+      openWith(d.id, f, { newBase: d.label, startEdit: true });
+    }).catch(function (e) { toast('새 문서를 만들지 못했습니다: ' + ((e && e.message) || e), 4200); });
+    return true;
+  }
+  function onNewClick(e) { var b = e.target.closest ? e.target.closest('[data-sonew]') : null; if (b) newDoc(b.getAttribute('data-sonew')); }
+
+  // ---- 공통 단축키(DeX·키보드): Ctrl+S = 사본 저장 ----
+  document.addEventListener('keydown', function (e) {
+    if (!cur || !host || !host.classList.contains('on') || SO_EDIT_PLUS !== 'on') return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's') { e.preventDefault(); if (typeof cur.saveFlow === 'function') cur.saveFlow(); }
+  }, true);
+
   // ============ 머리줄 더보기 메뉴 ============
   function menuOpen() { var m = host && host.querySelector('#soMenu'); return !!(m && m.style.display !== 'none'); }
   function closeMenu() { var m = host && host.querySelector('#soMenu'); if (m) m.style.display = 'none'; }
@@ -546,12 +682,14 @@
     var canConv = !!c && !(global.SmartDocs && typeof SmartDocs.isViewable === 'function' && !SmartDocs.isViewable(c.file.name, c.file.type));
     if (canConv) items.push('<button type="button" role="menuitem" data-m="convert"><b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 폰 화면과 모양이 다를 때</span></button>');
     items.push('<button type="button" role="menuitem" data-m="info"><b>' + SOFFICE_NAME + ' 정보</b><span>출처와 라이선스</span></button>');
+    if (fixAvail(c)) items.push('<button type="button" role="menuitem" data-m="fix" class="so-menu-fix"><b>수정 요청</b><span>폰에서 못 하는 수정은 표시해서 맡깁니다 · 화면이 「변환한 보기」로 바뀝니다</span></button>');
     m.innerHTML = items.join(''); m.style.display = '';
   }
   function onMenuClick(e) {
     var b = e.target.closest ? e.target.closest('[data-m]') : null; if (!b) return;
     var k = b.getAttribute('data-m'); closeMenu();
     if (k === 'info') { showInfo(); return; }
+    if (k === 'fix') { if (cur) requestFix(cur); return; }
     if (k === 'convert') {
       var c = cur; if (!c) return;
       var go = function () { toConvert(c.file, null); };
@@ -567,7 +705,7 @@
       if (c.recReady && (discard || !c.dirty)) { c.noRec = true; recDel(c.recKey); }
       if (c.recSheet) { c.recSheet = false; try { if (typeof cfg.dismiss === 'function') cfg.dismiss(); } catch (e) {} }   // 떠 있는 시트도 함께 닫는다
     }
-    closeMenu();
+    closeMenu(); closeSheet();
     if (c && c.mod && typeof c.mod.close === 'function') { try { c.mod.close(); } catch (e) {} }
     if (host) { host.classList.remove('on'); var b = host.querySelector('#soBody'); if (b) b.innerHTML = ''; var a = host.querySelector('#soActions'); if (a) a.innerHTML = ''; var bz = host.querySelector('#soBusy'); if (bz) bz.style.display = 'none'; }
     closeInfo();
@@ -575,6 +713,7 @@
   // 뒤로: 정보 → 모듈 → (고친 내용 있으면 확인) → 닫기
   function back() {
     if (menuOpen()) { closeMenu(); return true; }
+    if (sheetEl) { closeSheet(true); return true; }
     if (infoEl && infoEl.classList.contains('on')) { closeInfo(); return true; }
     if (!cur) return false;
     var c = cur;
@@ -639,9 +778,19 @@
     for (i = 0; i < a.length; i++) a[i].textContent = SOFFICE_NAME;
     for (i = 0; i < b.length; i++) b[i].textContent = SOFFICE_SUB;
   }
+  function mountNewRow() {      // O-0861 「＋ 새 문서」 줄 — 문서 열기 단추 카드 바로 아래
+    var card = document.querySelector('#docPick .doc-open'), row = $('soNewRow');
+    if (!row && card && card.parentNode) {
+      row = document.createElement('div'); row.id = 'soNewRow'; row.className = 'so-newrow'; row.style.display = 'none';
+      card.parentNode.insertBefore(row, card.nextSibling);
+      row.addEventListener('click', onNewClick);
+    }
+    renderNewRow();
+  }
   function mount() {
     fillNames();
     try { firstScreen(); } catch (e) {}
+    mountNewRow();
     var row = $('soModeRow'); if (!row || row._soBound) { renderRow(); return; }
     row._soBound = true; row.addEventListener('click', onRowClick); renderRow();
   }
@@ -658,6 +807,8 @@
     simple: function () { return simpleOn() && enabled(); },   // v9.97: 첫 화면이 「열기 방식 한 줄」 모양인지(안내 글이 어디서 바꾸는지 말할 때 씀)
     openFile: openFile,
     copyName: copyName,
+    newDoc: newDoc,
+    flag: flagOn,
     isOpen: function () { return !!(host && host.classList.contains('on') && (cur || (infoEl && infoEl.classList.contains('on')))); },
     back: back,
     close: function () { closeHost(true); },

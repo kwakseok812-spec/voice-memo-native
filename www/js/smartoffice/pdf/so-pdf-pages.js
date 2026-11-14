@@ -1,0 +1,397 @@
+/* ============================================================================
+ * so-pdf-pages.js — S-Office PDF 편집 보강(O-0861, v10.2): 쪽 정리(순서·삭제·회전) · 합치기 · 나누기 · 양식 칸 채우기
+ * ----------------------------------------------------------------------------
+ * so-pdf.js 가 스위치(SO_PDF_PAGES)가 켜졌을 때만 불러온다. 새 부품 없음 — 이미 들어 있는 pdf-lib(MIT)와 PDF.js(보기)만 쓴다.
+ *   · 쪽 순서·삭제·회전은 「원본 문서 안에서 쪽을 빼고 같은 쪽을 다시 끼우는」 방식이다(새 문서에 복사하지 않는다) —
+ *     그래야 입력 칸(양식)·목차·링크가 그대로 산다(0단계 시험). 지운 쪽의 내용은 파일에서 비우고 안 쓰는 부분은 정리해, 지운 쪽이 파일 속에 남지 않게 한다.
+ *   · 합치기(다른 PDF의 쪽을 붙임) · 나누기(고른 쪽만 새 PDF)는 새로 복사하므로 붙인/나눈 쪽의 입력 칸·목차는 사라진다 → 저장 전 안내.
+ *   · 양식 칸 채우기: PDF의 입력 칸 사각형을 읽어, 쓴 글(한글 포함)을 그림으로 그려 그 자리에 박는다(칸 자체는 비워 둠). 글꼴을 들이지 않는다.
+ *   · 전자서명이 든 PDF는 다시 쓰면 서명이 무효가 되므로 쪽 정리·양식 채우기를 막고 「수정 요청」으로 안내한다.
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+
+  var FAMILY = 'Helvetica, Arial, "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo", sans-serif';
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function cols() { var w = global.innerWidth; return w >= 900 ? 6 : (w >= 640 ? 5 : 3); }
+  function perRow() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }
+
+  // ---- 문서 정보(입력 칸 · 목차 · 전자서명) — 구현 첫 단계에서 pdf-lib 로 읽는다 ----
+  function readInfo(api) {
+    return Promise.all([api.loadLib(), api.getBytes()]).then(function (r) {
+      var L = r[0];
+      return L.PDFDocument.load(r[1], { updateMetadata: false, ignoreEncryption: false }).then(function (doc) {
+        var info = { hasForm: false, hasOutline: false, signed: false };
+        try { info.hasOutline = doc.catalog.has(L.PDFName.of('Outlines')); } catch (e) {}
+        try {
+          var form = doc.getForm(), fs = form.getFields();
+          info.hasForm = fs.length > 0;
+          fs.forEach(function (f) { if (f instanceof L.PDFSignature) { try { if (f.acroField.dict.has(L.PDFName.of('V'))) info.signed = true; } catch (e) {} } });
+        } catch (e) {}
+        try { var perms = doc.catalog.get(L.PDFName.of('Perms')); if (perms) info.signed = true; } catch (e) {}
+        return info;
+      });
+    });
+  }
+  function signedBlock(api) {
+    var body = el('div'); body.appendChild(el('div', '', '이 PDF에는 전자서명이 들어 있어서 고치면 서명이 무효가 됩니다. 폰에서는 고치지 않고 「수정 요청」으로 보내 주십시오.'));
+    api.ctx.sheet({ title: '전자서명이 든 PDF입니다', body: body, buttons: [{ label: '닫기' }].concat(api.ctx.fixAvail() ? [{ label: '수정 요청', primary: true, onClick: function () { setTimeout(function () { api.ctx.requestFix(); }, 80); return true; } }] : []) });
+  }
+  // 입력 칸·목차를 잃을 때(합치기·나누기) 저장 전 안내 — 문서 안에 있을 때만 보인다
+  function lossNote(info, what) {
+    var parts = []; if (info.hasForm) parts.push('입력 칸'); if (info.hasOutline) parts.push('목차(차례)');
+    var josa = info.hasOutline ? '가' : '이';
+    return parts.length ? ('이 PDF에는 ' + parts.join('과 ') + josa + ' 있어요. ' + what + '입력 칸과 목차는 사라져요.') : '';
+  }
+
+  // ============================== 쪽 정리 화면 ==============================
+  function openPages(api) {
+    var ctx = api.ctx, root = api.root;
+    if (root.querySelector('.spp')) return;
+    function start() {
+      ctx.busy('문서를 확인하는 중…');
+      readInfo(api).catch(function () { return { hasForm: false, hasOutline: false, signed: false, unknown: true }; }).then(function (info) {
+        if (info.signed) { ctx.busy(null); signedBlock(api); return; }
+        var flat = api.hasAnns() ? (ctx.busy('넣은 것을 반영하는 중…'), api.flattenAnns()) : Promise.resolve(false);
+        return flat.then(function () { ctx.busy(null); build(api, info); });
+      }).catch(function (e) { ctx.busy(null); ctx.toast('쪽 정리를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+    }
+    if (api.hasAnns()) ctx.confirm('넣은 것이 있어요', '넣은 형광펜·글·서명을 먼저 문서에 반영한 뒤 쪽 정리를 합니다. 반영한 뒤에도 「되돌리기」로 취소할 수 있어요.', '반영하고 쪽 정리', start, { cancelLabel: '취소' });
+    else start();
+  }
+
+  function build(api, info) {
+    var ctx = api.ctx, pdfjs = api.pdfjs, N = api.pageCount();
+    var items = [], hist = [], sel = {}, exts = [], thumbs = {}, destroyed = false, drag = null, io = null;
+    for (var i = 0; i < N; i++) items.push({ k: 'm', i: i, rot: 0 });
+    var back = el('div', 'spp'), bar = el('div', 'spp-bar'), grid = el('div', 'spp-grid'), foot = el('div', 'spp-foot');
+    var tt = el('div', 'spp-t'), btnC = el('button', 'spp-hb', '취소'), btnU = el('button', 'spp-hb', '↶'), btnOk = el('button', 'spp-hb ok', '적용');
+    [btnC, btnU, btnOk].forEach(function (b) { b.type = 'button'; });
+    btnU.setAttribute('aria-label', '되돌리기');
+    bar.appendChild(btnC); bar.appendChild(tt); bar.appendChild(btnU); bar.appendChild(btnOk);
+    var hint = el('div', 'spp-hint', '쪽을 눌러 고르고, 꾹 눌러 끌면 순서가 바뀌어요');
+    back.appendChild(bar); back.appendChild(hint); back.appendChild(grid); back.appendChild(foot);
+    api.root.appendChild(back);
+
+    function snap() { return JSON.stringify(items); }
+    function push() { hist.push(snap()); if (hist.length > 40) hist.shift(); btnU.disabled = false; }
+    function changed() { return snap() !== JSON.stringify(items0()); }
+    function items0() { var a = []; for (var i = 0; i < N; i++) a.push({ k: 'm', i: i, rot: 0 }); return a; }
+    function selIdx() { var a = []; items.forEach(function (it, idx) { if (sel[idx]) a.push(idx); }); return a; }
+
+    // ---- 그리기 ----
+    function docOf(it) { return it.k === 'm' ? api.pdfDoc() : exts[it.d].pdf; }
+    function drawThumb(cell, it) {
+      var host = cell.querySelector('.spp-th');
+      var token = it.k + (it.d == null ? '' : it.d) + ':' + it.i;
+      if (host.getAttribute('data-t') === token) return;
+      host.setAttribute('data-t', token);
+      docOf(it).getPage(it.i + 1).then(function (pg) {
+        if (destroyed) return;
+        var vp0 = pg.getViewport({ scale: 1 }), w = Math.max(80, Math.min(240, cell.clientWidth || 110)) * Math.min(2, global.devicePixelRatio || 1);
+        var vp = pg.getViewport({ scale: w / vp0.width });
+        var cv = document.createElement('canvas'); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+        return pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function () {
+          if (destroyed || host.getAttribute('data-t') !== token) { cv.width = 0; return; }
+          host.innerHTML = ''; host.appendChild(cv); try { pg.cleanup(); } catch (e) {}
+          host._ratio = vp.width / vp.height; applyRot(cell, it);
+        });
+      }).catch(function () {});
+    }
+    function applyRot(cell, it) {
+      var host = cell.querySelector('.spp-th'), cv = host.firstChild; if (!cv || cv.tagName !== 'CANVAS') return;
+      var base = it.rot % 360, r = host._ratio || 0.7, w = Math.max(40, cell.clientWidth - 8), ch = w / r, turned = base % 180 !== 0;
+      host.style.height = Math.round(turned ? w * r : ch) + 'px';
+      cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(ch) + 'px';
+      cv.style.marginTop = (-Math.round(ch / 2)) + 'px';
+      cv.style.transform = 'rotate(' + base + 'deg)' + (turned ? ' scale(' + r + ')' : '');
+    }
+    function render() {
+      grid.innerHTML = ''; grid.style.gridTemplateColumns = 'repeat(' + cols() + ',1fr)';
+      items.forEach(function (it, idx) {
+        var c = el('div', 'spp-cell' + (sel[idx] ? ' sel' : '') + (it.k === 'x' ? ' ext' : '')); c.setAttribute('data-i', idx); c.setAttribute('role', 'button');
+        c.setAttribute('aria-label', (idx + 1) + '쪽' + (sel[idx] ? ' 선택됨' : ''));
+        var th = el('div', 'spp-th'); th.appendChild(el('i', 'spp-ph', '…')); c.appendChild(th);
+        c.appendChild(el('b', 'spp-n', String(idx + 1)));
+        var ck = el('span', 'spp-ck', '✓'); c.appendChild(ck);
+        if (it.rot) c.appendChild(el('span', 'spp-rot', '↻' + it.rot));
+        grid.appendChild(c); bindCell(c, idx);
+      });
+      tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '장 고름' : '');
+      btnOk.disabled = !changed() || !items.length; btnU.disabled = !hist.length;
+      if (io) io.disconnect();
+      io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { var i = +en.target.getAttribute('data-i'); drawThumb(en.target, items[i]); } }); }, { root: grid, rootMargin: '200px' });
+      [].slice.call(grid.children).forEach(function (c) { io.observe(c); });
+      renderFoot();
+    }
+    function renderFoot() {
+      foot.innerHTML = '';
+      var any = selIdx().length > 0;
+      [['↻', '회전', rotate, any], ['🗑', '삭제', del, any], ['◀', '앞으로', function () { move(-1); }, any], ['▶', '뒤로', function () { move(1); }, any], ['＋', '합치기', merge, true], ['✂', '나누기', split, any]].forEach(function (d) {
+        var b = el('button', 'spp-fb'); b.type = 'button'; b.disabled = !d[3]; b.appendChild(el('span', 't-g', d[0])); b.appendChild(el('span', 't-l', d[1])); b.onclick = d[2]; foot.appendChild(b);
+      });
+    }
+
+    // ---- 고르기 · 끌어서 순서 바꾸기(꾹 눌러 집기) ----
+    function bindCell(c, idx) {
+      var timer = 0, startX = 0, startY = 0, moved = false, lifted = false, pid = null;
+      c.addEventListener('pointerdown', function (e) {
+        if (!e.isPrimary || (e.button != null && e.button > 0)) return;
+        startX = e.clientX; startY = e.clientY; moved = false; lifted = false; pid = e.pointerId;
+        clearTimeout(timer);
+        timer = setTimeout(function () { lifted = true; drag = { from: idx, to: idx, cell: c }; c.classList.add('lift'); try { c.setPointerCapture(pid); } catch (x) {} if (global.navigator.vibrate) { try { global.navigator.vibrate(12); } catch (x) {} } }, 380);
+      });
+      c.addEventListener('pointermove', function (e) {
+        if (!e.isPrimary) return;
+        if (!lifted) { if (Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) > 8) { moved = true; clearTimeout(timer); } return; }
+        e.preventDefault(); moved = true;
+        c.style.transform = 'translate(' + (e.clientX - startX) + 'px,' + (e.clientY - startY) + 'px) scale(1.06)';
+        c.style.pointerEvents = 'none';
+        var t = document.elementFromPoint(e.clientX, e.clientY); c.style.pointerEvents = '';
+        var tc = t && t.closest ? t.closest('.spp-cell') : null; if (tc) { drag.to = +tc.getAttribute('data-i'); [].slice.call(grid.children).forEach(function (g) { g.classList.toggle('drop', g === tc && g !== c); }); }
+        var gr = grid.getBoundingClientRect(); if (e.clientY < gr.top + 50) grid.scrollTop -= 14; else if (e.clientY > gr.bottom - 50) grid.scrollTop += 14;   // 가장자리에서 자동으로 넘김
+      });
+      function end(e) {
+        clearTimeout(timer);
+        if (lifted && drag) {
+          var from = drag.from, to = drag.to; drag = null; c.classList.remove('lift'); c.style.transform = '';
+          if (to !== from) { push(); var it = items.splice(from, 1)[0]; items.splice(to, 0, it); var ns = {}; ns[to] = true; sel = ns; }
+          render(); return;
+        }
+        if (e.type === 'pointerup' && !moved) { sel[idx] = !sel[idx]; if (!sel[idx]) delete sel[idx]; c.classList.toggle('sel', !!sel[idx]); tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '장 고름' : ''); renderFoot(); }
+      }
+      c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+      c.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+    grid.addEventListener('touchmove', function (e) { if (drag) e.preventDefault(); }, { passive: false });
+
+    // ---- 동작 ----
+    function need() { if (!selIdx().length) { ctx.toast('먼저 쪽을 눌러 고르십시오.', 2200); return false; } return true; }
+    function rotate() { if (!need()) return; push(); selIdx().forEach(function (i) { items[i].rot = (items[i].rot + 90) % 360; }); render(); ctx.toast('오른쪽으로 돌렸어요', 1600); }
+    function del() {
+      if (!need()) return; var s = selIdx();
+      if (s.length >= items.length) { ctx.toast('모든 쪽을 지울 수는 없어요.', 2600); return; }
+      push(); items = items.filter(function (_, i) { return !sel[i]; }); sel = {}; render(); ctx.toast(s.length + '쪽을 지웠어요(적용 전에는 되돌릴 수 있어요)', 2600);
+    }
+    function move(d) {
+      if (!need()) return; var s = selIdx(); if (d < 0 ? s[0] === 0 : s[s.length - 1] === items.length - 1) { ctx.toast('더 갈 곳이 없어요.', 1600); return; }
+      push(); var ns = {};
+      if (d < 0) { s.forEach(function (i) { var it = items.splice(i, 1)[0]; items.splice(i - 1, 0, it); ns[i - 1] = true; }); }
+      else { s.slice().reverse().forEach(function (i) { var it = items.splice(i, 1)[0]; items.splice(i + 1, 0, it); ns[i + 1] = true; }); }
+      sel = ns; render();
+      var c0 = grid.children[Object.keys(ns)[0]]; if (c0 && c0.scrollIntoView) { try { c0.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+    }
+    btnU.onclick = function () { if (!hist.length) return; items = JSON.parse(hist.pop()); sel = {}; render(); };
+    // 합치기: 다른 PDF 의 쪽을 고른 쪽 뒤(없으면 맨 끝)에 붙인다
+    function merge() {
+      var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,.pdf'; inp.style.display = 'none';
+      inp.onchange = function () {
+        var f = inp.files && inp.files[0]; if (inp.parentNode) inp.parentNode.removeChild(inp); if (!f) return;
+        ctx.busy('붙일 PDF를 읽는 중…');
+        f.arrayBuffer().then(function (buf) {
+          var bytes = new Uint8Array(buf);
+          return pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise.then(function (pd) {
+            return api.loadLib().then(function (L) { return L.PDFDocument.load(bytes.slice(), { updateMetadata: false }); }).then(function (ld) {
+              var inf = { hasForm: false, hasOutline: false };
+              try { inf.hasOutline = ld.catalog.has(api.PDFName('Outlines')); } catch (e) {} try { inf.hasForm = ld.getForm().getFields().length > 0; } catch (e) {}
+              return { pd: pd, bytes: bytes, inf: inf, name: f.name };
+            });
+          });
+        }).then(function (x) {
+          ctx.busy(null);
+          var note = lossNote(x.inf, '붙이는 쪽의 ');
+          var go = function () {
+            var d = exts.push({ pdf: x.pd, bytes: x.bytes, name: x.name }) - 1, s = selIdx(), at = s.length ? s[s.length - 1] + 1 : items.length;
+            push(); var add = []; for (var i = 0; i < x.pd.numPages; i++) add.push({ k: 'x', d: d, i: i, rot: 0 });
+            items.splice.apply(items, [at, 0].concat(add)); sel = {}; add.forEach(function (_, j) { sel[at + j] = true; }); render();
+            ctx.toast(x.pd.numPages + '쪽을 붙였어요', 2200);
+          };
+          if (note) ctx.confirm('붙이기 전에 알려 드려요', note, '그래도 붙이기', go, { cancelLabel: '취소' }); else go();
+        }).catch(function (e) { ctx.busy(null); ctx.toast('PDF를 붙이지 못했습니다 — ' + ((e && e.message) || '읽을 수 없는 파일'), 4200); });
+      };
+      document.body.appendChild(inp); inp.click();
+    }
+    // 나누기: 고른 쪽만 새 PDF 로 저장(지금 화면의 쪽 정리 결과 기준, 원래 문서는 그대로)
+    function split() {
+      if (!need()) return; var s = selIdx();
+      var note = lossNote(info, '새 파일에는 ');
+      var go = function () {
+        ctx.busy('고른 쪽으로 새 파일을 만드는 중…');
+        build_(s).then(function (out) {
+          ctx.busy(null);
+          var name = ctx.name.replace(/\.pdf$/i, '') + '_쪽' + (s.length === 1 ? (s[0] + 1) : (s[0] + 1) + '-' + (s[s.length - 1] + 1)) + '.pdf';
+          return ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name, { exact: true }).then(function (ok) { if (ok !== false) ctx.toast('고른 ' + s.length + '쪽을 새 파일로 저장했어요(지금 화면은 그대로)', 3200); });
+        }).catch(function (e) { ctx.busy(null); ctx.toast('나누지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+      };
+      ctx.noticeThen(function () { if (note) ctx.confirm('나누기 전에 알려 드려요', note, '그래도 나누기', go, { cancelLabel: '취소' }); else go(); });
+    }
+    function build_(idxs) {      // 고른 쪽(회전 포함)만으로 새 문서
+      return api.loadLib().then(function (L) {
+        return api.getBytes().then(function (b) { return L.PDFDocument.load(b, { updateMetadata: false }); }).then(function (src) {
+          var out, extDocs = {};
+          return L.PDFDocument.create().then(function (o) {
+            out = o; var chain = Promise.resolve();
+            idxs.forEach(function (ix) {
+              var it = items[ix];
+              chain = chain.then(function () {
+                if (it.k === 'm') return out.copyPages(src, [it.i]);
+                return (extDocs[it.d] ? Promise.resolve(extDocs[it.d]) : L.PDFDocument.load(exts[it.d].bytes, { updateMetadata: false }).then(function (d) { extDocs[it.d] = d; return d; })).then(function (d) { return out.copyPages(d, [it.i]); });
+              }).then(function (cp) { var pg = cp[0]; if (it.rot) pg.setRotation(L.degrees(((pg.getRotation().angle || 0) + it.rot) % 360)); out.addPage(pg); });
+            });
+            return chain;
+          }).then(function () { return out.save(); });
+        });
+      });
+    }
+
+    // ---- 적용: 원본 문서 안에서 쪽을 빼고 같은 쪽을 다시 끼운다 ----
+    function applyAll() {
+      ctx.busy('쪽을 정리하는 중…');
+      var L;
+      return api.loadLib().then(function (l) { L = l; return api.getBytes(); }).then(function (b) { return L.PDFDocument.load(b, { updateMetadata: false }); }).then(function (src) {
+        var pages = src.getPages(), n = pages.length, used = {}, extLoaded = {}, chain = Promise.resolve(), pick = new Array(items.length);
+        items.forEach(function (it, pos) { if (it.k === 'm') { used[it.i] = true; pick[pos] = pages[it.i]; } });
+        var extWant = {}; items.forEach(function (it, pos) { if (it.k === 'x') (extWant[it.d] = extWant[it.d] || []).push([pos, it.i]); });
+        Object.keys(extWant).forEach(function (d) {
+          chain = chain.then(function () { return L.PDFDocument.load(exts[d].bytes, { updateMetadata: false }); }).then(function (ed) { return src.copyPages(ed, extWant[d].map(function (x) { return x[1]; })); }).then(function (cp) { extWant[d].forEach(function (x, j) { pick[x[0]] = cp[j]; }); });
+        });
+        return chain.then(function () {
+          var removed = []; pages.forEach(function (pg, i) { if (!used[i]) removed.push(pg); });
+          for (var i = n - 1; i >= 0; i--) src.removePage(i);
+          items.forEach(function (it, pos) { var pg = pick[pos]; if (it.rot) pg.setRotation(L.degrees(((pg.getRotation().angle || 0) + it.rot) % 360)); src.insertPage(pos, pg); });
+          return { src: src, removed: removed, L: L };
+        });
+      }).then(function (r) {
+        purge(r.L, r.src, r.removed);
+        return r.src.save().then(function (out1) {
+          // 안 쓰는 부분 정리(GC)는 점검에 통과할 때만 쓴다 — 지운 쪽의 그림·글이 파일에 남지 않게
+          var tried = Promise.resolve(out1);
+          return Promise.all([L.PDFDocument.load(out1, { updateMetadata: false })]).then(function (x) {
+            var d2 = x[0]; gc(L, d2);
+            return d2.save().then(function (out2) { return verify(out2, items.length).then(function (ok) { return ok ? out2 : out1; }, function () { return out1; }); });
+          }).catch(function () { return out1; }).then(function (best) { return verify(best, items.length).then(function () { return best; }); });
+        });
+      }).then(function (out) { return api.applyBytes(out, '쪽 정리'); });
+    }
+    function verify(bytes, expect) {
+      return pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise.then(function (d) { var ok = d.numPages === expect; try { d.destroy(); } catch (e) {} if (!ok) throw new Error('쪽 수 점검 실패'); return true; });
+    }
+    function purge(L, doc, removed) {          // 지운 쪽의 내용·자원·주석을 비운다(목차·링크가 가리키는 빈 쪽만 남을 수 있다)
+      var ctxx = doc.context, N = L.PDFName;
+      removed.forEach(function (pg) {
+        try {
+          var d = pg.node; d.set(N.of('Contents'), ctxx.register(ctxx.stream(new Uint8Array(0))));
+          ['Resources', 'Annots', 'Thumb', 'Metadata', 'PieceInfo'].forEach(function (k) { try { d.delete(N.of(k)); } catch (e) {} });
+        } catch (e) {}
+      });
+    }
+    function gc(L, doc) {                      // 문서 뿌리에서 닿지 않는 개체를 지운다(반복문 — 목차가 길어도 안전)
+      var c = doc.context, seen = {}, stack = [];
+      ['Root', 'Info', 'Encrypt'].forEach(function (k) { var v = c.trailerInfo[k]; if (v) stack.push(v); });
+      while (stack.length) {
+        var o = stack.pop(); if (!o) continue;
+        if (o instanceof L.PDFRef) { var key = o.toString(); if (seen[key]) continue; seen[key] = 1; var t = c.lookup(o); if (t) stack.push(t); }
+        else if (o instanceof L.PDFDict) { o.entries().forEach(function (e) { stack.push(e[1]); }); }
+        else if (o instanceof L.PDFArray) { for (var i = 0; i < o.size(); i++) stack.push(o.get(i)); }
+        else if (o instanceof L.PDFStream) { stack.push(o.dict); }
+      }
+      c.enumerateIndirectObjects().forEach(function (e) { if (!seen[e[0].toString()]) c.delete(e[0]); });
+    }
+
+    function close() {
+      destroyed = true; if (io) io.disconnect();
+      exts.forEach(function (x) { try { x.pdf.destroy(); } catch (e) {} });
+      if (back.parentNode) back.parentNode.removeChild(back);
+      api.pagesClosed();
+    }
+    btnC.onclick = function () { if (changed()) ctx.confirm('정리한 내용을 버릴까요?', '적용하지 않고 닫으면 지금까지 정리한 것이 사라져요.', '버리고 닫기', close, { danger: true, cancelLabel: '계속 정리' }); else close(); };
+    btnOk.onclick = function () {
+      if (btnOk.disabled) return;
+      var s = items.filter(function (it) { return it.k === 'x'; });
+      var go = function () {
+        applyAll().then(function () { ctx.busy(null); close(); ctx.toast('쪽을 정리했어요(' + items.length + '쪽). 저장은 「사본 저장」으로 하십시오.', 3600); }).catch(function (e) { ctx.busy(null); ctx.toast('쪽 정리를 적용하지 못했습니다 — ' + ((e && e.message) || e), 5200); });
+      };
+      go();
+    };
+    api.onPagesBack(function () { btnC.onclick(); return true; });
+    render();
+  }
+
+  // ============================== 양식 칸 채우기 ==============================
+  // PDF.js 가 읽어 주는 입력 칸(Widget)의 사각형을 쪽 위에 표시하고, 누르면 글을 적게 한다. 적은 글은 그림으로 그 자리에 박는다.
+  function fillPng(text, w, h) {
+    var k = 3, size = Math.max(7, Math.min(16, h * 0.7)), cv = document.createElement('canvas'), g;
+    function lay() { g = cv.getContext('2d'); g.font = size + 'px ' + FAMILY; return g.measureText(text).width; }
+    cv.width = 4; cv.height = 4; var tw = lay();
+    while (tw > w - 4 && size > 6) { size -= 0.5; tw = lay(); }
+    cv.width = Math.ceil(w * k); cv.height = Math.ceil(h * k); g = cv.getContext('2d'); g.scale(k, k);
+    g.font = size + 'px ' + FAMILY; g.fillStyle = '#111'; g.textBaseline = 'middle'; g.fillText(text, 2, h / 2 + 0.5);
+    return cv.toDataURL('image/png');
+  }
+  function checkPng(w, h) {
+    var k = 3, cv = document.createElement('canvas'); cv.width = Math.ceil(w * k); cv.height = Math.ceil(h * k);
+    var g = cv.getContext('2d'); g.scale(k, k); g.strokeStyle = '#111'; g.lineWidth = Math.max(1.4, Math.min(w, h) * 0.12); g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(w * 0.2, h * 0.55); g.lineTo(w * 0.42, h * 0.78); g.lineTo(w * 0.82, h * 0.24); g.stroke();
+    return cv.toDataURL('image/png');
+  }
+  function formMode(api) {
+    var ctx = api.ctx;
+    if (api.formOn()) { api.formStop(); return; }
+    ctx.busy('입력 칸을 찾는 중…');
+    readInfo(api).catch(function () { return { signed: false }; }).then(function (info) {
+      ctx.busy(null);
+      if (info.signed) { signedBlock(api); return; }
+      return collectWidgets(api).then(function (list) {
+        if (!list.length) { ctx.toast('이 PDF에는 채울 입력 칸이 없어요. 「글」 도구로 원하는 자리에 글을 넣을 수 있어요.', 4200); return; }
+        api.formStart(list, function (w, a) { onWidget(api, w, a); });
+        ctx.toast('칸을 눌러 글을 적어 보세요(' + list.length + '칸)', 3000);
+      });
+    }).catch(function (e) { ctx.busy(null); ctx.toast('입력 칸을 읽지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+  }
+  function collectWidgets(api) {
+    var pdf = api.pdfDoc(), n = api.pageCount(), out = [], chain = Promise.resolve();
+    for (var p = 1; p <= n; p++) (function (p) {
+      chain = chain.then(function () { return pdf.getPage(p); }).then(function (pg) {
+        var vp = pg.getViewport({ scale: 1 });
+        return pg.getAnnotations({ intent: 'display' }).then(function (an) {
+          an.forEach(function (a) {
+            if (a.subtype !== 'Widget' || !a.rect || a.readOnly) return;
+            var r = vp.convertToViewportRectangle(a.rect), x = Math.min(r[0], r[2]), y = Math.min(r[1], r[3]), w = Math.abs(r[2] - r[0]), h = Math.abs(r[3] - r[1]);
+            if (w < 4 || h < 4) return;
+            var kind = a.fieldType === 'Tx' ? 'text' : (a.fieldType === 'Btn' && !a.pushButton ? 'check' : (a.fieldType === 'Sig' ? 'sig' : (a.fieldType === 'Ch' ? 'text' : '')));
+            if (!kind) return;
+            out.push({ page: p, x: x, y: y, w: w, h: h, kind: kind, name: a.fieldName || '', id: p + ':' + (a.id || out.length) });
+          });
+          try { pg.cleanup(); } catch (e) {}
+        });
+      });
+    })(p);
+    return chain.then(function () { return out; });
+  }
+  function onWidget(api, w, existing) {
+    var ctx = api.ctx;
+    if (w.kind === 'sig') { ctx.toast('서명 칸은 폰에서 채울 수 없어요. 「서명」 도구로 그림 서명을 원하는 자리에 넣을 수 있어요.', 4200); return; }
+    if (w.kind === 'check') {
+      if (existing) { api.removeFill(existing); ctx.toast('체크를 지웠어요', 1600); } else { api.addFill(w, checkPng(w.w, w.h), { check: true }); ctx.toast('체크했어요', 1600); }
+      return;
+    }
+    var body = el('div'), ta = el(w.h > 28 ? 'textarea' : 'input', 'sp-ta'); if (w.h <= 28) ta.type = 'text'; else ta.rows = 3;
+    ta.value = existing && existing.fill ? existing.fill.text : ''; ta.placeholder = '이 칸에 넣을 글';
+    body.appendChild(ta); body.appendChild(el('div', 'so-sheet-note', '채운 뒤에는 칸에서 다시 고칠 수 없고 글 검색·복사가 안 돼요(저장 전에는 되돌릴 수 있어요).'));
+    ctx.sheet({
+      title: '칸에 글 넣기', body: body, keep: function () { return ta.value !== (existing && existing.fill ? existing.fill.text : ''); },
+      buttons: [{ label: '취소' }].concat(existing ? [{ label: '지우기', danger: true, onClick: function () { api.removeFill(existing); return true; } }] : []).concat([{
+        label: '넣기', primary: true, onClick: function () {
+          var t = ta.value.replace(/\s+$/, '').replace(/\n/g, ' ');
+          if (!t) { ctx.toast('넣을 글을 먼저 적어 주십시오.', 1800); return false; }
+          if (existing) api.removeFill(existing, true);
+          api.addFill(w, fillPng(t, w.w, w.h), { text: t });
+          return true;
+        } }])
+    });
+    setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) {} }, 220);
+  }
+
+  global.SOPdfPages = { openPages: openPages, formMode: formMode, perRow: perRow };
+})(window);

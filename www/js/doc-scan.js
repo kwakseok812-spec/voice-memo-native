@@ -1547,6 +1547,7 @@
     col.appendChild(c);
     function call(k) { return function () { try { a[k] && a[k](f); } catch (e) { toast('실행하지 못했습니다.'); } }; }
     if (a.share) col.appendChild(h('button', 'dsc-btn dsc-pri dsc-big', '공유함에 넣기', call('share')));
+    if (a.pages) col.appendChild(h('button', 'dsc-btn dsc-big', '쪽 더 정리하기 → ' + ((window.SOffice && SOffice.NAME) || 'S-Office') + '로', call('pages')));   // O-0861: 만든 PDF의 쪽 순서·삭제·합치기는 S-Office 쪽 정리에서(스캔 화면은 사진 쪽 저장소를 정리하는 화면이라 부품을 공유하지 않고 한 줄로 잇는다)
     if (a.view) col.appendChild(h('button', 'dsc-btn dsc-big', '문서 열기', call('view')));
     if (a.save) col.appendChild(h('button', 'dsc-btn dsc-big', '폰에 저장', call('save')));
     foot([h('button', 'dsc-btn', '닫기', function () { closeUi(false, false); })]);

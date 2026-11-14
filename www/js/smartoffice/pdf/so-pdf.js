@@ -4,6 +4,7 @@
  * 이 파일의 코드는 자체 작성(이음오피스 소스 복사 없음). AI 기능 없음. 원본은 덮어쓰지 않고 「원래이름_수정.pdf」 사본만 저장.
  * 하는 일: 세로 연속 쪽 보기(보이는 쪽 근처만 그림) · 핀치/버튼 확대 · 쪽 이동 · 형광펜 · 글 얹기 · 메모 · 손글씨 서명.
  * 하지 않는 일: PDF 본문 글 직접 수정.
+ * v10.2(O-0861) 스위치 SO_PDF_PAGES: 쪽 정리·합치기·나누기·양식 칸 채우기(so-pdf-pages.js, 켜져 있을 때만 불러옴) · 도구줄 6칸+더보기.
  */
 (function (global) {
   'use strict';
@@ -24,7 +25,8 @@
   function newState(ctx) {
     return { ctx: ctx, dead: false, pdf: null, bytes: null, n: 0, pages: [], maxW: 1, z: 1, s: 1, fit: 1, mode: 'hand',
       bigDoc: false, hlColor: HL_COLORS[0], txColor: TX_COLORS[0], size: 14, sig: null, anns: [], hist: [[]], rev: 0, savedRev: 0, sel: null,
-      rendering: false, pinch: null, dlg: null, idc: 0, curPage: 1, io: null, ro: null, failedToasted: false, cache: null };
+      rendering: false, pinch: null, dlg: null, idc: 0, curPage: 1, io: null, ro: null, failedToasted: false, cache: null,
+      bytes: null, workStack: [], savedWork: 0, form: null, pagesBack: null, bucket: 0 };
   }
 
   // ---------------------------------------------------------------- 화면 만들기
@@ -53,15 +55,8 @@
     // 아래 도구줄
     var tb = el('div', 'sp-tools'); root.appendChild(tb); S.tb = tb;
     S.opt = el('div', 'sp-opt'); tb.appendChild(S.opt);
-    var row = el('div', 'sp-row'); tb.appendChild(row);
-    S.modeBtns = {};
-    [['hand', '✋', '보기'], ['hl', '🖍', '형광펜'], ['text', 'T', '글'], ['memo', '📝', '메모'], ['sig', '✍', '서명']].forEach(function (d) {
-      var b = el('button', 'sp-tool'); b.type = 'button';
-      b.innerHTML = '<i></i><span></span>'; b.firstChild.textContent = d[1]; b.lastChild.textContent = d[2];
-      b.onclick = function () { setMode(d[0]); };
-      row.appendChild(b); S.modeBtns[d[0]] = b;
-    });
-    var ub = el('button', 'sp-tool'); ub.type = 'button'; ub.innerHTML = '<i>↶</i><span>되돌리기</span>'; ub.onclick = undo; row.appendChild(ub); S.undoBtn = ub;
+    var row = el('div', 'sp-row'); tb.appendChild(row); S.row = row;
+    renderToolRow();
     setMode('hand'); refreshUndo();
 
     // 확대 손동작(두 손가락) · 컴퓨터 ctrl+휠
@@ -72,7 +67,7 @@
     sc.addEventListener('wheel', function (e) { if (e.ctrlKey) { e.preventDefault(); zoomTo(S.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX, e.clientY); } }, { passive: false });
     var raf = 0;
     sc.addEventListener('scroll', function () { pillWake(); if (raf) return; raf = requestAnimationFrame(function () { raf = 0; if (!S || S.dead) return; updateCurPage(); }); }, { passive: true });
-    if (global.ResizeObserver) { S.ro = new ResizeObserver(function () { if (S && !S.dead && S.pages.length) { layout(); pump(); } }); S.ro.observe(sc); }
+    if (global.ResizeObserver) { S.ro = new ResizeObserver(function () { if (S && !S.dead && S.pages.length) { layout(); pump(); if (plus() && S.bucket !== perRowN()) { renderToolRow(); setMode(S.mode); refreshUndo(); } } }); S.ro.observe(sc); }
     sc.addEventListener('pointerdown', function (e) { if (e.target === sc || e.target === inner) select(null); });
     pillWake();
   }
@@ -86,6 +81,7 @@
   function setMode(m) {
     S.mode = m; S.root.setAttribute('data-mode', m); select(null);
     Object.keys(S.modeBtns).forEach(function (k) { S.modeBtns[k].classList.toggle('on', k === m); });
+    if (S.moreBtn) S.moreBtn.classList.toggle('on', !S.modeBtns[m]);
     renderOpt();
     var hint = { hl: '글 위를 손가락으로 쓸어 칠하십시오. 화면을 넘기려면 「보기」를 누르십시오.', text: '글을 넣을 자리를 한 번 누르십시오.', memo: '메모를 붙일 자리를 한 번 누르십시오.', sig: '서명을 넣을 자리를 한 번 누르십시오.' }[m];
     if (hint) S.ctx.toast(hint, 2400);
@@ -242,13 +238,14 @@
   function commit() {
     S.hist.push(S.anns.map(function (a) { return Object.assign({}, a); }));
     if (S.hist.length > 60) S.hist.shift();
-    S.rev++; S.ctx.setDirty(S.rev !== S.savedRev); refreshUndo();
+    S.rev++; updateDirty(); refreshUndo();
   }
-  function refreshUndo() { if (S.undoBtn) S.undoBtn.disabled = S.hist.length < 2; }
+  function refreshUndo() { if (S.undoBtn) S.undoBtn.disabled = S.hist.length < 2 && !S.workStack.length; }
+  function updateDirty() { S.ctx.setDirty(S.rev !== S.savedRev || S.workStack.length !== S.savedWork); }
   function undo() {
-    if (S.hist.length < 2) return;
+    if (S.hist.length < 2) { if (S.workStack.length) undoWork(); return; }
     S.hist.pop(); S.anns = S.hist[S.hist.length - 1].map(function (a) { return Object.assign({}, a); });
-    S.rev++; S.ctx.setDirty(S.rev !== S.savedRev);
+    S.rev++; updateDirty();
     select(null); remountAll(); refreshUndo();
   }
   function remountAll() {
@@ -307,6 +304,7 @@
       if (S.pinch || !ev.isPrimary) return;
       if (S.mode === 'hl' && a.type === 'hl') return;
       ev.stopPropagation(); select(a.id);
+      if (a.fill) return;                  // 양식 칸에 박은 글은 제자리(옮기지 않는다)
       var P = S.pages[a.page - 1], sx = ev.clientX, sy = ev.clientY, ox = a.x, oy = a.y, moved = false;
       try { e.setPointerCapture(ev.pointerId); } catch (x) {}
       function mv(m) {
@@ -337,6 +335,8 @@
       btn('수정', function () { textDialog(a.type, a, null); });
       btn('글자 키우기', function () { a.size = Math.min(60, a.size * 1.2); layoutText(a); remount(a); commit(); });
       btn('줄이기', function () { a.size = Math.max(6, a.size / 1.2); layoutText(a); remount(a); commit(); });
+    } else if (a.type === 'stamp' && a.fill) {
+      if (a.fill.text != null && S.form) btn('수정', function () { var w = S.form.list.filter(function (x) { return x.id === a.fill.wid; })[0]; if (w) S.form.cb(w, a); });
     } else if (a.type === 'stamp') {
       btn('키우기', function () { scaleStamp(a, 1.2); });
       btn('줄이기', function () { scaleStamp(a, 1 / 1.2); });
@@ -360,7 +360,7 @@
   function bindOverlay(P) {
     var d = P.el;
     d.addEventListener('pointerdown', function (ev) {
-      if (S.pinch || !ev.isPrimary || ev.target.closest && ev.target.closest('.sp-ann')) return;
+      if (S.pinch || !ev.isPrimary || ev.target.closest && ev.target.closest('.sp-ann,.sp-wg')) return;
       var m = S.mode;
       if (m === 'hand') { if (S.sel != null) select(null); return; }
       var rect = d.getBoundingClientRect();
@@ -522,16 +522,18 @@
   }
   function dataBytes(url) { var b = atob(url.split(',')[1]), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
 
-  function save() {
-    var ctx = S.ctx, cur = S;
-    if (!S.anns.length) { ctx.toast('아직 넣은 것이 없습니다. 형광펜·글·메모·서명을 넣은 뒤 저장해 주십시오.', 3000); return; }
-    select(null);
-    ctx.busy('새 파일 만드는 중…');
-    var L, doc, font, byPage = {};
+  function getBytes() {
+    if (S.bytes) return Promise.resolve(S.bytes);
+    return S.ctx.file.arrayBuffer().then(function (b) { S.bytes = new Uint8Array(b); return S.bytes; });
+  }
+  // 지금 문서(쪽 정리 결과 포함) 위에 넣은 형광펜·글·메모·서명·양식 글을 그려 넣은 새 파일 바이트. 넣은 것이 없으면 지금 문서를 그대로 준다.
+  function buildOutput() {
+    var cur = S, L, doc, font, byPage = {};
+    if (!S.anns.length) return getBytes().then(function (b) { return b.slice(); });
     S.anns.forEach(function (a) { (byPage[a.page] = byPage[a.page] || []).push(a); });
     var nums = Object.keys(byPage).map(Number).sort(function (a, b) { return a - b; });
-    loadLib().then(function (lib) {
-      L = lib; return ctx.file.arrayBuffer();
+    return loadLib().then(function (lib) {
+      L = lib; return getBytes();
     }).then(function (buf) {
       return L.PDFDocument.load(new Uint8Array(buf), { updateMetadata: false });
     }).then(function (d) {
@@ -547,22 +549,32 @@
         });
       });
       return chain;
-    }).then(function () { return doc.save(); }).then(function (out) {
-      if (S !== cur || S.dead) return;
+    }).then(function () { return doc.save(); });
+  }
+  // 반환: Promise<true|false>(저장 성공 여부) — 「수정 요청」으로 넘어가기 전 저장이 이 값을 본다
+  function save() {
+    var ctx = S.ctx, cur = S;
+    if (!S.anns.length && !S.workStack.length) { ctx.toast('아직 고친 것이 없습니다. 형광펜·글·메모·서명·쪽 정리를 한 뒤 저장해 주십시오.', 3000); return Promise.resolve(false); }
+    select(null);
+    ctx.busy('새 파일 만드는 중…');
+    return buildOutput().then(function (out) {
+      if (S !== cur || S.dead) return false;
       var base = (ctx.name || 'document').replace(/\.pdf$/i, '');
       var name = base + '_수정.pdf';
       ctx.busy(null);
       var mySt = S;
       return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name)).then(function (ok) {
-        if (ok === false || S !== mySt) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
-        S.savedRev = S.rev; ctx.setDirty(false);
-        ctx.toast('사본으로 저장했습니다: ' + name + ' (원래 파일은 그대로)', 4200);
+        if (ok === false || S !== mySt) return false;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+        S.savedRev = S.rev; S.savedWork = S.workStack.length; ctx.setDirty(false);
+        ctx.toast('사본으로 저장했습니다 (원래 파일은 그대로)', 4200);
+        return true;
       });
     }).catch(function (e) {
-      if (S !== cur || S.dead) return;
+      if (S !== cur || S.dead) return false;
       ctx.busy(null);
       try { console.warn('[S-Office PDF] 저장 실패', e); } catch (x) {}
       ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000);
+      return false;
     });
   }
   function toPdf(vp, x, y) { var p = vp.convertToPdfPoint(x, y); return { x: p[0], y: p[1] }; }
@@ -607,17 +619,23 @@
   // ---------------------------------------------------------------- 임시 보관(snapshot) · 되살리기(restore)
   // 넣은 형광펜·글·메모·서명의 목록을 JSON 으로(없으면 null). 서명 그림은 데이터 주소로 담는다.
   function snapshot() {
-    if (!S || S.dead || !S.anns.length) return null;
+    if (!S || S.dead || (!S.anns.length && !S.workStack.length)) return null;
     var list = S.anns.map(function (a) {
       var o = { t: a.type, p: a.page, x: a.x, y: a.y };
       if (a.type === 'hl') { o.w = a.w; o.h = a.h; o.c = a.color; }
-      else if (a.type === 'stamp') { o.w = a.w; o.h = a.h; o.img = a.img; }
+      else if (a.type === 'stamp') { o.w = a.w; o.h = a.h; o.img = a.img; if (a.fill) o.fill = a.fill; }
       else { o.text = a.text; o.size = a.size; o.c = a.color; o.maxw = a.maxw; }
       return o;
     });
-    return { v: 1, n: S.n, anns: list };
+    return { v: 2, n: S.n, anns: list, work: (S.workStack.length && S.bytes) ? new Blob([S.bytes], { type: 'application/pdf' }) : null };
   }
   function restore(data) {
+    if (data && data.work instanceof Blob && S && !S.dead) {           // 쪽 정리를 한 문서였다면 그 결과 문서부터 되살린다
+      return data.work.arrayBuffer().then(function (b) { return applyBytes(new Uint8Array(b), '이어서', false); }).then(function () { var r = restoreAnns(data); r.applied += 1; return r; });
+    }
+    return restoreAnns(data);
+  }
+  function restoreAnns(data) {
     var rep = { applied: 0, skipped: 0 };
     if (!S || S.dead || !S.pages.length || !data || !Array.isArray(data.anns)) return rep;
     if (typeof data.n === 'number' && data.n !== S.n) {   // 저장해 둔 쪽 수와 지금 문서가 다르면 적용하지 않는다
@@ -635,6 +653,7 @@
         } else if (o.t === 'stamp') {
           if (!num(o.w) || !num(o.h) || typeof o.img !== 'string' || !png.test(o.img)) { rep.skipped++; return; }
           a.w = clamp(o.w, 8, P.w); a.h = clamp(o.h, 8, P.h); a.img = o.img;
+          if (o.fill && typeof o.fill === 'object') a.fill = { wid: String(o.fill.wid || ''), text: typeof o.fill.text === 'string' ? o.fill.text.slice(0, 2000) : undefined, check: !!o.fill.check };
         } else {
           if (typeof o.text !== 'string' || !o.text || !num(o.size) || !num(o.maxw) || !hex.test(o.c || '')) { rep.skipped++; return; }
           a.text = o.text.slice(0, 5000); a.size = clamp(o.size, 6, 60); a.color = o.c; a.maxw = clamp(o.maxw, 40, P.w);
@@ -651,6 +670,119 @@
     return rep;
   }
 
+  // ---------------------------------------------------------------- O-0861(v10.2) 쪽 정리 · 양식 채우기 연결
+  function plus() { return !!(S && S.ctx.flag && S.ctx.flag('pdf')); }
+  function perRowN() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }
+  function pagesMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-pages.js').then(function () { if (!global.SOPdfPages) throw new Error('쪽 정리 부품을 불러오지 못함'); return global.SOPdfPages; }); }
+  function openPagesScreen() {
+    if (S.form) formStop();
+    setMode('hand');
+    pagesMod().then(function (M) { M.openPages(pagesApi()); }).catch(function (e) { S.ctx.toast('쪽 정리를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+  }
+  function toggleForm() { pagesMod().then(function (M) { M.formMode(pagesApi()); }).catch(function (e) { S.ctx.toast('양식 채우기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
+  function pagesApi() {
+    return {
+      ctx: S.ctx, root: S.root, pdfjs: global.pdfjsLib, loadLib: loadLib, getBytes: getBytes,
+      hasAnns: function () { return S.anns.length > 0; },
+      flattenAnns: function () { return buildOutput().then(function (out) { return applyBytes(out, '반영'); }); },
+      applyBytes: function (b, label) { return applyBytes(b, label); },
+      pageCount: function () { return S.n; }, pdfDoc: function () { return S.pdf; },
+      PDFName: function (n) { return global.PDFLib.PDFName.of(n); },
+      onPagesBack: function (fn) { S.pagesBack = fn; }, pagesClosed: function () { S.pagesBack = null; },
+      formOn: function () { return !!S.form; }, formStop: formStop, formStart: formStart,
+      addFill: addFill, removeFill: removeFill
+    };
+  }
+  // 아래 도구줄: 접은 폰 6칸+더보기 · 펼침 10칸 · DeX 12칸. 가로로 밀지 않는다. (스위치가 꺼지면 예전 6칸 그대로)
+  function renderToolRow() {
+    var row = S.row; row.innerHTML = ''; S.modeBtns = {}; S.moreBtn = null; S.undoBtn = null; S.formBtn = null;
+    var D = {
+      hand: { i: '✋', l: '보기', mode: 'hand' }, hl: { i: '🖍', l: '형광펜', mode: 'hl' }, text: { i: 'T', l: '글', mode: 'text' }, memo: { i: '📝', l: '메모', mode: 'memo' }, sig: { i: '✍', l: '서명', mode: 'sig' },
+      undo: { i: '↶', l: '되돌리기', run: undo, undo: true }, pages: { i: '▦', l: '쪽 정리', run: openPagesScreen }, form: { i: '✎', l: '양식 채우기', run: toggleForm, form: true }
+    };
+    var list = plus() ? ['hand', 'hl', 'text', 'sig', 'pages', 'undo', 'memo', 'form'] : ['hand', 'hl', 'text', 'memo', 'sig', 'undo'];
+    var n = plus() ? perRowN() : 99, shown = list.length > n ? list.slice(0, n) : list, rest = list.length > n ? list.slice(n) : [];
+    S.bucket = perRowN();
+    function mk(id, host, inSheet) {
+      var d = D[id], b = el('button', inSheet ? 'sp-mb' : 'sp-tool'); b.type = 'button';
+      b.innerHTML = '<i></i><span></span>'; b.firstChild.textContent = d.i; b.lastChild.textContent = d.l;
+      b.onclick = function () { if (inSheet) S.ctx.closeSheet(); if (d.mode) setMode(d.mode); else d.run(); };
+      host.appendChild(b);
+      if (d.mode && !inSheet) S.modeBtns[d.mode] = b;
+      if (d.undo && !inSheet) S.undoBtn = b;
+      if (d.form && !inSheet) S.formBtn = b;
+      return b;
+    }
+    shown.forEach(function (id) { mk(id, row, false); });
+    if (rest.length) {
+      var mb = el('button', 'sp-tool'); mb.type = 'button'; mb.setAttribute('aria-label', '더보기'); mb.innerHTML = '<i>⋯</i><span>더보기</span>';
+      mb.onclick = function () {
+        var body = el('div', 'sp-mgrid'); rest.forEach(function (id) { mk(id, body, true); });
+        S.ctx.sheet({ title: '더보기', body: body, buttons: [{ label: '닫기' }], wide: true });
+      };
+      row.appendChild(mb); S.moreBtn = mb;
+    }
+    if (S.formBtn) S.formBtn.classList.toggle('on', !!S.form);
+    refreshUndo();
+  }
+  // ---- 쪽 정리 결과를 문서로 받아들이기(쪽 수가 바뀌므로 쪽 칸을 새로 만든다) ----
+  function gatherSizes(doc) {
+    var sizes = [], chain = Promise.resolve();
+    for (var i = 1; i <= doc.numPages; i++) (function (i) {
+      chain = chain.then(function () { return doc.getPage(i); }).then(function (p) { var v = p.getViewport({ scale: 1 }); try { p.cleanup(); } catch (e) {} sizes[i - 1] = [v.width, v.height]; });
+    })(i);
+    return chain.then(function () { return sizes; });
+  }
+  function applyBytes(bytes, label, noPush) {
+    var cur = S, old = S.pdf, prevBytes = S.bytes;
+    return global.pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise.then(function (doc) {
+      return gatherSizes(doc).then(function (sizes) {
+        if (S !== cur || S.dead) { try { doc.destroy(); } catch (e) {} return; }
+        if (S.form) formStop();
+        try { if (S.io) S.io.disconnect(); } catch (e) {}
+        S.pages.forEach(function (P) { release(P); });
+        S.inner.innerHTML = '';
+        try { if (old) old.destroy(); } catch (e) {}
+        S.pdf = doc; S.n = doc.numPages; S.pages = []; S.maxW = 1;
+        for (var i = 0; i < S.n; i++) { var z = sizes[i]; S.pages.push({ n: i + 1, w: z[0], h: z[1] }); S.maxW = Math.max(S.maxW, z[0]); }
+        if (!noPush) S.workStack.push({ bytes: prevBytes, label: label || '' });
+        S.bytes = bytes; S.anns = []; S.hist = [[]]; S.sel = null; S.rev++;
+        select(null); initPages(); layout(); S.sc.scrollTop = 0; updateCurPage(); pump(); refreshUndo(); updateDirty();
+      });
+    });
+  }
+  function undoWork() {
+    var w = S.workStack[S.workStack.length - 1]; if (!w) return;
+    S.ctx.busy('이전 상태로 되돌리는 중…');
+    (w.bytes ? Promise.resolve(w.bytes) : S.ctx.file.arrayBuffer().then(function (b) { return new Uint8Array(b); })).then(function (bytes) {
+      S.workStack.pop(); return applyBytes(bytes, '되돌림', true).then(function () { S.ctx.busy(null); S.ctx.toast('쪽 정리를 되돌렸어요', 2200); });
+    }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('되돌리지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+  }
+  // ---- 양식 칸(입력 칸) 표시 · 채움 ----
+  function fillOf(w) { for (var i = 0; i < S.anns.length; i++) if (S.anns[i].fill && S.anns[i].fill.wid === w.id) return S.anns[i]; return null; }
+  function formStart(list, cb) {
+    formStop(); S.form = { list: list, cb: cb }; setMode('hand'); S.root.setAttribute('data-form', '1');
+    list.forEach(function (w) {
+      var P = S.pages[w.page - 1]; if (!P) return;
+      var b = el('button', 'sp-wg sp-wg-' + w.kind); b.type = 'button'; b.setAttribute('aria-label', '입력 칸');
+      b.style.left = w.x + 'px'; b.style.top = w.y + 'px'; b.style.width = w.w + 'px'; b.style.height = w.h + 'px';
+      b.onclick = function (ev) { ev.stopPropagation(); cb(w, fillOf(w)); };
+      P.ov.appendChild(b); w.node = b;
+    });
+    if (S.formBtn) S.formBtn.classList.add('on');
+  }
+  function formStop() {
+    if (!S || !S.form) return;
+    S.form.list.forEach(function (w) { if (w.node && w.node.parentNode) w.node.parentNode.removeChild(w.node); });
+    S.form = null; if (S.root) S.root.removeAttribute('data-form'); if (S.formBtn) S.formBtn.classList.remove('on');
+  }
+  function addFill(w, url, fill) { addAnn({ type: 'stamp', page: w.page, x: w.x, y: w.y, w: w.w, h: w.h, img: url, fill: Object.assign({ wid: w.id }, fill) }); }
+  function removeFill(a, quiet) {
+    S.anns = S.anns.filter(function (x) { return x.id !== a.id; });
+    var nn = nodeOf(a); if (nn) nn.parentNode.removeChild(nn);
+    if (!quiet) commit(); select(null);
+  }
+
   // ---------------------------------------------------------------- 모듈 등록
   function openDoc(ctx) {
     teardown();
@@ -660,8 +792,18 @@
     if (global.visualViewport) { global.visualViewport.addEventListener('resize', onVvChange); cur.vvOn = true; }
     if (!global.pdfjsLib) return Promise.reject(new Error('PDF 보기 엔진을 찾지 못함'));
     try { if (!global.pdfjsLib.GlobalWorkerOptions.workerSrc) global.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; } catch (e) {}
+    if (ctx.flag && ctx.flag('pdf')) {       // DeX·키보드: Ctrl+Z = 되돌리기(글 입력 칸에 커서가 있을 때는 건드리지 않는다)
+      cur.keyUndo = function (e) {
+        if (!S || S !== cur || !(e.ctrlKey || e.metaKey) || e.altKey || String(e.key).toLowerCase() !== 'z') return;
+        var t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || S.dlg || document.querySelector('.so-sheet-back') || (S.root && S.root.querySelector('.spp'))) return;
+        e.preventDefault(); undo();
+      };
+      document.addEventListener('keydown', cur.keyUndo);
+    }
     ctx.onBack(function () {
       if (!S) return false;
+      if (S.pagesBack && S.root && S.root.querySelector('.spp')) return S.pagesBack();
+      if (S.form && !S.dlg) { formStop(); return true; }
       if (S.dlg) { closeDlg(); return true; }
       if (S.sel != null) { select(null); return true; }
       return false;
@@ -688,8 +830,9 @@
       if (!sizes || S !== cur) return;
       for (var i = 0; i < cur.n; i++) { var z = sizes[i] || sizes[0]; cur.pages.push({ n: i + 1, w: z[0], h: z[1] }); cur.maxW = Math.max(cur.maxW, z[0]); }
       ctx.setActions([{ label: '사본 저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
+      if (ctx.onSave) { ctx.onSave(function () { S.ctx.noticeThen(save); }); ctx.setSaver(function () { return save(); }); }
       buildUI(); initPages(); layout(); updateCurPage();
-      return waitFirst(cur);
+      return waitFirst(cur).then(function () { if (ctx.opts && ctx.opts.openPages && plus() && S === cur) setTimeout(openPagesScreen, 150); });   // 스캔 완료 화면의 「쪽 더 정리하기」
     });
   }
   function waitFirst(cur) {
@@ -710,7 +853,8 @@
     try { if (o.io) o.io.disconnect(); if (o.ro) o.ro.disconnect(); } catch (e) {}
     o.pages.forEach(function (P) { if (P.task) { try { P.task.cancel(); } catch (e) {} } if (P.canvas) { P.canvas.width = 0; P.canvas.height = 0; } });
     try { if (o.pdf) o.pdf.destroy(); } catch (e) {}
-    o.sig = null; o.anns = []; o.hist = [];
+    try { if (o.keyUndo) document.removeEventListener('keydown', o.keyUndo); } catch (e) {}
+    o.sig = null; o.anns = []; o.hist = []; o.bytes = null; o.workStack = []; o.form = null;
   }
 
   global.SOffice.register({

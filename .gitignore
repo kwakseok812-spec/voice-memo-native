@@ -22,4 +22,6 @@ hwp-fidelity/
 smartoffice-test/
 *.hwp
 *.hwpx
+# O-0861: 「＋ 새 문서」 빈 한글 양식(내용·작성자 정보 없음) 한 파일만 예외
+!/www/vendor/so/templates/blank.hwp
 www/js/smartoffice/**/samples/

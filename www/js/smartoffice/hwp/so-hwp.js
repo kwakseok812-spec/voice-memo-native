@@ -17,6 +17,8 @@
  *   · 고친 내용 복구: 공통 틀이 snapshot()으로 고친 문서 전체를 바이트로 받아 두고, 같은 파일을 다시 열면 restore()로 편집 상태를 되살린다.
  *   · 도구줄은 자주 쓰는 것 한 줄 + 「⋯」 더보기 줄(정렬·확대·찾기). 넓은 화면(펼침)은 한 줄에 모두.
  *   · 저장은 언제나 「사본 저장」(원본은 건드리지 않는다). 저장 전에 한 번 확인(공유함 업로드 안내) → 사본 이름에 무작위 꼬리표.
+ *   · v10.2(O-0861) 스위치 SO_HWP_TOOLS: 켜져 있으면 도구줄이 「맥락 도구줄」(글 / 표 안 / 그림 선택)로 바뀐다 — 표 만들기·줄 넣기·줄/칸 지우기·그림 넣기·글자 색·문단 넣기·새 문서.
+ *     코드는 so-hwp-tools.js. 꺼져 있으면(또는 그 파일을 못 불러오면) 아래 예전 도구줄 그대로.
  * ==========================================================================*/
 (function (global) {
   'use strict';
@@ -28,6 +30,7 @@
   var TB_H = 54;                           // 아래 도구줄 높이(px)
 
   var st = null;      // { editor, iframe, editing, wrap, frame, tb, pill, timers, pages, ... }
+  var TOOLS_URL = 'js/smartoffice/hwp/so-hwp-tools.js';
 
   function baseOf(name) { return String(name || '문서').replace(/\.[^.]+$/, ''); }
   function readBytes(file) {
@@ -61,7 +64,8 @@
     var s = d.createElement('style'); s.id = 'so-hwp-phone-css';
     s.textContent = '#menu-bar,#icon-toolbar,#style-bar,#studio-header,#status-bar{display:none !important}' +
       '#h-ruler,#v-ruler,#ruler-corner{visibility:hidden !important}' +
-      'html,body,#scroll-container{touch-action:pan-x pan-y !important;overscroll-behavior:contain}';
+      'html,body,#scroll-container{touch-action:pan-x pan-y !important;overscroll-behavior:contain}' +
+      'body.so-auto .modal-overlay,body.so-auto > div[style*="z-index: 9999"]{opacity:0 !important}';   // O-0861: 코드가 대신 누르는 동안 PC용 팝업·상자는 보이지 않게
     d.head.appendChild(s);
   }
   function kickResize() {
@@ -74,9 +78,9 @@
     var bottomEdge = vv ? (vv.height + vv.offsetTop) : global.innerHeight;   // 키보드가 올라오면 보이는 높이만큼만 쓴다
     var h = Math.max(160, Math.round(bottomEdge - b.top));
     st.wrap.style.top = Math.round(b.top) + 'px'; st.wrap.style.height = h + 'px';
-    arrangeExtra(global.innerWidth >= 640);
-    var rows = st.editing ? (1 + ((!st.wide && st.moreOpen) ? 1 : 0)) : 0, tb = rows * TB_H;
-    st.wrap.classList.toggle('more', !!(st.editing && !st.wide && st.moreOpen));
+    if (!st.T) arrangeExtra(global.innerWidth >= 640);
+    var rows = st.editing ? (1 + ((!st.T && !st.wide && st.moreOpen) ? 1 : 0)) : 0, tb = rows * TB_H;
+    st.wrap.classList.toggle('more', !!(!st.T && st.editing && !st.wide && st.moreOpen));
     st.frame.style.height = (h - tb) + 'px';
     st.pill.style.bottom = (tb + 12) + 'px';
     kickResize();
@@ -128,7 +132,8 @@
   }
   function syncState() {
     var d = doc(); if (!d || !st) return;
-    if (st.editing) st.tbBtns.forEach(function (x) {
+    if (st.T && st.editing) st.T.sync();
+    if (st.editing) (st.T ? st.T.stateBtns() : st.tbBtns).forEach(function (x) {
       var e = d.querySelector(x.sel);
       var on = !!(e && (e.classList.contains('active') || e.classList.contains('on') || e.classList.contains('pressed') || e.getAttribute('aria-pressed') === 'true'));
       x.b.classList.toggle('on', on);
@@ -189,11 +194,13 @@
   function applyMode(ctx) {
     st.wrap.classList.toggle('editing', st.editing);
     setReadOnly(!st.editing); setActions(ctx); layout();
+    if (st.T && st.editing) { st.T.render(); st.T.sync(true); }      // O-0861: 고치기를 켤 때·고치던 내용을 이어 열 때마다 맥락 도구줄을 새로 그린다
   }
-  function startEdit(ctx) {
+  function startEdit(ctx, quiet) {
     if (!st) return;
     st.editing = true; applyMode(ctx);
-    ctx.toast('고치는 중입니다. 저장은 「사본 저장」으로 새 파일이 만들어집니다(원본은 그대로).', 4200);
+    if (st.T) { st.T.render(); st.T.sync(true); }
+    if (!quiet) ctx.toast('고치는 중입니다. 저장은 「사본 저장」으로 새 파일이 만들어집니다(원본은 그대로).', 4200);
   }
   function stopEdit(ctx) {
     if (!st) return;
@@ -240,33 +247,83 @@
     }).catch(function () { if (st === s) { s.ctx.busy(null); s.ctx.toast('고치던 내용을 불러오지 못해 원본을 열었습니다.', 4600); } return false; });
   }
 
+  // 저장 확인 시트 고정 안내(O-0861 7-2): 한컴에서 한 번 확인해 달라는 말 — 위험 개체를 알아내는 길이 없어 늘 같은 한 줄을 보여 준다.
+  //   hwpx 는 파일(XML)에 「줄 위치 정보」가 있는지 읽어, 없는 것(한컴이 아닌 프로그램이 만든 파일)이면 한 줄을 더 얹는다.
+  function hwpxNote(ctx) {
+    if (ctx.ext !== 'hwpx' || ctx.isNew) return Promise.resolve('');
+    return ctx.loadScript('vendor/so/docx/jszip.min.js').then(function () {
+      return global.JSZip.loadAsync(ctx.file);
+    }).then(function (z) {
+      var names = Object.keys(z.files).filter(function (n) { return /^Contents\/section\d+\.xml$/i.test(n); });
+      return Promise.all(names.map(function (n) { return z.file(n).async('string'); })).then(function (xs) {
+        var has = xs.some(function (x) { return x.indexOf('linesegarray') >= 0; });
+        return has ? '' : '\n이 파일은 한컴이 아닌 프로그램으로 만든 파일이라 저장하면 줄 간격이 달라질 수 있어요.';
+      });
+    }).catch(function () { return ''; });
+  }
+  function checkLine(name, isNew) {
+    return isNew ? '\n\n한컴 한글에서 열어 한 번 확인해 주세요. 새 문서는 이 이름으로 새로 생겨요.' : '\n\n한컴 한글에서 열어 한 번 확인해 주세요. 저장하면 원본은 그대로 두고 「' + name.replace(/\.[^.]+$/, '') + '」 파일이 새로 생겨요.';
+  }
+  function makeBlob(bytes, ext) { return new Blob([bytes], { type: ext === 'hwpx' ? 'application/haansofthwpx' : 'application/x-hwp' }); }
+  // 확인 시트 없이 바로 저장(「수정 요청」으로 넘어가기 전 저장). 저장이 성공했을 때만 true.
+  function saveSilent(ctx) {
+    if (!st || !st.editor) return Promise.resolve(false);
+    var ext = (ctx.ext === 'hwpx') ? 'hwpx' : 'hwp', name = ctx.copyName(ext);
+    ctx.busy('사본을 만드는 중…');
+    return exportBytes().then(function (bytes) {
+      ctx.busy(null);
+      if (!bytes || bytes.length < 512) throw new Error('저장할 내용이 비어 있습니다.');
+      return Promise.resolve(ctx.saveCopy(makeBlob(bytes, ext), name)).then(function (ok) {
+        if (ok === false) return false;
+        ctx.setDirty(false); if (st) st.dirty = false;
+        try { st.editor.notifySaved(name); } catch (e) {}
+        return true;
+      });
+    }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — ' + ((e && e.message) || e), 6000); return false; });
+  }
   function saveCopy(ctx) {
     if (!st || !st.editor) return;
     var ext = (ctx.ext === 'hwpx') ? 'hwpx' : 'hwp';
-    var name = baseOf(ctx.name) + '_수정.' + ext;      // 같은 이름 중복 처리는 공통 틀이 한다
-    ctx.confirmCopy('사본을 저장할까요?',
-      '고친 문서를 새 파일로 저장합니다.\n저장 이름: ' + name,
-      '저장하기', function () {
-        ctx.busy('사본을 만드는 중…');
-        exportBytes().then(function (bytes) {
-          ctx.busy(null);
-          if (!bytes || bytes.length < 512) throw new Error('저장할 내용이 비어 있습니다.');
-          return Promise.resolve(ctx.saveCopy(new Blob([bytes], { type: ext === 'hwpx' ? 'application/haansofthwpx' : 'application/x-hwp' }), name)).then(function (ok) {
-            if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 고침 해제
-            ctx.setDirty(false); if (st) st.dirty = false;
-            try { st.editor.notifySaved(name); } catch (e) {}
-          });
-        }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — ' + ((e && e.message) || e), 6000); });
-      });
+    var plus = !!st.T;
+    var name = plus ? ctx.copyName(ext) : (baseOf(ctx.name) + '_수정.' + ext);      // 같은 이름 중복 처리는 공통 틀이 한다
+    hwpxNote(ctx).then(function (extra) {
+      if (!st) return;
+      ctx.confirmCopy('사본을 저장할까요?',
+        '고친 문서를 새 파일로 저장합니다.\n저장 이름: ' + (plus ? '「' + name + '」' : name) + (plus ? checkLine(name, ctx.isNew) + extra : ''),
+        '저장하기', function () {
+          ctx.busy('사본을 만드는 중…');
+          exportBytes().then(function (bytes) {
+            ctx.busy(null);
+            if (!bytes || bytes.length < 512) throw new Error('저장할 내용이 비어 있습니다.');
+            return Promise.resolve(ctx.saveCopy(makeBlob(bytes, ext), name)).then(function (ok) {
+              if (ok === false) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 고침 해제
+              ctx.setDirty(false); if (st) st.dirty = false;
+              try { st.editor.notifySaved(name); } catch (e) {}
+            });
+          }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — ' + ((e && e.message) || e), 6000); });
+        });
+    });
   }
 
   function open(ctx) {
+    // O-0861: 맥락 도구줄(so-hwp-tools.js)은 스위치가 켜졌을 때만 불러온다. 못 불러오면 예전 도구줄로 연다.
+    if (ctx.flag && ctx.flag('hwp') && !global.SOHwpTools) {
+      return ctx.loadScript(TOOLS_URL).then(function () { return open2(ctx); }, function () { return open2(ctx); });
+    }
+    return open2(ctx);
+  }
+  function open2(ctx) {
     st = { editor: null, iframe: null, editing: false, ctx: ctx, dirty: false, timers: [], pages: 0, pillEditing: false };
     ctx.loadCss('js/smartoffice/hwp/so-hwp.css');
     ctx.body.style.overflow = 'hidden';
     var wrap = el('div', 'so-hwp-wrap'), frame = el('div', 'so-hwp-frame');
     wrap.appendChild(frame); st.wrap = wrap; st.frame = frame;
-    st.tb = buildToolbar(); wrap.appendChild(st.tb2); wrap.appendChild(st.tb);
+    if (ctx.flag && ctx.flag('hwp') && global.SOHwpTools) {
+      st.tb = el('div', 'so-hwp-tb tools'); st.tb.setAttribute('role', 'toolbar'); st.tb.setAttribute('aria-label', '한글 고치기 도구'); wrap.appendChild(st.tb);
+      st.T = global.SOHwpTools.create({
+        st: function () { return st; }, doc: doc, ctx: ctx, clickIn: clickIn, markDirty: markDirty
+      });
+    } else { st.tb = buildToolbar(); wrap.appendChild(st.tb2); wrap.appendChild(st.tb); }
     st.pill = buildPill(); wrap.appendChild(st.pill);
     ctx.body.appendChild(wrap);
     st.onVV = function () { layout(); };
@@ -295,7 +352,10 @@
     }).then(function () {
       clearInterval(tick);
       var d = doc(); if (d) { injectStudioCss(d); bindPinch(d); bindDirty(d); d.addEventListener('compositionstart', function () { if (st) st.composing = true; }, true); d.addEventListener('compositionend', function () { if (st) st.composing = false; }, true); }
+      if (d && ctx.flag && ctx.flag('hwp')) d.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's') { e.preventDefault(); e.stopPropagation(); saveCopy(ctx); } }, true);   // DeX·키보드: Ctrl+S = 사본 저장
+      if (ctx.onSave) { ctx.onSave(function () { if (st && st.editing) saveCopy(ctx); }); ctx.setSaver(function () { return saveSilent(ctx); }); }
       applyMode(ctx); ctx.busy(null);
+      if (ctx.opts && ctx.opts.startEdit) { startEdit(ctx, true); ctx.toast('새 문서입니다. 폰에서 보이는 글꼴과 한컴에서 열린 글꼴이 다를 수 있어요. 저장은 「사본 저장」으로 하십시오.', 5600); }
       st.timers.push(setInterval(syncState, 400)); syncState();
       try { if (st.editor.onDocumentChanged) st.editor.onDocumentChanged(function () { markDirty(); }); } catch (e) {}
     }, function (e) { clearInterval(tick); throw e; });

@@ -3950,6 +3950,7 @@
   APP_VERSION = 'v10.0';        // v10.0(O-0857): 게임 칸에 「지뢰 피하기」·「카드 정리」(혼자 하는 솔리테어) 추가 — 홈 「게임」 칸 작은 글씨는 「장기·오목 외 2」, 목록 시트에 3줄. 게임 파일은 공개 저장소 main 그대로의 복사본(www/games/minesweeper·solitaire, 인터넷 없이 열림·두던 판 이어짐). 게임이 열어 둔 쪽지(새 판 고르기)는 뒤로 가기가 먼저 닫음(games.js back() 한 줄, 장기·오목 동작 그대로). 서버·SQL·자바·권한 변경 없음 · versionCode 144
   APP_VERSION = 'v10.1';        // v10.1(O-0858): 홈 두 큰 칸 아래 「코드 K」 줄(폰에 설치된 코드 K 앱 열기 · 없으면 Claude Code 연결 안내 · 회의 녹음 중이면 확인 창 · 스위치 CODEK_TILE) — 서버·SQL·권한 변경 없음 · versionCode 145
   APP_VERSION = 'v10.2';        // v10.2(O-0859): 게임 칸에 「벽돌 깨기」(12판·아이템·이어하기) 추가 — 홈 「게임」 칸 작은 글씨 「장기·오목 외 3」, 목록 시트 4줄. 게임 파일은 공개 저장소 main 그대로의 복사본(www/games/brickbreaker, 인터넷 없이 열림). 서버·SQL·자바·권한 변경 없음 · versionCode 146
+  APP_VERSION = 'v10.3';        // v10.3(O-0861): S-Office 편집 보강 1판(한글·PDF) — 한글: 표 만들기·줄 넣기·줄/칸 지우기·그림 넣기·글자 색·새 한글 문서·저장 때 「한컴에서 확인」 안내 / PDF: 쪽 정리(순서·삭제·회전)·합치기·나누기·양식 칸 채우기(전자서명 PDF는 막음) / 공통: 머리줄 「수정 요청」·저장 이름 `_수정(n)` 규칙·Ctrl+S·문서 뷰어 첫 화면 「＋ 새 문서」·스캔 완료 화면 「쪽 더 정리하기」. 스위치 SO_EDIT_PLUS(전체)·SO_HWP_TOOLS·SO_PDF_PAGES·SO_NEW_DOC(so-core.js) — 서버·SQL·권한·자바 변경 없음
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -7523,6 +7524,11 @@
           openSheet('공유함에 넣었습니다', '앱과 PC 어디서든 공유함에서 열 수 있습니다.', '공유함 열기', function () { openLocker(); }, null, null, { positive: true, icon: 'i-check', cancelLabel: '닫기' });
         }).catch(function () {});     // 실패 안내는 docScanShare 가 했다
       },
+      pages: (window.SOffice && SOffice.enabled && SOffice.enabled() && SOffice.flag && SOffice.flag('pdf')) ? function (file) {   // O-0861: 만든 PDF를 S-Office 「쪽 정리」로 바로 연다(SO_PDF_PAGES 가 꺼져 있으면 이 단추 자체가 없다)
+        if (window.DocScan && DocScan.isOpen()) DocScan.back();
+        openScreen(docsView);
+        if (!SOffice.openFile(file, { openPages: true })) toast('쪽 정리를 열지 못했습니다. 「문서 열기」로 열어 주십시오.');
+      } : null,
       view: function (file) {         // 문서 뷰어(SmartDocs.handleLocalFile — 공유로 받은 문서 열기와 같은 길)
         if (!(window.SmartDocs && SmartDocs.handleLocalFile)) { toast(soName() + '를 준비하지 못했습니다.'); return; }
         if (window.DocScan && DocScan.isOpen()) DocScan.back();

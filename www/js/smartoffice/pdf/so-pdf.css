@@ -70,3 +70,41 @@ html[data-style="dark"] .sp-cv{filter:brightness(.88)}       /* 어두운 화면
   .sp-row{max-width:640px;margin:0 auto;width:100%}
   .sp-opt{max-width:640px;margin:0 auto}
 }
+
+/* ---- O-0861(v10.2) 더보기 시트 · 양식 칸 · 쪽 정리 화면 ---- */
+.sp-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sp-mb{appearance:none;display:flex;align-items:center;gap:10px;min-height:52px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;padding:0 12px;cursor:pointer;text-align:left}
+.sp-mb i{font-style:normal;font-size:18px;font-weight:800;min-width:30px;text-align:center}
+.sp-mb span{font-size:14px;font-weight:800}
+.sp-tool{min-width:0}
+.sp-wg{position:absolute;appearance:none;padding:0;background:rgba(90,120,255,.16);border:1.5px dashed var(--p1,#6a5af9);border-radius:3px;cursor:pointer;z-index:3}
+.sp-wg::before{content:'';position:absolute;inset:-8px}
+.sp-wg-check{background:rgba(90,120,255,.22)}
+.sp-wg-sig{background:rgba(160,160,160,.18);border-color:#888}
+.sp-root[data-form] .sp-page{outline:0}
+.spp{position:absolute;inset:0;z-index:12;display:flex;flex-direction:column;background:var(--page-bg,#f3f4f8);color:var(--text,#111)}
+.spp *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.spp-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--glass-b,#ccc);background:var(--bg0,#fff);min-height:56px}
+.spp-t{flex:1;min-width:0;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.spp-hb{appearance:none;border:1px solid var(--glass-b,#ccc);background:var(--glass,#eee);color:inherit;border-radius:12px;min-height:44px;min-width:48px;padding:0 12px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}
+.spp-hb.ok{border-color:transparent;background:linear-gradient(135deg,var(--p1,#6a5af9),var(--p2,#8e7bff));color:#fff}
+.spp-hb:disabled{opacity:.4}
+.spp-hint{padding:6px 14px;font-size:12.5px;color:var(--dim,#666)}
+.spp-grid{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;display:grid;gap:10px;padding:8px 12px 16px;align-content:start}
+.spp-cell{position:relative;border-radius:12px;border:2px solid transparent;background:var(--glass,#e9ebf2);padding:4px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:pan-y;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.spp-cell.sel{border-color:var(--p1,#6a5af9);box-shadow:0 0 0 2px var(--p1,#6a5af9) inset}
+.spp-cell.lift{z-index:5;box-shadow:0 10px 24px rgba(0,0,0,.35);transition:none;touch-action:none}
+.spp-cell.drop{border-color:#2aa84a;border-style:dashed}
+.spp-th{position:relative;width:100%;min-height:96px;overflow:hidden;background:#fff;border-radius:6px}
+.spp-th canvas{position:absolute;left:0;top:50%;transform-origin:center center}
+.spp-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-style:normal}
+.spp-n{position:absolute;left:8px;bottom:8px;min-width:24px;height:24px;border-radius:12px;background:rgba(20,22,30,.78);color:#fff;font-size:12.5px;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.spp-ck{position:absolute;right:8px;top:8px;width:26px;height:26px;border-radius:50%;background:var(--p1,#6a5af9);color:#fff;font-weight:800;display:none;align-items:center;justify-content:center}
+.spp-cell.sel .spp-ck{display:flex}
+.spp-rot{position:absolute;right:8px;bottom:8px;font-size:12px;font-weight:800;background:rgba(20,22,30,.78);color:#fff;border-radius:10px;padding:2px 6px}
+.spp-cell.ext{outline:2px dotted #2a7ede;outline-offset:1px}
+.spp-foot{display:flex;gap:3px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--glass-b,#ccc);background:var(--bg0,#fff)}
+.spp-fb{flex:1 1 0;min-width:0;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;appearance:none;border:1px solid var(--glass-b,#ccc);background:var(--glass,#eee);color:inherit;border-radius:12px;font-family:inherit;cursor:pointer}
+.spp-fb .t-g{font-size:18px;line-height:1.05;font-weight:800}.spp-fb .t-l{font-size:11px;font-weight:700}
+.spp-fb:disabled{opacity:.38}.spp-fb:active{transform:scale(.96)}
+@media (prefers-reduced-motion:reduce){.spp-cell,.spp-fb:active{transition:none;transform:none}}
