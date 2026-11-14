@@ -51,6 +51,14 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
     LICENSE-IeumOffice-GenOffice-Apache-2.0.txt, NOTICE-GenOffice-original.txt 에 그대로 있습니다(한글 편집 화면 번들과 qpdf.wasm 에 공통).
  6) @rhwp/editor(vendor/so/hwp/sdk/)의 MIT 고지: vendor/so/hwp/sdk/LICENSE-rhwp-editor-MIT.txt
 
+[차트 — v10.9(O-0861)]
+ 차트 만들기·고치기와 폰 화면의 미리 그림은 이 앱이 직접 만든 코드(js/smartoffice/so-chart.js, xlsx/so-xlsx-chart.js 등)입니다.
+ 차트 그리기 라이브러리(ECharts 등)나 다른 새 외부 부품은 들어 있지 않습니다. 파일 안에 만드는 차트는 표준 형식(Office Open XML)의 차트와 딸린 통합문서입니다.
+
+[앱의 다른 부품 — S-Office 밖(고지 보강, v10.9)]
+ - page-flip 2.0.7 (StPageFlip, MIT License) — 책 넘김 화면 부품. www/vendor/page-flip.browser.min.js
+   라이선스 원문: www/vendor/LICENSE-page-flip-MIT.txt (MIT 전문 · 저작권자 줄은 원본 저장소 확인 뒤 맞출 것이 남아 있음)
+
 [제휴 아님]
  S-Office는 Microsoft, 주식회사 한글과컴퓨터, Adobe, Google, Artifex Software(SmartOffice) 등과 제휴하거나
  후원·보증을 받은 관계가 아닙니다. 「Office」는 Microsoft Office를 뜻하는 말이 아니며, 상표는 각 소유자의 것입니다.

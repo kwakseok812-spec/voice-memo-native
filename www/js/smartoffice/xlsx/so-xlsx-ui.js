@@ -610,7 +610,7 @@
       S().ctx.sheet({ title: '더보기', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
     function render() {
-      var n = perRow(), ids = ORDER, shown = ids.length > n ? ids.slice(0, n) : ids, rest = ids.length > n ? ids.slice(n) : [];
+      var chartOk = !!(env.chartUi && env.chartUi()), n = perRow(), ids = ORDER.filter(function (id) { return id !== 'chart' || chartOk; }), shown = ids.length > n ? ids.slice(0, n) : ids, rest = ids.length > n ? ids.slice(n) : [];
       U.row.innerHTML = '';
       shown.forEach(function (id) { var b = mkBtn(id, U.row, false); if (id === 'range') U.rangeB = b; });
       if (rest.length) { var mb = el('button', 'sxu-ob'); mb.type = 'button'; mb.setAttribute('aria-label', '더보기'); mb.appendChild(el('span', 'g', '⋯')); mb.appendChild(el('span', 'l', '더보기')); mb.onclick = function () { moreSheet(rest); }; U.row.appendChild(mb); }

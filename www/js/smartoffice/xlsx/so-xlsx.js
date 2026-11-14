@@ -781,7 +781,7 @@
     q('.sx-rone').onclick = replaceCurrent; q('.sx-rall').onclick = replaceAll;
     S.el.hcol.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hcol.getBoundingClientRect(); selectLine('col', Math.min(S.sh.nc - 1, lowerIdx(S.sh.colX, (e.clientX - rc.left + S.el.sc.scrollLeft) / S.scale))); });
     S.el.hrow.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hrow.getBoundingClientRect(); selectLine('row', Math.min(S.sh.nr - 1, lowerIdx(S.sh.rowY, (e.clientY - rc.top + S.el.sc.scrollTop) / S.scale))); });
-    if (plusOn()) { S.ui = global.SOXlsxUI.create(envForUI()); S.ui.mount(S.el.ops); if (global.SOXlsxChart && ctx.flag('chart')) S.chartUi = global.SOXlsxChart.create(envForUI()); }
+    if (plusOn()) { if (global.SOXlsxChart && ctx.flag('chart')) S.chartUi = global.SOXlsxChart.create(envForUI()); S.ui = global.SOXlsxUI.create(envForUI()); S.ui.mount(S.el.ops); }
     S.el.tabs.innerHTML = S.vis.map(function (i) { return '<button type="button" class="sx-tab" data-i="' + i + '">' + esc(S.names[i]) + '</button>'; }).join('');
     S.el.tabs.addEventListener('click', function (e) { var b = e.target.closest('.sx-tab'); if (b) showSheet(+b.getAttribute('data-i')); });
     root.addEventListener('click', function (e) {

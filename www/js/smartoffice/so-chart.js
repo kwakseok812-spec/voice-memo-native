@@ -343,7 +343,7 @@
     var ctx = o.ctx, sp = clone(o.spec), table = o.mode !== 'range', dirtyData = false, W = 6;
     var body = el('div', 'soc'), prev = el('div', 'soc-prev'), colors = el('div', 'soc-colors'), rangeBox = el('div', 'soc-range'), tblBox = el('div', 'soc-tblbox');
     function ensureSeries() { while (sp.series.length < 1) sp.series.push({ name: '계열 1', vals: sp.cats.map(function () { return null; }) }); sp.series.forEach(function (s) { while (s.vals.length < sp.cats.length) s.vals.push(null); s.vals.length = sp.cats.length; }); }
-    function drawPrev() { var w = Math.min(520, Math.max(240, (prev.clientWidth || 340))); prev.innerHTML = svg(sp, w, Math.round(w * 0.62), { bg: true }); }
+    function drawPrev() { var w = Math.min(420, Math.max(240, (prev.clientWidth || 340))); prev.innerHTML = svg(sp, w, Math.round(w * 0.62), { bg: true }); }
     function label(t) { body.appendChild(el('div', 'soc-l', t)); }
     function chips(list, cur, fn, cls) { var r = el('div', 'soc-r' + (cls ? ' ' + cls : '')); list.forEach(function (it) { var b = el('button', 'soc-b' + (it[0] === cur ? ' on' : ''), it[1]); b.type = 'button'; b.onclick = function () { fn(it[0]); }; r.appendChild(b); }); return r; }
     function field(ph, v, fn, max) { var i = el('input', 'soc-in'); i.type = 'text'; i.placeholder = ph; i.value = v || ''; i.maxLength = max || 60; i.setAttribute('aria-label', ph); i.addEventListener('input', function () { fn(i.value); drawPrev(); }); return i; }
@@ -360,6 +360,7 @@
       if (!isPie(k) && sp.labels === 'pct') sp.labels = 'val';
       if (k === 'scatter' && table && !sp.cats.some(function (c) { return toNum(c) != null; })) sp.cats = sp.cats.map(function (c, i) { return String(i + 1); });      // 분산형은 가로 값(X)이 숫자여야 한다
       if (table) buildTable();
+      else if (k === 'scatter' && !rgOpt.hdrCol && o.range && o.range.text && !o.range.locked && o.range.resolve) { rgOpt.hdrCol = true; redo(false); buildRange(); }      // 분산형은 첫 열이 가로 값(X)
       paintChips(); paintColors(); drawPrev();
     }
     function paintColors() {
