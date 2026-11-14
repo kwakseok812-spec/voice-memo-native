@@ -172,7 +172,7 @@ class SilentCameraActivity : ComponentActivity() {
     private var lastSeg = -1
     private var lastBase = ""                                // 안내 알약의 «기본 안내»(일시 안내 말고) 마지막 글
     private var baseFaded = false                            // 기본 안내가 6초를 채워 이미 사라졌나
-    private var transientShown = false                       // 일시 안내(「3쪽 찍었어요」 등)가 떠 있나
+    private var transientShown = false                       // 일시 안내(「3쪽 찍었습니다」 등)가 떠 있나
     private var boundPreview: Preview? = null                // 지금 연결된 미리보기(실제 크기를 나중에 다시 읽기 위해)
     private var retreatNote = false                          // 나중 확인에서 물러나기로 했다 → 다시 연결한 뒤 안내 한 번
     private var hintFade: Runnable? = null
@@ -720,7 +720,7 @@ class SilentCameraActivity : ComponentActivity() {
             minWidth = dp(CamLayout.ZOOM_LABEL_DP); minimumWidth = dp(CamLayout.ZOOM_LABEL_DP)
             minHeight = dp(CamLayout.ZOOM_ROW_DP); minimumHeight = dp(CamLayout.ZOOM_ROW_DP)
             setPadding(dp(8), 0, dp(8), 0)
-            contentDescription = "지금 확대 배율. 누르면 확대 막대가 펴져요"
+            contentDescription = "지금 확대 배율. 누르면 확대 막대가 펴집니다"
             isClickable = true
             isFocusable = true
             setOnClickListener { toggleSeek() }
@@ -827,7 +827,7 @@ class SilentCameraActivity : ComponentActivity() {
             ImageCapture.FLASH_MODE_AUTO -> InsetDrawable(round(0x47FFFFFF, 18), dp(6))
             else -> null
         }
-        flashBtn.contentDescription = "불빛 $state. 누르면 바뀌어요"
+        flashBtn.contentDescription = "불빛 $state. 누르면 바뀝니다"
         positionHl(true)
     }
 
@@ -876,7 +876,7 @@ class SilentCameraActivity : ComponentActivity() {
     /**
      * 안내 알약. «기본 안내»(모드별 문장·경고)는 글이 바뀔 때 나타나 6초 뒤 사라진다(손떨림·어두움·많이 확대 같은 경고는 계속 보임).
      * 모드를 바꾸거나 카메라를 열면 기본 안내 글이 달라지므로 다시 나타난다.
-     * «일시 안내»(「3쪽 찍었어요」「카메라가 준비됐어요」「불빛 켬」 …, transient = true)는 잠깐 보였다가 기본 안내로 돌아오는데,
+     * «일시 안내»(「3쪽 찍었습니다」「카메라가 준비됐습니다」「불빛 켬」 …, transient = true)는 잠깐 보였다가 기본 안내로 돌아오는데,
      * 돌아왔을 때 기본 안내가 이미 6초를 채워 사라진 상태였다면 다시 켜지 않는다.
      */
     private fun hintChanged(warn: Boolean, transient: Boolean) {
@@ -966,7 +966,7 @@ class SilentCameraActivity : ComponentActivity() {
                     verifyLater(wanted, 1)
                 }
                 syncOverlayCompact()
-                if (retreated || retreatNote) flashNote("이 폰에서는 화면을 더 크게 못 보여 드려요. 지금 모양으로 찍어요", 3500) else flashNote("카메라가 준비됐어요", 1200)
+                if (retreated || retreatNote) flashNote("이 폰에서는 화면을 더 크게 보여 드릴 수 없습니다. 지금 모양으로 찍습니다", 3500) else flashNote("카메라가 준비됐습니다", 1200)
                 retreatNote = false
             } catch (e: Exception) {
                 finishWith("error")
@@ -1171,24 +1171,24 @@ class SilentCameraActivity : ComponentActivity() {
         val mb = Math.round(n * 1.2f)
         infoTv.text = when {
             mode == "doc" && multi -> n.toString() + "쪽 · 약 " + mb + "MB · 최대 " + capPages() + "쪽"
-            mode == "doc" && from == "scan" -> "이 쪽만 다시 찍고 원래 자리에 넣어요"
-            mode == "doc" -> "한 장씩 확인해요"
-            mode == "receipt" -> "한 장 찍고 확인한 뒤 영수증 칸으로 이어져요"
-            mode == "card" -> "한 장 찍고 확인한 뒤 명함 등록으로 이어져요"
-            else -> "찍으면 먼저 미리보기가 나와요"
+            mode == "doc" && from == "scan" -> "이 쪽만 다시 찍고 원래 자리에 넣습니다"
+            mode == "doc" -> "한 장씩 확인합니다"
+            mode == "receipt" -> "한 장 찍고 확인한 뒤 영수증 칸으로 이어집니다"
+            mode == "card" -> "한 장 찍고 확인한 뒤 명함 등록으로 이어집니다"
+            else -> "찍으면 먼저 미리보기가 나옵니다"
         }
         // 알림 띠(우선순위: 한도 → 저장 공간 → 일반 사진 표시)
         val cap = capPages()
         val full = mode == "doc" && multi && n >= cap
         val diskFull = Session.usedBytes(this) >= Session.DISK_CAP_BYTES
         val note = when {
-            full && cap >= Session.MAX_PAGES -> "100쪽을 다 찍었어요. 오른쪽 아래 「완료」를 눌러 주세요."
-            full -> "이번에는 " + cap + "쪽까지예요. 완료를 눌러 주세요"
-            diskFull && n > 0 -> "저장 공간 한도(약 150MB)에 닿았어요. 오른쪽 아래 「완료」를 눌러 주세요."
-            lowDisk && mode == "doc" && multi -> "저장 공간이 얼마 안 남았어요. 이번에는 " + Session.LOW_DISK_PAGES + "쪽까지만 찍을 수 있어요."
-            lowDisk -> "저장 공간이 얼마 안 남았어요."
-            mode == "doc" && multi && cap - n <= 20 && n > 0 -> "앞으로 " + (cap - n) + "쪽 더 찍을 수 있어요."
-            mode == "photo" -> "찍을 때 화면이 번쩍이고 폰이 짧게 떨려요"
+            full && cap >= Session.MAX_PAGES -> "100쪽을 다 찍었습니다. 오른쪽 아래 「완료」를 눌러 주십시오."
+            full -> "이번에는 " + cap + "쪽까지입니다. 완료를 눌러 주십시오"
+            diskFull && n > 0 -> "저장 공간 한도(약 150MB)에 닿았습니다. 오른쪽 아래 「완료」를 눌러 주십시오."
+            lowDisk && mode == "doc" && multi -> "저장 공간이 얼마 안 남았습니다. 이번에는 " + Session.LOW_DISK_PAGES + "쪽까지만 찍을 수 있습니다."
+            lowDisk -> "저장 공간이 얼마 안 남았습니다."
+            mode == "doc" && multi && cap - n <= 20 && n > 0 -> "앞으로 " + (cap - n) + "쪽 더 찍을 수 있습니다."
+            mode == "photo" -> "찍을 때 화면이 번쩍이고 폰이 짧게 떨립니다"
             else -> ""
         }
         noticeTv.text = note
@@ -1216,13 +1216,13 @@ class SilentCameraActivity : ComponentActivity() {
         if (busy) return
         if (guideReset != null) return                       // 방금 찍은 뒤 안내가 떠 있는 동안은 바꾸지 않는다
         hintTv.text = when {
-            shakeLevel > 1.6f -> "조금만 가만히 있어 주세요"
-            darkLive && flashMode == ImageCapture.FLASH_MODE_OFF -> "조금 어두워요. 밝은 쪽으로 가거나 불빛을 켜 볼까요?"
-            zoomOn && zoomWanted >= ZOOM_COARSE_FROM -> "많이 확대했어요. 글자가 거칠면 가까이 다가가 주세요"
-            mode == "receipt" -> "영수증이 세로로 꽉 차게 비춰 주세요"
-            mode == "card" -> "명함을 가로로 꽉 차게 비춰 주세요"
-            mode == "photo" -> "찍을 장면을 비춰 주세요"
-            else -> "문서 전체가 들어오게 비춰 주세요"
+            shakeLevel > 1.6f -> "조금만 가만히 있어 주십시오"
+            darkLive && flashMode == ImageCapture.FLASH_MODE_OFF -> "조금 어둡습니다. 밝은 쪽으로 가거나 불빛을 켜 볼까요?"
+            zoomOn && zoomWanted >= ZOOM_COARSE_FROM -> "많이 확대했습니다. 글자가 거칠면 가까이 다가가 주십시오"
+            mode == "receipt" -> "영수증이 세로로 꽉 차게 비춰 주십시오"
+            mode == "card" -> "명함을 가로로 꽉 차게 비춰 주십시오"
+            mode == "photo" -> "찍을 장면을 비춰 주십시오"
+            else -> "문서 전체가 들어오게 비춰 주십시오"
         }
         if (compact) hintChanged(shakeLevel > 1.6f || (darkLive && flashMode == ImageCapture.FLASH_MODE_OFF) || (zoomOn && zoomWanted >= ZOOM_COARSE_FROM), false)
     }
@@ -1459,7 +1459,7 @@ class SilentCameraActivity : ComponentActivity() {
                     camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic)
                 }
                 camera?.let { setupZoom(it) }
-                flashNote("카메라가 준비됐어요", 1200)
+                flashNote("카메라가 준비됐습니다", 1200)
             } catch (e: Exception) {
                 finishWith("error")
             }
@@ -1506,7 +1506,7 @@ class SilentCameraActivity : ComponentActivity() {
         if (mode == "doc" && multi && n >= capPages()) return
         if (mode != "doc" && n >= 1) return
         if (Session.usedBytes(this) >= Session.DISK_CAP_BYTES && n > 0) return
-        if (Session.freeBytes(this) < 20L * 1024 * 1024) { flashNote("저장 공간이 거의 없어요. 공간을 비운 뒤 다시 찍어 주세요", 4000); return }
+        if (Session.freeBytes(this) < 20L * 1024 * 1024) { flashNote("저장 공간이 거의 없습니다. 공간을 비운 뒤 다시 찍어 주십시오", 4000); return }
         val willShake = shakeLevel > 1.2f
         busy = true
         shotZoom = zoomWanted                                // 찍는 동안은 배율을 바꾸지 않는다(busy) — 화면에 보인 범위와 사진이 같다
@@ -1518,15 +1518,15 @@ class SilentCameraActivity : ComponentActivity() {
             frameTarget = file
             wantFrame.set(true)
             // 프레임 저장은 분석기가 부른다(onFrame)
-            main.postDelayed({ if (wantFrame.getAndSet(false)) { busy = false; flashNote("찍지 못했어요. 다시 눌러 주세요") } }, 4000)
+            main.postDelayed({ if (wantFrame.getAndSet(false)) { busy = false; flashNote("찍지 못했습니다. 다시 눌러 주십시오") } }, 4000)
             return
         }
-        val ic = imageCapture ?: run { busy = false; flashNote("카메라가 아직 준비 안 됐어요"); return }
+        val ic = imageCapture ?: run { busy = false; flashNote("카메라가 아직 준비되지 않았습니다"); return }
         focusThen {
             ic.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), ContextCompat.getMainExecutor(this),
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(r: ImageCapture.OutputFileResults) { afterSaved(file, willShake) }
-                    override fun onError(e: ImageCaptureException) { busy = false; try { file.delete() } catch (x: Exception) { }; flashNote("찍지 못했어요. 다시 눌러 주세요", 3000) }
+                    override fun onError(e: ImageCaptureException) { busy = false; try { file.delete() } catch (x: Exception) { }; flashNote("찍지 못했습니다. 다시 눌러 주십시오", 3000) }
                 })
         }
     }
@@ -1561,7 +1561,7 @@ class SilentCameraActivity : ComponentActivity() {
             val shake = shakeLevel > 1.2f
             runOnUiThread { afterSaved(target, shake) }
         } catch (e: Exception) {
-            runOnUiThread { busy = false; flashNote("찍지 못했어요. 다시 눌러 주세요", 3000) }
+            runOnUiThread { busy = false; flashNote("찍지 못했습니다. 다시 눌러 주십시오", 3000) }
         } finally {
             img.close()
         }
@@ -1586,8 +1586,8 @@ class SilentCameraActivity : ComponentActivity() {
                     if (zoomOn && !ZOOM_KEEP_ACROSS_PAGES) setZoom(1f)
                     refreshAll()
                     if (compact) popThumb()
-                    val extra = if (h.q == "blur") " · 조금 흐려요" else if (h.q == "dark") " · 조금 어두워요" else ""
-                    flashNote(pages.size.toString() + "쪽 찍었어요" + extra)
+                    val extra = if (h.q == "blur") " · 조금 흐립니다" else if (h.q == "dark") " · 조금 어둡습니다" else ""
+                    flashNote(pages.size.toString() + "쪽 찍었습니다" + extra)
                 } else {
                     refreshAll()
                     showConfirm(pg)
@@ -1647,7 +1647,7 @@ class SilentCameraActivity : ComponentActivity() {
             setPadding(dp(4), 0, dp(4), 0)
             setBackgroundColor(0x99000000.toInt())
         }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START))
-        cell.contentDescription = (i + 1).toString() + "쪽" + if (bad) ", 흐리거나 어두워요" else ""
+        cell.contentDescription = (i + 1).toString() + "쪽" + if (bad) ", 흐리거나 어둡습니다" else ""
         stripBox.addView(cell)
         val t = thumbs[pg.path]
         if (t != null) iv.setImageBitmap(t) else bg.execute {
@@ -1664,12 +1664,12 @@ class SilentCameraActivity : ComponentActivity() {
 
     private fun hintLine(q: String, shake: Boolean): Pair<String, Int> {
         val base = when (q) {
-            "blur" -> "글자가 조금 흐려요. 다시 찍는 게 좋아요"
-            "dark" -> "조금 어두워요. 불빛을 켜고 다시 찍어 볼까요?"
-            else -> "선명해요. 글자가 잘 보여요"
+            "blur" -> "글자가 조금 흐립니다. 다시 찍는 게 좋습니다"
+            "dark" -> "조금 어둡습니다. 불빛을 켜고 다시 찍어 볼까요?"
+            else -> "선명합니다. 글자가 잘 보입니다"
         }
         val color = if (q == "sharp") 0xFF86EFAC.toInt() else 0xFFFCD34D.toInt()
-        return Pair(if (shake) "$base · 손떨림이 있었어요" else base, color)
+        return Pair(if (shake) "$base · 손떨림이 있었습니다" else base, color)
     }
 
     /** 이미 찍은 쪽을 크게 보고 지울 수 있다(연속 촬영의 썸네일을 눌렀을 때). */
@@ -1716,11 +1716,11 @@ class SilentCameraActivity : ComponentActivity() {
         col.addView(zv, LinearLayout.LayoutParams(-1, 0, 1f))
         bg.execute {
             val b = loadBitmap(pg.path, 2400)
-            runOnUiThread { if (b != null) zv.setImageBitmap(b) else flashNote("사진을 화면에 못 불러왔어요") }
+            runOnUiThread { if (b != null) zv.setImageBitmap(b) else flashNote("사진을 화면에 불러오지 못했습니다") }
         }
         val warn = pg.q != "sharp"
         val hl = hintLine(pg.q, shook.contains(pg.path))
-        val statusTv = if (mode == "photo") tv("이 사진은 아직 어디에도 저장되지 않았어요", 15f, 0xFFD0D6E6.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(dp(14), dp(8), dp(14), dp(8)) }
+        val statusTv = if (mode == "photo") tv("이 사진은 아직 어디에도 저장되지 않았습니다", 15f, 0xFFD0D6E6.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(dp(14), dp(8), dp(14), dp(8)) }
             else tv(hl.first, 15f, hl.second, true).apply { gravity = Gravity.CENTER; setPadding(dp(14), dp(8), dp(14), dp(2)) }
         val bar = View(this).apply { setBackgroundColor(0xFF3B82F6.toInt()) }
         val autoNote = tv("", 13f, 0xFFD0D6E6.toInt()).apply { gravity = Gravity.CENTER }
@@ -1733,9 +1733,9 @@ class SilentCameraActivity : ComponentActivity() {
             row.addView(button("다시 찍기", false, 1f) { removeLayer(l); retakeAfterConfirm(pg) })
             saveBtn = button("갤러리에 저장", false, 1f) {
                 if (saved) return@button
-                statusTv.text = "저장하는 중이에요…"
+                statusTv.text = "저장하는 중입니다…"
                 saveToGallery(pg.path) { ok, msg ->
-                    if (ok) { saved = true; saveBtn.text = "저장됨 ✓"; saveBtn.alpha = 0.6f; statusTv.text = "갤러리에 저장했어요" }
+                    if (ok) { saved = true; saveBtn.text = "저장됨 ✓"; saveBtn.alpha = 0.6f; statusTv.text = "갤러리에 저장했습니다" }
                     else statusTv.text = msg
                 }
             }
@@ -1767,7 +1767,7 @@ class SilentCameraActivity : ComponentActivity() {
 
         if (auto) {
             val secs = String.format("%.1f", AUTO_MS / 1000f)
-            autoNote.text = secs + "초 뒤에 저절로 넘어가요 · 사진을 누르면 멈춰요"
+            autoNote.text = secs + "초 뒤에 저절로 넘어갑니다 · 사진을 누르면 멈춥니다"
             val full = resources.displayMetrics.widthPixels.toFloat()
             val anim = ValueAnimator.ofFloat(1f, 0f).setDuration(AUTO_MS)
             anim.addUpdateListener { a ->
@@ -1784,7 +1784,7 @@ class SilentCameraActivity : ComponentActivity() {
             zv.onTouched = {
                 if (autoAnim === anim && anim.isRunning) {
                     anim.cancel(); autoAnim = null
-                    autoNote.text = "멈췄어요. 천천히 보세요"
+                    autoNote.text = "멈췄습니다. 천천히 보십시오"
                     bar.visibility = View.GONE
                 }
             }
@@ -1808,10 +1808,10 @@ class SilentCameraActivity : ComponentActivity() {
 
     // ───────── 갤러리에 저장 (일반 사진 모드만) ─────────
     private fun saveToGallery(path: String, done: (Boolean, String) -> Unit) {
-        if (Build.VERSION.SDK_INT < 29) { done(false, "이 폰에서는 갤러리 저장을 지원하지 않아요"); return }
+        if (Build.VERSION.SDK_INT < 29) { done(false, "이 폰에서는 갤러리 저장을 지원하지 않습니다"); return }
         bg.execute {
             var ok = false
-            var msg = "갤러리에 저장하지 못했어요"
+            var msg = "갤러리에 저장하지 못했습니다"
             try {
                 val src = File(path)
                 val v = ContentValues().apply {
@@ -1832,7 +1832,7 @@ class SilentCameraActivity : ComponentActivity() {
                     ok = copied > 0 && size == src.length()
                     if (!ok) try { contentResolver.delete(uri, null, null) } catch (e: Exception) { }
                 }
-            } catch (e: Exception) { msg = "갤러리에 저장하지 못했어요" }
+            } catch (e: Exception) { msg = "갤러리에 저장하지 못했습니다" }
             runOnUiThread { done(ok, msg) }
         }
     }
@@ -1878,28 +1878,28 @@ class SilentCameraActivity : ComponentActivity() {
                 val c0 = card()
                 c0.addView(tv("화면 모양", 17f, Color.WHITE, true))
                 val choices = arrayOf(
-                    arrayOf(CamLayout.BIG, "크게 보기 (처음 설정)", "영수증·일반 사진은 카메라 화면을 더 크게 보여 줘요. 문서는 지금처럼 넓게 보여요."),
-                    arrayOf(CamLayout.SMALL, "단추만 작게 (시야 그대로)", "비추는 범위는 그대로 두고, 단추만 작게 정리해요."),
-                    arrayOf(CamLayout.CLASSIC, "예전 화면 그대로", "지난 버전과 똑같이 보여요."))
+                    arrayOf(CamLayout.BIG, "크게 보기 (처음 설정)", "영수증·일반 사진은 카메라 화면을 더 크게 보여 줍니다. 문서는 지금처럼 넓게 보입니다."),
+                    arrayOf(CamLayout.SMALL, "단추만 작게 (시야 그대로)", "비추는 범위는 그대로 두고, 단추만 작게 정리합니다."),
+                    arrayOf(CamLayout.CLASSIC, "예전 화면 그대로", "지난 버전과 똑같이 보입니다."))
                 for (ch in choices) c0.addView(option(ch[1], ch[2], layoutVariant == ch[0]) { chooseLayout(ch[0]) })
-                if (pages.isNotEmpty()) c0.addView(tv("사진을 찍은 뒤에는 모양을 바꿀 수 없어요. 완료한 뒤 바꿔 주세요", 13f, 0xFFFCD34D.toInt()).apply { setPadding(0, dp(6), 0, 0) })
+                if (pages.isNotEmpty()) c0.addView(tv("사진을 찍은 뒤에는 모양을 바꿀 수 없습니다. 완료한 뒤 바꿔 주십시오", 13f, 0xFFFCD34D.toInt()).apply { setPadding(0, dp(6), 0, 0) })
                 col.addView(c0)
             }
             val auto = prefs.getBoolean("auto", false)
             val c1 = card()
             c1.addView(tv("찍은 뒤 확인 방식", 17f, Color.WHITE, true))
-            c1.addView(option("항상 멈춰서 확인 (처음 설정)", "찍으면 사진이 크게 나오고 「다시 찍기」「사용하기」를 눌러요", !auto) { prefs.edit().putBoolean("auto", false).apply(); fill() })
-            c1.addView(option("선명하면 저절로 넘어가기", "선명한 사진은 2.8초 뒤 저절로 넘어가요. 흐리거나 어두우면 늘 멈춰요", auto) { prefs.edit().putBoolean("auto", true).apply(); fill() })
+            c1.addView(option("항상 멈춰서 확인 (처음 설정)", "찍으면 사진이 크게 나오고 「다시 찍기」「사용하기」를 누릅니다", !auto) { prefs.edit().putBoolean("auto", false).apply(); fill() })
+            c1.addView(option("선명하면 저절로 넘어가기", "선명한 사진은 2.8초 뒤 저절로 넘어갑니다. 흐리거나 어두우면 늘 멈춥니다", auto) { prefs.edit().putBoolean("auto", true).apply(); fill() })
             col.addView(c1)
             val vib = prefs.getBoolean("vibrate", true)
             val c2 = card()
             c2.addView(tv("찍을 때 진동", 17f, Color.WHITE, true))
-            c2.addView(option("문서·영수증 찍을 때 짧게 진동", "찍혔는지 알려 줘요", vib) { prefs.edit().putBoolean("vibrate", !vib).apply(); fill() })
+            c2.addView(option("문서·영수증 찍을 때 짧게 진동", "찍혔는지 알려 줍니다", vib) { prefs.edit().putBoolean("vibrate", !vib).apply(); fill() })
             c2.addView(tv("일반 사진은 항상 번쩍임과 진동", 15f, Color.WHITE, true).apply { setPadding(0, dp(8), 0, 0) })
-            c2.addView(tv("사람이 있는 곳에서 찍는다는 걸 알 수 있게 꺼지지 않아요", 13f, 0xFFC7CEE0.toInt()))
+            c2.addView(tv("사람이 있는 곳에서 찍는다는 걸 알 수 있게 꺼지지 않습니다", 13f, 0xFFC7CEE0.toInt()))
             col.addView(c2)
             val c3 = card()
-            c3.addView(tv("움직임 효과는 폰의 「움직임 줄이기」 설정을 따라가요.", 14f, 0xFFC7CEE0.toInt()))
+            c3.addView(tv("움직임 효과는 폰의 「움직임 줄이기」 설정을 따라갑니다.", 14f, 0xFFC7CEE0.toInt()))
             col.addView(c3)
         }
         fill()
@@ -1927,7 +1927,7 @@ class SilentCameraActivity : ComponentActivity() {
                 setPadding(dp(20), dp(18), dp(20), dp(16))
             }
             card.addView(tv("찍은 " + pages.size + "쪽을 버릴까요?", 18f, Color.WHITE, true))
-            card.addView(tv("닫으면 찍은 사진이 사라져요.", 15f, 0xFFC7CEE0.toInt()).apply { setPadding(0, dp(6), 0, dp(14)) })
+            card.addView(tv("닫으면 찍은 사진이 사라집니다.", 15f, 0xFFC7CEE0.toInt()).apply { setPadding(0, dp(6), 0, dp(14)) })
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.addView(button("계속 찍기", false, 1f) { removeLayer(l) })
             row.addView(button("버리기", true, 1f) { removeLayer(l); discardMineAndFinish() })
