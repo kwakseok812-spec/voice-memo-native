@@ -100,6 +100,12 @@
   // ---------------- 그리기 ----------------
   function schedule() { if (!raf) raf = requestAnimationFrame(function () { raf = 0; if (S) render(); }); }
 
+  function fltOf(sh) {                       // 이 시트에 걸린 자동 필터(머리줄 ▽ 표시용). 시트 글이 바뀔 때만 다시 읽는다
+    var xml = S.an && S.an.sheets && S.an.sheets[sh.name] && S.an.sheets[sh.name].xml;
+    if (!xml || !global.SOXlsxStruct || !global.SOXlsxStruct.readFilter) return null;
+    if (sh._fx !== xml) { sh._fx = xml; try { sh._fl = global.SOXlsxStruct.readFilter(xml); } catch (e) { sh._fl = null; } }
+    return sh._fl;
+  }
   function cellDiv(sh, r, c, x, y, w, h, extraCls, lh) {
     var cell = cellOf(sh, r, c), txt = display(cell);
     var sel = (S.sel.r === r && S.sel.c === c) ? ' sel' : '';
@@ -115,7 +121,9 @@
       if (sty.bl) st += 'border-left:1px solid #222;'; if (sty.br) st += 'border-right:1px solid #222;'; if (sty.bt) st += 'border-top:1px solid #222;'; if (sty.bb) st += 'border-bottom:1px solid #222;';
     }
     var rgc = (S.rg && r >= S.rg.r0 && r <= S.rg.r1 && c >= S.rg.c0 && c <= S.rg.c1) ? ' rg' : '';
-    return '<div class="sx-c' + (extraCls || '') + sel + rgc + ed + '" style="' + st + '">' + (txt ? esc(txt) : '') + '</div>';
+    var fl = fltOf(sh), fmk = '';
+    if (fl && r === fl.ref.r0 - 1 && c >= fl.ref.c0 - 1 && c <= fl.ref.c1 - 1) { var fk = c - (fl.ref.c0 - 1), fon = fl.criteria[fk] !== undefined; fmk = '<span class="sx-fv' + (fon ? ' on' : '') + '" data-fc="' + fk + '" aria-label="' + (fon ? '필터가 걸린 열' : '필터') + '">' + (fon ? '▼' : '▽') + '</span>'; }
+    return '<div class="sx-c' + (extraCls || '') + sel + rgc + ed + (fmk ? ' sx-fh' : '') + '" style="' + st + '">' + (txt ? esc(txt) : '') + fmk + '</div>';
   }
   // 한 구역(rows r0..r1, cols c0..c1)을 HTML 로. ox,oy = 구역 원점 좌표(스크롤 보정)
   function cellsHTML(sh, r0, r1, c0, c1, ox, oy) {
@@ -238,8 +246,10 @@
   }
   function onTap(e) {
     if (S.lp) { S.lp = false; return; }                 // 길게 눌러 상세를 연 뒤의 손 뗌은 무시
+    var fvEl = e.target && e.target.closest ? e.target.closest('.sx-fv') : null;
     var res = pickAt(e.clientX, e.clientY, e.target);
     if (!res) return;
+    if (fvEl && S.editing && S.ui && S.ui.filterCol) { S.ui.filterCol(Number(fvEl.getAttribute('data-fc'))); return; }      // 머리줄 ▽ → 그 열 필터
     // 고치기 중이면 칸을 누르는 즉시 입력줄이 키보드 위로 올라온다
     // v10.4: 아래 도구줄이 있을 때는 첫 번째 누름 = 칸 고르기(키보드 안 올림), 같은 칸을 한 번 더 누르면 입력 시작(키보드가 올라오면 도구줄이 가려지므로)
     if (S.editable && S.editing && (!plusOn() || res.same)) { try { S.el.inp.focus({ preventScroll: true }); } catch (x2) {} }
@@ -529,7 +539,7 @@
       S.ctx.busy('되돌리는 중…');
       currentBytes().then(function (cur) { to.push({ pkg: true, bytes: cur, label: st.label }); return loadBytes(st.bytes); }).then(adopt).then(function () {
         S.pkgOps = Math.max(0, (S.pkgOps || 0) + (from === S.undo ? -1 : 1)); S.ctx.busy(null); syncDirty(); S.ctx.toast(doneMsg + ' (' + st.label + ')', 2000);
-      }).catch(function (e) { S.ctx.busy(null); from.push(st); S.ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); });
+      }).catch(function (e) { S.ctx.busy(null); from.push(st); S.ctx.explainFail('되돌리지 못했습니다', e, 4200); });
       return;
     }
     to.push(capture(st.name, st.r, st.c));
@@ -550,7 +560,7 @@
         loadBytes(new Uint8Array(S.origBuf)).then(adopt).then(function () {
           S.edits = {}; S.patched = {}; Object.keys((S.an && S.an.sheets) || {}).forEach(function (nm) { S.patched[nm] = 1; }); S.undo = []; S.redo = []; S.orig = {}; S.origRef = {}; S.calcToasted = false; S.pkgOps = 0;
           S.ctx.busy(null); syncDirty(); S.ctx.toast('고친 내용을 모두 되돌렸습니다.', 2400);
-        }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); });
+        }).catch(function (e) { S.ctx.busy(null); S.ctx.explainFail('되돌리지 못했습니다', e, 4200); });
       }, { danger: true });
       return;
     }
@@ -643,7 +653,7 @@
         if (ok === false || !S) return false;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
         S.dirty = false; ctx.setDirty(false); refreshActions(); if (!silent) ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000); return true;
       });
-    }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); return false; });
+    }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다', e, 4800); return false; });
   }
   function saveCopyNow() { doSave(false); }
   function askSave() {
@@ -870,7 +880,7 @@
         S.pkgOps = (S.pkgOps || 0) + 1;
         return adopt(m).then(function () { done(); syncDirty(); if (onDone) onDone(x.r); return true; });
       });
-    }).catch(function (e) { done(); S.ctx.toast('고치지 못했습니다: ' + ((e && e.message) || e), 5200); return false; });
+    }).catch(function (e) { done(); S.ctx.explainFail('고치지 못했습니다', e, 5200); return false; });
   }
   // ---- 서식(styles.xml)을 읽어 그리기에 쓴다 ----
   function loadStyles() {

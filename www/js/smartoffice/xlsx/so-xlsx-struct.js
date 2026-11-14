@@ -790,8 +790,16 @@
         if (m) for (var r = +m[2] + 1; r <= +m[4]; r++) { var row = getRow(sd, r, false); if (row) row.open = delAttr(row.open, 'hidden'); }     // 옛 필터가 숨긴 줄은 먼저 모두 보이게
         var out = serializeSheet(sd);
         if (rng) {
+          var OPN = { ge: 'greaterThanOrEqual', le: 'lessThanOrEqual', gt: 'greaterThan', lt: 'lessThan', eq: '' };
           var cs = Object.keys(criteria || {}).map(Number).sort(function (a, b) { return a - b; }).map(function (k) {
-            return '<filterColumn colId="' + k + '"><filters>' + criteria[k].map(function (v) { return '<filter val="' + escX(v) + '"/>'; }).join('') + '</filters></filterColumn>';
+            var c = criteria[k];
+            if (c && c.cond) {                           // 조건 필터: 숫자 비교·글자 포함
+              return '<filterColumn colId="' + k + '"><customFilters' + (c.cond.length > 1 && c.and !== false ? ' and="1"' : '') + '>' + c.cond.map(function (x) {
+                if (x.op === 'contains') return '<customFilter val="*' + escX(x.s) + '*"/>';
+                return '<customFilter' + (OPN[x.op] ? ' operator="' + OPN[x.op] + '"' : '') + ' val="' + escX(String(x.n)) + '"/>';
+              }).join('') + '</customFilters></filterColumn>';
+            }
+            return '<filterColumn colId="' + k + '"><filters>' + c.map(function (v) { return '<filter val="' + escX(v) + '"/>'; }).join('') + '</filters></filterColumn>';
           }).join('');
           var ref = colName(rng.c0) + rng.r0 + ':' + colName(rng.c1) + rng.r1;
           out = insertWsElement(out, 'autoFilter', '<autoFilter ref="' + ref + '"' + (cs ? '>' + cs + '</autoFilter>' : '/>'));
@@ -805,12 +813,97 @@
     var m = /<autoFilter\b[^>]*?(?:\/>|>[\s\S]*?<\/autoFilter>)/.exec(xml || ''); if (!m) return null;
     var open = m[0].match(/^<autoFilter\b[^>]*>/)[0], rm = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(attrOf(open, 'ref') || ''); if (!rm) return null;
     var crit = {}; (m[0].match(/<filterColumn\b[\s\S]*?<\/filterColumn>/g) || []).forEach(function (fc) {
-      var id = +attrOf(fc.match(/^<filterColumn\b[^>]*>/)[0], 'colId'); if (/<(customFilters|top10|dynamicFilter|colorFilter|iconFilter)\b/.test(fc)) crit[id] = null; else crit[id] = (fc.match(/<filter\b[^>]*\sval="[^"]*"/g) || []).map(function (t) { return unescX(attrOf(t, 'val')); });
+      var id = +attrOf(fc.match(/^<filterColumn\b[^>]*>/)[0], 'colId');
+      if (/<customFilters\b/.test(fc) && !/<(top10|dynamicFilter|colorFilter|iconFilter|filters)\b/.test(fc)) {
+        var cf = fc.match(/<customFilter\b[^>]*\/?>/g) || [], conds = [], okc = cf.length > 0 && cf.length <= 2, andv = /<customFilters\b[^>]*\sand="(?:1|true)"/.test(fc);
+        var OPR = { greaterThanOrEqual: 'ge', lessThanOrEqual: 'le', greaterThan: 'gt', lessThan: 'lt' };
+        cf.forEach(function (t) {
+          var op = attrOf(t, 'operator') || 'equal', v = unescX(attrOf(t, 'val') || '');
+          if (op === 'equal' && /^\*[^*?]+\*$/.test(v)) conds.push({ op: 'contains', s: v.slice(1, -1) });
+          else if (OPR[op] && v !== '' && !isNaN(parseFloat(v))) conds.push({ op: OPR[op], n: parseFloat(v) });
+          else if (op === 'equal' && v !== '' && !isNaN(parseFloat(v)) && /^-?[\d.]+$/.test(v)) conds.push({ op: 'eq', n: parseFloat(v) });
+          else okc = false;
+        });
+        crit[id] = okc ? { cond: conds, and: andv } : null; return;
+      }
+      if (/<(customFilters|top10|dynamicFilter|colorFilter|iconFilter)\b/.test(fc)) crit[id] = null; else crit[id] = (fc.match(/<filter\b[^>]*\sval="[^"]*"/g) || []).map(function (t) { return unescX(attrOf(t, 'val')); });
     });
     return { ref: { c0: colNum(rm[1]), r0: +rm[2], c1: colNum(rm[3]), r1: +rm[4] }, criteria: crit };
   }
+  // ============================== 칸·범위 복사 붙여넣기 (v10.7) ==============================
+  // src = {r0,c0,r1,c1}(1부터) → 붙일 왼쪽 위 (dstR0,dstC0)(1부터). mode: 'all'(값·수식·서식) | 'values'(값만, 붙는 자리의 서식은 그대로). cut=true 면 원래 칸은 비운다(다른 칸의 수식이 원래 칸을 쓰면 하지 않는다)
+  function mergesOf(xml) { var out = [], m, re = /<mergeCell\b[^>]*\sref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g; while ((m = re.exec(xml))) out.push({ c0: colNum(m[1]), r0: +m[2], c1: colNum(m[3]), r1: +m[4] }); return out; }
+  function hitMerge(ms, r0, c0, r1, c1) { return ms.some(function (m) { return !(m.r1 < r0 || m.r0 > r1 || m.c1 < c0 || m.c0 > c1); }); }
+  function copyRange(pkg, sheetName, src, dstR0, dstC0, mode, cut) {
+    return wbInfo(pkg).then(function (info) {
+      var tgt = null; info && info.sheets.forEach(function (s) { if (sameName(s.name, sheetName)) tgt = s; });
+      if (!tgt || !tgt.path) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml0) {
+        var ex = expandShared(xml0, tgt.name); if (ex.err) return { err: WHY.shared };
+        var nr = src.r1 - src.r0 + 1, nc = src.c1 - src.c0 + 1, dr = dstR0 - src.r0, dc = dstC0 - src.c0;
+        if (dstR0 + nr - 1 > MAXR || dstC0 + nc - 1 > MAXC) return { err: '붙일 자리가 시트의 끝을 넘습니다.' };
+        var ms = mergesOf(ex.xml);
+        if (hitMerge(ms, src.r0, src.c0, src.r1, src.c1) || hitMerge(ms, dstR0, dstC0, dstR0 + nr - 1, dstC0 + nc - 1)) return { err: '합쳐진 칸이 걸려 있어 폰에서는 복사·붙여넣기를 할 수 없습니다. 먼저 합치기를 풀거나 「수정 요청」으로 맡겨 주십시오.' };
+        var sd = parseSheet(ex.xml); if (!sd) return { err: WHY.sheet };
+        var snap = [], i, j, err = null;
+        for (i = 0; i < nr; i++) { var srow = getRow(sd, src.r0 + i, false); snap.push([]); for (j = 0; j < nc; j++) { var sc = srow && getCell(srow, src.c0 + j, false); snap[i].push(sc ? sc.raw : null); } }
+        for (i = 0; i < nr && !err; i++) for (j = 0; j < nc; j++) if (snap[i][j] && /<f\b[^>]*\st="(?:array|dataTable)"|\scm="|\svm="/.test(snap[i][j])) { err = '배열 수식이나 특수한 칸이 들어 있어 복사할 수 없습니다. 엑셀에서 해 주십시오.'; break; }
+        if (err) return { err: err };
+        if (cut && snap.some(function (rw) { return rw.some(function (q) { return q && /<f\b/.test(q); }); })) return { err: '수식이 든 칸은 오려두기를 할 수 없습니다(엑셀은 수식이 가리키는 곳을 따로 계산해 옮깁니다). 「복사」로 붙인 뒤 원래 칸을 지워 주십시오.' };
+        if (cut) {                                   // 다른 칸의 수식이 원래 칸을 쓰면 오려두기를 막는다
+          var bad = false, sheets = info.sheets.filter(function (s) { return s.path; });
+          return Promise.all(sheets.map(function (s) { return pkg.read(s.path).then(function (x) { return { s: s, x: x || '' }; }); })).then(function (all) {
+            all.forEach(function (a) {
+              (a.x.match(/<f\b[^>]*>[^<]*<\/f>/g) || []).forEach(function (ft) {
+                var txt = unescX(ft.replace(/<[^>]+>/g, ''));
+                mapRefs(txt, a.s.name, function (r) {
+                  if (!sameName(r.sheet, tgt.name)) return null;
+                  var b = r.b || r.a, rr0 = Math.min(r.a.r, b.r), rr1 = Math.max(r.a.r, b.r), cc0 = Math.min(r.a.c, b.c), cc1 = Math.max(r.a.c, b.c);
+                  if (!(rr1 < src.r0 || rr0 > src.r1 || cc1 < src.c0 || cc0 > src.c1)) bad = true; return null;
+                });
+              });
+            });
+            if (bad) return { err: '다른 칸의 수식이 옮기려는 칸을 쓰고 있어 오려두기는 할 수 없습니다(수식이 어긋납니다). 「복사」로 붙인 뒤 원래 칸을 지워 주십시오.' };
+            return doPaste();
+          });
+        }
+        return doPaste();
+        function doPaste() {
+          var n = 0;
+          for (i = 0; i < nr && !err; i++) {
+            var row = getRow(sd, dstR0 + i, true);
+            for (j = 0; j < nc && !err; j++) {
+              var raw = snap[i][j], dcol = dstC0 + j, old = getCell(row, dcol, false), oldS = old ? attrOf(openTagOfCell(old.raw), 's') : null;
+              if (!raw) {                               // 빈 칸을 붙이면 붙는 자리를 비운다
+                if (old) { var k0 = row.cells.indexOf(old); if (mode === 'values' && oldS != null) row.cells[k0] = { c: dcol, raw: '<c r="' + colName(dcol) + row.r + '" s="' + oldS + '"/>' }; else row.cells.splice(k0, 1); }
+                continue;
+              }
+              var f = /<f\b([^>]*)>([^<]*)<\/f>/.exec(raw), nraw = raw;
+              if (mode === 'values') {
+                nraw = nraw.replace(/<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>/g, '');
+                if (/\st="str"/.test(nraw)) nraw = nraw.replace(/\st="str"/, ' t="inlineStr"').replace(/<v>([^<]*)<\/v>/, '<is><t xml:space="preserve">$1</t></is>');
+                var ot = openTagOfCell(nraw), ot2 = oldS != null ? setAttr(ot, 's', oldS) : delAttr(ot, 's'); nraw = ot2 + nraw.slice(ot.length);
+              } else if (f) {
+                var tr = translateFormula(unescX(f[2]), tgt.name, dr, dc); if (tr.err) { err = '붙일 자리가 시트 밖으로 나가는 수식이 있습니다.'; break; }
+                nraw = nraw.replace(/<f\b([^>]*)>([^<]*)<\/f>/, function (all, at) { return '<f' + at + '>' + escX(tr.f) + '</f>'; }).replace(/<v>[^<]*<\/v>/, '').replace(/\st="[^"]*"/, '');
+              }
+              var nc2 = { c: dcol, raw: nraw }; renumberCell(nc2, row.r, dcol);
+              if (old) row.cells[row.cells.indexOf(old)] = nc2; else { var at2 = 0; while (at2 < row.cells.length && row.cells[at2].c < dcol) at2++; row.cells.splice(at2, 0, nc2); }
+              n++;
+            }
+          }
+          if (err) return { err: err };
+          if (cut) {
+            for (i = 0; i < nr; i++) { var srow2 = getRow(sd, src.r0 + i, false); if (!srow2) continue; for (j = 0; j < nc; j++) { var rr = src.r0 + i, cc = src.c0 + j; if (rr >= dstR0 && rr < dstR0 + nr && cc >= dstC0 && cc < dstC0 + nc) continue; var sc2 = getCell(srow2, cc, false); if (sc2) srow2.cells.splice(srow2.cells.indexOf(sc2), 1); } }
+          }
+          var out = serializeSheet(sd); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true, n: n, nr: nr, nc: nc };
+        }
+      });
+    });
+  }
+
   var api = {
-    setRowsHidden: setRowsHidden, setColsHidden: setColsHidden, showAllHidden: showAllHidden, setFilter: setFilter, readFilter: readFilter,
+    setRowsHidden: setRowsHidden, setColsHidden: setColsHidden, showAllHidden: showAllHidden, setFilter: setFilter, readFilter: readFilter, copyRange: copyRange,
     setCachedValues: setCachedValues,
     colNum: colNum, colName: colName, escX: escX, unescX: unescX, WHY: WHY,
     parseSheet: parseSheet, serializeSheet: serializeSheet, getRow: getRow, getCell: getCell, setDimension: setDimension, dimensionOf: dimensionOf,

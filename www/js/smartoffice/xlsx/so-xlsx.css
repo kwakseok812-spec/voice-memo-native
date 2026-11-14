@@ -114,3 +114,8 @@ html[data-style="dark"] .sx-root{--sx-bg:#14171f;--sx-fg:#e8eaf0;--sx-line:#2b30
 .sxu-mb:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){.sxu-ob:active,.sxu-b:active,.sxu-mb:active{transform:none}}
 @media (min-width:600px){.sx-bottom{flex-wrap:wrap}.sx-bottom .sx-ops{flex:0 0 100%;order:-1}.sxu-ob{min-height:56px}.sxu-ob .l{font-size:12px}}
+
+/* O-0861 v10.7: 자동 필터 머리줄 표시(▽ 걸리지 않음 · ▼ 조건 걸림) */
+.sx-c.sx-fh{padding-right:22px;box-sizing:border-box}
+.sx-fv{position:absolute;right:0;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:#1C5FD6;background:rgba(28,95,214,.10);cursor:pointer;font-weight:800;pointer-events:auto}
+.sx-fv.on{color:#fff;background:#1C5FD6}
