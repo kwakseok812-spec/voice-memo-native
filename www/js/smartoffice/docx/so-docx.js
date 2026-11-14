@@ -325,7 +325,8 @@
 
   // ---- 위쪽 알림(시트 단추를 가리지 않게 화면 위쪽에 둔다) / 쪽 번호 알약 / 쪽·목차 이동
   var noteT = 0;
-  function note(msg, ms) {
+  function note(msg, ms) {                               // v10.7: 본문을 가리지 않게 앱 공용 안내 띠(도구줄 바로 위 한 줄)로 보인다
+    if (ctxRef && ctxRef.toast) { ctxRef.toast(msg, ms || 3200); return; }
     if (!noteEl) return;
     noteEl.textContent = msg; noteEl.classList.add('on');
     clearTimeout(noteT); noteT = setTimeout(function () { if (noteEl) noteEl.classList.remove('on'); }, ms || 3200);
@@ -415,8 +416,9 @@
 
   // ---- 문단 고치는 시트 (textarea: 폰 한글 조합 입력이 가장 안정적. contenteditable 은 docx-preview 가 만든 DOM·CSS zoom 위에서 커서·조합이 흔들려 쓰지 않음)
   //      시트는 화면 맨 아래 고정(position:fixed)이 아니라 틀 안에 두고, 키보드가 올라오면 visualViewport 로 높이를 재서 키보드 바로 위로 올린다.
-  var sheet = null, sheetVV = null, sheetCur = null;
+  var sheet = null, sheetVV = null, sheetCur = null, curTa = null;
   function closeSheet() {
+    curTa = null;
     if (sheetVV && window.visualViewport) { window.visualViewport.removeEventListener('resize', sheetVV); window.visualViewport.removeEventListener('scroll', sheetVV); }
     sheetVV = null;
     if (sheetCur) { sheetCur.classList.remove('so-docx-cur'); sheetCur = null; }
@@ -444,7 +446,50 @@
     while (i >= 0 && i < S.doc.paras.length) { var p = S.doc.paras[i]; if (p.editable && p.r) return i; i += delta; }
     return -1;
   }
-  function openSheet(pEl, xi) {
+  // ---- 글자 일부만 꾸미기(O-0861 v10.7): 글칸에서 글자를 끌어 고른 뒤 단추로 그 부분에만 적용 ----
+  var PF_COLORS = [['검정', '000000'], ['빨강', 'C00000'], ['파랑', '1C5FD6'], ['초록', '1B8A3A'], ['주황', 'EE7A00'], ['보라', '7A3FC4'], ['회색', '777777'], ['흰색', 'FFFFFF']];
+  var PF_HL = [['노랑', 'yellow'], ['연두', 'green'], ['하늘', 'cyan'], ['분홍', 'magenta'], ['없음', null]];
+  var PF_FONTS = ['맑은 고딕', '바탕', '돋움', '굴림', '궁서', 'Arial', 'Times New Roman'], PF_SIZES = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36];
+  function partialApply(f, msg) {
+    var ps = S && S.psel;
+    if (!structOn()) return;
+    if (!ps || !(ps.b > ps.a)) { note('먼저 위 글칸에서 꾸밀 글자를 끌어서 고르십시오.', 3200); return; }
+    if (curTa && curTa.xi === ps.xi) curTa.commit();
+    var snap = { xi: ps.xi, a: ps.a, b: ps.b, text: ps.text };
+    structRun('글자 서식', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxStruct.fmtPartial(x, snap.xi, snap.a, snap.b, f); if (r.err) return r; pkg.write('word/document.xml', r.xml); return {}; }); }, function (r) {
+      if (r && r.err) { note(r.err, 5200); return; }
+      note(msg || '고른 글자의 서식을 바꿨습니다', 2400);
+      S.psel = snap;
+      var q = S.doc.paras[snap.xi]; if (q && q.editable && q.r) openSheet(q.r, snap.xi, { a: snap.a, b: snap.b });
+    });
+  }
+  function pfSheet(title, groups) {
+    var body = document.createElement('div'); body.className = 'sdx';
+    groups.forEach(function (g) {
+      var l = document.createElement('div'); l.className = 'sdx-l'; l.textContent = g.label; body.appendChild(l);
+      var row = document.createElement('div'); row.className = 'sdx-r'; body.appendChild(row);
+      g.items.forEach(function (it) { var b = document.createElement('button'); b.type = 'button'; b.className = 'sdx-b'; b.textContent = it[0]; b.onclick = function () { partialApply(it[1], it[2]); }; row.appendChild(b); });
+    });
+    ctxRef.sheet({ title: title, body: body, buttons: [{ label: '닫기' }], wide: true, keep: true });
+  }
+  function buildPartialBar(box, ta, xi, getComposing) {
+    box.innerHTML = '<div class="so-docx-sh-fl"></div><div class="so-docx-sh-fb"></div>';
+    var fl = box.querySelector('.so-docx-sh-fl'), fr = box.querySelector('.so-docx-sh-fb');
+    function paint() { var ps = S.psel; if (ps && ps.xi === xi && ps.b > ps.a) { var t = String(ps.text || '').replace(/\s+/g, ' '); fl.textContent = '고른 글자: 「' + (t.length > 14 ? t.slice(0, 14) + '…' : t) + '」 ' + (ps.b - ps.a) + '자'; } else fl.textContent = '고른 글자 없음 — 위 글칸에서 꾸밀 글자를 끌어 고르십시오'; }
+    function rec() { var a = ta.selectionStart, b = ta.selectionEnd; if (b > a) S.psel = { xi: xi, a: a, b: b, text: ta.value.slice(a, b) }; else if (S.psel && S.psel.xi === xi && document.activeElement === ta) S.psel = null; paint(); }
+    ['select', 'keyup', 'mouseup', 'touchend', 'blur'].forEach(function (ev) { ta.addEventListener(ev, function () { setTimeout(rec, ev === 'blur' ? 0 : 30); }); });
+    ta.addEventListener('input', function () { if (S.psel && S.psel.xi === xi) { S.psel = null; paint(); } });
+    function add(label, cls, fn) { var b = document.createElement('button'); b.type = 'button'; b.className = 'so-docx-pfx' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('pointerdown', function (e) { e.preventDefault(); }); b.onclick = function () { if (getComposing()) { try { ta.blur(); } catch (x) {} setTimeout(fn, 80); } else fn(); }; fr.appendChild(b); }
+    add('굵게', 'bold', function () { rec(); partialApply({ bold: true }, '고른 글자를 굵게 했습니다'); });
+    add('기울임', 'it', function () { rec(); partialApply({ italic: true }, '고른 글자를 기울였습니다'); });
+    add('밑줄', 'ul', function () { rec(); partialApply({ underline: true }, '고른 글자에 밑줄을 넣었습니다'); });
+    add('일반', '', function () { rec(); partialApply({ bold: false, italic: false, underline: false }, '고른 글자의 굵게·기울임·밑줄을 풀었습니다'); });
+    add('색', '', function () { rec(); pfSheet('고른 글자 색', [{ label: '글자 색', items: PF_COLORS.map(function (c) { return [c[0], { color: c[1] }, '고른 글자의 색을 바꿨습니다']; }) }, { label: '형광펜', items: PF_HL.map(function (c) { return [c[0], { highlight: c[1] }, '형광펜을 바꿨습니다']; }) }]); });
+    add('크기', '', function () { rec(); pfSheet('고른 글자 크기', [{ label: '글자 크기(pt)', items: PF_SIZES.map(function (z) { return [String(z), { size: z }, '고른 글자의 크기를 바꿨습니다']; }) }]); });
+    add('글꼴', '', function () { rec(); pfSheet('고른 글자 글꼴', [{ label: '글꼴', items: PF_FONTS.map(function (z) { return [z, { font: z }, '고른 글자의 글꼴을 바꿨습니다']; }) }]); });
+    paint();
+  }
+  function openSheet(pEl, xi, selRange) {
     closeSheet();
     var para = S.doc.paras[xi], cur = (xi in S.edits) ? S.edits[xi] : para.text;
     sheet = document.createElement('div'); sheet.className = 'so-docx-sheet';
@@ -452,7 +497,7 @@
       '<div class="so-docx-sh-h"><button type="button" class="so-docx-sh-mv" data-a="prev" aria-label="앞 문단"' + (neighbor(xi, -1) < 0 ? ' disabled' : '') + '>‹</button>' +
       '<div class="so-docx-sh-t">문단 고치기' + (xi in S.edits ? ' · 고친 문단' : '') + '</div>' +
       '<button type="button" class="so-docx-sh-mv" data-a="next" aria-label="다음 문단"' + (neighbor(xi, 1) < 0 ? ' disabled' : '') + '>›</button></div>' +
-      '<div class="so-docx-sh-n"></div>' +
+      '<div class="so-docx-sh-n"></div>' + (structOn() ? '<div class="so-docx-sh-f"></div>' : '') +
       '<textarea class="so-docx-ta" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="enter"></textarea>' +
       '<div class="so-docx-sh-b"><button type="button" data-a="cancel">취소</button><button type="button" data-a="revert"' + ((xi in S.edits) ? '' : ' disabled') + '>원래 글로</button><button type="button" data-a="ok" class="primary">적용</button></div>';
     var noteT2 = [];
@@ -469,6 +514,8 @@
       setRendered(pEl, (xi in S.edits) ? v : null);
       afterChange();
     }
+    curTa = { xi: xi, ta: ta, commit: commit };
+    if (structOn()) buildPartialBar(sheet.querySelector('.so-docx-sh-f'), ta, xi, function () { return composing; });
     function act(a) {
       if (!sheet) return;
       if (a === 'cancel') { closeSheet(); return; }
@@ -491,7 +538,7 @@
     S.sheetOpen = true;
     placeSheet(true);
     if (window.visualViewport) { sheetVV = function () { placeSheet(true); }; window.visualViewport.addEventListener('resize', sheetVV); window.visualViewport.addEventListener('scroll', sheetVV); }
-    setTimeout(function () { if (!sheet) return; try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} placeSheet(true); }, 60);
+    setTimeout(function () { if (!sheet) return; try { ta.focus(); if (selRange && selRange.b <= ta.value.length) ta.setSelectionRange(selRange.a, selRange.b); else ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} placeSheet(true); }, 60);
   }
   function setRendered(p, text) {
     if (text == null) { if (p._soOrig != null) { p.innerHTML = p._soOrig; } p.classList.remove('so-docx-edited'); return; }
@@ -582,12 +629,12 @@
           return reopen(u8).then(function () { fin(); ctxRef.setDirty(true); setActions(); setTip(); if (onDone) onDone(r || {}); return true; });
         });
       });
-    }).catch(function (e) { fin(); ctxRef.toast('고치지 못했습니다: ' + ((e && e.message) || e), 5200); return false; });
+    }).catch(function (e) { fin(); ctxRef.explainFail('고치지 못했습니다', e, 5200); return false; });
   }
   function swapState(bytes, label) {
     S.busyRun = true; ctxRef.busy(label);
     S.edits = {}; S.cur = bytes;
-    return reopen(bytes).then(function () { S.busyRun = false; ctxRef.busy(null); ctxRef.setDirty(S.pkgOps > 0); setActions(); setTip(); return true; }, function (e) { S.busyRun = false; ctxRef.busy(null); ctxRef.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); return false; });
+    return reopen(bytes).then(function () { S.busyRun = false; ctxRef.busy(null); ctxRef.setDirty(S.pkgOps > 0); setActions(); setTip(); return true; }, function (e) { S.busyRun = false; ctxRef.busy(null); ctxRef.explainFail('되돌리지 못했습니다', e, 4200); return false; });
   }
   function structUndo() {
     if (!structOn() || S.busyRun) return;
@@ -613,7 +660,7 @@
           ctx.busy(null);
           return Promise.resolve(ctx.saveCopy(new Blob([b], { type: DOCX_MIME }), outName)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); S.edits = {}; ctx.toast('사본을 저장했습니다', 3600); setActions(); setTip(); });
         });
-      }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — 원본은 그대로입니다. (' + ((e && e.message) || e) + ')', 5200); });
+      }).catch(function (e) { ctx.busy(null); ctx.explainFail('저장하지 못했습니다(원본은 그대로입니다)', e, 5200); });
     });
   }
   // 글만 있는(고칠 수 있는) 문단에서 찾아 바꾸기 — 문단 글 고치기(S.edits)와 같은 길로 반영한다
@@ -653,6 +700,7 @@
       if (c) {
         if (kk === 'z' && !e.shiftKey) { e.preventDefault(); structUndo(); } else if (kk === 'y' || (kk === 'z' && e.shiftKey)) { e.preventDefault(); structRedo(); }
         else if (kk === 'f') { e.preventDefault(); openFind(); }
+        else if (kk === 'c' && q && ui) { e.preventDefault(); ui.copySel(false); } else if (kk === 'x' && q && ui) { e.preventDefault(); ui.copySel(true); } else if (kk === 'v' && q && ui) { e.preventDefault(); ui.pasteClip(); } else if (kk === 'd' && q && ui) { e.preventDefault(); ui.dupSel(); }
         else if ((kk === 'b' || kk === 'i' || kk === 'u') && q) {
           e.preventDefault(); var f = {}, cur = window.SODocxStruct.readFmt(S.xml, q.a), key = kk === 'b' ? 'bold' : (kk === 'i' ? 'italic' : 'underline'); f[key] = !cur[key];
           structRun('글자 서식', function (pkg) { return pkg.read('word/document.xml').then(function (x) { pkg.write('word/document.xml', window.SODocxStruct.setRunFmt(x, q.a, q.b, f)); return {}; }); });
@@ -685,7 +733,7 @@
         });
       }).catch(function (e) {
         ctx.busy(null);
-        ctx.toast('저장하지 못했습니다 — 원본은 그대로입니다. (' + ((e && e.message) || e) + ')', 5200);
+        ctx.explainFail('저장하지 못했습니다(원본은 그대로입니다)', e, 5200);
       });
     });
   }
@@ -694,7 +742,7 @@
     var newXml = applyEdits(xml, doc, S.edits);
     // 검사 1: XML 이 깨지지 않았나, 문단 수·글이 기대와 같은가
     var parsed = new DOMParser().parseFromString(newXml, 'application/xml');
-    if (parsed.getElementsByTagName('parsererror').length) return Promise.reject(new Error('고친 문서의 XML 검사 실패'));
+    if (parsed.getElementsByTagName('parsererror').length) return Promise.reject(new Error('고친 문서를 다시 읽는 검사에서 걸렸습니다'));
     var doc2 = analyzeDoc(newXml, S.settings);
     if (doc2.paras.length !== doc.paras.length) return Promise.reject(new Error('문단 수 검사 실패'));
     for (var i = 0; i < doc.paras.length; i++) {
@@ -741,7 +789,7 @@
         if (xml.charCodeAt(0) === 0xFEFF) { xml = xml.slice(1); S.bom = true; }
         var doc = analyzeDoc(xml, settings);
         var chk = new DOMParser().parseFromString(xml, 'application/xml');
-        if (chk.getElementsByTagName('parsererror').length) throw new Error('원본 XML 해석 불가');
+        if (chk.getElementsByTagName('parsererror').length) throw new Error('원본 문서의 구조를 읽지 못했습니다');
         S.zip = zip; S.xml = xml; S.settings = settings; S.doc = doc; S.origNames = names;
         var cached = null;
         S.origBytes = function (nm) { cached = cached || JS.loadAsync(S.curBlob || ctxRef.file); return cached.then(function (z) { return z.file(nm).async('uint8array'); }); };

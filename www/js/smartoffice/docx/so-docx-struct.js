@@ -189,18 +189,21 @@
       });
     }).replace(/<w:pPr\/>/g, '');
   }
+  function rprFmt(rpr, f) {                         // 런 속성 묶음 하나(<w:rPr>…</w:rPr> 또는 '')에 글자 서식 적용
+    var x = rpr || '';
+    if (f.bold != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'b', f.bold ? '<w:b/>' : '<w:b w:val="0"/>');
+    if (f.bold != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'bCs', f.bold ? '<w:bCs/>' : '<w:bCs w:val="0"/>');
+    if (f.italic != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'i', f.italic ? '<w:i/>' : '<w:i w:val="0"/>');
+    if (f.underline != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'u', f.underline ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>');
+    if (f.size != null) { var h = Math.round(Math.max(4, Math.min(200, f.size)) * 2); x = setProp(x, 'w:rPr', RPR_ORDER, 'sz', '<w:sz w:val="' + h + '"/>'); x = setProp(x, 'w:rPr', RPR_ORDER, 'szCs', '<w:szCs w:val="' + h + '"/>'); }
+    if (f.color !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'color', f.color ? '<w:color w:val="' + f.color + '"/>' : null);
+    if (f.highlight !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'highlight', f.highlight ? '<w:highlight w:val="' + f.highlight + '"/>' : null);
+    if (f.font) x = setProp(x, 'w:rPr', RPR_ORDER, 'rFonts', '<w:rFonts w:ascii="' + esc(f.font) + '" w:hAnsi="' + esc(f.font) + '" w:eastAsia="' + esc(f.font) + '" w:cs="' + esc(f.font) + '"/>');
+    return x;
+  }
   function fmtRunTags(pStr, f) {                    // 문단 안 모든 런(<w:r>)의 글자 속성 고치기
     return pStr.replace(/<w:r(\s[^>]*)?>(<w:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:rPr>))?/g, function (all, at, rpr) {
-      var x = rpr || '';
-      if (f.bold != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'b', f.bold ? '<w:b/>' : '<w:b w:val="0"/>');
-      if (f.bold != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'bCs', f.bold ? '<w:bCs/>' : '<w:bCs w:val="0"/>');
-      if (f.italic != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'i', f.italic ? '<w:i/>' : '<w:i w:val="0"/>');
-      if (f.underline != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'u', f.underline ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>');
-      if (f.size != null) { var h = Math.round(Math.max(4, Math.min(200, f.size)) * 2); x = setProp(x, 'w:rPr', RPR_ORDER, 'sz', '<w:sz w:val="' + h + '"/>'); x = setProp(x, 'w:rPr', RPR_ORDER, 'szCs', '<w:szCs w:val="' + h + '"/>'); }
-      if (f.color !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'color', f.color ? '<w:color w:val="' + f.color + '"/>' : null);
-      if (f.highlight !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'highlight', f.highlight ? '<w:highlight w:val="' + f.highlight + '"/>' : null);
-      if (f.font) x = setProp(x, 'w:rPr', RPR_ORDER, 'rFonts', '<w:rFonts w:ascii="' + esc(f.font) + '" w:hAnsi="' + esc(f.font) + '" w:eastAsia="' + esc(f.font) + '" w:cs="' + esc(f.font) + '"/>');
-      return '<w:r' + (at || '') + '>' + x;
+      return '<w:r' + (at || '') + '>' + rprFmt(rpr || '', f);
     });
   }
   function setRunFmt(xml, a, b, f) { return mapParas(xml, a, b, function (p) { return fmtRunTags(p, f); }); }
@@ -473,7 +476,126 @@
     return f;
   }
 
+  // ============================== 글자 일부만 서식 · 복사·복제 · 표 서식 (v10.7) ==============================
+  // [from,to) = 문단 글(탭·줄바꿈도 한 글자)의 글자 번호. 런을 앞·가운데·뒤로 쪼개 가운데에만 서식을 준다 — 나머지 속성·링크·번호는 그대로
+  function fmtPartial(xml, xi, from, to, f) {
+    var p = P(xml, xi), ps = xml.slice(p.s, p.e);
+    if (!(to > from)) return { err: '먼저 꾸밀 글자를 고르십시오.' };
+    if (/<w:txbxContent|<w:fldChar|<w:fldSimple|<w:instrText|<w:sdt\b|<w:ins\b|<w:del\b|<w:moveFrom|<w:moveTo|<w:footnoteReference|<w:endnoteReference/.test(ps)) return { err: '이 문단에는 필드·변경 추적·각주 등이 있어 일부 글자만 꾸밀 수 없습니다. 문단 전체 서식을 쓰거나 「수정 요청」으로 맡겨 주십시오.' };
+    var pos = 0, out = '', last = 0, re = /<w:r(\s[^>]*)?>([\s\S]*?)<\/w:r>/g, m, hit = false;
+    while ((m = re.exec(ps))) {
+      var attrs = m[1] || '', inner = m[2], rm = /^<w:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:rPr>)/.exec(inner), rpr = rm ? rm[0] : '', body = rm ? inner.slice(rm[0].length) : inner;
+      var toks = [], tre = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:t(?:\s[^>]*)?\/>|<w:tab\s*\/>|<w:br\b[^>]*\/>|<w:cr\s*\/>|<[^>]+>/g, tm, len = 0;
+      while ((tm = tre.exec(body))) {
+        var raw = tm[0];
+        if (/^<w:t[\s>\/]/.test(raw) && !/^<w:tab/.test(raw)) { var tx = raw.slice(-2) === '/>' && raw.indexOf('</w:t>') < 0 ? '' : unesc(tm[1] || ''); toks.push({ k: 't', text: tx }); len += tx.length; }
+        else if (/^<w:tab\s*\/>/.test(raw)) { toks.push({ k: 'tab' }); len += 1; }
+        else if (/^<w:br\b/.test(raw) || /^<w:cr\s*\/>/.test(raw)) { toks.push({ k: 'br', raw: raw }); len += 1; }
+        else toks.push({ k: 'x', raw: raw });
+      }
+      var a = pos, b = pos + len; pos = b;
+      if (len === 0 || b <= from || a >= to) continue;
+      // 세 덩어리로 나눈다
+      var groups = [[], [], []], at = a;
+      toks.forEach(function (tk) {
+        if (tk.k === 't') {
+          var s1 = Math.max(0, Math.min(tk.text.length, from - at)), s2 = Math.max(s1, Math.min(tk.text.length, to - at));
+          if (s1 > 0) groups[0].push({ k: 't', text: tk.text.slice(0, s1) });
+          if (s2 > s1) groups[1].push({ k: 't', text: tk.text.slice(s1, s2) });
+          if (s2 < tk.text.length) groups[2].push({ k: 't', text: tk.text.slice(s2) });
+          at += tk.text.length;
+        } else if (tk.k === 'x') groups[at < from ? 0 : (at < to ? 1 : 2)].push(tk);
+        else { groups[at < from ? 0 : (at < to ? 1 : 2)].push(tk); at += 1; }
+      });
+      var emit = groups.map(function (g, gi) {
+        if (!g.length) return '';
+        var r2 = gi === 1 ? rprFmt(rpr, f) : rpr;
+        return '<w:r' + attrs + '>' + r2 + g.map(function (tk) { return tk.k === 't' ? '<w:t xml:space="preserve">' + esc(tk.text) + '</w:t>' : (tk.k === 'tab' ? '<w:tab/>' : tk.raw); }).join('') + '</w:r>';
+      }).join('');
+      out += ps.slice(last, m.index) + emit; last = m.index + m[0].length; hit = true;
+    }
+    if (!hit) return { err: '고른 글자를 찾지 못했습니다. 글을 다시 열어 고른 뒤 눌러 보십시오.' };
+    out += ps.slice(last);
+    return { xml: xml.slice(0, p.s) + out + xml.slice(p.e) };
+  }
+
+  // ---- 복사·붙여넣기·복제(문단·표). 같은 문서 안에서만 — 그림·번호·스타일 관계가 그대로 유효하다 ----
+  function cleanClone(frag, fullXml) {                // 책갈피는 빼고, 그림 번호(docPr id)는 새로 매긴다
+    var ids = (fullXml.match(/<wp:docPr\b[^>]*\sid="(\d+)"/g) || []).map(function (s) { return +/id="(\d+)"/.exec(s)[1]; }), mx = Math.max.apply(null, ids.concat([0]));
+    return frag.replace(/<w:bookmarkStart\b[^>]*\/>|<w:bookmarkEnd\b[^>]*\/>/g, '').replace(/(<wp:docPr\b[^>]*\sid=")(\d+)(")/g, function (m, a, v, b) { mx++; return a + mx + b; });
+  }
+  function copyParas(xml, a, b) {
+    var ps = paras(xml); if (!ps[a] || !ps[b]) throw new Error('문단을 찾지 못했습니다');
+    for (var i = a; i <= b; i++) if (/<w:sectPr\b/.test(xml.slice(ps[i].s, ps[i].e)) || ps[i].anc.join('/') !== ps[a].anc.join('/') || !sameParent(xml, ps[a], ps[i])) return { err: '구역 끝이거나 표 안팎에 걸친 문단은 폰에서 복사할 수 없습니다.' };
+    var s = ps[a].s, e = ps[b].e;
+    if (/<w:tbl\b/.test(xml.slice(s, e))) return { err: '표가 끼어 있는 범위는 문단으로 복사할 수 없습니다. 표는 「표」 시트의 「표 복사」를 쓰십시오.' };
+    return { kind: 'paras', xml: xml.slice(s, e), n: b - a + 1 };
+  }
+  function pasteBlock(xml, xi, clip) {                 // xi 번 문단(또는 표 밖 문단) 바로 아래에
+    var p = P(xml, xi), frag = cleanClone(clip.xml, xml), cnt;
+    if (clip.kind === 'table') {
+      if (p.anc.indexOf('w:tc') >= 0) return { err: '표 안에는 표를 붙일 수 없습니다. 표 밖 문단을 고르고 붙여 주십시오.' };
+      cnt = paras(frag).length + 1;
+      return { xml: xml.slice(0, p.e) + frag + '<w:p/>' + xml.slice(p.e), newA: xi + 1, newB: xi + cnt };
+    }
+    cnt = paras(frag).length;
+    return { xml: xml.slice(0, p.e) + frag + xml.slice(p.e), newA: xi + 1, newB: xi + cnt };
+  }
+  function dupParas(xml, a, b) { var c = copyParas(xml, a, b); if (c.err) return c; return pasteBlock(xml, b, c); }
+  function copyTable(xml, xi) {
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    return { kind: 'table', xml: b.xml, tblEnd: b.tbl.e };
+  }
+  function dupTable(xml, xi) {
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var outer = innermost(ranges(xml, 'w:tc'), b.tbl.s);
+    if (outer) return { err: '표 안의 표는 폰에서 복제할 수 없습니다.' };
+    var frag = cleanClone(b.xml, xml), n = paras(frag).length, before = paras(xml.slice(0, b.tbl.e)).length;
+    return { xml: xml.slice(0, b.tbl.e) + '<w:p/>' + frag + xml.slice(b.tbl.e), newA: before + 1, newB: before + n };
+  }
+
+  // ---- 표 서식: 칸 배경색(칸·줄·표 전체) · 테두리(켜기·끄기·굵기) · 첫 줄을 제목 줄로 ----
+  var TBLPR_ORDER = ['tblStyle', 'tblpPr', 'tblOverlap', 'bidiVisual', 'tblStyleRowBandSize', 'tblStyleColBandSize', 'tblW', 'jc', 'tblCellSpacing', 'tblInd', 'tblBorders', 'shd', 'tblLayout', 'tblCellMar', 'tblLook', 'tblCaption', 'tblDescription'];
+  function cellRangesIn(xml, from, to) { return ranges(xml, 'w:tc').filter(function (r) { return r.s >= from && r.e <= to; }).sort(function (x, y) { return y.s - x.s; }); }
+  function setCellShade(xml, xi, hex, scope) {         // hex = 'RRGGBB' | null(배경 없음), scope = 'cell' | 'row' | 'table'
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var shd = hex ? '<w:shd w:val="clear" w:color="auto" w:fill="' + hex + '"/>' : null, cells;
+    if (scope === 'cell') cells = [b.tc];
+    else {
+      if ((b.xml.slice(1).match(/<w:tbl>/g) || []).length) return { err: '표 안에 또 표가 있어 줄·표 전체에는 한 번에 적용할 수 없습니다. 칸마다 적용하십시오.' };
+      cells = scope === 'row' ? cellRangesIn(xml, b.tr.s, b.tr.e) : cellRangesIn(xml, b.tbl.s, b.tbl.e);
+    }
+    cells.sort(function (x, y) { return y.s - x.s; });
+    var out = xml;
+    cells.forEach(function (c) {
+      var tc = out.slice(c.s, c.e), nx = shd ? setTcPr(tc, 'shd', shd) : (/<w:tcPr\b/.test(tc) ? setTcPr(tc, 'shd', null).replace(/<w:tcPr\s*\/>/, '') : tc);
+      out = out.slice(0, c.s) + nx + out.slice(c.e);
+    });
+    return { xml: out };
+  }
+  function setTableBorders(xml, xi, o) {               // o = { on:true|false, sz:2~24(1/8pt), color:'RRGGBB' }
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var t = b.xml, sz = o.sz || 4, col = o.color || '808080', ln = function (n) { return o.on ? '<w:' + n + ' w:val="single" w:sz="' + sz + '" w:space="0" w:color="' + col + '"/>' : '<w:' + n + ' w:val="nil"/>'; };
+    var tb = '<w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(ln).join('') + '</w:tblBorders>';
+    var pm = /<w:tblPr\b[\s\S]*?<\/w:tblPr>|<w:tblPr\s*\/>/.exec(t);
+    if (!pm) return { err: '이 표는 속성이 없어 테두리를 바꿀 수 없습니다.' };
+    var npr = setProp(pm[0], 'w:tblPr', TBLPR_ORDER, 'tblBorders', tb);
+    var nt = t.slice(0, pm.index) + npr + t.slice(pm.index + pm[0].length);
+    nt = nt.replace(/<w:tcBorders>[\s\S]*?<\/w:tcBorders>/g, '');
+    return { xml: xml.slice(0, b.tbl.s) + nt + xml.slice(b.tbl.e) };
+  }
+  function headerRow(xml, xi) {                        // 표 첫 줄: 굵게 + 연한 회색 배경
+    var b = tblBlock(xml, xi); if (b.err) return b;
+    var rows = rowsOfTbl(b.xml); if (!rows.length) return { err: '표에 줄이 없습니다.' };
+    var r0 = rows[0], row = b.xml.slice(r0.s, r0.e);
+    row = fmtRunTags(row, { bold: true });
+    row = row.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, function (tc) { return setTcPr(tc, 'shd', '<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>'); });
+    var nt = b.xml.slice(0, r0.s) + row + b.xml.slice(r0.e);
+    return { xml: xml.slice(0, b.tbl.s) + nt + xml.slice(b.tbl.e) };
+  }
+
   global.SODocxStruct = {
+    fmtPartial: fmtPartial, copyParas: copyParas, pasteBlock: pasteBlock, dupParas: dupParas, copyTable: copyTable, dupTable: dupTable, setCellShade: setCellShade, setTableBorders: setTableBorders, headerRow: headerRow,
     paras: paras, newPara: newPara, insertPara: insertPara, deleteParas: deleteParas, moveParas: moveParas, pageBreakAfter: pageBreakAfter, ensureStyle: ensureStyle, setStyle: setStyle,
     setParaFmt: setParaFmt, setRunFmt: setRunFmt, readFmt: readFmt, ensureList: ensureList, setList: setList, numIdOf: numIdOf, insertTable: insertTable, tableEdit: tableEdit, tableInfo: tableInfo,
     addPicture: addPicture, scalePicture: scalePicture, removePicture: removePicture, readHF: readHF, setHF: setHF, addPageNumber: addPageNumber, findHits: findHits, newDocxFiles: newDocxFiles, pText: pText, textWidth: textWidth

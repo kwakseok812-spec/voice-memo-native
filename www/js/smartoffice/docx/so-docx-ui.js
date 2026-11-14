@@ -5,6 +5,7 @@
 (function (global) {
   'use strict';
   var ST = global.SODocxStruct;
+  function J(w, j) { return global.SOffice && global.SOffice.josa ? global.SOffice.josa(w, j) : w + j; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   var TXT = [['검정', '000000'], ['빨강', 'C00000'], ['파랑', '1C5FD6'], ['초록', '1B8A3A'], ['주황', 'EE7A00'], ['보라', '7A3FC4'], ['회색', '777777'], ['기본', null]];
   var HL = [['노랑', 'yellow'], ['연두', 'green'], ['하늘', 'cyan'], ['분홍', 'magenta'], ['없음', null]];
@@ -31,18 +32,61 @@
         if (r && r.err) { fail(r.err); return; }
         if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 2600);
         if (r && r.newA != null) env.select(r.newA, r.newB); else if (!keepSel) env.select(null);
+        setTimeout(refillSheet, 30);
       });
     }
-    function sheet(title, build, noBtn) { var body = el('div', 'sdx'); build(body); ctx().sheet({ title: title, body: body, buttons: noBtn ? [] : [{ label: '닫기' }], wide: true }); return body; }
+    var curSheet = null, keepMode = false;
+    function sheet(title, build, noBtn, keep) {            // keep=true 면 항목을 눌러도 닫히지 않는다(「닫기」로 닫음) — 적용한 뒤 시트 안을 문서 상태에 맞게 다시 그린다
+      var body = el('div', 'sdx'); keepMode = !!keep; build(body); keepMode = false;
+      curSheet = keep ? { body: body, build: build } : null;
+      ctx().sheet({ title: title, body: body, buttons: noBtn ? [] : [{ label: '닫기' }], wide: true, keep: !!keep }); return body;
+    }
+    function refillSheet() {
+      if (!curSheet) return;
+      var b = curSheet.body; if (!b.isConnected) { curSheet = null; return; }
+      var sc = [], p = b.parentElement; while (p && p !== document.body) { if (p.scrollTop) sc.push([p, p.scrollTop]); p = p.parentElement; }
+      keepMode = true; b.innerHTML = ''; try { curSheet.build(b); } catch (e) {} keepMode = false;
+      sc.forEach(function (q) { q[0].scrollTop = q[1]; });
+    }
     function group(body, label) { body.appendChild(el('div', 'sdx-l', label)); var r = el('div', 'sdx-r'); body.appendChild(r); return r; }
     function grid(body) { var g = el('div', 'sdx-g'); body.appendChild(g); return g; }
     function btn(row, text, fn, cls, color) {
       var b = el('button', 'sdx-b' + (cls ? ' ' + cls : ''), color === undefined ? text : ''); b.type = 'button';
       if (color !== undefined) { b.setAttribute('aria-label', text); var d = el('i'); if (color) d.style.background = '#' + color; else d.className = 'none'; b.appendChild(d); b.appendChild(el('span', '', text)); }
-      b.onclick = function () { ctx().closeSheet(); setTimeout(fn, 60); }; row.appendChild(b); return b;
+      var keep = keepMode;
+      b.onclick = function () { if (keep) { fn(); return; } ctx().closeSheet(); setTimeout(fn, 60); }; row.appendChild(b); return b;
     }
     function range() { var r = need(); return r; }
 
+    // ---------------- 복사·붙여넣기·복제(문단·표) ----------------
+    var clip = null;
+    function copySel(cut) {
+      var r = need(); if (!r) return; var c;
+      try { c = ST.copyParas(S().xml, r.a, r.b); } catch (e) { toast('복사하지 못했습니다: ' + ((e && e.message) || e), 4200); return; }
+      if (c.err) { fail(c.err); return; }
+      clip = c;
+      if (cut) op('오려두기', function (x) { return ST.deleteParas(x, r.a, r.b); }, '문단 ' + c.n + '개를 오려 두었습니다 — 붙일 문단을 고르고 「붙여넣기」');
+      else toast('문단 ' + c.n + '개를 복사했습니다 — 붙일 문단을 고르고 「붙여넣기」', 3400);
+    }
+    function copyTbl() {
+      var r = need(); if (!r) return; var c = ST.copyTable(S().xml, r.a);
+      if (c.err) { fail(c.err); return; } clip = c; toast('표를 복사했습니다 — 표 밖 문단을 고르고 「붙여넣기」', 3400);
+    }
+    function pasteClip() {
+      var r = need(); if (!r) return;
+      if (!clip) { toast('먼저 복사할 문단이나 표를 복사해 주십시오.', 3000); return; }
+      var c = clip;
+      op('붙여넣기', function (x) { var q = ST.pasteBlock(x, r.b, c); return q.err ? q : { xml: q.xml, newA: q.newA, newB: q.newB }; }, c.kind === 'table' ? '표를 붙였습니다(고른 문단 아래)' : '붙였습니다(고른 문단 아래)', true);
+    }
+    function dupSel() {
+      var r = need(); if (!r) return;
+      op('문단 복제', function (x) { var q = ST.dupParas(x, r.a, r.b); return q.err ? q : { xml: q.xml, newA: q.newA, newB: q.newB }; }, '복제했습니다(바로 아래에 들어갔습니다)', true);
+    }
+    function dupTbl() {
+      var r = need(); if (!r) return;
+      op('표 복제', function (x) { var q = ST.dupTable(x, r.a); return q.err ? q : { xml: q.xml, newA: q.newA, newB: q.newB }; }, '표를 복제했습니다(바로 아래에 들어갔습니다)', true);
+    }
+    U.copySel = copySel; U.pasteClip = pasteClip; U.dupSel = dupSel;
     // ---------------- 문단 ----------------
     function paraSheet() {
       var r = need(); if (!r) return;
@@ -54,6 +98,7 @@
         btn(g, '쪽 나누기 넣기', function () { op('쪽 나누기', function (x) { return ST.pageBreakAfter(x, r.b); }, '쪽 나누기를 넣었습니다', true); }, 'big');
         btn(g, '위로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, -1); }, '위로 옮겼습니다'); }, 'big');
         btn(g, '아래로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, 1); }, '아래로 옮겼습니다'); }, 'big');
+        btn(g, '복사', function () { copySel(false); }, 'big'); btn(g, '오려두기', function () { copySel(true); }, 'big'); btn(g, '붙여넣기', pasteClip, 'big'); btn(g, '문단 복제', dupSel, 'big');
         if (r.a === r.b) btn(g, '글 고치기', function () { env.editText(r.a); }, 'big');
         body.appendChild(el('div', 'so-sheet-note', '문서에서 문단을 눌러 고르면 맨 위에 「고른 문단」이 보입니다. 여러 문단은 「범위」로 고릅니다. 같은 문단을 한 번 더 누르면 글 고치기가 열립니다.'));
       });
@@ -79,6 +124,7 @@
     function fmtSheet() {
       var r = need(); if (!r) return; var cur = fmtNow();
       sheet('서식 — 고른 문단 전체에 적용', function (body) {
+        r = rg() || r; cur = fmtNow();
         var g1 = group(body, '글자');
         btn(g1, '굵게', function () { applyRun({ bold: !cur.bold }); }, 'bold' + (cur.bold ? ' on' : '')); btn(g1, '기울임', function () { applyRun({ italic: !cur.italic }); }, 'it' + (cur.italic ? ' on' : '')); btn(g1, '밑줄', function () { applyRun({ underline: !cur.underline }); }, 'ul' + (cur.underline ? ' on' : ''));
         var g2 = group(body, '글자 크기(' + (cur.size ? cur.size + 'pt' : '스타일 기본') + ')');
@@ -88,10 +134,10 @@
         var g4 = group(body, '형광펜'); HL.forEach(function (c) { btn(g4, c[0], function () { applyRun({ highlight: c[1] }, '형광펜을 바꿨습니다'); }, c[1] ? '' : ''); });
         var g5 = group(body, '글꼴'); FONTS.forEach(function (f) { btn(g5, f, function () { applyRun({ font: f }, '글꼴을 바꿨습니다'); }); });
         var g6 = group(body, '정렬'); [['왼쪽', 'left'], ['가운데', 'center'], ['오른쪽', 'right'], ['양쪽', 'both']].forEach(function (a) { btn(g6, a[0], function () { applyPara({ align: a[1] }); }, cur.align === a[1] ? 'on' : ''); });
-        var g7 = group(body, '줄 간격'); [1, 1.15, 1.5, 2].forEach(function (v) { btn(g7, String(v), function () { applyPara({ line: v }, '줄 간격을 ' + v + '로 바꿨습니다'); }); });
+        var g7 = group(body, '줄 간격'); [1, 1.15, 1.5, 2].forEach(function (v) { btn(g7, String(v), function () { applyPara({ line: v }, '줄 간격을 ' + J(String(v), '으로') + ' 바꿨습니다'); }); });
         var g8 = group(body, '들여쓰기'); btn(g8, '← 내어쓰기', function () { applyPara({ indent: -1 }); }); btn(g8, '들여쓰기 →', function () { applyPara({ indent: 1 }); }); btn(g8, '초기화', function () { applyPara({ indent: 0 }); });
-        body.appendChild(el('div', 'so-sheet-note', '한 문단의 글자 일부만 다르게 꾸미는 것은 이번 판에서는 지원하지 않습니다(문단 전체에 적용). 필요하면 「수정 요청」으로 맡겨 주십시오.'));
-      });
+        body.appendChild(el('div', 'so-sheet-note', '글자 일부만 꾸미려면 문단을 한 번 더 눌러 「문단 고치기」를 열고, 글자를 끌어 고른 뒤 「고른 글자 꾸미기」 줄의 단추를 누릅니다. 이 시트는 고른 문단 전체에 적용됩니다.'));
+      }, false, true);
     }
     // ---------------- 목록 ----------------
     function listSheet() {
@@ -109,12 +155,14 @@
         btn(g, '글머리표(●)', function () { apply('bullet'); }, 'big'); btn(g, '번호 목록(1. 2. 3.)', function () { apply('decimal'); }, 'big'); btn(g, '목록 풀기', function () { apply(null); }, 'big');
         btn(g, '한 단계 안으로', function () { applyPara({ indent: 1 }); }, 'big');
         body.appendChild(el('div', 'so-sheet-note', '앞 문단이 같은 종류의 목록이면 번호가 이어집니다. 여러 문단은 「범위」로 고른 뒤 한꺼번에 적용하십시오.'));
-      });
+      }, false, true);
     }
     // ---------------- 표 ----------------
+    var BGS = [['없음', null], ['노랑', 'FFE066'], ['연두', 'B7E4A0'], ['하늘', '9CC9FF'], ['분홍', 'FFB3C7'], ['살구', 'FFC98A'], ['회색', 'D9D9D9'], ['파랑', '4472C4']];
     function tableSheet() {
       var r = rg();
       sheet('표', function (body) {
+        r = rg();
         var g0 = group(body, '새 표 넣기(고른 문단 아래)');
         var rows = 3, cols = 3, lab = el('div', 'sdx-l', ''); function paint() { lab.textContent = '줄 ' + rows + ' × 칸 ' + cols; }
         var rr = el('div', 'sdx-r'); function step(t, f) { var b = el('button', 'sdx-b', t); b.type = 'button'; b.onclick = function () { f(); paint(); }; rr.appendChild(b); }
@@ -123,15 +171,24 @@
           var q = need(); if (!q) return; ctx().closeSheet();
           env.run('표', function (pkg) { return ST.ensureStyle(pkg, 'tablegrid').then(function (sid) { return pkg.read('word/document.xml').then(function (x) { var t = ST.insertTable(x, q.b, rows, cols, null); if (t.err) return t; pkg.write('word/document.xml', t.xml); return {}; }); }); }, function (z) { if (z && z.err) { fail(z.err); return; } toast('표를 넣었습니다(' + rows + '×' + cols + '). 칸을 눌러 고른 뒤 한 번 더 눌러 글을 넣으십시오.', 3600); env.select(null); });
         }; body.appendChild(ok);
-        var info = null; if (r) { try { info = ST.tableInfo(S().xmlNow, r.a); } catch (e) {} }
+        var info = null; if (r) { try { info = ST.tableInfo(S().xml, r.a); } catch (e) {} }
         var g = grid(body); body.insertBefore(el('div', 'sdx-l', info ? '고른 칸이 든 표: ' + info.rows + '줄 × ' + info.cols + '칸' + (info.merged ? ' (합쳐진 칸 있음)' : '') : '표 안의 칸(문단)을 고르면 아래 단추가 쓰입니다'), g);
         function te(opn, msg) { return function () { var q = need(); if (!q) return; op('표 고치기', function (x) { var t = ST.tableEdit(x, q.a, opn); return t.err ? t : t.xml; }, msg, true); }; }
         btn(g, '위에 줄 추가', te('rowAbove', '줄을 넣었습니다'), 'big'); btn(g, '아래에 줄 추가', te('rowBelow', '줄을 넣었습니다'), 'big');
         btn(g, '줄 지우기', te('rowDel', '줄을 지웠습니다(되돌리려면 ↶)'), 'big danger'); btn(g, '칸 지우기(열)', te('colDel', '칸을 지웠습니다(되돌리려면 ↶)'), 'big danger');
         btn(g, '왼쪽에 칸 추가', te('colLeft', '칸을 넣었습니다'), 'big'); btn(g, '오른쪽에 칸 추가', te('colRight', '칸을 넣었습니다'), 'big');
         btn(g, '오른쪽 칸과 합치기', te('mergeRight', '칸을 합쳤습니다'), 'big'); btn(g, '아래 칸과 합치기', te('mergeDown', '칸을 합쳤습니다'), 'big'); btn(g, '가로 합치기 풀기', te('unmerge', '합친 칸을 풀었습니다'), 'big');
-        body.appendChild(el('div', 'so-sheet-note', '칸 폭은 표 전체 폭(종이 안)을 그대로 두고 나눕니다. 합쳐진 칸이 있는 표는 줄·칸 넣고 빼기를 막고 「수정 요청」을 안내합니다.'));
-      });
+        btn(g, '표 복사', copyTbl, 'big'); btn(g, '표 복제', dupTbl, 'big'); btn(g, '붙여넣기', pasteClip, 'big');
+        function shade(hex, scope, msg) { var q = need(); if (!q) return; op('표 서식', function (x) { var t = ST.setCellShade(x, q.a, hex, scope); return t.err ? t : t.xml; }, msg || '배경색을 바꿨습니다', true); }
+        var gc = group(body, '고른 칸 배경색'); BGS.forEach(function (c) { btn(gc, c[0], function () { shade(c[1], 'cell'); }, 'sw', c[1] || ''); });
+        var gr = group(body, '고른 줄 전체 배경색'); BGS.forEach(function (c) { btn(gr, c[0], function () { shade(c[1], 'row', '줄의 배경색을 바꿨습니다'); }, 'sw', c[1] || ''); });
+        var gt = group(body, '표 전체 배경색'); BGS.forEach(function (c) { btn(gt, c[0], function () { shade(c[1], 'table', '표의 배경색을 바꿨습니다'); }, 'sw', c[1] || ''); });
+        var gb = group(body, '표 테두리');
+        function bord(o, msg) { var q = need(); if (!q) return; op('표 테두리', function (x) { var t = ST.setTableBorders(x, q.a, o); return t.err ? t : t.xml; }, msg, true); }
+        btn(gb, '가는 선', function () { bord({ on: true, sz: 4, color: '808080' }, '테두리를 가는 선으로 했습니다'); }); btn(gb, '굵은 선', function () { bord({ on: true, sz: 12, color: '404040' }, '테두리를 굵은 선으로 했습니다'); }); btn(gb, '테두리 없음', function () { bord({ on: false }, '테두리를 없앴습니다'); });
+        btn(gb, '첫 줄을 제목 줄로', function () { var q = need(); if (!q) return; op('표 제목 줄', function (x) { var t = ST.headerRow(x, q.a); return t.err ? t : t.xml; }, '첫 줄을 굵게·회색 배경으로 했습니다', true); }, 'wide');
+        body.appendChild(el('div', 'so-sheet-note', '칸 폭은 표 전체 폭(종이 안)을 그대로 두고 나눕니다. 합쳐진 칸이 있는 표는 줄·칸 넣고 빼기를 막고 「수정 요청」을 안내합니다. 표를 붙일 때는 표 밖 문단을 먼저 고릅니다.'));
+      }, false, true);
     }
     // ---------------- 그림 ----------------
     function pickPicture() {
@@ -223,6 +280,7 @@
       global.addEventListener('resize', function () { if (U.row && U.bucket !== perRow()) { renderRow(); U.refresh(); } });
     };
     U.refresh = function () {
+      setTimeout(refillSheet, 0);
       if (!U.lab) return; var r = rg(), s = S();
       U.lab.textContent = s && s.rangeMode ? '범위의 끝 문단을 눌러 주십시오…' : (r ? '고른 문단 ' + (r.a + 1) + (r.b > r.a ? '~' + (r.b + 1) + ' (' + (r.b - r.a + 1) + '개)' : '') + (r.b === r.a ? ' · 한 번 더 누르면 글 고치기' : '') : '문단을 한 번 누르면 고릅니다 · 점선 문단은 한 번 더 누르면 글을 고칩니다');
       if (U.rangeB) { U.rangeB.classList.toggle('on', !!(s && s.rangeMode)); U.rangeB.querySelector('.l').textContent = s && s.rangeMode ? '범위 취소' : '범위'; }

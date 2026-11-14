@@ -82,3 +82,12 @@ html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0
 .sdx-mb .g{font-size:18px;min-width:26px;text-align:center}
 @media (min-width:600px){.sdx-ob{min-height:56px}.sdx-ob .l{font-size:12px}}
 @media (prefers-reduced-motion:reduce){.sdx-ob:active,.sdx-b:active,.sdx-mb:active{transform:none}}
+
+/* O-0861 v10.7: 글자 일부만 꾸미기 줄(문단 고치기 시트 안) */
+.so-docx-sh-f{margin:6px 0 8px;padding:8px;border:1.5px solid var(--glass-b2,#c9c9d4);border-radius:12px;background:var(--glass,#f3f4fa)}
+.so-docx-sh-fl{font-size:13px;font-weight:700;color:var(--text,#222);margin-bottom:6px;word-break:keep-all;line-height:1.4}
+.so-docx-sh-fb{display:flex;flex-wrap:wrap;gap:6px}
+.so-docx-pfx{appearance:none;min-height:46px;min-width:54px;padding:0 11px;border-radius:12px;border:1.5px solid var(--glass-b,#c9c9d4);background:var(--bg0,#fff);color:var(--text,#222);font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}
+.so-docx-pfx:active{background:var(--glass2,#e5e7f2);transform:scale(.96)}
+.so-docx-pfx.bold{font-weight:900}.so-docx-pfx.it{font-style:italic}.so-docx-pfx.ul{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){.so-docx-pfx:active{transform:none}}
