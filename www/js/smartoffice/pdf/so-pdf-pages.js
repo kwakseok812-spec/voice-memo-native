@@ -128,7 +128,7 @@
     function renderFoot() {
       foot.innerHTML = '';
       var any = selIdx().length > 0;
-      [['↻', '회전', rotate, any], ['🗑', '삭제', del, any], ['◀', '앞으로', function () { move(-1); }, any], ['▶', '뒤로', function () { move(1); }, any], ['＋', '합치기', merge, true], ['✂', '나누기', split, any]].forEach(function (d) {
+      [['↻', '회전', rotate, any], ['🗑', '쪽 지우기', del, any], ['◀', '앞으로', function () { move(-1); }, any], ['▶', '뒤로', function () { move(1); }, any], ['＋', '합치기', merge, true], ['✂', '나누기', split, any]].forEach(function (d) {
         var b = el('button', 'spp-fb'); b.type = 'button'; b.disabled = !d[3]; b.appendChild(el('span', 't-g', d[0])); b.appendChild(el('span', 't-l', d[1])); b.onclick = d[2]; foot.appendChild(b);
       });
     }

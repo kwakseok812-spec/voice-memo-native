@@ -3954,6 +3954,7 @@
   APP_VERSION = 'v10.4';        // v10.4(O-0861): S-Office 편집 보강 2판(엑셀) — 줄·칸 넣고 빼기(끝은 늘, 중간은 안전 검사 통과 때만) · 칸 서식(굵게·글자색·배경색·정렬·숫자 모양·테두리) · 칸 합치기 · 줄 높이·칸 너비 · 시트 추가·이름·삭제·순서 · 정렬 · 채우기 · 찾아 바꾸기 · ∑ 합계 · 합계 바로 보이기(자체 계산기, 파일을 열 때 저장된 값과 모두 맞을 때만 켬) · 「＋ 새 문서」에 엑셀 칩 · 스위치 SO_XLSX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 148
   APP_VERSION = 'v10.5';        // v10.5(O-0861): S-Office 편집 보강 3판(PPT) — 슬라이드 추가·복제·삭제·순서·숨기기 · 글 상자·도형·선·화살표·그림·표 넣기, 끌어 옮기고 크기 조절 · 글자 서식·색·글머리표 · 표 줄·칸 · 발표자 노트 · 슬라이드 쇼(전체 화면) · 「＋ 새 문서」에 PPT 칩 · 스위치 SO_PPTX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 149
   APP_VERSION = 'v10.6';        // v10.6(O-0861): S-Office 편집 보강 4판(워드) — 문단 넣기·지우기·옮기기 · 제목 스타일 · 글자·문단 서식 · 글머리표·번호 목록 · 표(넣기·줄 칸 추가 삭제·칸 합치기) · 그림 · 쪽 나누기 · 머리글·바닥글·쪽 번호 · 찾아 바꾸기 · 링크 글자·그림 옆 글자 고치기 · 「＋ 새 문서」에 워드 칩 · 스위치 SO_DOCX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 150
+  APP_VERSION = 'v10.7';        // v10.7(O-0861): S-Office 편집 보강 5판 — PPT 화면 순서 = 파일 순서(복제·순서 바꾸기 뒤 어긋남 수정) · 안내 띠(본문·도구줄을 안 가림) · 서식 시트 열어 둔 채 이어서 적용 · 쉬운 도형 이름·조사·실패 안내 · 엑셀 필터 ▽ 표시·조건 필터 · 글자 일부만 서식(PPT·워드) · 복사·붙여넣기(PPT 개체·워드 문단·표·엑셀 칸) · PPT 글꼴·맞춤·테두리·표 칸 합치기 · 워드 표 서식 — 서버·SQL·자바·권한 변경 없음 · versionCode 151
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -9651,6 +9652,21 @@
     if (!toastEl) return;
     toastEl.style.width = wide ? 'max-content' : ''; toastEl.style.maxWidth = wide ? '86vw' : '';   // 넓은 한 줄은 이 요소에만 값을 준다(styles.css 의 .toast 는 그대로 둔다)
     toastEl.textContent = msg; toastEl.style.display = 'block'; toastEl.classList.toggle('so-up', !!up);
+    if (up) {   // v10.7: S-Office 안내는 아래 도구줄 바로 위 한 줄 띠(안내줄 자리)에 — 본문·도구줄·입력줄을 가리지 않는다. 화면 맨 아래에 있는 도구줄의 윗선을 찾아 띠의 아래 끝으로 삼는다(떠 있는 시트·뒷막은 건너뜀)
+      var placeBand = function () {
+        try {
+          var vh = window.innerHeight, top = vh - 8, list = document.elementsFromPoint(Math.round(window.innerWidth / 2), vh - 6), k, e = null;
+          for (k = 0; k < list.length; k++) { var q = list[k]; if (q === toastEl || !q.closest || !q.closest('#soRoot') || q.id === 'soRoot' || q.closest('.so-sheet-back,.so-sheet')) continue; e = q; break; }
+          if (e) {
+            while (e.parentElement && e.parentElement.id !== 'soRoot' && e.parentElement.getBoundingClientRect().height <= 130 && e.parentElement.getBoundingClientRect().bottom >= vh - 6) e = e.parentElement;
+            if (!/so-main|so-body/.test(String(e.className))) top = Math.min(top, e.getBoundingClientRect().top);
+          }
+          var shs = document.querySelectorAll('.so-sheet'), q2; for (k = 0; k < shs.length; k++) { q2 = shs[k].getBoundingClientRect(); if (q2.height > 0 && q2.top < vh - 24 && q2.top > vh * 0.2) top = Math.min(top, q2.top); }   // 떠 있는 시트가 있으면 시트 위에 띄운다
+          toastEl.style.setProperty('--so-band-b', Math.max(0, Math.round(vh - top)) + 'px');
+        } catch (x) { toastEl.style.setProperty('--so-band-b', '84px'); }
+      };
+      placeBand(); setTimeout(placeBand, 120); setTimeout(placeBand, 320);
+    }
     requestAnimationFrame(function () { toastEl.classList.add('show'); });
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {

@@ -505,18 +505,18 @@
       pic: { g: '🖼', l: '그림', run: pickPicture },
       paraBelow: { g: '↵↓', l: '아래 문단', run: function () { paraAdd('below'); } },
       paraAbove: { g: '↑↵', l: '위 문단', run: function () { paraAdd('above'); } },
-      paraDel: { g: '문단✕', l: '문단 지움', run: paraDel },
+      paraDel: { g: '문단✕', l: '문단 지우기', run: paraDel },
       hf: { g: '쪽', l: '쪽번호·머리말', run: hfSheet },
       rowBelow: { g: '＋줄', l: '줄 추가', run: run('table:insert-row-below', '줄을 하나 더 넣었습니다') },
       rowAbove: { g: '↑줄', l: '위에 추가', run: run('table:insert-row-above', '위에 줄을 하나 넣었습니다') },
-      rowDel: { g: '－줄', l: '줄 지움', run: run('table:delete-row', '줄을 지웠습니다(되돌리려면 취소 단추)') },
-      colDel: { g: '－칸', l: '칸 지움', run: run('table:delete-col', '칸을 지웠습니다(되돌리려면 취소 단추)') },
+      rowDel: { g: '－줄', l: '줄 지우기', run: run('table:delete-row', '줄을 지웠습니다(되돌리려면 취소 단추)') },
+      colDel: { g: '－칸', l: '칸 지우기', run: run('table:delete-col', '칸을 지웠습니다(되돌리려면 취소 단추)') },
       cellMerge: { g: '합침', l: '칸 합치기', run: cellMerge },
       colRight: { g: '＋칸', l: '칸 추가', run: function () { addCol('right'); } },
       colLeft: { g: '←칸', l: '왼쪽 칸', run: function () { addCol('left'); } },
       cellSplit: { g: '나눔', l: '칸 나누기', run: run('table:cell-split', null) },
       tableDel: { g: '표✕', l: '표 지우기', run: run('table:delete', '표를 지웠습니다(되돌리려면 취소 단추)', { title: '표를 지우시겠습니까?', msg: '표와 표 안의 글이 모두 지워집니다. 지운 직후에는 「취소」 단추로 되돌릴 수 있습니다.', label: '표 지우기' }) },
-      picDel: { g: '🗑', l: '그림 지움', run: run('insert:picture-delete', '그림을 지웠습니다(되돌리려면 취소 단추)') }
+      picDel: { g: '🗑', l: '그림 지우기', run: run('insert:picture-delete', '그림을 지웠습니다(되돌리려면 취소 단추)') }
     };
 
     function perRow() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }

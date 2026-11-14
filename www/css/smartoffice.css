@@ -86,6 +86,8 @@
   padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));transform:translateY(100%);transition:transform .2s ease;box-shadow:0 -10px 32px rgba(0,0,0,.28)}
 .so-sheet-back.on .so-sheet{transform:none}
 .so-sheet.wide{max-width:720px}
+.so-sheet-back.keep{pointer-events:none}.so-sheet-back.keep.on{background:transparent}
+.so-sheet.keep{pointer-events:auto;max-height:46%;border-top:2px solid var(--p1,#2f6fed);box-shadow:0 -10px 32px rgba(0,0,0,.4)}   /* O-0861 v10.7: 여러 개를 이어서 적용하는 시트(닫기 단추로 닫음) */
 .so-sheet-t{font-size:17px;font-weight:800;margin:0 2px 10px}
 .so-sheet-body{font-size:14px;line-height:1.6;word-break:keep-all}
 .so-sheet-btns{display:flex;gap:8px;margin-top:14px}
@@ -96,5 +98,5 @@
 .so-sheet-btn:disabled{opacity:.45}
 @media (prefers-reduced-motion:reduce){.so-sheet,.so-sheet-back,.so-newchip{transition:none}.so-newchip:active,.so-sheet-btn:active{transform:none}}
 /* v10.3(O-0861): S-Office 안내(토스트)는 아래 도구줄을 가리지 않게 머리줄 바로 아래(문서 위쪽)에 띄운다 */
-.toast.so-up{bottom:auto;top:44vh;transform:translateX(-50%) translateY(-10px);background:#0b1020;border:1.5px solid rgba(255,255,255,.55);box-shadow:0 6px 22px rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none}   /* O-0861 v10.4 보완: 입력줄·되돌리기 줄·도구줄을 가리지 않게 화면 가운데쯤(본문 위)에, 어두운 화면에서도 또렷하게 */
-.toast.so-up.show{transform:translateX(-50%) translateY(0)}
+.toast.so-up{left:0;right:0;width:auto;max-width:none;box-sizing:border-box;bottom:var(--so-band-b,84px);top:auto;transform:translateY(8px);padding:9px 14px;border-radius:0;font-size:13.5px;line-height:1.45;background:#0b1020;border:0;border-top:2px solid rgba(255,255,255,.55);box-shadow:0 -4px 14px rgba(0,0,0,.35);backdrop-filter:none;-webkit-backdrop-filter:none;z-index:9990}   /* O-0861 v10.7: 화면 가운데에 뜨던 안내가 PPT 제목·워드 본문을 가렸다 → 도구줄 바로 위 안내줄 자리의 한 줄 띠로(위치는 app.js toast 가 계산) */
+.toast.so-up.show{transform:translateY(0)}

@@ -341,7 +341,7 @@
       btn('키우기', function () { scaleStamp(a, 1.2); });
       btn('줄이기', function () { scaleStamp(a, 1 / 1.2); });
     }
-    btn('삭제', function () {
+    btn('지우기', function () {
       S.anns = S.anns.filter(function (x) { return x.id !== a.id; });
       var nn = nodeOf(a); if (nn) nn.parentNode.removeChild(nn);
       commit(); select(null);
@@ -573,7 +573,7 @@
       if (S !== cur || S.dead) return false;
       ctx.busy(null);
       try { console.warn('[S-Office PDF] 저장 실패', e); } catch (x) {}
-      ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000);
+      ctx.explainFail('저장하지 못했습니다', e, 5000);
       return false;
     });
   }

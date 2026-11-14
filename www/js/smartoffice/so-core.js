@@ -89,6 +89,22 @@
   var $ = function (id) { return document.getElementById(id); };
   var extOf = function (n) { return (String(n || '').split('.').pop() || '').toLowerCase(); };
   function toast(m, ms) { try { cfg.toast(m, ms); } catch (e) {} }
+  // 조사 붙이기: josa('차트','을') → '차트를' · josa('표','이') → '표가'. 받침이 있으면 앞 것, 없으면 뒤 것(을/를 · 이/가 · 은/는 · 과/와 · 으로/로). 숫자·영문은 읽는 소리 기준(어림)
+  var JOSA = { '을': ['을', '를'], '를': ['을', '를'], '이': ['이', '가'], '가': ['이', '가'], '은': ['은', '는'], '는': ['은', '는'], '과': ['과', '와'], '와': ['과', '와'], '으로': ['으로', '로'], '로': ['으로', '로'] };
+  function hasBatchim(w) {
+    w = String(w == null ? '' : w).replace(/[\s)\]」』>'"’”]+$/, ''); if (!w) return false;
+    var ch = w.charAt(w.length - 1), c = ch.charCodeAt(0);
+    if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28 !== 0;
+    if (/[0-9]/.test(ch)) return '013678'.indexOf(ch) >= 0;                // 영·일·삼·육·칠·팔
+    if (/[A-Za-z]/.test(ch)) return 'lmnrLMNR'.indexOf(ch) >= 0;           // 엘·엠·엔·알
+    return false;
+  }
+  function josa(w, j) {
+    var p = JOSA[j]; if (!p) return String(w) + j;
+    var b = hasBatchim(w), last = String(w).replace(/[\s)\]」』>'"’”]+$/, '');
+    if (p[0] === '으로') { var lc = last.charCodeAt(last.length - 1), ll = (lc >= 0xAC00 && lc <= 0xD7A3 && (lc - 0xAC00) % 28 === 8) || (/[0-9]/.test(last.charAt(last.length - 1)) && '168'.indexOf(last.charAt(last.length - 1)) >= 0) ; return String(w) + ((b && !ll) ? '으로' : '로'); }
+    return String(w) + (b ? p[0] : p[1]);
+  }
 
   // ============ 열기 방식(기억) ============
   function mode() { try { return localStorage.getItem(MODE_KEY) === 'soffice' ? 'soffice' : 'convert'; } catch (e) { return 'convert'; } }
@@ -324,6 +340,7 @@
       closeSheet: function () { closeSheet(); },
       onSave: function (fn) { c.saveFlow = (typeof fn === 'function') ? fn : null; },       // Ctrl+S 가 부를 「사본 저장」 흐름
       setSaver: function (fn) { c.saver = (typeof fn === 'function') ? fn : null; },       // 「수정 요청」으로 넘어가기 전에 저장해 두는 일(확인창 없이, Promise<true|false>)
+      explainFail: function (head, e, ms) { explainFail(c, head, e, ms); },
       requestFix: function () { requestFix(c); },
       fixAvail: function () { return fixAvail(c); },
       // 사본 저장 확인창: 모듈의 확인 문구 뒤에 공유함 업로드 안내를 붙인다(PC 브라우저에서는 붙이지 않음)
@@ -594,8 +611,8 @@
   function openSheet(c, o) {
     o = o || {};
     buildHost(); closeSheet();
-    var back = document.createElement('div'); back.className = 'so-sheet-back';
-    var box = document.createElement('div'); box.className = 'so-sheet' + (o.wide ? ' wide' : ''); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    var back = document.createElement('div'); back.className = 'so-sheet-back' + (o.keep ? ' keep' : '');      // keep = 서식·색처럼 여러 개를 이어서 적용하는 시트: 뒷막을 눌러도 안 닫히고, 위쪽 문서가 그대로 보이고 눌러진다
+    var box = document.createElement('div'); box.className = 'so-sheet' + (o.wide ? ' wide' : '') + (o.keep ? ' keep' : ''); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
     if (o.title) { var t = document.createElement('div'); t.className = 'so-sheet-t'; t.textContent = o.title; box.appendChild(t); }
     if (o.body) { var bd = document.createElement('div'); bd.className = 'so-sheet-body'; bd.appendChild(o.body); box.appendChild(bd); }
     var bs = document.createElement('div'); bs.className = 'so-sheet-btns';
@@ -614,6 +631,18 @@
   }
 
   // ---- 「수정 요청」 — 폰에서 못 하는 수정을 PC가 처음 파일에 고치는 기존 흐름(표시해서 요청하기)으로 잇는다 ----
+  // 실패 안내: 기술 문구(XML·검사·해석 등)는 쉬운 말로 바꾸고, 「수정 요청」을 쓸 수 있는 문서면 다음 길로 함께 안내한다
+  function whyText(e) {
+    var m = String((e && e.message) || e || '');
+    if (/XML|해석|검사|점검|형식이 등록|가리킴|parsererror|JSON|Unexpected|undefined|null|TypeError|ReferenceError|RangeError|SyntaxError|Cannot |is not|Failed to/i.test(m))
+      return '문서 안의 구조를 확인하는 중 문제가 생겨 반영하지 않았습니다. 문서는 그대로입니다';
+    return m || '알 수 없는 이유';
+  }
+  function explainFail(c, head, e, ms) {
+    var why = whyText(e);
+    if (c === cur && cfg.confirm && fixAvail(c) && why.indexOf('문서 안의 구조') === 0) { cfg.confirm(head, why + '.\n\n한 번 더 해 보시거나, 계속 안 되면 「수정 요청」으로 맡겨 주십시오.', '수정 요청', function () { requestFix(c); }, { cancelLabel: '닫기' }); return; }
+    toast(head + ': ' + why + (why.indexOf('문서 안의 구조') === 0 ? '. 한 번 더 해 보십시오' : ''), ms || 5200);
+  }
   function fixAvail(c) {
     c = c || cur;
     return SO_EDIT_PLUS === 'on' && !!c && !c.newBase && !!(global.SmartDocs && typeof SmartDocs.openFix === 'function' && typeof SmartDocs.handleLocalFile === 'function');
@@ -829,6 +858,7 @@
     copyName: copyName,
     newDoc: newDoc,
     flag: flagOn,
+    josa: josa,
     isOpen: function () { return !!(host && host.classList.contains('on') && (cur || (infoEl && infoEl.classList.contains('on')))); },
     back: back,
     close: function () { closeHost(true); },
