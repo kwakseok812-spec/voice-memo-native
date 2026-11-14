@@ -102,6 +102,11 @@
       case 'b': return '<c' + attrs + ' t="b"><v>' + (spec.v ? 1 : 0) + '</v></c>';
       case 's': return '<c' + attrs + ' t="inlineStr"><is><t xml:space="preserve">' + escX(cleanText(spec.v)) + '</t></is></c>';
       case 'f': return '<c' + attrs + '><f>' + escX(cleanText(spec.f)) + '</f></c>';
+      case 'fv':       // O-0861(v10.4): 수식 + 자체 계산기가 낸 저장값(없으면 수식만)
+        if (spec.vt === 'n' && numStr(spec.v) != null) return '<c' + attrs + '><f>' + escX(cleanText(spec.f)) + '</f><v>' + numStr(spec.v) + '</v></c>';
+        if (spec.vt === 'b') return '<c' + attrs + ' t="b"><f>' + escX(cleanText(spec.f)) + '</f><v>' + (spec.v ? 1 : 0) + '</v></c>';
+        if (spec.vt === 's') return '<c' + attrs + ' t="str"><f>' + escX(cleanText(spec.f)) + '</f><v>' + escX(cleanText(spec.v)) + '</v></c>';
+        return '<c' + attrs + '><f>' + escX(cleanText(spec.f)) + '</f></c>';
       case 'empty': return '<c' + attrs + '/>';
     }
     return null;

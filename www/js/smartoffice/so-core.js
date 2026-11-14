@@ -61,6 +61,7 @@
   var SO_FIRST_SIMPLE = 'on';               // v9.97(O-0854 5번): 'on' = 첫 화면에 「열기 방식: … · 바꾸기」 한 줄만(마지막 방식으로 바로 열기) · 보안 안내는 [자세히] 뒤로 · 'off' = 예전 두 칸 선택·긴 안내 그대로
   var SO_EDIT_PLUS = 'on';                  // O-0861(v10.3): 'off' = 편집 보강(표·그림·쪽 정리·새 문서·「수정 요청」·저장 이름 규칙·단축키)이 통째로 사라지고 v10.1과 같다
   var SO_HWP_TOOLS = 'on';                  // 한글 표·그림·글자 색·새 문서 단추 — 'off' = 예전 한글 도구줄
+  var SO_XLSX_TOOLS = 'on';                 // 엑셀 줄·칸·서식·시트·계산·새 문서 — 'off' = 예전 엑셀 화면(값 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
@@ -573,6 +574,7 @@
     if (SO_EDIT_PLUS !== 'on') return false;
     if (k === 'hwp') return SO_HWP_TOOLS === 'on';
     if (k === 'pdf') return SO_PDF_PAGES === 'on';
+    if (k === 'xlsx') return SO_XLSX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
     return true;
   }
@@ -646,7 +648,8 @@
 
   // ---- 새 문서 — 「＋ 새 문서」 줄(문서 뷰어 첫 화면). 준비된 형식(템플릿이 있는 형식)만 보인다 ----
   var NEW_DOCS = [
-    { id: 'hwp', chip: '한글', label: '새 한글 문서', ext: 'hwp', url: 'vendor/so/templates/blank.hwp', mime: 'application/x-hwp', flag: 'hwp' }
+    { id: 'hwp', chip: '한글', label: '새 한글 문서', ext: 'hwp', url: 'vendor/so/templates/blank.hwp', mime: 'application/x-hwp', flag: 'hwp' },
+    { id: 'xlsx', chip: '엑셀', label: '새 엑셀 문서', ext: 'xlsx', gen: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', flag: 'xlsx' }     // 빈 문서는 코드가 만든다(작성자 정보 없음)
   ];
   function newDocList() { return NEW_DOCS.filter(function (d) { return flagOn('newdoc') && flagOn(d.flag) && (d.id !== 'hwp' || SO_HWP_READY === 'on'); }); }
   function renderNewRow() {
@@ -660,7 +663,11 @@
   function newDoc(id) {
     var d = null; newDocList().forEach(function (x) { if (x.id === id) d = x; });
     if (!d) { toast('이 형식의 새 문서는 아직 만들 수 없습니다.', 2800); return false; }
-    fetch(d.url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('양식 파일을 읽지 못했습니다(' + r.status + ')'); return r.blob(); }).then(function (b) {
+    var getBlob = d.gen === 'xlsx' ? loadScript('vendor/so/docx/jszip.min.js').then(function () { return loadScript('js/smartoffice/xlsx/so-xlsx-struct.js'); }).then(function () {
+      var z = new global.JSZip(), f = global.SOXlsxStruct.newWorkbookFiles('시트1'); Object.keys(f).forEach(function (k) { z.file(k, f[k], { createFolders: false }); });
+      return z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: d.mime });
+    }) : fetch(d.url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('양식 파일을 읽지 못했습니다(' + r.status + ')'); return r.blob(); });
+    getBlob.then(function (b) {
       var f = new File([b], d.label + '.' + d.ext, { type: d.mime });
       openWith(d.id, f, { newBase: d.label, startEdit: true });
     }).catch(function (e) { toast('새 문서를 만들지 못했습니다: ' + ((e && e.message) || e), 4200); });

@@ -79,3 +79,38 @@ html[data-style="dark"] .sx-root{--sx-bg:#14171f;--sx-fg:#e8eaf0;--sx-line:#2b30
   .sx-bottom .sx-toolrow{flex-shrink:0;max-width:62%}
   .sx-input{font-size:15px}
 }
+
+/* ===== v10.4(O-0861) 엑셀 편집 도구: 아래 도구줄 · 시트 · 범위 표시 · 계산 표시 · 바꾸기 줄 ===== */
+.sx-c.rg{box-shadow:inset 0 0 0 999px rgba(47,107,255,.16)}
+.sx-c.rg.sel{box-shadow:inset 0 0 0 3px var(--sx-sel),inset 0 0 0 999px rgba(47,107,255,.22)}
+.sx-calc{font-size:12px;color:var(--muted);white-space:nowrap;padding:0 4px;max-width:44%;overflow:hidden;text-overflow:ellipsis}
+.sx-repl .sx-rq{flex:1;min-width:0;height:44px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;padding:0 12px;font-size:16px;font-family:inherit}
+.sx-ops{border-top:1px solid var(--glass-b);background:var(--bg0,var(--page-bg))}
+.sxu-lab{font-size:12.5px;color:var(--muted);padding:5px 12px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sxu-row{display:flex;gap:4px;padding:4px 6px 6px}
+.sxu-ob{appearance:none;flex:1 1 0;min-width:0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:12px;font-family:inherit;padding:2px 0;cursor:pointer}
+.sxu-ob .g{font-size:17px;font-weight:800;line-height:1.1}
+.sxu-ob .l{font-size:10.5px;font-weight:700;line-height:1.1;white-space:nowrap}
+.sxu-ob:active{background:var(--glass2);transform:scale(.97)}
+.sxu-ob.on{border-color:var(--p1);color:var(--p1);background:var(--glass2)}
+.sxu-l{font-size:13.5px;font-weight:800;margin:10px 2px 6px;color:var(--text)}
+.sxu-r{display:flex;flex-wrap:wrap;gap:8px}
+.sxu-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:2px 0 10px}
+.sxu-b{appearance:none;min-height:48px;padding:0 14px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;font-weight:800;font-size:14.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.sxu-b.big{min-height:54px}
+.sxu-b.danger{color:var(--rec,#e11d48);border-color:rgba(251,113,133,.5)}
+.sxu-b.on{border-color:var(--p1);background:var(--p1);color:#fff}
+.sxu-b.bold{font-weight:900}.sxu-b.it{font-style:italic}
+.sxu-b.sw{flex-direction:column;gap:3px;min-width:64px;min-height:62px;padding:6px 8px;font-size:12.5px}
+.sxu-b.sw i{display:block;width:30px;height:30px;border-radius:50%;border:2px solid var(--glass-b2,rgba(0,0,0,.25))}
+.sxu-b.sw i.none{background:linear-gradient(135deg,transparent 46%,#d33 46% 54%,transparent 54%),#fff}
+.sxu-b:active{transform:scale(.96)}
+.sxu-in{width:96px;height:48px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--in-bg,var(--glass));color:var(--text);font-size:16px;padding:0 10px;font-family:inherit}
+.sxu-in.wide{width:100%;box-sizing:border-box;margin-bottom:8px}
+.sxu-u{font-size:13px;color:var(--muted);align-self:center}
+.sxu-mg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sxu-mb{appearance:none;min-height:56px;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;font-weight:800;font-size:14.5px;cursor:pointer}
+.sxu-mb .g{font-size:18px;min-width:26px;text-align:center}
+.sxu-mb:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.sxu-ob:active,.sxu-b:active,.sxu-mb:active{transform:none}}
+@media (min-width:600px){.sx-bottom{flex-wrap:wrap}.sx-bottom .sx-ops{flex:0 0 100%;order:-1}.sxu-ob{min-height:56px}.sxu-ob .l{font-size:12px}}

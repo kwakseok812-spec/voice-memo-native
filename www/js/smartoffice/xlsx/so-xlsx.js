@@ -5,6 +5,8 @@
  * 저장 방식(xlsx): SheetJS 로 다시 쓰지 않는다. 원본 zip 을 JSZip(MIT)으로 열어 고친 셀만 해당 시트 XML 에 끼워 넣고(so-xlsx-patch.js),
  * 나머지 파일(서식·차트·그림·정의된 이름·조건부 서식)은 그대로 둔다. 피벗표·매크로가 있거나 보호·특수 구조인 파일/시트/칸은 고치기를 막는다.
  * 옛 xls 는 보기만, csv 는 예전 방식(글자 그대로 사본 저장).
+ * v10.4(O-0861) 스위치 SO_XLSX_TOOLS: 줄·칸 넣고 빼기, 칸 서식, 칸 합치기, 줄 높이·칸 너비, 시트 추가·이름·삭제·순서, 찾아 바꾸기, 채우기, 정렬, 합계 바로 보이기(자체 계산기), 새 엑셀 문서.
+ *   구조 편집은 so-xlsx-struct.js(XML 직접 편집), 계산은 so-xlsx-calc.js, 단추·시트는 so-xlsx-ui.js. 고친 뒤에는 만든 파일을 다시 읽어 화면을 갈아 끼운다(화면과 저장 파일이 늘 같은 내용).
  */
 (function (global) {
   'use strict';
@@ -58,7 +60,8 @@
       if (h > 0) h = Math.max(h, 22);
       rowY[k + 1] = rowY[k] + Math.round(h);
     }
-    return { i: i, name: name, ws: ws, nr: nr, nc: nc, colX: colX, rowY: rowY, merges: merges };
+    var usedR = 0, usedC = 0; if (ws['!ref']) { var ur = XLSX.utils.decode_range(ws['!ref']); usedR = ur.e.r + 1; usedC = ur.e.c + 1; }
+    return { i: i, name: name, ws: ws, nr: nr, nc: nc, colX: colX, rowY: rowY, merges: merges, usedR: usedR, usedC: usedC };
   }
   function visibleSheets(wb) {
     var meta = (wb.Workbook && wb.Workbook.Sheets) || [], out = [];
@@ -104,7 +107,15 @@
     var st = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;line-height:' + (lh - 1) + 'px;font-size:' + Math.round(14 * S.scale * 10) / 10 + 'px;';
     if (cell && cell.t === 'n') st += 'text-align:right;'; else if (cell && (cell.t === 'b' || cell.t === 'e')) st += 'text-align:center;';
     var fill = fillOf(cell); if (fill) st += 'background-color:' + fill + ';color:#111;';
-    return '<div class="sx-c' + (extraCls || '') + sel + ed + '" style="' + st + '">' + (txt ? esc(txt) : '') + '</div>';
+    var sty = styleAt(sh, r, c);
+    if (sty) {
+      if (sty.b) st += 'font-weight:800;'; if (sty.i) st += 'font-style:italic;'; if (sty.u) st += 'text-decoration:underline;';
+      if (sty.bg) st += 'background-color:' + sty.bg + ';color:' + (sty.color || '#111') + ';'; else if (sty.color) st += 'color:' + sty.color + ';';
+      if (sty.h) st += 'text-align:' + sty.h + ';'; if (sty.wrap) st += 'white-space:pre-wrap;line-height:1.25;';
+      if (sty.bl) st += 'border-left:1px solid #222;'; if (sty.br) st += 'border-right:1px solid #222;'; if (sty.bt) st += 'border-top:1px solid #222;'; if (sty.bb) st += 'border-bottom:1px solid #222;';
+    }
+    var rgc = (S.rg && r >= S.rg.r0 && r <= S.rg.r1 && c >= S.rg.c0 && c <= S.rg.c1) ? ' rg' : '';
+    return '<div class="sx-c' + (extraCls || '') + sel + rgc + ed + '" style="' + st + '">' + (txt ? esc(txt) : '') + '</div>';
   }
   // 한 구역(rows r0..r1, cols c0..c1)을 HTML 로. ox,oy = 구역 원점 좌표(스크롤 보정)
   function cellsHTML(sh, r0, r1, c0, c1, ox, oy) {
@@ -186,10 +197,10 @@
   }
 
   // ---------------- 선택·입력줄 ----------------
-  function select(r, c, noRender) {
+  function select(r, c, noRender, keepRg) {
     var sh = S.sh, m = mergeAt(sh, r, c);
     if (m) { r = m.s.r; c = m.s.c; }
-    S.sel = { r: r, c: c };
+    S.sel = { r: r, c: c }; if (!keepRg) { S.rg = null; S.rangeMode = false; S.rgAnchor = null; }
     var cell = cellOf(sh, r, c);
     S.el.addr.textContent = addr(r, c);
     S.el.inp.value = barText(cell); S.barOrig = S.el.inp.value;
@@ -211,6 +222,13 @@
     if (x < 0 || y < 0) return false;
     var r = Math.min(sh.nr - 1, lowerIdx(sh.rowY, y)), c = Math.min(sh.nc - 1, lowerIdx(sh.colX, x));
     var m = mergeAt(sh, r, c), tr = m ? m.s.r : r, tc = m ? m.s.c : c;
+    if (S.rangeMode && S.editing) {            // 범위의 끝 칸: 처음 칸(앵커)부터 이 칸까지
+      var an0 = S.rgAnchor || S.sel;
+      S.rg = { r0: Math.min(an0.r, tr), r1: Math.max(an0.r, tr), c0: Math.min(an0.c, tc), c1: Math.max(an0.c, tc) };
+      S.rangeMode = false; S.rgAnchor = null; render(true); if (S.ui) S.ui.refresh();
+      S.ctx.toast('범위를 골랐습니다(' + addr(S.rg.r0, S.rg.c0) + ':' + addr(S.rg.r1, S.rg.c1) + ')', 2200);
+      return { same: false, range: true };
+    }
     var same = (S.sel.r === tr && S.sel.c === tc);
     // 한글을 치던 중 다른 칸을 누르면, 치던 내용을 먼저 그 칸에 넣어 둔다(값이 사라지지 않게)
     if (!same && S.editable && S.editing && el.inp.value !== S.barOrig) { if (!commit(true)) return false; }
@@ -222,7 +240,8 @@
     var res = pickAt(e.clientX, e.clientY, e.target);
     if (!res) return;
     // 고치기 중이면 칸을 누르는 즉시 입력줄이 키보드 위로 올라온다
-    if (S.editable && S.editing) { try { S.el.inp.focus({ preventScroll: true }); } catch (x2) {} }
+    // v10.4: 아래 도구줄이 있을 때는 첫 번째 누름 = 칸 고르기(키보드 안 올림), 같은 칸을 한 번 더 누르면 입력 시작(키보드가 올라오면 도구줄이 가려지므로)
+    if (S.editable && S.editing && (!plusOn() || res.same)) { try { S.el.inp.focus({ preventScroll: true }); } catch (x2) {} }
   }
   // 길게 누르면 칸의 전체 내용(긴 글)을 큰 창으로 보여 준다
   function bindLongPress(wrap) {
@@ -469,7 +488,7 @@
     return { hadFormula: hadFormula };
   }
   function syncDirty() {
-    var d = Object.keys(S.edits).length > 0;
+    var d = Object.keys(S.edits).length > 0 || !!S.pkgOps;
     if (d !== S.dirty) { S.dirty = d; S.ctx.setDirty(d); }
     refreshActions();
   }
@@ -485,9 +504,11 @@
     var ap = applyRes(sh.name, r, c, res);
     if (ap.err) { S.ctx.toast(ap.err, 4200); return false; }
     syncDirty();
-    if (res.formula != null) S.ctx.toast('수식을 넣었습니다. 계산 결과는 엑셀에서 열면 나옵니다.', 3600);
+    var calcWas = !!(S.calc && S.calc.on), calcOk = calcWas ? calcRefresh() : false;
+    if (res.formula != null) S.ctx.toast(calcOk ? '수식을 넣었습니다. 계산한 값을 바로 보여 드립니다.' : (calcWas ? '이 수식은 폰에서 계산하지 못해 「합계 바로 보이기」를 껐습니다. 계산 결과는 엑셀에서 열면 나옵니다.' : '수식을 넣었습니다. 계산 결과는 엑셀에서 열면 나옵니다.'), 3800);
     else if (ap.hadFormula) S.ctx.toast('수식이 있던 칸이라, 이제 값만 남았습니다.', 2600);
-    else if (willAffect) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다.', 3200); }
+    else if (calcWas && !calcOk) S.ctx.toast('계산을 하지 못해 「합계 바로 보이기」를 껐습니다. 합계 값은 엑셀에서 열면 다시 계산됩니다.', 3800);
+    else if (willAffect && !calcOk) { S.calcToasted = true; S.ctx.toast('이 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다.', 3200); }
     if (!stay && r + 1 < sh.nr) { select(r + 1, c, true); ensureVisible(); }
     else S.barOrig = S.el.inp.value;
     render(true); refreshEd();
@@ -503,8 +524,16 @@
     if (!S || !S.editing || !from.length) return;
     S.el.inp.blur();
     var st = from.pop();
+    if (st.pkg) {                                  // 줄·칸·서식·시트 같은 큰 고침: 그 전 문서로 통째로 돌린다
+      S.ctx.busy('되돌리는 중…');
+      currentBytes().then(function (cur) { to.push({ pkg: true, bytes: cur, label: st.label }); return loadBytes(st.bytes); }).then(adopt).then(function () {
+        S.pkgOps = Math.max(0, (S.pkgOps || 0) + (from === S.undo ? -1 : 1)); S.ctx.busy(null); syncDirty(); S.ctx.toast(doneMsg + ' (' + st.label + ')', 2000);
+      }).catch(function (e) { S.ctx.busy(null); from.push(st); S.ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); });
+      return;
+    }
     to.push(capture(st.name, st.r, st.c));
     reinstate(st);
+    if (S.calc && S.calc.on) calcRefresh();
     syncDirty(); jumpTo(st.name, st.r, st.c); refreshEd();
     S.ctx.toast(doneMsg + ' (' + st.a + ')', 1800);
   }
@@ -513,7 +542,17 @@
   function resetAll() {
     if (!S || !S.editing) return;
     var n = Object.keys(S.edits).length;
-    if (!n) { S.ctx.toast('고친 칸이 없습니다.', 1800); return; }
+    if (!n && !S.pkgOps) { S.ctx.toast('고친 칸이 없습니다.', 1800); return; }
+    if (S.pkgOps && S.origBuf) {
+      S.ctx.confirm('모두 되돌릴까요?', '지금까지 고친 내용(줄·칸·서식·시트 포함)을 모두 처음 모양으로 돌립니다. 이미 저장한 사본 파일은 그대로입니다.', '모두 되돌리기', function () {
+        if (!S) return; S.ctx.busy('되돌리는 중…');
+        loadBytes(new Uint8Array(S.origBuf)).then(adopt).then(function () {
+          S.edits = {}; S.patched = {}; Object.keys((S.an && S.an.sheets) || {}).forEach(function (nm) { S.patched[nm] = 1; }); S.undo = []; S.redo = []; S.orig = {}; S.origRef = {}; S.calcToasted = false; S.pkgOps = 0;
+          S.ctx.busy(null); syncDirty(); S.ctx.toast('고친 내용을 모두 되돌렸습니다.', 2400);
+        }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); });
+      }, { danger: true });
+      return;
+    }
     S.ctx.confirm('모두 되돌릴까요?', '지금까지 고친 ' + n + '칸을 모두 처음 모양으로 돌립니다. 이미 저장한 사본 파일은 그대로입니다.', '모두 되돌리기', function () {
       if (!S) return;
       Object.keys(S.orig).forEach(function (k) {
@@ -531,7 +570,9 @@
   function refreshEd() {
     if (!S || !S.el || !S.el.ed) return;
     S.el.ed.style.display = (S.editable && S.editing) ? '' : 'none';
-    S.el.undoB.disabled = !S.undo.length; S.el.redoB.disabled = !S.redo.length; S.el.allB.disabled = !Object.keys(S.edits).length;
+    S.el.undoB.disabled = !S.undo.length; S.el.redoB.disabled = !S.redo.length; S.el.allB.disabled = !Object.keys(S.edits).length && !S.pkgOps;
+    if (S.el.calcB) S.el.calcB.textContent = !plusOn() ? '' : (S.calc && S.calc.on ? '합계 계산 켜짐' : (S.calc && S.calc.has ? '합계는 엑셀에서 계산' : ''));
+    if (S.el.repl) S.el.repl.style.display = (S.el.find.style.display !== 'none' && S.editing && plusOn()) ? '' : 'none';
   }
   function leaveEdit() {
     if (!S || !S.editing) return;
@@ -562,6 +603,7 @@
     var f = S.el.find;
     if (f.style.display === 'none') { f.style.display = ''; S.el.fq.focus(); }
     else { f.style.display = 'none'; S.finds = null; }
+    refreshEd();
   }
   function runFind() {
     var q = S.el.fq.value.trim();
@@ -581,49 +623,47 @@
   }
 
   function saveBase() { return (S.ctx.name || 'sheet').replace(/\.[^.]+$/, ''); }
-  function saveCopyNow() {
+  var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  function buildXlsx() { return currentBytes(); }
+  function doSave(silent) {                  // 사본 저장. silent = 확인 시트 없이(「수정 요청」으로 넘어가기 전 저장). Promise<true|false>
     var ctx = S.ctx, XLSX = global.XLSX, base = saveBase();
-    try {
-      if (S.ext === 'csv') {
-        var csv = XLSX.utils.sheet_to_csv(S.wb.Sheets[S.names[0]]);
-        Promise.resolve(ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv')).then(function (ok) {
-          if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
-          S.dirty = false; ctx.setDirty(false); refreshActions();
-          ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000);
-        });
-        return;
-      } else {
-        ctx.busy('사본 만드는 중…');
-        global.SOXlsxPatch.finalize(S.zip, S.an, Object.keys(S.patched)).then(function () {
-          return S.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-        }).then(function (out) {
-          ctx.busy(null);
-          if (!S) return;
-          return Promise.resolve(ctx.saveCopy(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '_수정.xlsx')).then(function (ok) {
-            if (ok === false || !S) return;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
-            S.dirty = false; ctx.setDirty(false); refreshActions();
-            ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000);
-          });
-        }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); });
-        return;
-      }
-    } catch (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); }
+    if (S.ext === 'csv') {
+      var csv = XLSX.utils.sheet_to_csv(S.wb.Sheets[S.names[0]]);
+      return Promise.resolve(ctx.saveCopy(new Blob(['﻿' + csv], { type: 'text/csv' }), base + '_수정.csv')).then(function (ok) {
+        if (ok === false || !S) return false;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+        S.dirty = false; ctx.setDirty(false); refreshActions(); if (!silent) ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000); return true;
+      });
+    }
+    ctx.busy('사본 만드는 중…');
+    return buildXlsx().then(function (out) {
+      ctx.busy(null);
+      if (!S) return false;
+      return Promise.resolve(ctx.saveCopy(new Blob([out], { type: XLSX_MIME }), base + '_수정.xlsx')).then(function (ok) {
+        if (ok === false || !S) return false;   // 저장 실패는 틀이 안내한다 — 성공이 확인된 뒤에만 성공 안내·고침 해제
+        S.dirty = false; ctx.setDirty(false); refreshActions(); if (!silent) ctx.toast('사본으로 저장했습니다. 원래 파일은 그대로입니다.', 3000); return true;
+      });
+    }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 4000); return false; });
   }
+  function saveCopyNow() { doSave(false); }
   function askSave() {
     if (!S.editable || !S.dirty) return;
     if (S.editing && !commit(true)) return;
-    var base = saveBase();
-    var msg = S.ext === 'csv'
-      ? '고친 값을 새 CSV 파일(' + base + '_수정.csv)로 저장합니다. 원래 파일은 그대로입니다.'
-      : '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + base + '_수정.xlsx)로 저장합니다. 글꼴·색·차트·그림은 그대로입니다. ' +
-        (anyAffected() ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있습니다. ' : '') +
+    var base = saveBase(), plus = plusOn(), nm = (plus && S.ctx.copyName) ? S.ctx.copyName(S.ext === 'csv' ? 'csv' : 'xlsx') : base + '_수정.' + (S.ext === 'csv' ? 'csv' : 'xlsx');
+    var msg;
+    if (S.ext === 'csv') msg = '고친 값을 새 CSV 파일(' + nm + ')로 저장합니다. 원래 파일은 그대로입니다.';
+    else if (S.ctx.isNew) msg = '새 엑셀 문서를 「' + nm + '」 파일로 저장합니다.';
+    else if (S.pkgOps) msg = '고친 내용(줄·칸·서식·시트 포함)을 담아 새 파일(' + nm + ')로 저장합니다. 그림·차트는 그대로 둡니다. 원래 파일은 그대로입니다.';
+    else msg = '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + nm + ')로 저장합니다. 글꼴·색·차트·그림은 그대로입니다. ' +
+        (anyAffected() && !(S.calc && S.calc.on) ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있습니다. ' : '') +
         '원래 파일은 그대로입니다.';
-    S.ctx.confirmCopy('사본으로 저장할까요?', msg, '사본 저장', saveCopyNow);
+    if (plus && S.ext !== 'csv' && S.calc && !S.calc.on && S.calc.has) msg += '\n합계 같은 수식 값은 폰에서 다시 계산하지 않았습니다. 엑셀(또는 한셀)에서 열면 계산됩니다.';
+    S.ctx.confirmCopy('사본으로 저장할까요?', msg, '사본 저장', saveCopyNow, plus && S.ext !== 'csv' ? { emph: '엑셀(또는 한셀)에서 열어 한 번 확인해 주십시오.' } : undefined);
   }
   function startEdit() {
     if (!S || !S.editable) return;
     S.editing = true; refreshActions(); select(S.sel.r, S.sel.c); refreshEd();
-    S.ctx.toast('고치기를 켰습니다. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르십시오.', 3600);
+    if (S.ui) S.ui.refresh();
+    S.ctx.toast(plusOn() ? '고치기를 켰습니다. 칸을 눌러 내용을 바꾸고 ✓를 누르십시오. 줄·칸·서식 도구는 아래에 있습니다.' : '고치기를 켰습니다. 고칠 칸을 누르고 내용을 바꾼 뒤 ✓를 누르십시오.', 3600);
   }
   function refreshActions() {
     var list = [];
@@ -638,6 +678,7 @@
   // ---- 임시 보관(snapshot) · 되살리기(restore) ----
   function snapshot() {
     if (!S || !S.editable) return null;
+    if (S.pkgOps) return currentBytes().then(function (b) { return { v: 3, ext: S.ext, bytes: new Blob([b], { type: XLSX_MIME }) }; });     // 줄·칸·서식·시트까지 고쳤으면 고친 문서를 통째로 보관
     var out = [];
     Object.keys(S.edits).forEach(function (k) {
       var e = S.edits[k], rs = e.res, o = { s: e.name, a: addr(e.r, e.c) };
@@ -650,6 +691,12 @@
   }
   function restore(data) {
     var rep = { applied: 0, skipped: 0 };
+    if (S && S.editable && data && data.v === 3 && data.bytes instanceof Blob && plusOn()) {
+      return data.bytes.arrayBuffer().then(function (b) { return loadBytes(new Uint8Array(b)); }).then(adopt).then(function () {
+        S.pkgOps = 1; S.editing = true; syncDirty(); refreshActions(); refreshEd(); if (S.ui) S.ui.refresh();
+        S.ctx.toast('이어서 고치던 내용을 되살렸습니다.', 3600); return { applied: 1, skipped: 0 };
+      }).catch(function () { S.ctx.toast('이어서 고치던 내용을 되살리지 못했습니다.', 3200); return rep; });
+    }
     if (!S || !S.editable || !data || !Array.isArray(data.edits)) return rep;
     if (Array.isArray(data.names) && (data.names.length !== S.names.length || data.names.some(function (n, i) { return n !== S.names[i]; }))) {   // 시트 구성(수·이름)이 달라졌으면 적용하지 않는다
       rep.skipped = data.edits.length; S.ctx.toast('문서의 시트 구성이 달라져 이어서 고치던 내용을 되살리지 않았습니다.', 4200); return rep;
@@ -697,16 +744,17 @@
     var note = S.noteText ? '<div class="sx-note">' + esc(S.noteText) + '</div>' : '';
     root.innerHTML = note +
       '<div class="sx-edbar" style="display:none"><button type="button" class="sx-eb sx-undo" aria-label="되돌리기">↶</button><button type="button" class="sx-eb sx-redo" aria-label="다시하기">↷</button>' +
-        '<button type="button" class="sx-eb sx-eall">모두 되돌리기</button><span class="sx-edsp"></span><button type="button" class="sx-eb sx-eview">보기로</button></div>' +
+        '<button type="button" class="sx-eb sx-eall">모두 되돌리기</button><span class="sx-edsp"></span><span class="sx-calc"></span><button type="button" class="sx-eb sx-eview">보기로</button></div>' +
       '<div class="sx-find" style="display:none"><input class="sx-fq" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="칸 값 찾기" aria-label="찾을 말"><span class="sx-fcnt"></span>' +
         '<button type="button" class="sx-eb sx-fprev" aria-label="이전">▲</button><button type="button" class="sx-eb sx-fnext" aria-label="다음">▼</button><button type="button" class="sx-eb sx-fx" aria-label="찾기 닫기">✕</button></div>' +
+      '<div class="sx-find sx-repl" style="display:none"><input class="sx-rq" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="바꿀 말" aria-label="바꿀 말"><button type="button" class="sx-eb sx-rone">바꾸기</button><button type="button" class="sx-eb sx-rall">모두 바꾸기</button></div>' +
       '<div class="sx-fbar"><div class="sx-addr">A1</div><input class="sx-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="칸 내용"><button type="button" class="sx-exp" aria-label="칸 내용 크게 보기">⤢</button><button type="button" class="sx-ok" aria-label="입력 확정">✓</button></div>' +
       '<div class="sx-gridwrap">' +
         '<div class="sx-corner"></div><div class="sx-hcol"></div><div class="sx-hrow"></div>' +
         '<div class="sx-scroll"><div class="sx-spacer"><div class="sx-layer"></div></div></div>' +
         '<div class="sx-fz sx-fr" style="display:none"></div><div class="sx-fz sx-fc" style="display:none"></div><div class="sx-fz sx-fx" style="display:none"></div>' +
       '</div>' +
-      '<div class="sx-bottom"><div class="sx-tools sx-tabrow"><div class="sx-tabs"></div></div>' +
+      '<div class="sx-bottom"><div class="sx-ops" style="display:none"></div><div class="sx-tools sx-tabrow"><div class="sx-tabs"></div></div>' +
       '<div class="sx-tools sx-toolrow"><button type="button" class="sx-chip sx-zoom" data-z="-" aria-label="축소">−</button><span class="sx-pct">100%</span><button type="button" class="sx-chip sx-zoom" data-z="+" aria-label="확대">＋</button>' +
         '<button type="button" class="sx-chip" data-f="find">찾기</button><button type="button" class="sx-chip" data-f="fit">화면에 맞춤</button>' +
         '<button type="button" class="sx-chip' + (S.showHdr ? ' on' : '') + '" data-f="hdr" aria-pressed="' + S.showHdr + '">머리글 표시</button>' +
@@ -715,7 +763,12 @@
     var q = function (s) { return root.querySelector(s); };
     S.el = { root: root, addr: q('.sx-addr'), inp: q('.sx-input'), ok: q('.sx-ok'), wrap: q('.sx-gridwrap'), corner: q('.sx-corner'), hcol: q('.sx-hcol'), hrow: q('.sx-hrow'),
       sc: q('.sx-scroll'), spacer: q('.sx-spacer'), layer: q('.sx-layer'), fr: q('.sx-fr'), fc: q('.sx-fc'), fx: q('.sx-fx'), tabs: q('.sx-tabs'), pct: q('.sx-pct'),
-      ed: q('.sx-edbar'), undoB: q('.sx-undo'), redoB: q('.sx-redo'), allB: q('.sx-eall'), viewB: q('.sx-eview'), find: q('.sx-find'), fq: q('.sx-fq'), fcnt: q('.sx-fcnt') };
+      ed: q('.sx-edbar'), undoB: q('.sx-undo'), redoB: q('.sx-redo'), allB: q('.sx-eall'), viewB: q('.sx-eview'), find: q('.sx-find:not(.sx-repl)'), fq: q('.sx-fq'), fcnt: q('.sx-fcnt'),
+      ops: q('.sx-ops'), calcB: q('.sx-calc'), repl: q('.sx-repl'), rq: q('.sx-rq') };
+    q('.sx-rone').onclick = replaceCurrent; q('.sx-rall').onclick = replaceAll;
+    S.el.hcol.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hcol.getBoundingClientRect(); selectLine('col', Math.min(S.sh.nc - 1, lowerIdx(S.sh.colX, (e.clientX - rc.left + S.el.sc.scrollLeft) / S.scale))); });
+    S.el.hrow.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hrow.getBoundingClientRect(); selectLine('row', Math.min(S.sh.nr - 1, lowerIdx(S.sh.rowY, (e.clientY - rc.top + S.el.sc.scrollTop) / S.scale))); });
+    if (plusOn()) { S.ui = global.SOXlsxUI.create(envForUI()); S.ui.mount(S.el.ops); }
     S.el.tabs.innerHTML = S.vis.map(function (i) { return '<button type="button" class="sx-tab" data-i="' + i + '">' + esc(S.names[i]) + '</button>'; }).join('');
     S.el.tabs.addEventListener('click', function (e) { var b = e.target.closest('.sx-tab'); if (b) showSheet(+b.getAttribute('data-i')); });
     root.addEventListener('click', function (e) {
@@ -756,6 +809,173 @@
     bindKeyboard();
   }
 
+
+  // ============ O-0861(v10.4) 편집 보강: 꾸러미 편집 · 화면 갈아 끼우기 · 계산 · 서식 읽기 ============
+  function plusOn() { return !!(S && S.mode === 'patch' && S.ctx.flag && S.ctx.flag('xlsx') && global.SOXlsxStruct && global.SOXlsxUI); }
+  function zipPkg(zip) {
+    var cache = {};
+    return {
+      read: function (p) { if (p in cache) return Promise.resolve(cache[p]); var f = zip.file(p); if (!f) return Promise.resolve(null); return f.async('string').then(function (s) { cache[p] = s; return s; }); },
+      write: function (p, s) { cache[p] = s; zip.file(p, s, { createFolders: false }); },
+      remove: function (p) { delete cache[p]; zip.remove(p); },
+      list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); }
+    };
+  }
+  function currentBytes() {
+    return global.SOXlsxPatch.finalize(S.zip, S.an, Object.keys(S.patched)).then(function () {
+      return S.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    });
+  }
+  function loadBytes(bytes) {
+    var buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    var wb = readWorkbook({ ext: 'xlsx' }, buf).wb;
+    return global.JSZip.loadAsync(buf, { createFolders: false }).then(function (z) { return global.SOXlsxPatch.analyze(z).then(function (a) { return { wb: wb, zip: z, an: a }; }); });
+  }
+  function drawTabs(cur) {
+    S.el.tabs.innerHTML = S.vis.map(function (i) { return '<button type="button" class="sx-tab' + (i === cur ? ' on' : '') + '" data-i="' + i + '">' + esc(S.names[i]) + '</button>'; }).join('');
+  }
+  // 새로 읽은 문서로 갈아 끼운다(보던 시트·칸·위치는 그대로)
+  function adopt(m) {
+    var keepName = S.keepSheet || (S.sh && S.sh.name); S.keepSheet = null; var sc = S.el.sc, st = sc.scrollTop, sl = sc.scrollLeft, sel = { r: S.sel.r, c: S.sel.c }, calcWas = !!(S.calc && S.calc.on);
+    S.wb = m.wb; S.names = m.wb.SheetNames; S.vis = visibleSheets(m.wb); S.zip = m.zip; S.an = m.an;
+    S.patched = {}; Object.keys((m.an && m.an.sheets) || {}).forEach(function (nm) { S.patched[nm] = 1; });     // 다음 저장 때 시트 XML 을 다시 쓰게(내용은 같다)
+    S.fmap = null; S.smap = {}; S.rg = null; S.rangeMode = false; S.finds = null;
+    var i = S.names.indexOf(keepName); if (i < 0 || S.vis.indexOf(i) < 0) { i = S.vis[0]; sel = { r: 0, c: 0 }; st = 0; sl = 0; }
+    S.sh = prepSheet(i); drawTabs(i); layoutSize();
+    S.sel = { r: Math.min(sel.r, S.sh.nr - 1), c: Math.min(sel.c, S.sh.nc - 1) };
+    return loadStyles().then(function () {
+      if (calcWas) { if (!calcRefresh()) S.calc.on = false; } else calcInit();
+      sc.scrollTop = st; sc.scrollLeft = sl; S.lk = null;
+      select(S.sel.r, S.sel.c, true); render(true); refreshEd(); if (S.ui) S.ui.refresh();
+    });
+  }
+  // 문서를 고치는 일 한 번(줄·칸·서식·시트…). mut(pkg) → Promise<{ok}|{err}> — 복사본에서 먼저 해 보고, 되면 화면을 갈아 끼운다.
+  function pkgRun(label, mut, onDone, onFail) {
+    if (!plusOn() || !S.editing) { S.ctx.toast('먼저 「고치기」를 켜 주십시오.', 2400); return Promise.resolve(false); }
+    if (S.el.inp.value !== S.barOrig && !commit(true)) return Promise.resolve(false);
+    var cps = S.an && S.an.sheets && S.an.sheets[S.sh.name];
+    if (cps && cps.readOnly) { S.ctx.toast(cps.why || '이 시트는 고칠 수 없습니다.', 4200); return Promise.resolve(false); }      // 보호된 시트 등은 보기만
+    if (S.busyPkg) return Promise.resolve(false);
+    S.busyPkg = true; S.ctx.busy('고치는 중…');
+    var before, done = function () { S.busyPkg = false; S.ctx.busy(null); };
+    return currentBytes().then(function (b) { before = b; return global.JSZip.loadAsync(b.slice(), { createFolders: false }); }).then(function (z2) {
+      return Promise.resolve(mut(zipPkg(z2), z2)).then(function (r) { return { r: r, z: z2 }; });
+    }).then(function (x) {
+      if (!x.r || x.r.err || x.r.ok === false) { done(); if (onFail) onFail(x.r); else S.ctx.toast((x.r && x.r.err) || '할 수 없습니다.', 5200); return false; }
+      return x.z.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } }).then(loadBytes).then(function (m) {
+        S.undo.push({ pkg: true, bytes: before, label: label }); S.redo = [];
+        var pk = 0; for (var k = S.undo.length - 1; k >= 0; k--) if (S.undo[k].pkg && ++pk > 10) { S.undo.splice(0, k + 1); break; }      // 통째 보관은 10번까지만
+        if (S.undo.length > UNDO_MAX + 10) S.undo.splice(0, S.undo.length - UNDO_MAX - 10);
+        S.pkgOps = (S.pkgOps || 0) + 1;
+        return adopt(m).then(function () { done(); syncDirty(); if (onDone) onDone(x.r); return true; });
+      });
+    }).catch(function (e) { done(); S.ctx.toast('고치지 못했습니다: ' + ((e && e.message) || e), 5200); return false; });
+  }
+  // ---- 서식(styles.xml)을 읽어 그리기에 쓴다 ----
+  function loadStyles() {
+    S.styles = null; S.smap = {};
+    var f = S.zip && S.zip.file('xl/styles.xml'); if (!f || !global.SOXlsxStruct) return Promise.resolve();
+    return f.async('string').then(function (x) { var st = new global.SOXlsxStruct.Styles(x); S.styles = st.hasAll ? st : null; }).catch(function () { S.styles = null; });
+  }
+  function smapOf(name) {
+    var psh = S.an && S.an.sheets && S.an.sheets[name]; if (!psh || psh.xml == null) return null;
+    var c = S.smap && S.smap[name]; if (c && c.x === psh.xml) return c.m;
+    var m = {}, tags = psh.xml.match(/<c\b[^>]*>/g) || [];
+    for (var i = 0; i < tags.length; i++) { var r = /\sr="([A-Z]+\d+)"/.exec(tags[i]), s = /\ss="(\d+)"/.exec(tags[i]); if (r && s && s[1] !== '0') m[r[1]] = +s[1]; }
+    if (!S.smap) S.smap = {}; S.smap[name] = { x: psh.xml, m: m }; return m;
+  }
+  function styleAt(sh, r, c) {
+    if (!S.styles) return null;
+    var m = smapOf(sh.name), s = m && m[addr(r, c)]; return s ? S.styles.resolve(s) : null;
+  }
+  // ---- 자체 계산기(합계 바로 보이기) ----
+  function calcModel() {
+    var XLSX = global.XLSX;
+    var nm = null; function names() { if (nm) return nm; nm = {}; ((S.wb.Workbook && S.wb.Workbook.Names) || []).forEach(function (x) { if (x && x.Name && x.Sheet == null && !(x.Name in nm)) nm[x.Name] = x.Ref; }); return nm; }
+    return { name: function (n) { return names()[n] || null; }, has: function (n) { return !!S.wb.Sheets[n]; }, cell: function (sh, r, c) { var ws = S.wb.Sheets[sh]; return ws ? ws[XLSX.utils.encode_cell({ r: r - 1, c: c - 1 })] : undefined; } };
+  }
+  function formulaCells() {
+    var out = [], XLSX = global.XLSX;
+    S.names.forEach(function (nm) {
+      var ws = S.wb.Sheets[nm]; if (!ws) return;
+      for (var k in ws) { if (k.charAt(0) === '!' || !Object.prototype.hasOwnProperty.call(ws, k)) continue; var cl = ws[k]; if (cl && cl.f) { var p = XLSX.utils.decode_cell(k); out.push({ sheet: nm, r: p.r + 1, c: p.c + 1 }); } }
+    });
+    return out;
+  }
+  function calcInit() {
+    S.calc = { on: false, why: '', has: false };
+    if (!plusOn() || !global.SOXlsxCalc) return;
+    var list = formulaCells(); S.calc.has = list.length > 0;
+    if (!list.length) { S.calc.on = true; return; }
+    var res = global.SOXlsxCalc.check(calcModel(), list);
+    S.calc.on = !!res.ok; S.calc.why = res.ok ? '' : res.why;
+  }
+  // 모든 수식을 다시 계산해 바뀐 값만 화면과 파일(<v>)에 적는다. 못 하는 수식이 있으면 끄고 false.
+  function calcRefresh() {
+    if (!S.calc || !S.calc.on) return false;
+    var XLSX = global.XLSX, m = calcModel(), list = formulaCells(), upd = {}, i, any = false;
+    for (i = 0; i < list.length; i++) {
+      var f = list[i], res = global.SOXlsxCalc.run(m, f.sheet, f.r, f.c);
+      if (!res || res.t === 'e') { S.calc.on = false; S.calc.why = 'unsupported'; return false; }
+      var ws = S.wb.Sheets[f.sheet], a = XLSX.utils.encode_cell({ r: f.r - 1, c: f.c - 1 }), cl = ws[a];
+      if (global.SOXlsxCalc.same(res, cl) && cl.w !== '⟳') continue;
+      cl.t = res.t; cl.v = res.v;
+      cl.w = res.t === 'n' ? XLSX.SSF.format(cl.z && cl.z !== 'General' ? cl.z : 'General', res.v) : res.t === 'b' ? (res.v ? 'TRUE' : 'FALSE') : String(res.v);
+      (upd[f.sheet] = upd[f.sheet] || {})[a] = { t: res.t, v: res.v }; any = true;
+    }
+    if (any && S.an && S.an.sheets) Object.keys(upd).forEach(function (nm) {
+      var psh = S.an.sheets[nm]; if (!psh || psh.xml == null) return;
+      var r = global.SOXlsxStruct.setCachedValues(psh.xml, upd[nm]); psh.xml = r.xml; S.patched[nm] = 1;
+    });
+    return true;
+  }
+  // ---- 범위 ----
+  function selRange() { return S.rg ? { r0: S.rg.r0, c0: S.rg.c0, r1: S.rg.r1, c1: S.rg.c1 } : { r0: S.sel.r, c0: S.sel.c, r1: S.sel.r, c1: S.sel.c }; }
+  function selectLine(kind, i) {           // 줄 번호·열 글자를 누르면 그 줄/열 전체(쓴 범위까지)를 고른다
+    if (!S.editing || !plusOn()) return;
+    var sh = S.sh;
+    if (kind === 'col') { S.sel = { r: 0, c: i }; S.rg = { r0: 0, r1: Math.max(0, (sh.usedR || 1) - 1), c0: i, c1: i }; }
+    else { S.sel = { r: i, c: 0 }; S.rg = { r0: i, r1: i, c0: 0, c1: Math.max(0, (sh.usedC || 1) - 1) }; }
+    select(S.sel.r, S.sel.c, true, true); render(true); if (S.ui) S.ui.refresh();
+  }
+  function startRange() {
+    if (!S.editing) return; S.rangeMode = true; S.rgAnchor = { r: S.sel.r, c: S.sel.c };
+    S.ctx.toast('범위의 끝 칸을 눌러 주십시오(지금 칸부터 그 칸까지). 줄 번호나 열 글자를 누르면 그 줄·열이 골라집니다.', 3600);
+    if (S.ui) S.ui.refresh();
+  }
+  function clearRange() { S.rg = null; S.rangeMode = false; S.rgAnchor = null; render(true); if (S.ui) S.ui.refresh(); }
+  // ---- 찾아 바꾸기 ----
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function replaceOne(h, q, rp) {
+    var nm = S.names[h.si], ws = S.wb.Sheets[nm], a = addr(h.r, h.c), cl = ws && ws[a];
+    if (!cl || cl.f) return 'skip';
+    var cur = barText(cl), nx = cur.replace(new RegExp(escRe(q), 'gi'), function () { return rp; });
+    if (nx === cur) return 'skip';
+    var res = parseInput(nx, cl, S.ext); if (res.err || res.formula != null) return 'skip';
+    var ap = applyRes(nm, h.r, h.c, res); return ap.err ? 'skip' : 'ok';
+  }
+  function replaceCurrent() {
+    if (!S.editing || !S.finds || !S.finds.list.length) { S.ctx.toast('먼저 찾을 말을 쓰고 찾아 주십시오.', 2400); return; }
+    var h = S.finds.list[Math.max(0, S.finds.i)], r = replaceOne(h, S.finds.q, S.el.rq.value);
+    if (r === 'ok') { syncDirty(); if (S.calc && S.calc.on) calcRefresh(); render(true); refreshEd(); S.ctx.toast('바꿨습니다', 1600); stepFind(1); }
+    else S.ctx.toast('이 칸은 바꿀 수 없습니다(수식 칸이거나 바뀌는 것이 없습니다).', 3000);
+  }
+  function replaceAll() {
+    if (!S.editing || !S.finds || !S.finds.list.length) { S.ctx.toast('먼저 찾을 말을 쓰고 찾아 주십시오.', 2400); return; }
+    var n = 0, skip = 0, rp = S.el.rq.value, q = S.finds.q;
+    S.finds.list.forEach(function (h) { var r = replaceOne(h, q, rp); if (r === 'ok') n++; else skip++; });
+    syncDirty(); if (S.calc && S.calc.on) calcRefresh(); S.finds = null; S.el.fcnt.textContent = ''; render(true); refreshEd();
+    S.ctx.toast(n + '칸을 바꿨습니다.' + (skip ? ' (' + skip + '칸은 수식이거나 바뀌지 않아 건너뛰었습니다)' : '') + (n > UNDO_MAX ? ' 되돌리기는 마지막 ' + UNDO_MAX + '칸까지입니다.' : ''), 4200);
+  }
+  function envForUI() {
+    return {
+      S: function () { return S; }, ctx: S.ctx, toast: function (m, ms) { S.ctx.toast(m, ms); }, addr: addr, colName: colName, esc: esc,
+      ensureVisible: ensureVisible, selRange: selRange, startRange: startRange, clearRange: clearRange, pkgRun: pkgRun, commit: commit, select: select, render: render, applyRes: applyRes, parseInput: parseInput,
+      syncDirty: syncDirty, refreshEd: refreshEd, calcRefresh: calcRefresh, undoEdit: undoEdit, redoEdit: redoEdit, resetAll: resetAll, leaveEdit: leaveEdit, toggleFind: toggleFind,
+      barText: barText, display: display, cellOf: cellOf, plusOn: plusOn, styleAt: styleAt
+    };
+  }
+
   // ---------------- 등록 ----------------
   global.SOffice.register({
     id: 'xlsx', label: '엑셀', editable: true,
@@ -768,6 +988,8 @@
       var need = global.XLSX ? Promise.resolve() : ctx.loadScript('vendor/xlsx.full.min.js');
       if (isX) need = need.then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-patch.js'); })
         .then(function () { return global.JSZip ? null : ctx.loadScript('vendor/so/docx/jszip.min.js'); });
+      if (isX && ctx.flag && ctx.flag('xlsx')) need = need.then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-calc.js'); })
+        .then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-ui.js'); }).catch(function () { /* 못 불러오면 예전 화면으로 연다 */ });
       return need.then(function () { return ctx.file.arrayBuffer(); }).then(function (buf) {
         var res = readWorkbook(ctx, buf), wb = res.wb;
         if (!wb || !wb.SheetNames || !wb.SheetNames.length) throw new Error('시트를 찾지 못했습니다');
@@ -781,17 +1003,27 @@
           }
           S = { ctx: ctx, ext: ctx.ext, wb: wb, names: wb.SheetNames, vis: visibleSheets(wb), scale: 1, frz: { row: false, col: false },
             showHdr: hdrPref(), hw: 0, hh: 0, lp: false, lk: null, edits: {}, dirty: false, editing: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason, mode: mode,
-            zip: pk && pk.zip, an: pk && pk.an, patched: {}, undo: [], redo: [], orig: {}, origRef: {}, fmap: null, finds: null };
+            zip: pk && pk.zip, an: pk && pk.an, patched: {}, undo: [], redo: [], orig: {}, origRef: {}, fmap: null, finds: null, origBuf: buf, pkgOps: 0, smap: {}, styles: null, calc: { on: false, why: '', has: false } };
           S.hw = S.showHdr ? HDR_W : 0; S.hh = S.showHdr ? HDR_H : 0;
           build(ctx);
           ctx.onBack(function () { if (S && S.el && S.el.det) { closeDetail(); return true; } return false; });
           refreshActions();
           showSheet(S.vis[0]); refreshEd();
+          var after = Promise.resolve();
+          if (plusOn()) {
+            after = loadStyles().then(function () {
+              calcInit(); S.lk = null; render(true); refreshEd(); if (S.ui) S.ui.refresh();
+              if (ctx.onSave) { ctx.onSave(function () { if (S && S.editing) askSave(); }); ctx.setSaver(function () { return doSave(true); }); }
+              if (ctx.opts && ctx.opts.startEdit && S.editable) startEdit();
+            });
+          }
+          return after;
         });
       });
     },
     snapshot: snapshot,
     restore: restore,
+    _state: function () { return S; },                  // 점검용(시험에서 상태를 들여다본다)
     close: function () {
       if (!S) return;
       try { if (S.ro) S.ro.disconnect(); } catch (e) {}
