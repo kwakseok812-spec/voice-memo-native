@@ -220,7 +220,20 @@
         btn(g, '앞으로 옮기기', function () { moveSlide(-1); }, 'big'); btn(g, '뒤로 옮기기', function () { moveSlide(1); }, 'big');
         btn(g, hid ? '숨김 풀기' : '숨기기', function () { env.run('숨기기', function (pkg) { return ST.hideSlide(pkg, i, !hid).then(function () { return { slide: i }; }); }, function () { toast(hid ? '다시 보이게 했습니다' : '쇼에서 건너뛰도록 숨겼습니다', 2400); U.refreshAll(); }); }, 'big');
         btn(g, '쇼 보기', function () { env.slideshow(i); }, 'big');
+        btn(g, '이 슬라이드 배치 바꾸기', changeLayoutSheet, 'big');
+        var gb = group(body, '이 슬라이드 배경색'); BGC.forEach(function (c) { btn(gb, c[0], function () { op('배경색', function (x) { return ST.setSlideBg(x, c[1]); }, c[1] ? '배경색을 바꿨습니다' : '배경을 배치의 것으로 되돌렸습니다', true); }, 'sw', c[1] || ''); });
         body.appendChild(el('div', 'so-sheet-note', '새 슬라이드·복제는 지금 장 바로 뒤에 들어갑니다. 차트·SmartArt·삽입 개체·동영상이 든 장은 복제할 수 없고(이유를 알려 드립니다), 순서 바꾸기·지우기는 됩니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.'));
+      });
+    }
+    var BGC = [['배치 그대로', null], ['흰색', 'FFFFFF'], ['연한 회색', 'F2F2F2'], ['연한 노랑', 'FFF8D6'], ['연한 하늘', 'E3F0FF'], ['연한 연두', 'E6F5DC'], ['연한 분홍', 'FDE6EC'], ['남색', '1F3864'], ['검정', '000000']];
+    function changeLayoutSheet() {
+      var p = st.path;
+      ST.readDeck(env.roPkg(s.info.zip)).then(function () { return ST.listLayouts(env.roPkg(s.info.zip)); }).then(function (ls) {
+        sheet('배치 바꾸기', function (body) {
+          var g = grid(body);
+          ls.forEach(function (l) { btn(g, l.name, function () { env.run('배치 바꾸기', function (pkg) { return ST.changeLayout(pkg, p, l.path).then(function (r) { return r.err ? r : { slide: s.idx }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } st.sel = null; toast('이 슬라이드의 배치를 「' + l.name + '」로 바꿨습니다(안의 내용은 그대로입니다)', 3000); U.refreshAll(); }); }, 'big'); });
+          body.appendChild(el('div', 'so-sheet-note', '제목·본문 자리는 새 배치의 위치·서식을 따라갑니다. 마음에 안 들면 ↶ 로 되돌립니다.'));
+        });
       });
     }
     function addSlide(layout) { var i = s.idx; env.run('새 슬라이드', function (pkg) { return ST.addSlide(pkg, i + 1, layout).then(function () { return { slide: i + 1 }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } st.sel = null; toast('새 슬라이드를 넣었습니다', 2400); U.refreshAll(); }); }
@@ -350,6 +363,9 @@
           btn(al, a[0], function () { var q = sel(); if (!q || !q.g) return; var p = a[1](q); setGeom(q.id, { x: p.x, y: p.y, w: q.g.w, h: q.g.h }, '맞췄습니다'); }, '', undefined, true);
         });
         btn(al, '정가운데', function () { var q = sel(); if (!q || !q.g) return; setGeom(q.id, { x: Math.round((st.W - q.g.w) / 2), y: Math.round((st.H - q.g.h) / 2), w: q.g.w, h: q.g.h }, '정가운데로 맞췄습니다'); }, '', undefined, true);
+        var rt = group(body, '회전(지금 ' + (function () { try { return ST.readRotation(st.xml, sh.id); } catch (e) { return 0; } })() + '°)');
+        function rot(d, abs) { var q = sel(); if (!q) return; op('회전', function (x) { var cur = ST.readRotation(x, q.id); return ST.setRotation(x, q.id, abs ? d : cur + d); }, '돌렸습니다', true); }
+        [['↺ −90°', -90], ['↻ +90°', 90], ['−15°', -15], ['+15°', 15], ['180°', 180]].forEach(function (a) { btn(rt, a[0], function () { rot(a[1], a[0] === '180°'); }, '', undefined, true); }); btn(rt, '똑바로(0°)', function () { rot(0, true); }, '', undefined, true);
         var r = group(body, '크기·순서');
         btn(r, '크게 ×1.1', function () { scaleBy(1.1); }, '', undefined, true); btn(r, '작게 ×0.9', function () { scaleBy(0.9); }, '', undefined, true);
         btn(r, '맨 앞으로', function () { op('맨 앞으로', function (x) { return ST.reorderShape(x, sh.id, true); }, '맨 앞으로 옮겼습니다', true); }, '', undefined, true);

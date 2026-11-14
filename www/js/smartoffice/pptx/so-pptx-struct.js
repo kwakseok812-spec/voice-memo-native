@@ -135,12 +135,13 @@
   function maxSldId(pres) { var mx = 255; (pres.match(/<p:sldId\b[^>]*?\sid="(\d+)"/g) || []).forEach(function (s) { mx = Math.max(mx, +/id="(\d+)"/.exec(s)[1]); }); return mx; }
 
   // ---------- 배치(레이아웃) 목록 ----------
+  var LAYOUT_KO = { 'Title Slide': '제목 슬라이드', 'Title and Content': '제목 및 내용', 'Section Header': '구역 머리글', 'Two Content': '내용 두 개', 'Comparison': '비교', 'Title Only': '제목만', 'Blank': '빈 화면', 'Content with Caption': '설명이 있는 내용', 'Picture with Caption': '설명이 있는 그림', 'Title and Vertical Text': '제목 및 세로 글', 'Vertical Title and Text': '세로 제목과 글' };
   async function listLayouts(pkg) {
     var out = [];
     pkg.list().filter(function (p) { return /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(p); }).sort(function (a, b) { return +/(\d+)\.xml$/.exec(a)[1] - +/(\d+)\.xml$/.exec(b)[1]; }).forEach(function (p) { out.push({ path: p }); });
     for (var i = 0; i < out.length; i++) {
       var x = await pkg.read(out[i].path) || '', m = /<p:cSld\b[^>]*\sname="([^"]*)"/.exec(x);
-      out[i].name = m ? unescX(m[1]) : ('배치 ' + (i + 1));
+      out[i].name = m ? (LAYOUT_KO[unescX(m[1])] || unescX(m[1])) : ('배치 ' + (i + 1));
     }
     return out;
   }
@@ -921,12 +922,46 @@
     return xml.slice(0, sh.s) + nx + xml.slice(sh.e);
   }
 
+
+  // ============================== v10.8: 슬라이드 배경색 · 도형 회전 · 배치 바꾸기 ==============================
+  // 배경색(hex 'RRGGBB' | null = 배치의 배경으로 되돌림): 슬라이드 XML 맨 앞(<p:cSld> 첫 자식)에 <p:bg>
+  function setSlideBg(xml, hex) {
+    var m = /<p:cSld\b[^>]*?(\/?)>/.exec(xml); if (!m || m[1] === '/') throw new Error('슬라이드의 내용을 찾지 못했습니다');
+    var x = xml.replace(/<p:bg\b[^>]*?(?:\/>|>[\s\S]*?<\/p:bg>)/, ''), at = m.index + m[0].length;
+    if (!hex) return x;
+    return x.slice(0, at) + '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + hex + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' + x.slice(at);
+  }
+  function readSlideBg(xml) { var m = /<p:bg\b[\s\S]*?<a:srgbClr\s+val="([0-9A-Fa-f]{6})"/.exec(xml); return m ? m[1] : null; }
+  // 회전: deg = 절대 각도(0~359). 그림·도형·글 상자·선(위치가 직접 적힌 것)에만
+  function setRotation(xml, id, deg) {
+    var sh = findShape(xml, id); if (!sh) throw new Error('도형을 찾지 못했습니다');
+    var x = sh.xml, r = spPrRange(x);
+    if (sh.name === 'p:graphicFrame' || sh.name === 'p:grpSp') throw new Error('표·차트·묶음 도형은 폰에서 돌릴 수 없습니다.');
+    if (!r) throw new Error('이 도형은 돌릴 수 없습니다');
+    var sp = x.slice(r.s, r.e), xm = /<a:xfrm\b[^>]*>/.exec(sp);
+    if (!xm) throw new Error('이 도형은 위치가 배치에서 이어받는 것이라 먼저 끌어서 한 번 옮긴 뒤 돌려 주십시오.');
+    var v = ((Math.round(deg) % 360) + 360) % 360, open = xm[0].replace(/\srot="[^"]*"/, '');
+    if (v) open = open.replace(/^<a:xfrm/, '<a:xfrm rot="' + v * 60000 + '"');
+    sp = sp.replace(xm[0], open);
+    return xml.slice(0, sh.s) + x.slice(0, r.s) + sp + x.slice(r.e) + xml.slice(sh.e);
+  }
+  function readRotation(xml, id) { var sh = findShape(xml, id); if (!sh) return 0; var m = /<a:xfrm\b[^>]*\srot="(-?\d+)"/.exec(sh.xml); return m ? ((Math.round(+m[1] / 60000) % 360) + 360) % 360 : 0; }
+  // 배치 바꾸기: 슬라이드가 쓰는 배치(slideLayout)만 다른 것으로 바꾼다(슬라이드 안의 내용은 그대로)
+  async function changeLayout(pkg, slidePath, layoutPath) {
+    var rp = relsPathOf(slidePath), rx = await pkg.read(rp); if (rx == null) return { err: '이 슬라이드의 연결 정보를 찾지 못했습니다.' };
+    if (!pkg.list().some(function (p) { return p === layoutPath; })) return { err: '고른 배치를 찾지 못했습니다.' };
+    var m = /<Relationship\b[^>]*\/slideLayout"[^>]*\/>/.exec(rx); if (!m) return { err: '이 슬라이드의 배치 연결을 찾지 못했습니다.' };
+    var rel = m[0].replace(/Target="[^"]*"/, 'Target="../slideLayouts/' + layoutPath.replace(/^.*\//, '') + '"');
+    pkg.write(rp, rx.replace(m[0], rel)); return { ok: true };
+  }
+
   global.SOPptxStruct = {
     readDeck: readDeck, listSlides: listSlides, listLayouts: listLayouts, addSlide: addSlide, duplicateSlide: duplicateSlide, deleteSlide: deleteSlide, moveSlide: moveSlide, hideSlide: hideSlide,
     readSlide: readSlide, listShapes: listShapes, removeShape: removeShape, setGeom: setGeom, clampGeom: clampGeom, addTextBox: addTextBox, addAutoShape: addAutoShape, addLine: addLine,
     addPicture: addPicture, addTable: addTable, setFill: setFill, setLineColor: setLineColor, formatText: formatText, readFormat: readFormat, addParagraph: addParagraph, removeParagraph: removeParagraph,
     tableEdit: tableEdit, reorderShape: reorderShape, paraRange: paraRange, slideNotes: slideNotes, setNotes: setNotes, newPresentationFiles: newPresentationFiles, SHAPES: SHAPES, EMU: EMU,
     setAnchor: setAnchor, friendlyName: friendlyName, formatRun: formatRun, setLineStyle: setLineStyle, copyShape: copyShape, pasteShape: pasteShape, tableMerge: tableMerge, cellSpans: cellSpans,
+    setSlideBg: setSlideBg, readSlideBg: readSlideBg, setRotation: setRotation, readRotation: readRotation, changeLayout: changeLayout,
     _topShapes: topShapes, _dupBlock: dupBlock
   };
 })(typeof window !== 'undefined' ? window : globalThis);
