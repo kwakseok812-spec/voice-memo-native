@@ -2986,7 +2986,9 @@
     sh.className = 'sheet shin-sheet atm-sheet';
     sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="보내기 고르기"><div class="sheet-head">무엇을 보낼까요?</div>' +
       '<button type="button" class="sheet-btn" data-atm="file"><svg class="atm-ic"><use href="#i-image"/></svg><span><b>파일·사진을 케이에게</b><small>채팅에 붙여 케이에게 보여 주기</small></span></button>' +
-      '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>명함 사진은 그대로 등록됩니다. 명함이 아니면 다음 화면에서 「이 사진은 명함입니다」를 꺼 주십시오.</small></span></button>' +
+      (SCAN_CARD === 'on'
+        ? '<button type="button" class="sheet-btn" data-atm="photo"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>사진을 PC로 보내 정리</b><small>PC가 사진을 정리합니다. 명함 사진이면 명함 대장에 등록됩니다. 홈의 스캔에서 「명함」으로 찍어 등록할 수도 있습니다.</small></span></button>'
+        : '<button type="button" class="sheet-btn" data-atm="card"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 등록 · 사진 PC 정리</b><small>명함 사진은 그대로 등록됩니다. 명함이 아니면 다음 화면에서 「이 사진은 명함입니다」를 꺼 주십시오.</small></span></button>') +
       (SCAN_HUB === 'on' ? '<button type="button" class="sheet-btn" data-atm="receipt"><svg class="atm-ic"><use href="#i-note"/></svg><span><b>영수증 등록</b><small>케이가 읽어서 운영비·연구비 앱에 넣을 내용을 보여 드립니다</small></span></button>' : '') +
       '<button type="button" class="sheet-btn" data-atm="video"><svg class="atm-ic"><use href="#i-video"/></svg><span><b>영상 정리 (PC로)</b><small>긴 녹화도 조각으로 나눠 보내 PC가 요약</small></span></button>' +
       (docScanOn() && DOC_SCAN_CHAT === 'on' ? '<button type="button" class="sheet-btn" data-atm="docscan"><svg class="atm-ic"><use href="#i-doc"/></svg><span><b>📄 문서 스캔 (여러 장 → PDF)</b><small>종이 문서를 찍어 PDF 한 파일로 — 공유함에 넣기</small></span></button>' : '') +   // O-0576
@@ -2998,6 +3000,7 @@
       var k = b && b.getAttribute('data-atm');
       if (k === 'file') $('chatFileInput').click();
       else if (k === 'card') { photoAsCard = true; filePanelFromChat = true; $('photoInput').click(); }
+      else if (k === 'photo' && SCAN_CARD === 'on') { photoAsCard = false; filePanelFromChat = true; $('photoInput').click(); }      // v9.99: 명함 스위치를 끈 채(예전 「사진 PC 정리」와 같음) — 파일 창 안 스위치로 켤 수도 있고, 켜지 않아도 PC 가 사진이 명함이면 등록한다
       else if (k === 'receipt' && SCAN_HUB === 'on') openReceiptScan();
       else if (k === 'video') { filePanelFromChat = true; $('videoInput').click(); }
       else if (k === 'docscan' && docScanOn() && DOC_SCAN_CHAT === 'on') openScanGeneral();   // O-0576
