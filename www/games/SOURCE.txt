@@ -2,3 +2,4 @@
 janggi 9d58d95de94c360c18434962b798596de10f3743 https://github.com/kwakseok812-spec/janggi (origin/main 파일 그대로, 복사한 날 2026-11-08)
 minesweeper 88083f064fca8fd11a577669fd906eaee2c9e9f9 https://github.com/kwakseok812-spec/minesweeper (공개 main 파일 그대로, 복사한 날 2026-11-14)
 solitaire 5ffcba4ac05fac1dd9bd2c0eb61fae8fb95fd4fe https://github.com/kwakseok812-spec/solitaire (공개 main 파일 그대로, 복사한 날 2026-11-14)
+brickbreaker c6b3ab75c2e084c4094b48ca770170dbea6978fc https://github.com/kwakseok812-spec/brickbreaker (공개 main 파일 그대로, 복사한 날 2026-11-14)

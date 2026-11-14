@@ -1,5 +1,5 @@
 /* ============================================================================
- * games.js — 홈 「게임」 칸 + 「장기·오목」·「지뢰 피하기」·「카드 정리」를 스마트비서 안에서 두기 (v9.83 O-0783 · v10.0 O-0857)
+ * games.js — 홈 「게임」 칸 + 「장기·오목」·「지뢰 피하기」·「카드 정리」·「벽돌 깨기」를 스마트비서 안에서 두기 (v9.83 O-0783 · v10.0 O-0857 · v10.2 O-0859)
  * ----------------------------------------------------------------------------
  * 무엇: 홈 맨 끝 「게임」 칸(작은 글씨 「장기·오목」) → 「한 판 둘까요?」 목록 시트 → 게임을 고르면 앱 안 고정 층(#gameRoot)에서 게임이 열린다.
  *       게임 파일은 앱에 담아 둔 원본 그대로의 복사본(www/games/<id>/, 복사·대조 도구 deploy/sync_games.sh)이고, 같은 출처라 두던 판(localStorage janggi.*)이 이어진다.
@@ -32,7 +32,10 @@
       ready: '__mines', saves: [{ key: 'mines.game.v1', arr: 'moves' }], mode: '' },
     { id: 'solitaire', name: '카드 정리', sub: '카드 정리', desc: '혼자 하는 카드 놀이(솔리테어)',
       src: 'games/solitaire/index.html', icon: 'games/solitaire/icon-192.png', url: 'https://kwakseok812-spec.github.io/solitaire/',
-      ready: '__solitaire', saves: [{ key: 'solitaire.game.v1', arr: 'moves' }], mode: '' }
+      ready: '__solitaire', saves: [{ key: 'solitaire.game.v1', arr: 'moves' }], mode: '' },
+    { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 12판',
+      src: 'games/brickbreaker/index.html', icon: 'games/brickbreaker/icon-192.png', url: 'https://kwakseok812-spec.github.io/brickbreaker/',
+      ready: '__bricks', saves: [{ key: 'bricks.game.v1', arr: 'moves' }], mode: '' }
   ];
   var TXT = {
     head: '한 판 둘까요?', load: '판을 펴는 중입니다…', fail: '게임을 불러오지 못했습니다', failTab: '인터넷 주소로 열기', badge: '두던 판이 있습니다', close: '닫기',
