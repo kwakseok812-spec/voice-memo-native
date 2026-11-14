@@ -71,7 +71,7 @@ html[data-style="dark"] .sp-cv{filter:brightness(.88)}       /* 어두운 화면
   .sp-opt{max-width:640px;margin:0 auto}
 }
 
-/* ---- O-0861(v10.2) 더보기 시트 · 양식 칸 · 쪽 정리 화면 ---- */
+/* ---- O-0861(v10.3) 더보기 시트 · 양식 칸 · 쪽 정리 화면 ---- */
 .sp-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sp-mb{appearance:none;display:flex;align-items:center;gap:10px;min-height:52px;border-radius:14px;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;padding:0 12px;cursor:pointer;text-align:left}
 .sp-mb i{font-style:normal;font-size:18px;font-weight:800;min-width:30px;text-align:center}

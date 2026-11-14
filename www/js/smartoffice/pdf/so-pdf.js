@@ -4,7 +4,7 @@
  * 이 파일의 코드는 자체 작성(이음오피스 소스 복사 없음). AI 기능 없음. 원본은 덮어쓰지 않고 「원래이름_수정.pdf」 사본만 저장.
  * 하는 일: 세로 연속 쪽 보기(보이는 쪽 근처만 그림) · 핀치/버튼 확대 · 쪽 이동 · 형광펜 · 글 얹기 · 메모 · 손글씨 서명.
  * 하지 않는 일: PDF 본문 글 직접 수정.
- * v10.2(O-0861) 스위치 SO_PDF_PAGES: 쪽 정리·합치기·나누기·양식 칸 채우기(so-pdf-pages.js, 켜져 있을 때만 불러옴) · 도구줄 6칸+더보기.
+ * v10.3(O-0861) 스위치 SO_PDF_PAGES: 쪽 정리·합치기·나누기·양식 칸 채우기(so-pdf-pages.js, 켜져 있을 때만 불러옴) · 도구줄 6칸+더보기.
  */
 (function (global) {
   'use strict';
@@ -590,7 +590,7 @@
       return;
     }
     if (a.type === 'stamp') {
-      return doc.embedPng(dataBytes(a.img)).then(function (im) {
+      return (/^data:image\/jpe?g/.test(a.img) ? doc.embedJpg(dataBytes(a.img)) : doc.embedPng(dataBytes(a.img))).then(function (im) {
         var p = toPdf(vp, a.x, a.y + a.h);
         page.drawImage(im, { x: p.x, y: p.y, width: a.w, height: a.h, rotate: L.degrees(ang) });
       });
@@ -641,7 +641,7 @@
     if (typeof data.n === 'number' && data.n !== S.n) {   // 저장해 둔 쪽 수와 지금 문서가 다르면 적용하지 않는다
       rep.skipped = data.anns.length; S.ctx.toast('문서의 쪽 수가 달라져(저장 ' + data.n + '쪽, 지금 ' + S.n + '쪽) 이어서 넣던 내용을 되살리지 않았습니다.', 4200); return rep;
     }
-    var num = function (v) { return typeof v === 'number' && isFinite(v); }, hex = /^#[0-9a-fA-F]{6}$/, png = /^data:image\/png;base64,[A-Za-z0-9+\/=]+$/;
+    var num = function (v) { return typeof v === 'number' && isFinite(v); }, hex = /^#[0-9a-fA-F]{6}$/, png = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/;
     data.anns.forEach(function (o) {
       try {
         var P = o && num(o.p) ? S.pages[Math.round(o.p) - 1] : null;
@@ -670,7 +670,43 @@
     return rep;
   }
 
-  // ---------------------------------------------------------------- O-0861(v10.2) 쪽 정리 · 양식 채우기 연결
+
+  // ---------------------------------------------------------------- O-0861(v10.3) 사진 넣기 — 서명과 같은 「그림 주석」으로 쪽 위에 올린다(끌어서 옮기고 키우기·줄이기)
+  function readPhoto(file) {
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () {
+        var w = im.naturalWidth, h = im.naturalHeight, k = Math.min(1, 1600 / Math.max(w, h)), keepPng = /png/i.test(file.type);
+        var cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+        var g = cv.getContext('2d'); if (!keepPng) { g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
+        g.drawImage(im, 0, 0, cv.width, cv.height);
+        var out = { url: cv.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.85), w: cv.width, h: cv.height };
+        URL.revokeObjectURL(url); cv.width = cv.height = 0; res(out);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); rej(new Error('사진을 읽지 못했습니다.')); };
+      im.src = url;
+    });
+  }
+  function addPhoto() {
+    if (!S || S.dead) return;
+    setMode('hand');
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp,image/gif'; inp.style.display = 'none';
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0]; if (inp.parentNode) inp.parentNode.removeChild(inp); if (!f || !S || S.dead) return;
+      S.ctx.busy('사진을 줄이는 중…');
+      readPhoto(f).then(function (ph) {
+        S.ctx.busy(null); if (!S || S.dead) return;
+        var P = S.pages[Math.max(0, S.curPage - 1)] || S.pages[0], r = ph.h / ph.w;
+        var w = Math.min(P.w * 0.55, 320), h = w * r; if (h > P.h * 0.7) { h = P.h * 0.7; w = h / r; }
+        var sr = S.sc.getBoundingClientRect(), pr = P.el.getBoundingClientRect(), cy = ((sr.top + sr.height / 2) - pr.top) / P.s;   // 지금 보이는 가운데 높이
+        addAnn({ type: 'stamp', page: P.n, img: ph.url, x: Math.max(0, (P.w - w) / 2), y: clamp(cy - h / 2, 0, Math.max(0, P.h - h)), w: w, h: h });
+        S.ctx.toast('사진을 넣었습니다. 손가락으로 끌어 옮기고 「키우기」「줄이기」로 크기를 맞추십시오.', 4200);
+      }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('사진을 넣지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+    };
+    document.body.appendChild(inp); inp.click();
+  }
+
+  // ---------------------------------------------------------------- O-0861(v10.3) 쪽 정리 · 양식 채우기 연결
   function plus() { return !!(S && S.ctx.flag && S.ctx.flag('pdf')); }
   function perRowN() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }
   function pagesMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-pages.js').then(function () { if (!global.SOPdfPages) throw new Error('쪽 정리 부품을 불러오지 못함'); return global.SOPdfPages; }); }
@@ -698,9 +734,9 @@
     var row = S.row; row.innerHTML = ''; S.modeBtns = {}; S.moreBtn = null; S.undoBtn = null; S.formBtn = null;
     var D = {
       hand: { i: '✋', l: '보기', mode: 'hand' }, hl: { i: '🖍', l: '형광펜', mode: 'hl' }, text: { i: 'T', l: '글', mode: 'text' }, memo: { i: '📝', l: '메모', mode: 'memo' }, sig: { i: '✍', l: '서명', mode: 'sig' },
-      undo: { i: '↶', l: '되돌리기', run: undo, undo: true }, pages: { i: '▦', l: '쪽 정리', run: openPagesScreen }, form: { i: '✎', l: '양식 채우기', run: toggleForm, form: true }
+      undo: { i: '↶', l: '되돌리기', run: undo, undo: true }, pages: { i: '▦', l: '쪽 정리', run: openPagesScreen }, form: { i: '✎', l: '양식 채우기', run: toggleForm, form: true }, pic: { i: '🖼', l: '사진', run: addPhoto }
     };
-    var list = plus() ? ['hand', 'hl', 'text', 'sig', 'pages', 'undo', 'memo', 'form'] : ['hand', 'hl', 'text', 'memo', 'sig', 'undo'];
+    var list = plus() ? ['hand', 'hl', 'text', 'memo', 'sig', 'undo', 'pages', 'pic', 'form'] : ['hand', 'hl', 'text', 'memo', 'sig', 'undo'];   // 접은 폰 6칸은 예전 그대로(메모 한 번), 새 도구는 더보기
     var n = plus() ? perRowN() : 99, shown = list.length > n ? list.slice(0, n) : list, rest = list.length > n ? list.slice(n) : [];
     S.bucket = perRowN();
     function mk(id, host, inSheet) {
@@ -755,7 +791,7 @@
     var w = S.workStack[S.workStack.length - 1]; if (!w) return;
     S.ctx.busy('이전 상태로 되돌리는 중…');
     (w.bytes ? Promise.resolve(w.bytes) : S.ctx.file.arrayBuffer().then(function (b) { return new Uint8Array(b); })).then(function (bytes) {
-      S.workStack.pop(); return applyBytes(bytes, '되돌림', true).then(function () { S.ctx.busy(null); S.ctx.toast('쪽 정리를 되돌렸어요', 2200); });
+      S.workStack.pop(); return applyBytes(bytes, '되돌림', true).then(function () { S.ctx.busy(null); S.ctx.toast('쪽 정리를 되돌렸습니다', 2200); });
     }).catch(function (e) { S.ctx.busy(null); S.ctx.toast('되돌리지 못했습니다 — ' + ((e && e.message) || e), 4200); });
   }
   // ---- 양식 칸(입력 칸) 표시 · 채움 ----

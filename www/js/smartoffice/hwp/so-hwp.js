@@ -17,7 +17,7 @@
  *   · 고친 내용 복구: 공통 틀이 snapshot()으로 고친 문서 전체를 바이트로 받아 두고, 같은 파일을 다시 열면 restore()로 편집 상태를 되살린다.
  *   · 도구줄은 자주 쓰는 것 한 줄 + 「⋯」 더보기 줄(정렬·확대·찾기). 넓은 화면(펼침)은 한 줄에 모두.
  *   · 저장은 언제나 「사본 저장」(원본은 건드리지 않는다). 저장 전에 한 번 확인(공유함 업로드 안내) → 사본 이름에 무작위 꼬리표.
- *   · v10.2(O-0861) 스위치 SO_HWP_TOOLS: 켜져 있으면 도구줄이 「맥락 도구줄」(글 / 표 안 / 그림 선택)로 바뀐다 — 표 만들기·줄 넣기·줄/칸 지우기·그림 넣기·글자 색·문단 넣기·새 문서.
+ *   · v10.3(O-0861) 스위치 SO_HWP_TOOLS: 켜져 있으면 도구줄이 「맥락 도구줄」(글 / 표 안 / 그림 선택)로 바뀐다 — 표 만들기·줄 넣기·줄/칸 지우기·그림 넣기·글자 색·문단 넣기·새 문서.
  *     코드는 so-hwp-tools.js. 꺼져 있으면(또는 그 파일을 못 불러오면) 아래 예전 도구줄 그대로.
  * ==========================================================================*/
 (function (global) {
@@ -257,12 +257,13 @@
       var names = Object.keys(z.files).filter(function (n) { return /^Contents\/section\d+\.xml$/i.test(n); });
       return Promise.all(names.map(function (n) { return z.file(n).async('string'); })).then(function (xs) {
         var has = xs.some(function (x) { return x.indexOf('linesegarray') >= 0; });
-        return has ? '' : '\n이 파일은 한컴이 아닌 프로그램으로 만든 파일이라 저장하면 줄 간격이 달라질 수 있어요.';
+        return has ? '' : '\n이 파일은 한컴이 아닌 프로그램으로 만든 파일이라 저장하면 줄 간격이 달라질 수 있습니다.';
       });
     }).catch(function () { return ''; });
   }
+  var CHECK_EMPH = '한컴 한글에서 열어 한 번 확인해 주십시오.';      // 저장 시트 맨 끝에 굵은 한 줄로 따로 보인다(so-core confirmCopy → app.js)
   function checkLine(name, isNew) {
-    return isNew ? '\n\n한컴 한글에서 열어 한 번 확인해 주세요. 새 문서는 이 이름으로 새로 생겨요.' : '\n\n한컴 한글에서 열어 한 번 확인해 주세요. 저장하면 원본은 그대로 두고 「' + name.replace(/\.[^.]+$/, '') + '」 파일이 새로 생겨요.';
+    return isNew ? '\n\n새 문서는 이 이름으로 새로 생깁니다.' : '\n\n저장하면 원본은 그대로 두고 「' + name.replace(/\.[^.]+$/, '') + '」 파일이 새로 생깁니다.';
   }
   function makeBlob(bytes, ext) { return new Blob([bytes], { type: ext === 'hwpx' ? 'application/haansofthwpx' : 'application/x-hwp' }); }
   // 확인 시트 없이 바로 저장(「수정 요청」으로 넘어가기 전 저장). 저장이 성공했을 때만 true.
@@ -301,7 +302,7 @@
               try { st.editor.notifySaved(name); } catch (e) {}
             });
           }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다 — ' + ((e && e.message) || e), 6000); });
-        });
+        }, plus ? { emph: CHECK_EMPH } : undefined);
     });
   }
 
@@ -355,7 +356,7 @@
       if (d && ctx.flag && ctx.flag('hwp')) d.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's') { e.preventDefault(); e.stopPropagation(); saveCopy(ctx); } }, true);   // DeX·키보드: Ctrl+S = 사본 저장
       if (ctx.onSave) { ctx.onSave(function () { if (st && st.editing) saveCopy(ctx); }); ctx.setSaver(function () { return saveSilent(ctx); }); }
       applyMode(ctx); ctx.busy(null);
-      if (ctx.opts && ctx.opts.startEdit) { startEdit(ctx, true); ctx.toast('새 문서입니다. 폰에서 보이는 글꼴과 한컴에서 열린 글꼴이 다를 수 있어요. 저장은 「사본 저장」으로 하십시오.', 5600); }
+      if (ctx.opts && ctx.opts.startEdit) { startEdit(ctx, true); ctx.toast('새 문서입니다. 한컴 한글에서는 글꼴이 다르게 보일 수 있습니다.', 3400); }
       st.timers.push(setInterval(syncState, 400)); syncState();
       try { if (st.editor.onDocumentChanged) st.editor.onDocumentChanged(function () { markDirty(); }); } catch (e) {}
     }, function (e) { clearInterval(tick); throw e; });

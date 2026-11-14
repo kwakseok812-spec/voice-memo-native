@@ -94,3 +94,6 @@
 .so-sheet-btn.danger{border-color:transparent;background:#d33;color:#fff}
 .so-sheet-btn:disabled{opacity:.45}
 @media (prefers-reduced-motion:reduce){.so-sheet,.so-sheet-back,.so-newchip{transition:none}.so-newchip:active,.so-sheet-btn:active{transform:none}}
+/* v10.3(O-0861): S-Office 안내(토스트)는 아래 도구줄을 가리지 않게 머리줄 바로 아래(문서 위쪽)에 띄운다 */
+.toast.so-up{bottom:auto;top:calc(118px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-10px)}
+.toast.so-up.show{transform:translateX(-50%) translateY(0)}

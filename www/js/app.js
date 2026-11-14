@@ -9644,10 +9644,10 @@
     var n = String(msg == null ? '' : msg).replace(/\u2060/g, '').length;
     return Math.min(6000, 1800 + Math.max(0, n - 20) * 60);
   }
-  function toast(msg, ms, wide) {  // v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
+  function toast(msg, ms, wide, up) {  // v10.3: up = S-Office 안내는 아래 도구줄 위에 띄움 · v6.7: ms(선택) — 긴 안내(설치 허용 등)는 더 오래 보이게. 기본 1.8초 그대로 · (O-0487) wide = 옷 이름이 든 긴 한 줄을 넓게(두 줄 안에 들게). 주지 않으면 예전 그대로
     if (!toastEl) return;
     toastEl.style.width = wide ? 'max-content' : ''; toastEl.style.maxWidth = wide ? '86vw' : '';   // 넓은 한 줄은 이 요소에만 값을 준다(styles.css 의 .toast 는 그대로 둔다)
-    toastEl.textContent = msg; toastEl.style.display = 'block';
+    toastEl.textContent = msg; toastEl.style.display = 'block'; toastEl.classList.toggle('so-up', !!up);
     requestAnimationFrame(function () { toastEl.classList.add('show'); });
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
@@ -10548,13 +10548,14 @@
   if (window.SOffice && SOffice.configure) {
     try {
       SOffice.configure({
-        toast: toast,
+        toast: function (m, ms) { toast(m, ms, false, true); },   // v10.3: 아래 도구줄을 가리지 않게 도구줄 위쪽에 띄운다
         dismiss: function () { closeSheet(); },   // 문서를 닫을 때 떠 있던 확인 시트도 함께 닫는다
         // 저장·열기 같은 보통 단추는 파란색, 「그래도 닫기」처럼 잃는 일만 빨간 단추(o.danger). o.extra = 가운데 단추, o.cancelLabel = 맨 아래 단추 이름
         confirm: function (t, m, label, fn, o) {
           o = o || {};
           var danger = !!o.danger || /그래도|삭제|지우/.test(label || '');
-          openSheet(t, m, label, fn, null, o.extra || null, { positive: !danger, cancelLabel: o.cancelLabel });
+          openSheet(t, m, label, fn, null, o.extra || null, { positive: !danger, cancelLabel: o.cancelLabel, recmsg: true, main: o.main });   // v10.3: 줄바꿈이 보이고(여러 줄 안내) 글이 잘리지 않게 · 기본 단추 강조
+          if (o.emph && sheetMsg) { var eb = document.createElement('b'); eb.textContent = o.emph; eb.style.cssText = 'display:block;margin-top:10px;font-size:15.5px;color:var(--text)'; sheetMsg.appendChild(eb); }   // 맨 끝에 눈에 띄는 한 줄
         },
         save: savePhoneFile
       });

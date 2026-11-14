@@ -1,5 +1,5 @@
 /* ============================================================================
- * so-pdf-pages.js — S-Office PDF 편집 보강(O-0861, v10.2): 쪽 정리(순서·삭제·회전) · 합치기 · 나누기 · 양식 칸 채우기
+ * so-pdf-pages.js — S-Office PDF 편집 보강(O-0861, v10.3): 쪽 정리(순서·삭제·회전) · 합치기 · 나누기 · 양식 칸 채우기
  * ----------------------------------------------------------------------------
  * so-pdf.js 가 스위치(SO_PDF_PAGES)가 켜졌을 때만 불러온다. 새 부품 없음 — 이미 들어 있는 pdf-lib(MIT)와 PDF.js(보기)만 쓴다.
  *   · 쪽 순서·삭제·회전은 「원본 문서 안에서 쪽을 빼고 같은 쪽을 다시 끼우는」 방식이다(새 문서에 복사하지 않는다) —
@@ -42,7 +42,7 @@
   function lossNote(info, what) {
     var parts = []; if (info.hasForm) parts.push('입력 칸'); if (info.hasOutline) parts.push('목차(차례)');
     var josa = info.hasOutline ? '가' : '이';
-    return parts.length ? ('이 PDF에는 ' + parts.join('과 ') + josa + ' 있어요. ' + what + '입력 칸과 목차는 사라져요.') : '';
+    return parts.length ? ('이 PDF에는 ' + parts.join('과 ') + josa + ' 있습니다. ' + what + '입력 칸과 목차는 사라집니다.') : '';
   }
 
   // ============================== 쪽 정리 화면 ==============================
@@ -53,11 +53,11 @@
       ctx.busy('문서를 확인하는 중…');
       readInfo(api).catch(function () { return { hasForm: false, hasOutline: false, signed: false, unknown: true }; }).then(function (info) {
         if (info.signed) { ctx.busy(null); signedBlock(api); return; }
-        var flat = api.hasAnns() ? (ctx.busy('넣은 것을 반영하는 중…'), api.flattenAnns()) : Promise.resolve(false);
+        var flat = api.hasAnns() ? (ctx.busy('넣은 것을 문서에 합치는 중…'), api.flattenAnns()) : Promise.resolve(false);
         return flat.then(function () { ctx.busy(null); build(api, info); });
       }).catch(function (e) { ctx.busy(null); ctx.toast('쪽 정리를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
     }
-    if (api.hasAnns()) ctx.confirm('넣은 것이 있어요', '넣은 형광펜·글·서명을 먼저 문서에 반영한 뒤 쪽 정리를 합니다. 반영한 뒤에도 「되돌리기」로 취소할 수 있어요.', '반영하고 쪽 정리', start, { cancelLabel: '취소' });
+    if (api.hasAnns()) ctx.confirm('넣은 것이 있습니다', '넣은 형광펜·글·서명을 먼저 문서에 합친 뒤 쪽 정리를 합니다. 합친 뒤에도 「되돌리기」로 취소할 수 있습니다.', '문서에 합치고 쪽 정리', start, { cancelLabel: '취소' });
     else start();
   }
 
@@ -70,7 +70,7 @@
     [btnC, btnU, btnOk].forEach(function (b) { b.type = 'button'; });
     btnU.setAttribute('aria-label', '되돌리기');
     bar.appendChild(btnC); bar.appendChild(tt); bar.appendChild(btnU); bar.appendChild(btnOk);
-    var hint = el('div', 'spp-hint', '쪽을 눌러 고르고, 꾹 눌러 끌면 순서가 바뀌어요');
+    var hint = el('div', 'spp-hint', '쪽을 눌러 고르고, 꾹 눌러 끌면 순서가 바뀝니다');
     back.appendChild(bar); back.appendChild(hint); back.appendChild(grid); back.appendChild(foot);
     api.root.appendChild(back);
 
@@ -118,7 +118,7 @@
         if (it.rot) c.appendChild(el('span', 'spp-rot', '↻' + it.rot));
         grid.appendChild(c); bindCell(c, idx);
       });
-      tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '장 고름' : '');
+      tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '쪽 고름' : '');
       btnOk.disabled = !changed() || !items.length; btnU.disabled = !hist.length;
       if (io) io.disconnect();
       io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { var i = +en.target.getAttribute('data-i'); drawThumb(en.target, items[i]); } }); }, { root: grid, rootMargin: '200px' });
@@ -159,7 +159,7 @@
           if (to !== from) { push(); var it = items.splice(from, 1)[0]; items.splice(to, 0, it); var ns = {}; ns[to] = true; sel = ns; }
           render(); return;
         }
-        if (e.type === 'pointerup' && !moved) { sel[idx] = !sel[idx]; if (!sel[idx]) delete sel[idx]; c.classList.toggle('sel', !!sel[idx]); tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '장 고름' : ''); renderFoot(); }
+        if (e.type === 'pointerup' && !moved) { sel[idx] = !sel[idx]; if (!sel[idx]) delete sel[idx]; c.classList.toggle('sel', !!sel[idx]); tt.textContent = '쪽 정리 · ' + items.length + '쪽' + (selIdx().length ? ' · ' + selIdx().length + '쪽 고름' : ''); renderFoot(); }
       }
       c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
       c.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -168,14 +168,14 @@
 
     // ---- 동작 ----
     function need() { if (!selIdx().length) { ctx.toast('먼저 쪽을 눌러 고르십시오.', 2200); return false; } return true; }
-    function rotate() { if (!need()) return; push(); selIdx().forEach(function (i) { items[i].rot = (items[i].rot + 90) % 360; }); render(); ctx.toast('오른쪽으로 돌렸어요', 1600); }
+    function rotate() { if (!need()) return; push(); selIdx().forEach(function (i) { items[i].rot = (items[i].rot + 90) % 360; }); render(); ctx.toast('오른쪽으로 돌렸습니다', 1600); }
     function del() {
       if (!need()) return; var s = selIdx();
-      if (s.length >= items.length) { ctx.toast('모든 쪽을 지울 수는 없어요.', 2600); return; }
-      push(); items = items.filter(function (_, i) { return !sel[i]; }); sel = {}; render(); ctx.toast(s.length + '쪽을 지웠어요(적용 전에는 되돌릴 수 있어요)', 2600);
+      if (s.length >= items.length) { ctx.toast('모든 쪽을 지울 수는 없습니다.', 2600); return; }
+      push(); items = items.filter(function (_, i) { return !sel[i]; }); sel = {}; render(); ctx.toast(s.length + '쪽을 지웠습니다(적용 전에는 되돌릴 수 있습니다)', 2600);
     }
     function move(d) {
-      if (!need()) return; var s = selIdx(); if (d < 0 ? s[0] === 0 : s[s.length - 1] === items.length - 1) { ctx.toast('더 갈 곳이 없어요.', 1600); return; }
+      if (!need()) return; var s = selIdx(); if (d < 0 ? s[0] === 0 : s[s.length - 1] === items.length - 1) { ctx.toast('더 갈 곳이 없습니다.', 1600); return; }
       push(); var ns = {};
       if (d < 0) { s.forEach(function (i) { var it = items.splice(i, 1)[0]; items.splice(i - 1, 0, it); ns[i - 1] = true; }); }
       else { s.slice().reverse().forEach(function (i) { var it = items.splice(i, 1)[0]; items.splice(i + 1, 0, it); ns[i + 1] = true; }); }
@@ -205,9 +205,9 @@
             var d = exts.push({ pdf: x.pd, bytes: x.bytes, name: x.name }) - 1, s = selIdx(), at = s.length ? s[s.length - 1] + 1 : items.length;
             push(); var add = []; for (var i = 0; i < x.pd.numPages; i++) add.push({ k: 'x', d: d, i: i, rot: 0 });
             items.splice.apply(items, [at, 0].concat(add)); sel = {}; add.forEach(function (_, j) { sel[at + j] = true; }); render();
-            ctx.toast(x.pd.numPages + '쪽을 붙였어요', 2200);
+            ctx.toast(x.pd.numPages + '쪽을 붙였습니다', 2200);
           };
-          if (note) ctx.confirm('붙이기 전에 알려 드려요', note, '그래도 붙이기', go, { cancelLabel: '취소' }); else go();
+          if (note) ctx.confirm('붙이기 전에 알려 드립니다', note, '그래도 붙이기', go, { cancelLabel: '취소' }); else go();
         }).catch(function (e) { ctx.busy(null); ctx.toast('PDF를 붙이지 못했습니다 — ' + ((e && e.message) || '읽을 수 없는 파일'), 4200); });
       };
       document.body.appendChild(inp); inp.click();
@@ -221,10 +221,10 @@
         build_(s).then(function (out) {
           ctx.busy(null);
           var name = ctx.name.replace(/\.pdf$/i, '') + '_쪽' + (s.length === 1 ? (s[0] + 1) : (s[0] + 1) + '-' + (s[s.length - 1] + 1)) + '.pdf';
-          return ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name, { exact: true }).then(function (ok) { if (ok !== false) ctx.toast('고른 ' + s.length + '쪽을 새 파일로 저장했어요(지금 화면은 그대로)', 3200); });
+          return ctx.saveCopy(new Blob([out], { type: 'application/pdf' }), name, { exact: true }).then(function (ok) { if (ok !== false) ctx.toast('고른 ' + s.length + '쪽을 새 파일로 저장했습니다(지금 화면은 그대로)', 3200); });
         }).catch(function (e) { ctx.busy(null); ctx.toast('나누지 못했습니다 — ' + ((e && e.message) || e), 4200); });
       };
-      ctx.noticeThen(function () { if (note) ctx.confirm('나누기 전에 알려 드려요', note, '그래도 나누기', go, { cancelLabel: '취소' }); else go(); });
+      ctx.noticeThen(function () { if (note) ctx.confirm('나누기 전에 알려 드립니다', note, '그래도 나누기', go, { cancelLabel: '취소' }); else go(); });
     }
     function build_(idxs) {      // 고른 쪽(회전 포함)만으로 새 문서
       return api.loadLib().then(function (L) {
@@ -305,12 +305,12 @@
       if (back.parentNode) back.parentNode.removeChild(back);
       api.pagesClosed();
     }
-    btnC.onclick = function () { if (changed()) ctx.confirm('정리한 내용을 버릴까요?', '적용하지 않고 닫으면 지금까지 정리한 것이 사라져요.', '버리고 닫기', close, { danger: true, cancelLabel: '계속 정리' }); else close(); };
+    btnC.onclick = function () { if (changed()) ctx.confirm('정리한 내용을 버리시겠습니까?', '적용하지 않고 닫으면 지금까지 정리한 것이 사라집니다.', '버리고 닫기', close, { danger: true, cancelLabel: '계속 정리' }); else close(); };
     btnOk.onclick = function () {
       if (btnOk.disabled) return;
       var s = items.filter(function (it) { return it.k === 'x'; });
       var go = function () {
-        applyAll().then(function () { ctx.busy(null); close(); ctx.toast('쪽을 정리했어요(' + items.length + '쪽). 저장은 「사본 저장」으로 하십시오.', 3600); }).catch(function (e) { ctx.busy(null); ctx.toast('쪽 정리를 적용하지 못했습니다 — ' + ((e && e.message) || e), 5200); });
+        applyAll().then(function () { ctx.busy(null); close(); ctx.toast('쪽을 정리했습니다(' + items.length + '쪽). 저장은 「사본 저장」으로 하십시오.', 3600); }).catch(function (e) { ctx.busy(null); ctx.toast('쪽 정리를 적용하지 못했습니다 — ' + ((e && e.message) || e), 5200); });
       };
       go();
     };
@@ -343,9 +343,9 @@
       ctx.busy(null);
       if (info.signed) { signedBlock(api); return; }
       return collectWidgets(api).then(function (list) {
-        if (!list.length) { ctx.toast('이 PDF에는 채울 입력 칸이 없어요. 「글」 도구로 원하는 자리에 글을 넣을 수 있어요.', 4200); return; }
+        if (!list.length) { ctx.toast('이 PDF에는 채울 입력 칸이 없습니다. 「글」 도구로 원하는 자리에 글을 넣을 수 있습니다.', 4200); return; }
         api.formStart(list, function (w, a) { onWidget(api, w, a); });
-        ctx.toast('칸을 눌러 글을 적어 보세요(' + list.length + '칸)', 3000);
+        ctx.toast('칸을 눌러 글을 적어 보십시오(' + list.length + '칸)', 3000);
       });
     }).catch(function (e) { ctx.busy(null); ctx.toast('입력 칸을 읽지 못했습니다 — ' + ((e && e.message) || e), 4200); });
   }
@@ -371,14 +371,14 @@
   }
   function onWidget(api, w, existing) {
     var ctx = api.ctx;
-    if (w.kind === 'sig') { ctx.toast('서명 칸은 폰에서 채울 수 없어요. 「서명」 도구로 그림 서명을 원하는 자리에 넣을 수 있어요.', 4200); return; }
+    if (w.kind === 'sig') { ctx.toast('서명 칸은 폰에서 채울 수 없습니다. 「서명」 도구로 그림 서명을 원하는 자리에 넣을 수 있습니다.', 4200); return; }
     if (w.kind === 'check') {
-      if (existing) { api.removeFill(existing); ctx.toast('체크를 지웠어요', 1600); } else { api.addFill(w, checkPng(w.w, w.h), { check: true }); ctx.toast('체크했어요', 1600); }
+      if (existing) { api.removeFill(existing); ctx.toast('체크를 지웠습니다', 1600); } else { api.addFill(w, checkPng(w.w, w.h), { check: true }); ctx.toast('체크했습니다', 1600); }
       return;
     }
     var body = el('div'), ta = el(w.h > 28 ? 'textarea' : 'input', 'sp-ta'); if (w.h <= 28) ta.type = 'text'; else ta.rows = 3;
     ta.value = existing && existing.fill ? existing.fill.text : ''; ta.placeholder = '이 칸에 넣을 글';
-    body.appendChild(ta); body.appendChild(el('div', 'so-sheet-note', '채운 뒤에는 칸에서 다시 고칠 수 없고 글 검색·복사가 안 돼요(저장 전에는 되돌릴 수 있어요).'));
+    body.appendChild(ta); body.appendChild(el('div', 'so-sheet-note', '채운 뒤에는 칸에서 다시 고칠 수 없고 글 검색·복사가 안 됩니다(저장 전에는 되돌릴 수 있습니다).'));
     ctx.sheet({
       title: '칸에 글 넣기', body: body, keep: function () { return ta.value !== (existing && existing.fill ? existing.fill.text : ''); },
       buttons: [{ label: '취소' }].concat(existing ? [{ label: '지우기', danger: true, onClick: function () { api.removeFill(existing); return true; } }] : []).concat([{

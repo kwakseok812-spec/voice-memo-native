@@ -59,7 +59,7 @@
   var SOFFICE_LONG = '스마트오피스';          // 풀이(정보 화면에서만)
   var SO_ON = 'on';                         // 스위치 — 'off' 면 통째로 꺼진 것과 같다
   var SO_FIRST_SIMPLE = 'on';               // v9.97(O-0854 5번): 'on' = 첫 화면에 「열기 방식: … · 바꾸기」 한 줄만(마지막 방식으로 바로 열기) · 보안 안내는 [자세히] 뒤로 · 'off' = 예전 두 칸 선택·긴 안내 그대로
-  var SO_EDIT_PLUS = 'on';                  // O-0861(v10.2): 'off' = 편집 보강(표·그림·쪽 정리·새 문서·「수정 요청」·저장 이름 규칙·단축키)이 통째로 사라지고 v10.1과 같다
+  var SO_EDIT_PLUS = 'on';                  // O-0861(v10.3): 'off' = 편집 보강(표·그림·쪽 정리·새 문서·「수정 요청」·저장 이름 규칙·단축키)이 통째로 사라지고 v10.1과 같다
   var SO_HWP_TOOLS = 'on';                  // 한글 표·그림·글자 색·새 문서 단추 — 'off' = 예전 한글 도구줄
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
@@ -313,7 +313,7 @@
       setDirty: function (v) { c.dirty = !!v; if (c.dirty) startAuto(c); else stopAuto(c); },
       onBack: function (fn) { c.backFn = (typeof fn === 'function') ? fn : null; },
       confirm: function (t, m, label, fn, o) { if (typeof cfg.confirm === 'function') cfg.confirm(t, m, label, fn, o); else fn(); },
-      // ---- v10.2(O-0861) 편집 보강 공통 도구 ----
+      // ---- v10.3(O-0861) 편집 보강 공통 도구 ----
       flag: function (k) { return flagOn(k); },
       copyName: function (ext) { return c.newBase ? newDocName(c.newBase, ext || extOf(c.file.name)) : copyName(c.file.name, ext); },   // 저장될 이름을 미리 보여 줄 때(예약하지 않는다)
       isNew: !!c.newBase,
@@ -324,7 +324,7 @@
       requestFix: function () { requestFix(c); },
       fixAvail: function () { return fixAvail(c); },
       // 사본 저장 확인창: 모듈의 확인 문구 뒤에 공유함 업로드 안내를 붙인다(PC 브라우저에서는 붙이지 않음)
-      confirmCopy: function (t, m, label, fn) { var n = noticeText(); ctx.confirm(t, n ? (m + '\n\n' + n) : m, '사본 저장', fn); },   // 저장 단추 이름은 모든 형식 「사본 저장」으로 통일
+      confirmCopy: function (t, m, label, fn, o) { var n = noticeText(); ctx.confirm(t, n ? (m + '\n\n' + n) : m, '사본 저장', fn, o); },   // o.emph = 시트 맨 끝에 굵게 따로 한 줄로 보일 안내(아래 app.js confirm)   // 저장 단추 이름은 모든 형식 「사본 저장」으로 통일
       // 확인창이 없는 저장(예: PDF)용: 처음 한 번만 안내 확인
       noticeThen: noticeThen,
       saveNotice: noticeText()
@@ -346,7 +346,7 @@
   }
   // ============ 사본 이름 ============
   //   모듈이 이름을 주면 그대로 존중한다. 안 주면 「원래이름_수정.확장자」, 이번에 같은 이름을 이미 저장했으면 「_수정(2)」.
-  //   v10.2(O-0861): 「_수정」 파일을 다시 고쳐도 _수정을 또 붙이지 않고 번호만 올린다 — 보고서.hwp → 보고서_수정.hwp → 보고서_수정(2).hwp → (3).
+  //   v10.3(O-0861): 「_수정」 파일을 다시 고쳐도 _수정을 또 붙이지 않고 번호만 올린다 — 보고서.hwp → 보고서_수정.hwp → 보고서_수정(2).hwp → (3).
   //   스위치(SO_EDIT_PLUS)가 꺼져 있으면 예전처럼 매번 _수정을 붙인다.
   function copyName(orig, ext) {
     var n = String(orig || 'document'), dot = n.lastIndexOf('.');
@@ -526,7 +526,7 @@
   function saveCopy(f, name, c, o) {
     var file = (f instanceof File) ? f : new File([f], name || 'document', { type: (f && f.type) || 'application/octet-stream' });
     var want = name;
-    if (SO_EDIT_PLUS === 'on' && c && !(o && o.exact)) {            // v10.2: 이름은 모든 형식이 틀 한 곳의 규칙을 따른다(모듈이 준 이름은 참고만)
+    if (SO_EDIT_PLUS === 'on' && c && !(o && o.exact)) {            // v10.3: 이름은 모든 형식이 틀 한 곳의 규칙을 따른다(모듈이 준 이름은 참고만)
       var ex = extOf(name || file.name) || extOf(c.file.name);
       want = c.newBase ? newDocName(c.newBase, ex) : copyName(c.file.name, ex);
     } else
@@ -563,12 +563,12 @@
       var msg = '「' + file.name + '」을 저장하지 못했습니다. (' + why + ')\n' +
         (kept ? '사본은 이 앱 안에 보관해 두었습니다. 연결이 되면 [다시 시도]를 누르거나, 다음에 S-Office를 열 때 다시 저장할 수 있습니다.' : '사본을 앱 안에 보관하지도 못했습니다. 지금 [다시 시도]를 누르거나 [공유]로 다른 앱에 보내 두십시오.');
       if (typeof cfg.confirm !== 'function') { toast('저장하지 못했습니다. (' + why + ')', 5000); return; }
-      cfg.confirm('저장하지 못했습니다', msg, '다시 시도', function () { saveCopy(file, file.name, c); },
+      cfg.confirm('저장하지 못했습니다', msg, '다시 시도', function () { saveCopy(file, file.name, c, { exact: true }); },   // 이미 정한 이름 그대로(나누기·새 문서 이름이 바뀌지 않게)
         { extra: share ? { label: '공유', action: function () { shareFile(file); } } : null, cancelLabel: '닫기' });
     });
   }
 
-  // ============ O-0861(v10.2) 편집 보강 공통 도구 — 시트 · 수정 요청 · 새 문서 · 단축키 ============
+  // ============ O-0861(v10.3) 편집 보강 공통 도구 — 시트 · 수정 요청 · 새 문서 · 단축키 ============
   function flagOn(k) {
     if (SO_EDIT_PLUS !== 'on') return false;
     if (k === 'hwp') return SO_HWP_TOOLS === 'on';
@@ -635,9 +635,10 @@
     var msg = '폰에서 고치던 내용이 있습니다. 「수정 요청」은 처음 파일을 PC가 고치는 일이라 지금까지 고친 내용은 들어가지 않습니다.';
     var leave = function () { if (keeps) toast('고친 내용은 7일 동안 앱에 자동 보관됩니다. 같은 파일을 다시 열면 이어 고칠 수 있습니다.', 4600); go(); };
     if (typeof c.saver === 'function') {
-      c.ctx.confirm('고치던 내용이 있습니다', msg, '사본으로 저장하고 넘어가기', function () {
+      // 위에서부터: [사본으로 저장하고 넘어가기](강조) · [저장 안 하고 넘어가기](붉은 단추) · [취소]
+      c.ctx.confirm('고치던 내용이 있습니다', msg, '저장 안 하고 넘어가기', leave, { danger: true, main: 'extra', cancelLabel: '취소', extra: { label: '사본으로 저장하고 넘어가기', action: function () {
         Promise.resolve().then(function () { return c.saver(); }).then(function (ok) { if (ok !== false) go(); }, function () {});   // 저장이 성공한 뒤에만 넘어간다
-      }, { extra: { label: '저장 안 하고 넘어가기', action: leave }, cancelLabel: '취소' });
+      } } });
     } else {
       c.ctx.confirm('고치던 내용이 있습니다', msg + '\n먼저 이 화면에서 「사본 저장」을 하실 수도 있습니다.', '저장 안 하고 넘어가기', leave, { danger: true, cancelLabel: '취소' });
     }
