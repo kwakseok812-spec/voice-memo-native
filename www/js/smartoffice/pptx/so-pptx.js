@@ -15,16 +15,42 @@
   }
   function anyEdit(s) { return s.edits.some(function (e) { return Object.keys(e).length > 0; }); }
 
+  // 슬라이드 순서 대응: 목록(presentation.xml 의 sldIdLst) 순서 i 번째 슬라이드가 미리보기 부품이 그린 몇 번째(파일 번호 순)인지. 알 수 없으면 null(그대로 둠)
+  function viewOrder(buf) {
+    var Z = window.JSZip; if (!Z) return Promise.resolve(null);
+    return Z.loadAsync(buf.slice(0)).then(function (z) {
+      function rd(n) { var f = z.file(n); return f ? f.async('string') : Promise.resolve(''); }
+      return Promise.all([rd('ppt/presentation.xml'), rd('ppt/_rels/presentation.xml.rels'), rd('[Content_Types].xml')]).then(function (r) {
+        var rels = {}, m, rre = /<Relationship\s[^>]*>/g, L = [], C = [];
+        while ((m = rre.exec(r[1]))) { var id = /\bId="([^"]*)"/.exec(m[0]), tg = /\bTarget="([^"]*)"/.exec(m[0]); if (id && tg) rels[id[1]] = tg[1]; }
+        var sre = /<p:sldId\s[^>]*?r:id="([^"]*)"/g;
+        while ((m = sre.exec(r[0]))) { var t = rels[m[1]]; if (!t) continue; t = t.replace(/^\//, ''); if (t.indexOf('ppt/') !== 0) t = 'ppt/' + t.replace(/^\.\//, ''); L.push(t); }
+        var ore = /<Override\b[^>]*>/g;
+        while ((m = ore.exec(r[2]))) { if (/presentationml\.slide\+xml/.test(m[0])) { var pn = /PartName="\/?([^"]*)"/.exec(m[0]); if (pn) C.push(pn[1]); } }
+        function idx(nm) { var q = nm.match(/(\d+)/); return q ? parseInt(q[0], 10) : 1; }
+        C = C.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return (idx(a.x) - idx(b.x)) || (a.i - b.i); }).map(function (o) { return o.x; });
+        var perm = L.map(function (p) { return C.indexOf(p); });
+        if (!L.length || C.length !== L.length || perm.some(function (k) { return k < 0; })) return null;
+        return perm;
+      });
+    }).catch(function () { return null; });
+  }
+
   // 그림판 다시 그리기(원본 또는 고친 파일). 슬라이드 목록을 s 에 새로 채운다
   function drawDeck(host, s, buf) {
     try { if (s.prev && s.prev.destroy) s.prev.destroy(); } catch (e) {}
     s.stage.innerHTML = '';
     var W = Math.max(240, Math.min(host.clientWidth - 12, 1100));
     s.prev = window.pptxPreview.init(s.stage, { width: W, mode: 'list' });
-    return s.prev.preview(buf.slice(0)).then(function () {
+    return s.prev.preview(buf.slice(0)).then(function () { return viewOrder(buf); }).then(function (perm) {
       var wrapper = s.stage.querySelector('.pptx-preview-wrapper');
       var slides = wrapper ? [].slice.call(wrapper.querySelectorAll('.pptx-preview-slide-wrapper')) : [];
       if (!slides.length) throw new Error('슬라이드를 그리지 못함');
+      if (perm && perm.length === slides.length) {      // 미리보기 부품은 파일 번호(slideN.xml) 순으로 그린다 → 목록(sldIdLst) 순서로 다시 놓아 화면·편집 대상이 늘 같은 순서가 되게
+        var re = perm.map(function (k) { return slides[k]; }), par = slides[0].parentNode;
+        re.forEach(function (n) { if (n && n.parentNode === par) par.appendChild(n); });
+        slides = re;
+      }
       wrapper.style.background = 'transparent';
       s.wrapper = wrapper; s.slides = slides; s.idx = Math.min(s.idx, slides.length - 1);
       s.sh = slides[0].offsetHeight || 540; s.drawW = W;
@@ -275,7 +301,7 @@
           (notes.length ? '<br>이 장의 ' + esc(notes.join(' · ')) + '는 고칠 수 없습니다.' : '') +
           (lockedN ? '<br>자동 숫자(쪽 번호·날짜 등)나 수식이 든 문단 ' + lockedN + '개는 보기만 됩니다.' : '') + '</div>' +
           '<div class="so-pe-list"></div>' +
-          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · 표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없습니다 · 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다</div>';
+          '<div class="so-pe-foot">' + (i + 1) + ' / ' + n + '장 · ' + (structOn() ? '표의 줄·칸과 슬라이드 추가·삭제·순서는 편집 화면 아래 도구줄의 「표」「슬라이드」에서 바꿉니다' : '표 안 글자는 고칠 수 있지만 표의 줄·칸은 바꿀 수 없고, 슬라이드 추가·삭제·순서 바꾸기는 지원하지 않습니다') + '</div>';
         P.innerHTML = html;
         // 미리보기: 지금 화면에 그려진 장을 복사해서 폭에 맞춘다(고친 뒤 「보기」를 누르면 새로 그려짐)
         var pv = P.querySelector('.so-pe-prev'), src = s.slides[i];
