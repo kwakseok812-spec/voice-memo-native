@@ -1035,6 +1035,13 @@
         });
       });
     },
+    exportPdf: function () {                           // v10.8 4회차: 「⋯」→ PDF로 내보내기(워드와 같은 그림 방식, so-xlsx-pdf.js)
+      if (!S) return; var ctx = S.ctx;
+      ctx.loadScript('js/smartoffice/xlsx/so-xlsx-pdf.js').then(function () {
+        if (!global.SOXlsxPdf || !S) throw new Error('PDF 내보내기 부품을 불러오지 못함');
+        return global.SOXlsxPdf.run({ ctx: ctx, vis: S.vis, prep: prepSheet, display: display, cellOf: cellOf, styleAt: styleAt });
+      }).catch(function (e) { ctx.toast('PDF 내보내기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
+    },
     snapshot: snapshot,
     restore: restore,
     reveal: function (topY) {                           // v10.7 다듬기: 서식 시트를 열어 둔 동안 고른 칸·범위가 시트 밑에 깔리면 화면에 그려진 칸의 실제 위치를 재서 시트 위로 올려 준다
