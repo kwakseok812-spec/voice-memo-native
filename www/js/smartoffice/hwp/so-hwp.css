@@ -66,3 +66,5 @@
 .so-opt-b:active{transform:scale(.96)}
 .so-sheet-body .sp-ta{width:100%;box-sizing:border-box;min-height:48px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--in-bg,var(--glass));color:var(--text);font-family:inherit;font-size:16px}
 @media (prefers-reduced-motion:reduce){.so-opt-b:active{transform:none}}
+/* v10.8 2회차: 여러 줄 칩 */
+.so-opt-r.wrap{flex-wrap:wrap}.so-opt-r.wrap .so-opt-b{flex:1 0 28%}

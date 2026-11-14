@@ -23,8 +23,8 @@
 
   // 맥락별 단추 순서(쓰는 빈도 순). 앞에서부터 한 줄에 들어가는 만큼 보이고 나머지는 「더보기」 시트로 간다.
   var ORDER = {
-    text: ['undo', 'bold', 'sizeUp', 'color', 'table', 'pic', 'redo', 'italic', 'underline', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'paraBelow', 'paraAbove', 'paraDel', 'hf', 'pbreak', 'pgset', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
-    table: ['undo', 'rowBelow', 'colRight', 'rowDel', 'colDel', 'cellMerge', 'bold', 'color', 'rowAbove', 'colLeft', 'cellSplit', 'tableDel', 'redo', 'italic', 'underline', 'sizeUp', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'pic', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
+    text: ['undo', 'bold', 'sizeUp', 'color', 'table', 'pic', 'redo', 'italic', 'underline', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'paraBelow', 'paraAbove', 'paraDel', 'hf', 'pbreak', 'pgset', 'link', 'fnote', 'enote', 'pmore', 'cmore', 'repl', 'pgborder', 'cols', 'bmark', 'numb', 'bull', 'lvUp', 'lvDn', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
+    table: ['undo', 'rowBelow', 'colRight', 'rowDel', 'colDel', 'cellMerge', 'bold', 'color', 'rowAbove', 'colLeft', 'cellSplit', 'tableDel', 'cellFill', 'redo', 'italic', 'underline', 'sizeUp', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'link', 'pmore', 'cmore', 'repl', 'pic', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
     pic: ['undo', 'picDel', 'redo', 'zoomOut', 'zoomIn', 'zoomFit']
   };
   var COLORS = [['검정', '#000000'], ['빨강', '#e02020'], ['파랑', '#1c5fd6'], ['초록', '#1b8a3a'], ['주황', '#ee7a00'], ['보라', '#7a3fc4'], ['회색', '#777777']];
@@ -109,6 +109,162 @@
     pageInfo: function (a) {
       var S = a.getInputHandler().getCursorPosition().sectionIndex, def = a.wasm.getPageDef(S); def = typeof def === 'string' ? JSON.parse(def) : def;
       return { ok: true, landscape: !!def.landscape, wmm: Math.round(def.width / (7200 / 25.4)), hmm: Math.round(def.height / (7200 / 25.4)) };
+    },
+    // ---- v10.8 2회차 ----
+    // 하이퍼링크: args = { text, uri } 또는 { remove: true }. 글을 고른 상태면 그 글에, 아니면 커서 자리에 글을 넣고 링크를 건다. 이미 링크 위에 커서가 있으면 주소·글을 고친다
+    linkSet: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var d = a.wasm, pos = h.getCursorPosition(), sel = h.hasSelection() ? h.getSelection() : null;
+      function tgtOf(p) {
+        var cp = p.cellPath && p.cellPath.length ? p.cellPath.map(function (q) { return [q.controlIndex, q.cellIndex, q.cellParaIndex]; }) : (p.parentParaIndex !== undefined ? [[p.controlIndex, p.cellIndex, p.cellParaIndex]] : []);
+        return { section: p.sectionIndex, para: p.parentParaIndex !== undefined ? p.parentParaIndex : p.paragraphIndex, cellPath: cp };
+      }
+      var p0 = sel ? sel.start : pos, p1 = sel ? sel.end : pos, T = tgtOf(p0), T1 = tgtOf(p1);
+      if (JSON.stringify(T) !== JSON.stringify(T1)) return { ok: false, why: 'multi' };
+      var s = Math.min(p0.charOffset || 0, p1.charOffset || 0), e = Math.max(p0.charOffset || 0, p1.charOffset || 0), ctx = d.getHyperlinkContext(T), cur = null;
+      (ctx.links || []).forEach(function (l) { if (s === e ? (l.start <= s && s < l.end) : (s < l.end && l.start < e)) cur = l; });
+      var cpj = JSON.stringify(T.cellPath.map(function (q) { return { controlIndex: q[0], cellIndex: q[1], cellParaIndex: q[2] }; }));
+      var res = { ok: true };
+      try {
+        if (args.remove) {
+          if (!cur) return { ok: false, why: 'nolink' };
+          h.executeOperation({ kind: 'snapshot', operationType: 'editHyperlink', operation: function (i) { i.removeHyperlink(T, cur.fieldId, true); return pos; } });
+          res.removed = true; return res;
+        }
+        var text = String(args.text || '').replace(/[\r\n\t]+/g, ' ').trim(), uri = String(args.uri || '').trim();
+        if (!uri) return { ok: false, why: 'nouri' };
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(uri)) uri = 'https://' + uri;
+        if (!/^https?:\/\/[^\s\\]+$/i.test(uri)) return { ok: false, why: 'baduri' };
+        var after = e;
+        h.executeOperation({ kind: 'snapshot', operationType: 'editHyperlink', operation: function (i) {
+          if (cur) {
+            i.updateHyperlink(T, cur.fieldId, uri);
+            if (text && text !== cur.text) { i.replaceHyperlinkText(T, cur.fieldId, text); after = cur.start + Array.from(text).length; } else after = cur.end;
+            return Object.assign({}, pos, { charOffset: after });
+          }
+          var st = s, en = e;
+          if (s === e) {
+            if (!text) throw new Error('notext');
+            if (T.cellPath.length) i.insertTextInCellByPath(T.section, T.para, cpj, s, text); else i.insertText(T.section, T.para, s, text);
+            en = s + Array.from(text).length;
+          }
+          i.insertHyperlink(T, st, en, uri);
+          var cf = JSON.stringify({ textColor: '#0000ff', underlineType: 'Bottom', underlineColor: '#0000ff' });
+          if (T.cellPath.length) i.applyCharFormatInCellByPath(T.section, T.para, cpj, st, en, cf); else i.applyCharFormat(T.section, T.para, st, en, cf);
+          after = en; return Object.assign({}, pos, { charOffset: en });
+        } });
+        res.uri = uri; res.edited = !!cur;
+      } catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return res;
+    },
+    // 지금 커서·고른 글이 링크 위에 있는지(시트 안내용)
+    linkInfo: function (a) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var d = a.wasm, pos = h.getCursorPosition(), sel = h.hasSelection() ? h.getSelection() : null, p = sel ? sel.start : pos;
+      try {
+        var cp = p.cellPath && p.cellPath.length ? p.cellPath.map(function (q) { return [q.controlIndex, q.cellIndex, q.cellParaIndex]; }) : (p.parentParaIndex !== undefined ? [[p.controlIndex, p.cellIndex, p.cellParaIndex]] : []);
+        var T = { section: p.sectionIndex, para: p.parentParaIndex !== undefined ? p.parentParaIndex : p.paragraphIndex, cellPath: cp }, ctx = d.getHyperlinkContext(T), s = p.charOffset || 0, e = sel ? sel.end.charOffset : s, cur = null;
+        (ctx.links || []).forEach(function (l) { if (s === e ? (l.start <= s && s < l.end) : (s < l.end && l.start < e)) cur = l; });
+        return { ok: true, hasSel: !!sel && s !== e, link: cur ? { text: cur.text, uri: cur.uri } : null };
+      } catch (err) { return { ok: true, hasSel: !!sel, link: null }; }
+    },
+    // 각주·미주 넣기: args = { kind: 'foot'|'end', text }. 커서 자리에 번호를 넣고 아래(각주)·문서 끝(미주)에 글을 적는다. 표 안에서는 쓰지 않는다
+    noteAdd: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var t = h.getCursorPosition(); if (inCell(t)) return { ok: false, why: 'intable' };
+      var S = t.sectionIndex, P = t.paragraphIndex, at = t.charOffset || 0, end = args.kind === 'end', text = String(args.text || '').replace(/[\r\n\t]+/g, ' ').trim(), res = { ok: true };
+      try {
+        h.executeOperation({ kind: 'snapshot', operationType: end ? 'insertEndnote' : 'insertFootnote', operation: function (i) {
+          var r = end ? i.insertEndnote(S, P, at) : i.insertFootnote(S, P, at); if (!r || !r.ok) throw new Error('note');
+          res.num = r.footnoteNumber || r.endnoteNumber || 0;
+          var ne = i.getNoteEditInfo(S, r.paraIdx, r.controlIdx);
+          if (text) i.insertTextInFootnote(S, r.paraIdx, r.controlIdx, (ne && ne.fnParaIndex) || 0, ne && ne.charOffset != null ? ne.charOffset : 2, text);
+          return t;
+        } });
+      } catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return res;
+    },
+    // 쪽 테두리·배경(지금 구역): args = { box: 'keep'|'none'|'box', type, width: 0..15, color, fill: 'keep'|'none'|'#rrggbb' }
+    pageBorder: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var S = h.getCursorPosition().sectionIndex, d = a.wasm, pb = d.getPageBorderFill(S); pb = typeof pb === 'string' ? JSON.parse(pb) : pb;
+      if (args.box === 'none' || args.box === 'box') {
+        var b = args.box === 'none' ? { type: 0, width: 0, color: '#000000' } : { type: args.type || 1, width: args.width == null ? 3 : args.width, color: args.color || '#000000' };
+        pb.borderLeft = Object.assign({}, b); pb.borderRight = Object.assign({}, b); pb.borderTop = Object.assign({}, b); pb.borderBottom = Object.assign({}, b);
+      }
+      if (args.fill === 'none') { pb.fillType = 'none'; } else if (args.fill && args.fill !== 'keep') { pb.fillType = 'solid'; pb.fillColor = args.fill; pb.patternType = -1; pb.fillArea = 'paper'; }
+      var pos0 = h.getCursorPosition();
+      try { h.executeOperation({ kind: 'snapshot', operationType: 'pageBorder', operation: function (i) { i.setPageBorderFill(S, pb); return pos0; } }); }
+      catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true };
+    },
+    // 찾아 바꾸기(문서 전체): args = { q, r, cs }
+    replaceAll: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var q = String(args.q || ''); if (!q) return { ok: false, why: 'noq' };
+      var res = { ok: true, count: 0 }, pos0 = h.getCursorPosition();
+      try { h.executeOperation({ kind: 'snapshot', operationType: 'replaceAll', operation: function (i) { var r = i.replaceAll(q, String(args.r == null ? '' : args.r), !!args.cs); r = typeof r === 'string' ? JSON.parse(r) : r; res.count = (r && r.count) || 0; return pos0; } }); }
+      catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return res;
+    },
+    // 책갈피 넣기: args = { name }
+    bookmarkAdd: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var t = h.getCursorPosition(); if (inCell(t)) return { ok: false, why: 'intable' };
+      var name = String(args.name || '').trim(); if (!name) return { ok: false, why: 'noname' };
+      try { h.executeOperation({ kind: 'snapshot', operationType: 'addBookmark', operation: function (i) { i.addBookmark(t.sectionIndex, t.paragraphIndex, t.charOffset || 0, name); return t; } }); }
+      catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true };
+    },
+    // 단 나누기(지금 구역): args = { n: 1~4 }
+    colSet: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var S = h.getCursorPosition().sectionIndex, n = Math.max(1, Math.min(4, args.n | 0 || 1)), pos0 = h.getCursorPosition();
+      try { h.executeOperation({ kind: 'snapshot', operationType: 'setColumnDef', operation: function (i) { i.setColumnDef(S, n, 0, 1, n > 1 ? 1000 : 0); return pos0; } }); }
+      catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true };
+    },
+    // 글자 서식 더: 고른 글에만. args = { props:{strikethrough,superscript,subscript,shadeColor,spacings...}, font:'맑은 고딕' }
+    charFmt: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      if (!h.hasSelection()) return { ok: false, why: 'nosel' };
+      var pr = Object.assign({}, args.props || {});
+      try {
+        if (args.font) { var fid = a.wasm.findOrCreateFontId(args.font); if (fid >= 0) pr.fontId = fid; }
+        h.applyCharFormat(pr);
+      } catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true };
+    },
+    // 문단 서식 더: 커서·고른 글이 든 문단. args = { props:{ lineSpacing, lineSpacingType, spacingBefore, spacingAfter, marginLeft, indent, fillType, fillColor ... } }
+    paraFmt: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      try { h.applyParaFormat(args.props || {}); } catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true };
+    },
+    // 지금 문단 모양(시트 안내용)
+    paraInfo: function (a) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      try { var p = h.getParaProperties(); return { ok: true, ls: p.lineSpacing, lst: p.lineSpacingType, sb: p.spacingBefore, sa: p.spacingAfter, ml: p.marginLeft, ind: p.indent }; } catch (e) { return { ok: false }; }
+    },
+    // 표 칸 배경색: args = { color|null, scope: 'cell'|'row'|'table' }
+    cellFill: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var t = h.getCursorPosition(); if (!inCell(t)) return { ok: false, why: 'notable' };
+      var d = a.wasm, S = t.sectionIndex, P = t.parentParaIndex, C = t.controlIndex, info = d.getCellInfo(S, P, C, t.cellIndex), idxs = [];
+      if (args.scope === 'cell') idxs = [t.cellIndex];
+      else { var n = d.getTableDimensions(S, P, C).cellCount; for (var k = 0; k < n; k++) { if (args.scope === 'table') idxs.push(k); else { var ci = d.getCellInfo(S, P, C, k); if (ci.row === info.row) idxs.push(k); } } }
+      var cnt = 0;
+      try {
+        h.executeOperation({ kind: 'snapshot', operationType: 'setCellProperties', operation: function (i) {
+          idxs.forEach(function (k) {
+            var cp = JSON.parse(JSON.stringify(i.getCellProperties(S, P, C, k)));
+            if (args.color) { cp.fillType = 'solid'; cp.fillColor = args.color; cp.patternType = -1; } else cp.fillType = 'none';
+            i.setCellProperties(S, P, C, k, cp); cnt++;
+          });
+          return t;
+        } });
+      } catch (err) { return { ok: false, why: 'engine', msg: String((err && err.message) || err) }; }
+      return { ok: true, n: cnt };
     },
     // 문단 지우기: 표·그림 같은 개체가 든 문단은 글만 비운다(개체를 잃지 않게)
     paraDel: function (a) {
@@ -525,6 +681,132 @@
         setTimeout(function () { runExt('pageSet', st).then(function (r) { if (r && r.ok) { env.markDirty(); T.sync(true); toast('용지 설정을 바꿨습니다. 한컴 한글에서 열어 한 번 확인해 주십시오.', 3400); } else toast('용지 설정을 바꾸지 못했습니다.', 3200); }); }, 60); return true; } }] });
     }
 
+    // ---- v10.8 2회차: 링크 · 각주·미주 · 쪽 테두리·배경 · 바꾸기 · 책갈피 · 단 · 글자 더 · 문단 더 · 칸 색 ----
+    var BGL = [['없음', null], ['연노랑', '#fff7cc'], ['연하늘', '#e3f0ff'], ['연두', '#e5f5d8'], ['분홍', '#ffe3ea'], ['연회색', '#eeeeee']];
+    function chipsRow(body, label, list, st, key, wrap) {
+      var w = el('div', 'so-opt'); w.appendChild(el('div', 'so-opt-l', label)); var row = el('div', 'so-opt-r' + (wrap ? ' wrap' : ''));
+      list.forEach(function (o) { var b = el('button', 'so-opt-b', o[1]); b.type = 'button'; b.onclick = function () { st[key] = o[0]; [].slice.call(row.children).forEach(function (x) { x.classList.toggle('on', x === b); }); }; row.appendChild(b); });
+      w.appendChild(row); body.appendChild(w); return row;
+    }
+    function textIn(body, label, ph, max) { body.appendChild(el('div', 'so-opt-l', label)); var i = el('input', 'sp-ta'); i.type = 'text'; i.maxLength = max || 200; i.placeholder = ph || ''; body.appendChild(i); return i; }
+    function whyText(r, what) {
+      if (r && r.why === 'intable') return '표 안에서는 쓸 수 없습니다. 표 밖 글 위에 커서를 두십시오.';
+      if (r && r.why === 'nosel') return '먼저 바꿀 글자를 길게 눌러 고른 뒤 눌러 주십시오.';
+      if (r && r.why === 'multi') return '글을 한 문단 안에서만 고를 수 있습니다.';
+      if (r && r.why === 'notable') return '표 안의 칸을 먼저 눌러 주십시오.';
+      if (r && r.why === 'baduri') return '주소는 http:// 또는 https:// 로 시작하는 인터넷 주소여야 합니다.';
+      if (r && r.why === 'nouri') return '주소를 적어 주십시오.';
+      if (r && r.why === 'engine' && /개체|링크 편집/.test(r.msg || '')) return '이 문단에는 표·그림·각주 같은 개체가 들어 있어 링크를 걸 수 없습니다. 개체가 없는 문단에서 해 주십시오.';
+      if (r && r.why === 'engine' && /notext/.test(r.msg || '')) return '링크로 보일 글을 적거나, 문서의 글을 먼저 길게 눌러 골라 주십시오.';
+      return what + '을 하지 못했습니다.' + (r && r.msg ? ' (' + r.msg + ')' : '');
+    }
+    function act(name, args, okMsg, what, after) {
+      return runExt(name, args).then(function (r) {
+        if (r && r.ok) { env.markDirty(); T.sync(true); toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 3200); if (after) after(r); } else toast(whyText(r, what), 4200);
+      });
+    }
+    function go(fn) { env.ctx.closeSheet(); setTimeout(fn, 60); }
+
+    function linkSheet() {
+      var body = el('div'), note = el('div', 'so-sheet-note', '고른 글이 있으면 그 글에 링크를 겁니다. 고른 글이 없으면 아래 「보일 글」을 커서 자리에 넣고 링크를 겁니다.');
+      var txt = textIn(body, '링크로 보일 글', '예: 신청 안내 페이지', 80), uri = textIn(body, '인터넷 주소', 'https://', 300); uri.inputMode = 'url'; uri.autocapitalize = 'off'; uri.autocomplete = 'off';
+      body.appendChild(note);
+      var cur = null;
+      runExt('linkInfo').then(function (r) {
+        if (!r || !r.ok) return; cur = r.link;
+        if (r.link) { txt.value = r.link.text; uri.value = r.link.uri; note.textContent = '커서가 있는 링크입니다. 글이나 주소를 고쳐 「고치기」를 누르거나, 「링크 없애기」로 링크만 풉니다.'; }
+        else if (r.hasSel) { txt.disabled = true; txt.placeholder = '(고른 글을 그대로 씁니다)'; }
+      });
+      var btns = [{ label: '취소' }, { label: '링크 없애기', onClick: function () { setTimeout(function () { act('linkSet', { remove: true }, '링크를 없앴습니다(글은 그대로 둡니다)', '링크 없애기'); }, 60); return true; } },
+        { label: '넣기', primary: true, onClick: function () { var a = { text: txt.value, uri: uri.value }; setTimeout(function () { act('linkSet', a, function (r) { return r.edited ? '링크를 고쳤습니다' : '링크를 걸었습니다(파란 밑줄 글자)'; }, '링크 넣기'); }, 60); return true; } }];
+      env.ctx.sheet({ title: '링크(하이퍼링크)', body: body, wide: true, buttons: btns });
+    }
+    function noteSheet(kind) {
+      var end = kind === 'end', body = el('div'), inp = textIn(body, end ? '미주 내용(문서 맨 끝에 모입니다)' : '각주 내용(그 쪽 맨 아래에 나옵니다)', end ? '예: 출처 — 교육부 보도자료' : '예: 2026년 기준', 200);
+      body.appendChild(el('div', 'so-sheet-note', '커서가 있는 자리에 번호가 들어갑니다. 글을 비워 두면 번호만 넣습니다. 표 안에서는 넣을 수 없습니다. 각주·미주가 든 문단에는 링크를 걸 수 없습니다. 한컴 한글에서 열어 한 번 확인해 주십시오.'));
+      env.ctx.sheet({ title: end ? '미주 넣기' : '각주 넣기', body: body, wide: true, buttons: [{ label: '취소' }, { label: '넣기', primary: true, onClick: function () { var v = inp.value; setTimeout(function () { act('noteAdd', { kind: end ? 'end' : 'foot', text: v }, function (r) { return (end ? '미주 ' : '각주 ') + (r.num ? r.num + '번을 ' : '') + '넣었습니다'; }, end ? '미주 넣기' : '각주 넣기'); }, 60); return true; } }] });
+    }
+    function pageBorderSheet() {
+      var body = el('div'), st = { box: 'keep', width: 3, fill: 'keep' };
+      chipsRow(body, '쪽 테두리', [['none', '없음'], ['thin', '가는 선'], ['mid', '보통 선'], ['thick', '굵은 선']], st, 'box');
+      var cs = el('div', 'so-opt'); cs.appendChild(el('div', 'so-opt-l', '쪽 배경색(종이 전체)')); var row = el('div', 'so-opt-r wrap');
+      BGL.forEach(function (c) { var b = el('button', 'so-opt-b', c[0]); b.type = 'button'; b.onclick = function () { st.fill = c[1] === null ? 'none' : c[1]; [].slice.call(row.children).forEach(function (x) { x.classList.toggle('on', x === b); }); }; row.appendChild(b); });
+      cs.appendChild(row); body.appendChild(cs);
+      body.appendChild(el('div', 'so-sheet-note', '고르지 않은 칸은 그대로 둡니다. 커서가 있는 구역 전체에 적용됩니다. 인쇄하면 배경색도 같이 나옵니다.'));
+      env.ctx.sheet({ title: '쪽 테두리·배경', body: body, wide: true, buttons: [{ label: '취소' }, { label: '적용', primary: true, onClick: function () {
+        if (st.box === 'keep' && st.fill === 'keep') { toast('바꿀 것을 하나 이상 골라 주십시오.', 2600); return false; }
+        var a = { fill: st.fill }; if (st.box === 'none') a.box = 'none'; else if (st.box !== 'keep') { a.box = 'box'; a.type = 1; a.width = st.box === 'thin' ? 1 : (st.box === 'mid' ? 3 : 8); }
+        setTimeout(function () { act('pageBorder', a, '쪽 테두리·배경을 바꿨습니다. 한컴 한글에서 열어 한 번 확인해 주십시오.', '쪽 테두리·배경 바꾸기'); }, 60); return true; } }] });
+    }
+    function replaceSheet() {
+      var body = el('div'), q = textIn(body, '찾을 말', '', 100), r = textIn(body, '바꿀 말(비우면 지웁니다)', '', 100), st = { cs: 'no' };
+      chipsRow(body, '대소문자', [['no', '구분 안 함'], ['yes', '구분함']], st, 'cs').children[0].classList.add('on');
+      body.appendChild(el('div', 'so-sheet-note', '문서 전체에서 한꺼번에 바꿉니다. 바꾼 직후에는 「취소」 단추로 되돌릴 수 있습니다.'));
+      env.ctx.sheet({ title: '찾아 바꾸기', body: body, wide: true, buttons: [{ label: '취소' }, { label: '모두 바꾸기', primary: true, onClick: function () {
+        if (!q.value) { toast('찾을 말을 적어 주십시오.', 2400); return false; }
+        var a = { q: q.value, r: r.value, cs: st.cs === 'yes' };
+        setTimeout(function () { runExt('replaceAll', a).then(function (x) { if (x && x.ok) { env.markDirty(); T.sync(true); toast(x.count ? x.count + '곳을 바꿨습니다(되돌리려면 취소 단추)' : '찾은 곳이 없습니다', 3200); } else toast(whyText(x, '바꾸기'), 3600); }); }, 60); return true; } }] });
+    }
+    function bookmarkSheet() {
+      var body = el('div'), nm = textIn(body, '책갈피 이름', '예: 붙임1', 40);
+      body.appendChild(el('div', 'so-sheet-note', '커서가 있는 문단 앞에 책갈피를 둡니다. 한컴 한글에서 「이동」 기능으로 찾아갈 수 있습니다.'));
+      env.ctx.sheet({ title: '책갈피', body: body, wide: true, buttons: [{ label: '취소' }, { label: '넣기', primary: true, onClick: function () { var v = nm.value; if (!v.trim()) { toast('이름을 적어 주십시오.', 2400); return false; } setTimeout(function () { act('bookmarkAdd', { name: v }, '책갈피를 넣었습니다', '책갈피 넣기'); }, 60); return true; } }] });
+    }
+    function colSheet() {
+      var body = el('div'), st = { n: null };
+      chipsRow(body, '글을 신문처럼 칸으로 나누기', [[1, '1단'], [2, '2단'], [3, '3단']], st, 'n');
+      body.appendChild(el('div', 'so-sheet-note', '커서가 있는 구역 전체가 나뉩니다. 큰 표가 든 구역은 칸이 겹쳐 보일 수 있으니 바로 확인하고, 이상하면 「취소」 단추로 되돌려 주십시오.'));
+      env.ctx.sheet({ title: '단 나누기', body: body, wide: true, buttons: [{ label: '취소' }, { label: '적용', primary: true, onClick: function () { if (!st.n) { toast('칸 수를 골라 주십시오.', 2400); return false; } var n = st.n; setTimeout(function () { act('colSet', { n: n }, n + '단으로 나눴습니다', '단 나누기'); }, 60); return true; } }] });
+    }
+    function charMoreSheet() {
+      var body = el('div'), grid = el('div', 'so-hwp-mgrid');
+      function add(g, label, fn) { var b = el('button', 'so-hwp-mb'); b.type = 'button'; b.setAttribute('aria-label', label); b.appendChild(el('span', 't-g', g)); b.appendChild(el('span', 't-l', label)); b.onclick = function () { go(fn); }; grid.appendChild(b); }
+      function f(props, msg, font) { return function () { act('charFmt', { props: props, font: font }, msg, '글자 서식 바꾸기'); }; }
+      add('S̶', '취소선', f({ strikethrough: true }, '취소선을 넣었습니다')); add('가', '취소선 없애기', f({ strikethrough: false }, '취소선을 없앴습니다'));
+      add('x²', '위 첨자', f({ superscript: true, subscript: false }, '위 첨자로 바꿨습니다')); add('x₂', '아래 첨자', f({ subscript: true, superscript: false }, '아래 첨자로 바꿨습니다'));
+      add('x', '첨자 없애기', f({ superscript: false, subscript: false }, '첨자를 없앴습니다')); add('↔', '자간 좁게', f({ spacings: [-10, -10, -10, -10, -10, -10, -10] }, '글자 사이를 좁혔습니다'));
+      add('⟷', '자간 넓게', f({ spacings: [10, 10, 10, 10, 10, 10, 10] }, '글자 사이를 넓혔습니다')); add('↺', '자간 기본', f({ spacings: [0, 0, 0, 0, 0, 0, 0] }, '글자 사이를 기본으로 했습니다'));
+      body.appendChild(grid);
+      var st = { hl: null, font: null, size: null };
+      var hl = el('div', 'so-opt'); hl.appendChild(el('div', 'so-opt-l', '형광펜(글자 뒤 색)')); var hr = el('div', 'so-opt-r wrap');
+      [['없음', '#ffffff'], ['노랑', '#ffff66'], ['연두', '#ccff99'], ['하늘', '#bfe3ff'], ['분홍', '#ffc9dc']].forEach(function (c) { var b = el('button', 'so-opt-b', c[0]); b.type = 'button'; b.onclick = function () { go(f({ shadeColor: c[1] }, '형광펜을 ' + (c[0] === '없음' ? '없앴습니다' : '칠했습니다'))); }; hr.appendChild(b); });
+      hl.appendChild(hr); body.appendChild(hl);
+      var fo = el('div', 'so-opt'); fo.appendChild(el('div', 'so-opt-l', '글꼴')); var fr = el('div', 'so-opt-r wrap');
+      ['함초롬바탕', '함초롬돋움', '맑은 고딕', '바탕', '돋움', '굴림', '휴먼명조'].forEach(function (n) { var b = el('button', 'so-opt-b', n); b.type = 'button'; b.onclick = function () { go(f({}, '글꼴을 ' + n + roJosa(n) + ' 바꿨습니다', n)); }; fr.appendChild(b); });
+      fo.appendChild(fr); body.appendChild(fo);
+      var sz = el('div', 'so-opt'); sz.appendChild(el('div', 'so-opt-l', '글자 크기(pt)')); var sr = el('div', 'so-opt-r wrap');
+      [9, 10, 11, 12, 13, 14, 16, 18, 20, 24].forEach(function (n) { var b = el('button', 'so-opt-b', String(n)); b.type = 'button'; b.onclick = function () { go(f({ fontSize: n * 100 }, '글자 크기를 ' + n + '포인트로 바꿨습니다')); }; sr.appendChild(b); });
+      sz.appendChild(sr); body.appendChild(sz);
+      body.appendChild(el('div', 'so-sheet-note', '먼저 바꿀 글자를 길게 눌러 고른 뒤 누르십시오. 고른 글에만 적용됩니다.'));
+      env.ctx.sheet({ title: '글자 서식 더', body: body, wide: true, buttons: [{ label: '닫기' }] });
+    }
+    function paraMoreSheet() {
+      var body = el('div'), HU = 7200 / 25.4;
+      function row(label, list, mk) {
+        var w = el('div', 'so-opt'); w.appendChild(el('div', 'so-opt-l', label)); var r = el('div', 'so-opt-r wrap');
+        list.forEach(function (o) { var b = el('button', 'so-opt-b', o[0]); b.type = 'button'; b.onclick = function () { var p = mk(o[1]); go(function () { act('paraFmt', { props: p }, '문단 서식을 바꿨습니다(' + label + ' ' + o[0] + ')', '문단 서식 바꾸기'); }); }; r.appendChild(b); });
+        w.appendChild(r); body.appendChild(w); return w;
+      }
+      var info = el('div', 'so-sheet-note', '커서가 있는 문단(고른 글이 있으면 그 문단들)에 적용됩니다.');
+      row('줄 간격', [['좁게 130%', 130], ['보통 160%', 160], ['넓게 180%', 180], ['200%', 200], ['250%', 250]], function (v) { return { lineSpacing: v, lineSpacingType: 'Percent' }; });
+      row('문단 위 간격', [['0', 0], ['3pt', 3], ['6pt', 6], ['10pt', 10], ['15pt', 15]], function (v) { return { spacingBefore: Math.round(v * 100) }; });
+      row('문단 아래 간격', [['0', 0], ['3pt', 3], ['6pt', 6], ['10pt', 10], ['15pt', 15]], function (v) { return { spacingAfter: Math.round(v * 100) }; });
+      row('왼쪽 들여쓰기', [['없음', 0], ['5mm', 5], ['10mm', 10], ['15mm', 15], ['20mm', 20]], function (v) { return { marginLeft: Math.round(v * HU * 2) }; });
+      row('첫 줄', [['보통', 0], ['들여쓰기 5mm', 5], ['들여쓰기 10mm', 10], ['내어쓰기 5mm', -5], ['내어쓰기 10mm', -10]], function (v) { return { indent: Math.round(v * HU * 2) }; });
+      row('문단 배경(음영)', BGL.map(function (c) { return [c[0], c[1]]; }), function (v) { return v ? { fillType: 'solid', fillColor: v, patternColor: v, patternType: -1 } : { fillType: 'none' }; });
+      row('이 문단부터', [['새 쪽에서 시작', true], ['이어서(기본)', false]], function (v) { return { pageBreakBefore: v }; });
+      body.appendChild(info);
+      env.ctx.sheet({ title: '문단 서식 더', body: body, wide: true, buttons: [{ label: '닫기' }] });
+    }
+    function cellFillSheet() {
+      var body = el('div'), st = { scope: 'cell' };
+      chipsRow(body, '어디에', [['cell', '이 칸'], ['row', '이 줄 전체'], ['table', '표 전체']], st, 'scope').children[0].classList.add('on');
+      var cs = el('div', 'so-opt'); cs.appendChild(el('div', 'so-opt-l', '칸 배경색')); var r = el('div', 'so-opt-r wrap');
+      [['없음', null], ['연노랑', '#fff7cc'], ['연하늘', '#dbeafe'], ['연두', '#dcfce7'], ['분홍', '#ffe3ea'], ['연회색', '#e5e7eb'], ['남색', '#bbd4f5']].forEach(function (c) { var b = el('button', 'so-opt-b', c[0]); b.type = 'button'; b.onclick = function () { var a = { color: c[1], scope: st.scope }; go(function () { act('cellFill', a, function (x) { return x.n + '칸의 배경을 ' + (c[1] ? '칠했습니다' : '없앴습니다'); }, '칸 색 바꾸기'); }); }; r.appendChild(b); });
+      cs.appendChild(r); body.appendChild(cs);
+      env.ctx.sheet({ title: '칸 배경색', body: body, wide: true, buttons: [{ label: '닫기' }] });
+    }
+
     // ---- 단추 목록 ----
     function run(id, okMsg, danger) {
       return function () {
@@ -557,6 +839,20 @@
       hf: { g: '쪽', l: '쪽번호·머리말', run: hfSheet },
       pbreak: { g: '⤓쪽', l: '쪽 나누기', run: pageBreak },
       pgset: { g: '▯', l: '용지 설정', run: pageSetSheet },
+      link: { g: '🔗', l: '링크', run: linkSheet },
+      fnote: { g: '¹', l: '각주', run: function () { noteSheet('foot'); } },
+      enote: { g: 'ⁿ', l: '미주', run: function () { noteSheet('end'); } },
+      pmore: { g: '¶', l: '문단 서식', run: paraMoreSheet },
+      cmore: { g: '가̲', l: '글자 더', run: charMoreSheet },
+      repl: { g: '⇄', l: '바꾸기', run: replaceSheet },
+      pgborder: { g: '▣', l: '쪽 테두리·배경', run: pageBorderSheet },
+      cols: { g: '▥', l: '단 나누기', run: colSheet },
+      bmark: { g: '🔖', l: '책갈피', run: bookmarkSheet },
+      cellFill: { g: '▨', l: '칸 배경색', run: cellFillSheet },
+      numb: { g: '1.', l: '번호 목록', run: run('format:toggle-numbering', null) },
+      bull: { g: '•', l: '글머리표', run: run('format:toggle-bullet', null) },
+      lvUp: { g: '→', l: '들여쓰기', run: run('format:level-decrease', null) },
+      lvDn: { g: '←', l: '내어쓰기', run: run('format:level-increase', null) },
       rowBelow: { g: '＋줄', l: '줄 추가', run: run('table:insert-row-below', '줄을 하나 더 넣었습니다') },
       rowAbove: { g: '↑줄', l: '위에 추가', run: run('table:insert-row-above', '위에 줄을 하나 넣었습니다') },
       rowDel: { g: '－줄', l: '줄 지우기', run: run('table:delete-row', '줄을 지웠습니다(되돌리려면 취소 단추)') },
