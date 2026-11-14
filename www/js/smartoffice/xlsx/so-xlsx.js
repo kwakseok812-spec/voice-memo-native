@@ -904,7 +904,8 @@
   function calcModel() {
     var XLSX = global.XLSX;
     var nm = null; function names() { if (nm) return nm; nm = {}; ((S.wb.Workbook && S.wb.Workbook.Names) || []).forEach(function (x) { if (x && x.Name && x.Sheet == null && !(x.Name in nm)) nm[x.Name] = x.Ref; }); return nm; }
-    return { name: function (n) { return names()[n] || null; }, has: function (n) { return !!S.wb.Sheets[n]; }, cell: function (sh, r, c) { var ws = S.wb.Sheets[sh]; return ws ? ws[XLSX.utils.encode_cell({ r: r - 1, c: c - 1 })] : undefined; } };
+    var now = new Date(), today = Math.round(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000) + 25569;     // 오늘 날짜(엑셀 날짜 번호) — TODAY() 계산용
+    return { today: today, name: function (n) { return names()[n] || null; }, has: function (n) { return !!S.wb.Sheets[n]; }, cell: function (sh, r, c) { var ws = S.wb.Sheets[sh]; return ws ? ws[XLSX.utils.encode_cell({ r: r - 1, c: c - 1 })] : undefined; } };
   }
   function formulaCells() {
     var out = [], XLSX = global.XLSX;
