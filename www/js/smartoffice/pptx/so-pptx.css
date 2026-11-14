@@ -116,3 +116,6 @@ html[data-style="dark"] .spx-sw{background:#05060c}
 .so-pe-rfx:active{background:var(--glass2,#e5e7f2);transform:scale(.96)}
 .so-pe-rfx.bold{font-weight:900}.so-pe-rfx.it{font-style:italic}.so-pe-rfx.ul{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.so-pe-rfx:active{transform:none}}
+
+/* O-0861 v10.8(3회차): 여러 개 고르기 */
+.spx-box.msel{border:2px solid #f59e0b;background:rgba(245,158,11,.16)}

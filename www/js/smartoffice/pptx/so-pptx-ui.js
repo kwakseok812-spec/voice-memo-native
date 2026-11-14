@@ -16,7 +16,7 @@
 
   function create(env) {
     var U = {}, s = env.s, ctx = env.ctx, host = env.host;
-    var root = null, st = { shapes: [], xml: '', path: '', sel: null, cell: null, W: 9144000, H: 6858000, meta: [], k: 1 }, up = true, bucket = 0, keyFn = null;
+    var root = null, st = { shapes: [], xml: '', path: '', sel: null, cell: null, multi: [], multiOn: false, W: 9144000, H: 6858000, meta: [], k: 1 }, up = true, bucket = 0, keyFn = null;
     function toast(m, ms) { env.toast(m, ms || 2800); }
     function nameOf(sh) { var k = KIND[sh.kind] || '도형', lab = sh.label || sh.name || ''; return !lab ? k : (lab.indexOf(k) === 0 ? lab : k + ' · ' + lab); }
     function sel() { for (var i = 0; i < st.shapes.length; i++) if (st.shapes[i].id === st.sel) return st.shapes[i]; return null; }
@@ -101,7 +101,7 @@
     function place(b, g) { b.style.left = (g.x * st.k) + 'px'; b.style.top = (g.y * st.k) + 'px'; b.style.width = Math.max(14, g.w * st.k) + 'px'; b.style.height = Math.max(14, g.h * st.k) + 'px'; }
     function paintSel() {
       [].forEach.call(root.querySelectorAll('.spx-box'), function (b) {
-        var on = Number(b.dataset.id) === st.sel; b.classList.toggle('sel', on);
+        var on = Number(b.dataset.id) === st.sel; b.classList.toggle('sel', on); b.classList.toggle('msel', st.multi.indexOf(Number(b.dataset.id)) >= 0);
         var h = b.querySelector('.spx-hd'); if (h) h.remove();
         if (on && sel() && sel().canMove) { var hd = el('div', 'spx-hd'); hd.setAttribute('aria-label', '크기 조절'); b.appendChild(hd); hd.addEventListener('pointerdown', function (e) { boxDown(e, sel(), b, true); }); }
       });
@@ -109,6 +109,7 @@
     function boxDown(e, sh, b, resize) {
       e.stopPropagation();
       if (env.s.busyRun) return;
+      if (st.multiOn) { e.preventDefault(); multiToggle(sh.id); return; }
       if (st.sel !== sh.id) { st.sel = sh.id; st.cell = null; paintSel(); renderCtx(); if (!resize && !(sh.canMove)) { toast('이 개체는 폰에서 옮기거나 크기를 바꿀 수 없습니다. 지우기는 할 수 있습니다.', 3600); } }
       if (!sh.canMove) return;
       e.preventDefault();
@@ -221,8 +222,9 @@
         btn(g, hid ? '숨김 풀기' : '숨기기', function () { env.run('숨기기', function (pkg) { return ST.hideSlide(pkg, i, !hid).then(function () { return { slide: i }; }); }, function () { toast(hid ? '다시 보이게 했습니다' : '쇼에서 건너뛰도록 숨겼습니다', 2400); U.refreshAll(); }); }, 'big');
         btn(g, '쇼 보기', function () { env.slideshow(i); }, 'big');
         btn(g, '이 슬라이드 배치 바꾸기', changeLayoutSheet, 'big');
+        btn(g, '쪽 번호·날짜·바닥글', footerSheet, 'big'); btn(g, '화면 전환', transSheet, 'big'); btn(g, '슬라이드 크기', sizeSheet, 'big');
         var gb = group(body, '이 슬라이드 배경색'); BGC.forEach(function (c) { btn(gb, c[0], function () { op('배경색', function (x) { return ST.setSlideBg(x, c[1]); }, c[1] ? '배경색을 바꿨습니다' : '배경을 배치의 것으로 되돌렸습니다', true); }, 'sw', c[1] || ''); });
-        body.appendChild(el('div', 'so-sheet-note', '새 슬라이드·복제는 지금 장 바로 뒤에 들어갑니다. 차트·SmartArt·삽입 개체·동영상이 든 장은 복제할 수 없고(이유를 알려 드립니다), 순서 바꾸기·지우기는 됩니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.'));
+        body.appendChild(el('div', 'so-sheet-note', '새 슬라이드·복제는 지금 장 바로 뒤에 들어갑니다. 삽입 개체(표·문서를 통째로 끼운 것)가 든 장은 복제할 수 없고(이유를 알려 드립니다), 순서 바꾸기·지우기는 됩니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.'));
       });
     }
     var BGC = [['배치 그대로', null], ['흰색', 'FFFFFF'], ['연한 회색', 'F2F2F2'], ['연한 노랑', 'FFF8D6'], ['연한 하늘', 'E3F0FF'], ['연한 연두', 'E6F5DC'], ['연한 분홍', 'FDE6EC'], ['남색', '1F3864'], ['검정', '000000']];
@@ -343,6 +345,7 @@
         var g2 = group(body, sh.kind === 'line' ? '선 색' : '테두리 색'); FILLS.forEach(function (c) { btn(g2, c[0], function () { op('선 색', function (x) { return ST.setLineColor(x, sh.id, c[1]); }, '선 색을 바꿨습니다', true); }, 'sw', c[1] || ''); });
         var g3 = group(body, sh.kind === 'line' ? '선 굵기' : '테두리 굵기'); [[0.5, '0.5pt'], [1, '1pt'], [2, '2pt'], [3, '3pt'], [4.5, '4.5pt'], [6, '6pt']].forEach(function (w) { btn(g3, w[1], function () { op('선 굵기', function (x) { return ST.setLineStyle(x, sh.id, { w: w[0] }); }, '굵기를 바꿨습니다', true); }); });
         var g4 = group(body, sh.kind === 'line' ? '선 모양' : '테두리 모양'); [['실선', 'solid'], ['긴 점선', 'dash'], ['점선', 'sysDot'], ['점·선', 'dashDot']].forEach(function (d) { btn(g4, d[0], function () { op('선 모양', function (x) { return ST.setLineStyle(x, sh.id, { dash: d[1] }); }, '모양을 바꿨습니다', true); }); });
+        fxExtras(body, sh);
         body.appendChild(el('div', 'so-sheet-note', '테두리가 없던 도형에 굵기·모양을 주면 짙은 회색 선이 생깁니다. 색은 위에서 바꿉니다.'));
       }, false, true);
     }
@@ -370,6 +373,7 @@
         btn(r, '크게 ×1.1', function () { scaleBy(1.1); }, '', undefined, true); btn(r, '작게 ×0.9', function () { scaleBy(0.9); }, '', undefined, true);
         btn(r, '맨 앞으로', function () { op('맨 앞으로', function (x) { return ST.reorderShape(x, sh.id, true); }, '맨 앞으로 옮겼습니다', true); }, '', undefined, true);
         btn(r, '맨 뒤로', function () { op('맨 뒤로', function (x) { return ST.reorderShape(x, sh.id, false); }, '맨 뒤로 옮겼습니다', true); }, '', undefined, true);
+        geoExtras(body, sh);
       }, false, true);
     }
     // ---------------- 표 ----------------
@@ -395,6 +399,7 @@
         btn(g, '가로 합치기 풀기', tm('splitH', '합친 칸을 풀었습니다'), 'big'); btn(g, '세로 합치기 풀기', tm('splitV', '합친 칸을 풀었습니다'), 'big');
         btn(g, '이 칸 글 고치기', function () { var rg = ST.paraRange(st.xml, sh.id, cell); ctx.closeSheet(); env.openText({ slide: s.idx, from: rg ? rg.from : 0, count: rg ? rg.count : 0, shapeId: sh.id, cell: { r: cell.r, c: cell.c } }); }, 'big');
         btn(g, '칸 고르기 풀기', function () { st.cell = null; renderCtx(); toast('표 전체가 대상입니다', 2000); }, 'big');
+        tableExtras(body, sh, cell);
         body.appendChild(el('div', 'so-sheet-note', '합친 칸의 글은 왼쪽 위 칸으로 모입니다. 합쳐진 칸이 있는 표는 줄·칸 넣고 빼기를 막고 「수정 요청」을 안내합니다(먼저 합치기를 풀면 됩니다). 서식은 고른 칸(없으면 표 전체)에 적용됩니다.'));
       }, false, true);
     }
@@ -410,11 +415,164 @@
       });
     }
 
+    // ---------------- v10.8(3회차): 정리(여러 개 고르기·맞춤·묶기) · 쪽 번호·날짜·바닥글 · 화면 전환 · 슬라이드 크기 · 링크 · 표 폭·높이 · 자르기·그림자·그러데이션 ----------------
+    function multiToggle(id) {
+      var i = st.multi.indexOf(id); if (i >= 0) st.multi.splice(i, 1); else st.multi.push(id);
+      paintSel(); renderCtx();
+    }
+    function multiEnd() { st.multiOn = false; st.multi = []; paintSel(); renderCtx(); }
+    function multiItems() { return st.multi.map(function (id) { var q = st.shapes.filter(function (z) { return z.id === id; })[0]; return q && q.g ? { id: id, g: q.g, sh: q } : null; }).filter(Boolean); }
+    function arrangeSheet() {
+      sheet('정리 — 맞춤·간격·묶기', function (body) {
+        var its = multiItems(), one = sel();
+        if (!st.multiOn) {
+          var g0 = grid(body); btn(g0, '여러 개 고르기 시작', function () { st.multiOn = true; st.multi = st.sel != null ? [st.sel] : []; st.sel = null; st.cell = null; paintSel(); renderCtx(); toast('도형을 눌러 하나씩 고르십시오(다시 누르면 빼기). 다 골랐으면 아래의 「정리」 단추를 누릅니다.', 4600); }, 'big wide', undefined, false);
+          if (one && one.kind === 'group') { var g1 = grid(body); btn(g1, '이 묶음 풀기', ungroupNow, 'big wide', undefined, false); }
+          body.appendChild(el('div', 'so-sheet-note', '도형 여러 개를 골라 왼쪽·가운데·위 등으로 가지런히 맞추거나, 간격을 같게 하거나, 하나로 묶을 수 있습니다. 묶인 도형은 한꺼번에 옮겨지고, 「이 묶음 풀기」로 다시 낱개로 돌릴 수 있습니다(↶ 로도 됩니다).'));
+          return;
+        }
+        body.appendChild(el('div', 'so-sheet-note', '고른 도형 ' + its.length + '개'));
+        function al(mode, msg) { return function () { op('맞춤', function (x) { var r = ST.alignShapes(x, multiItems(), mode); return r.err ? r : { xml: r.xml }; }, msg, true); }; }
+        var ga = group(body, '맞춤(고른 도형끼리)');
+        [['왼쪽', 'left'], ['가로 가운데', 'hcenter'], ['오른쪽', 'right'], ['위', 'top'], ['세로 가운데', 'vcenter'], ['아래', 'bottom']].forEach(function (a) { btn(ga, a[0], al(a[1], '맞췄습니다'), '', undefined, true); });
+        var gd = group(body, '간격(세 개 이상, 양 끝은 그대로)');
+        btn(gd, '가로 간격 같게', function () { op('간격', function (x) { var r = ST.distributeShapes(x, multiItems(), 'h'); return r.err ? r : { xml: r.xml }; }, '가로 간격을 같게 했습니다', true); }, '', undefined, true);
+        btn(gd, '세로 간격 같게', function () { op('간격', function (x) { var r = ST.distributeShapes(x, multiItems(), 'v'); return r.err ? r : { xml: r.xml }; }, '세로 간격을 같게 했습니다', true); }, '', undefined, true);
+        var gg = group(body, '묶기');
+        btn(gg, '하나로 묶기', function () { var ids = st.multi.slice(); op('묶기', function (x) { var r = ST.groupShapes(x, ids); return r.err ? r : { xml: r.xml, id: r.id }; }, '묶었습니다(되돌리려면 ↶)').then(function () { st.multiOn = false; st.multi = []; renderCtx(); }); }, 'big', undefined, false);
+        btn(gg, '고르기 끝내기', function () { multiEnd(); }, 'big', undefined, false);
+      }, false, true);
+    }
+    function ungroupNow() { var sh = sel(); if (!sh || sh.kind !== 'group') { toast('먼저 묶인 도형을 눌러 고르십시오.', 3000); return; } op('묶음 풀기', function (x) { var r = ST.ungroupShape(x, sh.id); return r.err ? r : { xml: r.xml, id: r.ids && r.ids[0] }; }, '묶음을 풀었습니다(되돌리려면 ↶)'); }
+    function footerSheet() {
+      var i = s.idx, scopeAll = true, skip = true;
+      ST.readFooters(env.roPkg(s.info.zip), i).then(function (cur) {
+        var body = el('div', 'spx'), now = el('div', 'so-sheet-note'); now.textContent = '이 슬라이드: 쪽 번호 ' + (cur.num ? '있음' : '없음') + ' · 날짜 ' + (cur.date ? '있음' : '없음') + ' · 바닥글 ' + (cur.footer ? '「' + cur.footer + '」' : '없음');
+        body.appendChild(now);
+        var gs = group(body, '적용 범위'), b1 = el('button', 'spx-b on', '모든 슬라이드'), b2 = el('button', 'spx-b', '이 슬라이드만'), b3 = el('button', 'spx-b on', '첫 슬라이드(표지)는 빼기');
+        [b1, b2, b3].forEach(function (b) { b.type = 'button'; gs.appendChild(b); });
+        b1.onclick = function () { scopeAll = true; b1.classList.add('on'); b2.classList.remove('on'); }; b2.onclick = function () { scopeAll = false; b2.classList.add('on'); b1.classList.remove('on'); };
+        b3.onclick = function () { skip = !skip; b3.classList.toggle('on', skip); };
+        function go(o, msg) { var only = scopeAll ? undefined : i; o.only = only; o.skipFirst = skip; env.run('쪽 번호·바닥글', function (pkg) { return ST.setFooters(pkg, o).then(function (r) { return r.err ? r : { slide: i, noLayout: r.noLayout, n: r.slides }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } toast(msg + (r.noLayout ? ' — 배치에 자리가 없는 ' + r.noLayout + '곳은 건너뛰었습니다' : ''), 4200); U.refreshAll(); }); }
+        var gn = group(body, '쪽 번호'); btn(gn, '쪽 번호 넣기', function () { go({ num: true }, '쪽 번호를 넣었습니다'); }, 'on', undefined, false); btn(gn, '쪽 번호 빼기', function () { go({ num: false }, '쪽 번호를 뺐습니다'); }, '', undefined, false);
+        var gt = group(body, '날짜'); var today = (function () { var d = new Date(); return d.getFullYear() + '. ' + (d.getMonth() + 1) + '. ' + d.getDate() + '.'; })();
+        btn(gt, '오늘 날짜(' + today + ')', function () { go({ date: { auto: false, text: today } }, '날짜를 넣었습니다'); }, '', undefined, false); btn(gt, '열 때마다 오늘로', function () { go({ date: { auto: true, text: today } }, '자동으로 바뀌는 날짜를 넣었습니다'); }, '', undefined, false); btn(gt, '날짜 빼기', function () { go({ date: false }, '날짜를 뺐습니다'); }, '', undefined, false);
+        body.appendChild(el('div', 'spx-l', '바닥글 글')); var tf = el('input', 'spx-in'); tf.type = 'text'; tf.placeholder = '예: 바이오융합공학과 · 2026학년도 2학기'; tf.value = cur.footer || ''; tf.setAttribute('aria-label', '바닥글 글'); body.appendChild(tf);
+        var gf = group(body, ''); btn(gf, '바닥글 넣기', function () { var v = tf.value.trim(); if (!v) { toast('바닥글에 넣을 글을 적어 주십시오.', 2600); return; } go({ footer: v }, '바닥글을 넣었습니다'); }, 'on', undefined, false); btn(gf, '바닥글 빼기', function () { go({ footer: false }, '바닥글을 뺐습니다'); }, '', undefined, false);
+        body.appendChild(el('div', 'so-sheet-note', '번호·날짜·바닥글은 슬라이드 배치가 정해 둔 자리(보통 아래쪽)에 들어갑니다. 폰 화면의 미리보기에는 보이지 않을 수 있고, 파워포인트로 열면 보입니다. 되돌리려면 ↶ 입니다.'));
+        ctx.sheet({ title: '쪽 번호·날짜·바닥글', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
+    var TRANS = [['없음', 'none'], ['페이드', 'fade'], ['밀기', 'push'], ['나타나기(지우기)', 'wipe'], ['덮기', 'cover'], ['벗기기', 'pull'], ['나누기', 'split'], ['확대', 'zoom'], ['무작위 막대', 'randomBar']];
+    var TRANS_NAME = { none: '없음', fade: '페이드', push: '밀기', wipe: '나타나기', cover: '덮기', pull: '벗기기', split: '나누기', zoom: '확대', randomBar: '무작위 막대', other: '기타' };
+    function transSheet() {
+      var i = s.idx, cur = null, scopeAll = false, spd = 'med', dir = 'l', adv = 0, kindSel = null;
+      env.roPkg(s.info.zip).read(st.path).then(function (x) {
+        cur = ST.readTransitionXml(x); kindSel = cur.kind === 'other' ? null : cur.kind;
+        var body = el('div', 'spx'); body.appendChild(el('div', 'so-sheet-note', '이 슬라이드의 지금 전환: ' + TRANS_NAME[cur.kind] + (cur.advTm ? ' · ' + (cur.advTm / 1000) + '초 뒤 자동 넘김' : '')));
+        var gs = group(body, '적용 범위'), b1 = el('button', 'spx-b on', '이 슬라이드만'), b2 = el('button', 'spx-b', '모든 슬라이드'); [b1, b2].forEach(function (b) { b.type = 'button'; gs.appendChild(b); });
+        b1.onclick = function () { scopeAll = false; b1.classList.add('on'); b2.classList.remove('on'); }; b2.onclick = function () { scopeAll = true; b2.classList.add('on'); b1.classList.remove('on'); };
+        function tog(label, items, get, set) { var g = group(body, label), bs = []; items.forEach(function (it) { var b = el('button', 'spx-b' + (get() === it[1] ? ' on' : ''), it[0]); b.type = 'button'; b.onclick = function () { set(it[1]); bs.forEach(function (q) { q[0].classList.toggle('on', get() === q[1]); }); }; g.appendChild(b); bs.push([b, it[1]]); }); }
+        tog('속도', [['느리게', 'slow'], ['보통', 'med'], ['빠르게', 'fast']], function () { return spd; }, function (v) { spd = v; });
+        tog('방향(밀기·나타나기·덮기·벗기기)', [['왼쪽', 'l'], ['오른쪽', 'r'], ['위', 'u'], ['아래', 'd']], function () { return dir; }, function (v) { dir = v; });
+        tog('자동 넘김', [['클릭할 때만', 0], ['3초 뒤', 3000], ['5초 뒤', 5000], ['10초 뒤', 10000]], function () { return adv; }, function (v) { adv = v; });
+        var gk = group(body, '전환 효과 — 누르면 바로 적용');
+        TRANS.forEach(function (t) {
+          btn(gk, t[0], function () {
+            var o = { kind: t[1], dir: dir, spd: spd, advTm: adv || null }, which = scopeAll ? 'all' : i;
+            env.run('화면 전환', function (pkg) { return ST.setTransition(pkg, which, o).then(function (r) { return { slide: i, n: r.n }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } toast(t[1] === 'none' ? '전환 효과를 뺐습니다' : '「' + t[0] + '」 전환을 ' + (scopeAll ? '모든 슬라이드(' + r.n + '장)에' : '이 슬라이드에') + ' 넣었습니다(↶ 로 되돌립니다)', 3600); U.refreshAll(); });
+          }, cur.kind === t[1] ? 'on' : '', undefined, false);
+        });
+        body.appendChild(el('div', 'so-sheet-note', '전환 효과는 쇼를 할 때 장이 넘어가는 모양입니다. 폰의 쇼 보기에서는 효과 없이 넘어가고, 파워포인트로 발표할 때 나타납니다. 이미 있던 다른 전환 효과는 고른 효과로 바뀝니다.'));
+        ctx.sheet({ title: '화면 전환', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
+    function sizeSheet() {
+      ST.readSlideSize(env.roPkg(s.info.zip)).then(function (cur) {
+        var body = el('div', 'spx'); body.appendChild(el('div', 'so-sheet-note', '지금 크기: ' + (cur ? (cur.name || '사용자 크기') + ' (' + Math.round(cur.W / 360000 * 10) / 10 + ' × ' + Math.round(cur.H / 360000 * 10) / 10 + 'cm)' : '알 수 없음')));
+        var g = grid(body);
+        Object.keys(ST.SLIDE_SIZES).forEach(function (k) {
+          var sz = ST.SLIDE_SIZES[k];
+          btn(g, sz.name + ' (' + Math.round(sz.cx / 36000) / 10 + '×' + Math.round(sz.cy / 36000) / 10 + 'cm)', function () {
+            ctx.confirm('슬라이드 크기를 「' + sz.name + '」로 바꿀까요?', '모든 슬라이드·배치의 도형을 같은 비율로 줄이거나 늘려 가운데에 놓고, 글자 크기도 같은 비율로 맞춥니다. 비율이 다르면 위아래나 좌우에 빈 자리가 생깁니다. 직후에는 ↶ 로 되돌릴 수 있습니다. 표·차트·그림은 비율을 지켜 줄어듭니다.', '바꾸기', function () {
+              env.run('슬라이드 크기', function (pkg) { return ST.setSlideSize(pkg, k).then(function (r) { return r.err ? r : { slide: s.idx, scale: r.scale }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } toast('슬라이드 크기를 바꿨습니다(내용 ' + r.scale + '%). 마음에 안 들면 ↶ 입니다.', 4600); U.refreshAll(); });
+            }, { cancelLabel: '취소' });
+          }, 'big', undefined, false);
+        });
+        body.appendChild(el('div', 'so-sheet-note', '크기를 바꾸면 모든 장이 한꺼번에 바뀝니다. 바꾼 뒤 장마다 한 번 훑어보시기 바랍니다.'));
+        ctx.sheet({ title: '슬라이드 크기', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
+    function linkSheet() {
+      var sh = need(); if (!sh) return;
+      if (sh.kind === 'table' || sh.kind === 'chart' || sh.kind === 'smart' || sh.kind === 'ole' || sh.kind === 'other') { toast('표·차트에는 폰에서 링크를 걸 수 없습니다. 도형이나 글 상자를 골라 주십시오.', 3600); return; }
+      ST.readLink(env.roPkg(s.info.zip), st.path, sh.id).then(function (cur) {
+        var body = el('div', 'spx'), a = el('input', 'spx-in'); a.type = 'text'; a.placeholder = '주소 (https://…)'; a.inputMode = 'url'; a.setAttribute('aria-label', '링크 주소'); a.value = cur && cur.url ? cur.url : '';
+        var curTxt = !cur ? '없음' : cur.url ? cur.url : cur.slide != null ? (cur.slide + 1) + '번 슬라이드로 이동' : ({ nextslide: '다음 슬라이드', previousslide: '이전 슬라이드', firstslide: '처음 슬라이드', lastslide: '마지막 슬라이드' }[cur.jump] || '이동');
+        body.appendChild(el('div', 'so-sheet-note', '고른 도형: ' + nameOf(sh) + ' · 지금 링크: ' + curTxt));
+        body.appendChild(el('div', 'spx-l', '인터넷 주소')); body.appendChild(a);
+        var tgt = 'shape', gm = group(body, '어디에 걸까'), useText = !!(sh.canText && sh.text), t1 = el('button', 'spx-b' + (useText ? '' : ' on'), '도형 전체(누르면 이동)'), t2 = el('button', 'spx-b' + (useText ? ' on' : ''), '안의 글 전체'); if (useText) tgt = 'text';
+        [t2, t1].forEach(function (b) { b.type = 'button'; gm.appendChild(b); });
+        t1.onclick = function () { tgt = 'shape'; t1.classList.add('on'); t2.classList.remove('on'); }; t2.onclick = function () { if (!useText) { toast('이 도형에는 글이 없어 「도형 전체」에만 걸 수 있습니다.', 3000); return; } tgt = 'text'; t2.classList.add('on'); t1.classList.remove('on'); };
+        function put(spec, msg) { var i = s.idx; env.run('링크', function (pkg) { return ST.setLink(pkg, st.path, sh.id, spec, tgt).then(function (r) { return r.err ? r : { slide: i }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } toast(msg, 3000); U.refreshAll(); }); }
+        var g1 = group(body, ''); btn(g1, '주소 링크 걸기', function () { put({ url: a.value }, '링크를 걸었습니다(쇼·파워포인트에서 누르면 열립니다)'); }, 'on', undefined, false);
+        var gs = group(body, '다른 슬라이드로 이동');
+        for (var k = 0; k < s.slides.length && k < 24; k++) (function (k) { btn(gs, (k + 1) + '번', function () { put({ slide: k }, (k + 1) + '번 슬라이드로 가는 링크를 걸었습니다'); }, '', undefined, false); })(k);
+        var gj = group(body, '순서대로 이동'); [['다음', 'next'], ['이전', 'prev'], ['처음', 'first'], ['끝', 'last']].forEach(function (j) { btn(gj, j[0] + ' 슬라이드', function () { put({ jump: j[1] }, j[0] + ' 슬라이드로 가는 링크를 걸었습니다'); }, '', undefined, false); });
+        var gx = group(body, ''); btn(gx, '링크 없애기', function () { put({ remove: true }, '링크를 없앴습니다'); }, 'danger', undefined, false);
+        body.appendChild(el('div', 'so-sheet-note', '링크는 쇼 보기와 파워포인트 발표에서 누르면 작동합니다. 글에 링크를 걸면 파워포인트가 글을 링크 색(밑줄)으로 보여 줍니다.'));
+        ctx.sheet({ title: '링크', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
+    // 표 시트 안: 열 너비·줄 높이
+    function tableExtras(body, sh, cell) {
+      var g = ST.tableGeom(st.xml, sh.id); if (!g) return;
+      var ci = Math.min(cell.c, g.cols.length - 1), ri = Math.min(cell.r, g.rows.length - 1);
+      function cm(v) { return Math.round(v / 36000) / 10; }
+      var gw = group(body, '열 너비 — 고른 칸의 열 ' + (ci + 1) + '번째 ' + cm(g.cols[ci]) + 'cm (표 전체 ' + cm(g.cols.reduce(function (a, c) { return a + c; }, 0)) + 'cm)');
+      [['− 1cm', -360000], ['− 0.3cm', -108000], ['＋ 0.3cm', 108000], ['＋ 1cm', 360000]].forEach(function (a) { btn(gw, a[0], function () { op('열 너비', function (x) { var r = ST.setTableCols(x, sh.id, { col: ci, delta: a[1] }); return r.err ? r : { xml: r.xml }; }, '열 너비를 바꿨습니다(옆 열이 그만큼 줄거나 늘었습니다)', true); }, '', undefined, true); });
+      btn(gw, '모든 열 같게', function () { op('열 너비', function (x) { var r = ST.setTableCols(x, sh.id, { equal: true }); return r.err ? r : { xml: r.xml }; }, '모든 열을 같은 너비로 했습니다', true); }, '', undefined, true);
+      var gh = group(body, '고른 줄(' + (ri + 1) + '번째) 높이 ' + cm(g.rows[ri]) + 'cm 이상'), gh2 = group(body, '표 전체 줄 높이');
+      [['0.8cm', 288000], ['1cm', 360000], ['1.5cm', 540000], ['2cm', 720000], ['3cm', 1080000]].forEach(function (a) {
+        btn(gh, a[0], function () { op('줄 높이', function (x) { var r = ST.setTableRows(x, sh.id, { row: ri, h: a[1] }); return r.err ? r : { xml: r.xml }; }, '줄 높이를 바꿨습니다', true); }, '', undefined, true);
+        btn(gh2, '모두 ' + a[0], function () { op('줄 높이', function (x) { var r = ST.setTableRows(x, sh.id, { all: true, h: a[1] }); return r.err ? r : { xml: r.xml }; }, '모든 줄 높이를 바꿨습니다', true); }, '', undefined, true);
+      });
+    }
+    // 위치·크기 시트 안: 그림 자르기 · 앞뒤 한 칸
+    function geoExtras(body, sh) {
+      var r = group(body, '순서(겹친 도형)');
+      btn(r, '한 칸 앞으로', function () { op('순서', function (x) { var q = ST.stepShape(x, sh.id, 1); return q.err ? q : { xml: q.xml }; }, '한 칸 앞으로 옮겼습니다', true); }, '', undefined, true);
+      btn(r, '한 칸 뒤로', function () { op('순서', function (x) { var q = ST.stepShape(x, sh.id, -1); return q.err ? q : { xml: q.xml }; }, '한 칸 뒤로 옮겼습니다', true); }, '', undefined, true);
+      if (sh.kind === 'pic') {
+        var gc = group(body, '그림 자르기(가운데를 남기고 비율로)' + (ST.readCrop(st.xml, sh.id) ? ' — 지금 잘려 있음' : ''));
+        [['1:1', '1:1'], ['4:3', '4:3'], ['3:4', '3:4'], ['16:9', '16:9'], ['9:16', '9:16']].forEach(function (a) { btn(gc, a[0], function () { op('그림 자르기', function (x) { var q = ST.cropPicture(x, sh.id, a[1]); return q.err ? q : { xml: q.xml }; }, '그림을 ' + a[0] + ' 비율로 잘랐습니다(되돌리려면 「원래 비율로」 또는 ↶)', true); }, '', undefined, true); });
+        btn(gc, '원래 비율로', function () { op('그림 자르기', function (x) { var q = ST.cropPicture(x, sh.id, 'orig'); return q.err ? q : { xml: q.xml }; }, '원래 비율로 되돌렸습니다', true); }, 'on', undefined, true);
+        body.appendChild(el('div', 'so-sheet-note', '자르기는 그림의 바깥을 가려서 보이지 않게 할 뿐 그림 파일은 그대로입니다. 끌어서 자르는 대신 비율로 잘라 드립니다.'));
+      }
+    }
+    // 색·선 시트 안: 그러데이션 · 그림자
+    var GRADS = [['파랑 ↓', '9CC9FF', '1F4E9E', 90], ['주황 ↓', 'FFD9A0', 'C25B00', 90], ['초록 ↓', 'D5F0C8', '2E7D32', 90], ['회색 ↓', 'F2F2F2', '7F7F7F', 90], ['남색 →', '2F5597', '8FAADC', 0], ['분홍 →', 'FFB3C7', 'C2185B', 0], ['보라 ↘', 'E1D5F5', '5B2C9E', 45], ['노랑 ↘', 'FFF2A8', 'E6A100', 45]];
+    function fxExtras(body, sh) {
+      if (sh.canFill) {
+        var gg = group(body, '그러데이션 채우기(두 색이 이어짐)' + (ST.readFillKind(st.xml, sh.id) === 'grad' ? ' — 지금 그러데이션' : ''));
+        GRADS.forEach(function (a) { btn(gg, a[0], function () { op('그러데이션', function (x) { var q = ST.setGradient(x, sh.id, a[1], a[2], a[3]); return q.err ? q : { xml: q.xml }; }, '그러데이션을 입혔습니다(색 단추를 누르면 한 가지 색으로 돌아갑니다)', true); }, '', undefined, true); });
+      }
+      if (sh.kind !== 'table' && sh.kind !== 'group' && sh.kind !== 'chart' && sh.kind !== 'smart' && sh.kind !== 'ole' && sh.kind !== 'other') {
+        var cs = ST.readShadow(st.xml, sh.id), gs = group(body, '그림자' + (cs ? ' — 지금 ' + (cs === 'hard' ? '또렷하게' : '부드럽게') : ' — 지금 없음'));
+        [['없음', 'none'], ['부드럽게', 'soft'], ['또렷하게', 'hard']].forEach(function (a) { btn(gs, a[0], function () { op('그림자', function (x) { var q = ST.setShadow(x, sh.id, a[1]); return q.err ? q : { xml: q.xml }; }, a[1] === 'none' ? '그림자를 뺐습니다' : '그림자를 넣었습니다', true); }, cs === a[1] || (!cs && a[1] === 'none') ? 'on' : '', undefined, true); });
+      }
+    }
     // ---------------- 맥락 줄 · 도구줄 ----------------
     function renderCtx() {
       setTimeout(refillSheet, 0);
       var t = root.querySelector('.spx-ctxt'), b = root.querySelector('.spx-ctxb'); b.innerHTML = '';
       var sh = sel();
+      if (st.multiOn) {
+        t.textContent = '여러 개 고르는 중 — ' + st.multi.length + '개 (도형을 눌러 고르거나 빼기)';
+        var ab = el('button', 'spx-cb', '정리'); ab.type = 'button'; ab.onclick = arrangeSheet; b.appendChild(ab);
+        var eb = el('button', 'spx-cb', '끝내기'); eb.type = 'button'; eb.onclick = multiEnd; b.appendChild(eb);
+        return;
+      }
       if (!sh) {
         t.textContent = '슬라이드 ' + (s.idx + 1) + ' / ' + s.slides.length + (clip ? ' · 복사해 둔 ' + clip.name : ' · 도형을 누르면 고를 수 있습니다');
         if (clip) { var pb = el('button', 'spx-cb', '붙여넣기'); pb.type = 'button'; pb.onclick = function () { pasteClip(); }; b.appendChild(pb); }
@@ -427,10 +585,10 @@
     var ITEMS = {
       slide: { g: '▭', l: '슬라이드', run: slideSheet }, ins: { g: '＋', l: '넣기', run: insertSheet }, text: { g: '가', l: '글', run: textBtn }, fmt: { g: 'Aa', l: '서식', run: fmtSheet },
       geo: { g: '⤢', l: '위치·크기', run: geoSheet }, color: { g: '◐', l: '색·선', run: colorSheet }, table: { g: '▦', l: '표', run: tableSheet }, notes: { g: '✎', l: '노트', run: notesSheet },
-      copy: { g: '⧉', l: '복사', run: copySheet },
+      copy: { g: '⧉', l: '복사', run: copySheet }, arrange: { g: '⧈', l: '정리', run: arrangeSheet }, link: { g: '↗', l: '링크', run: linkSheet },
       show: { g: '▶', l: '쇼', run: function () { env.slideshow(s.idx); } }
     };
-    var ORDER = ['slide', 'ins', 'text', 'fmt', 'geo', 'color', 'copy', 'table', 'notes', 'show'];
+    var ORDER = ['slide', 'ins', 'text', 'fmt', 'geo', 'color', 'copy', 'table', 'arrange', 'link', 'notes', 'show'];
     function mk(id, hostEl, inSheet) {
       var it = ITEMS[id], b = el('button', inSheet ? 'spx-mb' : 'spx-ob'); b.type = 'button'; b.setAttribute('aria-label', it.l);
       b.appendChild(el('span', 'g', it.g)); b.appendChild(el('span', 'l', it.l));
