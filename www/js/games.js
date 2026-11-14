@@ -1,5 +1,5 @@
 /* ============================================================================
- * games.js — 홈 「게임」 칸 + 「장기·오목」을 스마트비서 안에서 두기 (v9.83, O-0783)
+ * games.js — 홈 「게임」 칸 + 「장기·오목」·「지뢰 피하기」·「카드 정리」를 스마트비서 안에서 두기 (v9.83 O-0783 · v10.0 O-0857)
  * ----------------------------------------------------------------------------
  * 무엇: 홈 맨 끝 「게임」 칸(작은 글씨 「장기·오목」) → 「한 판 둘까요?」 목록 시트 → 게임을 고르면 앱 안 고정 층(#gameRoot)에서 게임이 열린다.
  *       게임 파일은 앱에 담아 둔 원본 그대로의 복사본(www/games/<id>/, 복사·대조 도구 deploy/sync_games.sh)이고, 같은 출처라 두던 판(localStorage janggi.*)이 이어진다.
@@ -26,7 +26,13 @@
   var GAMES = [
     { id: 'janggi', name: '장기·오목', sub: '장기·오목', desc: 'AI와 두는 한국 장기와 오목',
       src: 'games/janggi/index.html', icon: 'games/janggi/icon-192.png', url: 'https://kwakseok812-spec.github.io/janggi/',
-      ready: '__janggi', saves: [{ key: 'janggi.game.v1', arr: 'hist' }, { key: 'janggi.omok.game.v1', arr: 'moves' }], mode: '' }
+      ready: '__janggi', saves: [{ key: 'janggi.game.v1', arr: 'hist' }, { key: 'janggi.omok.game.v1', arr: 'moves' }], mode: '' },
+    { id: 'minesweeper', name: '지뢰 피하기', sub: '지뢰 피하기', desc: '지뢰를 피해 판을 여는 퍼즐',
+      src: 'games/minesweeper/index.html', icon: 'games/minesweeper/icon-192.png', url: 'https://kwakseok812-spec.github.io/minesweeper/',
+      ready: '__mines', saves: [{ key: 'mines.game.v1', arr: 'moves' }], mode: '' },
+    { id: 'solitaire', name: '카드 정리', sub: '카드 정리', desc: '혼자 하는 카드 놀이(솔리테어)',
+      src: 'games/solitaire/index.html', icon: 'games/solitaire/icon-192.png', url: 'https://kwakseok812-spec.github.io/solitaire/',
+      ready: '__solitaire', saves: [{ key: 'solitaire.game.v1', arr: 'moves' }], mode: '' }
   ];
   var TXT = {
     head: '한 판 둘까요?', load: '판을 펴는 중입니다…', fail: '게임을 불러오지 못했습니다', failTab: '인터넷 주소로 열기', badge: '두던 판이 있습니다', close: '닫기',
@@ -217,6 +223,7 @@
   function back() {
     if (!isOpen()) return false;
     var w = frameWin(), doc = frameDoc(), J = null;
+    try { if (w && typeof w.__gameBack === 'function' && w.__gameBack()) return true; } catch (e) {}   // O-0857: 지뢰 피하기·카드 정리가 열어 둔 쪽지(새 판 고르기 등)가 있으면 그것만 닫는다 — 장기·오목에는 이 함수가 없어 아래 동작 그대로
     try { J = w && w.__janggi; } catch (e) { J = null; }
     var scr = J && J.S && J.S.screen;
     if (doc && scr && scr !== 'home') {
