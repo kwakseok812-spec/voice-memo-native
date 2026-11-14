@@ -29,6 +29,8 @@
 .soc-over.tr{background:transparent}
 .soc-xl{position:absolute;left:0;top:0;width:0;height:0}
 .soc-xl .soc-over{pointer-events:auto;cursor:pointer;border:1px solid #d9d9d9;box-sizing:border-box}
+.soc-xl .soc-over{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.soc-xl .soc-over.drag{cursor:grabbing;opacity:.82;box-shadow:0 6px 18px rgba(0,0,0,.3);z-index:5}
 .soc-xl .soc-over.sel{outline:3px solid var(--p1);outline-offset:-1px}
 .soc-docchart{display:block;margin:8px auto;line-height:0;background:#fff;max-width:100%;border:1px solid #d9d9d9}
 .soc-docchart svg{display:block;width:100%;height:auto}

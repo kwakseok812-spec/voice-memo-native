@@ -68,8 +68,19 @@
       var g6 = group('테두리'); opt(g6, '모두', function () { applyFmt({ borderMode: 'all' }, '테두리를 넣었습니다'); }); opt(g6, '바깥쪽', function () { applyFmt({ borderMode: 'outer' }, '바깥 테두리를 넣었습니다'); }); opt(g6, '없음', function () { applyFmt({ borderMode: 'none' }, '테두리를 없앴습니다'); });
       var g8 = group('글꼴'); FONTS.forEach(function (f) { opt(g8, f, function () { applyFmt({ fontName: f }, '글꼴을 바꿨습니다'); }); });
       var g9 = group('글자 크기'); opt(g9, '작게 −', function () { stepSize(-1); }); opt(g9, '크게 ＋', function () { stepSize(1); }); SIZES.forEach(function (z) { opt(g9, String(z), function () { applyFmt({ fontSize: z }, '글자 크기를 ' + J(String(z), '으로') + ' 바꿨습니다'); }); });
+      var g10 = group('표로 서식(줄무늬 표)'); Object.keys(ST.TBL_PRESETS).forEach(function (k) { var p = ST.TBL_PRESETS[k], b = opt(g10, p.name, function () { S().ctx.closeSheet(); setTimeout(function () { tableFmt(k); }, 60); }); b.style.borderLeft = '8px solid ' + p.hdr; });
+      body.appendChild(el('div', 'so-sheet-note', '표로 서식: 표 전체를 「범위」로 고르거나 표 안의 칸 하나를 누른 채 이 단추를 누르면, 첫 줄을 머리 줄로 하는 줄무늬 표(엑셀의 「표」)가 됩니다.'));
       body.appendChild(el('div', 'so-sheet-note', '칸 합치기는 도구줄의 「칸 합치기」(또는 더보기)에서 합니다.'));
       body.appendChild(el('div', 'so-sheet-note', '고른 곳(' + rangeText() + ')에 적용됩니다. 칸 하나만 골랐으면 그 칸에만, 줄 번호·열 글자나 「범위」로 고르면 그 범위 전체에 적용됩니다.'));
+    }
+    function tableFmt(key) {
+      var s = S(), r = rg0(), single = r.r0 === r.r1 && r.c0 === r.c1, rg;
+      if (single) { var g = currentRegion(s.sh, r.r0, r.c0); rg = { r0: g.r0 + 1, c0: g.c0 + 1, r1: g.r1 + 1, c1: g.c1 + 1 }; } else rg = rg1();
+      if (rg.r1 <= rg.r0) { toast('표로 만들려면 머리 줄과 자료 줄이 필요합니다. 표 전체를 「범위」로 고르거나 표 안의 칸을 누르십시오.', 4200); return; }
+      var txt = env.addr(rg.r0 - 1, rg.c0 - 1) + ':' + env.addr(rg.r1 - 1, rg.c1 - 1), p = ST.TBL_PRESETS[key];
+      S().ctx.confirm(txt + ' 를 「' + p.name + '」 표로 만들까요?', '첫 줄이 머리 줄이 되고 칸 이름이 표의 열 이름이 됩니다(머리 줄에 숫자·빈 칸이 있으면 글자로 바뀝니다). 머리 줄에 필터 단추(▽)가 생기고 줄마다 번갈아 색이 들어갑니다. 되돌리려면 ↶ 를 쓰십시오.', '표로 만들기', function () {
+        run('표로 서식', function (pkg) { return ST.tableFormat(pkg, nameNow(), rg, key); }, function (x) { return '표로 서식을 넣었습니다(' + x.ref + ')'; });
+      }, { cancelLabel: '취소' });
     }
     function mergeCells() {
       var r = rg0(); if (r.r0 === r.r1 && r.c0 === r.c1) { toast('합칠 칸을 먼저 「범위」로 두 칸 이상 골라 주십시오.', 3200); return; }
@@ -115,7 +126,7 @@
     }
     // ---------------- 자동 필터 ----------------
     function sheetXml() { var s = S(), psh = s.an && s.an.sheets && s.an.sheets[s.sh.name]; return psh ? psh.xml : null; }
-    function shown(sh, r, c) { var cl = env.cellOf(sh, r, c); return cl ? (cl.w != null ? String(cl.w) : (cl.v == null ? '' : String(cl.v))) : ''; }
+    function shown(sh, r, c) { var cl = env.cellOf(sh, r, c); if (!cl) return ''; if (env.display) { try { return String(env.display(cl)); } catch (e) {} } return cl.w != null ? String(cl.w) : (cl.v == null ? '' : String(cl.v)); }      // 화면에 보이는 모양(숫자 서식 적용) 그대로 — 안 그러면 49.00 이 49 로 재어져 칸이 좁아진다
     function numOf(v) { var n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? null : n; }
     function condTest(x, v) {
       if (x.op === 'contains') return String(v).toLowerCase().indexOf(String(x.s).toLowerCase()) >= 0;
@@ -215,8 +226,13 @@
     }
     function pasteClip(mode) {
       if (!clip) { toast('먼저 복사할 칸이나 범위를 고르고 「복사」를 누르십시오.', 3200); return; }
-      if (clip.sheet !== nameNow()) { toast('다른 시트로는 붙일 수 없습니다(같은 시트 안에서만 됩니다). 복사한 시트로 돌아가 붙여 주십시오.', 4200); return; }
-      var d = rg1(), c = clip;
+      var d = rg1(), c = clip, cross = c.sheet !== nameNow();
+      if (c.cut && (cross || (mode !== 'all' && mode !== 'values'))) { toast(cross ? '오려 둔 것은 같은 시트 안에서만 붙일 수 있습니다(수식의 참조가 어긋나지 않게). 다른 시트로는 「복사」를 쓰십시오.' : '오려 둔 것은 「붙여넣기」나 「값만 붙여넣기」로만 붙일 수 있습니다.', 4600); return; }
+      if (cross || mode === 'format' || mode === 'transpose') {
+        var lab = mode === 'format' ? '서식만 붙였습니다' : mode === 'transpose' ? '행과 열을 바꿔 붙였습니다' : (mode === 'values' ? '값만 붙였습니다' : '붙였습니다');
+        run('붙여넣기', function (pkg) { return ST.pasteSpecial(pkg, c.sheet, c.rng, nameNow(), d.r0, d.c0, mode); }, function (x) { return lab + '(' + x.nr + '줄 × ' + x.nc + '칸, ' + env.addr(d.r0 - 1, d.c0 - 1) + ' 부터' + (cross ? ' · 「' + nameNow() + '」 시트' : '') + ')'; });
+        return;
+      }
       run('붙여넣기', function (pkg) { return ST.copyRange(pkg, c.sheet, c.rng, d.r0, d.c0, mode, c.cut); }, function (x) { if (c.cut) clip = null; return (mode === 'values' ? '값만 붙였습니다(' : '붙였습니다(') + x.nr + '줄 × ' + x.nc + '칸, ' + env.addr(d.r0 - 1, d.c0 - 1) + ' 부터)'; });
     }
     function copySheet() {
@@ -224,8 +240,9 @@
       function add(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; grid.appendChild(b); }
       add('복사', function () { copySel(false); }); add('오려두기', function () { copySel(true); });
       add('붙여넣기(값·수식·서식)', function () { pasteClip('all'); }); add('값만 붙여넣기', function () { pasteClip('values'); });
+      add('서식만 붙여넣기', function () { pasteClip('format'); }); add('행과 열 바꿔 붙여넣기', function () { pasteClip('transpose'); });
       body.appendChild(grid);
-      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + (clip ? ' · 복사해 둔 곳: ' + clip.at + (clip.cut ? '(오려두기)' : '') : ' · 복사해 둔 것이 없습니다') + '. 붙이려면 붙일 칸(왼쪽 위 칸)을 누르고 「붙여넣기」를 누릅니다. 수식은 붙이는 자리에 맞게 상대 참조가 따라 움직입니다(「$」가 붙은 칸은 그대로). 같은 시트 안에서만 되고, 합쳐진 칸이나 배열 수식이 걸리면 안내하고 하지 않습니다. 오려두기는 다른 칸의 수식이 그 칸을 쓰면 하지 않습니다. 키보드(DeX)는 Ctrl+C·X·V 입니다.'));
+      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + (clip ? ' · 복사해 둔 곳: ' + clip.at + (clip.cut ? '(오려두기)' : '') : ' · 복사해 둔 것이 없습니다') + '. 붙이려면 붙일 칸(왼쪽 위 칸)을 누르고 「붙여넣기」를 누릅니다. 다른 시트에 붙이려면 그 시트로 옮겨 붙일 칸을 누른 뒤 같은 단추를 누릅니다(오려두기는 같은 시트 안에서만). 「행과 열 바꿔」는 수식을 계산된 값으로 붙입니다. 수식은 붙이는 자리에 맞게 상대 참조가 따라 움직입니다(「$」가 붙은 칸은 그대로). 같은 시트 안에서만 되고, 합쳐진 칸이나 배열 수식이 걸리면 안내하고 하지 않습니다. 오려두기는 다른 칸의 수식이 그 칸을 쓰면 하지 않습니다. 키보드(DeX)는 Ctrl+C·X·V 입니다.'));
       S().ctx.sheet({ title: '복사·붙여넣기', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
     U.copySel = copySel; U.pasteClip = pasteClip; U.filterCol = function (k) { filterSheet(k); };
@@ -379,11 +396,22 @@
       return w;
     }
     function lineW(txt) { var m = 0; String(txt).split(/\r?\n/).forEach(function (l) { m = Math.max(m, chW(l)); }); return m; }
+    var mcv = null;
+    function pxNeed(txt, st) {                // 앱 화면에서 이 글이 차지하는 픽셀(칸 안쪽 여백 14 + 여유 4 포함)
+      try {
+        if (!mcv) mcv = document.createElement('canvas');
+        var g = mcv.getContext('2d'), probe = document.querySelector('.sx-c'), fam = (st && st.fn) ? '"' + String(st.fn).split('"').join('') + '",sans-serif' : (probe ? getComputedStyle(probe).fontFamily : 'sans-serif'), px = ((st && st.fs) ? st.fs * 4 / 3 : 14), m = 0;
+        g.font = (st && st.b ? '800 ' : '400 ') + px + 'px ' + fam;
+        String(txt).split('\n').forEach(function (l) { m = Math.max(m, g.measureText(l).width); });
+        return m + 18;
+      } catch (e) { return 0; }
+    }
     function autoColCh(sh, c, r0, r1) {
       var mx = 0;
       for (var r = r0; r <= r1; r++) {
         var t = shown(sh, r, c); if (!t) continue; var st = envStyleAt(sh, r, c), w = lineW(t) * (((st && st.fs) || 11) / 11) * (st && st.b ? 1.08 : 1);
         if (st && st.wrap) { w = Math.min(w, 40); }
+        else w = Math.max(w, pxNeed(t, st) / 6 - 1);      // 이 앱 화면의 칸은 글자 수 × 6픽셀로 그려지고 글자는 14픽셀 크기라, 화면에서 안 잘리게 실제 글자 폭으로도 잰다
         mx = Math.max(mx, w);
       }
       return mx ? Math.max(4, Math.min(80, Math.round((mx + 2) * 10) / 10)) : 0;
@@ -571,6 +599,12 @@
       add2('고른 칸 잠금 풀기', function () { run('잠금 풀기', function (pkg) { return ST.applyStyle(pkg, nameNow(), r1, { locked: false }); }, '고른 칸(' + rangeText() + ')은 보호해도 고칠 수 있습니다'); });
       add2('고른 칸 다시 잠그기', function () { run('잠그기', function (pkg) { return ST.applyStyle(pkg, nameNow(), r1, { locked: true }); }, '고른 칸(' + rangeText() + ')을 잠갔습니다'); });
       body.appendChild(g2);
+      body.appendChild(el('div', 'sxu-l', '통합 문서 구조 보호(암호 없이) — 시트를 더하거나 지우거나 이름·순서를 바꾸지 못하게 합니다'));
+      var g3 = el('div', 'sxu-g');
+      function add3(text, fn) { var b = el('button', 'sxu-b big', text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g3.appendChild(b); }
+      add3('문서 구조 보호하기', function () { S().ctx.confirm('문서 구조를 보호하시겠습니까?', '암호 없이 보호합니다. 시트 추가·삭제·이름 바꾸기·옮기기가 막히고(엑셀에서도 같습니다), 「문서 구조 보호 풀기」로 언제든 풀 수 있습니다. 이 앱은 암호를 입력하거나 걸지 않습니다.', '보호하기', function () { run('문서 구조 보호', function (pkg) { return ST.setWbProtect(pkg, true); }, '문서 구조를 보호했습니다'); }, { cancelLabel: '취소' }); });
+      add3('문서 구조 보호 풀기', function () { run('문서 구조 보호 풀기', function (pkg) { return ST.setWbProtect(pkg, false); }, '문서 구조 보호를 풀었습니다'); });
+      body.appendChild(g3);
       body.appendChild(el('div', 'so-sheet-note', '그림·차트·메모·표가 든 시트는 복사할 수 없습니다. 시트 보호는 엑셀에서 열었을 때 적용되며, 암호가 걸린 시트의 보호는 이 앱에서 풀 수 없습니다.'));
       S().ctx.sheet({ title: '시트 복사·탭 색·보호', body: body, buttons: [{ label: '닫기' }], wide: true });
     }

@@ -1153,6 +1153,8 @@
             else if (v0.k === 'n') nv = { k: 'n', v: Number((v0.v + step * i).toPrecision(15)) };
             else if (v0.k === 's') nv = nextSeq(v0, i, step) || v0;      // 이어 갈 규칙이 없는 글자는 그대로 복사
             else nv = v0;
+            var orow = getRow(sd, p.r, false), oc = orow && getCell(orow, p.c, false), ov = oc ? cellVal(oc, sst) : null;
+            if (nv && ov && !ov.f && ov.k === nv.k && ov.v === nv.v) continue;      // 이미 같은 값이면 채운 칸으로 세지 않는다(안내 숫자가 실제와 맞도록)
             if (!nv) { putCell(sd, p.r, p.c, function (ref) { return '<c r="' + ref + '"' + (stl != null ? ' s="' + stl + '"' : '') + '/>'; }); continue; }
             if (nv.k === 'b' || nv.k === 'e') { putCell(sd, p.r, p.c, function (ref) { return c0.raw.replace(/\sr="[A-Z]+\d+"/, ' r="' + ref + '"'); }); n++; continue; }
             putCell(sd, p.r, p.c, function (ref) { return mkCellXml(ref, stl, nv); }); n++;
@@ -1634,7 +1636,158 @@
     });
   }
 
+  // ============================== v10.9 2회차: 선택하여 붙여넣기(서식만·행열 바꿔·다른 시트로) · 표로 서식 · 통합 문서 보호 ==============================
+  // mode: 'all'(수식·값·서식, 다른 시트로도) · 'values'(값만, 받는 칸 서식 유지) · 'format'(서식만) · 'transpose'(행과 열을 바꿔 — 값과 서식, 수식은 계산된 값으로)
+  function pasteSpecial(pkg, srcName, src, dstName, dstR0, dstC0, mode) {
+    return wbInfo(pkg).then(function (info) {
+      var S0 = null, T0 = null; info && info.sheets.forEach(function (s) { if (sameName(s.name, srcName)) S0 = s; if (sameName(s.name, dstName)) T0 = s; });
+      if (!S0 || !S0.path || !T0 || !T0.path) return { err: WHY.sheet };
+      var same = S0.path === T0.path;
+      return Promise.all([pkg.read(S0.path), same ? Promise.resolve(null) : pkg.read(T0.path)]).then(function (xs) {
+        var sx = expandShared(xs[0], S0.name), tx = same ? sx : expandShared(xs[1], T0.name);
+        if (sx.err || tx.err) return { err: WHY.shared };
+        var nr = src.r1 - src.r0 + 1, nc = src.c1 - src.c0 + 1, tr = mode === 'transpose' ? nc : nr, tc = mode === 'transpose' ? nr : nc;
+        if (dstR0 + tr - 1 > MAXR || dstC0 + tc - 1 > MAXC) return { err: '붙일 자리가 시트의 끝을 넘습니다.' };
+        if (hitMerge(mergesOf(sx.xml), src.r0, src.c0, src.r1, src.c1) || hitMerge(mergesOf(tx.xml), dstR0, dstC0, dstR0 + tr - 1, dstC0 + tc - 1)) return { err: '합친 칸이 걸려 있어 이 방식으로는 붙일 수 없습니다. 칸 합치기를 풀거나 「수정 요청」으로 맡겨 주십시오.' };
+        var sd = parseSheet(sx.xml), td = same ? sd : parseSheet(tx.xml); if (!sd || !td) return { err: WHY.sheet };
+        var snap = [], i, j, err = null;
+        for (i = 0; i < nr; i++) { var srow = getRow(sd, src.r0 + i, false); snap.push([]); for (j = 0; j < nc; j++) { var sc = srow && getCell(srow, src.c0 + j, false); snap[i].push(sc ? sc.raw : null); } }
+        for (i = 0; i < nr && !err; i++) for (j = 0; j < nc; j++) if (snap[i][j] && /<f\b[^>]*\st="(?:array|dataTable)"|\scm="|\svm="/.test(snap[i][j])) { err = '배열 수식이나 특수한 칸이 들어 있어 붙일 수 없습니다. 「수정 요청」으로 맡겨 주십시오.'; break; }
+        if (err) return { err: err };
+        var n = 0;
+        function dropAt(r, c) { var row = getRow(td, r, false); if (!row) return; var o = getCell(row, c, false); if (o) row.cells.splice(row.cells.indexOf(o), 1); }
+        function toValue(raw) {
+          var o = raw.replace(/<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>/g, '');
+          if (/\st="str"/.test(o)) o = o.replace(/\st="str"/, ' t="inlineStr"').replace(/<v>([^<]*)<\/v>/, '<is><t xml:space="preserve">$1</t></is>');
+          return o;
+        }
+        for (i = 0; i < nr && !err; i++) for (j = 0; j < nc && !err; j++) {
+          var raw = snap[i][j], r = mode === 'transpose' ? dstR0 + j : dstR0 + i, c = mode === 'transpose' ? dstC0 + i : dstC0 + j;
+          var drow = getRow(td, r, true), old = getCell(drow, c, false), oldS = old ? attrOf(openTagOfCell(old.raw), 's') : null;
+          if (mode === 'format') {
+            var s = raw ? attrOf(openTagOfCell(raw), 's') : null;
+            if (old) { var ot = openTagOfCell(old.raw); old.raw = (s != null ? setAttr(ot, 's', s) : delAttr(ot, 's')) + old.raw.slice(ot.length); n++; }
+            else if (s != null) { putCell(td, r, c, function (ref) { return '<c r="' + ref + '" s="' + s + '"/>'; }); n++; }
+            continue;
+          }
+          if (!raw) { if (old) { if (mode === 'values' && oldS != null) old.raw = '<c r="' + colName(c) + r + '" s="' + oldS + '"/>'; else dropAt(r, c); } continue; }
+          var nraw = raw;
+          if (mode === 'values') { nraw = toValue(raw); var ot2 = openTagOfCell(nraw); nraw = (oldS != null ? setAttr(ot2, 's', oldS) : delAttr(ot2, 's')) + nraw.slice(ot2.length); }
+          else if (mode === 'transpose') nraw = toValue(raw);
+          else {
+            var f = /<f\b([^>]*)>([^<]*)<\/f>/.exec(raw);
+            if (f) {
+              var trf = translateFormula(unescX(f[2]), S0.name, dstR0 - src.r0, dstC0 - src.c0); if (trf.err) { err = '붙일 자리가 시트 범위를 벗어나는 수식이 있습니다.'; break; }
+              nraw = raw.replace(/<f\b([^>]*)>([^<]*)<\/f>/, function (all, at) { return '<f' + at + '>' + escX(trf.f) + '</f>'; }).replace(/<v>[^<]*<\/v>/, '').replace(/\st="[^"]*"/, '');
+            }
+          }
+          var keep = nraw; putCell(td, r, c, function (ref) { return keep.replace(/^(<c\b[^>]*?\sr=")[A-Z]+\d+(")/, function (m, x, y) { return x + ref + y; }); }); n++;
+        }
+        if (err) return { err: err };
+        var out = serializeSheet(td); pkg.write(T0.path, setDimension(out, dimensionOf(parseSheet(out))));
+        return { ok: true, n: n, nr: tr, nc: tc };
+      });
+    });
+  }
+
+  // ---- 표로 서식: 진짜 엑셀 표(줄무늬 표 스타일 + 머리 줄 필터) + 앱 화면에서도 보이도록 같은 색을 칸 서식으로 함께 넣는다 ----
+  var TBL_PRESETS = {
+    blue: { name: '파랑', style: 'TableStyleMedium2', hdr: '#4472C4', band: '#D9E1F2' }, orange: { name: '주황', style: 'TableStyleMedium3', hdr: '#ED7D31', band: '#FBE5D6' },
+    gray: { name: '회색', style: 'TableStyleMedium4', hdr: '#7F7F7F', band: '#EDEDED' }, gold: { name: '노랑', style: 'TableStyleMedium5', hdr: '#BF9000', band: '#FFF2CC' },
+    sky: { name: '하늘', style: 'TableStyleMedium6', hdr: '#5B9BD5', band: '#DDEBF7' }, green: { name: '초록', style: 'TableStyleMedium7', hdr: '#548235', band: '#E2EFDA' }
+  };
+  function tableFormat(pkg, sheetName, rng, key) {
+    var pre = TBL_PRESETS[key]; if (!pre) return Promise.resolve({ err: '알 수 없는 표 스타일입니다.' });
+    return wbInfo(pkg).then(function (info) {
+      var tgt = null; info && info.sheets.forEach(function (s) { if (sameName(s.name, sheetName)) tgt = s; });
+      if (!tgt || !tgt.path) return { err: WHY.sheet };
+      if (rng.r1 <= rng.r0) return { err: '머리 줄과 자료 줄이 적어도 한 줄씩 있어야 합니다. 「범위」로 표 전체를 고르십시오.' };
+      if (rng.c1 - rng.c0 + 1 > 64 || (rng.r1 - rng.r0 + 1) * (rng.c1 - rng.c0 + 1) > 200000) return { err: '너무 큰 범위입니다(64열·20만 칸 이하).' };
+      return Promise.all([pkg.read(tgt.path), readSst(pkg), relsOf(pkg, tgt.path), pkg.read('xl/styles.xml'), pkg.read('[Content_Types].xml')]).then(function (a) {
+        var xml = a[0], sst = a[1], rl = a[2], stx = a[3], ct = a[4];
+        if (!stx || !ct) return { err: '서식 정보를 찾지 못했습니다.' };
+        if (/<autoFilter\b/.test(xml)) return { err: '이 시트에는 이미 필터가 걸려 있어 표로 만들 수 없습니다. 먼저 필터를 지워 주십시오.' };
+        if (hitMerge(mergesOf(xml), rng.r0, rng.c0, rng.r1, rng.c1)) return { err: '합친 칸이 걸려 있어 표로 만들 수 없습니다.' };
+        var ex = expandShared(xml, tgt.name); if (ex.err) return { err: WHY.shared };
+        var sd = parseSheet(ex.xml); if (!sd) return { err: WHY.sheet };
+        var st = new Styles(stx); if (!st.hasAll) return { err: '이 문서의 서식 구조가 특이해서 표로 만들 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+        var ref = colName(rng.c0) + rng.r0 + ':' + colName(rng.c1) + rng.r1;
+        var existing = pkg.list().filter(function (p) { return /^xl\/tables\/table\d+\.xml$/.test(p); });
+        return Promise.all(existing.map(function (p) { return pkg.read(p); })).then(function (tx) {
+          var mxId = 0, names = {}, mine = rl.tags.filter(function (t) { return t.type === 'table'; }).map(function (t) { return resolvePath(tgt.path, t.target); }), clash = false;
+          tx.forEach(function (t, k) {
+            var id = +(attrOf(/<table\b[^>]*>/.exec(t)[0], 'id') || 0); mxId = Math.max(mxId, id); names[(attrOf(/<table\b[^>]*>/.exec(t)[0], 'displayName') || '').toLowerCase()] = 1;
+            if (mine.indexOf(existing[k]) >= 0) { var rf = rangeParts(attrOf(/<table\b[^>]*>/.exec(t)[0], 'ref') || ''); if (rf && !(rf.r1 < rng.r0 || rf.r0 > rng.r1 || rf.c1 < rng.c0 || rf.c0 > rng.c1)) clash = true; }
+          });
+          if (clash) return { err: '고른 범위에 이미 표가 있습니다.' };
+          var mxF = 0; existing.forEach(function (p) { mxF = Math.max(mxF, +/(\d+)\.xml$/.exec(p)[1]); });
+          var num = Math.max(mxId, mxF) + 1, tname = 'Table' + num; while (names[tname.toLowerCase()]) { num++; tname = 'Table' + num; }
+          // 머리 줄: 칸마다 글자여야 하고 서로 달라야 한다
+          var hrow = getRow(sd, rng.r0, true), cols = [], seen = {};
+          for (var c = rng.c0; c <= rng.c1; c++) {
+            var hc = getCell(hrow, c, false), v = cellVal(hc, sst), txt = v.k === 'z' || v.v == null ? '' : String(v.v);
+            if (!txt.trim()) txt = '열' + (c - rng.c0 + 1);
+            var base = txt, k2 = 2; while (seen[txt.toLowerCase()]) { txt = base + k2; k2++; }
+            seen[txt.toLowerCase()] = 1; cols.push(txt);
+            var isText = hc && v.k === 's' && !v.f && txt === base && (attrOf(openTagOfCell(hc.raw), 't') === 's' || attrOf(openTagOfCell(hc.raw), 't') === 'inlineStr');
+            if (!isText) { var s0 = hc ? attrOf(openTagOfCell(hc.raw), 's') : null; putCell(sd, rng.r0, c, function (rf2) { return '<c r="' + rf2 + '"' + (s0 != null ? ' s="' + s0 + '"' : '') + ' t="inlineStr"><is><t xml:space="preserve">' + escX(txt) + '</t></is></c>'; }); }
+          }
+          // 칸 서식(머리 줄 색·글자, 홀수 자료 줄 색)
+          for (var r = rng.r0; r <= rng.r1; r++) {
+            var row = getRow(sd, r, true), ch = r === rng.r0 ? { bg: pre.hdr, color: '#FFFFFF', bold: true } : ((r - rng.r0) % 2 === 1 ? { bg: pre.band } : null);
+            if (!ch) continue;
+            for (var cc = rng.c0; cc <= rng.c1; cc++) { var cell = getCell(row, cc, true); setCellAttr(cell, 's', String(st.derive(cellStyleOf(cell.raw), ch))); }
+          }
+          var out = serializeSheet(sd); out = setDimension(out, dimensionOf(parseSheet(out)));
+          if (!/<worksheet\b[^>]*\sxmlns:r="/.test(out)) out = out.replace(/<worksheet\b/, '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"');
+          var rtxt = rl.xml || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>', mxid = 0;
+          (rtxt.match(/\sId="rId(\d+)"/g) || []).forEach(function (t) { mxid = Math.max(mxid, +/(\d+)/.exec(t)[1]); });
+          var rid = 'rId' + (mxid + 1), tpath = 'xl/tables/table' + (mxF + 1) + '.xml';
+          while (pkg.list().indexOf(tpath) >= 0) tpath = 'xl/tables/table' + (+/(\d+)\.xml$/.exec(tpath)[1] + 1) + '.xml';
+          rtxt = rtxt.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/' + tpath.replace(/^xl\/tables\//, '') + '"/></Relationships>');
+          var tp = /<tableParts\b[^>]*?count="(\d+)"[^>]*>/.exec(out);
+          if (tp) out = out.replace(tp[0], tp[0].replace(/count="\d+"/, 'count="' + (+tp[1] + 1) + '"')).replace('</tableParts>', '<tablePart r:id="' + rid + '"/></tableParts>');
+          else out = insertWsElement(out, 'tableParts', '<tableParts count="1"><tablePart r:id="' + rid + '"/></tableParts>');
+          var tbl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="' + num + '" name="' + tname + '" displayName="' + tname + '" ref="' + ref + '" totalsRowShown="0"><autoFilter ref="' + ref + '"/><tableColumns count="' + cols.length + '">' +
+            cols.map(function (t, i) { return '<tableColumn id="' + (i + 1) + '" name="' + escX(t) + '"/>'; }).join('') + '</tableColumns><tableStyleInfo name="' + pre.style + '" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>';
+          pkg.write(tgt.path, out); pkg.write('xl/styles.xml', st.serialize()); pkg.write(rl.path, rtxt); pkg.write(tpath, tbl);
+          pkg.write('[Content_Types].xml', ct.replace('</Types>', '<Override PartName="/' + tpath + '" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/></Types>'));
+          return { ok: true, ref: ref, name: tname };
+        });
+      });
+    });
+  }
+
+  // ---- 통합 문서 구조 보호(암호 없이): 시트 추가·삭제·이름 바꾸기·옮기기를 막는다 ----
+  function readWbProtect(wbxml) {
+    var m = /<workbookProtection\b[^>]*?\/>/.exec(wbxml || ''); if (!m) return { on: false, pw: false };
+    return { on: /\slockStructure="(?:1|true)"/.test(m[0]), pw: /\s(?:workbookPassword|workbookHashValue|workbookAlgorithmName|workbookSaltValue)=/.test(m[0]) };
+  }
+  function setWbProtect(pkg, on) {
+    return pkg.read('xl/workbook.xml').then(function (wb) {
+      if (!wb) return { err: '통합 문서 정보를 읽지 못했습니다.' };
+      var cur = readWbProtect(wb), m = /<workbookProtection\b[^>]*?\/>/.exec(wb);
+      if (on) {
+        if (cur.on) return { err: '이미 구조가 보호된 문서입니다.' };
+        if (m) wb = wb.replace(m[0], setAttr(m[0], 'lockStructure', '1'));
+        else { var tag = '<workbookProtection lockStructure="1"/>', bv = /<bookViews\b/.exec(wb), sh = /<sheets\b/.exec(wb); var at = bv ? bv.index : (sh ? sh.index : -1); if (at < 0) return { err: '통합 문서 구조가 특이해서 보호할 수 없습니다.' }; wb = wb.slice(0, at) + tag + wb.slice(at); }
+      } else {
+        if (!m || !cur.on) return { err: '구조가 보호되어 있지 않은 문서입니다.' };
+        if (cur.pw) return { err: '암호가 걸린 보호입니다. 암호를 모르면 풀 수 없고, 암호를 입력하는 일은 이 앱에서 하지 않습니다. 엑셀에서 풀어 주십시오.' };
+        var nt = delAttr(m[0], 'lockStructure'); wb = wb.replace(m[0], /\s[A-Za-z]+="/.test(nt) ? nt : '');
+      }
+      pkg.write('xl/workbook.xml', wb); return { ok: true };
+    });
+  }
+  // 구조 보호 중에는 시트를 더하거나 지우거나 이름·순서를 바꾸지 못하게 한다(엑셀과 같은 규칙)
+  var wbGuard = {};
+  [['addSheet', addSheet], ['renameSheet', renameSheet], ['deleteSheet', deleteSheet], ['moveSheet', moveSheet], ['copySheet', copySheet]].forEach(function (p) {
+    var fn = p[1];
+    wbGuard[p[0]] = function (pkg) { var a = arguments; return pkg.read('xl/workbook.xml').then(function (wb) { if (readWbProtect(wb).on) return { err: '통합 문서 구조가 보호되어 있어 시트를 더하거나 지우거나 바꿀 수 없습니다. 「시트」 → 「복사·탭 색·보호」에서 보호를 풀어 주십시오.' }; return fn.apply(null, a); }); };
+  });
+
   var api = {
+    pasteSpecial: pasteSpecial, tableFormat: tableFormat, TBL_PRESETS: TBL_PRESETS, readWbProtect: readWbProtect, setWbProtect: setWbProtect,
     setRowsHidden: setRowsHidden, setColsHidden: setColsHidden, showAllHidden: showAllHidden, setFilter: setFilter, readFilter: readFilter, copyRange: copyRange,
     setCachedValues: setCachedValues, freezePanes: freezePanes, readFreeze: readFreeze, addCond: addCond, clearCond: clearCond, readCond: readCond, setValid: setValid, readValid: readValid,
     colNum: colNum, colName: colName, escX: escX, unescX: unescX, WHY: WHY,
@@ -1648,6 +1801,7 @@
     copySheet: copySheet, setLink: setLink, readLinks: readLinks, setOutline: setOutline, readOutline: readOutline, readSst: readSst, cellVal: cellVal,
     insertWsElement: insertWsElement, addSheet: addSheet, renameSheet: renameSheet, deleteSheet: deleteSheet, moveSheet: moveSheet, checkSheetName: checkSheetName, wbInfo: wbInfo, newWorkbookFiles: newWorkbookFiles
   };
+  api.addSheet = wbGuard.addSheet; api.renameSheet = wbGuard.renameSheet; api.deleteSheet = wbGuard.deleteSheet; api.moveSheet = wbGuard.moveSheet; api.copySheet = wbGuard.copySheet;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.SOXlsxStruct = api;
 })(typeof window !== 'undefined' ? window : globalThis);

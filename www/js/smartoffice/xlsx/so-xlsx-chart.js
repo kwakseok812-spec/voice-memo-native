@@ -164,6 +164,32 @@
     // ---------------- 시트 위 겹쳐 그리기 ----------------
     function colPx(sh, c) { return c <= sh.nc ? sh.colX[c] : sh.colX[sh.nc] + (c - sh.nc) * 84; }
     function rowPx(sh, r) { return r <= sh.nr ? sh.rowY[r] : sh.rowY[sh.nr] + (r - sh.nr) * 30; }
+    function colAt(sh, x) { var c = 0; if (x >= sh.colX[sh.nc]) return sh.nc + Math.floor((x - sh.colX[sh.nc]) / 84); while (c < sh.nc && sh.colX[c + 1] <= x) c++; return c; }
+    function rowAt(sh, y) { var r = 0; if (y >= sh.rowY[sh.nr]) return sh.nr + Math.floor((y - sh.rowY[sh.nr]) / 30); while (r < sh.nr && sh.rowY[r + 1] <= y) r++; return r; }
+    var dragAt = 0;
+    // 차트 끌어서 옮기기: 마우스·펜은 바로, 손가락은 꾹(0.4초) 누른 채로 끈다(그냥 쓸면 시트가 스크롤된다). 놓은 자리의 칸으로 옮긴다
+    function bindDrag(d, ch, b, k) {
+      var st = null;
+      d.addEventListener('touchmove', function (ev) { if (st && st.on && ev.cancelable) ev.preventDefault(); }, { passive: false });
+      d.addEventListener('pointerdown', function (e) {
+        var s = S(); if (!e.isPrimary || !s || !s.editing) return;
+        st = { x: e.clientX, y: e.clientY, on: false, t: null, mouse: e.pointerType === 'mouse', moved: false };
+        if (!st.mouse) st.t = setTimeout(function () { if (st) { st.on = true; d.classList.add('drag'); try { if (navigator.vibrate) navigator.vibrate(15); } catch (x) {} } }, 380);
+        try { d.setPointerCapture(e.pointerId); } catch (x) {}
+      });
+      d.addEventListener('pointermove', function (e) {
+        if (!st || !e.isPrimary) return; var dx = e.clientX - st.x, dy = e.clientY - st.y, mag = Math.abs(dx) + Math.abs(dy);
+        if (!st.on) { if (st.mouse && mag > 6) { st.on = true; d.classList.add('drag'); } else { if (mag > 10) clearTimeout(st.t); return; } }
+        st.moved = true; d.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; if (e.cancelable) e.preventDefault();
+      });
+      function end(e, cancel) {
+        if (!st) return; var s0 = st; st = null; clearTimeout(s0.t); d.classList.remove('drag'); d.style.transform = '';
+        if (!s0.moved) return; dragAt = Date.now(); if (cancel) return;
+        var s = S(); if (!s || !s.sh) return; var k2 = s.scale || 1, nx = Math.max(0, b.x + (e.clientX - s0.x) / k2), ny = Math.max(0, b.y + (e.clientY - s0.y) / k2), c = colAt(s.sh, nx), r = rowAt(s.sh, ny);
+        run('차트 자리', function (pkg) { return moveChart(pkg, S().sh.name, ch.chartPath, { toC: c, toR: r }); }, '차트를 ' + env.addr(r, c) + ' 칸 쪽으로 옮겼습니다(되돌리려면 ↶)');
+      }
+      d.addEventListener('pointerup', function (e) { end(e, false); }); d.addEventListener('pointercancel', function (e) { end(e, true); });
+    }
     function box(ch) {
       var sh = S().sh, a = ch.anchor, x0 = colPx(sh, a.from.c) + a.from.co / EMU, y0 = rowPx(sh, a.from.r) + a.from.ro / EMU, x1, y1;
       if (a.kind === 'twoCellAnchor' && a.to) { x1 = colPx(sh, a.to.c) + a.to.co / EMU; y1 = rowPx(sh, a.to.r) + a.to.ro / EMU; } else if (a.ext) { x1 = x0 + a.ext.cx / EMU; y1 = y0 + a.ext.cy / EMU; } else { x1 = x0 + 480; y1 = y0 + 300; }
@@ -186,7 +212,8 @@
         if (live[i]) d.innerHTML = Ch().svg(live[i], Math.round(b.w * k), Math.round(b.h * k), { bg: true });
         else d.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12.5px;line-height:1.4;color:#667;text-align:center;padding:6px;box-sizing:border-box;background:#fff">' + (ch.info && ch.info.kind ? '차트(' + ch.info.kind + ') — 모양은 엑셀에서 보입니다' : '차트') + '</div>';
         d.setAttribute('role', 'button'); d.setAttribute('aria-label', (ch.name || '차트') + ' — 누르면 고치기·옮기기');
-        d.addEventListener('click', function (e) { e.stopPropagation(); U.tap(i); });
+        d.addEventListener('click', function (e) { e.stopPropagation(); if (Date.now() - dragAt < 500) return; U.tap(i); });
+        bindDrag(d, ch, b, k);
         host.appendChild(d); maxR = Math.max(maxR, (b.x + b.w) * k + 30); maxB = Math.max(maxB, (b.y + b.h) * k + 30);
       });
       var sp = s.el.spacer; if (parseFloat(sp.style.width) < maxR) sp.style.width = Math.round(maxR) + 'px'; if (parseFloat(sp.style.height) < maxB) sp.style.height = Math.round(maxB) + 'px';
@@ -283,7 +310,7 @@
       function add(t, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), t); b.type = 'button'; b.onclick = function () { s.ctx.closeSheet(); setTimeout(fn, 60); }; g.appendChild(b); }
       add('차트 고치기', function () { U.edit(i); }); add('자리·크기', function () { U.place(i); }); add('차트 지우기', function () { U.del(i); }, 'danger');
       body.appendChild(el('div', 'sxu-l', (ch.name || '차트') + ' — ' + (ch.info && ch.info.spec ? Ch().TYPE_NAME[ch.info.spec.type] : (ch.info && ch.info.kind) || '')));
-      body.appendChild(g); body.appendChild(el('div', 'so-sheet-note', ch.info && ch.info.ok ? '차트를 고치면 종류·제목·범례·데이터 범위·색을 바꿀 수 있습니다.' : ch.info.why + ' 자리·크기와 지우기는 할 수 있습니다.'));
+      body.appendChild(g); body.appendChild(el('div', 'so-sheet-note', (ch.info && ch.info.ok ? '차트를 고치면 종류·제목·범례·데이터 범위·색을 바꿀 수 있습니다.' : ch.info.why + ' 자리·크기와 지우기는 할 수 있습니다.') + ' 차트를 꾹 누른 채(마우스는 그냥) 끌어서 놓으면 그 칸으로 옮겨집니다.'));
       s.ctx.sheet({ title: '차트', body: body, buttons: [{ label: '닫기', onClick: function () { sel = -1; U.paint(true); } }], wide: true, onClose: function () { sel = -1; U.paint(true); } });
     };
     U.edit = function (i) {
