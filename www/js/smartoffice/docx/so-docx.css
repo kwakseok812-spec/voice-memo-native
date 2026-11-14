@@ -91,3 +91,8 @@ html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0
 .so-docx-pfx:active{background:var(--glass2,#e5e7f2);transform:scale(.96)}
 .so-docx-pfx.bold{font-weight:900}.so-docx-pfx.it{font-style:italic}.so-docx-pfx.ul{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.so-docx-pfx:active{transform:none}}
+
+/* O-0861 v10.8(3회차): 변경 내용 하나씩 목록 */
+.sdx-chg{padding:8px 0;border-bottom:1px solid var(--glass-b,#ccd)}
+.sdx-chl{font-size:13.5px;line-height:1.45;margin-bottom:6px;word-break:keep-all;color:var(--text,#111)}
+.sdx-chg .sdx-r .sdx-b{min-width:88px}

@@ -974,10 +974,12 @@
   // ---- 그림·표 이름(캡션): 「그림 1」 + 글. 같은 이름표의 번호는 문서 순서대로 다시 매긴다 ----
   STYLE_NAMES.caption = ['caption', '캡션', '그림 설명'];
   STYLE_DEF.caption = '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="35"/><w:qFormat/><w:pPr><w:spacing w:before="60" w:after="200" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>';
-  function renumberSeq(xml, label) {
-    var n = 0, esl = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    var re = new RegExp('<w:fldSimple\\b[^>]*w:instr="\\s*SEQ\\s+' + esl + '(?![A-Za-z0-9_])[^"]*"[^>]*>(?:(?!<\\/w:fldSimple>)[\\s\\S])*?<\\/w:fldSimple>', 'g');
-    return xml.replace(re, function (f) { n++; return f.replace(/(<w:t\b[^>]*>)\d+(<\/w:t>)/, '$1' + n + '$2'); });
+  function renumberSeq(xml, label) {                 // 같은 이름표의 번호(간단한 필드·복잡한 필드 모두)를 문서 순서대로 다시 매긴다
+    var n = 0, esl = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), rpr = '(?:<w:rPr>(?:(?!<\\/w:rPr>)[\\s\\S])*<\\/w:rPr>)?';
+    var simple = '<w:fldSimple\\b[^>]*w:instr="\\s*SEQ\\s+' + esl + '(?![A-Za-z0-9_])[^"]*"[^>]*>(?:(?!<\\/w:fldSimple>)[\\s\\S])*?<\\/w:fldSimple>';
+    var cplx = '<w:instrText\\b[^>]*>\\s*SEQ\\s+' + esl + '(?![A-Za-z0-9_])[^<]*<\\/w:instrText><\\/w:r>\\s*<w:r\\b[^>]*>' + rpr + '<w:fldChar\\b[^>]*w:fldCharType="separate"[^>]*\\/><\\/w:r>\\s*<w:r\\b[^>]*>' + rpr + '<w:t\\b[^>]*>\\d+<\\/w:t>';
+    var re = new RegExp(simple + '|' + cplx, 'g');
+    return xml.replace(re, function (f) { n++; return f.replace(/(<w:t\b[^>]*>)\d+(<\/w:t>)(?![\s\S]*<w:t\b)/, '$1' + n + '$2'); });
   }
   // above=true 면 고른 문단 위에, 아니면 아래에 넣는다(그림은 보통 아래, 표는 위)
   async function addCaption(pkg, xi, label, text, above) {
@@ -986,7 +988,7 @@
     var sid = await ensureStyle(pkg, 'caption'), x = await must(pkg, 'word/document.xml'), p = P(x, xi);
     if (p.anc.indexOf('w:txbxContent') >= 0) return { err: '텍스트 상자 안에는 넣을 수 없습니다.' };
     var kn = above ? '<w:keepNext/>' : '';
-    var par = '<w:p><w:pPr>' + (sid ? '<w:pStyle w:val="' + sid + '"/>' : '') + kn + (sid ? '' : '<w:spacing w:after="200"/>') + '</w:pPr><w:r>' + (sid ? '' : '<w:rPr><w:b/><w:sz w:val="20"/></w:rPr>') + '<w:t xml:space="preserve">' + esc(label) + ' </w:t></w:r><w:fldSimple w:instr=" SEQ ' + esc(label) + ' \\* ARABIC "><w:r><w:rPr><w:noProof/></w:rPr><w:t>1</w:t></w:r></w:fldSimple>' + (text ? '<w:r><w:t xml:space="preserve"> ' + esc(text) + '</w:t></w:r>' : '') + '</w:p>';
+    var par = '<w:p><w:pPr>' + (sid ? '<w:pStyle w:val="' + sid + '"/>' : '') + kn + (sid ? '' : '<w:spacing w:after="200"/>') + '</w:pPr><w:r>' + (sid ? '' : '<w:rPr><w:b/><w:sz w:val="20"/></w:rPr>') + '<w:t xml:space="preserve">' + esc(label) + ' </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> SEQ ' + esc(label) + ' \\* ARABIC </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:rPr><w:noProof/></w:rPr><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>' + (text ? '<w:r><w:t xml:space="preserve"> ' + esc(text) + '</w:t></w:r>' : '') + '</w:p>';
     var at = above ? p.s : p.e;
     if (p.anc.indexOf('w:tc') >= 0) {                               // 표 칸 안의 문단 → 표 전체의 위 또는 아래
       var tbs = ranges(x, 'w:tbl').filter(function (r) { return r.s <= p.s && p.s < r.e; }).sort(function (u, v) { return u.s - v.s; });

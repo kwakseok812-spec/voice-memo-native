@@ -80,6 +80,7 @@
     fld: '쪽 번호·목차 같은 자동 필드가 들어 있어 보기만 됩니다.',
     link: '링크가 들어 있어 보기만 됩니다.',
     rev: '변경 추적(고친 흔적)이 들어 있어 보기만 됩니다.',
+    revonly: '변경 추적 문서입니다. 아래 「검토」에서 변경 내용을 수락·거절한 뒤에 글을 고칠 수 있습니다.',
     note: '각주·주석 표시가 들어 있어 보기만 됩니다.',
     struct: '이 위치의 문단(콘텐츠 컨트롤 등)은 보기만 됩니다.',
     other: '특수 요소가 들어 있어 보기만 됩니다.',
@@ -227,8 +228,8 @@
 
   // document.xml 문자열 전체를 분석: { paras:[{s,e,a,editable,reason,text}], global: 사유|null }
   function analyzeDoc(xml, settingsXml) {
-    var g = null;
-    if (/<w:(ins|del|moveFrom|moveTo)[\s>\/]/.test(xml) || (settingsXml && /<w:trackRevisions[\s\/>]/.test(settingsXml))) g = '변경 추적(고친 흔적)이 있는 문서라 보기만 됩니다.';
+    var g = null, revOnly = false;
+    if (/<w:(ins|del|moveFrom|moveTo)[\s>\/]/.test(xml) || (settingsXml && /<w:trackRevisions[\s\/>]/.test(settingsXml))) { if (LOOSE && window.SODocxStruct && window.SODocxUI) revOnly = true; else g = '변경 추적(고친 흔적)이 있는 문서라 보기만 됩니다.'; }   // 편집 보강이 켜져 있으면 「검토」(수락·거절)만 열어 준다
     else if (settingsXml && /<w:documentProtection[^>]*w:enforcement\s*=\s*["'](1|true|on)["']/.test(settingsXml)) g = '편집이 제한(보호)된 문서라 보기만 됩니다.';
     else if (/<w:altChunk[\s\/>]/.test(xml)) g = '다른 문서가 끼워진(altChunk) 문서라 보기만 됩니다.';
     var raw = scanParagraphs(xml), paras = [];
@@ -237,9 +238,10 @@
       var str = xml.slice(p.s, p.e), a = analyze(str), reason = a.reason;
       var struct = p.anc.some(function (n) { return !OK_ANC[n]; });
       if (!reason && struct) reason = 'struct';
+      if (revOnly && !reason) reason = 'revonly';
       paras.push({ s: p.s, e: p.e, a: a, text: a.text, norm: norm(a.text), reason: reason, editable: !reason, mixed: mixedFormat(a) });
     });
-    return { paras: paras, global: g };
+    return { paras: paras, global: g, revOnly: revOnly };
   }
   function mixedFormat(a) { var seen = {}, n = 0; a.runs.forEach(function (r) { if (r.text && !seen[r.rpr]) { seen[r.rpr] = 1; n++; } }); return n > 1; }
 
@@ -463,6 +465,18 @@
       var q = S.doc.paras[snap.xi]; if (q && q.editable && q.r) openSheet(q.r, snap.xi, { a: snap.a, b: snap.b });
     });
   }
+  // 문단 고치기 시트의 글칸에 기호·날짜를 커서 자리에 넣는다
+  function symInsert(ta) {
+    var ST = window.SODocxStruct, body = document.createElement('div'); body.className = 'sdx';
+    function put(s) { var a = ta.selectionStart == null ? ta.value.length : ta.selectionStart, b = ta.selectionEnd == null ? a : ta.selectionEnd; ta.value = ta.value.slice(0, a) + s + ta.value.slice(b); var p = a + s.length; try { ta.setSelectionRange(p, p); } catch (e) {} ctxRef.toast((window.SOffice && window.SOffice.josa ? window.SOffice.josa('「' + s + '」', '을') : '「' + s + '」을') + ' 넣었습니다', 1400); }
+    function grp(label, items) {
+      var l = document.createElement('div'); l.className = 'sdx-l'; l.textContent = label; body.appendChild(l);
+      var row = document.createElement('div'); row.className = 'sdx-r'; body.appendChild(row);
+      items.forEach(function (s) { var b = document.createElement('button'); b.type = 'button'; b.className = 'sdx-b'; b.textContent = s; b.onclick = function () { put(s); }; row.appendChild(b); });
+    }
+    ST.SYMBOLS.forEach(function (g) { grp(g[0], g[1]); }); grp('날짜·시각(지금)', ST.dateChoices());
+    ctxRef.sheet({ title: '기호·날짜 넣기 — 글칸의 커서 자리에', body: body, buttons: [{ label: '닫기' }], wide: true, keep: true });
+  }
   function pfSheet(title, groups) {
     var body = document.createElement('div'); body.className = 'sdx';
     groups.forEach(function (g) {
@@ -480,6 +494,7 @@
     ['select', 'keyup', 'mouseup', 'touchend', 'blur'].forEach(function (ev) { ta.addEventListener(ev, function () { setTimeout(rec, ev === 'blur' ? 0 : 30); }); });
     ta.addEventListener('input', function () { if (S.psel && S.psel.xi === xi) { S.psel = null; paint(); } });
     function add(label, cls, fn) { var b = document.createElement('button'); b.type = 'button'; b.className = 'so-docx-pfx' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('pointerdown', function (e) { e.preventDefault(); }); b.onclick = function () { if (getComposing()) { try { ta.blur(); } catch (x) {} setTimeout(fn, 80); } else fn(); }; fr.appendChild(b); }
+    add('기호', '', function () { symInsert(ta); });
     add('굵게', 'bold', function () { rec(); partialApply({ bold: true }, '고른 글자를 굵게 했습니다'); });
     add('기울임', 'it', function () { rec(); partialApply({ italic: true }, '고른 글자를 기울였습니다'); });
     add('밑줄', 'ul', function () { rec(); partialApply({ underline: true }, '고른 글자에 밑줄을 넣었습니다'); });
@@ -682,6 +697,7 @@
       editText: function (xi) { var q = S.doc.paras[xi]; if (q && q.editable && q.r) openSheet(q.r, xi); else note(REASON[q && q.reason] || REASON.nomatch, 3800); },
       readNotes: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readNotes(rwPkg(z), kind); }); },
       readHF: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readHF(rwPkg(z), kind); }); },
+      peek: function (fn) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return fn(rwPkg(z)); }); },
       replaceAll: replaceAll, toggleRange: function () { S.rangeMode = !S.rangeMode; if (ui) ui.refresh(); }
     });
     if (!bar) { bar = document.createElement('div'); bar.className = 'sdx-bar'; (ctxRef.body.parentNode || document.body).appendChild(bar); }
@@ -818,6 +834,7 @@
           if (p.r) { p.r._soX = i; if (p.editable) { p.r.classList.add('so-docx-ok'); nEdit++; } }
         });
         S.nEdit = nEdit; S.exact = al.exact;
+        S.revOnly = !!doc.revOnly;
         if (doc.global) S.disabled = doc.global;
         else if (!nEdit && !structOn()) S.disabled = '글을 고칠 수 있는 문단이 없습니다.';
         S.ready = true;
