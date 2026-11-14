@@ -63,6 +63,7 @@
   var SO_HWP_TOOLS = 'on';                  // 한글 표·그림·글자 색·새 문서 단추 — 'off' = 예전 한글 도구줄
   var SO_XLSX_TOOLS = 'on';                 // 엑셀 줄·칸·서식·시트·계산·새 문서 — 'off' = 예전 엑셀 화면(값 고치기만)
   var SO_PPTX_TOOLS = 'on';                 // 파워포인트 슬라이드·도형·그림·표·노트·쇼·새 문서 — 'off' = 예전 PPT 화면(글자 고치기만)
+  var SO_DOCX_TOOLS = 'on';                 // 워드 문단·스타일·서식·목록·표·그림·머리글·바꾸기·새 문서 — 'off' = 예전 워드 화면(글자 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
@@ -577,6 +578,7 @@
     if (k === 'pdf') return SO_PDF_PAGES === 'on';
     if (k === 'xlsx') return SO_XLSX_TOOLS === 'on';
     if (k === 'pptx') return SO_PPTX_TOOLS === 'on';
+    if (k === 'docx') return SO_DOCX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
     return true;
   }
@@ -652,7 +654,8 @@
   var NEW_DOCS = [
     { id: 'hwp', chip: '한글', label: '새 한글 문서', ext: 'hwp', url: 'vendor/so/templates/blank.hwp', mime: 'application/x-hwp', flag: 'hwp' },
     { id: 'xlsx', chip: '엑셀', label: '새 엑셀 문서', ext: 'xlsx', gen: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', flag: 'xlsx' },     // 빈 문서는 코드가 만든다(작성자 정보 없음)
-    { id: 'pptx', chip: 'PPT', label: '새 PPT 문서', ext: 'pptx', gen: 'pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', flag: 'pptx' }
+    { id: 'pptx', chip: 'PPT', label: '새 PPT 문서', ext: 'pptx', gen: 'pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', flag: 'pptx' },
+    { id: 'docx', chip: '워드', label: '새 워드 문서', ext: 'docx', gen: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', flag: 'docx' }
   ];
   function newDocList() { return NEW_DOCS.filter(function (d) { return flagOn('newdoc') && flagOn(d.flag) && (d.id !== 'hwp' || SO_HWP_READY === 'on'); }); }
   function renderNewRow() {
@@ -666,7 +669,10 @@
   function newDoc(id) {
     var d = null; newDocList().forEach(function (x) { if (x.id === id) d = x; });
     if (!d) { toast('이 형식의 새 문서는 아직 만들 수 없습니다.', 2800); return false; }
-    var getBlob = d.gen === 'pptx' ? loadScript('vendor/so/docx/jszip.min.js').then(function () { return loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () {
+    var getBlob = d.gen === 'docx' ? loadScript('vendor/so/docx/jszip.min.js').then(function () { return loadScript('js/smartoffice/docx/so-docx-struct.js'); }).then(function () {
+      var z = new global.JSZip(), f = global.SODocxStruct.newDocxFiles(); Object.keys(f).forEach(function (k) { z.file(k, f[k], { createFolders: false }); });
+      return z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: d.mime });
+    }) : d.gen === 'pptx' ? loadScript('vendor/so/docx/jszip.min.js').then(function () { return loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () {
       var z = new global.JSZip(), f = global.SOPptxStruct.newPresentationFiles(); Object.keys(f).forEach(function (k) { z.file(k, f[k], { createFolders: false }); });
       return z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: d.mime });
     }) : d.gen === 'xlsx' ? loadScript('vendor/so/docx/jszip.min.js').then(function () { return loadScript('js/smartoffice/xlsx/so-xlsx-struct.js'); }).then(function () {

@@ -72,9 +72,9 @@
 
 /* ---- O-0861(v10.2) 「＋ 새 문서」 줄 · 아래에서 올라오는 시트 · 「수정 요청」 항목 ---- */
 .so-newrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 2px;padding:2px 4px 2px 6px;font-size:14px}
-.so-new-t{font-weight:800;color:var(--text)}
-.so-new-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.so-newchip{appearance:none;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:999px;min-height:44px;min-width:64px;padding:0 18px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;
+.so-new-t{font-weight:800;color:var(--text);white-space:nowrap}
+.so-new-chips{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0}
+.so-newchip{appearance:none;border:1px solid var(--glass-b);background:var(--glass);color:var(--text);border-radius:999px;min-height:44px;min-width:52px;padding:0 11px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;
   transition:transform .12s ease, background .15s ease}
 .so-newchip:active{transform:scale(.95);background:var(--glass2,rgba(128,128,128,.15))}
 .so-menu .so-menu-fix{margin-top:4px;border-top:1px solid var(--glass-b);border-radius:0 0 12px 12px}
