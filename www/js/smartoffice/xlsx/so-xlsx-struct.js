@@ -1646,7 +1646,7 @@
     setPrintArea: setPrintArea, setPrintTitles: setPrintTitles, setPageSetup: setPageSetup, readPageSetup: readPageSetup, readPrintNames: readPrintNames, setTabColor: setTabColor, readTabColor: readTabColor, readProtect: readProtect, setProtect: setProtect,
     setMemo: setMemo, readMemos: readMemos,
     copySheet: copySheet, setLink: setLink, readLinks: readLinks, setOutline: setOutline, readOutline: readOutline, readSst: readSst, cellVal: cellVal,
-    addSheet: addSheet, renameSheet: renameSheet, deleteSheet: deleteSheet, moveSheet: moveSheet, checkSheetName: checkSheetName, wbInfo: wbInfo, newWorkbookFiles: newWorkbookFiles
+    insertWsElement: insertWsElement, addSheet: addSheet, renameSheet: renameSheet, deleteSheet: deleteSheet, moveSheet: moveSheet, checkSheetName: checkSheetName, wbInfo: wbInfo, newWorkbookFiles: newWorkbookFiles
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.SOXlsxStruct = api;
