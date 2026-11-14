@@ -291,6 +291,9 @@
   try { if (!HOME_BAR_ON) document.documentElement.setAttribute('data-homebar', 'off'); } catch (e) {}
   var HOME_ROW = 'on';        // v9.57: 홈 순서 인사말 → 오늘 한눈에 → [회의 녹음 | 소장 케이 채팅] 한 줄 → 도구 → PC 연결 · 'off' = v9.56 순서(styles.css 끝 v9.57 묶음)
   try { if (HOME_ROW === 'off') document.documentElement.setAttribute('data-homerow', 'off'); } catch (e) {}
+  // v10.1(O-0858) 홈 「코드 K」 줄(두 큰 칸 바로 아래): 폰에 설치된 코드 K 앱을 연다(미니뷰와 같은 방식). 'on' = 폰 앱에서 줄이 보이고 맨 아래 「Claude Code 연결」 줄은 숨김 · 'off' = 줄 없음·「Claude Code 연결」 그대로 = v10.0 홈.
+  //   되돌리는 길: 이 값을 'off' 로 바꿔 새 번호로 낸다(앱 안에서 끄는 길은 따로 없다). 새 권한 0 · 서버 변경 0.
+  var CODEK_TILE = 'on';
   function syncHomeOn() { try { document.documentElement.classList.toggle('home-on', isOpen(homeView)); } catch (e) {} }
   /* v9.4 홈 큰 카드의 인사 한 줄 — 때에 맞는 인사(k-intro.js 의 GREETINGS 목록을 그대로 쓴다).
    *   앱을 켠 뒤 한 번 정하고(시작 인사에 방금 나온 말은 뺀다), 그 뒤로는 시간대(아침 04~11 · 낮 11~17 · 저녁 17~04)가 바뀐 채
@@ -3945,6 +3948,7 @@
   APP_VERSION = 'v9.96';        // v9.96(O-0854): 앱 전반 검토에서 나온 작은 고침 묶음 — 건강 「적어 두었습니다」 잘못 표시·혈당 방식 칩 키움 · 긴 안내 글은 더 오래 · 명함 검색이 끊기면 안내 · 회의록 제목 검색 · 채팅 ＋ 명함 문구 · 글꼴이 첫 화면을 막지 않음 · 폴드 펼침 홈 6칸 · 홈 칸 글씨 11.5px · PC 상태에서 그 자리 연동 암호 창 · 암호 창 설명 문구. 새 단추 없음(검색 칸 1개 제외). 서버·PC 쪽 변경 없음 · versionCode 140
   APP_VERSION = 'v9.99';        // v9.99(O-0854 4차): 명함 등록 자리(홈 스캔 카메라의 「명함」 칸 · 카메라 [사진 불러오기] · 대체 창 「명함」 줄 · ＋ 창은 「사진을 PC로 보내 정리」) · 네이티브 카메라 글 ~습니다 통일 · versionCode 143
   APP_VERSION = 'v10.0';        // v10.0(O-0857): 게임 칸에 「지뢰 피하기」·「카드 정리」(혼자 하는 솔리테어) 추가 — 홈 「게임」 칸 작은 글씨는 「장기·오목 외 2」, 목록 시트에 3줄. 게임 파일은 공개 저장소 main 그대로의 복사본(www/games/minesweeper·solitaire, 인터넷 없이 열림·두던 판 이어짐). 게임이 열어 둔 쪽지(새 판 고르기)는 뒤로 가기가 먼저 닫음(games.js back() 한 줄, 장기·오목 동작 그대로). 서버·SQL·자바·권한 변경 없음 · versionCode 144
+  APP_VERSION = 'v10.1';        // v10.1(O-0858): 홈 두 큰 칸 아래 「코드 K」 줄(폰에 설치된 코드 K 앱 열기 · 없으면 Claude Code 연결 안내 · 회의 녹음 중이면 확인 창 · 스위치 CODEK_TILE) — 서버·SQL·권한 변경 없음 · versionCode 145
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -7632,16 +7636,43 @@
     try { w = window.open(PC_K_SESSION_URL || PC_K_OPEN_URL, '_blank'); } catch (e) {}
     if (!w) toast('Claude 화면을 열지 못했습니다 — 다시 눌러 주십시오.');
   }
-  if ($('btnPcK')) $('btnPcK').addEventListener('click', function () {
+  function showPcKSheet(lead) {
     openSheet('Claude Code 연결',
-      'PC 케이와 대화방(Claude 앱)에서 직접 일을 시키는 곳입니다. PC 화면을 직접 보며 조작하려면 「PC 원격 제어」를 누르십시오.\n' +
+      (lead ? lead + '\n' : '') + 'PC 케이와 대화방(Claude 앱)에서 직접 일을 시키는 곳입니다. PC 화면을 직접 보며 조작하려면 「PC 원격 제어」를 누르십시오.\n' +
       '① Claude 앱이 열리면 새 작업 창은 ✕로 닫아 주십시오.\n' +
       '② Code 대화 목록에서 컴퓨터 표시(초록 점)가 붙은 「' + PC_K_SESSION_TITLE + '」을 고르십시오.\n' +
       '③ 그 대화창에 바로 입력하시면 PC 케이에게 전달됩니다.',
       'Claude 앱 열기', openPcKClaude);
     if (sheetMsg) sheetMsg.classList.add('pck');   // 여러 줄 안내(왼쪽 정렬·줄바꿈 유지·높이 제한 해제)
     if (sheetConfirm) { sheetConfirm.classList.remove('danger'); var _u = sheetConfirm.querySelector('use'); if (_u) _u.setAttribute('href', '#i-chat'); }   // 여는 동작이라 빨간 휴지통 대신
-  });
+  }
+  if ($('btnPcK')) $('btnPcK').addEventListener('click', function () { showPcKSheet(''); });
+  // v10.1(O-0858) 홈 「코드 K」 줄: 설치된 코드 K 열기. 없으면(미설치) 위 「Claude Code 연결」 안내 시트(첫 줄에 코드 K 안내)로. 회의 녹음 중이면 먼저 확인.
+  (function () {
+    var b = $('btnCodek');
+    if (!b) return;
+    var PA = window.PhoneApps;
+    var nat = !!(PA && typeof PA.isNative === 'function' && PA.isNative() && typeof PA.openCodek === 'function');
+    if (CODEK_TILE === 'off' || !nat) return;   // PC·브라우저·옛 화면: 줄은 숨긴 채 「Claude Code 연결」이 그대로
+    b.style.display = '';
+    if ($('btnPcK')) $('btnPcK').style.display = 'none';
+    var busy = false;
+    function go() {
+      b.classList.add('press'); setTimeout(function () { b.classList.remove('press'); }, 420);
+      PA.openCodek({ missing: function () {
+        showPcKSheet('코드 K 앱이 아직 없습니다. 아래에서 Claude 앱으로 대화하세요.\n코드 K는 사무소가 보낸 설치 파일로만 설치됩니다.');
+      } });
+    }
+    b.addEventListener('click', function () {
+      if (busy) return;
+      busy = true; setTimeout(function () { busy = false; }, 700);   // 연타 방지(열기 쪽 잠금과 별도로 확인 창이 두 번 뜨지 않게)
+      if (isRecording) {
+        openSheet('회의 녹음 중입니다', '코드 K를 열면 녹음이 끊기거나 소리가 안 담길 수 있습니다.', '그래도 열기', go, null, null, { positive: true, icon: 'i-check', cancelLabel: '취소' });
+        return;
+      }
+      go();
+    });
+  })();
   // v8.7(O-0173) 홈 「PC 화면」 — 크롬 원격 데스크톱으로 24시간 PC 화면을 직접 보고 조작(대표님 「크롬 원격제어 버튼도 따로」).
   //   폰: ExternalApp.launchApp(com.google.chromeremotedesktop), 없으면 「스토어 열기」 시트 / PC판: remotedesktop.google.com/access 새 탭.
   //   여는 방법은 문서 뷰어 [원격 화면 열기]와 같은 한 곳(docviewer.js editOpenRemote → SmartDocs.openRemote).

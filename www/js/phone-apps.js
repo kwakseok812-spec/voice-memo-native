@@ -32,6 +32,7 @@
   var MINVIEW_DESC = '유튜브 · 광고 없이';
   var MINVIEW_MISSING_DESC = '미니뷰가 없어서 Brave로 열립니다';
   var MINVIEW_PC_DESC = '새 탭으로 유튜브 열기';
+  var CODEK_PKG = 'com.kwak.codek';   // v10.1(O-0858) 코드 K(별개 앱) — 홈 「코드 K」 줄이 첫 화면만 연다. 이 저장소에는 그 앱의 코드·열쇠가 없다(패키지 이름만)
   var ROW_MINVIEW = { id: 'minview', name: '미니뷰', pkg: MINVIEW_PKG, desc: MINVIEW_DESC, minview: true };   // v9.87(O-0794) 기본 첫 줄
   var ROW_BRAVE = { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true };                       // v9.86 까지의 첫 줄 — 지우지 않고 남겨 둔다(YT_MODE='brave' 일 때 init 이 이 줄로 바꿔 끼운다)
   var VIDEO = [
@@ -60,6 +61,7 @@
   function packages() {
     var a = all().filter(function (x) { return x.pkg; }).map(function (x) { return x.pkg; });
     if (a.indexOf(MINVIEW_PKG) < 0) a.unshift(MINVIEW_PKG);
+    if (a.indexOf(CODEK_PKG) < 0) a.push(CODEK_PKG);   // 코드 K 도 허용 목록·매니페스트에는 있고 OTT 시트 줄은 아니다
     return a;
   }
   function storeName(it) { return (it && (it.store || it.name)) || ''; }
@@ -82,7 +84,7 @@
     return bad;
   }
 
-  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, ROW_MINVIEW: ROW_MINVIEW, ROW_BRAVE: ROW_BRAVE, MINVIEW_PKG: MINVIEW_PKG, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
+  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, ROW_MINVIEW: ROW_MINVIEW, ROW_BRAVE: ROW_BRAVE, MINVIEW_PKG: MINVIEW_PKG, CODEK_PKG: CODEK_PKG, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
   if (typeof module !== 'undefined' && module.exports) { module.exports = { PhonePure: PhonePure }; }
   if (typeof document === 'undefined') return;   // node 시험: 화면 부분은 건너뜀
 
@@ -149,6 +151,23 @@
     return true;
   }
 
+  /* 코드 K 열기(v10.1, O-0858): 설치된 코드 K 의 첫 화면을 연다. 결과를 cb.missing(why) 로 알린다 — why: 'not_installed' | 'not_allowed' | 'pc' | 'error'.
+   * 열렸으면 말 없이 끝. 연타 잠금(700ms)은 다른 앱 열기와 같은 것. 스토어 줄은 없다(코드 K 는 사무소가 보낸 설치 파일로만 깔린다). */
+  function openCodek(cb) {
+    var miss = function (why) { try { if (cb && cb.missing) cb.missing(why); } catch (e) {} };
+    if (!tryLock()) return false;
+    if (!isNative()) { miss('pc'); return true; }
+    var EA = plugin();
+    if (!EA || typeof EA.launchApp !== 'function') { miss('not_allowed'); return true; }
+    try {
+      EA.launchApp({ pkg: CODEK_PKG }).then(function (r) {
+        if (r && r.opened) return;
+        miss((r && r.reason) || 'error');
+      }, function () { miss('error'); });
+    } catch (e) { miss('error'); }
+    return true;
+  }
+
   /* OTT 5줄 시트 — 채팅 ＋ 고르기 창(atm-sheet)과 같은 틀(뒤로 가기로 닫힘은 app.js goBack 의 .shin-sheet 처리가 맡는다) */
   function openVideoSheet() {
     if (!ctx) return;
@@ -184,7 +203,7 @@
   }
 
   global.PhoneApps = {
-    init: init, openApp: openApp, openMinview: openMinview, openVideoSheet: openVideoSheet, tryLock: tryLock, isNative: isNative,
+    init: init, openApp: openApp, openMinview: openMinview, openCodek: openCodek, openVideoSheet: openVideoSheet, tryLock: tryLock, isNative: isNative,
     VIDEO: VIDEO, POINTS: POINTS, PC_DESC: PC_DESC,
     _test: { lastGo: function () { return lastGo; } }
   };

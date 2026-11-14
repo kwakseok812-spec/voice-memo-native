@@ -40,7 +40,8 @@ public class ExternalAppPlugin extends Plugin {
             "com.netflix.mediaclient", "kr.co.captv.pooqV2", "net.cj.cjhv.gs.tving", "com.disney.disneyplus",
             "com.cashwalk.cashwalk", "kr.go.seoul.healthcare", "com.tracerofficial", "kr.co.openit.openrider",
             "com.nbt.moves", "viva.republica.toss", "com.kbstar.kbbank",
-            "com.kwak.tubelab"));   /* v9.87 (O-0794) 미니뷰(별개 앱) — 이 목록 ⇔ 매니페스트 <queries> ⇔ phone-apps.js 가 같아야 한다 */
+            "com.kwak.tubelab",
+            "com.kwak.codek"));   /* v10.1 (O-0858) 코드 K(별개 앱, 스토어 없음) — 홈 「코드 K」 줄 */ /* v9.87 (O-0794) 미니뷰(별개 앱) — 이 목록 ⇔ 매니페스트 <queries> ⇔ phone-apps.js 가 같아야 한다 */
 
     @PluginMethod
     public void launchApp(final PluginCall call) {
