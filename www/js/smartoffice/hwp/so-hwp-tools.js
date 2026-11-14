@@ -23,7 +23,7 @@
 
   // 맥락별 단추 순서(쓰는 빈도 순). 앞에서부터 한 줄에 들어가는 만큼 보이고 나머지는 「더보기」 시트로 간다.
   var ORDER = {
-    text: ['undo', 'bold', 'sizeUp', 'color', 'table', 'pic', 'redo', 'italic', 'underline', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'paraBelow', 'paraAbove', 'paraDel', 'hf', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
+    text: ['undo', 'bold', 'sizeUp', 'color', 'table', 'pic', 'redo', 'italic', 'underline', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'paraBelow', 'paraAbove', 'paraDel', 'hf', 'pbreak', 'pgset', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
     table: ['undo', 'rowBelow', 'colRight', 'rowDel', 'colDel', 'cellMerge', 'bold', 'color', 'rowAbove', 'colLeft', 'cellSplit', 'tableDel', 'redo', 'italic', 'underline', 'sizeUp', 'sizeDown', 'alignL', 'alignC', 'alignR', 'alignJ', 'pic', 'zoomOut', 'zoomIn', 'zoomFit', 'find'],
     pic: ['undo', 'picDel', 'redo', 'zoomOut', 'zoomIn', 'zoomFit']
   };
@@ -84,6 +84,31 @@
       var at = below ? d.getParagraphLength(S, P) : 0, np = below ? P + 1 : P;
       h.executeOperation({ kind: 'snapshot', operationType: 'splitParagraph', operation: function (i) { i.splitParagraph(S, P, at); return { sectionIndex: S, paragraphIndex: np, charOffset: 0 }; } });
       return { ok: true };
+    },
+    // 쪽 나누기(v10.8): 커서 자리에서 문단을 나누고 새 쪽에서 시작(엔진의 강제 쪽 나누기). 표 안에서는 쓰지 않는다
+    pageBreak: function (a) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var t = h.getCursorPosition(); if (inCell(t)) return { ok: false, why: 'intable' };
+      var S = t.sectionIndex, P = t.paragraphIndex, at = t.charOffset || 0;
+      h.executeOperation({ kind: 'snapshot', operationType: 'insertPageBreak', operation: function (i) { i.insertPageBreak(S, P, at); return { sectionIndex: S, paragraphIndex: P + 1, charOffset: 0 }; } });
+      return { ok: true };
+    },
+    // 용지 설정(v10.8): args = { orient:'portrait'|'landscape', size:'A4'|'A3'|'B5'|'Letter', margin:'normal'|'narrow'|'wide' } — 지금 구역(커서가 있는 구역)
+    pageSet: function (a, args) {
+      var h = a.getInputHandler(); if (!h) return { ok: false };
+      var S = h.getCursorPosition().sectionIndex, d = a.wasm, def = d.getPageDef(S); def = typeof def === 'string' ? JSON.parse(def) : def;
+      var U = 7200 / 25.4, SZ = { A4: [210, 297], A3: [297, 420], B5: [176, 250], Letter: [215.9, 279.4] }, MG = { normal: [20, 15, 30, 30, 15, 15], narrow: [10, 10, 10, 10, 5, 5], wide: [25, 20, 40, 40, 15, 15] };
+      if (args.size && SZ[args.size]) { def.width = Math.round(SZ[args.size][0] * U); def.height = Math.round(SZ[args.size][1] * U); }
+      if (args.orient) def.landscape = args.orient === 'landscape';
+      if (args.margin && MG[args.margin]) { var m = MG[args.margin]; def.marginTop = Math.round(m[0] * U); def.marginBottom = Math.round(m[1] * U); def.marginLeft = Math.round(m[2] * U); def.marginRight = Math.round(m[3] * U); def.marginHeader = Math.round(m[4] * U); def.marginFooter = Math.round(m[5] * U); def.marginGutter = 0; }
+      var pos0 = h.getCursorPosition();
+      h.executeOperation({ kind: 'snapshot', operationType: 'setPageDef', operation: function (i) { i.setPageDef(S, def); return pos0; } });
+      return { ok: true, landscape: !!def.landscape };
+    },
+    // 지금 용지 모양(표시용)
+    pageInfo: function (a) {
+      var S = a.getInputHandler().getCursorPosition().sectionIndex, def = a.wasm.getPageDef(S); def = typeof def === 'string' ? JSON.parse(def) : def;
+      return { ok: true, landscape: !!def.landscape, wmm: Math.round(def.width / (7200 / 25.4)), hmm: Math.round(def.height / (7200 / 25.4)) };
     },
     // 문단 지우기: 표·그림 같은 개체가 든 문단은 글만 비운다(개체를 잃지 않게)
     paraDel: function (a) {
@@ -477,6 +502,29 @@
       });
     }
 
+    function pageBreak() {
+      runExt('pageBreak').then(function (r) {
+        if (r && r.ok) { env.markDirty(); toast('커서 자리에서 쪽을 나눴습니다(새 쪽에서 시작)', 2600); T.sync(true); return; }
+        toast(r && r.why === 'intable' ? '표 안에서는 쓸 수 없습니다. 표 밖 글 위에 커서를 두십시오.' : '지금은 쓸 수 없습니다.', 3200);
+      });
+    }
+    function pageSetSheet() {
+      var body = el('div'), st = { orient: null, size: null, margin: null }, info = null;
+      function chips(label, list, key) {
+        var wrap = el('div', 'so-opt'); wrap.appendChild(el('div', 'so-opt-l', label)); var row = el('div', 'so-opt-r');
+        list.forEach(function (o) { var b = el('button', 'so-opt-b', o[1]); b.type = 'button'; b.onclick = function () { st[key] = o[0]; [].slice.call(row.children).forEach(function (x) { x.classList.toggle('on', x === b); }); }; row.appendChild(b); });
+        wrap.appendChild(row); return wrap;
+      }
+      body.appendChild(chips('방향', [['portrait', '세로'], ['landscape', '가로']], 'orient'));
+      body.appendChild(chips('용지 크기', [['A4', 'A4'], ['A3', 'A3'], ['B5', 'B5'], ['Letter', 'Letter']], 'size'));
+      body.appendChild(chips('여백', [['normal', '보통'], ['narrow', '좁게'], ['wide', '넓게']], 'margin'));
+      var lab = el('div', 'so-sheet-note', '고르지 않은 칸은 그대로 둡니다. 커서가 있는 구역에 적용됩니다.'); body.appendChild(lab);
+      runExt('pageInfo').then(function (r) { if (r && r.ok) lab.textContent = '지금 ' + r.wmm + '×' + r.hmm + 'mm ' + (r.landscape ? '가로' : '세로') + '. 고르지 않은 칸은 그대로 둡니다. 커서가 있는 구역에 적용됩니다.'; });
+      env.ctx.sheet({ title: '용지 설정', body: body, wide: true, buttons: [{ label: '취소' }, { label: '적용', primary: true, onClick: function () {
+        if (!st.orient && !st.size && !st.margin) { toast('바꿀 것을 하나 이상 골라 주십시오.', 2600); return false; }
+        setTimeout(function () { runExt('pageSet', st).then(function (r) { if (r && r.ok) { env.markDirty(); T.sync(true); toast('용지 설정을 바꿨습니다. 한컴 한글에서 열어 한 번 확인해 주십시오.', 3400); } else toast('용지 설정을 바꾸지 못했습니다.', 3200); }); }, 60); return true; } }] });
+    }
+
     // ---- 단추 목록 ----
     function run(id, okMsg, danger) {
       return function () {
@@ -507,6 +555,8 @@
       paraAbove: { g: '↑↵', l: '위 문단', run: function () { paraAdd('above'); } },
       paraDel: { g: '문단✕', l: '문단 지우기', run: paraDel },
       hf: { g: '쪽', l: '쪽번호·머리말', run: hfSheet },
+      pbreak: { g: '⤓쪽', l: '쪽 나누기', run: pageBreak },
+      pgset: { g: '▯', l: '용지 설정', run: pageSetSheet },
       rowBelow: { g: '＋줄', l: '줄 추가', run: run('table:insert-row-below', '줄을 하나 더 넣었습니다') },
       rowAbove: { g: '↑줄', l: '위에 추가', run: run('table:insert-row-above', '위에 줄을 하나 넣었습니다') },
       rowDel: { g: '－줄', l: '줄 지우기', run: run('table:delete-row', '줄을 지웠습니다(되돌리려면 취소 단추)') },
