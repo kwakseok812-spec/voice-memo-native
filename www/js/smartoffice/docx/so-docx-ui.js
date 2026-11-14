@@ -250,6 +250,36 @@
         body.appendChild(el('div', 'so-sheet-note', '칸 폭은 표 전체 폭(종이 안)을 그대로 두고 나눕니다. 합쳐진 칸이 있는 표는 줄·칸 넣고 빼기를 막고 「수정 요청」을 안내합니다. 표를 붙일 때는 표 밖 문단을 먼저 고릅니다.'));
       }, false, true);
     }
+
+    // ---------------- 차트(v10.9) ----------------
+    function chartOn() { return !!(ctx().flag && ctx().flag('chart')); }
+    function loadChart() { return ctx().loadScript('js/smartoffice/so-chart.js').then(function () { ctx().loadCss('js/smartoffice/so-chart.css'); return global.SOChart; }); }
+    function chartNew() {
+      var r = need(); if (!r) return;
+      loadChart().then(function (C) {
+        C.openEditor({ ctx: ctx(), title: '차트 넣기', spec: C.sampleFor('col'), mode: 'table', applyLabel: '차트 넣기',
+          note: '숫자를 고쳐 적으면 위의 그림이 바로 바뀝니다. 고른 문단 아래에 글자처럼 들어가고, 워드에서 열어 「데이터 편집」으로도 고칠 수 있습니다.',
+          onApply: function (sp) { env.run('차트', function (pkg) { return ST.addChart(pkg, r.b, sp); }, function (q) { if (q && q.err) { fail(q.err); return; } if (q && q.xi != null) env.select(q.xi, q.xi); toast('차트를 문단 아래에 넣었습니다 — 그 문단을 눌러 「그림」→「차트 고치기」', 3600); }); } });
+      }).catch(function (e) { toast('차트 부품을 불러오지 못했습니다: ' + ((e && e.message) || e), 4200); });
+    }
+    function chartEdit() {
+      var r = need(); if (!r) return;
+      loadChart().then(function (C) { return env.peek(function (pkg) { return ST.readChart(pkg, r.a); }).then(function (x) { return { C: C, x: x }; }); }).then(function (z) {
+        var C = z.C, x = z.x; if (x.err) { toast(x.err, 3600); return; }
+        if (!x.info.ok) { fail(x.info.why); return; }
+        function openIt() {
+          C.openEditor({ ctx: ctx(), title: '차트 고치기', spec: x.info.spec, mode: 'table', applyLabel: '적용', note: '고치면 파일 안의 차트와 딸린 데이터가 함께 바뀝니다.',
+            onDelete: function () { setTimeout(chartDel, 60); return true; },
+            onApply: function (sp) { env.run('차트 고치기', function (pkg) { return ST.updateChart(pkg, r.a, sp); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('차트를 고쳤습니다', 2400); }); } });
+        }
+        if (!x.mine) ctx().confirm('차트를 고치기 전에', '이 차트는 이 앱에서 만든 것이 아니라서, 고치면 글꼴·그림자 같은 세부 서식이 기본 모양으로 정리될 수 있습니다. 숫자·제목·색·종류는 그대로 남습니다. 계속할까요?', '계속', openIt, { cancelLabel: '취소' });
+        else openIt();
+      }).catch(function (e) { toast('차트를 열지 못했습니다: ' + ((e && e.message) || e), 4200); });
+    }
+    function chartDel() {
+      var r = need(); if (!r) return;
+      env.run('차트 지우기', function (pkg) { return ST.removeChart(pkg, r.a); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('차트를 지웠습니다(되돌리려면 ↶)', 2600); });
+    }
     // ---------------- 그림 ----------------
     function pickPicture() {
       var r = need(); if (!r) return;
@@ -276,6 +306,7 @@
       sheet('그림', function (body) {
         var g = grid(body);
         btn(g, '그림 넣기(사진·파일)', pickPicture, 'big');
+        if (chartOn()) { btn(g, '차트 넣기', chartNew, 'big'); btn(g, '차트 고치기', chartEdit, 'big'); btn(g, '차트 지우기', chartDel, 'big danger'); }
         btn(g, '그림 지우기', function () { var r = need(); if (!r) return; op('그림 지우기', function (x) { return ST.removePicture(x, r.a); }, '그림을 지웠습니다(되돌리려면 ↶)', true); }, 'big danger');
         btn(g, '크게 ×1.25', function () { var r = need(); if (!r) return; op('그림 크기', function (x) { return ST.scalePicture(x, r.a, 1.25); }, '그림을 키웠습니다', true); }, 'big');
         btn(g, '작게 ×0.8', function () { var r = need(); if (!r) return; op('그림 크기', function (x) { return ST.scalePicture(x, r.a, 0.8); }, '그림을 줄였습니다', true); }, 'big');

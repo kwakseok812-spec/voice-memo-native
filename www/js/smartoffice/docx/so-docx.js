@@ -888,8 +888,27 @@
         if (doc.global) S.disabled = doc.global;
         else if (!nEdit && !structOn()) S.disabled = '글을 고칠 수 있는 문단이 없습니다.';
         S.ready = true;
+        paintCharts();
       });
     });
+  }
+  // v10.9: 미리보기 부품은 차트를 못 그려서 빈 자리만 남긴다 → 같은 데이터로 우리가 그려 그 자리에 얹는다(앱 화면 안에서만, 파일에는 안 들어감)
+  function paintCharts() {
+    if (!S || !S.zip || !S.doc || !structOn() || !ctxRef.flag || !ctxRef.flag('chart')) return;
+    var zip = S.zip, doc = S.doc;
+    ctxRef.loadScript('js/smartoffice/so-chart.js').then(function () {
+      ctxRef.loadCss('js/smartoffice/so-chart.css'); var pk = rwPkg(zip);
+      return window.SODocxStruct.listCharts(pk).then(function (list) { return Promise.all(list.map(function (c) { return pk.read(c.path).then(function (x) { return { c: c, info: x ? window.SOChart.parse(x) : null }; }); })); });
+    }).then(function (arr) {
+      arr.forEach(function (it) {
+        var q = doc.paras[it.c.xi], p = q && q.r, d = p && p.querySelector('div[style*="inline-block"]'); if (!d) return;
+        var old = d.querySelector('.soc-over'); if (old) old.parentNode.removeChild(old);
+        var w = (parseFloat(d.style.width) || 300) * 4 / 3, h = (parseFloat(d.style.height) || 180) * 4 / 3, o = document.createElement('div'); o.className = 'soc-over'; o.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0';
+        if (it.info && it.info.spec) o.innerHTML = window.SOChart.svg(it.info.spec, w, h, { bg: true });
+        else o.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;line-height:1.4;color:#667;text-align:center;padding:6px;box-sizing:border-box;border:1px dashed #99a">차트' + (it.info && it.info.kind ? '(' + it.info.kind + ')' : '') + ' — 모양은 워드에서 보입니다</div>';
+        d.appendChild(o);
+      });
+    }).catch(function () { /* 그림을 못 얹어도 문서는 그대로다 */ });
   }
 
   // ---- 찾기: 화면에 그려진 문단 글 안에서 검색 → 누르면 그 문단으로 가서 잠깐 표시(바꾸기는 없음)

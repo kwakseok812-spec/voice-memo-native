@@ -358,6 +358,7 @@
       var was = sp.type; sp.type = k;
       if (isPie(k) && sp.labels === 'val' && !isPie(was)) { /* 값 그대로 */ }
       if (!isPie(k) && sp.labels === 'pct') sp.labels = 'val';
+      if (k === 'scatter' && table && !sp.cats.some(function (c) { return toNum(c) != null; })) sp.cats = sp.cats.map(function (c, i) { return String(i + 1); });      // 분산형은 가로 값(X)이 숫자여야 한다
       if (table) buildTable();
       paintChips(); paintColors(); drawPrev();
     }

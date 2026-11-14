@@ -1333,6 +1333,82 @@
     return [y + '. ' + m + '. ' + dd + '.', y + '년 ' + m + '월 ' + dd + '일', y + '-' + p2(m) + '-' + p2(dd), m + '월 ' + dd + '일(' + wk + ')', y + '년 ' + m + '월 ' + dd + '일(' + wk + ')', (h < 12 ? '오전 ' : '오후 ') + (h % 12 || 12) + ':' + p2(mi), p2(h) + ':' + p2(mi)];
   }
 
+
+  // ============================== v10.9: 차트 넣기·고치기·지우기 (진짜 차트 + 딸린 통합문서) ==============================
+  function chartRidIn(s) { var m = /<c:chart\b[^>]*?\sr:id="([^"]+)"/.exec(s); return m ? m[1] : null; }
+  function wordPath(target) { if (/^[A-Za-z]+:/.test(target)) return null; var parts = (target.charAt(0) === '/' ? '' : 'word/').concat(target.replace(/^\//, '')).split('/'), out = []; parts.forEach(function (q) { if (q === '..') out.pop(); else if (q && q !== '.') out.push(q); }); return out.join('/'); }
+  function relsOfPart(p) { return p.replace(/([^\/]+)$/, '_rels/$1.rels'); }
+  function relList(x) { return (x || '').match(/<Relationship\b[^>]*?\/?>/g) || []; }
+  function relAttr(t, n) { var m = new RegExp('\\s' + n + '="([^"]*)"').exec(t); return m ? m[1] : null; }
+  function relFromChart(from, target) { var a = from.replace(/[^\/]+$/, '').split('/').filter(Boolean), b = target.split('/'), i = 0; while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++; var o = []; for (var k = a.length - i; k > 0; k--) o.push('..'); return o.concat(b.slice(i)).join('/'); }
+  async function chartAt(pkg, xi) {
+    var xml = await must(pkg, 'word/document.xml'), p = paras(xml)[xi]; if (!p) return { err: '문단을 찾지 못했습니다.' };
+    var rid = chartRidIn(xml.slice(p.s, p.e)); if (!rid) return { err: '이 문단에는 차트가 없습니다.' };
+    var rx = await must(pkg, 'word/_rels/document.xml.rels'), rl = relList(rx).filter(function (t) { return relAttr(t, 'Id') === rid; })[0];
+    if (!rl) return { err: '차트 연결 정보를 찾지 못했습니다.' };
+    var path = wordPath(relAttr(rl, 'Target') || ''); if (!path || (await pkg.read(path)) == null) return { err: '차트 파일을 찾지 못했습니다.' };
+    var cr = relList(await pkg.read(relsOfPart(path))), em = cr.filter(function (t) { return /\/package$/.test(relAttr(t, 'Type') || '') && relAttr(t, 'TargetMode') !== 'External'; })[0];
+    return { xml: xml, p: p, rid: rid, rel: rl, rx: rx, path: path, embed: em ? { rel: em, path: wordPath2(path, relAttr(em, 'Target') || '') } : null };
+  }
+  function wordPath2(base, target) { if (/^[A-Za-z]+:/.test(target)) return null; var parts = target.charAt(0) === '/' ? target.slice(1).split('/') : base.replace(/[^\/]+$/, '').split('/').filter(Boolean).concat(target.split('/')), out = []; parts.forEach(function (q) { if (q === '..') out.pop(); else if (q && q !== '.') out.push(q); }); return out.join('/'); }
+  // 문서 속 차트가 든 문단 목록 → [{xi, rid, path}]  (미리 그리기용)
+  async function listCharts(pkg) {
+    var xml = await must(pkg, 'word/document.xml'), ps = paras(xml), out = [], rx = await pkg.read('word/_rels/document.xml.rels') || '', rls = relList(rx);
+    for (var i = 0; i < ps.length; i++) {
+      var s = xml.slice(ps[i].s, ps[i].e), rid = chartRidIn(s); if (!rid) continue;
+      var rl = rls.filter(function (t) { return relAttr(t, 'Id') === rid; })[0], path = rl ? wordPath(relAttr(rl, 'Target') || '') : null; if (!path) continue;
+      out.push({ xi: i, rid: rid, path: path });
+    }
+    return out;
+  }
+  async function readChart(pkg, xi) {
+    var c = await chartAt(pkg, xi); if (c.err) return c;
+    var info = global.SOChart.parse(await pkg.read(c.path));
+    return { info: info, path: c.path, mine: info.mine };
+  }
+  async function writeChartParts(pkg, cpath, sp, epath) {
+    var C = global.SOChart, ct = await must(pkg, '[Content_Types].xml');
+    pkg.write(cpath, C.chartXml(sp, { embed: 'rId1' }));
+    pkg.write(relsOfPart(cpath), '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + RT + 'package" Target="' + relFromChart(cpath, epath) + '"/></Relationships>');
+    if (ct.indexOf('PartName="/' + cpath + '"') < 0) ct = ct.replace('</Types>', '<Override PartName="/' + cpath + '" ContentType="' + C.CT_CHART + '"/></Types>');
+    if (!/<Default\b[^>]*Extension="xlsx"/i.test(ct)) ct = ct.replace(/(<Types\b[^>]*>)/, '$1<Default Extension="xlsx" ContentType="' + C.CT_XLSX + '"/>');
+    pkg.write('[Content_Types].xml', ct);
+  }
+  function nextIn(pkg, dir, base, ext) { var mx = 0, re = new RegExp('^' + dir.replace(/[.\/]/g, '\\$&') + base + '(\\d+)\\.' + ext + '$'); pkg.list().forEach(function (q) { var m = re.exec(q); if (m) mx = Math.max(mx, +m[1]); }); return mx + 1; }
+  async function addChart(pkg, xi, spec) {
+    var C = global.SOChart, sp = C.defaultRefs(C.clone(spec)); sp.frame = false;
+    var xml = await must(pkg, 'word/document.xml'), ps = paras(xml), p = ps[xi]; if (!p) throw new Error('문단을 찾지 못했습니다');
+    var cn = nextIn(pkg, 'word/charts/', 'chart', 'xml'), cpath = 'word/charts/chart' + cn + '.xml', en = nextIn(pkg, 'word/embeddings/', 'Microsoft_Excel_Sheet', 'xlsx'), epath = 'word/embeddings/Microsoft_Excel_Sheet' + en + '.xlsx';
+    pkg.writeBin(epath, await C.workbookBytes(sp, global.JSZip)); await writeChartParts(pkg, cpath, sp, epath);
+    var rp = 'word/_rels/document.xml.rels', rx = await must(pkg, rp), rid = nextRid(rx);
+    pkg.write(rp, rx.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="' + RT + 'chart" Target="charts/chart' + cn + '.xml"/></Relationships>'));
+    var tw = textWidth(xml) * 635, cx = Math.round(Math.min(tw * 0.92, 5760000)), cy = Math.round(cx * 0.6);
+    var ids = (xml.match(/<wp:docPr\b[^>]*\sid="(\d+)"/g) || []).map(function (s) { return +/id="(\d+)"/.exec(s)[1]; }), did = Math.max.apply(null, ids.concat([0])) + 1;
+    var dr = '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="' + did + '" name="차트 ' + did + '"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + rid + '"/></a:graphicData></a:graphic></wp:inline></w:drawing>';
+    pkg.write('word/document.xml', xml.slice(0, p.e) + '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r>' + dr + '</w:r></w:p>' + xml.slice(p.e));
+    return { ok: true, xi: xi + 1 };
+  }
+  async function updateChart(pkg, xi, spec) {
+    var C = global.SOChart, c = await chartAt(pkg, xi); if (c.err) return c;
+    var old = C.parse(await pkg.read(c.path)); if (!old.ok) return { err: old.why };
+    var sp = C.defaultRefs(C.clone(spec)), epath = c.embed ? c.embed.path : null; sp.frame = false;
+    if (!epath) epath = 'word/embeddings/Microsoft_Excel_Sheet' + nextIn(pkg, 'word/embeddings/', 'Microsoft_Excel_Sheet', 'xlsx') + '.xlsx';
+    pkg.writeBin(epath, await C.workbookBytes(sp, global.JSZip)); await writeChartParts(pkg, c.path, sp, epath);
+    return { ok: true };
+  }
+  async function removeChart(pkg, xi) {
+    var c = await chartAt(pkg, xi); if (c.err) return c;
+    var s = c.xml.slice(c.p.s, c.p.e), ns = s.replace(/<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:drawing>(?:(?!<\/w:drawing>)[\s\S])*?<c:chart\b[\s\S]*?<\/w:drawing>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/, '');
+    if (ns === s) return { err: '차트를 지우지 못했습니다.' };
+    var nx = c.xml.slice(0, c.p.s) + ns + c.xml.slice(c.p.e); pkg.write('word/document.xml', nx);
+    if (!new RegExp('<c:chart\\b[^>]*?\\sr:id="' + c.rid + '"').test(nx)) {
+      pkg.write('word/_rels/document.xml.rels', c.rx.replace(c.rel, ''));
+      var ct = await must(pkg, '[Content_Types].xml'); ct = ct.replace(new RegExp('<Override\\b[^>]*PartName="/' + c.path.replace(/[.\/]/g, '\\$&') + '"[^>]*/>'), ''); pkg.write('[Content_Types].xml', ct);
+      pkg.remove(c.path); pkg.remove(relsOfPart(c.path)); if (c.embed && c.embed.path) pkg.remove(c.embed.path);
+    }
+    return { ok: true };
+  }
+
   global.SODocxStruct = {
     SYMBOLS: SYMBOLS, dateChoices: dateChoices,
     tableGeomInfo: tableGeomInfo, setColWidth: setColWidth, setRowHeight: setRowHeight, setTableAlign: setTableAlign, tableLook: tableLook, appendText: appendText,
@@ -1344,6 +1420,7 @@
     fmtPartial: fmtPartial, copyParas: copyParas, pasteBlock: pasteBlock, dupParas: dupParas, copyTable: copyTable, dupTable: dupTable, setCellShade: setCellShade, setTableBorders: setTableBorders, headerRow: headerRow,
     paras: paras, newPara: newPara, insertPara: insertPara, deleteParas: deleteParas, moveParas: moveParas, pageBreakAfter: pageBreakAfter, ensureStyle: ensureStyle, setStyle: setStyle,
     setParaFmt: setParaFmt, setRunFmt: setRunFmt, readFmt: readFmt, ensureList: ensureList, setList: setList, numIdOf: numIdOf, insertTable: insertTable, tableEdit: tableEdit, tableInfo: tableInfo,
+    addChart: addChart, updateChart: updateChart, removeChart: removeChart, readChart: readChart, listCharts: listCharts,
     addPicture: addPicture, scalePicture: scalePicture, removePicture: removePicture, readHF: readHF, setHF: setHF, addPageNumber: addPageNumber, findHits: findHits, newDocxFiles: newDocxFiles, pText: pText, textWidth: textWidth
   };
 })(typeof window !== 'undefined' ? window : globalThis);
