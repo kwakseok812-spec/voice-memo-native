@@ -1,0 +1,35 @@
+/* so-chart.css — 차트 넣기·고치기 시트와 차트 미리 그림(O-0861, v10.9) */
+.soc{display:block}
+.soc-prev{width:100%;margin:2px 0 6px;border-radius:12px;border:1px solid var(--glass-b);background:#fff;overflow:hidden;line-height:0}
+.soc-prev svg{display:block;width:100%;height:auto}
+.soc-l{font-size:13.5px;font-weight:800;margin:12px 2px 6px;color:var(--text)}
+.soc-r{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 4px}
+.soc-r.g2{display:grid;grid-template-columns:1fr 1fr}
+.soc-b{appearance:none;min-height:46px;padding:0 12px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--glass);color:var(--text);font-family:inherit;font-weight:800;font-size:14.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.soc-b.on{border-color:var(--p1);background:var(--p1);color:#fff}
+.soc-b.big{min-height:52px;flex:1 1 100%}
+.soc-b:disabled{opacity:.4}
+.soc-b:active{transform:scale(.97)}
+.soc-in{width:100%;box-sizing:border-box;height:46px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--in-bg,var(--glass));color:var(--text);font-size:16px;padding:0 10px;font-family:inherit;margin-bottom:6px}
+.soc-note{font-size:12.5px;line-height:1.5;color:var(--muted);margin:6px 2px 4px}
+.soc-rt{font-size:13.5px;font-weight:700;margin:2px 2px 4px;word-break:break-all}
+.soc-tsc{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:2px 0 6px;border:1px solid var(--glass-b);border-radius:10px}
+.soc-tbl{border-collapse:collapse;min-width:100%}
+.soc-tbl th,.soc-tbl td{padding:3px;border-bottom:1px solid var(--glass-b);border-right:1px solid var(--glass-b);font-size:12.5px;color:var(--muted);text-align:center;font-weight:700}
+.soc-tbl th:first-child{min-width:62px;padding:3px 6px}
+.soc-ti{width:74px;box-sizing:border-box;height:40px;border:0;border-radius:8px;background:var(--in-bg,transparent);color:var(--text);font-size:15px;font-family:inherit;text-align:center;padding:0 4px}
+.soc-ti:focus{outline:2px solid var(--p1)}
+.soc-crow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:4px 0}
+.soc-cn{flex:0 0 100%;font-size:12.5px;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.soc-sw{appearance:none;width:34px;height:34px;border-radius:50%;border:2px solid rgba(0,0,0,.18);cursor:pointer;padding:0}
+.soc-sw.on{border-color:var(--text);box-shadow:0 0 0 2px var(--p1)}
+/* PPT 슬라이드 위·엑셀 시트 위·워드 본문 속 차트 미리 그림 */
+.soc-over{position:absolute;pointer-events:none;overflow:hidden;line-height:0;background:#fff}
+.soc-over svg{display:block;width:100%;height:100%}
+.soc-over.tr{background:transparent}
+.soc-xl{position:absolute;left:0;top:0;width:0;height:0}
+.soc-xl .soc-over{pointer-events:auto;cursor:pointer;border:1px solid #d9d9d9;box-sizing:border-box}
+.soc-xl .soc-over.sel{outline:3px solid var(--p1);outline-offset:-1px}
+.soc-docchart{display:block;margin:8px auto;line-height:0;background:#fff;max-width:100%;border:1px solid #d9d9d9}
+.soc-docchart svg{display:block;width:100%;height:auto}
+@media (prefers-reduced-motion:reduce){.soc-b:active{transform:none}}

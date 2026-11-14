@@ -66,6 +66,7 @@
   var SO_DOCX_TOOLS = 'on';                 // 워드 문단·스타일·서식·목록·표·그림·머리글·바꾸기·새 문서 — 'off' = 예전 워드 화면(글자 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_PDF_QPDF = 'on';                   // PDF 암호 걸기·풀기(qpdf.wasm) — 'off' = 암호 걸린 PDF는 예전처럼 변환해서 보고, 꾸미기 시트에 암호 구역이 없다(용량 줄이기는 그림 줄이기만)
+  var SO_CHART = 'on';                      // v10.9 차트 만들기·고치기(엑셀·PPT·워드)와 폰 화면 미리 그림 — 'off' = 차트는 예전처럼 보기·복제만(넣기 시트의 「차트」·「차트 고치기」가 사라진다)
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
@@ -599,6 +600,7 @@
     if (k === 'pptx') return SO_PPTX_TOOLS === 'on';
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
+    if (k === 'chart') return SO_CHART === 'on';
     return true;
   }
   // ---- 아래에서 올라오는 시트(손가락 단추 44px 이상 · 0.2초 · 「움직임 줄이기」는 CSS가 지킨다) ----

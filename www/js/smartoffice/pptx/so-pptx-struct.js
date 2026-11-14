@@ -353,7 +353,7 @@
       var k = kindOf(c), g = xfOf(c.xml, c.name), ph = /<p:ph\b[^>]*?\/?>/.exec(c.xml), inherited = false;
       if (!g && ph && phGeom) { g = phGeom(ph[0]); inherited = !!g; }
       var text = ''; (c.xml.match(/<a:t(?:\s[^>]*)?>[\s\S]*?<\/a:t>/g) || []).forEach(function (t) { text += unescX(t.replace(/<[^>]+>/g, '')) + ' '; });
-      var ed = !(k === 'chart' || k === 'smart' || k === 'ole' || k === 'other');
+      var ed = !(k === 'smart' || k === 'ole' || k === 'other');
       return { id: shapeId(c.xml), name: shapeName(c.xml), label: friendlyName(shapeName(c.xml), k, ph ? ph[0] : ''), canLine: k === 'text' || k === 'ph' || k === 'shape' || k === 'line', kind: k, name_: c.name, g: g, inherited: inherited, text: text.trim(), isPh: !!ph, phTag: ph ? ph[0] : '', canMove: ed && !!g, canText: k === 'text' || k === 'ph' || k === 'shape' || k === 'table', canFill: k === 'text' || k === 'ph' || k === 'shape' };
     }).filter(function (s) { return s.id; });
   }
@@ -1305,6 +1305,71 @@
     return { ok: true, n: n };
   }
 
+
+  // ============================== v10.9: 차트 만들기·고치기·지우기 (진짜 차트 + 딸린 통합문서) ==============================
+  // 슬라이드 위 차트 한 개 → { frame, rid, path(차트 파일), embed:{rel,path}|null }
+  async function chartParts(pkg, slidePath, id) {
+    var x = await must(pkg, slidePath), sh = findShape(x, id); if (!sh) return { err: '차트를 찾지 못했습니다.' };
+    var m = /<c:chart\b[^>]*?\sr:id="([^"]+)"/.exec(sh.xml); if (!m) return { err: '이 개체는 차트가 아닙니다.' };
+    var rels = parseRels(await pkg.read(relsPathOf(slidePath)) || ''), rl = rels.filter(function (r) { return r.id === m[1]; })[0];
+    if (!rl) return { err: '차트 연결 정보를 찾지 못했습니다.' };
+    var path = resolvePath(slidePath, rl.target); if (!path || (await pkg.read(path)) == null) return { err: '차트 파일을 찾지 못했습니다.' };
+    var crels = parseRels(await pkg.read(relsPathOf(path)) || ''), em = crels.filter(function (r) { return relKind(r.type) === 'package' && r.mode !== 'External'; })[0];
+    return { frame: sh, rid: m[1], slideRel: rl, path: path, crels: crels, embed: em ? { rel: em, path: resolvePath(path, em.target) } : null };
+  }
+  async function readChart(pkg, slidePath, id) {
+    var cp = await chartParts(pkg, slidePath, id); if (cp.err) return cp;
+    var info = global.SOChart.parse(await pkg.read(cp.path));
+    return { info: info, path: cp.path, hasEmbed: !!cp.embed, mine: info.mine };
+  }
+  async function writeChartFiles(pkg, chartPath, sp, embedPath, keepRelsFrom) {
+    var ct = await must(pkg, '[Content_Types].xml'), rid = 'rId1', rels = emptyRels();
+    if (embedPath) rels = rels.replace('</Relationships>', '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="' + escX(relTarget(chartPath, embedPath)) + '"/></Relationships>');
+    pkg.write(chartPath, global.SOChart.chartXml(sp, { embed: embedPath ? rid : null }));
+    pkg.write(relsPathOf(chartPath), rels);
+    ct = ctAdd(ct, '/' + chartPath, global.SOChart.CT_CHART); ct = ctDefault(ct, 'xlsx', global.SOChart.CT_XLSX);
+    pkg.write('[Content_Types].xml', ct);
+  }
+  function chartFrame(id, rid, g, name) {
+    return '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + id + '" name="' + escX(name) + '"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="' + g.x + '" y="' + g.y + '"/><a:ext cx="' + g.w + '" cy="' + g.h + '"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + rid + '"/></a:graphicData></a:graphic></p:graphicFrame>';
+  }
+  async function addChart(pkg, slidePath, spec, g) {
+    var C = global.SOChart, sp = C.defaultRefs(C.clone(spec)); sp.frame = false;
+    var n = nextNum(pkg, 'ppt/charts/', 'chart', 'xml'), cpath = 'ppt/charts/chart' + n + '.xml', ne = nextNum(pkg, 'ppt/embeddings/', 'Microsoft_Excel_Sheet', 'xlsx'), epath = 'ppt/embeddings/Microsoft_Excel_Sheet' + ne + '.xlsx';
+    pkg.writeBin(epath, await C.workbookBytes(sp, global.JSZip));
+    await writeChartFiles(pkg, cpath, sp, epath);
+    var rp = relsPathOf(slidePath), ar = addRel(await pkg.read(rp) || emptyRels(), R + 'chart', relTarget(slidePath, cpath)); pkg.write(rp, ar.xml);
+    var x = await must(pkg, slidePath), id = maxId(x) + 1;
+    pkg.write(slidePath, insertShape(x, chartFrame(id, ar.id, g, '차트 ' + (id - 1))));
+    return { id: id };
+  }
+  // 차트 고치기: 차트 파일을 새로 쓰고(우리가 만든 차트가 아니면 딸린 통합문서도 새로 만든다 — 차트와 데이터가 서로 맞게)
+  async function updateChart(pkg, slidePath, id, spec) {
+    var C = global.SOChart, cp = await chartParts(pkg, slidePath, id); if (cp.err) return cp;
+    var old = C.parse(await pkg.read(cp.path)); if (!old.ok) return { err: old.why };
+    var sp = C.defaultRefs(C.clone(spec)), epath = cp.embed ? cp.embed.path : null; sp.frame = false;
+    if (!epath) { var ne = nextNum(pkg, 'ppt/embeddings/', 'Microsoft_Excel_Sheet', 'xlsx'); epath = 'ppt/embeddings/Microsoft_Excel_Sheet' + ne + '.xlsx'; }
+    pkg.writeBin(epath, await C.workbookBytes(sp, global.JSZip));
+    await writeChartFiles(pkg, cp.path, sp, epath);
+    return { ok: true };
+  }
+  // 차트 지우기: 슬라이드의 틀·연결·차트 파일·딸린 통합문서까지 함께 지운다(다른 곳이 같은 파일을 쓰지 않을 때만)
+  async function removeChart(pkg, slidePath, id) {
+    var cp = await chartParts(pkg, slidePath, id); if (cp.err) return cp;
+    var x = await must(pkg, slidePath), nx = removeShape(x, id);
+    pkg.write(slidePath, nx);
+    var other = new RegExp('<c:chart\b[^>]*?\sr:id="' + cp.rid + '"').test(nx);
+    if (!other) {
+      var rp = relsPathOf(slidePath), rx = await pkg.read(rp); pkg.write(rp, rx.replace(cp.slideRel.raw, ''));
+      var users = 0; for (var q = pkg.list(), i = 0; i < q.length; i++) { if (/^ppt\/(slides|slideLayouts|slideMasters)\/_rels\//.test(q[i])) { var t = await pkg.read(q[i]); if (t && t.indexOf(relTarget(q[i].replace('_rels/', '').replace(/\.rels$/, ''), cp.path)) >= 0 && q[i] !== rp) users++; } }
+      if (!users) {
+        var ct = await must(pkg, '[Content_Types].xml'); pkg.write('[Content_Types].xml', ctDel(ct, '/' + cp.path));
+        pkg.remove(cp.path); pkg.remove(relsPathOf(cp.path)); if (cp.embed) pkg.remove(cp.embed.path);
+      }
+    }
+    return { ok: true };
+  }
+
   global.SOPptxStruct = {
     tableGeom: tableGeom, setTableCols: setTableCols, setTableRows: setTableRows, groupShapes: groupShapes, ungroupShape: ungroupShape, cropPicture: cropPicture, readCrop: readCrop,
     setShadow: setShadow, readShadow: readShadow, setGradient: setGradient, readFillKind: readFillKind, stepShape: stepShape, alignShapes: alignShapes, distributeShapes: distributeShapes,
@@ -1316,6 +1381,7 @@
     tableEdit: tableEdit, reorderShape: reorderShape, paraRange: paraRange, slideNotes: slideNotes, setNotes: setNotes, newPresentationFiles: newPresentationFiles, SHAPES: SHAPES, EMU: EMU,
     setAnchor: setAnchor, friendlyName: friendlyName, formatRun: formatRun, setLineStyle: setLineStyle, copyShape: copyShape, pasteShape: pasteShape, tableMerge: tableMerge, cellSpans: cellSpans,
     setSlideBg: setSlideBg, readSlideBg: readSlideBg, setRotation: setRotation, readRotation: readRotation, changeLayout: changeLayout,
+    readChart: readChart, addChart: addChart, updateChart: updateChart, removeChart: removeChart,
     _topShapes: topShapes, _dupBlock: dupBlock
   };
 })(typeof window !== 'undefined' ? window : globalThis);

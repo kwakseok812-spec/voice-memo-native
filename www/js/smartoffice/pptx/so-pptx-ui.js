@@ -89,6 +89,7 @@
       st.k = w / st.W;
       var src = s.slides[s.idx];
       if (src) { var c = src.cloneNode(true); c.style.display = ''; c.style.margin = '0'; c.style.position = 'absolute'; c.style.left = '0'; c.style.top = '0'; c.style.zoom = String(w / srcW(src)); c.style.pointerEvents = 'none'; stg.appendChild(c); }
+      st.shapes.forEach(function (sh) { if (sh.kind === 'chart' && sh.g && chartOn()) chartOverlay(sh, stg); });
       var ov = el('div', 'spx-ov'); stg.appendChild(ov);
       st.shapes.forEach(function (sh) {
         if (!sh.g) return;
@@ -98,7 +99,22 @@
       });
       paintSel();
     }
-    function place(b, g) { b.style.left = (g.x * st.k) + 'px'; b.style.top = (g.y * st.k) + 'px'; b.style.width = Math.max(14, g.w * st.k) + 'px'; b.style.height = Math.max(14, g.h * st.k) + 'px'; }
+    // ---------------- 차트 미리 그림(v10.9) — 미리보기 부품은 차트를 못 그려서, 같은 데이터로 우리가 그려 슬라이드 위에 겹쳐 보인다(앱 화면 안에서만) ----------------
+    function chartOn() { return !!(ctx.flag && ctx.flag('chart')); }
+    function loadChart() { return ctx.loadScript('js/smartoffice/so-chart.js').then(function () { ctx.loadCss('js/smartoffice/so-chart.css'); return global.SOChart; }); }
+    function chartPaint(d, g, info) {
+      var w = Math.max(14, g.w * st.k), h = Math.max(14, g.h * st.k);
+      d.style.left = (g.x * st.k) + 'px'; d.style.top = (g.y * st.k) + 'px'; d.style.width = w + 'px'; d.style.height = h + 'px';
+      if (info && info.spec) d.innerHTML = global.SOChart.svg(info.spec, w, h, { bg: true });
+      else if (info) d.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;line-height:1.4;color:#667;text-align:center;padding:6px;box-sizing:border-box;border:1px dashed #99a">' + (info.why ? '차트(' + String(info.kind || '') + ') — 모양은 파워포인트에서 보입니다' : '차트') + '</div>';
+    }
+    function chartOverlay(sh, stg) {
+      var d = el('div', 'soc-over'); d.dataset.id = sh.id; stg.appendChild(d); chartPaint(d, sh.g, null);
+      loadChart().then(function () { return ST.readChart(env.roPkg(s.info.zip), st.path, sh.id); }).then(function (r) {
+        if (!d.isConnected) return; sh._chart = r.info || null; chartPaint(d, sh._live || sh.g, r.info || { why: 'x', kind: '' });
+      }).catch(function () { if (d.isConnected) chartPaint(d, sh.g, { why: 'x', kind: '' }); });
+    }
+    function place(b, g) { var od = root.querySelector('.soc-over[data-id="' + b.dataset.id + '"]'); if (od) { od.style.left = (g.x * st.k) + 'px'; od.style.top = (g.y * st.k) + 'px'; od.style.width = Math.max(14, g.w * st.k) + 'px'; od.style.height = Math.max(14, g.h * st.k) + 'px'; } b.style.left = (g.x * st.k) + 'px'; b.style.top = (g.y * st.k) + 'px'; b.style.width = Math.max(14, g.w * st.k) + 'px'; b.style.height = Math.max(14, g.h * st.k) + 'px'; }
     function paintSel() {
       [].forEach.call(root.querySelectorAll('.spx-box'), function (b) {
         var on = Number(b.dataset.id) === st.sel; b.classList.toggle('sel', on); b.classList.toggle('msel', st.multi.indexOf(Number(b.dataset.id)) >= 0);
@@ -152,7 +168,12 @@
     function mid(w, h) { return { x: Math.round((st.W - w) / 2), y: Math.round((st.H - h) / 2), w: Math.round(w), h: Math.round(h) }; }
     function delShape() {
       var sh = need(); if (!sh) return;
+      if (sh.kind === 'chart') { delChart(sh); return; }
       op('도형 지우기', function (x) { return ST.removeShape(x, sh.id); }, J(KIND[sh.kind] || '도형', '을') + ' 지웠습니다(되돌리려면 ↶)');
+    }
+
+    function delChart(sh) {
+      env.run('차트 지우기', function (pkg) { return ST.removeChart(pkg, st.path, sh.id); }, function (r) { if (r && r.err) { fail(r.err); return; } st.sel = null; st.cell = null; toast('차트를 지웠습니다(되돌리려면 ↶)', 2600); U.refreshAll(); });
     }
 
     // ---------------- 복사·붙여넣기·복제 ----------------
@@ -261,11 +282,38 @@
     function insertSheet() {
       sheet('넣기', function (body) {
         var g = grid(body);
-        btn(g, '글 상자', textBoxSheet, 'big'); btn(g, '그림(사진)', pickPicture, 'big'); btn(g, '표', tableNewSheet, 'big');
+        btn(g, '글 상자', textBoxSheet, 'big'); btn(g, '그림(사진)', pickPicture, 'big'); btn(g, '표', tableNewSheet, 'big'); if (chartOn()) btn(g, '차트', chartNewSheet, 'big');
         Object.keys(ST.SHAPES).forEach(function (k) { btn(g, ST.SHAPES[k], function () { addShape(k); }, 'big'); });
         btn(g, '선', function () { addLn(false); }, 'big'); btn(g, '화살표 선', function () { addLn(true); }, 'big');
         body.appendChild(el('div', 'so-sheet-note', '넣은 도형은 슬라이드 가운데에 놓이고 바로 선택됩니다. 끌어서 옮기고, 모서리 점으로 크기를 바꾸고, 「서식」「색」으로 꾸밉니다. 도형 안에 글을 넣으려면 「글」을 누르십시오.'));
       });
+    }
+    function chartNewSheet() {
+      loadChart().then(function (C) {
+        C.openEditor({ ctx: ctx, title: '차트 넣기', spec: C.sampleFor('col'), mode: 'table', applyLabel: '차트 넣기',
+          note: '숫자를 고쳐 적으면 위의 그림이 바로 바뀝니다. 파일 안에는 진짜 차트가 들어가서, 파워포인트에서 열어 「데이터 편집」으로도 고칠 수 있습니다.',
+          onApply: function (sp) {
+            var g = { x: Math.round(st.W * 0.1), y: Math.round(st.H * 0.23), w: Math.round(st.W * 0.8), h: Math.round(st.H * 0.66) };      // 제목 줄 아래, 슬라이드의 넓은 자리
+            env.run('차트', function (pkg) { return ST.addChart(pkg, st.path, sp, g).then(function (r) { return { sel: r.id }; }); }, function (r) { if (r && r.err) { fail(r.err); return; } st.sel = r.sel; toast('차트를 넣었습니다 — 눌러서 「차트 고치기」, 끌어서 옮기기', 3200); U.refreshAll(); });
+          } });
+      }).catch(function (e) { toast('차트 부품을 불러오지 못했습니다: ' + ((e && e.message) || e), 4200); });
+    }
+    function chartEditSheet() {
+      var sh = sel(); if (!sh || sh.kind !== 'chart') { toast('먼저 슬라이드 위의 차트를 눌러 고르십시오.', 3000); return; }
+      loadChart().then(function (C) { return ST.readChart(env.roPkg(s.info.zip), st.path, sh.id).then(function (r) { return { C: C, r: r }; }); }).then(function (x) {
+        var C = x.C, r = x.r; if (r.err) { fail(r.err); return; }
+        if (!r.info.ok) { fail(r.info.why + ' 위치·크기·지우기는 할 수 있습니다.'); return; }
+        function openIt() {
+          C.openEditor({ ctx: ctx, title: '차트 고치기', spec: r.info.spec, mode: 'table', applyLabel: '적용',
+            note: '고치면 파일 안의 차트와 딸린 데이터가 함께 바뀝니다.',
+            onDelete: function () { setTimeout(function () { delChart(sh); }, 60); return true; },
+            onApply: function (sp) {
+              env.run('차트 고치기', function (pkg) { return ST.updateChart(pkg, st.path, sh.id, sp).then(function (q) { return q.err ? q : { sel: sh.id }; }); }, function (q) { if (q && q.err) { fail(q.err); return; } st.sel = sh.id; toast('차트를 고쳤습니다', 2400); U.refreshAll(); });
+            } });
+        }
+        if (!r.mine) ctx.confirm('차트를 고치기 전에', '이 차트는 이 앱에서 만든 것이 아니라서, 고치면 글꼴·그림자 같은 세부 서식이 기본 모양으로 정리될 수 있습니다. 숫자·제목·색·종류는 그대로 남습니다. 계속할까요?', '계속', openIt, { cancelLabel: '취소' });
+        else openIt();
+      }).catch(function (e) { toast('차트를 열지 못했습니다: ' + ((e && e.message) || e), 4200); });
     }
     function textBoxSheet() {
       var body = el('div', 'spx'), t = el('textarea', 'spx-in'); t.rows = 3; t.placeholder = '글 상자에 넣을 글'; t.setAttribute('aria-label', '글 상자의 글'); body.appendChild(t);
@@ -579,6 +627,7 @@
         return;
       }
       t.textContent = nameOf(sh) + (sh.kind === 'table' && st.cell ? ' · ' + (st.cell.r + 1) + '줄 ' + (st.cell.c + 1) + '칸' : '') + (sh.canMove ? ' · 끌어서 옮기기' : ' · 옮길 수 없는 개체');
+      if (sh.kind === 'chart' && chartOn()) { var cb = el('button', 'spx-cb', '차트 고치기'); cb.type = 'button'; cb.onclick = chartEditSheet; b.appendChild(cb); }
       var dp = el('button', 'spx-cb', '복제'); dp.type = 'button'; dp.onclick = dupShape; b.appendChild(dp);
       var d = el('button', 'spx-cb danger', '지우기'); d.type = 'button'; d.onclick = delShape; b.appendChild(d);
     }
