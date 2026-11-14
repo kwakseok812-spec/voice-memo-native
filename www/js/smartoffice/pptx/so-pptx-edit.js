@@ -132,7 +132,11 @@
   function inAny(rs, at) { for (var i = 0; i < rs.length; i++) if (at >= rs[i][0] && at < rs[i][1]) return true; return false; }
 
   // 슬라이드 XML 에서 고칠 수 있는 문단 목록
-  function scanSlide(xml) {
+  function loneInShape(xml, at) {                          // 이 빈 문단이 글 상자 안의 유일한 문단인가
+    var s = xml.lastIndexOf('<p:txBody>', at), e = xml.indexOf('</p:txBody>', at); if (s < 0 || e < 0) return false;
+    return (xml.slice(s, e).match(/<a:p[\s>\/]/g) || []).length === 1;
+  }
+  function scanSlide(xml, opt) {
     var tbl = ranges(xml, 'a:tbl'), grp = ranges(xml, 'p:grpSp'), fb = ranges(xml, 'mc:Fallback');
     var names = [], nre = /<p:cNvPr\s[^>]*?name="([^"]*)"/g, nm;
     while ((nm = nre.exec(xml))) names.push({ at: nm.index, name: dec(nm[1]) });
@@ -142,7 +146,7 @@
       var at = m.index, o = ord++;
       if (inAny(fb, at)) continue;
       var pp = parseParagraph(m[0]); if (!pp) continue;
-      if (!pp.text.replace(/\s/g, '')) continue;            // 빈 문단은 목록에 올리지 않는다
+      if (!pp.text.replace(/\s/g, '') && !(opt && opt.empties && (inAny(tbl, at) || loneInShape(xml, at)))) continue;   // 빈 문단은 목록에 올리지 않는다(새 PPT 편집 때만: 표 칸·빈 글 상자는 글을 채울 수 있게 올린다)
       var nmv = ''; for (var i = names.length - 1; i >= 0; i--) if (names[i].at < at) { nmv = names[i].name; break; }
       res.push({ ord: o, text: pp.text, locked: !!pp.locked, kind: inAny(tbl, at) ? '표' : (inAny(grp, at) ? '그룹 도형' : '글 상자'), shape: nmv });
     }
@@ -164,7 +168,7 @@
   function countOf(xml, re) { var m = xml.match(re); return m ? m.length : 0; }
 
   // 파일 열기 → { zip, slides:[{path, xml, paras, charts, smart, pics}] } (슬라이드 순서대로)
-  function load(buf, JSZip) {
+  function load(buf, JSZip, opt) {
     return JSZip.loadAsync(buf).then(function (zip) {
       var info = { zip: zip, JSZip: JSZip, slides: [] };
       return Promise.all([
@@ -188,7 +192,7 @@
           paths.forEach(function (p, i) {
             var x = xmls[i];
             info.slides.push({
-              path: p, xml: x, paras: scanSlide(x),
+              path: p, xml: x, paras: scanSlide(x, opt),
               charts: countOf(x, /<c:chart[\s>]/g), smart: countOf(x, /<dgm:relIds/g), pics: countOf(x, /<p:pic[\s>]/g)
             });
           });

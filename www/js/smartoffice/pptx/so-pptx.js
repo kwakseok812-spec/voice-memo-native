@@ -35,9 +35,96 @@
     var host = ctx.body;
     host.classList.add('so-pptx-host');
     var stage = document.createElement('div'); stage.className = 'so-pptx-stage'; host.appendChild(stage);
-    var s = state = { prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null, sh: 540, drawW: 0, dir: 0 };
+    var s = state = { prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, cur: buf, undo: [], redo: [], pkgOps: 0, ui: null, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null, sh: 540, drawW: 0, dir: 0 };
     return drawDeck(host, s, buf).then(function () {
       var slides = function () { return s.slides; };
+      function structOn() { return !!(ctx.flag && ctx.flag('pptx') && window.SOPptxUI && window.SOPptxStruct); }
+      function u8ab(u8) { return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength); }
+      function roPkg(zip) { return { read: function (q) { var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } }; }
+      function rwPkg(zip) {
+        var cache = {};
+        return { read: function (q) { if (q in cache) return Promise.resolve(cache[q]); var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); },
+          write: function (q, x) { cache[q] = x; zip.file(q, x, { createFolders: false }); }, writeBin: function (q, b) { zip.file(q, b, { binary: true, createFolders: false }); },
+          remove: function (q) { delete cache[q]; zip.remove(q); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } };
+      }
+      // 저장 전 점검: 모든 XML 이 문법에 맞고, 안의 관계가 가리키는 파일이 있고, 모든 파트에 형식이 있는지
+      function checkPkg(bytes) {
+        return s.JSZip.loadAsync(bytes).then(function (z) {
+          var names = Object.keys(z.files).filter(function (n) { return !z.files[n].dir; }), bad = null;
+          if (!z.file('[Content_Types].xml')) return { ok: false, why: '[Content_Types].xml 없음' };
+          return Promise.all(names.filter(function (n) { return /\.(xml|rels)$/i.test(n); }).map(function (n) { return z.file(n).async('string').then(function (x) { return [n, x]; }); })).then(function (list) {
+            var ctx2 = list.filter(function (l) { return l[0] === '[Content_Types].xml'; })[0][1];
+            list.forEach(function (l) {
+              if (bad) return;
+              var d = new DOMParser().parseFromString(l[1], 'application/xml');
+              if (d.getElementsByTagName('parsererror').length) { bad = l[0] + ' XML 오류'; return; }
+              if (/\.rels$/.test(l[0])) {
+                var base = l[0].replace('_rels/', '').replace(/\.rels$/, ''), dir = base.slice(0, base.lastIndexOf('/') + 1), re = /<Relationship\b[^>]*>/g, m;
+                while ((m = re.exec(l[1]))) {
+                  if (/TargetMode="External"/.test(m[0])) continue;
+                  var t = /Target="([^"]*)"/.exec(m[0]); if (!t) continue;
+                  var parts = (t[1].charAt(0) === '/' ? '' : dir).split('/').filter(Boolean); t[1].replace(/^\//, '').split('/').forEach(function (q) { if (q === '..') parts.pop(); else if (q && q !== '.') parts.push(q); });
+                  if (!z.file(parts.join('/'))) { bad = l[0] + ' 가 없는 파일(' + parts.join('/') + ')을 가리킴'; return; }
+                }
+              }
+            });
+            if (!bad) names.forEach(function (n) { if (bad || n === '[Content_Types].xml') return; var ext = (n.split('.').pop() || '').toLowerCase(); if (ctx2.indexOf('PartName="/' + n + '"') < 0 && !new RegExp('Extension="' + ext + '"', 'i').test(ctx2)) bad = n + ' 의 형식이 등록되지 않음'; });
+            return bad ? { ok: false, why: bad } : { ok: true };
+          });
+        });
+      }
+      function curBytes() {
+        if (!s.info || !anyEdit(s)) return Promise.resolve(s.cur);
+        return window.SOPptxEdit.build(s.info, s.edits).then(function (r) { return u8ab(r.bytes); });
+      }
+      function reloadInfo() {
+        return window.SOPptxEdit.load(s.cur.slice(0), s.JSZip, { empties: true }).then(function (info) { s.info = info; s.edits = info.slides.map(function () { return {}; }); });
+      }
+      function pushUndo(bytes) { s.undo.push(bytes); if (s.undo.length > 10) s.undo.shift(); s.redo = []; }
+      function adopt(bytes, keepIdx) {
+        s.cur = bytes;
+        return reloadInfo().then(function () { return drawDeck(host, s, bytes); }).then(function () { if (keepIdx != null) s.idx = Math.max(0, Math.min(s.slides.length - 1, keepIdx)); });
+      }
+      function flushEdits() {
+        if (!s.info || !anyEdit(s)) return Promise.resolve(false);
+        var before = s.cur;
+        return window.SOPptxEdit.build(s.info, s.edits).then(function (r) { pushUndo(before); s.pkgOps++; s.cur = u8ab(r.bytes); return reloadInfo().then(function () { return true; }); });
+      }
+      function loadEditorBase() { return s.info ? Promise.resolve() : loadEditor(); }
+      function run(label, mut, onDone) {
+        if (s.busyRun) return Promise.resolve(false);
+        s.busyRun = true; ctx.busy('고치는 중…');
+        var fin = function () { s.busyRun = false; ctx.busy(null); };
+        return loadEditorBase().then(flushEdits).then(function () {
+          var before = s.cur, zip;
+          return s.JSZip.loadAsync(before.slice(0), { createFolders: false }).then(function (z) { zip = z; return mut(rwPkg(z), z); }).then(function (r) {
+            if (r && r.err) { fin(); if (onDone) onDone(r); else ctx.toast(r.err, 5200); return false; }
+            return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } }).then(function (u8) {
+              return checkPkg(u8).then(function (v) {
+                if (!v.ok) throw new Error('점검에서 걸렸습니다(' + v.why + ') — 고치지 않았습니다');
+                pushUndo(before); s.pkgOps++;
+                return adopt(u8ab(u8), r && r.slide != null ? r.slide : null).then(function () { fin(); ctx.setDirty(true); if (onDone) onDone(r || {}); return true; });
+              });
+            });
+          });
+        }).catch(function (e) { fin(); ctx.toast('고치지 못했습니다: ' + ((e && e.message) || e), 5200); return false; });
+      }
+      function swapTo(bytes, label) {
+        if (s.busyRun) return Promise.resolve(false); s.busyRun = true; ctx.busy(label);
+        return adopt(bytes).then(function () { s.busyRun = false; ctx.busy(null); ctx.setDirty(s.pkgOps > 0); return true; }, function (e) { s.busyRun = false; ctx.busy(null); ctx.toast('되돌리지 못했습니다: ' + ((e && e.message) || e), 4200); return false; });
+      }
+      function undoOp() {
+        return loadEditorBase().then(flushEdits).then(function () {
+          if (!s.undo.length) { ctx.toast('되돌릴 것이 없습니다.', 1800); return false; }
+          var prev = s.undo.pop(); s.redo.push(s.cur); return swapTo(prev, '되돌리는 중…').then(function (ok) { if (ok) s.pkgOps = Math.max(0, s.pkgOps - 1); if (s.ui) s.ui.refreshAll(); return ok; });
+        });
+      }
+      function redoOp() {
+        return loadEditorBase().then(flushEdits).then(function () {
+          if (!s.redo.length) { ctx.toast('다시 할 것이 없습니다.', 1800); return false; }
+          var nx = s.redo.pop(); s.undo.push(s.cur); return swapTo(nx, '다시 하는 중…').then(function (ok) { if (ok) s.pkgOps++; if (s.ui) s.ui.refreshAll(); return ok; });
+        });
+      }
       var hudb = document.createElement('div'); hudb.className = 'so-pptx-hudb'; host.insertBefore(hudb, stage);   // 높이 0 의 떠 있는 줄(문서 자리를 차지하지 않는다). 위쪽에 두고 --soh(화면 높이)로 아래로 내려 그린다
       var nav = document.createElement('div'); nav.className = 'so-pptx-nav'; hudb.appendChild(nav);
       nav.innerHTML = '<button type="button" data-d="-1" aria-label="이전">‹</button><span class="so-pptx-pos"></span><button type="button" data-d="1" aria-label="다음">›</button>';
@@ -78,12 +165,13 @@
         var acts = [
           { label: s.mode === 'list' ? '한 장' : '목록', onClick: function () { s.mode = s.mode === 'list' ? 'one' : 'list'; s.scale = 1; render(); } },
           { label: '찾기', onClick: openFind },
+          structOn() ? { label: '쇼', onClick: function () { slideshow(s.idx); } } : null,
           { label: '−', onClick: function () { s.scale = Math.max(0.5, s.scale * 0.8); render(); } },
           { label: '＋', onClick: function () { s.scale = Math.min(3, s.scale * 1.25); render(); } },
           { label: '고치기', primary: !anyEdit(s), onClick: enterEdit }
         ];
         if (anyEdit(s)) acts.push({ label: '사본 저장', primary: true, onClick: saveCopy });
-        ctx.setActions(acts);
+        ctx.setActions(acts.filter(Boolean));
       }
       function go(d) { var n = Math.max(0, Math.min(slides().length - 1, s.idx + d)); if (n === s.idx) return; s.dir = d; s.idx = n; render(); }
       nav.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(Number(b.getAttribute('data-d'))); });
@@ -117,7 +205,7 @@
         clearTimeout(rt); rt = setTimeout(function () {
           lastW = host.clientWidth; if (s.editing) { s.stale = true; return; }
           var k = JSON.stringify(s.edits), edited = anyEdit(s) && s.info;
-          var p = edited ? window.SOPptxEdit.build(s.info, s.edits).then(function (r) { return r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength); }) : Promise.resolve(s.orig);
+          var p = edited ? window.SOPptxEdit.build(s.info, s.edits).then(function (r) { return r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength); }) : Promise.resolve(s.cur);
           p.then(function (buf) { return drawDeck(host, s, buf); }).then(function () { render(); }, function () {});
         }, 250);
       }
@@ -133,7 +221,7 @@
         }).then(function () {
           if (!window.JSZip || !window.SOPptxEdit) throw new Error('고치기 부품을 찾지 못함');
           s.JSZip = window.JSZip;
-          return window.SOPptxEdit.load(s.orig.slice(0), s.JSZip);
+          return window.SOPptxEdit.load(s.cur.slice(0), s.JSZip, structOn() ? { empties: true } : null);
         }).then(function (info) {
           s.info = info; s.edits = info.slides.map(function () { return {}; });
           if (info.slides.length !== s.slides.length) showTip('슬라이드 수가 화면과 달라 일부 미리보기가 어긋날 수 있습니다', 6000);
@@ -141,7 +229,7 @@
       }
       function enterEdit() {
         ctx.busy('고칠 글자를 찾는 중…');
-        loadEditor().then(function () { ctx.busy(null); showEdit(); }, function (e) { ctx.busy(null); ctx.toast('고치기를 열지 못했습니다: ' + ((e && e.message) || e), 4200); });
+        loadEditor().then(function () { ctx.busy(null); if (structOn()) { s.editing = true; stage.style.display = 'none'; nav.style.display = 'none'; tip.classList.add('hide'); if (s.panel) s.panel.style.display = 'none'; showEditor2(); } else showEdit(); }, function (e) { ctx.busy(null); ctx.toast('고치기를 열지 못했습니다: ' + ((e && e.message) || e), 4200); });
       }
       function slideTitle(i) {
         var sl = s.info.slides[i], p = sl.paras[0];
@@ -154,7 +242,7 @@
         if (!s.panel) { s.panel = document.createElement('div'); s.panel.className = 'so-pe'; host.appendChild(s.panel); }
         s.panel.style.display = '';
         host.scrollTop = 0;
-        ctx.onBack(function () { if (s.editing) { leaveEdit(); return true; } return false; });
+        ctx.onBack(function () { if (s.editing) { if (structOn()) { if (s.ui && s.ui.shown()) s.ui.back(); else backToEditor(); } else leaveEdit(); return true; } return false; });
         if (window.visualViewport && !s.vvOn) {            // 키보드가 올라와 가려지는 높이만큼 아래 여백을 줘서 맨 아래 칸도 키보드 위로 올릴 수 있게
           s.vvOn = true;
           var vf = function () { var vv = window.visualViewport; s.panel.style.paddingBottom = (Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 40) + 'px'; };
@@ -162,7 +250,7 @@
           cleanup.push(function () { window.visualViewport.removeEventListener('resize', vf); window.visualViewport.removeEventListener('scroll', vf); });
         }
         ctx.setActions([
-          { label: '보기', onClick: leaveEdit },
+          { label: structOn() ? '← 편집' : '보기', onClick: structOn() ? backToEditor : leaveEdit },
           { label: '사본 저장', primary: true, id: 'soPeSave', onClick: saveCopy }
         ]);
         renderEdit();
@@ -200,10 +288,13 @@
         }
         var list = P.querySelector('.so-pe-list');
         if (!sl.paras.length) list.innerHTML = '<div class="so-pe-empty">이 장에는 고칠 수 있는 글자가 없습니다.</div>';
+        var flt = s.filter && s.filter.slide === i ? s.filter : null;
+        if (flt) list.insertAdjacentHTML('beforebegin', '<div class="so-pe-hint">선택한 도형의 글만 보고 있습니다. <button type="button" class="so-pe-all so-link">이 장 전체 보기</button> <button type="button" class="so-pe-add so-link">＋ 줄 추가</button></div>');
         sl.paras.forEach(function (p) {
+          if (flt && (p.ord < flt.from || p.ord >= flt.from + flt.count)) return;
           var card = document.createElement('div'); card.className = 'so-pe-card';
           var cur = Object.prototype.hasOwnProperty.call(ed, p.ord) ? ed[p.ord] : p.text;
-          card.innerHTML = '<div class="so-pe-lab"><span class="so-pe-kind">' + esc(p.kind) + '</span> <span class="so-pe-shape">' + esc(p.shape) + '</span><span class="so-pe-mark">고침</span><button type="button" class="so-pe-undo">되돌리기</button></div>';
+          card.innerHTML = '<div class="so-pe-lab"><span class="so-pe-kind">' + esc(p.kind) + '</span> <span class="so-pe-shape">' + esc(p.shape) + '</span><span class="so-pe-mark">고침</span><button type="button" class="so-pe-undo">되돌리기</button>' + (structOn() ? '<button type="button" class="so-pe-del">줄 지우기</button>' : '') + '</div>';
           var ta = document.createElement('textarea'); ta.className = 'so-pe-ta'; ta.value = cur; ta.rows = 1; ta.spellcheck = false;
           if (p.locked) { ta.readOnly = true; ta.classList.add('lock'); }
           card.appendChild(ta);
@@ -220,23 +311,56 @@
           function mark() {
             var ch = Object.prototype.hasOwnProperty.call(ed, p.ord);
             card.classList.toggle('changed', ch);
-            ctx.setDirty(anyEdit(s));
+            ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
           }
           ta.addEventListener('input', sync);
           card.querySelector('.so-pe-undo').addEventListener('click', function () { delete ed[p.ord]; ta.value = p.text; mark(); fit(); });
+          var dl = card.querySelector('.so-pe-del');
+          if (dl) dl.addEventListener('click', function () {
+            ctx.confirm('이 줄을 지우시겠습니까?', '글 상자·표 칸의 마지막 줄이면 비우기만 합니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '줄 지우기', function () {
+              run('줄 지우기', function (pkg) { var pth = s.info.slides[i].path; return pkg.read(pth).then(function (x) { pkg.write(pth, window.SOPptxStruct.removeParagraph(x, p.ord)); return {}; }); }, function () { renderEdit(); });
+            }, { danger: true });
+          });
           list.appendChild(card); mark(); setTimeout(fit, 0);
         });
-        ctx.setDirty(anyEdit(s));
+        ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
         function jump(k) {
+          s.filter = null;
           if (composing) { try { document.activeElement.blur(); } catch (e) {} setTimeout(function () { composing = false; jump(k); }, 80); return; }   // 한글 조합 중이면 확정된 뒤에 넘어간다
           s.idx = Math.max(0, Math.min(n - 1, k)); renderEdit(); host.scrollTop = 0;
         }
-        P.querySelector('.so-pe-sel').addEventListener('change', function (e) { jump(Number(e.target.value)); });
+        var fa = P.querySelector('.so-pe-all'); if (fa) fa.addEventListener('click', function () { s.filter = null; renderEdit(); });
+        var fd = P.querySelector('.so-pe-add'); if (fd) fd.addEventListener('click', function () {
+          var body = document.createElement('div'), inp = document.createElement('textarea'); inp.className = 'spx-in'; inp.rows = 3; inp.placeholder = '새 줄에 들어갈 글'; inp.setAttribute('aria-label', '새 줄의 글'); body.appendChild(inp);
+          ctx.sheet({ title: '줄 추가', body: body, buttons: [{ label: '취소' }, { label: '추가', primary: true, onClick: function () {
+            var t = inp.value; if (!s.filter || s.filter.shapeId == null) return true;
+            run('줄 추가', function (pkg) { var pth = s.info.slides[i].path; return pkg.read(pth).then(function (x) { pkg.write(pth, window.SOPptxStruct.addParagraph(x, s.filter.shapeId, t, s.filter.cell || null)); return {}; }); }, function () {
+              window.SOPptxStruct.readSlide(roPkg(s.info.zip), s.info.slides[i].path).then(function (rs) { var rg = window.SOPptxStruct.paraRange(rs.xml, s.filter.shapeId, s.filter.cell || null); if (rg) { s.filter.from = rg.from; s.filter.count = rg.count; } renderEdit(); });
+            }); } }] });
+        });
+        P.querySelector('.so-pe-sel').addEventListener('change', function (e) { s.filter = null; jump(Number(e.target.value)); });
         [].forEach.call(P.querySelectorAll('.so-pe-nb'), function (b) { b.addEventListener('click', function () { jump(s.idx + Number(b.getAttribute('data-d'))); }); });
+      }
+      function showEditor2() {
+        if (!s.ui) s.ui = window.SOPptxUI.create({ s: s, ctx: ctx, host: host, run: run, undo: undoOp, redo: redoOp, roPkg: roPkg, flush: flushEdits, openText: openTextFor, exit: exitEditor2, slideshow: slideshow, toast: ctx.toast, curBytes: curBytes, save: saveCopy });
+        s.ui.show(); ctx.setDirty(s.pkgOps > 0 || anyEdit(s));
+      }
+      function backToEditor() { flushEdits().then(function () { if (s.panel) s.panel.style.display = 'none'; return drawDeck(host, s, s.cur); }).then(function () { showEditor2(); }, function () { showEditor2(); }); }
+      function openTextFor(filter) {
+        s.filter = filter || null; if (filter && filter.slide != null) s.idx = filter.slide;
+        if (s.ui) s.ui.hide(); showEdit();
+      }
+      function exitEditor2() {
+        if (s.ui) s.ui.hide();
+        flushEdits().then(function () { return drawDeck(host, s, s.cur); }).then(function () { s.editing = false; s.mode = 'one'; render(); }, function () { s.editing = false; render(); });
+      }
+      function slideshow(start) {
+        var pre = (s.info && anyEdit(s)) ? flushEdits().then(function () { return drawDeck(host, s, s.cur); }) : Promise.resolve();
+        pre.then(function () { window.SOPptxUI.slideshow({ s: s, ctx: ctx, host: host, start: start || 0, done: function () { if (s.editing && s.ui) s.ui.show(); } }); });
       }
       function leaveEdit() {
         var k = JSON.stringify(s.edits);
-        if (s.stale && !anyEdit(s)) { s.stale = false; drawDeck(host, s, s.orig).then(function () { render(); }, function () { render(); }); return; }
+        if (s.stale && !anyEdit(s)) { s.stale = false; drawDeck(host, s, s.cur).then(function () { render(); }, function () { render(); }); return; }
         if (!s.stale && (!anyEdit(s) || k === s.drawnKey)) { render(); return; }
         s.stale = false;
         ctx.busy('고친 모습으로 다시 그리는 중…');
@@ -244,11 +368,23 @@
           return drawDeck(host, s, r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength));
         }).then(function () { s.drawnKey = k; ctx.busy(null); s.mode = 'one'; render(); }, function (e) {
           ctx.busy(null); ctx.toast('다시 그리지 못했습니다: ' + ((e && e.message) || e), 4200);
-          drawDeck(host, s, s.orig).then(function () { render(); }, function () { render(); });
+          drawDeck(host, s, s.cur).then(function () { render(); }, function () { render(); });
+        });
+      }
+      function saveStruct() {
+        var name = (ctx.name || 'slides.pptx').replace(/\.pptx$/i, '') + '_수정.pptx';
+        ctx.confirmCopy('사본으로 저장', '고친 내용을 담아 「' + (ctx.copyName ? ctx.copyName('pptx') : name) + '」로 저장합니다. 원본은 바꾸지 않습니다.\n\n파워포인트에서 열어 한 번 확인해 주십시오.', '사본 저장', function () {
+          ctx.busy('사본을 만드는 중…');
+          flushEdits().then(function () { return checkPkg(s.cur); }).then(function (v) {
+            if (!v.ok) throw new Error('점검에서 걸렸습니다 (' + v.why + ') — 저장하지 않았습니다');
+            ctx.busy(null);
+            return Promise.resolve(ctx.saveCopy(new Blob([s.cur], { type: MIME }), name)).then(function (ok) { if (ok === false) return; ctx.setDirty(false); ctx.toast('사본을 만들었습니다', 3000); });
+          }).catch(function (e) { ctx.busy(null); ctx.toast('저장하지 못했습니다: ' + ((e && e.message) || e), 5000); });
         });
       }
       function saveCopy() {
-        if (!s.info || !anyEdit(s)) { ctx.toast('아직 고친 곳이 없습니다.'); return; }
+        if (structOn() && s.info && (s.pkgOps > 0 || anyEdit(s))) { saveStruct(); return; }
+        if (!s.info || !anyEdit(s)) { ctx.toast(structOn() ? '아직 고친 곳이 없습니다.' : '아직 고친 곳이 없습니다.'); return; }
         var name = (ctx.name || 'slides.pptx').replace(/\.pptx$/i, '') + '_수정.pptx';
         ctx.confirmCopy('사본으로 저장', '고친 글자를 담아 「' + name + '」로 저장합니다.\n글꼴·그림·도형·애니메이션은 그대로 두고 글자만 바꿉니다. 원본은 바꾸지 않습니다.', '사본 저장', function () {
           ctx.busy('사본을 만드는 중…');
@@ -316,6 +452,7 @@
       }
       s.api = {
         snapshot: function () {
+          if (structOn() && s.info && (s.pkgOps > 0 || anyEdit(s))) return curBytes().then(function (b) { return { v: 2, fmt: 'pptx', blob: new Blob([b], { type: MIME }) }; });
           if (!s.info || !anyEdit(s)) return null;
           var list = [];
           s.edits.forEach(function (ed, i) {
@@ -329,6 +466,15 @@
         restore: function (data) {
           if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
           function fail() { ctx.toast('저장해 둔 고친 내용이 이 파일과 맞지 않아 되살리지 않았습니다.', 4600); return false; }
+          if (data && data.v === 2 && data.fmt === 'pptx' && data.blob && structOn()) {
+            return data.blob.arrayBuffer().then(function (ab) {
+              return loadEditorBase().then(function () { return checkPkg(ab); }).then(function (v) {
+                if (!v.ok) return fail();
+                pushUndo(s.cur); s.pkgOps++; s.idx = 0;
+                return adopt(ab, 0).then(function () { ctx.setDirty(true); s.mode = 'one'; render(); ctx.toast('고치던 내용을 되살렸습니다.', 3000); return true; });
+              });
+            }, function () { return fail(); });
+          }
           if (!data || data.fmt !== 'pptx' || !data.edits || !data.edits.length) return Promise.resolve(false);
           return loadEditor().then(function () {
             if (data.n !== s.info.slides.length || data.sig !== deckSig()) return fail();
@@ -342,7 +488,7 @@
               var p0 = s.info.slides[x.s].paras.filter(function (y) { return y.ord === x.o; })[0];
               if (x.t === p0.text) delete s.edits[x.s][x.o]; else s.edits[x.s][x.o] = x.t;
             });
-            ctx.setDirty(anyEdit(s));
+            ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
             s.mode = 'one'; leaveEdit();
             ctx.toast('이어서 고칠 수 있게 고친 글 ' + data.edits.length + '곳을 되살렸습니다.', 3600);
             return true;
@@ -352,6 +498,7 @@
 
       showTip(slides().length + '장 · 「고치기」로 글자를 고칠 수 있습니다 · 애니메이션·차트는 화면에 표시되지 않습니다');
       render();
+      if (ctx.opts && ctx.opts.startEdit && structOn()) setTimeout(enterEdit, 0);
     });
   }
 
@@ -366,7 +513,7 @@
     restore: function (data) { return state && state.api ? state.api.restore(data) : Promise.resolve(false); },
     open: function (ctx) {
       ctx.loadCss('js/smartoffice/pptx/so-pptx.css');
-      return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () {
+      return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () { return ctx.flag && ctx.flag('pptx') ? ctx.loadScript('vendor/so/docx/jszip.min.js').then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-edit.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui.js'); }) : null; }).then(function () {
         if (!window.pptxPreview || !window.pptxPreview.init) throw new Error('파워포인트 부품을 찾지 못함');
         return ctx.file.arrayBuffer();
       }).then(function (buf) { return setup(ctx, buf); });
