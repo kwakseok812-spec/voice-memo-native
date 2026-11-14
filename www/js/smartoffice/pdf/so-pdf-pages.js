@@ -1,5 +1,5 @@
 /* ============================================================================
- * so-pdf-pages.js — S-Office PDF 편집 보강(O-0861, v10.3): 쪽 정리(순서·삭제·회전) · 합치기 · 나누기 · 양식 칸 채우기
+ * so-pdf-pages.js — S-Office PDF 편집 보강(O-0861, v10.3): 쪽 정리(순서·삭제·회전) · 합치기 · 나누기 · 양식 칸 채우기 · (v10.8) 꾸미기
  * ----------------------------------------------------------------------------
  * so-pdf.js 가 스위치(SO_PDF_PAGES)가 켜졌을 때만 불러온다. 새 부품 없음 — 이미 들어 있는 pdf-lib(MIT)와 PDF.js(보기)만 쓴다.
  *   · 쪽 순서·삭제·회전은 「원본 문서 안에서 쪽을 빼고 같은 쪽을 다시 끼우는」 방식이다(새 문서에 복사하지 않는다) —
@@ -420,7 +420,7 @@
     readInfo(api).catch(function () { return { signed: false }; }).then(function (info) {
       ctx.busy(null);
       if (info.signed) { signedBlock(api); return; }
-      var go = function () { buildDeco(api, info); };
+      var go = function () { (ctx.loadScript('js/smartoffice/pdf/so-pdf-tools.js')).catch(function () {}).then(function () { buildDeco(api, info); }); };   // v10.8 4회차: 가리기·머리글·정보·크기·용량·암호 구역(없어도 예전 꾸미기는 그대로)
       if (api.hasAnns()) ctx.confirm('넣은 것이 있습니다', '넣은 형광펜·글·서명을 먼저 문서에 합친 뒤 꾸밉니다. 합친 뒤에도 「되돌리기」로 취소할 수 있습니다.', '문서에 합치고 꾸미기', function () { ctx.busy('넣은 것을 문서에 합치는 중…'); api.flattenAnns().then(function () { ctx.busy(null); go(); }, function (e) { ctx.busy(null); ctx.toast('합치지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }, { cancelLabel: '취소' });
       else go();
     });
@@ -488,6 +488,7 @@
     act('빈 쪽 넣기', function () {
       run('빈 쪽', function (L, doc) { var last = doc.getPages()[doc.getPageCount() - 1], b = last.getSize(); for (var i = 0; i < Math.max(1, Math.min(20, Math.round(st.blank || 1))); i++) doc.addPage([b.width, b.height]); return ''; }, '빈 쪽을 넣었습니다.');
     });
+    if (global.SOPdfTools) { try { global.SOPdfTools.extend(api, { body: body, st: st, run: run }); } catch (e) { try { console.warn('[S-Office PDF] 꾸미기 구역', e); } catch (x) {} } }
     body.appendChild(el('div', 'so-sheet-note', '모든 쪽에 적용됩니다. 문서는 그대로 두고 이 화면에서 바꾼 뒤 「사본 저장」으로 새 파일에 저장합니다. 특정 쪽에만 넣으려면 먼저 「쪽 정리」에서 나누기로 따로 만드십시오.'));
     ctx.sheet({ title: '꾸미기', body: body, buttons: [{ label: '닫기' }], wide: true });
   }

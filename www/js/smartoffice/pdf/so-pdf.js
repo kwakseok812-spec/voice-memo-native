@@ -4,6 +4,7 @@
  * 이 파일의 코드는 자체 작성(이음오피스 소스 복사 없음). AI 기능 없음. 원본은 덮어쓰지 않고 「원래이름_수정.pdf」 사본만 저장.
  * 하는 일: 세로 연속 쪽 보기(보이는 쪽 근처만 그림) · 핀치/버튼 확대 · 쪽 이동 · 형광펜 · 글 얹기 · 메모 · 손글씨 서명.
  * 하지 않는 일: PDF 본문 글 직접 수정.
+ * v10.8(O-0861) 4회차: 영역 가리기·머리글/바닥글·문서 정보·쪽 크기 맞추기·용량 줄이기·암호 걸기(so-pdf-tools.js, 꾸미기 시트) · 암호 걸린 PDF 열기(암호 입력→암호 없는 사본으로 열기, 스위치 SO_PDF_QPDF) · 책갈피(목차) 보기(쪽 이동 창) · 사진 「모든 쪽에도」.
  * v10.3(O-0861) 스위치 SO_PDF_PAGES: 쪽 정리·합치기·나누기·양식 칸 채우기(so-pdf-pages.js, 켜져 있을 때만 불러옴) · 도구줄 6칸+더보기.
  */
 (function (global) {
@@ -340,6 +341,7 @@
     } else if (a.type === 'stamp') {
       btn('키우기', function () { scaleStamp(a, 1.2); });
       btn('줄이기', function () { scaleStamp(a, 1 / 1.2); });
+      if (plus() && S.n > 1 && S.n <= 40) btn('모든 쪽에도', function () { stampAll(a); });
     }
     btn('지우기', function () {
       S.anns = S.anns.filter(function (x) { return x.id !== a.id; });
@@ -348,6 +350,19 @@
     }, 'del');
     btn('✕', function () { select(null); }, 'x');
     bar.style.display = '';
+  }
+  // 고른 사진·서명을 다른 모든 쪽에도 같은 자리(쪽 크기에 비례)로 넣는다 — 로고·도장을 모든 쪽에 찍을 때
+  function stampAll(a) {
+    var P0 = S.pages[a.page - 1];
+    S.ctx.confirm('모든 쪽에 같은 자리로 넣을까요?', '이 사진을 다른 ' + (S.n - 1) + '쪽에도 같은 자리·같은 크기(쪽 크기에 비례)로 넣습니다. 쪽마다 따로 옮기거나 지울 수 있고, 되돌리려면 ↶ 를 쓰십시오.', '모든 쪽에 넣기', function () {
+      for (var n = 1; n <= S.n; n++) {
+        if (n === a.page || a.fill) continue;
+        var P = S.pages[n - 1], w = a.w / P0.w * P.w, h = w * (a.h / a.w);
+        var b = { type: 'stamp', page: n, img: a.img, x: clamp(a.x / P0.w * P.w, 0, Math.max(0, P.w - w)), y: clamp(a.y / P0.h * P.h, 0, Math.max(0, P.h - h)), w: w, h: h };
+        b.id = ++S.idc; S.anns.push(b); mount(b);
+      }
+      commit(); select(a.id); S.ctx.toast('모든 쪽에 넣었습니다.', 2200);
+    }, { cancelLabel: '취소' });
   }
   function positionSel() { /* 막대는 화면 위쪽 고정 — 따로 옮길 필요 없음 */ }
   function scaleStamp(a, f) {
@@ -467,6 +482,15 @@
       quick.appendChild(b);
     });
     wrap.appendChild(quick);
+    if (plus() && S.pdf && S.pdf.getOutline) {      // 책갈피(목차)가 있으면 목록으로 보기
+      var cur = S;
+      toolsMod().then(function (T) { return T.hasOutline(cur.pdf).then(function (ok) {
+        if (!ok || S !== cur || !quick.parentNode) return;
+        var ob = el('button', 'sp-sz', '책갈피(목차) 보기'); ob.type = 'button';
+        ob.onclick = function () { closeDlg(); T.outlineSheet({ ctx: cur.ctx, pdfDoc: function () { return cur.pdf; } }, goPage); };
+        quick.appendChild(ob);
+      }); }).catch(function () {});
+    }
     dialog('쪽 이동', wrap, [{ label: '취소' }, { label: '이동', primary: true, onClick: function () { goPage(+inp.value); } }]);
     setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 60);
   }
@@ -554,7 +578,7 @@
   // 반환: Promise<true|false>(저장 성공 여부) — 「수정 요청」으로 넘어가기 전 저장이 이 값을 본다
   function save() {
     var ctx = S.ctx, cur = S;
-    if (!S.anns.length && !S.workStack.length) { ctx.toast('아직 고친 것이 없습니다. 형광펜·글·메모·서명·쪽 정리를 한 뒤 저장해 주십시오.', 3000); return Promise.resolve(false); }
+    if (!S.anns.length && !S.workStack.length && !S.decrypted) { ctx.toast('아직 고친 것이 없습니다. 형광펜·글·메모·서명·쪽 정리를 한 뒤 저장해 주십시오.', 3000); return Promise.resolve(false); }
     select(null);
     ctx.busy('새 파일 만드는 중…');
     return buildOutput().then(function (out) {
@@ -619,7 +643,7 @@
   // ---------------------------------------------------------------- 임시 보관(snapshot) · 되살리기(restore)
   // 넣은 형광펜·글·메모·서명의 목록을 JSON 으로(없으면 null). 서명 그림은 데이터 주소로 담는다.
   function snapshot() {
-    if (!S || S.dead || (!S.anns.length && !S.workStack.length)) return null;
+    if (!S || S.dead || S.decrypted || (!S.anns.length && !S.workStack.length)) return null;   // 암호를 풀어 연 문서는 암호 없는 사본이 앱 안에 남지 않게 임시 보관하지 않는다
     var list = S.anns.map(function (a) {
       var o = { t: a.type, p: a.page, x: a.x, y: a.y };
       if (a.type === 'hl') { o.w = a.w; o.h = a.h; o.c = a.color; }
@@ -709,6 +733,7 @@
   // ---------------------------------------------------------------- O-0861(v10.3) 쪽 정리 · 양식 채우기 연결
   function plus() { return !!(S && S.ctx.flag && S.ctx.flag('pdf')); }
   function perRowN() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }
+  function toolsMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-tools.js').then(function () { if (!global.SOPdfTools) throw new Error('PDF 도구 부품을 불러오지 못함'); return global.SOPdfTools; }); }
   function pagesMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-pages.js').then(function () { if (!global.SOPdfPages) throw new Error('쪽 정리 부품을 불러오지 못함'); return global.SOPdfPages; }); }
   function openPagesScreen() {
     if (S.form) formStop();
@@ -723,7 +748,7 @@
       hasAnns: function () { return S.anns.length > 0; },
       flattenAnns: function () { return buildOutput().then(function (out) { return applyBytes(out, '반영'); }); },
       applyBytes: function (b, label) { return applyBytes(b, label); },
-      pageCount: function () { return S.n; }, pdfDoc: function () { return S.pdf; },
+      pageCount: function () { return S.n; }, pdfDoc: function () { return S.pdf; }, goPage: goPage,
       PDFName: function (n) { return global.PDFLib.PDFName.of(n); },
       onPagesBack: function (fn) { S.pagesBack = fn; }, pagesClosed: function () { S.pagesBack = null; },
       formOn: function () { return !!S.form; }, formStop: formStop, formStart: formStart,
@@ -847,7 +872,16 @@
     });
     return ctx.file.arrayBuffer().then(function (buf) {
       cur.bigDoc = buf.byteLength > 25 * 1024 * 1024;       // 큰 파일은 한 쪽에 쓰는 메모리를 더 줄인다
-      return global.pdfjsLib.getDocument({ data: new Uint8Array(buf.slice(0)), isEvalSupported: false }).promise;
+      return global.pdfjsLib.getDocument({ data: new Uint8Array(buf.slice(0)), isEvalSupported: false }).promise.catch(function (e) {
+        if (e && e.name === 'PasswordException' && ctx.flag && ctx.flag('pdfqpdf') && S === cur) {      // 암호가 걸린 PDF: 암호를 받아 암호 없는 사본으로 연다(스위치 SO_PDF_QPDF)
+          return toolsMod().then(function (T) { return T.openWithPassword(ctx, buf); }).then(function (bytes) {
+            if (!bytes || S !== cur) throw e;
+            cur.bytes = new Uint8Array(bytes); cur.decrypted = true;
+            return global.pdfjsLib.getDocument({ data: new Uint8Array(bytes).slice(), isEvalSupported: false }).promise;
+          });
+        }
+        throw e;
+      });
     }).then(function (doc) {
       if (S !== cur) { try { doc.destroy(); } catch (e) {} return; }
       cur.pdf = doc; cur.n = doc.numPages;
@@ -869,6 +903,7 @@
       ctx.setActions([{ label: '사본 저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
       if (ctx.onSave) { ctx.onSave(function () { S.ctx.noticeThen(save); }); ctx.setSaver(function () { return save(); }); }
       buildUI(); initPages(); layout(); updateCurPage();
+      if (cur.decrypted) ctx.toast('암호를 풀어 열었습니다. 「사본 저장」으로 저장하면 암호 없는 파일이 됩니다(원래 파일은 그대로).', 5200);
       return waitFirst(cur).then(function () { if (ctx.opts && ctx.opts.openPages && plus() && S === cur) setTimeout(openPagesScreen, 150); });   // 스캔 완료 화면의 「쪽 더 정리하기」
     });
   }
@@ -896,7 +931,12 @@
 
   global.SOffice.register({
     id: 'pdf', label: 'PDF', editable: true,
-    credits: [{ name: 'pdf-lib', license: 'MIT', note: 'PDF에 형광펜·글·메모·서명 넣기 (사본 저장)' }],
+    credits: [
+      { name: 'pdf-lib', license: 'MIT', note: 'PDF에 형광펜·글·메모·서명·꾸미기 넣기 (사본 저장)' },
+      { name: 'qpdf (Jay Berkenbilt 외)', license: 'Apache-2.0', note: 'PDF 암호 걸기·풀기·구조 압축 — qpdf.wasm(이음오피스 배포본의 파일을 수정 없이 사용, vendor/so/pdf/qpdf/)' },
+      { name: 'qpdf-wasm (WebAssembly 빌드·연결부)', license: 'ISC', note: 'qpdf 를 브라우저에서 돌리는 부품' },
+      { name: 'libjpeg-turbo · zlib', license: 'IJG · BSD-3-Clause · zlib', note: 'qpdf.wasm 안에 들어 있음' }
+    ],
     canOpen: function (ext) { return ext === 'pdf'; },
     open: openDoc,
     snapshot: snapshot,

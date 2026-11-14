@@ -111,3 +111,23 @@ html[data-style="dark"] .sp-cv{filter:brightness(.88)}       /* 어두운 화면
 .spd{display:flex;flex-direction:column;gap:8px;padding:2px 0 8px}.spd-l{font-size:13.5px;font-weight:800;margin:10px 2px 2px;color:var(--text,#111)}.spd-r{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .spd-b{appearance:none;min-height:46px;padding:0 14px;border-radius:12px;border:1.5px solid var(--glass-b,#ccc);background:var(--bg0,#fff);color:var(--text,#111);font:inherit;font-weight:700}.spd-b.big{width:100%}.spd-b.on{border-color:var(--p1,#2563eb);background:var(--p1,#2563eb);color:#fff}
 .spd-in{min-height:46px;border-radius:12px;border:1.5px solid var(--glass-b,#ccc);background:var(--bg0,#fff);color:var(--text,#111);padding:0 12px;font:inherit;width:90px}.spd-in.wide{width:100%}.spd-u{font-size:14px;color:var(--text2,#555)}
+/* v10.8 4회차: 꾸미기 시트의 접이식 구역 · 영역 가리기 화면 */
+.spd-d{border:1.5px solid var(--glass-b,#ccc);border-radius:14px;background:var(--bg0,#fff);overflow:hidden}
+.spd-d>summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;padding:0 14px;font-weight:800;font-size:14.5px;color:var(--text,#111);position:relative}
+.spd-d>summary::-webkit-details-marker{display:none}
+.spd-d>summary::after{content:'▾';position:absolute;right:14px;color:var(--text2,#555);transition:transform .2s}
+.spd-d[open]>summary::after{transform:rotate(180deg)}
+.spd-dc{display:flex;flex-direction:column;gap:8px;padding:0 12px 12px}
+.spd-dc .spd-u{margin-top:2px}
+.spd-g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 10px}.spd-f{min-width:0}.spd-f .spd-in{width:100%}
+.spr-stage{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--bg1,#e4e6ee);padding:8px;display:flex}
+.spr-stage[data-mode=draw]{touch-action:none}
+.spr-stage[data-mode=move]{touch-action:pan-x pan-y}
+.spr-host{position:relative;margin:auto;flex:none;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.22)}
+.spr-cv,.spr-ov{position:absolute;left:0;top:0}
+.spr-ov{touch-action:none;cursor:crosshair}
+.spr-stage[data-mode=move] .spr-ov{pointer-events:none}
+.spr-r{position:absolute;background:#000;outline:1.5px solid #e53935;box-sizing:border-box}
+.spr-r.tmp{background:rgba(0,0,0,.55)}
+.spr-foot .spp-fb{height:56px}
+@media (prefers-reduced-motion:reduce){.spd-d>summary::after{transition:none}}

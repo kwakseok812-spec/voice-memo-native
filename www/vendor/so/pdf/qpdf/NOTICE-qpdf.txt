@@ -1,0 +1,87 @@
+qpdf.wasm 고지문 (S-Office 앱에 들어 있는 부품: vendor/so/pdf/qpdf/qpdf.wasm · qpdf.js)
+
+이 부품은 PDF에 암호를 걸고 푸는 데 씁니다. 아래 원문은 이음오피스(IeumOffice) 0.12.3 배포본의
+THIRD-PARTY-NOTICES.txt 중 「@neslinesli93/qpdf-wasm v0.3.0」 부분(2483~2560줄)을 그대로 옮긴 것입니다.
+- qpdf.wasm 은 이음오피스 배포본(resources/wasm/qpdf.wasm)의 파일을 한 바이트도 고치지 않고 복사했습니다.
+  (SHA-256 abd933f4ccace4f732999381b21aec8b7e3726f18a5b167fafd57f88dd440876, 1,334,286 바이트)
+- qpdf.js 는 같은 패키지의 연결부 코드를 그대로 옮기고 설명 주석과 이름 한 줄만 붙였습니다(바뀐 부분 표시).
+- Apache License 2.0 전문: 같은 폴더의 LICENSE-Apache-2.0.txt, ISC 고지: LICENSE-qpdf-wasm-ISC.txt
+
+@neslinesli93/qpdf-wasm v0.3.0 — ISC
+------------------------------------------------------------------------
+qpdf: Copyright (c) 2005-2021 Jay Berkenbilt; Copyright (c) 2022-2025 Jay Berkenbilt and Manfred Holger. Licensed under the Apache License, Version 2.0.
+https://github.com/qpdf/qpdf
+WebAssembly build and wrapper: ISC License.
+https://github.com/neslinesli93/qpdf-wasm
+
+Libraries compiled into dist/qpdf.wasm (shipped as resources/wasm/qpdf.wasm):
+
+libjpeg-turbo — IJG License, Modified (3-clause) BSD License and zlib License
+Copyright (C) 1991-2021 The libjpeg-turbo Project and many others
+
+This software is based in part on the work of the Independent JPEG Group.
+
+Copyright (C)2009-2021 D. R. Commander. All Rights Reserved.
+Copyright (C)2015 Viktor Szathmáry. All Rights Reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+The SIMD extensions are covered by the zlib License:
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+zlib — zlib License
+Copyright (C) Jean-loup Gailly and Mark Adler
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+

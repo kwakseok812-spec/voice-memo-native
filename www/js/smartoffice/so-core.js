@@ -65,6 +65,7 @@
   var SO_PPTX_TOOLS = 'on';                 // 파워포인트 슬라이드·도형·그림·표·노트·쇼·새 문서 — 'off' = 예전 PPT 화면(글자 고치기만)
   var SO_DOCX_TOOLS = 'on';                 // 워드 문단·스타일·서식·목록·표·그림·머리글·바꾸기·새 문서 — 'off' = 예전 워드 화면(글자 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
+  var SO_PDF_QPDF = 'on';                   // PDF 암호 걸기·풀기(qpdf.wasm) — 'off' = 암호 걸린 PDF는 예전처럼 변환해서 보고, 꾸미기 시트에 암호 구역이 없다(용량 줄이기는 그림 줄이기만)
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
@@ -593,6 +594,7 @@
     if (SO_EDIT_PLUS !== 'on') return false;
     if (k === 'hwp') return SO_HWP_TOOLS === 'on';
     if (k === 'pdf') return SO_PDF_PAGES === 'on';
+    if (k === 'pdfqpdf') return SO_PDF_PAGES === 'on' && SO_PDF_QPDF === 'on';
     if (k === 'xlsx') return SO_XLSX_TOOLS === 'on';
     if (k === 'pptx') return SO_PPTX_TOOLS === 'on';
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';
@@ -811,7 +813,7 @@
         (hwpReady ? '' : ' 한글(HWP·HWPX) 문서는 아직 준비 중이라 「변환해서 보기」로 열립니다.') + '</p>' +
       (hwpReady ?
         '<h3>바탕으로 한 오픈소스</h3>' +
-        '<p>한글 문서 부분은 오픈소스 프로젝트 <b>이음오피스(IeumOffice)</b>(Apache License 2.0)와 그 바탕인 <b>GenOffice</b>(Genspark / Mainfunc, Inc., Apache License 2.0)의 일부 빌드를 <b>수정해서</b> 사용했습니다. 원래의 저작권·라이선스 고지는 유지합니다. 수정한 부분은 폰 화면에 맞추고 AI 기능을 뺀 것입니다.</p>' +
+        '<p>한글 문서 부분은 오픈소스 프로젝트 <b>이음오피스(IeumOffice)</b>(Apache License 2.0)와 그 바탕인 <b>GenOffice</b>(Genspark / Mainfunc, Inc., Apache License 2.0)의 일부 빌드를 <b>수정해서</b> 사용했습니다. 원래의 저작권·라이선스 고지는 유지합니다. 수정한 부분은 폰 화면에 맞추고 AI 기능을 뺀 것입니다. PDF 암호 부품(qpdf.wasm)은 이음오피스 배포본의 파일을 수정 없이 가져왔고, 로고·템플릿·글꼴은 가져오지 않았습니다. 라이선스 전문과 원본 고지는 <code>vendor/so/hwp/studio/</code>에 있습니다.</p>' +
         '<p>한글(HWP·HWPX) 해석·편집은 <b>rhwp</b>(MIT License, Copyright (c) 2025-2026 Edward Kim)를 바탕으로 합니다.</p>' +
         '<h3>한글 문서 고지</h3>' +
         '<p>본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.</p>' : '') +
