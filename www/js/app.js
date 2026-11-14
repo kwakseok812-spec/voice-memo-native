@@ -106,6 +106,10 @@
    *   SILENT_CAM_ENGINE: 'auto'(한 장=고화질, 이어 찍기=빠름) | 'quality' | 'fast' | 'frame'(화면 프레임 저장 — 소리가 날 때의 대체). */
   var SILENT_CAM = 'on';
   var SILENT_CAM_ENGINE = 'auto';
+  /* v9.99(O-0854 3번) 명함 등록 자리 — 'on' 이면 홈 「스캔」(카메라 화면)의 모드 알약에 「명함」 칸(문서|영수증|명함|일반 사진)이 생기고, 카메라를 못 쓸 때의 「무엇을 스캔할까요?」 창에도 「명함」 줄이 생기며,
+   *   채팅 ＋ 창의 「명함 등록 · 사진 PC 정리」 줄은 「사진을 PC로 보내 정리」 한 줄로 바뀐다. 명함 사진은 예전과 같은 길(명함 등록 창 → PC 명함 대장)로 간다 — 새 등록 길·새 서버 호출 없음.
+   *   'off' 면 v9.98 과 똑같다(카메라 알약 세 칸, 대체 창 두 줄, ＋ 창 예전 줄). */
+  var SCAN_CARD = 'on';
   /* v9.32 영수증 여러 장 · 「맞나요?」 확인 말풍선 — RECEIPT_MULTI 'off' 면 영수증은 한 장만(v9.31 과 같음), RECEIPT_ACK 'off' 면 PC 가 보낸 확인 단추를 그리지 않고 글만 보인다.
    *   RECEIPT_MULTI_MAX 는 한 번에 보내는 장수(PC 계약과 같은 값 10). */
   var RECEIPT_MULTI = 'on', RECEIPT_ACK = 'on', RECEIPT_MULTI_MAX = 10;
@@ -2804,7 +2808,7 @@
       }
       if (photoAsCard) {                                        // (O-0176) 채팅 ＋ 「명함 등록」 — 명함 스위치를 켠 채로(끄면 일반 사진 PC 정리)
         if ($('isCard')) $('isCard').checked = true;
-        if ($('filePanelTitle')) $('filePanelTitle').textContent = '명함 등록 · 사진 PC 정리';
+        if ($('filePanelTitle')) $('filePanelTitle').textContent = SCAN_CARD === 'on' ? '명함 등록' : '명함 등록 · 사진 PC 정리';     // v9.99: 머리줄에서 안 잘리게 짧게
       }
     } else filePanelFromChat = false;
     photoAsCard = false; photoAsScan = false; this.value = '';
@@ -2901,6 +2905,32 @@
     document.body.appendChild(sh);
     sh.style.display = 'flex';
   }
+  /* v9.99(O-0854 3번) 명함 등록 — 입구(카메라 「명함」 칸 · 대체 창 「명함」 줄 · 카메라의 [사진 불러오기])가 달라도 가는 곳은 한 곳, 기존 «명함 등록 · 사진 PC 정리» 창(명함 스위치 켜짐)이다.
+   *  거기서 [보내기]를 누르면 예전 ＋ 「명함 등록」과 똑같이 sendFiles → PC 가 명함 대장에 등록한다. 찍은 사진은 웹 파일로 이미 읽혀 있어 앱 안 임시 파일은 바로 지운다. */
+  function cardToPanel(file) {
+    photoAsCard = false; filePanelFromChat = false;
+    reviewFiles([file], 'photo'); setScanPanel(false);
+    if ($('isCard')) $('isCard').checked = true;
+    if ($('filePanelTitle')) $('filePanelTitle').textContent = '명함 등록';
+    try { if (window.SilentCam) SilentCam.release(file); } catch (e) {}
+  }
+  function cardPick() { photoAsScan = false; photoAsCard = true; filePanelFromChat = false; $('photoInput').click(); }       // 폰 사진 여러 장도 한 번에 고를 수 있다(photoInput 은 multiple)
+  function cardGallerySheet() {                  // 카메라의 [사진 불러오기]: 카메라가 닫힌 뒤엔 누름이 끊겨 있어, 한 번 더 눌러야 사진 고르기가 열린다
+    var old = document.querySelector('.stab-sheet'); if (old) { try { old.remove(); } catch (e) {} }
+    var sh = document.createElement('div');
+    sh.className = 'sheet shin-sheet atm-sheet stab-sheet';
+    sh.innerHTML = '<div class="sheet-box" role="dialog" aria-label="명함 사진 고르기"><div class="sheet-head">폰에 있는 명함 사진을 고르시겠습니까?</div>' +
+      '<button type="button" class="sheet-btn" data-cgs="pick"><svg class="atm-ic"><use href="#i-card"/></svg><span><b>명함 사진 고르기</b><small>카톡으로 받은 명함 이미지도 됩니다. 여러 장을 한꺼번에 고를 수 있습니다</small></span></button>' +
+      '<button type="button" class="sheet-btn atm-close" data-cgs="close">닫기</button></div>';
+    sh.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-cgs]') : null;
+      if (!b && ev.target !== sh) return;
+      try { sh.remove(); } catch (e) {}
+      if (b && b.getAttribute('data-cgs') === 'pick') cardPick();
+    });
+    document.body.appendChild(sh);
+    sh.style.display = 'flex';
+  }
   /* v9.29(O-0607) 홈 「카메라」 칸 — 새 카메라 화면(문서 / 영수증 / 일반 사진)을 연다.
    *  문서·영수증은 찍은 사진이 «기존 스캔 처리»(테두리·펴기·보정·목록·PDF / 영수증 칸)로 이어지고, 일반 사진은 카메라 화면 안에서 [갤러리에 저장] · [케이에게 보내기] · [다시 찍기].
    *  새 카메라를 쓸 수 없으면(스위치 off·플러그인 없음·카메라 오류·허락 거절 뒤 사진 고르기) 예전 「무엇을 스캔할까요?」 창(openScanTab)으로 간다. */
@@ -2921,12 +2951,14 @@
     var pre = (docScanOn() && DocScan.listSession) ? DocScan.listSession().then(function (r) { left = Math.max(0, left - ((r && r.pages && r.pages.length) || 0)); }, function () {}) : Promise.resolve();
     pre.then(function () {
       if (left <= 0 && last === 'doc') { toast('문서 스캔에 이미 100쪽이 담겨 있어 더 담을 수 없습니다.'); return { kind: 'cancel' }; }   // 열지 않는다
-      return SilentCam.shoot({ mode: last, from: 'tab', multi: last === 'doc', left: left });
+      return SilentCam.shoot({ mode: last, from: 'tab', multi: last === 'doc', left: left, card: SCAN_CARD === 'on' });
     }).then(function (r) {
       if (!r) return;
-      if (r.mode) { try { localStorage.setItem(CAM_MODE_KEY, r.mode); } catch (e) {} }
+      if (r.mode && r.mode !== 'card') { try { localStorage.setItem(CAM_MODE_KEY, r.mode); } catch (e) {} }      // v9.99: 「명함」은 기억하지 않는다(다음에 스캔을 눌렀는데 명함 모드로 열리는 놀람을 막음)
+      if (r.kind === 'gallery' && r.mode === 'card' && SCAN_CARD === 'on') { cardGallerySheet(); return; }
       if (r.kind === 'fallback' || r.kind === 'gallery') { openScanTab(); return; }
       if (r.kind !== 'files' || !r.files || !r.files.length) return;
+      if (r.mode === 'card') { if (SCAN_CARD === 'on') cardToPanel(r.files[0]); else r.files.forEach(function (f) { SilentCam.release(f); }); return; }
       if (r.mode === 'photo') { chatAttachCaptured(r.files[0]); toast('채팅에 붙였습니다. 보내기를 눌러 주십시오.'); return; }
       if (r.mode === 'receipt') { if (SCAN_HUB === 'on') openReceiptScan(true, r.files[0]); else SilentCam.release(r.files[0]); return; }
       if (docScanOn()) openScanGeneral({ files: r.files });
@@ -2940,7 +2972,8 @@
       return SilentCam.recover({
         doc: function (files) { if (docScanOn()) openScanGeneral({ files: files }); else files.forEach(function (f) { SilentCam.release(f); }); },
         receipt: function (file) { if (SCAN_HUB === 'on') openReceiptScan(true, file); },
-        photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였습니다. 보내기를 눌러 주십시오.'); }
+        photo: function (file) { chatAttachCaptured(file); toast('채팅에 붙였습니다. 보내기를 눌러 주십시오.'); },
+        card: function (file) { if (SCAN_CARD === 'on') cardToPanel(file); else SilentCam.release(file); }
       });
     }).catch(function () {});
   }

@@ -58,11 +58,11 @@
         { label: '폰 설정에서 허락하기', value: 'settings', primary: true }, { label: '닫기', value: 'close' }
       ]).then(function (v) { if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} } return { kind: 'cancel' }; });
     }
-    return sheet('카메라를 지금은 쓸 수 없습니다', '카메라 허락이 꺼져 있습니다. 그래도 문서와 영수증은 사진을 골라 주시면 똑같이 펴 드립니다.', [
+    return sheet('카메라를 지금은 쓸 수 없습니다', mode === 'card' ? '카메라 허락이 꺼져 있습니다. 그래도 명함은 사진을 골라 주시면 똑같이 등록해 드립니다.' : '카메라 허락이 꺼져 있습니다. 그래도 문서와 영수증은 사진을 골라 주시면 똑같이 펴 드립니다.', [
       { label: '사진 골라서 계속하기', value: 'gallery', primary: true }, { label: '폰 설정에서 허락하기', value: 'settings' }
     ]).then(function (v) {
       if (v === 'settings') { try { P().openAppSettings(); } catch (e) {} return { kind: 'cancel' }; }
-      return { kind: 'gallery' };
+      return { kind: 'gallery', mode: mode };
     });
   }
   function ensurePerm(mode, st) {             // → Promise<'ok' | result(= denied 안내 뒤 결과)>
@@ -103,7 +103,7 @@
   function releasePath(path) { try { var p = P(); if (p && path) return Promise.resolve(p.release({ path: path })).catch(function () {}); } catch (e) {} return Promise.resolve(); }
 
   /* ───────── 찍기 ───────── */
-  // opt: {mode:'doc'|'receipt'|'photo', from:'tab'|'scan', multi, left, title}
+  // opt: {mode:'doc'|'receipt'|'card'|'photo', from:'tab'|'scan', multi, left, title, card}  (card=true 면 카메라 모드 알약에 「명함」 칸이 생긴다 — 앱의 스위치 SCAN_CARD)
   // → {kind:'files', files, mode, action} | {kind:'cancel', mode} | {kind:'gallery'} | {kind:'fallback', why}
   function shoot(opt) {
     opt = opt || {};
@@ -116,9 +116,10 @@
       if (!st || !st.available) return done({ kind: 'fallback', why: 'nocamera' });
       return ensurePerm(mode, st).then(function (g) {
         if (g !== 'ok') return done(g);
-        return p.open({ mode: mode, from: opt.from || 'tab', multi: !!opt.multi, left: opt.left == null ? 100 : opt.left, title: opt.title || null, engine: engine(), resume: !!opt.resume, zoom: CFG.zoom, layout: CFG.layout }).then(function (r) {
+        return p.open({ mode: mode, from: opt.from || 'tab', multi: !!opt.multi, left: opt.left == null ? 100 : opt.left, title: opt.title || null, engine: engine(), resume: !!opt.resume, zoom: CFG.zoom, layout: CFG.layout, card: !!opt.card }).then(function (r) {
           r = r || {};
           if (r.action === 'denied') return deniedFlow(mode).then(done);
+          if (r.action === 'gallery') return done({ kind: 'gallery', mode: r.mode || mode });      // 명함 모드의 [사진 불러오기] — 부른 쪽(app.js)이 사진 고르기를 연다
           if (r.action === 'error') return done({ kind: 'fallback', why: r.reason || 'error' });
           if ((r.action === 'done' || r.action === 'send') && r.pages && r.pages.length) {
             return readAll(r.pages).then(function (files) {
@@ -135,7 +136,7 @@
   }
 
   /* ───────── 앱이 정리됐다 돌아왔을 때 · 3일 청소 ───────── */
-  // handlers: { doc(files), receipt(file), photo(file) } — app.js 가 «이어서 쓰기»를 어디로 이을지 정한다.
+  // handlers: { doc(files), receipt(file), photo(file), card(file) } — app.js 가 «이어서 쓰기»를 어디로 이을지 정한다.
   var recovering = false;
   function recover(handlers) {
     var p = P();
@@ -143,9 +144,9 @@
     recovering = true;
     return Promise.resolve(p.pending()).then(function (r) {
       if (!r || !r.has || r.cameraOpen || !r.pages || !r.pages.length) return false;
-      var n = r.pages.length, mode = r.mode === 'receipt' ? 'receipt' : (r.mode === 'photo' ? 'photo' : 'doc');
-      var what = mode === 'photo' ? '찍어 둔 사진이 있습니다' : '찍어 둔 ' + n + '쪽이 있습니다';
-      var body = mode === 'photo' ? '아직 어디에도 저장하거나 보내지 않은 사진입니다. 채팅에 붙일까요?' : '앱이 잠깐 닫히는 바람에 이어서 쓰지 못한 사진입니다. 이어서 쓸까요?';
+      var n = r.pages.length, mode = r.mode === 'receipt' ? 'receipt' : (r.mode === 'photo' ? 'photo' : (r.mode === 'card' ? 'card' : 'doc'));
+      var what = mode === 'photo' ? '찍어 둔 사진이 있습니다' : mode === 'card' ? '찍어 둔 명함 사진이 있습니다' : '찍어 둔 ' + n + '쪽이 있습니다';
+      var body = mode === 'photo' ? '아직 어디에도 저장하거나 보내지 않은 사진입니다. 채팅에 붙일까요?' : (mode === 'card' ? '아직 보내지 않은 명함 사진입니다. 명함 등록 화면으로 이어갈까요?' : '앱이 잠깐 닫히는 바람에 이어서 쓰지 못한 사진입니다. 이어서 쓸까요?');
       return sheet(what, body, [{ label: mode === 'photo' ? '채팅에 붙이기' : '이어서 쓰기', value: 'use', primary: true }, { label: '버리기', value: 'drop' }]).then(function (v) {
         if (v !== 'use') return Promise.resolve(p.discardAll()).then(function () { return true; });
         return readAll(r.pages).then(function (files) {
@@ -153,6 +154,7 @@
           if (mode === 'doc' && h.doc) { h.doc(files); return true; }
           if (mode === 'receipt' && h.receipt) { h.receipt(files[0]); for (var i = 1; i < files.length; i++) release(files[i]); return true; }
           if (mode === 'photo' && h.photo) { h.photo(files[0]); return true; }
+          if (mode === 'card' && h.card) { h.card(files[0]); return true; }
           return false;
         }, function () { return false; });
       });
