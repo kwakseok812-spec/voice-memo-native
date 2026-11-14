@@ -95,6 +95,8 @@
         btn(g, '아래에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.b, '', true); return { xml: y, newA: r.b + 1, newB: r.b + 1 }; }, '문단을 하나 넣었습니다', true); }, 'big');
         btn(g, '위에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.a, '', false); return { xml: y, newA: r.a, newB: r.a }; }, '문단을 하나 넣었습니다', true); }, 'big');
         btn(g, '문단 지우기', function () { ctx().confirm('고른 문단 ' + (r.b - r.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { op('문단 지우기', function (x) { return ST.deleteParas(x, r.a, r.b); }, function (q) { return q.blanked ? '내용을 비웠습니다(칸·본문의 마지막 문단이라 남겼습니다)' : '지웠습니다(되돌리려면 ↶)'; }); }, { danger: true }); }, 'big danger');
+        btn(g, '구역 나누기(다음 쪽부터)', function () { op('구역 나누기', function (x) { return ST.sectionBreakAfter(x, r.b); }, '구역을 나눴습니다(쪽 설정이 같은 새 구역)', true); }, 'big');
+        btn(g, '링크 넣기', function () { linkSheet(r); }, 'big'); btn(g, '각주 넣기', function () { noteSheet('footnote', r); }, 'big'); btn(g, '미주 넣기', function () { noteSheet('endnote', r); }, 'big');
         btn(g, '쪽 나누기 넣기', function () { op('쪽 나누기', function (x) { return ST.pageBreakAfter(x, r.b); }, '쪽 나누기를 넣었습니다', true); }, 'big');
         btn(g, '위로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, -1); }, '위로 옮겼습니다'); }, 'big');
         btn(g, '아래로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, 1); }, '아래로 옮겼습니다'); }, 'big');
@@ -103,6 +105,54 @@
         body.appendChild(el('div', 'so-sheet-note', '문서에서 문단을 눌러 고르면 맨 위에 「고른 문단」이 보입니다. 여러 문단은 「범위」로 고릅니다. 같은 문단을 한 번 더 누르면 글 고치기가 열립니다.'));
       });
     }
+    // ---------------- 링크 · 각주 · 미주 · 쪽 설정 ----------------
+    function linkSheet(r) {
+      var body = el('div', 'sdx'), a = el('input', 'sdx-in'), b = el('input', 'sdx-in'); a.type = b.type = 'text'; a.placeholder = '링크로 보일 글'; b.placeholder = '주소 (https://…)'; a.setAttribute('aria-label', '링크로 보일 글'); b.setAttribute('aria-label', '링크 주소'); b.inputMode = 'url';
+      body.appendChild(a); body.appendChild(b); body.appendChild(el('div', 'so-sheet-note', '고른 문단 맨 끝에 링크 글자가 붙습니다. 이미 있는 링크의 글자는 글 고치기에서 고칠 수 있습니다.'));
+      ctx().sheet({ title: '링크 넣기', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '넣기', primary: true, onClick: function () {
+        var t = a.value, u = b.value; env.run('링크', function (pkg) { return ST.addLink(pkg, r.b, t, u).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('링크를 넣었습니다', 2600); });
+      } }] });
+      setTimeout(function () { try { a.focus(); } catch (e) {} }, 300);
+    }
+    function noteSheet(kind, r) {
+      var nm = kind === 'footnote' ? '각주' : '미주';
+      env.readNotes(kind).then(function (list) {
+        var body = el('div', 'sdx'), t = el('textarea', 'sdx-in'); t.rows = 3; t.placeholder = nm + ' 내용'; t.setAttribute('aria-label', nm + ' 내용');
+        body.appendChild(el('div', 'sdx-l', '고른 문단 맨 끝에 ' + nm + ' 표시가 붙습니다')); body.appendChild(t);
+        if (list.length) {
+          body.appendChild(el('div', 'sdx-l', '이 문서의 ' + nm + ' ' + list.length + '개 — 누르면 고치거나 지웁니다'));
+          var g = el('div', 'sdx-g'); body.appendChild(g);
+          list.forEach(function (n, i) {
+            var b = el('button', 'sdx-b big', (i + 1) + '. ' + (n.text.length > 22 ? n.text.slice(0, 22) + '…' : n.text || '(빈 ' + nm + ')')); b.type = 'button';
+            b.onclick = function () { ctx().closeSheet(); setTimeout(function () { noteEdit(kind, n, i + 1); }, 60); }; g.appendChild(b);
+          });
+        }
+        body.appendChild(el('div', 'so-sheet-note', nm + ' 번호는 문서 순서대로 자동으로 매겨집니다. ' + nm + ' 표시가 든 문단도 글 고치기로 고칠 수 있습니다(표시는 그대로 남습니다).'));
+        ctx().sheet({ title: nm + ' 넣기', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '넣기', primary: true, onClick: function () {
+          var tx = t.value; env.run(nm, function (pkg) { return ST.insertNote(pkg, r.b, tx, kind).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(nm + '를 넣었습니다', 2600); });
+        } }] });
+      });
+    }
+    function noteEdit(kind, n, no) {
+      var nm = kind === 'footnote' ? '각주' : '미주', body = el('div', 'sdx'), t = el('textarea', 'sdx-in'); t.rows = 4; t.value = n.text; t.setAttribute('aria-label', nm + ' 내용');
+      body.appendChild(el('div', 'sdx-l', nm + ' ' + no)); body.appendChild(t);
+      ctx().sheet({ title: nm + ' ' + no + ' 고치기', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '지우기', onClick: function () {
+        env.run(nm + ' 지우기', function (pkg) { return ST.deleteNote(pkg, n.id, kind).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(nm + '를 지웠습니다(되돌리려면 ↶)', 2800); });
+      } }, { label: '저장', primary: true, onClick: function () {
+        var tx = t.value; env.run(nm, function (pkg) { return ST.editNote(pkg, n.id, tx, kind).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(nm + '를 고쳤습니다', 2600); });
+      } }] });
+    }
+    var PAGE_BG = [['없음', null], ['노랑', 'FFF2A8'], ['연두', 'D8F0C0'], ['하늘', 'CFE5FF'], ['분홍', 'FFD6E0'], ['회색', 'EDEDED']];
+    function pageGroup(body) {
+      var pg = null; try { pg = ST.readPage(S().xml); } catch (e) {}
+      function go(o, msg) { env.run('쪽 설정', function (pkg) { return ST.pageSetup(pkg, o).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(msg, 2800); }); }
+      var g0 = group(body, '쪽 설정' + (pg ? ' — 지금 ' + (pg.name || '사용자 크기') + (pg.land ? ' 가로' : ' 세로') : ' (문서 전체)'));
+      btn(g0, '세로', function () { go({ orient: 'portrait' }, '용지를 세로로 했습니다'); }, pg && !pg.land ? 'on' : ''); btn(g0, '가로', function () { go({ orient: 'landscape' }, '용지를 가로로 했습니다'); }, pg && pg.land ? 'on' : '');
+      var g1 = group(body, '용지 크기'); ['A4', 'A3', 'A5', 'B5', 'Letter', 'Legal'].forEach(function (k) { btn(g1, k, function () { go({ size: k }, '용지 크기를 ' + k + '로 했습니다'); }, pg && pg.name === k ? 'on' : ''); });
+      var g2 = group(body, '여백'); [['보통', 'normal'], ['좁게', 'narrow'], ['넓게', 'wide'], ['보통(좌우 좁게)', 'moderate']].forEach(function (m) { btn(g2, m[0], function () { go({ margin: m[1] }, '여백을 ' + m[0] + '으로 했습니다'); }); });
+      var g3 = group(body, '쪽 배경색'); PAGE_BG.forEach(function (c) { btn(g3, c[0], function () { env.run('쪽 배경색', function (pkg) { return ST.pageColor(pkg, c[1]).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('쪽 배경색을 바꿨습니다(인쇄에는 설정에 따라 나오지 않을 수 있습니다)', 3200); }); }, 'sw', c[1] || ''); });
+    }
+
     // ---------------- 스타일 ----------------
     function styleSheet() {
       var r = need(); if (!r) return;
@@ -135,6 +185,11 @@
         var g5 = group(body, '글꼴'); FONTS.forEach(function (f) { btn(g5, f, function () { applyRun({ font: f }, '글꼴을 바꿨습니다'); }); });
         var g6 = group(body, '정렬'); [['왼쪽', 'left'], ['가운데', 'center'], ['오른쪽', 'right'], ['양쪽', 'both']].forEach(function (a) { btn(g6, a[0], function () { applyPara({ align: a[1] }); }, cur.align === a[1] ? 'on' : ''); });
         var g7 = group(body, '줄 간격'); [1, 1.15, 1.5, 2].forEach(function (v) { btn(g7, String(v), function () { applyPara({ line: v }, '줄 간격을 ' + J(String(v), '으로') + ' 바꿨습니다'); }); });
+        var g7b = group(body, '글자 모양'); btn(g7b, '취소선', function () { applyRun({ strike: true }, '취소선을 넣었습니다'); }); btn(g7b, '위 첨자', function () { applyRun({ vert: 'superscript' }, '위 첨자로 했습니다'); }); btn(g7b, '아래 첨자', function () { applyRun({ vert: 'subscript' }, '아래 첨자로 했습니다'); }); btn(g7b, '첨자·취소선 풀기', function () { applyRun({ strike: false, vert: null }, '풀었습니다'); });
+        var g7c = group(body, '글자 간격(pt)'); [[-1, '좁게 −1'], [0, '기본'], [1, '넓게 +1'], [2, '+2'], [3, '+3']].forEach(function (v) { btn(g7c, v[1], function () { applyRun({ track: v[0] }, '글자 간격을 바꿨습니다'); }); });
+        var g7d = group(body, '문단 앞 간격(pt)'); [0, 6, 12, 18].forEach(function (v) { btn(g7d, String(v), function () { applyPara({ spBefore: v }, '문단 앞 간격을 바꿨습니다'); }); });
+        var g7e = group(body, '문단 뒤 간격(pt)'); [0, 6, 12, 18].forEach(function (v) { btn(g7e, String(v), function () { applyPara({ spAfter: v }, '문단 뒤 간격을 바꿨습니다'); }); });
+        var g7f = group(body, '문단 음영 · 테두리'); [['회색', 'D9D9D9'], ['노랑', 'FFF2A8'], ['하늘', 'CFE5FF'], ['없음', null]].forEach(function (c) { btn(g7f, c[0] === '없음' ? '음영 없음' : c[0] + ' 음영', function () { applyPara({ shade: c[1] }, '문단 음영을 바꿨습니다'); }); }); btn(g7f, '테두리 상자', function () { applyPara({ box: true }, '문단에 테두리를 넣었습니다'); }); btn(g7f, '테두리 없음', function () { applyPara({ box: null }, '문단 테두리를 없앴습니다'); });
         var g8 = group(body, '들여쓰기'); btn(g8, '← 내어쓰기', function () { applyPara({ indent: -1 }); }); btn(g8, '들여쓰기 →', function () { applyPara({ indent: 1 }); }); btn(g8, '초기화', function () { applyPara({ indent: 0 }); });
         body.appendChild(el('div', 'so-sheet-note', '글자 일부만 꾸미려면 문단을 한 번 더 눌러 「문단 고치기」를 열고, 글자를 끌어 고른 뒤 「고른 글자 꾸미기」 줄의 단추를 누릅니다. 이 시트는 고른 문단 전체에 적용됩니다.'));
       }, false, true);
@@ -235,7 +290,8 @@
         var g = grid(body), pb = el('button', 'sdx-b big', r[1].has && r[1].page ? '쪽 번호는 이미 있음' : '바닥글에 쪽 번호 넣기'); pb.type = 'button'; if (r[1].has && r[1].page) pb.disabled = true;
         pb.onclick = function () { ctx().closeSheet(); env.run('쪽 번호', function (pkg) { return ST.addPageNumber(pkg); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('바닥글 가운데에 쪽 번호를 넣었습니다', 3000); }); };
         g.appendChild(pb);
-        ctx().sheet({ title: '머리글·바닥글', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '글 저장', primary: true, onClick: function () {
+        pageGroup(body);
+        ctx().sheet({ title: '머리글·바닥글·쪽 설정', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '글 저장', primary: true, onClick: function () {
           var hv = th.value, fv = tf.value;
           env.run('머리글·바닥글', function (pkg) {
             var jobs = Promise.resolve();

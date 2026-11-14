@@ -95,7 +95,7 @@
     while ((m = re.exec(pStr))) {
       if (!m[2]) continue;
       var name = m[2], isClose = !!m[1], isSelf = !!m[4], depth = stack.length;   // 문단 자체가 depth 0 에서 열린 뒤 자식은 depth 1
-      if (PIC[name]) { if (LOOSE && (name === 'w:drawing' || name === 'wp:inline' || name === 'wp:anchor')) { if (cur) cur.pic = true; } else bad('pic'); } else if (FLD[name]) bad('fld'); else if (REV[name]) bad('rev'); else if (NOTE[name]) bad('note');
+      if (PIC[name]) { if (LOOSE && (name === 'w:drawing' || name === 'wp:inline' || name === 'wp:anchor')) { if (cur) cur.pic = true; } else bad('pic'); } else if (FLD[name]) bad('fld'); else if (REV[name]) bad('rev'); else if (NOTE[name]) { if (!(LOOSE && (name === 'w:footnoteReference' || name === 'w:endnoteReference'))) bad('note'); }
       if (isClose && name === 'w:hyperlink' && LOOSE && hl > 0) { hl--; continue; }
       if (isClose) {
         var top = stack.pop();
@@ -680,6 +680,7 @@
     if (!ui) ui = window.SODocxUI.create({
       S: function () { return S; }, ctx: function () { return ctxRef; }, run: structRun, note: note, sel: function () { return S.sel; }, select: selSet,
       editText: function (xi) { var q = S.doc.paras[xi]; if (q && q.editable && q.r) openSheet(q.r, xi); else note(REASON[q && q.reason] || REASON.nomatch, 3800); },
+      readNotes: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readNotes(rwPkg(z), kind); }); },
       readHF: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readHF(rwPkg(z), kind); }); },
       replaceAll: replaceAll, toggleRange: function () { S.rangeMode = !S.rangeMode; if (ui) ui.refresh(); }
     });
@@ -795,7 +796,15 @@
         S.origBytes = function (nm) { cached = cached || JS.loadAsync(S.curBlob || ctxRef.file); return cached.then(function (z) { return z.file(nm).async('uint8array'); }); };
         var Rs = Array.prototype.slice.call(box.querySelectorAll('section.docx > article p'));
         S.Rs = Rs;
-        var al = align(doc.paras, Rs.map(function (p) { return norm(p.textContent); }));
+        var known = {}; doc.paras.forEach(function (p) { known[p.norm] = 1; });
+        var al = align(doc.paras, Rs.map(function (p) {
+          var n = norm(p.textContent);
+          if (LOOSE && !known[n] && p.querySelector('sup')) {             // 각주·미주 번호(위 첨자 숫자)는 문서 글이 아니므로 빼고 맞춰 본다
+            var c = p.cloneNode(true); [].forEach.call(c.querySelectorAll('sup'), function (u) { if (/^\s*[\divxIVX]+\s*$/.test(u.textContent)) u.parentNode.removeChild(u); });
+            var n2 = norm(c.textContent); if (known[n2]) return n2;
+          }
+          return n;
+        }));
         var counts = {};
         doc.paras.forEach(function (p) { if (p.norm) counts[p.norm] = (counts[p.norm] || 0) + 1; });
         var nEdit = 0;

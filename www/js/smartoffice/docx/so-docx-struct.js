@@ -180,6 +180,14 @@
         var x = ppr;
         if (f.align) x = setProp(x, 'w:pPr', PPR_ORDER, 'jc', '<w:jc w:val="' + f.align + '"/>');
         if (f.line) { var sp = /<w:spacing\b[^>]*\/>/.exec(x); var t = sp ? sp[0] : '<w:spacing/>'; t = t.replace(/\sw:line="[^"]*"/, '').replace(/\sw:lineRule="[^"]*"/, '').replace(/\s*\/>$/, ' w:line="' + Math.round(240 * f.line) + '" w:lineRule="auto"/>'); x = setProp(x, 'w:pPr', PPR_ORDER, 'spacing', t); }
+        if (f.spBefore != null || f.spAfter != null) {
+          var sp2 = /<w:spacing\b[^>]*\/>/.exec(x), t3 = sp2 ? sp2[0] : '<w:spacing/>';
+          if (f.spBefore != null) t3 = t3.replace(/\sw:before(Lines|Autospacing)?="[^"]*"/g, '').replace(/\s*\/>$/, ' w:before="' + Math.round(f.spBefore * 20) + '"/>');
+          if (f.spAfter != null) t3 = t3.replace(/\sw:after(Lines|Autospacing)?="[^"]*"/g, '').replace(/\s*\/>$/, ' w:after="' + Math.round(f.spAfter * 20) + '"/>');
+          x = setProp(x, 'w:pPr', PPR_ORDER, 'spacing', t3);
+        }
+        if (f.shade !== undefined) x = setProp(x, 'w:pPr', PPR_ORDER, 'shd', f.shade ? '<w:shd w:val="clear" w:color="auto" w:fill="' + f.shade + '"/>' : null);
+        if (f.box !== undefined) x = setProp(x, 'w:pPr', PPR_ORDER, 'pBdr', f.box ? '<w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="808080"/><w:left w:val="single" w:sz="6" w:space="4" w:color="808080"/><w:bottom w:val="single" w:sz="6" w:space="1" w:color="808080"/><w:right w:val="single" w:sz="6" w:space="4" w:color="808080"/></w:pBdr>' : null);
         if (f.indent != null) {
           var im = /<w:ind\b[^>]*\/>/.exec(x), cur = im ? +(attrOf(im[0], 'left') || attrOf(im[0], 'start') || 0) : 0, nv = f.indent === 0 ? 0 : Math.max(0, cur + f.indent * 440);
           var t2 = im ? im[0].replace(/\sw:(left|start)="[^"]*"/, '') : '<w:ind/>'; t2 = nv ? t2.replace(/\s*\/>$/, ' w:left="' + nv + '"/>') : t2;
@@ -195,6 +203,9 @@
     if (f.bold != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'bCs', f.bold ? '<w:bCs/>' : '<w:bCs w:val="0"/>');
     if (f.italic != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'i', f.italic ? '<w:i/>' : '<w:i w:val="0"/>');
     if (f.underline != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'u', f.underline ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>');
+    if (f.strike != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'strike', f.strike ? '<w:strike/>' : '<w:strike w:val="0"/>');
+    if (f.vert !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'vertAlign', f.vert ? '<w:vertAlign w:val="' + f.vert + '"/>' : null);
+    if (f.track != null) x = setProp(x, 'w:rPr', RPR_ORDER, 'spacing', f.track ? '<w:spacing w:val="' + Math.round(f.track * 20) + '"/>' : null);
     if (f.size != null) { var h = Math.round(Math.max(4, Math.min(200, f.size)) * 2); x = setProp(x, 'w:rPr', RPR_ORDER, 'sz', '<w:sz w:val="' + h + '"/>'); x = setProp(x, 'w:rPr', RPR_ORDER, 'szCs', '<w:szCs w:val="' + h + '"/>'); }
     if (f.color !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'color', f.color ? '<w:color w:val="' + f.color + '"/>' : null);
     if (f.highlight !== undefined) x = setProp(x, 'w:rPr', RPR_ORDER, 'highlight', f.highlight ? '<w:highlight w:val="' + f.highlight + '"/>' : null);
@@ -594,7 +605,158 @@
     return { xml: xml.slice(0, b.tbl.s) + nt + xml.slice(b.tbl.e) };
   }
 
+  // ============================== v10.8: 쪽 설정 · 쪽 배경색 · 구역 나누기 · 하이퍼링크 · 각주·미주 · 문단 간격·테두리·음영 ==============================
+  var W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main', R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  var PAPER = { A4: [11906, 16838], A3: [16838, 23811], A5: [8391, 11906], B5: [10319, 14570], Letter: [12240, 15840], Legal: [12240, 20160] };
+  var MARGIN = { normal: [1440, 1440, 1440, 1440], narrow: [720, 720, 720, 720], wide: [1440, 1440, 2160, 2160], moderate: [1440, 1440, 1080, 1080] };   // 위·아래·왼·오(twip)
+  // 쪽 설정: o = { size:'A4'|…, orient:'portrait'|'landscape', margin:'normal'|'narrow'|'wide'|'moderate' } — 문서의 모든 구역에 적용. 바뀌는 것만 건드린다
+  async function pageSetup(pkg, o) {
+    var x = await must(pkg, 'word/document.xml'), n = 0;
+    x = x.replace(/<w:sectPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:sectPr>)/g, function (sp) {
+      if (/\/>$/.test(sp)) return sp;
+      n++;
+      var pg = /<w:pgSz\b[^>]*\/>/.exec(sp), cw = pg ? +(attrOf(pg[0], 'w') || 11906) : 11906, ch = pg ? +(attrOf(pg[0], 'h') || 16838) : 16838, land = pg ? attrOf(pg[0], 'orient') === 'landscape' || cw > ch : false;
+      var w = cw, h = ch;
+      if (o.size && PAPER[o.size]) { var q = PAPER[o.size]; w = q[0]; h = q[1]; if (land) { var t = w; w = h; h = t; } }
+      else if (!land) { var a = Math.min(w, h), b = Math.max(w, h); w = a; h = b; } else { var a2 = Math.min(w, h), b2 = Math.max(w, h); w = b2; h = a2; }
+      var wantLand = o.orient ? o.orient === 'landscape' : land;
+      if (wantLand !== (w > h)) { var t2 = w; w = h; h = t2; }
+      var np = '<w:pgSz w:w="' + w + '" w:h="' + h + '"' + (wantLand ? ' w:orient="landscape"' : '') + '/>';
+      sp = pg ? sp.replace(pg[0], np) : sp.replace(/(<w:sectPr\b[^>]*>)/, '$1' + np);
+      if (o.margin && MARGIN[o.margin]) {
+        var m = MARGIN[o.margin], pm = /<w:pgMar\b[^>]*\/>/.exec(sp), keep = pm ? pm[0].replace(/\sw:(top|bottom|left|right)="[^"]*"/g, '') : '<w:pgMar/>';
+        var np2 = keep.replace(/^<w:pgMar/, '<w:pgMar w:top="' + m[0] + '" w:right="' + m[3] + '" w:bottom="' + m[1] + '" w:left="' + m[2] + '"').replace(/\s*\/>$/, '/>');
+        if (!/w:header=/.test(np2)) np2 = np2.replace(/\/>$/, ' w:header="720" w:footer="720" w:gutter="0"/>');
+        sp = pm ? sp.replace(pm[0], np2) : sp.replace(/(<w:pgSz\b[^>]*\/>)/, '$1' + np2);
+      }
+      return sp;
+    });
+    if (!n) return { err: '이 문서에서 쪽 설정을 찾지 못했습니다.' };
+    pkg.write('word/document.xml', x); return { ok: true, sections: n };
+  }
+  function readPage(xml) {                       // 첫 구역의 쪽 모양(표시용)
+    var sp = /<w:sectPr\b[^>]*?(?:\/>|>[\s\S]*?<\/w:sectPr>)/.exec(xml), pg = sp && /<w:pgSz\b[^>]*\/>/.exec(sp[0]); if (!pg) return null;
+    var w = +(attrOf(pg[0], 'w') || 0), h = +(attrOf(pg[0], 'h') || 0), name = null;
+    Object.keys(PAPER).forEach(function (k) { var q = PAPER[k]; if ((Math.abs(q[0] - w) < 30 && Math.abs(q[1] - h) < 30) || (Math.abs(q[1] - w) < 30 && Math.abs(q[0] - h) < 30)) name = k; });
+    return { w: w, h: h, land: attrOf(pg[0], 'orient') === 'landscape' || w > h, name: name };
+  }
+  // 쪽 배경색(hex 6자리, null 이면 없앰)
+  async function pageColor(pkg, hex) {
+    var x = await must(pkg, 'word/document.xml'), sx = await pkg.read('word/settings.xml');
+    x = x.replace(/<w:background\b[^>]*?\/>/, '');
+    if (hex) {
+      var m = /<w:document\b[^>]*>/.exec(x); if (!m) return { err: '문서 시작 부분을 찾지 못했습니다.' };
+      x = x.slice(0, m.index + m[0].length) + '<w:background w:color="' + hex + '"/>' + x.slice(m.index + m[0].length);
+      if (sx != null && !/<w:displayBackgroundShape\b/.test(sx)) {
+        var ins = '<w:displayBackgroundShape/>', pos = sx.search(/<w:(?:view|zoom|removePersonalInformation|removeDateAndTime|doNotDisplayPageBoundaries|writeProtection)\b[\s\S]*?(?:\/>|<\/w:\w+>)/);
+        var zm = /<w:zoom\b[^>]*?\/>/.exec(sx), wm = /<w:writeProtection\b[^>]*?\/>/.exec(sx), at = zm ? zm.index + zm[0].length : (wm ? wm.index + wm[0].length : -1);
+        if (at < 0) { var sm = /<w:settings\b[^>]*>/.exec(sx); at = sm ? sm.index + sm[0].length : -1; }
+        if (at >= 0) sx = sx.slice(0, at) + ins + sx.slice(at); pkg.write('word/settings.xml', sx);
+      }
+    }
+    pkg.write('word/document.xml', x); return { ok: true };
+  }
+  // 고른 문단 뒤에서 구역 나누기(다음 쪽부터): 지금 구역의 쪽 모양을 그대로 이어받은 빈 문단을 넣는다
+  function sectionBreakAfter(xml, xi) {
+    var ps = paras(xml), p = ps[xi]; if (!p) return { err: '문단을 찾지 못했습니다.' };
+    if (p.anc.join('/') !== 'w:document/w:body') return { err: '표 안에서는 구역을 나눌 수 없습니다.' };
+    var last = /<w:sectPr\b[^>]*?>[\s\S]*?<\/w:sectPr>\s*<\/w:body>/.exec(xml); if (!last) return { err: '문서의 쪽 설정을 찾지 못했습니다.' };
+    var sp = last[0].replace(/\s*<\/w:body>$/, '').replace(/<w:(?:headerReference|footerReference|titlePg)\b[^>]*\/>/g, '');
+    if (/<w:sectPr\b/.test(xml.slice(p.s, p.e))) return { err: '이 문단은 이미 구역의 끝입니다.' };
+    return { xml: xml.slice(0, p.e) + '<w:p><w:pPr>' + sp + '</w:pPr></w:p>' + xml.slice(p.e) };
+  }
+  // 하이퍼링크: 고른 문단 맨 끝에 「글(링크)」를 붙인다
+  async function addLink(pkg, xi, text, url) {
+    text = String(text || '').trim(); url = String(url || '').trim();
+    if (!text) return { err: '링크로 보일 글을 적어 주십시오.' };
+    if (!/^(https?:\/\/|mailto:|tel:)/i.test(url)) { if (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(url)) url = 'https://' + url; else return { err: '주소는 https:// 로 시작하게 적어 주십시오.' }; }
+    var x = await must(pkg, 'word/document.xml'), p = P(x, xi), ps = x.slice(p.s, p.e);
+    if (/\/>\s*$/.test(ps.slice(0, ps.indexOf('>') + 1))) return { err: '빈 문단에는 먼저 글을 한 글자라도 쓴 뒤 넣어 주십시오.' };
+    var rp = 'word/_rels/document.xml.rels', rx = await must(pkg, rp), id = nextRid(rx);
+    pkg.write(rp, rx.replace('</Relationships>', '<Relationship Id="' + id + '" Type="' + RT + 'hyperlink" Target="' + esc(url) + '" TargetMode="External"/></Relationships>'));
+    var run = '<w:hyperlink r:id="' + id + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + esc(text) + '</w:t></w:r></w:hyperlink>';
+    x = x.slice(0, p.e - 6) + run + x.slice(p.e - 6);
+    if (!/<w:document\b[^>]*xmlns:r=/.test(x)) x = x.replace(/<w:document\b/, '<w:document xmlns:r="' + R_NS + '"');
+    pkg.write('word/document.xml', x); return { ok: true };
+  }
+
+  // ---- 각주·미주 ----
+  var NOTE_KIND = {
+    footnote: { part: 'word/footnotes.xml', root: 'w:footnotes', el: 'w:footnote', ref: 'w:footnoteReference', mark: 'w:footnoteRef', rel: 'footnotes', ct: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml', style: 'FootnoteText', rstyle: 'FootnoteReference', set: 'w:footnotePr' },
+    endnote: { part: 'word/endnotes.xml', root: 'w:endnotes', el: 'w:endnote', ref: 'w:endnoteReference', mark: 'w:endnoteRef', rel: 'endnotes', ct: 'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml', style: 'EndnoteText', rstyle: 'EndnoteReference', set: 'w:endnotePr' }
+  };
+  function noteBase(k) {
+    var sep = function (t, id, mk) { return '<' + k.el + ' w:type="' + t + '" w:id="' + id + '"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:' + mk + '/></w:r></w:p></' + k.el + '>'; };
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<' + k.root + ' xmlns:w="' + W_NS + '" xmlns:r="' + R_NS + '">' + sep('separator', -1, 'separator') + sep('continuationSeparator', 0, 'continuationSeparator') + '</' + k.root + '>';
+  }
+  function noteBody(k, id, text, hasStyle) {
+    return '<' + k.el + ' w:id="' + id + '"><w:p><w:pPr>' + (hasStyle ? '<w:pStyle w:val="' + k.style + '"/>' : '') + '</w:pPr><w:r><w:rPr>' + (hasStyle ? '<w:rStyle w:val="' + k.rstyle + '"/>' : '<w:vertAlign w:val="superscript"/>') + '</w:rPr><w:' + k.mark.slice(2) + '/></w:r><w:r><w:t xml:space="preserve"> ' + esc(text) + '</w:t></w:r></w:p></' + k.el + '>';
+  }
+  async function ensureNotePart(pkg, kind) {
+    var k = NOTE_KIND[kind], cur = await pkg.read(k.part);
+    if (cur != null) return cur;
+    pkg.write(k.part, noteBase(k));
+    var rp = 'word/_rels/document.xml.rels', rx = await must(pkg, rp), id = nextRid(rx);
+    pkg.write(rp, rx.replace('</Relationships>', '<Relationship Id="' + id + '" Type="' + RT + k.rel + '" Target="' + k.rel + '.xml"/></Relationships>'));
+    var ct = await must(pkg, '[Content_Types].xml');
+    if (ct.indexOf('/' + k.part) < 0) pkg.write('[Content_Types].xml', ct.replace('</Types>', '<Override PartName="/' + k.part + '" ContentType="' + k.ct + '"/></Types>'));
+    var sx = await pkg.read('word/settings.xml');
+    if (sx != null && !new RegExp('<' + k.set + '\\b').test(sx)) {
+      var ins = '<' + k.set + '><' + k.el + ' w:id="-1"/><' + k.el + ' w:id="0"/></' + k.set + '>', m = /<w:(?:endnotePr|compat|docVars|rsids|mathPr|themeFontLang|clrSchemeMapping|shapeDefaults|decimalSymbol|listSeparator)\b/.exec(sx);
+      if (kind === 'footnote') { var em = /<w:endnotePr\b/.exec(sx); if (em) m = em; }
+      if (m) pkg.write('word/settings.xml', sx.slice(0, m.index) + ins + sx.slice(m.index));
+    }
+    return noteBase(k);
+  }
+  // 고른 문단 맨 끝에 각주(또는 미주) 표시를 넣고 내용을 쓴다
+  async function insertNote(pkg, xi, text, kind) {
+    kind = kind || 'footnote'; var k = NOTE_KIND[kind]; text = String(text || '').trim();
+    if (!text) return { err: (kind === 'footnote' ? '각주' : '미주') + ' 내용을 적어 주십시오.' };
+    var x = await must(pkg, 'word/document.xml'), p = P(x, xi), ps = x.slice(p.s, p.e);
+    if (/\/>\s*$/.test(ps.slice(0, ps.indexOf('>') + 1))) return { err: '빈 문단에는 넣을 수 없습니다. 먼저 글을 쓴 뒤 넣어 주십시오.' };
+    if (p.anc.some(function (n) { return n === 'w:txbxContent'; })) return { err: '텍스트 상자 안에는 넣을 수 없습니다.' };
+    var nx = await ensureNotePart(pkg, kind), mx = 0; (nx.match(/w:id="(\d+)"/g) || []).forEach(function (s) { mx = Math.max(mx, +/(\d+)/.exec(s)[1]); });
+    var id = mx + 1, sx = await pkg.read('word/styles.xml'), hasStyle = !!(sx && new RegExp('w:styleId="' + k.style + '"').test(sx) && new RegExp('w:styleId="' + k.rstyle + '"').test(sx));
+    var ref = '<w:r><w:rPr>' + (hasStyle ? '<w:rStyle w:val="' + k.rstyle + '"/>' : '<w:vertAlign w:val="superscript"/>') + '</w:rPr><' + k.ref + ' w:id="' + id + '"/></w:r>';
+    x = x.slice(0, p.e - 6) + ref + x.slice(p.e - 6);
+    pkg.write('word/document.xml', x);
+    pkg.write(k.part, nx.replace('</' + k.root + '>', noteBody(k, id, text, hasStyle) + '</' + k.root + '>'));
+    return { ok: true, id: id };
+  }
+  // 문서에 있는 각주(또는 미주) 목록: [{id, text, para}] (문서 속 순서)
+  async function readNotes(pkg, kind) {
+    kind = kind || 'footnote'; var k = NOTE_KIND[kind], nx = await pkg.read(k.part), out = [];
+    if (nx == null) return out;
+    var x = await must(pkg, 'word/document.xml'), bodies = {};
+    (nx.match(new RegExp('<' + k.el + '\\b[^>]*?>[\\s\\S]*?<\\/' + k.el + '>', 'g')) || []).forEach(function (b) { var id = attrOf(b.match(/^<[^>]+>/)[0], 'id'); if (!/w:type=/.test(b.match(/^<[^>]+>/)[0])) bodies[id] = pText(b).replace(/^\s+/, ''); });
+    var ps = paras(x);
+    ps.forEach(function (p, i) { (x.slice(p.s, p.e).match(new RegExp('<' + k.ref + '\\b[^>]*\\/>', 'g')) || []).forEach(function (t) { var id = attrOf(t, 'id'); out.push({ id: id, text: bodies[id] != null ? bodies[id] : '', para: i }); }); });
+    return out;
+  }
+  async function editNote(pkg, id, text, kind) {
+    kind = kind || 'footnote'; var k = NOTE_KIND[kind], nx = await pkg.read(k.part); text = String(text || '').trim();
+    if (nx == null) return { err: '각주를 찾지 못했습니다.' };
+    var re = new RegExp('(<' + k.el + '\\b[^>]*w:id="' + id + '"[^>]*>)([\\s\\S]*?)(</' + k.el + '>)'), m = re.exec(nx);
+    if (!m) return { err: '각주를 찾지 못했습니다.' };
+    if (!text) return { err: '내용을 적어 주십시오.' };
+    var body = m[2], pm = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/.exec(body); if (!pm) return { err: '각주 안의 문단을 찾지 못했습니다.' };
+    if ((body.match(/<w:p\b/g) || []).length > 1 || /<w:(drawing|pict|fldChar|hyperlink)\b/.test(body)) return { err: '이 각주에는 여러 문단·그림·링크가 있어 폰에서는 고칠 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+    var para = pm[0], open = /^<w:p\b[^>]*>/.exec(para)[0], ppr = (/<w:pPr\b[\s\S]*?<\/w:pPr>|<w:pPr\s*\/>/.exec(para) || [''])[0];
+    var mark = (/<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?<w:(?:footnoteRef|endnoteRef)\s*\/>[\s\S]*?<\/w:r>/.exec(para) || [''])[0];
+    var np = open + ppr + mark + '<w:r><w:t xml:space="preserve"> ' + esc(text) + '</w:t></w:r></w:p>';
+    pkg.write(k.part, nx.replace(re, function (all, a, b, c) { return a + body.replace(pm[0], np) + c; })); return { ok: true };
+  }
+  async function deleteNote(pkg, id, kind) {
+    kind = kind || 'footnote'; var k = NOTE_KIND[kind], nx = await pkg.read(k.part), x = await must(pkg, 'word/document.xml');
+    var rr = new RegExp('<w:r\\b[^>]*>(?:<w:rPr\\b[^>]*?(?:\\/>|>[\\s\\S]*?<\\/w:rPr>))?<' + k.ref + '\\b[^>]*w:id="' + id + '"[^>]*\\/></w:r>');
+    if (!rr.test(x)) return { err: '문서에서 이 표시를 찾지 못했습니다.' };
+    pkg.write('word/document.xml', x.replace(rr, ''));
+    if (nx != null) pkg.write(k.part, nx.replace(new RegExp('<' + k.el + '\\b[^>]*w:id="' + id + '"[^>]*>[\\s\\S]*?<\\/' + k.el + '>'), ''));
+    return { ok: true };
+  }
+
   global.SODocxStruct = {
+    pageSetup: pageSetup, readPage: readPage, pageColor: pageColor, sectionBreakAfter: sectionBreakAfter, addLink: addLink, insertNote: insertNote, readNotes: readNotes, editNote: editNote, deleteNote: deleteNote,
     fmtPartial: fmtPartial, copyParas: copyParas, pasteBlock: pasteBlock, dupParas: dupParas, copyTable: copyTable, dupTable: dupTable, setCellShade: setCellShade, setTableBorders: setTableBorders, headerRow: headerRow,
     paras: paras, newPara: newPara, insertPara: insertPara, deleteParas: deleteParas, moveParas: moveParas, pageBreakAfter: pageBreakAfter, ensureStyle: ensureStyle, setStyle: setStyle,
     setParaFmt: setParaFmt, setRunFmt: setRunFmt, readFmt: readFmt, ensureList: ensureList, setList: setList, numIdOf: numIdOf, insertTable: insertTable, tableEdit: tableEdit, tableInfo: tableInfo,
