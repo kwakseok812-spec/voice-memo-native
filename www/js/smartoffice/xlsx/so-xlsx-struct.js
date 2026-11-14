@@ -450,6 +450,7 @@
       if (ch.valign !== undefined) al = ch.valign ? setAttr(al, 'vertical', ch.valign) : delAttr(al, 'vertical');
       body = am ? body.replace(am[0], al) : al + body; open = setAttr(open, 'applyAlignment', '1');
     }
+    if (ch.locked !== undefined) { body = body.replace(/<protection\b[^>]*?\/>/, ''); if (ch.locked === false) body += '<protection locked="0"/>'; open = setAttr(open, 'applyProtection', '1'); }
     open = setAttr(setAttr(setAttr(setAttr(open, 'fontId', String(fontId)), 'fillId', String(fillId)), 'borderId', String(borderId)), 'numFmtId', String(nfId));
     var nx = body ? open + body + '</xf>' : open.replace(/>$/, '/>');
     var idx = this.add('xfs', nx); this.cache[key] = idx; return idx;
@@ -473,6 +474,7 @@
     var szm = kids.sz && /\sval="([\d.]+)"/.exec(kids.sz); if (szm) o.fs = +szm[1]; var fnm = kids.name && /\sval="([^"]*)"/.exec(kids.name); if (fnm) o.fn = unescX(fnm[1]);
     var cm = kids.color && /\srgb="([0-9A-Fa-f]{8})"/.exec(kids.color); if (cm) o.color = '#' + cm[1].slice(2);
     var fill = this.fills[+(attrOf(open, 'fillId') || 0)] || '', fm = /<patternFill\b[^>]*patternType="solid"[^>]*>\s*<fgColor\b[^>]*rgb="([0-9A-Fa-f]{8})"/.exec(fill); if (fm) o.bg = '#' + fm[1].slice(2);
+    if (/<protection\b[^>]*\slocked="(0|false)"/.test(xf)) o.unlocked = true;
     var am = /<alignment\b[^>]*>/.exec(xf); if (am) { var h = attrOf(am[0], 'horizontal'); if (h === 'center' || h === 'left' || h === 'right' || h === 'centerContinuous') o.h = h === 'centerContinuous' ? 'center' : h; if (/wrapText="(1|true)"/.test(am[0])) o.wrap = true; }
     var bd = this.borders[+(attrOf(open, 'borderId') || 0)] || '';
     ['left', 'right', 'top', 'bottom'].forEach(function (side, i) { if (new RegExp('<' + side + '\\b[^>]*\\sstyle="(?!none)').test(bd)) o['b' + 'lrtb'.charAt(i)] = true; });
@@ -1068,6 +1070,570 @@
     });
   }
 
+  // ============================== v10.8 2회차 ①: 채우기 · 중복 제거 · 텍스트 나누기 ==============================
+  function withSheet(pkg, sheetName, fn) {
+    return wbInfo(pkg).then(function (info) {
+      var tgt = null; info && info.sheets.forEach(function (s) { if (sameName(s.name, sheetName)) tgt = s; });
+      if (!tgt || !tgt.path) return { err: WHY.sheet };
+      return pkg.read(tgt.path).then(function (xml) { return fn(xml, tgt, info); });
+    });
+  }
+  function readSst(pkg) {
+    return pkg.read('xl/sharedStrings.xml').then(function (x) {
+      if (!x) return [];
+      return (x.match(/<si\b[^>]*?(?:\/>|>[\s\S]*?<\/si>)/g) || []).map(function (si) {
+        return (si.match(/<t\b[^>]*?(?:\/>|>[\s\S]*?<\/t>)/g) || []).map(function (t) { return unescX(t.replace(/^<t\b[^>]*>/, '').replace(/<\/t>$/, '')); }).join('');
+      });
+    });
+  }
+  // 칸 하나의 값: { k: 'n'|'s'|'b'|'e'|'z'(빈), v, f(수식 있음) }
+  function cellVal(cell, sst) {
+    if (!cell) return { k: 'z', v: null, f: false };
+    var raw = cell.raw, ot = openTagOfCell(raw), t = attrOf(ot, 't'), f = /<f\b/.test(raw), vm = /<v>([^<]*)<\/v>/.exec(raw);
+    if (t === 'inlineStr') return { k: 's', v: (raw.match(/<t\b[^>]*>([^<]*)<\/t>/g) || []).map(function (x) { return unescX(x.replace(/<[^>]*>/g, '')); }).join(''), f: f };
+    if (!vm) return { k: 'z', v: null, f: f };
+    if (t === 's') return { k: 's', v: sst[+vm[1]] == null ? '' : sst[+vm[1]], f: f };
+    if (t === 'str') return { k: 's', v: unescX(vm[1]), f: f };
+    if (t === 'b') return { k: 'b', v: vm[1] === '1', f: f };
+    if (t === 'e') return { k: 'e', v: vm[1], f: f };
+    var n = parseFloat(vm[1]); return isNaN(n) ? { k: 'z', v: null, f: f } : { k: 'n', v: n, f: f };
+  }
+  function mkCellXml(ref, s, val) {         // val: { k, v }
+    var sa = s != null ? ' s="' + s + '"' : '';
+    if (val.k === 'n') return '<c r="' + ref + '"' + sa + '><v>' + String(val.v) + '</v></c>';
+    if (val.k === 's') return '<c r="' + ref + '"' + sa + ' t="inlineStr"><is><t xml:space="preserve">' + escX(val.v) + '</t></is></c>';
+    return '<c r="' + ref + '"' + sa + '/>';
+  }
+  function putCell(sd, r, c, xmlFn) {         // 줄·칸 자리에 새 칸을 넣는다(있으면 바꾼다). xmlFn(ref, 옛 칸|null) → raw
+    var row = getRow(sd, r, true), old = getCell(row, c, false), ref = colName(c) + r, raw = xmlFn(ref, old), nc = { c: c, raw: raw };
+    if (old) row.cells[row.cells.indexOf(old)] = nc; else { var at = 0; while (at < row.cells.length && row.cells[at].c < c) at++; row.cells.splice(at, 0, nc); }
+  }
+  var LISTS = [['월', '화', '수', '목', '금', '토', '일'], ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']];
+  function nextSeq(seed, k, step) {          // 시작 값(seed)에서 k번째(1부터) 뒤 값. 못 만들면 null
+    if (seed.k === 'n') return { k: 'n', v: Number((seed.v + step * k).toPrecision(15)) };
+    if (seed.k !== 's') return null;
+    var i, v = seed.v;
+    for (i = 0; i < LISTS.length; i++) { var p = LISTS[i].indexOf(v); if (p >= 0) return { k: 's', v: LISTS[i][(((p + k * step) % 7) + 7) % 7] }; }
+    var mm = /^(\d{1,2})월$/.exec(v); if (mm) return { k: 's', v: ((((+mm[1] - 1 + k * step) % 12) + 12) % 12 + 1) + '월' };
+    var m = /^([\s\S]*?)(\d+)(\D*)$/.exec(v); if (!m) return null;
+    var num = +m[2] + step * k; if (num < 0) return null;
+    var w = m[2].length, ns = String(num); if (m[2].charAt(0) === '0' && ns.length < w) ns = '0'.repeat(w - ns.length) + ns;
+    return { k: 's', v: m[1] + ns + m[3] };
+  }
+  // 범위 맨 앞 칸(들)을 따라 오른쪽·아래로 이어 채운다. axis 'down'|'right'. 수식이 든 칸은 복사(참조 이동)로 채운다
+  function fillSeries(pkg, sheetName, rng, axis) {
+    return readSst(pkg).then(function (sst) {
+      return withSheet(pkg, sheetName, function (xml0, tgt) {
+        var ex = expandShared(xml0, tgt.name); if (ex.err) return { err: WHY.shared };
+        var sd = parseSheet(ex.xml); if (!sd) return { err: WHY.sheet };
+        var down = axis === 'down', n = 0, err = null, lanes = down ? rng.c1 - rng.c0 + 1 : rng.r1 - rng.r0 + 1, len = down ? rng.r1 - rng.r0 + 1 : rng.c1 - rng.c0 + 1;
+        if (len < 2) return { err: '채울 범위를 두 칸 이상 골라 주십시오.' };
+        if (len * lanes > 200000) return { err: '한 번에 20만 칸까지 채울 수 있습니다.' };
+        for (var L = 0; L < lanes && !err; L++) {
+          var pos = function (i) { return down ? { r: rng.r0 + i, c: rng.c0 + L } : { r: rng.r0 + L, c: rng.c0 + i }; };
+          var p0 = pos(0), row0 = getRow(sd, p0.r, false), c0 = row0 && getCell(row0, p0.c, false), v0 = cellVal(c0, sst), st0 = c0 ? attrOf(openTagOfCell(c0.raw), 's') : null;
+          var p1 = pos(1), row1 = getRow(sd, p1.r, false), c1 = row1 && getCell(row1, p1.c, false), v1 = cellVal(c1, sst);
+          var useTwo = len > 2 && v0.k === 'n' && v1.k === 'n' && !v0.f && !v1.f, step = useTwo ? v1.v - v0.v : 1, from = useTwo ? 2 : 1;
+          if (!useTwo && v0.k === 's' && !v0.f && v1.k === 's' && !v1.f && len > 2) {      // 「1회」「2회」처럼 두 칸이 숫자 꼴이면 그 간격
+            var a = /(\d+)\D*$/.exec(v0.v), b = /(\d+)\D*$/.exec(v1.v); if (a && b && v0.v.replace(/\d+\D*$/, '') === v1.v.replace(/\d+\D*$/, '')) { step = +b[1] - +a[1]; from = 2; }
+          }
+          for (var i = from; i < len && !err; i++) {
+            var p = pos(i), stl = st0;
+            if (v0.f) {                                                    // 수식은 복사(상대 참조 이동)
+              if (!c0) continue;
+              var raw = c0.raw.replace(/<f\b([^>]*)>([^<]*)<\/f>/, function (all, at, txt) {
+                var tr = translateFormula(unescX(txt), tgt.name, down ? p.r - p0.r : 0, down ? 0 : p.c - p0.c); if (tr.err) { err = WHY.range; return all; }
+                return '<f' + at + '>' + escX(tr.f) + '</f>';
+              }).replace(/<v>[^<]*<\/v>/, '').replace(/\st="[^"]*"/, '');
+              var nc = { c: p.c, raw: raw }; renumberCell(nc, p.r, p.c);
+              putCell(sd, p.r, p.c, function () { return nc.raw; }); n++; continue;
+            }
+            var nv;
+            if (v0.k === 'z') nv = null;
+            else if (v0.k === 'n') nv = { k: 'n', v: Number((v0.v + step * i).toPrecision(15)) };
+            else if (v0.k === 's') nv = nextSeq(v0, i, step) || v0;      // 이어 갈 규칙이 없는 글자는 그대로 복사
+            else nv = v0;
+            if (!nv) { putCell(sd, p.r, p.c, function (ref) { return '<c r="' + ref + '"' + (stl != null ? ' s="' + stl + '"' : '') + '/>'; }); continue; }
+            if (nv.k === 'b' || nv.k === 'e') { putCell(sd, p.r, p.c, function (ref) { return c0.raw.replace(/\sr="[A-Z]+\d+"/, ' r="' + ref + '"'); }); n++; continue; }
+            putCell(sd, p.r, p.c, function (ref) { return mkCellXml(ref, stl, nv); }); n++;
+          }
+        }
+        if (err) return { err: err };
+        var out = serializeSheet(sd); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true, n: n };
+      });
+    });
+  }
+  // 옆(오른쪽)으로 복사해 채우기: 범위 맨 왼쪽 칸을 오른쪽 칸들에 복사(수식은 참조 이동)
+  function fillRight(pkg, sheetName, rng) {
+    return withSheet(pkg, sheetName, function (xml0, tgt) {
+      var ex = expandShared(xml0, tgt.name); if (ex.err) return { err: WHY.shared };
+      var sd = parseSheet(ex.xml); if (!sd) return { err: WHY.sheet };
+      var err = null, n = 0;
+      if (rng.c1 <= rng.c0) return { err: '채울 범위를 두 칸 이상 골라 주십시오.' };
+      for (var r = rng.r0; r <= rng.r1 && !err; r++) {
+        var row = getRow(sd, r, true), src = getCell(row, rng.c0, false);
+        for (var c = rng.c0 + 1; c <= rng.c1 && !err; c++) {
+          var cell = getCell(row, c, false);
+          if (!src) { if (cell) row.cells.splice(row.cells.indexOf(cell), 1); continue; }
+          var raw = src.raw.replace(/<f\b([^>]*)>([^<]*)<\/f>/, function (all, at, txt) {
+            var tr = translateFormula(unescX(txt), tgt.name, 0, c - rng.c0); if (tr.err) { err = WHY.range; return all; }
+            return '<f' + at + '>' + escX(tr.f) + '</f>';
+          }).replace(/<v>[^<]*<\/v>/, function (v) { return /<f\b/.test(src.raw) ? '' : v; });
+          if (/<f\b/.test(raw)) raw = raw.replace(/\st="[^"]*"/, '');
+          var nc = { c: c, raw: raw }; renumberCell(nc, r, c);
+          if (cell) row.cells[row.cells.indexOf(cell)] = nc; else { var at2 = 0; while (at2 < row.cells.length && row.cells[at2].c < c) at2++; row.cells.splice(at2, 0, nc); }
+          n++;
+        }
+      }
+      if (err) return { err: err };
+      var out = serializeSheet(sd); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true, n: n };
+    });
+  }
+  // 중복 제거: keys = 기준 열 번호들(1부터), hasHeader 면 첫 줄은 그대로 둔다. 중복 줄은 지워지고 아래 줄들이 위로 올라온다(범위 맨 아래가 비는 것은 엑셀과 같다)
+  function removeDuplicates(pkg, sheetName, rng, keys, hasHeader) {
+    return readSst(pkg).then(function (sst) {
+      return withSheet(pkg, sheetName, function (xml0, tgt) {
+        var sd = parseSheet(xml0); if (!sd) return { err: WHY.sheet };
+        var r0 = rng.r0 + (hasHeader ? 1 : 0); if (r0 >= rng.r1) return { err: '비교할 줄이 두 줄 이상 있어야 합니다.' };
+        var seen = {}, keep = [], dup = [], r;
+        for (r = r0; r <= rng.r1; r++) {
+          var row = getRow(sd, r, false), parts = keys.map(function (c) { var v = cellVal(row && getCell(row, c, false), sst); return v.k === 'z' ? 'z:' : v.k === 's' ? 's:' + String(v.v).toLowerCase() : v.k + ':' + v.v; }), key = parts.join('\u0001');
+          if (parts.every(function (p) { return p === 'z:'; })) { keep.push(r); continue; }
+          if (seen[key]) dup.push(r); else { seen[key] = 1; keep.push(r); }
+        }
+        if (!dup.length) return { ok: true, removed: 0 };
+        var order = keep.concat(dup), rr = { r0: r0, r1: rng.r1, c0: rng.c0, c1: rng.c1 };
+        return sortRows(pkg, sheetName, rr, order).then(function (res) {
+          if (res.err) return res;
+          return pkg.read(tgt.path).then(function (x2) {
+            var sd2 = parseSheet(x2), from = rng.r1 - dup.length + 1;
+            for (var rw = from; rw <= rng.r1; rw++) {
+              var row2 = getRow(sd2, rw, false); if (!row2) continue;
+              row2.cells = row2.cells.map(function (cl) {
+                if (cl.c < rng.c0 || cl.c > rng.c1) return cl;
+                var st = attrOf(openTagOfCell(cl.raw), 's'); return { c: cl.c, raw: '<c r="' + colName(cl.c) + rw + '"' + (st != null ? ' s="' + st + '"' : '') + '/>' };
+              });
+            }
+            pkg.write(tgt.path, serializeSheet(sd2)); return { ok: true, removed: dup.length };
+          });
+        });
+      });
+    });
+  }
+  // 텍스트 나누기: col 열의 r0~r1 글을 구분 글자(delim)로 나눠 오른쪽 칸들에 적는다. 오른쪽 칸에 내용이 있으면 하지 않는다
+  function textToColumns(pkg, sheetName, col, r0, r1, delim) {
+    return readSst(pkg).then(function (sst) {
+      return withSheet(pkg, sheetName, function (xml0, tgt) {
+        var ex = expandShared(xml0, tgt.name); if (ex.err) return { err: WHY.shared };
+        var sd = parseSheet(ex.xml); if (!sd) return { err: WHY.sheet };
+        if (!delim) return { err: '나눌 구분 글자를 정해 주십시오.' };
+        var plan = [], maxp = 1, r;
+        for (r = r0; r <= r1; r++) {
+          var row = getRow(sd, r, false), cell = row && getCell(row, col, false), v = cellVal(cell, sst);
+          if (v.k === 'z') continue; if (v.f) return { err: '수식이 든 칸은 나눌 수 없습니다.' };
+          var txt = v.k === 's' ? v.v : String(v.v), parts = txt.split(delim); if (parts.length > 60) return { err: '한 칸을 60조각을 넘게 나눌 수 없습니다.' };
+          plan.push({ r: r, parts: parts, st: cell ? attrOf(openTagOfCell(cell.raw), 's') : null }); maxp = Math.max(maxp, parts.length);
+        }
+        if (!plan.length) return { err: '나눌 글이 든 칸이 없습니다.' };
+        if (maxp < 2) return { err: '구분 글자가 들어 있는 칸이 없습니다.' };
+        for (var i = 0; i < plan.length; i++) for (var k = 1; k < plan[i].parts.length; k++) {
+          var rw = getRow(sd, plan[i].r, false), ce = rw && getCell(rw, col + k, false);
+          if (ce && cellVal(ce, sst).k !== 'z') return { err: '오른쪽 칸(' + colName(col + k) + plan[i].r + ')에 이미 내용이 있어 덮어쓰게 됩니다. 비어 있는 열에서 해 주십시오.' };
+        }
+        plan.forEach(function (p) {
+          p.parts.forEach(function (s, k) {
+            var t = s.trim(), val = /^-?(0|[1-9]\d{0,14})(\.\d+)?$/.test(t) ? { k: 'n', v: parseFloat(t) } : { k: 's', v: s };
+            if (k === 0 && val.k === 's') val = { k: 's', v: s };
+            putCell(sd, p.r, col + k, function (ref) { return mkCellXml(ref, p.st, val); });
+          });
+        });
+        var out = serializeSheet(sd); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true, rows: plan.length, cols: maxp };
+      });
+    });
+  }
+
+  // ============================== v10.8 2회차 ②: 이름 · 인쇄 · 시트 복사 · 탭 색 · 시트 보호 · 링크 · 묶기 ==============================
+  function absRef(sheet, rng) {
+    function a(c, r) { return '$' + colName(c) + '$' + r; }
+    return quoteSheet(sheet) + '!' + (rng.r0 === rng.r1 && rng.c0 === rng.c1 ? a(rng.c0, rng.r0) : a(rng.c0, rng.r0) + ':' + a(rng.c1, rng.r1));
+  }
+  var NM_AFTER = ['calcPr', 'oleSize', 'customWorkbookViews', 'pivotCaches', 'smartTagPr', 'smartTagTypes', 'webPublishing', 'fileRecoveryPr', 'webPublishObjects', 'extLst'];
+  function nameItems(wb) {
+    var m = /<definedNames\b[^>]*?(?:\/>|>([\s\S]*?)<\/definedNames>)/.exec(wb), items = m && m[1] ? (m[1].match(/<definedName\b[^>]*?(?:\/>|>[\s\S]*?<\/definedName>)/g) || []) : [];
+    return { m: m, items: items };
+  }
+  function parseNameItem(t) {
+    var ot = /^<definedName\b[^>]*>/.exec(t)[0], loc = attrOf(ot, 'localSheetId');
+    return { name: unescX(attrOf(ot, 'name') || ''), local: loc == null ? null : +loc, text: unescX(t.replace(/^<definedName\b[^>]*>/, '').replace(/<\/definedName>$/, '')), hidden: attrOf(ot, 'hidden') === '1', raw: t };
+  }
+  function putNameItems(wb, items) {
+    var cur = nameItems(wb), block = items.length ? '<definedNames>' + items.join('') + '</definedNames>' : '';
+    if (cur.m) return wb.replace(cur.m[0], block);
+    if (!block) return wb;
+    for (var i = 0; i < NM_AFTER.length; i++) { var k = wb.search(new RegExp('<' + NM_AFTER[i] + '\\b')); if (k >= 0) return wb.slice(0, k) + block + wb.slice(k); }
+    return wb.replace('</workbook>', block + '</workbook>');
+  }
+  function listNames(pkg) {
+    return wbInfo(pkg).then(function (info) {
+      if (!info) return [];
+      return nameItems(info.wb).items.map(parseNameItem).filter(function (n) { return !n.hidden && !/^_xlnm\./.test(n.name); }).map(function (n) { return { name: n.name, ref: n.text, local: n.local, sheet: n.local == null ? null : (info.sheets[n.local] || {}).name || null }; });
+    });
+  }
+  function nameOk(n) {
+    if (!n || !n.trim()) return '이름을 적어 주십시오.';
+    if (n.length > 200) return '이름은 200자까지입니다.';
+    if (!/^[A-Za-z_\u00C0-\uFFFF][\w.\u00C0-\uFFFF]*$/.test(n)) return '이름은 글자나 밑줄(_)로 시작하고, 글자·숫자·점·밑줄만 쓸 수 있습니다(띄어쓰기 불가).';
+    if (/^[A-Za-z]{1,3}\d+$/.test(n) || /^[Rr]\d*[Cc]\d*$/.test(n) || /^[RrCc]$/.test(n)) return '칸 주소처럼 보이는 이름은 쓸 수 없습니다.';
+    if (/^_xlnm\./i.test(n)) return '이 이름은 쓸 수 없습니다.';
+    return '';
+  }
+  // 이름 붙이기: refText 는 「'시트'!$A$1:$B$5」 꼴. scopeSheet 가 있으면 그 시트에서만 쓰는 이름
+  function setName(pkg, name, refText, scopeSheet) {
+    return wbInfo(pkg).then(function (info) {
+      if (!info) return { err: WHY.sheet };
+      var bad = nameOk(name); if (bad) return { err: bad };
+      var local = null; if (scopeSheet) { info.sheets.forEach(function (s) { if (sameName(s.name, scopeSheet)) local = s.idx; }); if (local == null) return { err: WHY.sheet }; }
+      var items = nameItems(info.wb).items, found = false;
+      items = items.map(function (t) { var p = parseNameItem(t); if (sameName(p.name, name) && p.local === local) { found = true; return '<definedName name="' + escX(name) + '"' + (local != null ? ' localSheetId="' + local + '"' : '') + '>' + escX(refText) + '</definedName>'; } return t; });
+      if (!found) items.push('<definedName name="' + escX(name) + '"' + (local != null ? ' localSheetId="' + local + '"' : '') + '>' + escX(refText) + '</definedName>');
+      pkg.write('xl/workbook.xml', putNameItems(info.wb, items)); return { ok: true, replaced: found };
+    });
+  }
+  function removeName(pkg, name, local) {
+    return wbInfo(pkg).then(function (info) {
+      if (!info) return { err: WHY.sheet };
+      var n0 = 0, items = nameItems(info.wb).items.filter(function (t) { var p = parseNameItem(t); if (sameName(p.name, name) && p.local === (local == null ? null : local)) { n0++; return false; } return true; });
+      if (!n0) return { err: '지울 이름을 찾지 못했습니다.' };
+      pkg.write('xl/workbook.xml', putNameItems(info.wb, items)); return { ok: true };
+    });
+  }
+  function setSpecialName(info, local, special, text) {      // 인쇄 영역·인쇄 제목: text 가 없으면 지운다
+    var items = nameItems(info.wb).items.filter(function (t) { var p = parseNameItem(t); return !(p.name === special && p.local === local); });
+    if (text) items.push('<definedName name="' + special + '" localSheetId="' + local + '">' + escX(text) + '</definedName>');
+    return putNameItems(info.wb, items);
+  }
+  function readPrintNames(info, idx) {
+    var o = { area: '', titles: '' };
+    nameItems(info.wb).items.map(parseNameItem).forEach(function (p) { if (p.local === idx) { if (p.name === '_xlnm.Print_Area') o.area = p.text; if (p.name === '_xlnm.Print_Titles') o.titles = p.text; } });
+    return o;
+  }
+  function setPrintArea(pkg, sheetName, rng) {
+    return wbInfo(pkg).then(function (info) {
+      var s = null; info && info.sheets.forEach(function (x) { if (sameName(x.name, sheetName)) s = x; }); if (!s) return { err: WHY.sheet };
+      pkg.write('xl/workbook.xml', setSpecialName(info, s.idx, '_xlnm.Print_Area', rng ? absRef(s.name, rng) : null)); return { ok: true };
+    });
+  }
+  // 반복해서 인쇄할 제목: rows = {r0,r1}|null, cols = {c0,c1}|null (둘 다 없으면 지움)
+  function setPrintTitles(pkg, sheetName, rows, cols) {
+    return wbInfo(pkg).then(function (info) {
+      var s = null; info && info.sheets.forEach(function (x) { if (sameName(x.name, sheetName)) s = x; }); if (!s) return { err: WHY.sheet };
+      var q = quoteSheet(s.name), parts = [];
+      if (cols) parts.push(q + '!$' + colName(cols.c0) + ':$' + colName(cols.c1));
+      if (rows) parts.push(q + '!$' + rows.r0 + ':$' + rows.r1);
+      pkg.write('xl/workbook.xml', setSpecialName(info, s.idx, '_xlnm.Print_Titles', parts.length ? parts.join(',') : null)); return { ok: true };
+    });
+  }
+  // sheetPr 의 자식(tabColor · outlinePr · pageSetUpPr)을 바꾼다. edit(kids) 가 kids 를 고친다.
+  function editSheetPr(xml, edit) {
+    var m = /<sheetPr\b([^>]*?)(\/?)>/.exec(xml), kids = { tabColor: '', outlinePr: '', pageSetUpPr: '' }, attrs = '', whole = null;
+    if (m) {
+      attrs = m[1].replace(/\s+$/, ''); whole = m[0];
+      if (m[2] !== '/') { var e = xml.indexOf('</sheetPr>', m.index); if (e < 0) return null; whole = xml.slice(m.index, e + 10); var inner = xml.slice(m.index + m[0].length, e); Object.keys(kids).forEach(function (k) { var km = new RegExp('<' + k + '\\b[^>]*?/>').exec(inner); if (km) kids[k] = km[0]; }); }
+    }
+    edit(kids);
+    var body = kids.tabColor + kids.outlinePr + kids.pageSetUpPr, nt = '<sheetPr' + attrs + (body ? '>' + body + '</sheetPr>' : '/>');
+    if (whole) return xml.replace(whole, nt);
+    return body ? insertWsElement(xml, 'sheetPr', nt) : xml;
+  }
+  var PAPER = { A4: 9, A3: 8, A5: 11, B5: 13, Letter: 1, Legal: 5 }, PAPER_R = { 9: 'A4', 8: 'A3', 11: 'A5', 13: 'B5', 1: 'Letter', 5: 'Legal' };
+  var MARGINS = { normal: [0.7, 0.7, 0.75, 0.75, 0.3, 0.3], narrow: [0.25, 0.25, 0.75, 0.75, 0.3, 0.3], wide: [1, 1, 1, 1, 0.5, 0.5] };
+  function readPageSetup(xml) {
+    var ps = /<pageSetup\b[^>]*?\/>/.exec(xml), o = { orient: 'portrait', paper: 'A4', fit: false, center: false, pageNum: false };
+    if (ps) { var pt = attrOf(ps[0], 'paperSize'); o.paper = PAPER_R[+pt] || (pt ? '기타' : 'A4'); if (attrOf(ps[0], 'orientation') === 'landscape') o.orient = 'landscape'; }
+    var sp = /<pageSetUpPr\b[^>]*?\/>/.exec(xml); o.fit = !!(sp && /fitToPage="(1|true)"/.test(sp[0]) && ps && attrOf(ps[0], 'fitToWidth') !== '0');
+    o.center = /<printOptions\b[^>]*horizontalCentered="(1|true)"/.test(xml);
+    o.pageNum = /<oddFooter>[\s\S]*&amp;P/.test(xml);
+    return o;
+  }
+  // o = { orient, paper, margin, fitWidth(true/false/undefined), center, pageNum } — 정하지 않은 것은 그대로 둔다
+  function setPageSetup(pkg, sheetName, o) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var ps = /<pageSetup\b[^>]*?\/>/.exec(xml), tag = ps ? ps[0] : '<pageSetup/>';
+      if (/\sr:id="/.test(tag) && (o.paper || o.orient)) { /* 프린터 설정 연결은 그대로 둔다 */ }
+      if (o.paper) tag = setAttr(tag, 'paperSize', String(PAPER[o.paper] || 9));
+      if (o.orient) tag = setAttr(tag, 'orientation', o.orient === 'landscape' ? 'landscape' : 'portrait');
+      if (o.fitWidth === true) { tag = setAttr(setAttr(tag, 'fitToWidth', '1'), 'fitToHeight', '0'); tag = delAttr(tag, 'scale'); }
+      else if (o.fitWidth === false) { tag = delAttr(delAttr(tag, 'fitToWidth'), 'fitToHeight'); }
+      xml = ps ? xml.replace(ps[0], tag) : insertWsElement(xml, 'pageSetup', tag);
+      if (o.fitWidth != null) {
+        xml = editSheetPr(xml, function (k) { k.pageSetUpPr = o.fitWidth ? '<pageSetUpPr fitToPage="1"/>' : ''; });
+        if (xml == null) return { err: '이 시트의 인쇄 정보가 특이해서 바꿀 수 없습니다.' };
+      }
+      if (o.margin && MARGINS[o.margin]) {
+        var mg = MARGINS[o.margin], nm = '<pageMargins left="' + mg[0] + '" right="' + mg[1] + '" top="' + mg[2] + '" bottom="' + mg[3] + '" header="' + mg[4] + '" footer="' + mg[5] + '"/>', pm = /<pageMargins\b[^>]*?\/>/.exec(xml);
+        xml = pm ? xml.replace(pm[0], nm) : insertWsElement(xml, 'pageMargins', nm);
+      }
+      if (o.center != null) {
+        var po = /<printOptions\b[^>]*?\/>/.exec(xml), pt2 = po ? po[0] : '<printOptions/>';
+        pt2 = o.center ? setAttr(pt2, 'horizontalCentered', '1') : delAttr(pt2, 'horizontalCentered');
+        if (po) xml = xml.replace(po[0], pt2); else if (o.center) xml = insertWsElement(xml, 'printOptions', pt2);
+      }
+      if (o.pageNum != null) {
+        var hf = /<headerFooter\b[^>]*?(?:\/>|>[\s\S]*?<\/headerFooter>)/.exec(xml);
+        if (o.pageNum) {
+          var foot = '<oddFooter>&amp;C&amp;P / &amp;N</oddFooter>';
+          if (!hf) xml = insertWsElement(xml, 'headerFooter', '<headerFooter>' + foot + '</headerFooter>');
+          else if (/<oddFooter>/.test(hf[0])) xml = xml.replace(hf[0], hf[0].replace(/<oddFooter>[\s\S]*?<\/oddFooter>/, foot));
+          else if (/<(evenHeader|evenFooter|firstHeader|firstFooter)>/.test(hf[0])) return { err: '이 시트에는 홀짝·첫 쪽을 따로 정한 머리글·바닥글이 있어 폰에서는 쪽 번호를 넣을 수 없습니다.' };
+          else xml = xml.replace(hf[0], /\/>$/.test(hf[0]) ? hf[0].replace(/\/>$/, '>' + foot + '</headerFooter>') : hf[0].replace('</headerFooter>', foot + '</headerFooter>'));
+        } else if (hf) xml = xml.replace(hf[0], hf[0].replace(/<oddFooter>[\s\S]*?<\/oddFooter>/, ''));
+      }
+      pkg.write(tgt.path, xml); return { ok: true };
+    });
+  }
+  function setTabColor(pkg, sheetName, hex) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var nx = editSheetPr(xml, function (k) { k.tabColor = hex ? '<tabColor rgb="' + argb(hex) + '"/>' : ''; });
+      if (nx == null) return { err: '이 시트의 정보가 특이해서 탭 색을 바꿀 수 없습니다.' };
+      pkg.write(tgt.path, nx); return { ok: true };
+    });
+  }
+  function readTabColor(xml) { var m = /<tabColor\b[^>]*?\srgb="([0-9A-Fa-f]{8})"/.exec(xml); return m ? '#' + m[1].slice(2) : null; }
+  // 시트 보호(암호 없이). on=false 로 풀 때 암호가 걸려 있으면 하지 않는다
+  function readProtect(xml) { var m = /<sheetProtection\b[^>]*?\/>/.exec(xml); if (!m) return { on: false, pw: false }; var t = m[0]; return { on: attrOf(t, 'sheet') === '1' || attrOf(t, 'sheet') === 'true', pw: !!(attrOf(t, 'password') || attrOf(t, 'hashValue') || attrOf(t, 'algorithmName')) }; }
+  function setProtect(pkg, sheetName, on) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var cur = readProtect(xml), m = /<sheetProtection\b[^>]*?\/>/.exec(xml);
+      if (on) {
+        if (cur.on) return { err: '이미 보호된 시트입니다.' };
+        var tag = '<sheetProtection sheet="1" objects="1" scenarios="1"/>';
+        xml = m ? xml.replace(m[0], tag) : insertWsElement(xml, 'sheetProtection', tag);
+      } else {
+        if (!m || !cur.on) return { err: '보호되어 있지 않은 시트입니다.' };
+        if (cur.pw) return { err: '암호가 걸린 보호입니다. 암호를 모르면 풀 수 없고, 암호를 입력하는 일은 이 앱에서 하지 않습니다. 엑셀에서 풀어 주십시오.' };
+        xml = xml.replace(m[0], '');
+      }
+      pkg.write(tgt.path, xml); return { ok: true };
+    });
+  }
+  // 시트 복사: 맨 뒤에 만든다. 그림·차트·메모·표 같은 개체가 있는 시트는 하지 않는다
+  function copySheet(pkg, srcName, newName) {
+    return wbInfo(pkg).then(function (info) {
+      if (!info) return { err: WHY.sheet };
+      var src = null; info.sheets.forEach(function (s) { if (sameName(s.name, srcName)) src = s; }); if (!src || !src.path) return { err: WHY.sheet };
+      var bad = checkSheetName(info, newName, null); if (bad) return { err: bad };
+      var rp = src.path.replace(/([^\/]+)$/, '_rels/$1.rels');
+      return Promise.all([pkg.read(src.path), pkg.read(rp)]).then(function (a) {
+        var xml = a[0], rels = a[1], keepRels = '';
+        if (rels) {
+          var tags = rels.match(/<Relationship\b[^>]*>/g) || [], other = tags.filter(function (t) { return !/\/(hyperlink|printerSettings)$/.test(attrOf(t, 'Type') || ''); });
+          if (other.length) return { err: '이 시트에는 그림·차트·메모·표 같은 개체가 있어서 폰에서는 복사할 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+          var hl = tags.filter(function (t) { return /\/hyperlink$/.test(attrOf(t, 'Type') || ''); }); if (hl.length) keepRels = hl.join('');
+        }
+        xml = xml.replace(/(<pageSetup\b[^>]*?)\sr:id="[^"]*"/, '$1').replace(/\stabSelected="[^"]*"/, '');
+        if (!keepRels) xml = xml.replace(/<hyperlinks\b[^>]*?(?:\/>|>[\s\S]*?<\/hyperlinks>)/, '');
+        var mx = 0; pkg.list().forEach(function (p) { var m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(p); if (m) mx = Math.max(mx, +m[1]); });
+        var path = 'xl/worksheets/sheet' + (mx + 1) + '.xml', rid = 'rId' + (Object.keys(info.rel).length + 100), sid = 0;
+        (info.wb.match(/<sheet\b[^>]*>/g) || []).forEach(function (t) { sid = Math.max(sid, +(attrOf(t, 'sheetId') || 0)); });
+        var rattr = /\s((?:\w+:)?id)="/.exec(src.tag || ''), ra = rattr ? rattr[1] : 'r:id';
+        pkg.write(path, xml);
+        if (keepRels) pkg.write(path.replace(/([^\/]+)$/, '_rels/$1.rels'), '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + keepRels + '</Relationships>');
+        pkg.write('xl/_rels/workbook.xml.rels', info.rels.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (mx + 1) + '.xml"/></Relationships>'));
+        pkg.write('[Content_Types].xml', info.ct.replace('</Types>', '<Override PartName="/' + path + '" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'));
+        pkg.write('xl/workbook.xml', info.wb.replace('</sheets>', '<sheet name="' + escX(newName) + '" sheetId="' + (sid + 1) + '" ' + ra + '="' + rid + '"/></sheets>'));
+        return { ok: true };
+      });
+    });
+  }
+  // ---- 링크(하이퍼링크) ----
+  function readLinks(xml) {
+    var m = /<hyperlinks\b[^>]*?(?:\/>|>([\s\S]*?)<\/hyperlinks>)/.exec(xml); if (!m || !m[1]) return [];
+    return (m[1].match(/<hyperlink\b[^>]*?\/>/g) || []).map(function (t) { return { ref: attrOf(t, 'ref'), rid: attrOf(t, 'r:id'), loc: attrOf(t, 'location') ? unescX(attrOf(t, 'location')) : null, raw: t }; });
+  }
+  // target = { url } | { loc: "시트!A1" } | null(범위 안의 링크를 지움)
+  function setLink(pkg, sheetName, rng, target) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var rp = tgt.path.replace(/([^\/]+)$/, '_rels/$1.rels');
+      return pkg.read(rp).then(function (rels) {
+        var links = readLinks(xml), hit = [], keep = [];
+        links.forEach(function (l) { var p = l.ref && rangeParts(l.ref); if (p && !(p.r1 < rng.r0 || p.r0 > rng.r1 || p.c1 < rng.c0 || p.c0 > rng.c1)) hit.push(l); else keep.push(l); });
+        if (!target && !hit.length) return { err: '이 범위에는 지울 링크가 없습니다.' };
+        var rtxt = rels || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+        hit.forEach(function (l) { if (l.rid) { var re = new RegExp('<Relationship\\b[^>]*\\sId="' + l.rid + '"[^>]*?/>'); rtxt = rtxt.replace(re, ''); } });
+        var newTag = null;
+        if (target) {
+          if (target.loc) newTag = '<hyperlink ref="' + rangeText(rng) + '" location="' + escX(target.loc) + '" display="' + escX(target.display || '') + '"/>';
+          else {
+            var u = String(target.url || '').trim();
+            if (!/^(https?:\/\/|mailto:)/i.test(u)) u = 'https://' + u;
+            if (!/^(https?:\/\/[^\s\\]+|mailto:[^\s\\]+)$/i.test(u) || u.length > 2000) return { err: '주소는 http:// · https:// · mailto: 로 시작하는 올바른 주소여야 합니다.' };
+            var mx = 0; (rtxt.match(/\sId="rId(\d+)"/g) || []).forEach(function (t) { mx = Math.max(mx, +/(\d+)/.exec(t)[1]); });
+            var rid = 'rId' + (mx + 1);
+            rtxt = rtxt.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + escX(u) + '" TargetMode="External"/></Relationships>');
+            newTag = '<hyperlink ref="' + rangeText(rng) + '" r:id="' + rid + '"/>';
+          }
+          if (!/<worksheet\b[^>]*\sxmlns:r="/.test(xml)) xml = xml.replace(/<worksheet\b/, '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"');
+        }
+        var all = keep.map(function (l) { return l.raw; }); if (newTag) all.push(newTag);
+        xml = xml.replace(/<hyperlinks\b[^>]*?(?:\/>|>[\s\S]*?<\/hyperlinks>)/, '');
+        if (all.length) xml = insertWsElement(xml, 'hyperlinks', '<hyperlinks>' + all.join('') + '</hyperlinks>');
+        pkg.write(tgt.path, xml);
+        if ((rtxt.match(/<Relationship\b/g) || []).length) pkg.write(rp, rtxt); else if (rels) pkg.remove(rp);
+        return { ok: true, removed: hit.length };
+      });
+    });
+  }
+  // ---- 줄·열 묶기(그룹) ----
+  function modCols(xml, c0, c1, fn) {          // c0~c1 칸 정의를 낱칸 단위로 잘라 fn(tag)→tag 로 고친다
+    var m = /<cols\b[^>]*?>([\s\S]*?)<\/cols>/.exec(xml), defs = m ? (m[1].match(/<col\b[^>]*\/>/g) || []).map(function (t) { return { min: +attrOf(t, 'min'), max: +attrOf(t, 'max'), tag: t }; }) : [], out = [], covered = {}, c;
+    defs.forEach(function (d) {
+      if (d.max < c0 || d.min > c1) { out.push(d); return; }
+      if (d.min < c0) out.push({ min: d.min, max: c0 - 1, tag: setAttr(setAttr(d.tag, 'min', String(d.min)), 'max', String(c0 - 1)) });
+      for (c = Math.max(d.min, c0); c <= Math.min(d.max, c1); c++) { covered[c] = 1; out.push({ min: c, max: c, tag: fn(setAttr(setAttr(d.tag, 'min', String(c)), 'max', String(c))) }); }
+      if (d.max > c1) out.push({ min: c1 + 1, max: d.max, tag: setAttr(setAttr(d.tag, 'min', String(c1 + 1)), 'max', String(d.max)) });
+    });
+    for (c = c0; c <= c1; c++) if (!covered[c]) out.push({ min: c, max: c, tag: fn('<col min="' + c + '" max="' + c + '" width="9.140625"/>') });
+    out.sort(function (a, b) { return a.min - b.min; });
+    xml = xml.replace(/<cols\b[^>]*?(?:\/>|>[\s\S]*?<\/cols>)/, '');
+    return out.length ? insertWsElement(xml, 'cols', '<cols>' + out.map(function (x) { return x.tag; }).join('') + '</cols>') : xml;
+  }
+  function setSheetFormatOutline(xml, rowLv, colLv) {
+    var m = /<sheetFormatPr\b[^>]*?\/>/.exec(xml); if (!m) return insertWsElement(xml, 'sheetFormatPr', '<sheetFormatPr defaultRowHeight="15"' + (rowLv ? ' outlineLevelRow="' + rowLv + '"' : '') + (colLv ? ' outlineLevelCol="' + colLv + '"' : '') + '/>');
+    var t = m[0];
+    if (rowLv != null) t = rowLv ? setAttr(t, 'outlineLevelRow', String(rowLv)) : delAttr(t, 'outlineLevelRow');
+    if (colLv != null) t = colLv ? setAttr(t, 'outlineLevelCol', String(colLv)) : delAttr(t, 'outlineLevelCol');
+    return xml.replace(m[0], t);
+  }
+  // axis 'row'|'col', op 'group'|'ungroup'|'collapse'|'expand', [i0,i1] 1부터
+  function setOutline(pkg, sheetName, axis, i0, i1, op) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var i;
+      if (axis === 'row') {
+        var sd = parseSheet(xml); if (!sd) return { err: WHY.sheet };
+        for (i = i0; i <= i1; i++) {
+          var row = getRow(sd, i, true), lv = +(attrOf(row.open, 'outlineLevel') || 0);
+          if (op === 'group') { if (lv >= 7) return { err: '묶음은 7단계까지입니다.' }; row.open = setAttr(row.open, 'outlineLevel', String(lv + 1)); }
+          else if (op === 'ungroup') { row.open = lv > 1 ? setAttr(row.open, 'outlineLevel', String(lv - 1)) : delAttr(delAttr(delAttr(row.open, 'outlineLevel'), 'hidden'), 'collapsed'); }
+          else if (op === 'collapse') { if (lv > 0) row.open = setAttr(row.open, 'hidden', '1'); }
+          else if (op === 'expand') { row.open = delAttr(row.open, 'hidden'); }
+        }
+        var sr = getRow(sd, i1 + 1, true);
+        if (op === 'collapse') sr.open = setAttr(sr.open, 'collapsed', '1'); else if (op === 'expand') sr.open = delAttr(sr.open, 'collapsed');
+        var mxl = 0; sd.rows.forEach(function (r) { mxl = Math.max(mxl, +(attrOf(r.open, 'outlineLevel') || 0)); });
+        var out = serializeSheet(sd); out = setSheetFormatOutline(out, mxl, null); pkg.write(tgt.path, setDimension(out, dimensionOf(parseSheet(out)))); return { ok: true };
+      }
+      var changed = false;
+      xml = modCols(xml, i0, i1, function (tag) {
+        var lv = +(attrOf(tag, 'outlineLevel') || 0);
+        if (op === 'group') { changed = true; return setAttr(tag, 'outlineLevel', String(Math.min(7, lv + 1))); }
+        if (op === 'ungroup') return lv > 1 ? setAttr(tag, 'outlineLevel', String(lv - 1)) : delAttr(delAttr(delAttr(tag, 'outlineLevel'), 'hidden'), 'collapsed');
+        if (op === 'collapse') return lv > 0 ? setAttr(tag, 'hidden', '1') : tag;
+        return delAttr(tag, 'hidden');
+      });
+      var after = /<cols\b[^>]*?>([\s\S]*?)<\/cols>/.exec(xml), mxc = 0; if (after) (after[1].match(/<col\b[^>]*\/>/g) || []).forEach(function (t) { mxc = Math.max(mxc, +(attrOf(t, 'outlineLevel') || 0)); });
+      xml = setSheetFormatOutline(xml, null, mxc);
+      var oc = i1 + 1; if (op === 'collapse' || op === 'expand') xml = modCols(xml, oc, oc, function (tag) { return op === 'collapse' ? setAttr(tag, 'collapsed', '1') : delAttr(tag, 'collapsed'); });
+      pkg.write(tgt.path, xml); return { ok: true };
+    });
+  }
+  function readOutline(xml) {
+    var rows = {}, cols = {};
+    (xml.match(/<row\b[^>]*>/g) || []).forEach(function (t) { var lv = +(attrOf(t, 'outlineLevel') || 0); if (lv) rows[attrOf(t, 'r')] = lv; });
+    return { rowLevels: Object.keys(rows).length, any: Object.keys(rows).length > 0 || /<col\b[^>]*outlineLevel=/.test(xml) };
+  }
+
+  // ============================== v10.8 2회차 ③: 메모(셀 메모) ==============================
+  // 엑셀은 메모를 그리는 VML 그림 파일이 없으면 메모를 조용히 무시한다 — 그래서 메모 글(comments)과 VML 그림을 항상 함께 넣고 뺀다.
+  function relsOf(pkg, path) {
+    var rp = path.replace(/([^\/]+)$/, '_rels/$1.rels');
+    return pkg.read(rp).then(function (x) {
+      var tags = x ? (x.match(/<Relationship\b[^>]*>/g) || []) : [];
+      return { path: rp, xml: x, tags: tags.map(function (t) { return { id: attrOf(t, 'Id'), type: (attrOf(t, 'Type') || '').replace(/^.*\//, ''), target: attrOf(t, 'Target'), raw: t }; }) };
+    });
+  }
+  function resolvePath(from, target) {
+    var parts = (target.charAt(0) === '/' ? target.slice(1) : from.replace(/[^\/]+$/, '') + target).split('/'), out = [];
+    parts.forEach(function (p) { if (p === '..') out.pop(); else if (p && p !== '.') out.push(p); }); return out.join('/');
+  }
+  function memoParts(xml) {
+    var items = (xml.match(/<comment\b[^>]*?(?:\/>|>[\s\S]*?<\/comment>)/g) || []).map(function (t) {
+      var ref = attrOf(/^<comment\b[^>]*>/.exec(t)[0], 'ref'), txt = (t.match(/<t\b[^>]*>([^<]*)<\/t>/g) || []).map(function (x) { return unescX(x.replace(/<[^>]*>/g, '')); }).join('');
+      return { ref: ref, text: txt, raw: t };
+    });
+    return items;
+  }
+  function readMemos(pkg, sheetName) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      return relsOf(pkg, tgt.path).then(function (rl) {
+        var cr = rl.tags.filter(function (t) { return t.type === 'comments'; })[0]; if (!cr) return { ok: true, list: [] };
+        return pkg.read(resolvePath(tgt.path, cr.target)).then(function (cx) { return { ok: true, list: cx ? memoParts(cx).map(function (m) { return { ref: m.ref, text: m.text }; }) : [] }; });
+      });
+    });
+  }
+  function vmlShape(id, row0, col0) {
+    return '<v:shape id="_x0000_s' + id + '" type="#_x0000_t202" style="position:absolute;margin-left:80pt;margin-top:5pt;width:140pt;height:60pt;z-index:' + (id % 1000) + ';visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto"><v:fill color2="#ffffe1"/><v:shadow on="t" color="black" obscured="t"/><v:path o:connecttype="none"/><v:textbox style="mso-direction-alt:auto"><div style="text-align:left"></div></v:textbox><x:ClientData ObjectType="Note"><x:MoveWithCells/><x:SizeWithCells/><x:Anchor>' + (col0 + 1) + ', 15, ' + row0 + ', 2, ' + (col0 + 3) + ', 15, ' + (row0 + 4) + ', 4</x:Anchor><x:AutoFill>False</x:AutoFill><x:Row>' + row0 + '</x:Row><x:Column>' + col0 + '</x:Column></x:ClientData></v:shape>';
+  }
+  var VML_HEAD = '<xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="1"/></o:shapelayout><v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>';
+  // 메모 달기·고치기(text 가 있으면) · 지우기(text 가 비면). ref = 'B3' 한 칸
+  function setMemo(pkg, sheetName, ref, text) {
+    return withSheet(pkg, sheetName, function (xml, tgt) {
+      var rm = /^([A-Z]+)(\d+)$/.exec(ref); if (!rm) return { err: '칸 하나를 골라 주십시오.' };
+      var col0 = colNum(rm[1]) - 1, row0 = +rm[2] - 1, clean = String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+      if (clean.length > 3000) return { err: '메모는 3,000자까지입니다.' };
+      return relsOf(pkg, tgt.path).then(function (rl) {
+        var cr = rl.tags.filter(function (t) { return t.type === 'comments'; })[0], vr = rl.tags.filter(function (t) { return t.type === 'vmlDrawing'; })[0];
+        if (!cr && vr) return { err: '이 시트에는 메모가 아닌 다른 양식 개체(단추·선택 상자 등)가 있어서 폰에서는 메모를 달 수 없습니다.' };
+        if (cr && !vr) return { err: '이 시트의 메모 구조가 특이해서 폰에서는 메모를 바꿀 수 없습니다.' };
+        var mx = 0; pkg.list().forEach(function (p) { var m = /^xl\/comments(\d+)\.xml$/.exec(p); if (m) mx = Math.max(mx, +m[1]); });
+        var cPath = cr ? resolvePath(tgt.path, cr.target) : 'xl/comments' + (mx + 1) + '.xml', vPath = null;
+        if (vr) vPath = resolvePath(tgt.path, vr.target); else { var mv = 0; pkg.list().forEach(function (p) { var m = /^xl\/drawings\/vmlDrawing(\d+)\.vml$/.exec(p); if (m) mv = Math.max(mv, +m[1]); }); vPath = 'xl/drawings/vmlDrawing' + (mv + 1) + '.vml'; }
+        return Promise.all([cr ? pkg.read(cPath) : Promise.resolve(null), vr ? pkg.read(vPath) : Promise.resolve(null)]).then(function (a) {
+          var cx = a[0], vx = a[1], hadAny = !!cx;
+          if (cr && (!cx || !vx)) return { err: '이 시트의 메모 파일을 읽지 못했습니다.' };
+          if (!cx) cx = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors><author>메모</author></authors><commentList></commentList></comments>';
+          if (!vx) vx = VML_HEAD + '</xml>';
+          var items = memoParts(cx), had = items.filter(function (m) { return m.ref === ref; })[0];
+          if (!clean.trim()) {
+            if (!had) return { err: '이 칸에는 지울 메모가 없습니다.' };
+            items = items.filter(function (m) { return m.ref !== ref; });
+            vx = vx.replace(new RegExp('<v:shape\\b[^>]*>(?:(?!</v:shape>)[\\s\\S])*?<x:Row>' + row0 + '</x:Row>\\s*<x:Column>' + col0 + '</x:Column>[\\s\\S]*?</v:shape>'), '');
+          } else {
+            var item = '<comment ref="' + ref + '" authorId="0"><text><r><t xml:space="preserve">' + escX(clean) + '</t></r></text></comment>';
+            if (had) items = items.map(function (m) { return m.ref === ref ? { ref: ref, raw: item } : m; });
+            else {
+              items.push({ ref: ref, raw: item });
+              var mid = 1024; (vx.match(/_x0000_s(\d+)/g) || []).forEach(function (t) { mid = Math.max(mid, +/(\d+)$/.exec(t)[1]); });
+              vx = vx.replace('</xml>', vmlShape(mid + 1, row0, col0) + '</xml>');
+            }
+          }
+          items.sort(function (p, q) { var pm = /^([A-Z]+)(\d+)$/.exec(p.ref), qm = /^([A-Z]+)(\d+)$/.exec(q.ref); return (+pm[2] - +qm[2]) || (colNum(pm[1]) - colNum(qm[1])); });
+          var rootOpen = /<comments\b[^>]*>/.exec(cx)[0], authors = (/<authors>[\s\S]*?<\/authors>/.exec(cx) || ['<authors><author>메모</author></authors>'])[0];
+          var ncx = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + rootOpen + authors + '<commentList>' + items.map(function (m) { return m.raw; }).join('') + '</commentList></comments>';
+          if (!items.length && hadAny && !/<x:ClientData ObjectType="(?!Note)/.test(vx)) {      // 마지막 메모를 지우면 메모 파일 일체를 걷어 낸다
+            pkg.remove(cPath); pkg.remove(vPath);
+            var nr = rl.xml; [cr, vr].forEach(function (t) { nr = nr.replace(t.raw, ''); });
+            if (!/<Relationship\b/.test(nr)) pkg.remove(rl.path); else pkg.write(rl.path, nr);
+            return pkg.read('[Content_Types].xml').then(function (ct) { pkg.write('[Content_Types].xml', ct.replace(new RegExp('<Override\\b[^>]*PartName="/' + cPath.replace(/[.\\\/]/g, '\\$&') + '"[^>]*/>'), '')); xml = xml.replace(/<legacyDrawing\b[^>]*?\/>/, ''); pkg.write(tgt.path, xml); return { ok: true, removed: true }; });
+          }
+          pkg.write(cPath, ncx); pkg.write(vPath, vx);
+          if (cr) return { ok: true };
+          var rtxt = rl.xml || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>', mxid = 0;
+          (rtxt.match(/\sId="rId(\d+)"/g) || []).forEach(function (t) { mxid = Math.max(mxid, +/(\d+)/.exec(t)[1]); });
+          var cid = 'rId' + (mxid + 1), vid = 'rId' + (mxid + 2);
+          rtxt = rtxt.replace('</Relationships>', '<Relationship Id="' + cid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../' + cPath.replace(/^xl\//, '') + '"/><Relationship Id="' + vid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../' + vPath.replace(/^xl\//, '') + '"/></Relationships>');
+          pkg.write(rl.path, rtxt);
+          if (!/<worksheet\b[^>]*\sxmlns:r="/.test(xml)) xml = xml.replace(/<worksheet\b/, '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"');
+          xml = insertWsElement(xml, 'legacyDrawing', '<legacyDrawing r:id="' + vid + '"/>'); pkg.write(tgt.path, xml);
+          return pkg.read('[Content_Types].xml').then(function (ct) {
+            var add = '<Override PartName="/' + cPath + '" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>';
+            if (!/Extension="vml"/i.test(ct)) add += '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>';
+            pkg.write('[Content_Types].xml', ct.replace('</Types>', add + '</Types>')); return { ok: true, created: true };
+          });
+        });
+      });
+    });
+  }
+
   var api = {
     setRowsHidden: setRowsHidden, setColsHidden: setColsHidden, showAllHidden: showAllHidden, setFilter: setFilter, readFilter: readFilter, copyRange: copyRange,
     setCachedValues: setCachedValues, freezePanes: freezePanes, readFreeze: readFreeze, addCond: addCond, clearCond: clearCond, readCond: readCond, setValid: setValid, readValid: readValid,
@@ -1076,6 +1642,10 @@
     shiftRefsInFormula: shiftRefsInFormula, translateFormula: translateFormula, expandShared: expandShared, shiftRangeText: shiftRangeText, mapRefs: mapRefs,
     lineEdit: lineEdit, appendRows: appendRows, checkMiddle: checkMiddle, Styles: Styles, applyStyle: applyStyle,
     mergeCellsOp: mergeCellsOp, setRowHeight: setRowHeight, setColWidth: setColWidth, sortRows: sortRows, fillDown: fillDown,
+    fillSeries: fillSeries, fillRight: fillRight, removeDuplicates: removeDuplicates, textToColumns: textToColumns, listNames: listNames, setName: setName, removeName: removeName, nameOk: nameOk, absRef: absRef,
+    setPrintArea: setPrintArea, setPrintTitles: setPrintTitles, setPageSetup: setPageSetup, readPageSetup: readPageSetup, readPrintNames: readPrintNames, setTabColor: setTabColor, readTabColor: readTabColor, readProtect: readProtect, setProtect: setProtect,
+    setMemo: setMemo, readMemos: readMemos,
+    copySheet: copySheet, setLink: setLink, readLinks: readLinks, setOutline: setOutline, readOutline: readOutline, readSst: readSst, cellVal: cellVal,
     addSheet: addSheet, renameSheet: renameSheet, deleteSheet: deleteSheet, moveSheet: moveSheet, checkSheetName: checkSheetName, wbInfo: wbInfo, newWorkbookFiles: newWorkbookFiles
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -76,7 +76,7 @@
           var dec = /^\s*(?:﻿)?<\?xml[^>]*encoding="([^"]+)"/i.exec(xml);
           if (dec && !/^utf-?8$/i.test(dec[1])) { sh.readOnly = true; sh.why = '이 시트의 글자 인코딩이 특이해서 고칠 수 없습니다.'; }
           else if (!/<sheetData[\s>\/]/.test(xml)) { sh.readOnly = true; sh.why = '이 시트의 구조가 특이해서 고칠 수 없습니다.'; }
-          else if (/<sheetProtection\b/.test(xml)) { sh.readOnly = true; sh.why = '보호된 시트라서 고칠 수 없습니다. (엑셀에서 보호를 풀어 주십시오)'; }
+          else if (/<sheetProtection\b/.test(xml)) { sh.readOnly = true; if (/<sheetProtection\b[^>]*\s(password|hashValue|algorithmName)=/.test(xml)) sh.why = '암호가 걸린 보호 시트라서 고칠 수 없습니다. (엑셀에서 보호를 풀어 주십시오)'; else { sh.prot = 'nopw'; sh.why = '보호된 시트라서 고칠 수 없습니다. (「더보기」→「시트」→「복사·탭 색·보호」의 「시트 보호 해제」로 풀 수 있습니다)'; } }
           return Promise.all(sh.tablePromises);
         });
       })).then(function () { return { ok: true, sheets: sheets, order: order }; });

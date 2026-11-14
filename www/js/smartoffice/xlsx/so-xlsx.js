@@ -862,11 +862,11 @@
     });
   }
   // 문서를 고치는 일 한 번(줄·칸·서식·시트…). mut(pkg) → Promise<{ok}|{err}> — 복사본에서 먼저 해 보고, 되면 화면을 갈아 끼운다.
-  function pkgRun(label, mut, onDone, onFail) {
+  function pkgRun(label, mut, onDone, onFail, opts) {
     if (!plusOn() || !S.editing) { S.ctx.toast('먼저 「고치기」를 켜 주십시오.', 2400); return Promise.resolve(false); }
     if (S.el.inp.value !== S.barOrig && !commit(true)) return Promise.resolve(false);
     var cps = S.an && S.an.sheets && S.an.sheets[S.sh.name];
-    if (cps && cps.readOnly) { S.ctx.toast(cps.why || '이 시트는 고칠 수 없습니다.', 4200); return Promise.resolve(false); }      // 보호된 시트 등은 보기만
+    if (cps && cps.readOnly && !(opts && opts.allowProtected && cps.prot === 'nopw')) { S.ctx.toast(cps.why || '이 시트는 고칠 수 없습니다.', 4200); return Promise.resolve(false); }      // 보호된 시트 등은 보기만
     if (S.busyPkg) return Promise.resolve(false);
     S.busyPkg = true; S.ctx.busy('고치는 중…');
     var before, done = function () { S.busyPkg = false; S.ctx.busy(null); };
@@ -985,7 +985,8 @@
       S: function () { return S; }, ctx: S.ctx, toast: function (m, ms) { S.ctx.toast(m, ms); }, addr: addr, colName: colName, esc: esc,
       ensureVisible: ensureVisible, selRange: selRange, startRange: startRange, clearRange: clearRange, pkgRun: pkgRun, commit: commit, select: select, render: render, applyRes: applyRes, parseInput: parseInput,
       syncDirty: syncDirty, refreshEd: refreshEd, calcRefresh: calcRefresh, undoEdit: undoEdit, redoEdit: redoEdit, resetAll: resetAll, leaveEdit: leaveEdit, toggleFind: toggleFind,
-      barText: barText, display: display, cellOf: cellOf, plusOn: plusOn, styleAt: styleAt
+      barText: barText, display: display, cellOf: cellOf, plusOn: plusOn, styleAt: styleAt,
+      pkgPeek: function (fn) { return currentBytes().then(function (b) { return global.JSZip.loadAsync(b.slice(), { createFolders: false }); }).then(function (z) { return fn(zipPkg(z)); }); }
     };
   }
 

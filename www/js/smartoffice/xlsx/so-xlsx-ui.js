@@ -8,7 +8,7 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   var TXT = [['검정', '#000000'], ['빨강', '#E02020'], ['파랑', '#1C5FD6'], ['초록', '#1B8A3A'], ['주황', '#EE7A00'], ['보라', '#7A3FC4'], ['회색', '#777777'], ['기본', null]];
   var BG = [['없음', null], ['노랑', '#FFF2A8'], ['연두', '#D8F0C0'], ['하늘', '#CFE5FF'], ['분홍', '#FFD6E0'], ['살구', '#FFDDB0'], ['회색', '#E5E7EB'], ['남색', '#BBD4F5']];
-  var NF = [['일반', 'General'], ['1,234', '#,##0'], ['소수 2자리', '#,##0.00'], ['퍼센트', '0%'], ['원', '#,##0"원"'], ['날짜', 'yyyy-mm-dd']];
+  var NF = [['일반', 'General'], ['1,234', '#,##0'], ['1,234.5', '#,##0.0'], ['1,234.50', '#,##0.00'], ['소수 1자리', '0.0'], ['소수 2자리', '0.00'], ['퍼센트', '0%'], ['퍼센트 1자리', '0.0%'], ['원', '#,##0"원"'], ['달러', '$#,##0.00'], ['날짜 2026-03-02', 'yyyy-mm-dd'], ['2026.03.02', 'yyyy.mm.dd'], ['26/3/2', 'yy/m/d'], ['3월 2일', 'm"월" d"일"'], ['2026년 3월 2일', 'yyyy"년" m"월" d"일"'], ['시간 14:30', 'hh:mm'], ['글자', '@']];
   var FONTS = ['맑은 고딕', '바탕', '돋움', '굴림', 'Arial', 'Times New Roman'];
   var SIZES = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28];
   var ALIGN = [['왼쪽', 'left'], ['가운데', 'center'], ['오른쪽', 'right'], ['기본', '']];
@@ -38,7 +38,7 @@
       b.innerHTML = ''; try { curSheet.build(b); } catch (e) {}
       sc.forEach(function (q) { q[0].scrollTop = q[1]; });
     }
-    function run(label, mut, okMsg, after) { return env.pkgRun(label, mut, function (r) { if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 2800); if (after) after(r); setTimeout(refillSheet, 30); }, fail(label)); }
+    function run(label, mut, okMsg, after, opts) { return env.pkgRun(label, mut, function (r) { if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 2800); if (after) after(r); setTimeout(refillSheet, 30); }, fail(label), opts); }
 
     // ---------------- 서식 ----------------
     function applyFmt(ch, msg) { run('서식', function (pkg) { return ST.applyStyle(pkg, nameNow(), rg1(), ch); }, msg || '서식을 바꿨습니다'); }
@@ -203,6 +203,7 @@
       line('줄 높이', 24, 8, 120, '포인트', function (v) { run('줄 높이', function (pkg) { return ST.setRowHeight(pkg, nameNow(), r1.r0, r1.r1, v); }, '줄 높이를 바꿨습니다'); }, function () { run('줄 높이', function (pkg) { return ST.setRowHeight(pkg, nameNow(), r1.r0, r1.r1, 0); }, '줄 높이를 기본으로 돌렸습니다'); });
       line('칸 너비', 14, 3, 80, '글자 수', function (v) { run('칸 너비', function (pkg) { return ST.setColWidth(pkg, nameNow(), r1.c0, r1.c1, v); }, '칸 너비를 바꿨습니다'); }, function () { run('칸 너비', function (pkg) { return ST.setColWidth(pkg, nameNow(), r1.c0, r1.c1, 0); }, '칸 너비를 기본으로 돌렸습니다'); });
       body.appendChild(el('div', 'so-sheet-note', '고른 곳(' + rangeText() + ')의 줄·열에 적용됩니다. 여러 줄·열을 한꺼번에 바꾸려면 줄 번호·열 글자나 「범위」로 고르십시오.'));
+      var af = el('button', 'sxu-b big', '글에 맞춰 자동 맞춤…'); af.type = 'button'; af.onclick = function () { S().ctx.closeSheet(); setTimeout(autoFitSheet, 60); }; var afg = el('div', 'sxu-g'); afg.appendChild(af); body.appendChild(afg);
       S().ctx.sheet({ title: '줄 높이·칸 너비', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
 
@@ -254,6 +255,7 @@
         var old = s.sh.name;
         S().ctx.confirm('「' + old + '」 시트를 지우시겠습니까?', '시트 안의 모든 내용이 지워집니다. 지운 직후에는 ↶ 단추로 되돌릴 수 있습니다.', '시트 지우기', function () { run('시트 지우기', function (pkg) { return ST.deleteSheet(pkg, old); }, '시트를 지웠습니다(되돌리려면 ↶)'); }, { danger: true });
       }, 'danger');
+      add('복사·탭 색·보호…', function () { sheetMoreSheet(); });
       body.appendChild(grid);
       S().ctx.sheet({ title: '시트', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
@@ -371,14 +373,231 @@
       S().ctx.sheet({ title: '입력 목록', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
 
+    // ---------------- v10.8 2회차: 글자 폭 계산 · 자동 맞춤 ----------------
+    function chW(s) {          // 글자 폭(숫자 한 칸 = 1, 한글·한자·전각 = 2)
+      var w = 0; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); w += (c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7FF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFF60) || (c >= 0xFFE0 && c <= 0xFFE6) ? 2 : 1; }
+      return w;
+    }
+    function lineW(txt) { var m = 0; String(txt).split(/\r?\n/).forEach(function (l) { m = Math.max(m, chW(l)); }); return m; }
+    function autoColCh(sh, c, r0, r1) {
+      var mx = 0;
+      for (var r = r0; r <= r1; r++) {
+        var t = shown(sh, r, c); if (!t) continue; var st = envStyleAt(sh, r, c), w = lineW(t) * (((st && st.fs) || 11) / 11) * (st && st.b ? 1.08 : 1);
+        if (st && st.wrap) { w = Math.min(w, 40); }
+        mx = Math.max(mx, w);
+      }
+      return mx ? Math.max(4, Math.min(80, Math.round((mx + 2) * 10) / 10)) : 0;
+    }
+    function autoRowPt(sh, r) {                // 줄 바꿈한 칸이 있으면 줄 수만큼 높이, 없으면 0(자동)
+      var lines = 1, any = false;
+      for (var c = 0; c < sh.nc; c++) {
+        var t = shown(sh, r, c); if (!t) continue; var st = envStyleAt(sh, r, c); if (!(st && st.wrap) && !/\n/.test(t)) continue;
+        any = true; var cap = Math.max(2, (sh.colX[c + 1] - sh.colX[c] - 5) / 7), n = 0;
+        String(t).split(/\r?\n/).forEach(function (l) { n += Math.max(1, Math.ceil(chW(l) * (((st && st.fs) || 11) / 11) / cap)); });
+        lines = Math.max(lines, n);
+      }
+      return any ? Math.min(409, Math.round(lines * 16.5 * 10) / 10) : 0;
+    }
+    function autoFitSheet() {
+      var s = S(), sh = s.sh, r = rg0(), r1 = rg1(), colsAll = r.r0 === r.r1 && r.c0 === r.c1;
+      var lastR = Math.max(0, sh.usedR - 1), rr0 = colsAll || r.r1 - r.r0 < 1 ? 0 : r.r0, rr1 = colsAll || r.r1 - r.r0 < 1 ? lastR : r.r1;
+      var body = el('div', 'sxu'), g = el('div', 'sxu-g');
+      function add(text, fn) { var b = el('button', 'sxu-b big', text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g.appendChild(b); }
+      add('열 너비 자동 맞춤', function () {
+        var ws = []; for (var c = r.c0; c <= r.c1; c++) ws.push({ c: c + 1, w: autoColCh(sh, c, rr0, rr1) });
+        if (!ws.some(function (x) { return x.w; })) { toast('글이 든 칸이 없어 맞출 것이 없습니다.', 2800); return; }
+        run('열 너비 맞춤', function (pkg) { var p = Promise.resolve({ ok: true }); ws.forEach(function (x) { if (x.w) p = p.then(function (q) { return q && q.err ? q : ST.setColWidth(pkg, nameNow(), x.c, x.c, x.w); }); }); return p; }, '글 길이에 맞춰 열 너비를 바꿨습니다');
+      });
+      add('줄 높이 자동 맞춤', function () {
+        var lo = r.r0, hi = r.r1; if (colsAll || hi - lo < 1) { lo = 0; hi = Math.min(lastR, 299); }
+        if (hi - lo > 299) { toast('한 번에 300줄까지 맞출 수 있습니다. 줄 번호를 눌러 범위를 줄여 주십시오.', 3600); return; }
+        var segs = [], cur = null;
+        for (var k = lo; k <= hi; k++) { var pt = autoRowPt(sh, k); if (cur && cur.pt === pt) cur.r1 = k + 1; else { cur = { r0: k + 1, r1: k + 1, pt: pt }; segs.push(cur); } }
+        run('줄 높이 맞춤', function (pkg) { var p = Promise.resolve({ ok: true }); segs.forEach(function (x) { p = p.then(function (q) { return q && q.err ? q : ST.setRowHeight(pkg, nameNow(), x.r0, x.r1, x.pt); }); }); return p; }, '줄 높이를 글에 맞췄습니다(줄 바꿈한 칸이 없는 줄은 엑셀이 알아서 맞춥니다)');
+      });
+      body.appendChild(g);
+      body.appendChild(el('div', 'so-sheet-note', (colsAll || r.r1 - r.r0 < 1 ? '표 전체(' : '고른 곳(') + rangeText() + ') 기준입니다. 칸 하나만 골랐으면 열 하나만, 줄 번호·열 글자나 「범위」로 고르면 그 범위만 맞춥니다. 열 너비는 글자 수로 어림하므로 엑셀에서 열면 조금 다를 수 있습니다.'));
+      S().ctx.sheet({ title: '자동 맞춤', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 채우기 ----------------
+    function fillSheet() {
+      var r = rg0(), body = el('div', 'sxu'), g = el('div', 'sxu-g');
+      function add(text, fn) { var b = el('button', 'sxu-b big', text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g.appendChild(b); }
+      var multiR = r.r1 > r.r0, multiC = r.c1 > r.c0;
+      add('아래로 복사(맨 위 줄을)', function () { if (!multiR) { toast('채울 범위를 「범위」로 먼저 고르십시오(맨 위 줄이 아래로 복사됩니다).', 3600); return; } run('아래로 채우기', function (pkg) { return ST.fillDown(pkg, nameNow(), rg1()); }, function (x) { return '맨 위 줄을 아래로 채웠습니다(' + x.n + '칸)'; }); });
+      add('오른쪽으로 복사(맨 왼쪽 칸을)', function () { if (!multiC) { toast('채울 범위를 「범위」로 먼저 고르십시오(맨 왼쪽 칸이 오른쪽으로 복사됩니다).', 3600); return; } run('오른쪽으로 채우기', function (pkg) { return ST.fillRight(pkg, nameNow(), rg1()); }, function (x) { return '맨 왼쪽 칸을 오른쪽으로 채웠습니다(' + x.n + '칸)'; }); });
+      add('아래로 이어서 채우기(1,2,3… · 월,화…)', function () { if (!multiR) { toast('채울 범위를 「범위」로 먼저 고르십시오(맨 위 칸이 시작 값입니다).', 3600); return; } run('연속 채우기', function (pkg) { return ST.fillSeries(pkg, nameNow(), rg1(), 'down'); }, function (x) { return '아래로 이어서 채웠습니다(' + x.n + '칸)'; }); });
+      add('오른쪽으로 이어서 채우기', function () { if (!multiC) { toast('채울 범위를 「범위」로 먼저 고르십시오(맨 왼쪽 칸이 시작 값입니다).', 3600); return; } run('연속 채우기', function (pkg) { return ST.fillSeries(pkg, nameNow(), rg1(), 'right'); }, function (x) { return '오른쪽으로 이어서 채웠습니다(' + x.n + '칸)'; }); });
+      body.appendChild(g);
+      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + '. 「이어서」는 맨 앞 두 칸이 숫자면 그 간격으로, 한 칸이면 1씩 늘립니다. 「1회」「제3주」처럼 숫자가 든 글, 월~일, 1월~12월도 이어집니다. 수식은 참조를 옮겨 복사합니다. 채운 뒤에는 ↶ 로 되돌릴 수 있습니다.'));
+      S().ctx.sheet({ title: '채우기', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 데이터(중복 제거 · 텍스트 나누기) ----------------
+    function chipsX(body, label, list, st, key, multi) {
+      body.appendChild(el('div', 'sxu-l', label)); var row = el('div', 'sxu-r'); body.appendChild(row);
+      list.forEach(function (o) {
+        var b = el('button', 'sxu-b' + ((multi ? st[key][o[0]] : st[key] === o[0]) ? ' on' : ''), o[1]); b.type = 'button';
+        b.onclick = function () { if (multi) { st[key][o[0]] = !st[key][o[0]]; b.classList.toggle('on', !!st[key][o[0]]); } else { st[key] = o[0]; [].slice.call(row.children).forEach(function (x) { x.classList.toggle('on', x === b); }); } };
+        row.appendChild(b);
+      });
+      return row;
+    }
+    function dataSheet() {
+      var s = S(), sh = s.sh, r = rg0(), reg = (r.r1 > r.r0 || r.c1 > r.c0) ? r : currentRegion(sh, r.r0, r.c0), body = el('div', 'sxu');
+      var firstText = true, c;
+      for (c = reg.c0; c <= reg.c1; c++) { var h = env.cellOf(sh, reg.r0, c); if (!h || h.t !== 's') firstText = false; }
+      var st = { hdr: firstText ? 'y' : 'n', keys: {} }, cols = [];
+      for (c = reg.c0; c <= reg.c1; c++) { st.keys[c] = true; var hc = env.cellOf(sh, reg.r0, c), nm = hc && hc.v != null && firstText ? String(hc.v).slice(0, 8) : env.colName(c) + '열'; cols.push([c, nm]); }
+      body.appendChild(el('div', 'sxu-l', '① 중복 제거 — 범위: ' + env.addr(reg.r0, reg.c0) + ':' + env.addr(reg.r1, reg.c1)));
+      chipsX(body, '첫 줄은 제목인가요?', [['y', '제목 있음'], ['n', '제목 없음']], st, 'hdr');
+      chipsX(body, '같은지 비교할 열(눌러서 켜고 끕니다)', cols, st, 'keys', true);
+      var g = el('div', 'sxu-g'), go = el('button', 'sxu-b big danger', '중복 줄 지우기'); go.type = 'button'; g.appendChild(go); body.appendChild(g);
+      go.onclick = function () {
+        var keys = cols.filter(function (q) { return st.keys[q[0]]; }).map(function (q) { return q[0] + 1; }); if (!keys.length) { toast('비교할 열을 하나 이상 켜 주십시오.', 2800); return; }
+        var rng = { r0: reg.r0 + 1, c0: reg.c0 + 1, r1: reg.r1 + 1, c1: reg.c1 + 1 };
+        S().ctx.closeSheet(); setTimeout(function () { run('중복 제거', function (pkg) { return ST.removeDuplicates(pkg, nameNow(), rng, keys, st.hdr === 'y'); }, function (x) { return x.removed ? x.removed + '줄의 중복을 지웠습니다(아래 줄이 위로 올라오고 범위 맨 아래가 빕니다. 되돌리려면 ↶)' : '중복이 없습니다'; }); }, 60);
+      };
+      body.appendChild(el('div', 'sxu-l', '② 텍스트 나누기 — 고른 열(' + env.colName(r.c0) + '열)의 글을 오른쪽 칸들에 나눠 적기'));
+      var st2 = { d: ',' }, inp = el('input', 'sxu-in wide'); inp.type = 'text'; inp.maxLength = 3; inp.placeholder = '직접 입력(1~3글자)'; inp.setAttribute('aria-label', '구분 글자');
+      chipsX(body, '구분 글자', [[',', '쉼표'], [' ', '띄어쓰기'], ['\t', '탭'], [';', '세미콜론'], ['/', '슬래시'], ['-', '하이픈']], st2, 'd');
+      body.appendChild(inp);
+      var g2 = el('div', 'sxu-g'), go2 = el('button', 'sxu-b big on', '나누기'); go2.type = 'button'; g2.appendChild(go2); body.appendChild(g2);
+      go2.onclick = function () {
+        var d = inp.value || st2.d, rr0 = r.r0, rr1 = r.r1; if (r.r0 === r.r1) { var rg2 = currentRegion(sh, r.r0, r.c0); rr0 = rg2.r0; rr1 = rg2.r1; }
+        S().ctx.closeSheet(); setTimeout(function () { run('텍스트 나누기', function (pkg) { return ST.textToColumns(pkg, nameNow(), r.c0 + 1, rr0 + 1, rr1 + 1, d); }, function (x) { return x.rows + '줄을 ' + x.cols + '칸으로 나눴습니다(되돌리려면 ↶)'; }); }, 60);
+      };
+      body.appendChild(el('div', 'so-sheet-note', '중복 제거는 비교 열이 모두 같은 줄을 지웁니다(대소문자 구분 없음). 텍스트 나누기는 오른쪽 칸에 이미 내용이 있으면 덮어쓰지 않고 멈춥니다. 한 열만 골랐으면 그 열의 이어진 줄 전체를 나눕니다.'));
+      S().ctx.sheet({ title: '데이터 정리', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 인쇄(쪽 설정 · 인쇄 영역 · 반복 제목) ----------------
+    function printSheet() {
+      var xml = sheetXml(), cur = xml ? ST.readPageSetup(xml) : { orient: 'portrait', paper: 'A4', fit: false, center: false, pageNum: false }, body = el('div', 'sxu'), st = {};
+      chipsX(body, '방향 (지금: ' + (cur.orient === 'landscape' ? '가로' : '세로') + ')', [['portrait', '세로'], ['landscape', '가로']], st, 'orient');
+      chipsX(body, '용지 (지금: ' + cur.paper + ')', [['A4', 'A4'], ['A3', 'A3'], ['A5', 'A5'], ['B5', 'B5'], ['Letter', 'Letter']], st, 'paper');
+      chipsX(body, '여백', [['normal', '보통'], ['narrow', '좁게'], ['wide', '넓게']], st, 'margin');
+      chipsX(body, '가로 폭 (지금: ' + (cur.fit ? '한 쪽에 맞춤' : '원래 크기') + ')', [['fit', '한 쪽 폭에 맞추기'], ['full', '원래 크기']], st, 'fit');
+      chipsX(body, '가운데 맞춤 (지금: ' + (cur.center ? '켬' : '끔') + ')', [['on', '가로 가운데'], ['off', '해제']], st, 'center');
+      chipsX(body, '쪽 번호 (지금: ' + (cur.pageNum ? '있음' : '없음') + ')', [['on', '아래에 쪽 번호'], ['off', '없애기']], st, 'pn');
+      var g = el('div', 'sxu-g'), ap = el('button', 'sxu-b big on', '쪽 설정 적용'); ap.type = 'button'; g.appendChild(ap); body.appendChild(g);
+      ap.onclick = function () {
+        var o = {}; if (st.orient) o.orient = st.orient; if (st.paper) o.paper = st.paper; if (st.margin) o.margin = st.margin; if (st.fit) o.fitWidth = st.fit === 'fit'; if (st.center) o.center = st.center === 'on'; if (st.pn) o.pageNum = st.pn === 'on';
+        if (!Object.keys(o).length) { toast('바꿀 것을 하나 이상 골라 주십시오.', 2600); return; }
+        S().ctx.closeSheet(); setTimeout(function () { run('쪽 설정', function (pkg) { return ST.setPageSetup(pkg, nameNow(), o); }, '쪽 설정을 바꿨습니다(엑셀의 인쇄 미리 보기에서 확인할 수 있습니다)'); }, 60);
+      };
+      body.appendChild(el('div', 'sxu-l', '인쇄 영역·반복 제목 (고른 곳: ' + rangeText() + ')'));
+      var g2 = el('div', 'sxu-g');
+      function add(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g2.appendChild(b); }
+      add('고른 곳을 인쇄 영역으로', function () { run('인쇄 영역', function (pkg) { return ST.setPrintArea(pkg, nameNow(), rg1()); }, '인쇄 영역을 ' + rangeText() + '로 정했습니다'); });
+      add('인쇄 영역 지우기', function () { run('인쇄 영역', function (pkg) { return ST.setPrintArea(pkg, nameNow(), null); }, '인쇄 영역을 지웠습니다(시트 전체를 인쇄)'); }, 'danger');
+      add('고른 줄을 모든 쪽 위에 반복', function () { var q = rg1(); run('반복 제목', function (pkg) { return ST.setPrintTitles(pkg, nameNow(), { r0: q.r0, r1: q.r1 }, null); }, '고른 줄(' + q.r0 + '~' + q.r1 + '줄)을 모든 쪽 맨 위에 인쇄합니다'); });
+      add('고른 열을 모든 쪽 왼쪽에 반복', function () { var q = rg1(); run('반복 제목', function (pkg) { return ST.setPrintTitles(pkg, nameNow(), null, { c0: q.c0, c1: q.c1 }); }, '고른 열(' + env.colName(q.c0 - 1) + '~' + env.colName(q.c1 - 1) + ')을 모든 쪽 왼쪽에 인쇄합니다'); });
+      add('반복 제목 지우기', function () { run('반복 제목', function (pkg) { return ST.setPrintTitles(pkg, nameNow(), null, null); }, '반복 제목을 지웠습니다'); }, 'danger');
+      body.appendChild(g2);
+      body.appendChild(el('div', 'so-sheet-note', '정하지 않은 항목은 그대로 둡니다. 긴 성적표는 「고른 줄을 모든 쪽 위에 반복」으로 제목 줄을 쪽마다 넣을 수 있습니다. 이 앱 화면에는 인쇄 모양이 나오지 않고, 엑셀·한셀에서 열면 적용됩니다.'));
+      S().ctx.sheet({ title: '인쇄 설정', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 이름 붙이기 ----------------
+    function nameSheet() {
+      var body = el('div', 'sxu'), listBox = el('div', 'sxu-l', '이 문서의 이름을 불러오는 중…'), inp = el('input', 'sxu-in wide'); inp.type = 'text'; inp.maxLength = 60; inp.placeholder = '이름(예: 성적표, 총점)'; inp.setAttribute('aria-label', '이름');
+      body.appendChild(el('div', 'sxu-l', '고른 곳(' + rangeText() + ')에 이름 붙이기 — 수식에서 =SUM(성적표)처럼 쓸 수 있습니다'));
+      body.appendChild(inp);
+      var g = el('div', 'sxu-g'), ap = el('button', 'sxu-b big on', '이름 붙이기'); ap.type = 'button'; g.appendChild(ap); body.appendChild(g);
+      ap.onclick = function () {
+        var nm = inp.value.trim(), q = rg1(), ref = ST.absRef(nameNow(), q);
+        S().ctx.closeSheet(); setTimeout(function () { run('이름 붙이기', function (pkg) { return ST.setName(pkg, nm, ref, null); }, function (x) { return x.replaced ? '「' + nm + '」의 범위를 ' + rangeText() + '로 바꿨습니다' : '「' + nm + '」이름을 붙였습니다(' + rangeText() + ')'; }); }, 60);
+      };
+      body.appendChild(listBox);
+      var listWrap = el('div', 'sxu-r'); body.appendChild(listWrap);
+      env.pkgPeek(function (pkg) { return ST.listNames(pkg); }).then(function (names) {
+        listBox.textContent = names.length ? '붙여 둔 이름 ' + names.length + '개 — 누르면 지웁니다' : '붙여 둔 이름이 없습니다';
+        names.slice(0, 40).forEach(function (n) {
+          var b = el('button', 'sxu-b', n.name + (n.sheet ? '(' + n.sheet + ' 시트)' : '') + ' ✕'); b.type = 'button'; b.title = n.ref;
+          b.onclick = function () { S().ctx.confirm('「' + n.name + '」 이름을 지우시겠습니까?', '이름만 지워지고 칸의 내용은 그대로입니다. 이 이름을 수식에서 쓰고 있으면 수식이 깨질 수 있습니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '이름 지우기', function () { run('이름 지우기', function (pkg) { return ST.removeName(pkg, n.name, n.local); }, '이름을 지웠습니다'); }, { danger: true }); };
+          listWrap.appendChild(b);
+        });
+      }, function () { listBox.textContent = ''; });
+      S().ctx.sheet({ title: '이름 붙이기', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 링크 ----------------
+    function linkSheet() {
+      var xml = sheetXml(), links = xml ? ST.readLinks(xml) : [], body = el('div', 'sxu'), inp = el('input', 'sxu-in wide'), loc = el('input', 'sxu-in wide'), r1 = rg1(), s = S();
+      inp.type = 'url'; inp.placeholder = 'https://…'; inp.setAttribute('aria-label', '인터넷 주소'); inp.autocapitalize = 'off'; loc.type = 'text'; loc.placeholder = '예: 요약!A1'; loc.setAttribute('aria-label', '문서 안 칸 주소');
+      body.appendChild(el('div', 'sxu-l', '고른 곳(' + rangeText() + ')에 링크 걸기 — 인터넷 주소')); body.appendChild(inp);
+      var g = el('div', 'sxu-g'), ap = el('button', 'sxu-b big on', '인터넷 링크 걸기'), ap2 = el('button', 'sxu-b big', '이 문서 안의 칸으로 링크'), cl = el('button', 'sxu-b big danger', '고른 곳의 링크 지우기'); ap.type = ap2.type = cl.type = 'button';
+      ap.onclick = function () {
+        var u = inp.value; if (!u.trim()) { toast('주소를 적어 주십시오.', 2400); return; }
+        s.ctx.closeSheet(); setTimeout(function () { run('링크', function (pkg) { return ST.setLink(pkg, nameNow(), r1, { url: u }).then(function (x) { return x.err ? x : ST.applyStyle(pkg, nameNow(), r1, { color: '#1C5FD6', underline: true }); }); }, '링크를 걸었습니다(파란 밑줄). 엑셀에서 누르면 열립니다'); }, 60);
+      };
+      ap2.onclick = function () {
+        var l = loc.value.trim(); if (!/^('[^']+'|[^!']+)!\$?[A-Za-z]{1,3}\$?\d+$/.test(l)) { toast('「시트이름!A1」 꼴로 적어 주십시오. 예: 요약!A1', 3600); return; }
+        s.ctx.closeSheet(); setTimeout(function () { run('링크', function (pkg) { return ST.setLink(pkg, nameNow(), r1, { loc: l }).then(function (x) { return x.err ? x : ST.applyStyle(pkg, nameNow(), r1, { color: '#1C5FD6', underline: true }); }); }, '문서 안 링크를 걸었습니다'); }, 60);
+      };
+      cl.onclick = function () { s.ctx.closeSheet(); setTimeout(function () { run('링크 지우기', function (pkg) { return ST.setLink(pkg, nameNow(), r1, null); }, function (x) { return '링크 ' + x.removed + '개를 지웠습니다(글자와 색은 그대로입니다)'; }); }, 60); };
+      g.appendChild(ap); body.appendChild(g);
+      body.appendChild(el('div', 'sxu-l', '또는 이 문서 안의 칸으로 이동하는 링크 — 「시트이름!A1」')); body.appendChild(loc);
+      var g2 = el('div', 'sxu-g'); g2.appendChild(ap2); g2.appendChild(cl); body.appendChild(g2);
+      body.appendChild(el('div', 'so-sheet-note', '칸의 글은 그대로 두고 링크만 거는데, 눈에 띄게 파란 밑줄도 입힙니다. 이 시트의 링크 ' + links.length + '개. 주소는 http://, https://, mailto: 만 걸 수 있습니다.'));
+      S().ctx.sheet({ title: '링크', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 줄·열 묶기(접기) ----------------
+    function groupSheet() {
+      var r = rg1(), body = el('div', 'sxu'), g = el('div', 'sxu-g');
+      function add(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g.appendChild(b); }
+      function op(axis, o, msg) { return function () { var lo = axis === 'row' ? r.r0 : r.c0, hi = axis === 'row' ? r.r1 : r.c1; run('묶기', function (pkg) { return ST.setOutline(pkg, nameNow(), axis, lo, hi, o); }, msg); }; }
+      add('고른 줄 묶기', op('row', 'group', '고른 줄을 묶었습니다(엑셀에서 왼쪽 − 단추로 접습니다)')); add('고른 줄 묶음 풀기', op('row', 'ungroup', '줄 묶음을 풀었습니다'), 'danger');
+      add('고른 줄 접기', op('row', 'collapse', '묶은 줄을 접었습니다')); add('고른 줄 펴기', op('row', 'expand', '묶은 줄을 폈습니다'));
+      add('고른 열 묶기', op('col', 'group', '고른 열을 묶었습니다(엑셀에서 위쪽 − 단추로 접습니다)')); add('고른 열 묶음 풀기', op('col', 'ungroup', '열 묶음을 풀었습니다'), 'danger');
+      add('고른 열 접기', op('col', 'collapse', '묶은 열을 접었습니다')); add('고른 열 펴기', op('col', 'expand', '묶은 열을 폈습니다'));
+      body.appendChild(g);
+      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + '. 줄 번호·열 글자를 눌러 줄·열을 고른 뒤 묶습니다. 접으면 묶은 줄·열이 숨고, 합계 줄 옆에 + 단추가 생깁니다. 이 앱 화면에서는 접은 줄이 숨겨져 보입니다.'));
+      S().ctx.sheet({ title: '줄·열 묶기', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+    // ---------------- 시트 꾸미기·보호·복사 ----------------
+    function sheetMoreSheet() {
+      var s = S(), xml = sheetXml(), body = el('div', 'sxu'), prot = xml ? ST.readProtect(xml) : { on: false }, tc = xml ? ST.readTabColor(xml) : null, r1 = rg1();
+      var inp = el('input', 'sxu-in wide'); inp.type = 'text'; inp.maxLength = 31; inp.value = s.sh.name + ' (2)'; inp.setAttribute('aria-label', '복사본 이름');
+      body.appendChild(el('div', 'sxu-l', '시트 복사 — 복사본 이름(맨 뒤에 만듭니다)')); body.appendChild(inp);
+      var g = el('div', 'sxu-g');
+      function add(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { var v = inp.value; S().ctx.closeSheet(); setTimeout(function () { fn(v); }, 60); }; g.appendChild(b); }
+      add('이 시트 복사', function (nm) { var old = s.sh.name; s.keepSheet = nm; run('시트 복사', function (pkg) { return ST.copySheet(pkg, old, nm); }, '시트를 복사했습니다(「' + nm + '」, 맨 뒤)'); });
+      body.appendChild(g);
+      body.appendChild(el('div', 'sxu-l', '탭 색' + (tc ? ' (지금 ' + tc + ')' : '')));
+      swatchRow(body, [['없음', null]].concat(TXT.slice(1, 7).map(function (c) { return [c[0], c[1]]; })), tc, function (v) { S().ctx.closeSheet(); setTimeout(function () { run('탭 색', function (pkg) { return ST.setTabColor(pkg, nameNow(), v); }, v ? '탭 색을 바꿨습니다' : '탭 색을 없앴습니다'); }, 60); });
+      body.appendChild(el('div', 'sxu-l', '시트 보호(암호 없이) — ' + (prot.on ? '지금 보호됨' + (prot.pw ? '(암호 있음)' : '') : '지금 보호 안 됨')));
+      var g2 = el('div', 'sxu-g');
+      function add2(text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = function () { S().ctx.closeSheet(); setTimeout(fn, 60); }; g2.appendChild(b); }
+      add2('이 시트 보호하기', function () { S().ctx.confirm('이 시트를 보호하시겠습니까?', '암호 없이 보호합니다. 엑셀에서 잠긴 칸은 고칠 수 없게 되고, 「시트 보호 해제」로 언제든 풀 수 있습니다. 고칠 칸은 먼저 「고른 칸 잠금 풀기」를 해 두십시오. 이 앱은 암호를 입력하거나 걸지 않습니다.', '보호하기', function () { run('시트 보호', function (pkg) { return ST.setProtect(pkg, nameNow(), true); }, '시트를 보호했습니다(암호 없음)'); }); });
+      add2('시트 보호 해제', function () { run('시트 보호 해제', function (pkg) { return ST.setProtect(pkg, nameNow(), false); }, '시트 보호를 풀었습니다', null, { allowProtected: true }); });
+      add2('고른 칸 잠금 풀기', function () { run('잠금 풀기', function (pkg) { return ST.applyStyle(pkg, nameNow(), r1, { locked: false }); }, '고른 칸(' + rangeText() + ')은 보호해도 고칠 수 있습니다'); });
+      add2('고른 칸 다시 잠그기', function () { run('잠그기', function (pkg) { return ST.applyStyle(pkg, nameNow(), r1, { locked: true }); }, '고른 칸(' + rangeText() + ')을 잠갔습니다'); });
+      body.appendChild(g2);
+      body.appendChild(el('div', 'so-sheet-note', '그림·차트·메모·표가 든 시트는 복사할 수 없습니다. 시트 보호는 엑셀에서 열었을 때 적용되며, 암호가 걸린 시트의 보호는 이 앱에서 풀 수 없습니다.'));
+      S().ctx.sheet({ title: '시트 복사·탭 색·보호', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
+
+    // ---------------- 메모 ----------------
+    function memoSheet() {
+      var r = rg0(), single = r.r0 === r.r1 && r.c0 === r.c1, ref = env.addr(r.r0, r.c0), body = el('div', 'sxu'), ta = el('textarea', 'sxu-in wide'), listBox = el('div', 'so-sheet-note', '이 시트의 메모를 불러오는 중…');
+      ta.rows = 4; ta.maxLength = 3000; ta.placeholder = '메모 내용'; ta.setAttribute('aria-label', '메모 내용'); ta.style.minHeight = '96px'; ta.style.resize = 'vertical';
+      body.appendChild(el('div', 'sxu-l', single ? '고른 칸 ' + ref + '의 메모' : '메모는 칸 하나에만 달 수 있습니다 — 칸 하나를 눌러 주십시오(지금 ' + rangeText() + ')')); body.appendChild(ta);
+      var g = el('div', 'sxu-g'), ap = el('button', 'sxu-b big on', '메모 달기·고치기'), cl = el('button', 'sxu-b big danger', '이 칸 메모 지우기'); ap.type = cl.type = 'button';
+      ap.onclick = function () { if (!single) { toast('칸 하나를 골라 주십시오.', 2600); return; } var v = ta.value; if (!v.trim()) { toast('메모 내용을 적어 주십시오.', 2600); return; } S().ctx.closeSheet(); setTimeout(function () { run('메모', function (pkg) { return ST.setMemo(pkg, nameNow(), ref, v); }, '메모를 달았습니다(' + ref + '). 엑셀에서 칸에 마우스를 올리면 보입니다'); }, 60); };
+      cl.onclick = function () { if (!single) { toast('칸 하나를 골라 주십시오.', 2600); return; } S().ctx.closeSheet(); setTimeout(function () { run('메모 지우기', function (pkg) { return ST.setMemo(pkg, nameNow(), ref, ''); }, '메모를 지웠습니다'); }, 60); };
+      g.appendChild(ap); g.appendChild(cl); body.appendChild(g); body.appendChild(listBox);
+      env.pkgPeek(function (pkg) { return ST.readMemos(pkg, nameNow()); }).then(function (x) {
+        var list = (x && x.list) || [], mine = list.filter(function (m) { return m.ref === ref; })[0]; if (mine) ta.value = mine.text;
+        listBox.textContent = list.length ? '이 시트의 메모 ' + list.length + '개: ' + list.slice(0, 8).map(function (m) { return m.ref + '「' + m.text.replace(/\s+/g, ' ').slice(0, 14) + '」'; }).join(' · ') : '이 시트에는 메모가 없습니다. 메모를 달면 칸 모서리에 작은 표시가 생깁니다(엑셀에서 보입니다).';
+      }, function () { listBox.textContent = ''; });
+      S().ctx.sheet({ title: '메모', body: body, buttons: [{ label: '닫기' }], wide: true });
+    }
     // ---------------- 단추줄 ----------------
     var ITEMS = {
       fmt: { g: 'Aa', l: '서식', run: fmtSheet }, rc: { g: '▤', l: '줄·칸', run: rcSheet }, range: { g: '⬚', l: '범위', run: rangeBtn },
-      fill: { g: '⤓', l: '채우기', run: fillDown }, sum: { g: '∑', l: '합계', run: autoSum }, sheet: { g: '▭', l: '시트', run: sheetSheet },
+      fill: { g: '⤓', l: '채우기', run: fillSheet }, sum: { g: '∑', l: '합계', run: autoSum }, sheet: { g: '▭', l: '시트', run: sheetSheet },
       merge: { g: '⊞', l: '칸 합치기', run: mergeBtn }, size: { g: '↔', l: '크기', run: sizeSheet }, sort: { g: '↕', l: '정렬', run: sortSheet },
-      copy: { g: '⧉', l: '복사', run: copySheet }, repl: { g: '⇄', l: '바꾸기', run: replaceBtn }, endrow: { g: '＋줄', l: '맨 끝 줄', run: appendRow }, filter: { g: '▽', l: '필터', run: filterSheet }, hide: { g: '◌', l: '숨기기', run: hideSheet }, freeze: { g: '❄', l: '틀 고정', run: freezeSheet }, cond: { g: '◧', l: '조건 서식', run: condSheet }, valid: { g: '☰', l: '입력 목록', run: validSheet }
+      copy: { g: '⧉', l: '복사', run: copySheet }, repl: { g: '⇄', l: '바꾸기', run: replaceBtn }, endrow: { g: '＋줄', l: '맨 끝 줄', run: appendRow }, filter: { g: '▽', l: '필터', run: filterSheet }, data: { g: '⌗', l: '데이터 정리', run: dataSheet }, print: { g: '⎙', l: '인쇄', run: printSheet }, names: { g: '≔', l: '이름 붙이기', run: nameSheet }, link: { g: '🔗', l: '링크', run: linkSheet }, group: { g: '⊟', l: '줄·열 묶기', run: groupSheet }, memo: { g: '🗒', l: '메모', run: memoSheet }, hide: { g: '◌', l: '숨기기', run: hideSheet }, freeze: { g: '❄', l: '틀 고정', run: freezeSheet }, cond: { g: '◧', l: '조건 서식', run: condSheet }, valid: { g: '☰', l: '입력 목록', run: validSheet }
     };
-    var ORDER = ['fmt', 'rc', 'range', 'copy', 'fill', 'sum', 'sheet', 'merge', 'size', 'sort', 'filter', 'hide', 'repl', 'endrow', 'freeze', 'cond', 'valid'];
+    var ORDER = ['fmt', 'rc', 'range', 'copy', 'fill', 'sum', 'sheet', 'merge', 'size', 'sort', 'filter', 'hide', 'repl', 'endrow', 'freeze', 'cond', 'valid', 'data', 'print', 'names', 'link', 'group', 'memo'];
     function mkBtn(id, host, inSheet) {
       var it = ITEMS[id], b = el('button', inSheet ? 'sxu-mb' : 'sxu-ob'); b.type = 'button'; b.setAttribute('aria-label', it.l); b.dataset.id = id;
       b.appendChild(el('span', 'g', it.g)); b.appendChild(el('span', 'l', it.l));
