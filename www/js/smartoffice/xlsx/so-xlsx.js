@@ -106,7 +106,75 @@
     if (sh._fx !== xml) { sh._fx = xml; try { sh._fl = global.SOXlsxStruct.readFilter(xml); } catch (e) { sh._fl = null; } }
     return sh._fl;
   }
+  // ---------------- 엑셀 화면 충실도(스위치 SO_XLSX_FIDELITY) ----------------
+  // 켜면: 글꼴 이름 따옴표 때문에 서식이 통째로 사라지던 문제 고침 · 선 굵기·색 · 세로 맞춤 · 테마색 · 글자 넘침 · 틀 고정 첫 줄/칸 따라가기. 끄면 예전 그리기(cellDiv) 그대로.
+  function fid() { return !!(S && S.ctx && S.ctx.flag && S.ctx.flag('xlsxfid') && S.styles); }
+  function lumOf(hex) { var m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return -1; var v = parseInt(m[1], 16); return (0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255; }
+  function nbStyle(sh, r, c) { return (r < 0 || c < 0 || r >= sh.nr || c >= sh.nc) ? null : styleAt(sh, r, c); }
+  function estW(txt, fs) { var n = 0, i, ch; for (i = 0; i < txt.length; i++) { ch = txt.charCodeAt(i); n += ch >= 0x1100 ? 1 : (ch === 32 ? 0.35 : 0.58); } return n * fs; }
+  function cellDivF(sh, r, c, x, y, w, h, extraCls, lh) {
+    var cell = cellOf(sh, r, c), txt = display(cell), s = S.scale;
+    var mg = extraCls === ' m' ? mergeAt(sh, r, c) : null;
+    var sel = (S.sel.r === r && S.sel.c === c) ? ' sel' : '';
+    var ed = S.edits[sh.i + '|' + r + '|' + c] ? ' ed' : '';
+    var sty = styleAt(sh, r, c) || {};
+    var fs = Math.round((sty.fs ? sty.fs * 4 / 3 : 14) * s * 10) / 10, lineH = Math.round(fs * 1.3);
+    var box = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;';
+    var tx = 'font-size:' + fs + 'px;';                                  // 글자 모양(넘침 글자 겹에도 같이 쓴다)
+    if (sty.fn) tx += "font-family:'" + String(sty.fn).replace(/["'\\;:<>&{}]/g, '') + "',sans-serif;";   // 작은따옴표 — style="…" 속성이 끊기지 않게
+    if (sty.b) tx += 'font-weight:700;'; if (sty.i) tx += 'font-style:italic;';
+    if (sty.u || sty.st) tx += 'text-decoration:' + (sty.u ? 'underline' : '') + (sty.u && sty.st ? ' ' : '') + (sty.st ? 'line-through' : '') + ';';
+    var bg = sty.bg || fillOf(cell), col = sty.color || '', lum;
+    if (bg) { lum = lumOf(bg); tx += 'color:' + (col || (lum >= 0 && lum < 0.45 ? '#fff' : '#111')) + ';'; }
+    else if (col) { lum = lumOf(col); if (lum > 0.12 && lum < 0.92) tx += 'color:' + col + ';'; }      // 검정·흰색 글자는 밝은·어두운 화면 기본색에 맡긴다(어두운 화면에서 안 보이는 것 방지)
+    var al = sty.h || (cell && cell.t === 'n' ? 'right' : (cell && (cell.t === 'b' || cell.t === 'e') ? 'center' : ''));
+    if (al) tx += 'text-align:' + al + ';';
+    var pad = sty.ind ? 'padding-left:' + Math.round((7 + sty.ind * 9) * s) + 'px;' : '';
+    var v = sty.v || 'bottom', ln;
+    if (sty.wrap) {
+      ln = 'white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.25;display:flex;flex-direction:column;justify-content:' + (v === 'top' ? 'flex-start' : v === 'center' ? 'center' : 'flex-end') + ';padding-top:1px;padding-bottom:1px;';
+    } else if (v === 'center' || h - lineH < 10) ln = 'line-height:' + (h - 1) + 'px;';
+    else if (v === 'top') ln = 'line-height:' + lineH + 'px;padding-top:2px;';
+    else ln = 'line-height:' + lineH + 'px;padding-top:' + (h - lineH - 3) + 'px;';
+    // 선: 칸마다 오른쪽·아래만 그린다(이웃 칸의 왼쪽·위 선도 여기서 그려 두 겹으로 굵어 보이지 않게). 맨 첫 칸만 왼쪽·위도 그린다
+    var bd = '';
+    var stRight = mg ? nbStyle(sh, mg.s.r, mg.e.c) : sty, stBot = mg ? nbStyle(sh, mg.e.r, mg.s.c) : sty;
+    var nR = nbStyle(sh, mg ? mg.s.r : r, (mg ? mg.e.c : c) + 1), nB = nbStyle(sh, (mg ? mg.e.r : r) + 1, mg ? mg.s.c : c);
+    var bR = (stRight && stRight.bd && stRight.bd.r) || (nR && nR.bd && nR.bd.l) || '', bB = (stBot && stBot.bd && stBot.bd.b) || (nB && nB.bd && nB.bd.t) || '';
+    if (bR) bd += 'border-right:' + bR + ';'; if (bB) bd += 'border-bottom:' + bB + ';';
+    if (c === 0 && sty.bd && sty.bd.l) bd += 'border-left:' + sty.bd.l + ';'; if (r === 0 && sty.bd && sty.bd.t) bd += 'border-top:' + sty.bd.t + ';';
+    var bgs = bg ? 'background-color:' + bg + ';' : '';
+    var rgc = (S.rg && r >= S.rg.r0 && r <= S.rg.r1 && c >= S.rg.c0 && c <= S.rg.c1) ? ' rg' : '';
+    var fl = fltOf(sh), fmk = '';
+    if (fl && r === fl.ref.r0 - 1 && c >= fl.ref.c0 - 1 && c <= fl.ref.c1 - 1) { var fk = c - (fl.ref.c0 - 1), fon = fl.criteria[fk] !== undefined; fmk = '<span class="sx-fv' + (fon ? ' on' : '') + '" data-fc="' + fk + '" aria-label="' + (fon ? '필터가 걸린 열' : '필터') + '">' + (fon ? '▼' : '▽') + '</span>'; }
+    // 글자 넘침: 줄바꿈 없는 글(문자)이 칸보다 길고 옆 칸이 비어 있으면 글자만 옆 칸 위로 번져 보인다(칸 자체는 그대로)
+    var ov = '';
+    if (txt && !sty.wrap && !mg && !fmk && cell && cell.t === 's' && txt.indexOf('\n') < 0 && (!al || al === 'left' || al === 'right') && estW(txt, fs) + 14 > w) {
+      var need = estW(txt, fs) + 14 - w, ext = 0, k, dir = al === 'right' ? -1 : 1, cnt = 0, cw;
+      for (k = c + dir; k >= 0 && k < sh.nc && cnt < 40 && ext < need; k += dir) {
+        if (mergeAt(sh, r, k) || display(cellOf(sh, r, k)) !== '') break;
+        cw = (sh.colX[k + 1] - sh.colX[k]) * s; if (cw <= 0) { cnt++; continue; } ext += cw; cnt++;
+      }
+      if (ext > 0) {
+        var ox = dir < 0 ? x - ext : x;
+        ov = '<div class="sx-c sx-ov" style="left:' + ox + 'px;top:' + y + 'px;width:' + (w + ext) + 'px;height:' + h + 'px;' + tx + ln + pad + '">' + esc(txt) + '</div>';
+        txt = '';
+      }
+    }
+    return '<div class="sx-c' + (extraCls || '') + sel + rgc + ed + (fmk ? ' sx-fh' : '') + '" style="' + box + tx + ln + pad + bgs + bd + '">' + (txt ? esc(txt) : '') + fmk + '</div>' + ov;
+  }
+  function paneOf(sh) {            // 시트의 틀 고정(첫 줄·첫 칸만 따라갈 수 있다)
+    var xml = S.an && S.an.sheets && S.an.sheets[sh.name] && S.an.sheets[sh.name].xml, m = xml && /<pane\b[^>]*>/.exec(xml);
+    if (!m || !/state="frozen/.test(m[0])) return { row: false, col: false };
+    var xs = /\sxSplit="(\d+)"/.exec(m[0]), ys = /\sySplit="(\d+)"/.exec(m[0]);
+    return { row: !!ys && +ys[1] === 1, col: !!xs && +xs[1] === 1 };
+  }
+  function syncFrz() {
+    if (!S || !S.el || !S.el.root) return;
+    ['row', 'col'].forEach(function (k) { var b = S.el.root.querySelector('[data-f="' + k + '"]'); if (b) { b.classList.toggle('on', !!S.frz[k]); b.setAttribute('aria-pressed', !!S.frz[k]); } });
+  }
   function cellDiv(sh, r, c, x, y, w, h, extraCls, lh) {
+    if (fid()) return cellDivF(sh, r, c, x, y, w, h, extraCls, lh);
     var cell = cellOf(sh, r, c), txt = display(cell);
     var sel = (S.sel.r === r && S.sel.c === c) ? ' sel' : '';
     var ed = S.edits[sh.i + '|' + r + '|' + c] ? ' ed' : '';
@@ -747,6 +815,7 @@
   // ---------------- 시트 바꾸기·화면 조립 ----------------
   function showSheet(i) {
     S.sh = prepSheet(i); S.sel = { r: 0, c: 0 };
+    if (fid() && !S.frzUser) { var pn = paneOf(S.sh); S.frz.row = pn.row; S.frz.col = pn.col; syncFrz(); }
     var sc = S.el.sc; sc.scrollTop = 0; sc.scrollLeft = 0;
     S.lk = null; S.scale = 1; S.el.pct.textContent = '100%'; placeGrid();
     S.scale = Math.round(fitScale() * 100) / 100; S.el.pct.textContent = Math.round(S.scale * 100) + '%'; layoutSize();
@@ -798,7 +867,7 @@
           f.classList.toggle('on', S.showHdr); f.setAttribute('aria-pressed', S.showHdr);
           try { localStorage.setItem('so_xlsx_hdr', S.showHdr ? '1' : '0'); } catch (x) {}
           placeGrid(); render(true);
-        } else { S.frz[k] = !S.frz[k]; f.classList.toggle('on', S.frz[k]); f.setAttribute('aria-pressed', S.frz[k]); render(); }
+        } else { S.frzUser = true; S.frz[k] = !S.frz[k]; f.classList.toggle('on', S.frz[k]); f.setAttribute('aria-pressed', S.frz[k]); render(); }
       }
     });
     S.el.sc.addEventListener('scroll', schedule, { passive: true });
@@ -890,7 +959,8 @@
   function loadStyles() {
     S.styles = null; S.smap = {};
     var f = S.zip && S.zip.file('xl/styles.xml'); if (!f || !global.SOXlsxStruct) return Promise.resolve();
-    return f.async('string').then(function (x) { var st = new global.SOXlsxStruct.Styles(x); S.styles = st.hasAll ? st : null; }).catch(function () { S.styles = null; });
+    var tf = S.zip.file('xl/theme/theme1.xml');
+    return f.async('string').then(function (x) { var st = new global.SOXlsxStruct.Styles(x); S.styles = st.hasAll ? st : null; return (st.hasAll && tf) ? tf.async('string').then(function (tx) { st.setTheme(tx); }).catch(function () {}) : null; }).catch(function () { S.styles = null; });
   }
   function smapOf(name) {
     var psh = S.an && S.an.sheets && S.an.sheets[name]; if (!psh || psh.xml == null) return null;
@@ -901,7 +971,7 @@
   }
   function styleAt(sh, r, c) {
     if (!S.styles) return null;
-    var m = smapOf(sh.name), s = m && m[addr(r, c)]; return s ? S.styles.resolve(s) : null;
+    var m = smapOf(sh.name), s = m && m[addr(r, c)]; return s ? S.styles.resolve(s, fid()) : null;
   }
   // ---- 자체 계산기(합계 바로 보이기) ----
   function calcModel() {

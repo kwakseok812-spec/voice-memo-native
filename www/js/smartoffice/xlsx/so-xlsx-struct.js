@@ -506,20 +506,79 @@
     return x;
   };
   // 서식 읽기(그리기용): 칸 서식 번호 → { b, i, color, bg, h, wrap, bl, br, bt, bb }
-  Styles.prototype.resolve = function (s) {
+  // rich(스위치 SO_XLSX_FIDELITY): 테마색·색 번호·밝기(tint) 색, 세로 맞춤(v), 들여쓰기(ind), 선 굵기·색(bd)까지 읽는다. 끄면 예전 읽기 그대로.
+  var IDX = ['000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','800000','008000','000080','808000','800080','008080','C0C0C0','808080','9999FF','993366','FFFFCC','CCFFFF','660066','FF8080','0066CC','CCCCFF','000080','FF00FF','FFFF00','00FFFF','800080','800000','008080','0000FF','00CCFF','CCFFFF','CCFFCC','FFFF99','99CCFF','FF99CC','CC99FF','FFCC99','3366FF','33CCCC','99CC00','FFCC00','FF9900','FF6600','666699','969696','003366','339966','003300','333300','993300','993366','333399','333333'];
+  function tintHex(hex, tint) {            // 엑셀 tint: 밝기(L)만 바꾼다
+    var r = parseInt(hex.substr(0, 2), 16) / 255, g = parseInt(hex.substr(2, 2), 16) / 255, b = parseInt(hex.substr(4, 2), 16) / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0, d = mx - mn;
+    if (d) { s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+    l = tint < 0 ? l * (1 + tint) : l * (1 - tint) + tint; l = Math.max(0, Math.min(1, l));
+    function f(p, q, t2) { if (t2 < 0) t2 += 1; if (t2 > 1) t2 -= 1; return t2 < 1 / 6 ? p + (q - p) * 6 * t2 : t2 < 0.5 ? q : t2 < 2 / 3 ? p + (q - p) * (2 / 3 - t2) * 6 : p; }
+    var R, G, B; if (!s) { R = G = B = l; } else { var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; R = f(p, q, h + 1 / 3); G = f(p, q, h); B = f(p, q, h - 1 / 3); }
+    function x(v) { var n = Math.round(v * 255).toString(16); return n.length < 2 ? '0' + n : n; }
+    return x(R) + x(G) + x(B);
+  }
+  Styles.prototype.setTheme = function (xml) {   // theme1.xml → 엑셀 테마 번호 순서(0=밝은1 1=어두운1 2=밝은2 3=어두운2 4~9=강조1~6 10·11=하이퍼링크)
+    this.theme = null; this.rc = null; if (!xml) return;
+    var sc = /<a:clrScheme\b[\s\S]*?<\/a:clrScheme>/.exec(xml); if (!sc) return;
+    var names = ['lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'], out = [];
+    for (var i = 0; i < names.length; i++) {
+      var m = new RegExp('<a:' + names[i] + '\\b[^>]*>([\\s\\S]*?)</a:' + names[i] + '>').exec(sc[0]), c = null;
+      if (m) { var v = /<a:srgbClr\b[^>]*\sval="([0-9A-Fa-f]{6})"/.exec(m[1]) || /<a:sysClr\b[^>]*\slastClr="([0-9A-Fa-f]{6})"/.exec(m[1]); c = v ? v[1].toUpperCase() : null; }
+      out.push(c);
+    }
+    this.theme = out;
+  };
+  Styles.prototype.colorOf = function (tag) {      // <color …/> · <fgColor …/> 한 개 → '#rrggbb' 또는 ''(자동·모름)
+    if (!tag) return '';
+    var rgb = /\srgb="([0-9A-Fa-f]{8})"/.exec(tag), hex = '';
+    if (rgb) hex = rgb[1].slice(2);
+    else {
+      var th = attrOf(tag, 'theme'), ix = attrOf(tag, 'indexed');
+      if (th != null) hex = (this.theme && this.theme[+th]) || '';
+      else if (ix != null) hex = IDX[+ix] || '';
+    }
+    if (!hex) return '';
+    var tn = attrOf(tag, 'tint'); if (tn != null && !isNaN(+tn) && +tn) hex = tintHex(hex, +tn);
+    return '#' + hex.toLowerCase();
+  };
+  var BD_W = { thin: '1px solid', hair: '1px solid', medium: '2px solid', thick: '3px solid', dotted: '1px dotted', dashed: '1px dashed', dashDot: '1px dashed', dashDotDot: '1px dashed', mediumDashed: '2px dashed', mediumDashDot: '2px dashed', mediumDashDotDot: '2px dashed', slantDashDot: '2px dashed', double: '3px double' };
+  Styles.prototype.resolve = function (s, rich) {
     if (!this.hasAll) return null;
+    var ck = rich ? 'r' : 'p'; if (!this.rc) this.rc = { r: {}, p: {} };
+    if (Object.prototype.hasOwnProperty.call(this.rc[ck], s)) return this.rc[ck][s];
     var xf = this.xfs[s]; if (!xf) return null;
-    var open = /^<xf\b[^>]*>/.exec(xf)[0], o = {};
+    var open = /^<xf\b[^>]*>/.exec(xf)[0], o = {}, self = this;
     var kids = fontKids(this.fonts[+(attrOf(open, 'fontId') || 0)] || '<font/>');
     if (kids.b) o.b = true; if (kids.i) o.i = true; if (kids.u) o.u = true; if (kids.strike) o.st = true;
     var szm = kids.sz && /\sval="([\d.]+)"/.exec(kids.sz); if (szm) o.fs = +szm[1]; var fnm = kids.name && /\sval="([^"]*)"/.exec(kids.name); if (fnm) o.fn = unescX(fnm[1]);
-    var cm = kids.color && /\srgb="([0-9A-Fa-f]{8})"/.exec(kids.color); if (cm) o.color = '#' + cm[1].slice(2);
-    var fill = this.fills[+(attrOf(open, 'fillId') || 0)] || '', fm = /<patternFill\b[^>]*patternType="solid"[^>]*>\s*<fgColor\b[^>]*rgb="([0-9A-Fa-f]{8})"/.exec(fill); if (fm) o.bg = '#' + fm[1].slice(2);
+    var fill = this.fills[+(attrOf(open, 'fillId') || 0)] || '';
+    if (rich) {
+      var cc = this.colorOf(kids.color); if (cc) o.color = cc;
+      var fgm = /<patternFill\b[^>]*patternType="solid"[^>]*>\s*(<fgColor\b[^>]*?\/?>)/.exec(fill), fc = fgm ? this.colorOf(fgm[1]) : ''; if (fc) o.bg = fc;
+    } else {
+      var cm = kids.color && /\srgb="([0-9A-Fa-f]{8})"/.exec(kids.color); if (cm) o.color = '#' + cm[1].slice(2);
+      var fm = /<patternFill\b[^>]*patternType="solid"[^>]*>\s*<fgColor\b[^>]*rgb="([0-9A-Fa-f]{8})"/.exec(fill); if (fm) o.bg = '#' + fm[1].slice(2);
+    }
     if (/<protection\b[^>]*\slocked="(0|false)"/.test(xf)) o.unlocked = true;
-    var am = /<alignment\b[^>]*>/.exec(xf); if (am) { var h = attrOf(am[0], 'horizontal'); if (h === 'center' || h === 'left' || h === 'right' || h === 'centerContinuous') o.h = h === 'centerContinuous' ? 'center' : h; if (/wrapText="(1|true)"/.test(am[0])) o.wrap = true; }
+    var am = /<alignment\b[^>]*>/.exec(xf); if (am) {
+      var h = attrOf(am[0], 'horizontal'); if (h === 'center' || h === 'left' || h === 'right' || h === 'centerContinuous') o.h = h === 'centerContinuous' ? 'center' : h; if (/wrapText="(1|true)"/.test(am[0])) o.wrap = true;
+      if (rich) {
+        var vv = attrOf(am[0], 'vertical'); if (vv === 'top' || vv === 'center' || vv === 'bottom') o.v = vv; else if (vv === 'justify' || vv === 'distributed') o.v = 'center';
+        var ind = attrOf(am[0], 'indent'); if (ind && +ind > 0 && (o.h === 'left' || !o.h)) o.ind = Math.min(+ind, 10);
+      }
+    }
     var bd = this.borders[+(attrOf(open, 'borderId') || 0)] || '';
-    ['left', 'right', 'top', 'bottom'].forEach(function (side, i) { if (new RegExp('<' + side + '\\b[^>]*\\sstyle="(?!none)').test(bd)) o['b' + 'lrtb'.charAt(i)] = true; });
-    return o;
+    ['left', 'right', 'top', 'bottom'].forEach(function (side, i) {
+      var k = 'lrtb'.charAt(i);
+      if (new RegExp('<' + side + '\\b[^>]*\\sstyle="(?!none)').test(bd)) o['b' + k] = true;
+      if (rich && o['b' + k]) {
+        var sm = new RegExp('<' + side + '\\b[^>]*?(?:/>|>([\\s\\S]*?)</' + side + '>)').exec(bd), sty = attrOf(sm[0], 'style') || 'thin';
+        var ct = sm[1] ? /<color\b[^>]*?\/?>/.exec(sm[1]) : null, cl = ct ? self.colorOf(ct[0]) : '';
+        o.bd = o.bd || {}; o.bd[k] = (BD_W[sty] || '1px solid') + ' ' + (sty === 'hair' ? '#9a9a9a' : (cl || '#333'));
+      }
+    });
+    this.rc[ck][s] = o; return o;
   };
 
   // 범위 안 모든 칸에 서식 바꿈을 적용한다. rng = {r0,c0,r1,c1}(1부터)
