@@ -67,6 +67,7 @@
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_PDF_QPDF = 'on';                   // PDF 암호 걸기·풀기(qpdf.wasm) — 'off' = 암호 걸린 PDF는 예전처럼 변환해서 보고, 꾸미기 시트에 암호 구역이 없다(용량 줄이기는 그림 줄이기만)
   var SO_CHART = 'on';                      // v10.9 차트 만들기·고치기(엑셀·PPT·워드)와 폰 화면 미리 그림 — 'off' = 차트는 예전처럼 보기·복제만(넣기 시트의 「차트」·「차트 고치기」가 사라진다)
+  var SO_CRYPT = 'on';                      // v10.9 문서 암호: 암호가 걸린 워드·엑셀·PPT 열기, 사본 저장할 때 암호 걸기 — 'off' = 암호 걸린 문서는 예전처럼 변환해서 보기만, ⋯ 메뉴의 암호 항목 없음
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
@@ -223,6 +224,7 @@
     var id = EXT_MAP[extOf(file.name)];
     if (id === 'hwp' && SO_HWP_READY !== 'on') { toast('한글 문서는 아직 준비 중이라 변환해서 보여 드립니다.', 3600); return false; }   // 모듈 로딩을 시도하지 않는다
     if (!id) { toast('이 형식은 ' + SOFFICE_NAME + '로 열 수 없어 변환해서 보여 드립니다.', 3200); return false; }
+    if (flagOn('crypt') && CRYPT_IDS[id] && /\.(docx|xlsx|pptx)$/i.test(file.name || '')) { gateCrypt(file).then(function (r) { if (r) openWith(id, r.file, opts, r.pw); }); return true; }
     openWith(id, file, opts);
     return true;
   }
@@ -266,7 +268,7 @@
     host.querySelector('#soMenu').addEventListener('click', onMenuClick);
     return host;
   }
-  function openWith(id, file, opts) {
+  function openWith(id, file, opts, pw) {
     closeHost(true);
     var token = ++seq;
     buildHost(); host.classList.add('on');
@@ -275,6 +277,7 @@
     host.querySelector('#soTitle').textContent = file.name || '문서';
     host.querySelector('#soActions').innerHTML = '';
     var c = { id: id, mod: null, file: file, dirty: false, backFn: null, token: token, recKey: recKey(file), recReady: false, timer: 0, opts: opts || {}, newBase: (opts && opts.newBase) || '' };
+    if (pw) { c.savePw = pw; c.noRec = true; }      // 암호 문서: 저장할 때 같은 암호를 다시 걸고, 풀린 내용은 앱 안에 임시 보관하지 않는다
     closeMenu();
     cur = c;
     var ctx = makeCtx(c, body);
@@ -546,6 +549,10 @@
   }
   // 반환: Promise — 저장이 끝났으면 true, 실패했으면 false(실패 안내 시트는 틀이 띄운다). 모듈은 true 일 때만 성공 안내·setDirty(false) 를 한다.
   function saveCopy(f, name, c, o) {
+    if (c && c.savePw && flagOn('crypt')) return encryptForSave(f, name, c).then(function (nf) { return nf ? saveCopy0(nf, name, c, o) : false; });
+    return saveCopy0(f, name, c, o);
+  }
+  function saveCopy0(f, name, c, o) {
     var file = (f instanceof File) ? f : new File([f], name || 'document', { type: (f && f.type) || 'application/octet-stream' });
     var want = name;
     if (SO_EDIT_PLUS === 'on' && c && !(o && o.exact)) {            // v10.3: 이름은 모든 형식이 틀 한 곳의 규칙을 따른다(모듈이 준 이름은 참고만)
@@ -601,6 +608,7 @@
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
     if (k === 'chart') return SO_CHART === 'on';
+    if (k === 'crypt') return SO_CRYPT === 'on';
     return true;
   }
   // ---- 아래에서 올라오는 시트(손가락 단추 44px 이상 · 0.2초 · 「움직임 줄이기」는 CSS가 지킨다) ----
@@ -731,6 +739,81 @@
     if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's') { e.preventDefault(); if (typeof cur.saveFlow === 'function') cur.saveFlow(); }
   }, true);
 
+
+  // ============ 문서 암호(O-0861 v10.9) — 워드·엑셀·PPT. 표준 암호화는 so-crypt.js(WebCrypto) ============
+  var CRYPT_IDS = { docx: 1, xlsx: 1, pptx: 1 };
+  function cryptBusy(msg) { try { var bz = host && host.querySelector('#soBusy'), t = host && host.querySelector('#soBusyT'); if (!bz) return; if (msg) { t.textContent = msg; bz.style.display = ''; } else bz.style.display = 'none'; } catch (e) {} }
+  function pwBody(withConfirm, note) {
+    var body = document.createElement('div'), mk = function (ph, label) { var i = document.createElement('input'); i.type = 'password'; i.className = 'so-pw'; i.placeholder = ph; i.autocomplete = 'off'; i.setAttribute('aria-label', label); i.style.cssText = 'width:100%;box-sizing:border-box;font-size:16px;padding:12px;margin:6px 0;border:1px solid var(--so-line,#bbb);border-radius:10px;background:transparent;color:inherit'; return i; };
+    var n = document.createElement('div'); n.className = 'so-sheet-note'; n.textContent = note; body.appendChild(n);
+    var a = mk('암호', '암호'), b = null; body.appendChild(a); if (withConfirm) { b = mk('암호를 한 번 더', '암호 확인'); body.appendChild(b); }
+    var msg = document.createElement('div'); msg.className = 'so-sheet-note'; msg.style.color = '#c0392b'; msg.style.minHeight = '1.2em'; body.appendChild(msg);
+    return { el: body, a: a, b: b, msg: msg };
+  }
+  function loadCrypt() { return loadScript('js/smartoffice/so-crypt.js').then(function () { if (!global.SOCrypt || !global.SOCrypt.supported()) throw new Error('이 기기에서는 암호 기능을 쓸 수 없습니다(보안 연결에서만 동작합니다).'); return global.SOCrypt; }); }
+  // 열 때: 암호 문서면 암호를 묻고 풀어 준다. 반환 Promise<{file,pw}|null>(null = 취소)
+  function gateCrypt(file) {
+    return file.slice(0, 8).arrayBuffer().then(function (hb) {
+      var h = new Uint8Array(hb), sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+      for (var i = 0; i < 8; i++) if (h[i] !== sig[i]) return { file: file };
+      return loadCrypt().then(function (C) {
+        return file.arrayBuffer().then(function (ab) {
+          var u8 = new Uint8Array(ab), enc = false; try { var cf = C.readCfb(u8); enc = !!(cf.streams['EncryptionInfo'] && cf.streams['EncryptedPackage']); } catch (e) {}
+          if (!enc) return { file: file };
+          return askPw(file, u8, C);
+        });
+      });
+    }).catch(function (e) { toast('암호 문서를 열지 못했습니다: ' + ((e && e.message) || e), 4200); return null; });
+  }
+  function askPw(file, u8, C) {
+    return new Promise(function (resolve) {
+      closeHost(true); buildHost(); host.classList.add('on'); host.querySelector('#soTitle').textContent = file.name || '문서'; host.querySelector('#soBody').innerHTML = ''; host.querySelector('#soActions').innerHTML = '';
+      var pb = pwBody(false, '「' + (file.name || '문서') + '」는 암호가 걸린 문서입니다. 암호는 이 폰 안에서만 쓰이고 저장하거나 보내지 않습니다. 열어서 고친 내용을 저장하면 같은 암호가 다시 걸립니다.');
+      var done = false, tries = 0;
+      function fin(v) { if (done) return; done = true; cryptBusy(null); closeSheet(); if (!v) closeHost(true); resolve(v); }
+      function go() {
+        var pw = pb.a.value; if (!pw) { pb.msg.textContent = '암호를 적어 주십시오.'; return; }
+        pb.msg.textContent = ''; cryptBusy('암호 확인하는 중… (몇 초 걸립니다)');
+        C.decrypt(u8, pw).then(function (plain) { fin({ file: new File([plain], file.name, { type: file.type, lastModified: file.lastModified }), pw: pw }); }, function (e) {
+          cryptBusy(null); tries++;
+          if (e && e.code === 'badpw') { pb.msg.textContent = '암호가 맞지 않습니다. 다시 적어 주십시오.' + (tries >= 3 ? ' (대소문자·한영 상태를 확인해 보십시오)' : ''); pb.a.select(); }
+          else { pb.msg.textContent = (e && e.message) || '암호를 풀지 못했습니다.'; }
+        });
+      }
+      openSheet(null, { title: '암호가 걸린 문서', body: pb.el, buttons: [{ label: '취소', onClick: function () { fin(null); return false; } }, { label: '열기', primary: true, onClick: function () { go(); return false; } }], onClose: function (v) { if (v) fin(null); } });
+      pb.a.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+      setTimeout(function () { try { pb.a.focus(); } catch (e) {} }, 300);
+    });
+  }
+  // 저장할 때: 같은 암호를 다시 걸고, 걸린 파일이 정말 그 암호로 풀리는지 확인한 뒤에만 저장한다
+  function encryptForSave(f, name, c) {
+    var file = (f instanceof File) ? f : new File([f], name || 'document', { type: (f && f.type) || 'application/octet-stream' });
+    cryptBusy('암호 거는 중… (몇 초 걸립니다)');
+    return loadCrypt().then(function (C) {
+      return file.arrayBuffer().then(function (ab) { var raw = new Uint8Array(ab); return C.encrypt(raw, c.savePw).then(function (enc) {
+        cryptBusy('암호 문서를 점검하는 중…');
+        return C.decrypt(enc, c.savePw).then(function (back) {
+          if (back.length !== raw.length) throw new Error('암호를 건 파일을 다시 풀어 보니 크기가 달라 저장하지 않았습니다.');
+          for (var i = 0; i < raw.length; i += 997) if (back[i] !== raw[i]) throw new Error('암호를 건 파일을 다시 풀어 보니 내용이 달라 저장하지 않았습니다.');
+          cryptBusy(null); return new File([enc], file.name, { type: file.type });
+        });
+      }); });
+    }).catch(function (e) { cryptBusy(null); toast('암호를 걸지 못해 저장하지 않았습니다: ' + ((e && e.message) || e), 5200); return null; });
+  }
+  function cryptSheet(c) {
+    var has = !!c.savePw, pb = pwBody(true, has ? '지금은 사본을 저장할 때 암호가 걸립니다. 새 암호를 적으면 바뀌고, 「암호 풀고 저장」을 누르면 암호 없이 저장됩니다.' : '사본을 저장할 때 이 암호가 걸립니다. 열 때마다 암호를 묻습니다. 암호를 잊으면 누구도 열 수 없으니(복구 방법이 없습니다) 꼭 적어 두십시오. 암호는 이 폰 안에서만 쓰이고 저장하거나 보내지 않습니다.');
+    var btns = [{ label: '닫기' }];
+    if (has) btns.push({ label: '암호 풀고 저장', danger: true, onClick: function () { c.savePw = ''; delete c.savePw; toast('이제 사본이 암호 없이 저장됩니다.', 3200); return true; } });
+    btns.push({ label: has ? '암호 바꾸기' : '암호 걸기', primary: true, onClick: function () {
+      var a = pb.a.value, b = pb.b.value;
+      if (!a) { pb.msg.textContent = '암호를 적어 주십시오.'; return false; }
+      if (a !== b) { pb.msg.textContent = '두 암호가 서로 다릅니다.'; return false; }
+      c.savePw = a; c.noRec = true; toast('사본을 저장할 때 암호를 겁니다. 고치던 내용은 이 앱에 임시 보관하지 않습니다.', 4200); return true;
+    } });
+    openSheet(c, { title: has ? '저장할 때 거는 암호' : '암호 걸어 저장하기', body: pb.el, buttons: btns });
+    setTimeout(function () { try { pb.a.focus(); } catch (e) {} }, 300);
+  }
+
   // ============ 머리줄 더보기 메뉴 ============
   function menuOpen() { var m = host && host.querySelector('#soMenu'); return !!(m && m.style.display !== 'none'); }
   function closeMenu() { var m = host && host.querySelector('#soMenu'); if (m) m.style.display = 'none'; }
@@ -741,6 +824,7 @@
     if (canConv) items.push('<button type="button" role="menuitem" data-m="convert"><b>변환해서 보기</b><span>PC가 PDF로 바꿔 보여 줍니다 · 폰 화면과 모양이 다를 때</span></button>');
     if (c && c.mod && typeof c.mod.exportPdf === 'function') items.push('<button type="button" role="menuitem" data-m="pdf"><b>PDF로 내보내기</b><span>화면에 보이는 모양 그대로 PDF 사본 · 글자는 그림으로 담김</span></button>');
     if (c && c.mod && typeof c.mod.exportMd === 'function') items.push('<button type="button" role="menuitem" data-m="md"><b>글을 마크다운으로 뽑기</b><span>PDF 속 글자를 제목·문단·목록으로 정리한 .md 사본</span></button>');
+    if (c && flagOn('crypt') && CRYPT_IDS[c.id]) items.push('<button type="button" role="menuitem" data-m="crypt"><b>' + (c.savePw ? '암호 바꾸기·풀기' : '암호 걸어 저장하기') + '</b><span>' + (c.savePw ? '지금: 사본을 저장할 때 암호가 걸립니다' : '사본을 저장할 때 암호를 걸어, 워드·엑셀·파워포인트에서 암호를 넣어야 열리게 합니다') + '</span></button>');
     items.push('<button type="button" role="menuitem" data-m="info"><b>' + SOFFICE_NAME + ' 정보</b><span>출처와 라이선스</span></button>');
     if (fixAvail(c)) items.push('<button type="button" role="menuitem" data-m="fix" class="so-menu-fix"><b>수정 요청</b><span>폰에서 못 하는 수정은 표시해서 맡깁니다 · 화면이 「변환한 보기」로 바뀝니다</span></button>');
     m.innerHTML = items.join(''); m.style.display = '';
@@ -749,6 +833,7 @@
     var b = e.target.closest ? e.target.closest('[data-m]') : null; if (!b) return;
     var k = b.getAttribute('data-m'); closeMenu();
     if (k === 'info') { showInfo(); return; }
+    if (k === 'crypt') { if (cur) cryptSheet(cur); return; }
     if (k === 'pdf') { if (cur && cur.mod && typeof cur.mod.exportPdf === 'function') cur.mod.exportPdf(); return; }
     if (k === 'md') { if (cur && cur.mod && typeof cur.mod.exportMd === 'function') cur.mod.exportMd(); return; }
     if (k === 'fix') { if (cur) requestFix(cur); return; }
