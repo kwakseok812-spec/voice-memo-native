@@ -17,9 +17,10 @@
   }
 
   // 슬라이드 한 장 → { bytes(JPEG), W, H }  (W·H 는 슬라이드의 화면 크기 px)
-  function slideToJpeg(slide, css) {
+  function slideToJpeg(slide, css, over) {
     var cs = global.getComputedStyle(slide), W = Math.round(parseFloat(cs.width)) || slide.offsetWidth || 960, H = Math.round(parseFloat(cs.height)) || slide.offsetHeight || 540;
-    var c = slide.cloneNode(true); c.style.zoom = '1'; c.style.margin = '0'; c.style.boxShadow = 'none'; c.style.transform = 'none'; c.style.width = W + 'px'; c.style.height = H + 'px';
+    var c = slide.cloneNode(true); c.style.display = ''; c.style.zoom = '1'; c.style.margin = '0'; c.style.boxShadow = 'none'; c.style.transform = 'none'; c.style.width = W + 'px'; c.style.height = H + 'px';
+    if (over) { try { over(c, W); } catch (e) {} }                       // v10.9 3회차: 차트 미리 그림을 얹는다
     // 캔버스는 복제되지 않으므로 그림으로 바꿔 넣는다
     var oc = [].slice.call(slide.querySelectorAll('canvas')), cc = [].slice.call(c.querySelectorAll('canvas'));
     oc.forEach(function (cv, i) { try { var im = document.createElement('img'); im.setAttribute('src', cv.toDataURL('image/png')); im.setAttribute('style', cv.getAttribute('style') || ''); im.setAttribute('width', cv.width); im.setAttribute('height', cv.height); if (cc[i] && cc[i].parentNode) cc[i].parentNode.replaceChild(im, cc[i]); } catch (e) {} });
@@ -65,7 +66,7 @@
     ctx.busy('PDF 만드는 중… (0/' + n + ')');
     return ctx.loadScript('vendor/so/pdf/pdf-lib.min.js').then(function () {
       slides.forEach(function (sl, i) {
-        chain = chain.then(function () { return sleep(0); }).then(function () { ctx.busy('PDF 만드는 중… (' + (i + 1) + '/' + n + ')'); return slideToJpeg(sl, css).then(function (r) { imgs.push(r); }); });
+        chain = chain.then(function () { return sleep(0); }).then(function () { ctx.busy('PDF 만드는 중… (' + (i + 1) + '/' + n + ')'); return Promise.resolve(env.charts ? env.charts(i) : null).then(function (cl) { return slideToJpeg(sl, css, cl && cl.list.length ? function (c, W) { c.style.position = 'relative'; window.SOPptxUIExt.paintCharts(c, cl.list, W / cl.W); } : null); }).then(function (r) { imgs.push(r); }); });
       });
       return chain;
     }).then(function () {

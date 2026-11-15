@@ -70,7 +70,7 @@
       function rwPkg(zip) {
         var cache = {};
         return { read: function (q) { if (q in cache) return Promise.resolve(cache[q]); var f = zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, readBin: function (q) { var f = zip.file(q); return f ? f.async('uint8array') : Promise.resolve(null); },
-          write: function (q, x) { cache[q] = x; zip.file(q, x, { createFolders: false }); }, writeBin: function (q, b) { zip.file(q, b, { binary: true, createFolders: false }); },
+          write: function (q, x) { cache[q] = x; zip.file(q, x, { createFolders: false }); }, writeBin: function (q, b, opt) { zip.file(q, b, Object.assign({ binary: true, createFolders: false }, opt || {})); },
           remove: function (q) { delete cache[q]; zip.remove(q); }, list: function () { return Object.keys(zip.files).filter(function (k) { return !zip.files[k].dir; }); } };
       }
       // 저장 전 점검: 모든 XML 이 문법에 맞고, 안의 관계가 가리키는 파일이 있고, 모든 파트에 형식이 있는지
@@ -106,7 +106,7 @@
       function reloadInfo() {
         return window.SOPptxEdit.load(s.cur.slice(0), s.JSZip, { empties: true }).then(function (info) { s.info = info; s.edits = info.slides.map(function () { return {}; }); });
       }
-      function pushUndo(bytes) { s.undo.push(bytes); if (s.undo.length > 10) s.undo.shift(); s.redo = []; }
+      function pushUndo(bytes) { s.undo.push(bytes); var lim = bytes.byteLength > 30e6 ? 2 : (bytes.byteLength > 10e6 ? 5 : 10); while (s.undo.length > lim) s.undo.shift(); s.redo = []; }     // 큰 파일(동영상 등)은 되돌리기 기억을 줄여 폰 메모리를 지킨다
       function adopt(bytes, keepIdx) {
         s.cur = bytes;
         return reloadInfo().then(function () { return drawDeck(host, s, bytes); }).then(function () { if (keepIdx != null) s.idx = Math.max(0, Math.min(s.slides.length - 1, keepIdx)); });
@@ -430,7 +430,7 @@
       }
       function slideshow(start) {
         var pre = (s.info && anyEdit(s)) ? flushEdits().then(function () { return drawDeck(host, s, s.cur); }) : Promise.resolve();
-        pre.then(function () { window.SOPptxUI.slideshow({ s: s, ctx: ctx, host: host, start: start || 0, done: function () { if (s.editing && s.ui) s.ui.show(); } }); });
+        pre.then(function () { window.SOPptxUI.slideshow({ s: s, ctx: ctx, host: host, roPkg: roPkg, start: start || 0, done: function () { if (s.editing && s.ui) s.ui.show(); } }); });
       }
       function leaveEdit() {
         var k = JSON.stringify(s.edits);
@@ -587,7 +587,7 @@
     restore: function (data) { return state && state.api ? state.api.restore(data) : Promise.resolve(false); },
     open: function (ctx) {
       ctx.loadCss('js/smartoffice/pptx/so-pptx.css');
-      return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () { return ctx.flag && ctx.flag('pptx') ? ctx.loadScript('vendor/so/docx/jszip.min.js').then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-edit.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui.js'); }) : null; }).then(function () {
+      return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () { return ctx.flag && ctx.flag('pptx') ? ctx.loadScript('vendor/so/docx/jszip.min.js').then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-edit.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-anim.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-theme.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-diagram.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-media.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui-ext.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui.js'); }) : null; }).then(function () {
         if (!window.pptxPreview || !window.pptxPreview.init) throw new Error('파워포인트 부품을 찾지 못함');
         return ctx.file.arrayBuffer();
       }).then(function (buf) { return setup(ctx, buf); });
@@ -596,7 +596,7 @@
       var s = state; if (!s || !s.slides || !s.slides.length || !s.ctx) { return; } var ctx = s.ctx;
       ctx.loadScript('js/smartoffice/pptx/so-pptx-pdf.js').then(function () {
         if (!window.SOPptxPdf || state !== s) throw new Error('PDF 내보내기 부품을 불러오지 못함');
-        window.SOPptxPdf.run({ ctx: ctx, slides: s.slides, stage: s.stage });
+        window.SOPptxPdf.run({ ctx: ctx, slides: s.slides, stage: s.stage, charts: s.info && window.SOPptxUIExt && ctx.flag && ctx.flag('chart') ? function (i) { var z = s.info.zip, pk = { read: function (q) { var f = z.file(q); return f ? f.async('string') : Promise.resolve(null); }, readBin: function (q) { var f = z.file(q); return f ? f.async('uint8array') : Promise.resolve(null); }, list: function () { return Object.keys(z.files).filter(function (k) { return !z.files[k].dir; }); } }, cache = (s._pdfCharts = s._pdfCharts || {}); return Promise.all([window.SOPptxUIExt.chartsFor(ctx, pk, i, cache), window.SOPptxStruct.readDeck(pk)]).then(function (r) { return { list: r[0].list, W: r[1].W }; }).catch(function () { return null; }); } : null });
       }).catch(function (e) { ctx.toast('PDF 내보내기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
     },
     close: function () {

@@ -80,6 +80,7 @@
           if (i === s.idx) setTimeout(function () { try { b.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) {} }, 0);
         })(i);
       }
+      if (global.SOPptxUIExt && global.SOPptxUIExt.thumbCharts) global.SOPptxUIExt.thumbCharts(ctx, env.roPkg(s.info.zip), box, n, tw, st.W, {});       // v10.9 3회차: 썸네일에도 차트 미리 그림
     }
     // ---------------- 고르는 슬라이드 ----------------
     function renderStage() {
@@ -169,6 +170,7 @@
     function delShape() {
       var sh = need(); if (!sh) return;
       if (sh.kind === 'chart') { delChart(sh); return; }
+      if (sh.media && X) { X.delMedia(sh); return; }
       op('도형 지우기', function (x) { return ST.removeShape(x, sh.id); }, J(KIND[sh.kind] || '도형', '을') + ' 지웠습니다(되돌리려면 ↶)');
     }
 
@@ -244,6 +246,7 @@
         btn(g, '쇼 보기', function () { env.slideshow(i); }, 'big');
         btn(g, '이 슬라이드 배치 바꾸기', changeLayoutSheet, 'big');
         btn(g, '쪽 번호·날짜·바닥글', footerSheet, 'big'); btn(g, '화면 전환', transSheet, 'big'); btn(g, '슬라이드 크기', sizeSheet, 'big'); btn(g, '구역(섹션)', sectionSheet, 'big');
+        if (X) X.slideButtons(g);
         var gb = group(body, '이 슬라이드 배경색'); BGC.forEach(function (c) { btn(gb, c[0], function () { op('배경색', function (x) { return ST.setSlideBg(x, c[1]); }, c[1] ? '배경색을 바꿨습니다' : '배경을 배치의 것으로 되돌렸습니다', true); }, 'sw', c[1] || ''); });
         body.appendChild(el('div', 'so-sheet-note', '새 슬라이드·복제는 지금 장 바로 뒤에 들어갑니다. 삽입 개체(표·문서를 통째로 끼운 것)가 든 장은 복제할 수 없고(이유를 알려 드립니다), 순서 바꾸기·지우기는 됩니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.'));
       });
@@ -285,6 +288,7 @@
         btn(g, '글 상자', textBoxSheet, 'big'); btn(g, '그림(사진)', pickPicture, 'big'); btn(g, '표', tableNewSheet, 'big'); if (chartOn()) btn(g, '차트', chartNewSheet, 'big');
         Object.keys(ST.SHAPES).forEach(function (k) { btn(g, ST.SHAPES[k], function () { addShape(k); }, 'big'); });
         btn(g, '선', function () { addLn(false); }, 'big'); btn(g, '화살표 선', function () { addLn(true); }, 'big');
+        if (X) X.insertButtons(g);
         body.appendChild(el('div', 'so-sheet-note', '넣은 도형은 슬라이드 가운데에 놓이고 바로 선택됩니다. 끌어서 옮기고, 모서리 점으로 크기를 바꾸고, 「서식」「색」으로 꾸밉니다. 도형 안에 글을 넣으려면 「글」을 누르십시오.'));
       });
     }
@@ -654,6 +658,7 @@
       }
       t.textContent = nameOf(sh) + (sh.kind === 'table' && st.cell ? ' · ' + (st.cell.r + 1) + '줄 ' + (st.cell.c + 1) + '칸' : '') + (sh.canMove ? ' · 끌어서 옮기기' : ' · 옮길 수 없는 개체');
       if (sh.kind === 'chart' && chartOn()) { var cb = el('button', 'spx-cb', '차트 고치기'); cb.type = 'button'; cb.onclick = chartEditSheet; b.appendChild(cb); }
+      if (X) X.ctxButtons(b, sh);
       var dp = el('button', 'spx-cb', '복제'); dp.type = 'button'; dp.onclick = dupShape; b.appendChild(dp);
       var d = el('button', 'spx-cb danger', '지우기'); d.type = 'button'; d.onclick = delShape; b.appendChild(d);
     }
@@ -701,22 +706,32 @@
       document.addEventListener('keydown', keyFn);
     }
     function unbindKeys() { if (keyFn) { document.removeEventListener('keydown', keyFn); keyFn = null; } }
+    var X = global.SOPptxUIExt ? global.SOPptxUIExt.mount({ U: U, ST: ST, env: env, ctx: ctx, s: s, st: st, el: el, sheet: sheet, group: group, btn: btn, grid: grid, op: op, toast: toast, fail: fail, sel: sel, nameOf: nameOf, mid: mid, refill: refillSheet, renderCtx: renderCtx, KIND: KIND }) : null;
     return U;
   }
 
   // ============================== 슬라이드 쇼(전체 화면 발표) ==============================
   function slideshow(o) {
-    var s = o.s, ctx = o.ctx, list = [], pos = 0, ov = el('div', 'spx-show'), stg = el('div', 'spx-show-s'), cnt = el('div', 'spx-show-c'), hint = el('div', 'spx-show-h', '탭·→ 다음 · ← 이전 · Esc 끝내기');
+    var s = o.s, ctx = o.ctx, list = [], pos = 0, ctrl = null, tok = 0, ov = el('div', 'spx-show'), stg = el('div', 'spx-show-s'), cnt = el('div', 'spx-show-c'), hint = el('div', 'spx-show-h', '탭·→ 다음 · ← 이전 · Esc 끝내기');
     ov.appendChild(stg); ov.appendChild(cnt); ov.appendChild(hint); document.body.appendChild(ov);
     var hid = {};
     var p = s.info && global.SOPptxStruct ? global.SOPptxStruct.listSlides({ read: function (q) { var f = s.info.zip.file(q); return f ? f.async('string') : Promise.resolve(null); }, list: function () { return Object.keys(s.info.zip.files); } }).then(function (r) { r.slides.forEach(function (x, i) { hid[i] = x.hidden; }); }, function () {}) : Promise.resolve();
-    function draw() {
+    function draw(arrive) {
+      if (ctrl && ctrl.stop) ctrl.stop(); ctrl = null; var my = ++tok;
       stg.innerHTML = ''; var i = list[pos], src = s.slides[i]; if (!src) return;
       var w = parseFloat(src.style.width) || src.offsetWidth || s.drawW || 960, h = parseFloat(src.style.height) || src.offsetHeight || s.sh || 540;
-      var k = Math.min(global.innerWidth / w, global.innerHeight / h), c = src.cloneNode(true); c.style.display = ''; c.style.margin = '0'; c.style.zoom = String(k); stg.appendChild(c);
+      var k = Math.min(global.innerWidth / w, global.innerHeight / h), c = src.cloneNode(true); c.style.display = ''; c.style.margin = '0'; c.style.zoom = String(k);
+      var wrap = el('div', 'spx-show-w'); wrap.style.cssText = 'position:relative;flex:none;width:' + Math.round(w * k) + 'px;height:' + Math.round(h * k) + 'px'; wrap.appendChild(c); stg.appendChild(wrap);
       cnt.textContent = (pos + 1) + ' / ' + list.length; hint.classList.add('hide');
+      if (global.SOPptxUIExt && global.SOPptxUIExt.showPrepare && s.info && o.roPkg) {          // v10.9 3회차: 움직임 효과 재생 · 차트 미리 그림
+        global.SOPptxUIExt.showPrepare({ ctx: ctx, roPkg: o.roPkg(s.info.zip), index: i, clone: c, baseW: w, pxW: w * k, wrap: wrap, cache: showCache }).then(function (cc) {
+          if (my !== tok) { if (cc && cc.stop) cc.stop(); return; }
+          ctrl = cc; if (cc && arrive === 'back') cc.finish();
+        });
+      }
     }
-    function go(d) { var n = pos + d; if (n < 0) return; if (n >= list.length) { end(); return; } pos = n; draw(); }
+    var showCache = {};
+    function go(d) { if (d > 0 && ctrl && ctrl.pending()) { ctrl.step(); return; } var n = pos + d; if (n < 0) return; if (n >= list.length) { end(); return; } pos = n; draw(d < 0 ? 'back' : 'fwd'); }
     function end() {
       document.removeEventListener('keydown', key, true); global.removeEventListener('resize', draw);
       try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
@@ -726,7 +741,7 @@
       var k = e.key;
       if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); end(); } else if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'Enter') { e.preventDefault(); e.stopPropagation(); go(1); } else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'Backspace') { e.preventDefault(); e.stopPropagation(); go(-1); }
     }
-    ov.addEventListener('click', function (e) { var r = ov.getBoundingClientRect(); go(e.clientX - r.left < r.width * 0.3 ? -1 : 1); });
+    ov.addEventListener('click', function (e) { if (e.target && e.target.closest && e.target.closest('video,audio')) return; var r = ov.getBoundingClientRect(); go(e.clientX - r.left < r.width * 0.3 ? -1 : 1); });
     var x0 = null; ov.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
     ov.addEventListener('touchend', function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) { e.preventDefault(); go(dx < 0 ? 1 : -1); } });
     p.then(function () {
