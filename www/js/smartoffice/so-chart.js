@@ -8,7 +8,7 @@
 (function (global) {
   'use strict';
   var PALETTE = ['4472C4', 'ED7D31', 'A5A5A5', 'FFC000', '5B9BD5', '70AD47', 'C00000', '7030A0', '264478', '404040'];
-  var TYPES = [['col', '세로 막대'], ['colStacked', '누적 세로 막대'], ['bar', '가로 막대'], ['barStacked', '누적 가로 막대'], ['line', '꺾은선'], ['pie', '원'], ['doughnut', '도넛'], ['scatter', '분산형']];
+  var TYPES = [['col', '세로 막대'], ['colStacked', '누적 세로 막대'], ['bar', '가로 막대'], ['barStacked', '누적 가로 막대'], ['line', '꺾은선'], ['pie', '원'], ['doughnut', '도넛'], ['scatter', '분산형'], ['combo', '콤보(막대+꺾은선)']];
   var TYPE_NAME = {}; TYPES.forEach(function (t) { TYPE_NAME[t[0]] = t[1]; });
   var MARK = '<!--S-Office chart v1-->';
   var NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -22,6 +22,7 @@
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
   function toNum(t) { if (t == null) return null; if (isNum(t)) return t; var s = String(t).replace(/[,\s]/g, '').replace(/%$/, ''); if (s === '' || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return null; var n = parseFloat(s); return isFinite(n) ? n : null; }
   function isPie(t) { return t === 'pie' || t === 'doughnut'; }
+  function d3Ok(t) { return t === 'col' || t === 'colStacked' || t === 'bar' || t === 'barStacked' || t === 'pie'; }
   function isBar(t) { return t === 'col' || t === 'colStacked' || t === 'bar' || t === 'barStacked'; }
   function colorOf(sp, i) { var c = sp.series[i] && sp.series[i].color; return c || PALETTE[i % PALETTE.length]; }
   function ptColor(sp, i) { var s0 = sp.series[0] || {}; return (s0.ptColors && s0.ptColors[i]) || PALETTE[i % PALETTE.length]; }
@@ -34,6 +35,7 @@
   function sampleFor(type) {
     var sp = blank(type);
     if (isPie(type)) { sp.cats = ['A', 'B', 'C', 'D']; sp.series = [{ name: '비율', vals: [40, 30, 20, 10] }]; sp.legend = 'r'; sp.labels = 'pct'; }
+    if (type === 'combo') { sp.series[0].kind = 'col'; sp.series[1].kind = 'line'; }
     if (type === 'scatter') { sp.cats = ['1', '2', '3', '4', '5']; sp.series = [{ name: 'Y', vals: [2, 4, 3, 6, 8] }]; sp.legend = ''; }
     return sp;
   }
@@ -72,6 +74,7 @@
     else if (isPie(type)) x += '<c:spPr><a:ln w="19050">' + fillX('FFFFFF') + '</a:ln></c:spPr>';
     else x += '<c:spPr>' + fillX(col) + '</c:spPr><c:invertIfNegative val="0"/>';
     if (isPie(type)) for (var i = 0; i < n; i++) x += '<c:dPt><c:idx val="' + i + '"/><c:bubble3D val="0"/><c:spPr>' + fillX(ptColor(sp, i)) + '<a:ln w="19050">' + fillX('FFFFFF') + '</a:ln></c:spPr></c:dPt>';
+    x += trendXml(sp, s, type, col);
     var cats = sp.cats.map(String);
     if (type === 'scatter') {
       x += (rf.cat ? '<c:xVal><c:numRef><c:f>' + esc(rf.cat) + '</c:f>' + numCache(sp.cats.map(toNum)) + '</c:numRef></c:xVal>' : '') + '<c:yVal><c:numRef><c:f>' + esc(rf.val) + '</c:f>' + numCache(s.vals) + '</c:numRef></c:yVal><c:smooth val="0"/>';
@@ -98,21 +101,58 @@
       '<c:valAx><c:axId val="222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="' + (hb ? 'b' : 'l') + '"/>' + grid + (sp.valTitle ? richTitle(sp.valTitle, !hb) : '') + '<c:numFmt formatCode="General" sourceLinked="1"/>' + tick + '<c:crossAx val="111111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>';
   }
   // spec → 차트 XML. o.embed = '(rId)' 이면 딸린 통합문서를 가리키는 externalData 를 넣는다
+  // v10.9 5회차: 콤보(막대+꺾은선, 보조 축)·입체(3D) 차트·직선 추세선
+  function trendXml(sp, s, type, col) {
+    if (s.trend !== 'linear' || sp.d3 || !(type === 'col' || type === 'bar' || type === 'line' || type === 'scatter')) return '';
+    return '<c:trendline><c:spPr><a:ln w="19050" cap="rnd">' + fillX(col) + '<a:prstDash val="sysDash"/></a:ln></c:spPr><c:trendlineType val="linear"/><c:dispRSqr val="0"/><c:dispEq val="0"/></c:trendline>';
+  }
+  function comboGroups(sp) {          // 콤보를 (막대|꺾은선) × (주 축|보조 축) 묶음으로 나눈다. 순서: 막대 주축, 막대 보조, 꺾은선 주축, 꺾은선 보조
+    var groups = [], order = ['colP', 'colS', 'lineP', 'lineS'];
+    sp.series.forEach(function (s, k) {
+      var kind = s.kind === 'line' ? 'line' : 'col', key = kind + (s.sec ? 'S' : 'P'), g = null;
+      groups.forEach(function (x) { if (x.key === key) g = x; });
+      if (!g) { g = { key: key, kind: kind, sec: !!s.sec, idx: [] }; groups.push(g); }
+      g.idx.push(k);
+    });
+    groups.sort(function (a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
+    return groups;
+  }
+  function secAxesXml() {
+    var tick = '<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>';
+    return '<c:valAx><c:axId val="444444"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:numFmt formatCode="General" sourceLinked="1"/>' + tick + '<c:crossAx val="333333"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx>' +
+      '<c:catAx><c:axId val="333333"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="1"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="444444"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>';
+  }
   function chartXml(sp, o) {
     o = o || {};
-    var t = sp.type, ser = '', j;
-    for (j = 0; j < sp.series.length; j++) { if (isPie(t) && j > 0) break; ser += serXml(sp, j, t); }
-    var plot, ax = '<c:axId val="111111"/><c:axId val="222222"/>', lb = dLblsXml(sp);
-    if (isBar(t)) plot = '<c:barChart><c:barDir val="' + ((t === 'bar' || t === 'barStacked') ? 'bar' : 'col') + '"/><c:grouping val="' + ((t === 'colStacked' || t === 'barStacked') ? 'stacked' : 'clustered') + '"/><c:varyColors val="0"/>' + ser + lb + '<c:gapWidth val="80"/>' + ((t === 'colStacked' || t === 'barStacked') ? '<c:overlap val="100"/>' : '') + ax + '</c:barChart>';
-    else if (t === 'line') plot = '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>' + ser + lb + '<c:marker val="1"/>' + ax + '</c:lineChart>';
-    else if (t === 'pie') plot = '<c:pieChart><c:varyColors val="1"/>' + ser + lb + '<c:firstSliceAng val="0"/></c:pieChart>';
-    else if (t === 'doughnut') plot = '<c:doughnutChart><c:varyColors val="1"/>' + ser + lb + '<c:firstSliceAng val="0"/><c:holeSize val="55"/></c:doughnutChart>';
-    else if (t === 'scatter') plot = '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>' + ser + lb + ax + '</c:scatterChart>';
-    else throw new Error('지원하지 않는 차트 종류');
+    var t = sp.type, d3 = !!sp.d3 && d3Ok(t), ser = '', j, plot, ax = '<c:axId val="111111"/><c:axId val="222222"/>', lb = dLblsXml(sp), v3 = '', extraAx = '';
+    if (t === 'combo') {
+      var groups = comboGroups(sp);
+      plot = groups.map(function (g) {
+        var gax = g.sec ? '<c:axId val="333333"/><c:axId val="444444"/>' : ax, sx = g.idx.map(function (k) { return serXml(sp, k, g.kind); }).join('');
+        return g.kind === 'col' ? '<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>' + sx + lb + '<c:gapWidth val="80"/>' + gax + '</c:barChart>'
+          : '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>' + sx + lb + '<c:marker val="1"/>' + gax + '</c:lineChart>';
+      }).join('');
+      if (groups.some(function (g) { return g.sec; })) extraAx = secAxesXml();
+    } else {
+      for (j = 0; j < sp.series.length; j++) { if (isPie(t) && j > 0) break; ser += serXml(sp, j, t); }
+      if (d3 && isBar(t)) {
+        plot = '<c:bar3DChart><c:barDir val="' + ((t === 'bar' || t === 'barStacked') ? 'bar' : 'col') + '"/><c:grouping val="' + ((t === 'colStacked' || t === 'barStacked') ? 'stacked' : 'clustered') + '"/><c:varyColors val="0"/>' + ser + lb + '<c:gapWidth val="80"/><c:shape val="box"/>' + ax + '<c:axId val="0"/></c:bar3DChart>';
+        v3 = '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:depthPercent val="100"/><c:rAngAx val="1"/></c:view3D>';
+      } else if (d3 && t === 'pie') {
+        plot = '<c:pie3DChart><c:varyColors val="1"/>' + ser + lb + '</c:pie3DChart>';
+        v3 = '<c:view3D><c:rotX val="30"/><c:rotY val="0"/><c:rAngAx val="0"/><c:perspective val="30"/></c:view3D>';
+      }
+      else if (isBar(t)) plot = '<c:barChart><c:barDir val="' + ((t === 'bar' || t === 'barStacked') ? 'bar' : 'col') + '"/><c:grouping val="' + ((t === 'colStacked' || t === 'barStacked') ? 'stacked' : 'clustered') + '"/><c:varyColors val="0"/>' + ser + lb + '<c:gapWidth val="80"/>' + ((t === 'colStacked' || t === 'barStacked') ? '<c:overlap val="100"/>' : '') + ax + '</c:barChart>';
+      else if (t === 'line') plot = '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>' + ser + lb + '<c:marker val="1"/>' + ax + '</c:lineChart>';
+      else if (t === 'pie') plot = '<c:pieChart><c:varyColors val="1"/>' + ser + lb + '<c:firstSliceAng val="0"/></c:pieChart>';
+      else if (t === 'doughnut') plot = '<c:doughnutChart><c:varyColors val="1"/>' + ser + lb + '<c:firstSliceAng val="0"/><c:holeSize val="55"/></c:doughnutChart>';
+      else if (t === 'scatter') plot = '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>' + ser + lb + ax + '</c:scatterChart>';
+      else throw new Error('지원하지 않는 차트 종류');
+    }
     var legend = sp.legend ? '<c:legend><c:legendPos val="' + sp.legend + '"/><c:overlay val="0"/></c:legend>' : '';
     var frame = sp.frame ? '<c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525">' + fillX('D9D9D9') + '</a:ln></c:spPr>' : '';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + MARK + '<c:chartSpace ' + NS + '><c:date1904 val="0"/><c:roundedCorners val="0"/><c:chart>' +
-      (sp.title ? richTitle(sp.title, false) : '') + '<c:autoTitleDeleted val="' + (sp.title ? 0 : 1) + '"/><c:plotArea><c:layout/>' + plot + (isPie(t) ? '' : axesXml(sp)) + '</c:plotArea>' + legend + '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>' + frame +
+      (sp.title ? richTitle(sp.title, false) : '') + '<c:autoTitleDeleted val="' + (sp.title ? 0 : 1) + '"/>' + v3 + '<c:plotArea><c:layout/>' + plot + (isPie(t) ? '' : axesXml(sp) + extraAx) + '</c:plotArea>' + legend + '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>' + frame +
       (o.embed ? '<c:externalData r:id="' + o.embed + '"><c:autoUpdate val="0"/></c:externalData>' : '') + '</c:chartSpace>';
   }
 
@@ -156,6 +196,15 @@
     var sf = one(n, 'solidFill'); if (!sf) return null; var c = one(sf, 'srgbClr'); return c ? (val(c) || '').toUpperCase() : null;
   }
   function textOf(t) { var r = path(t, ['tx', 'rich']); if (!r) return ''; var s = '', ts = r.getElementsByTagNameNS('*', 't'); for (var i = 0; i < ts.length; i++) s += ts[i].textContent; return s; }
+  function plotType(pl) {
+    var ln = pl.localName, grouping = val(one(pl, 'grouping')), dir = val(one(pl, 'barDir'));
+    if (ln === 'barChart' || ln === 'bar3DChart') { var t0 = dir === 'bar' ? 'bar' : 'col'; if (grouping === 'stacked') t0 += 'Stacked'; else if (grouping === 'percentStacked') return { bad: '100% 누적' }; return { type: t0 }; }
+    if (ln === 'lineChart') { if (grouping && grouping !== 'standard') return { bad: '누적 꺾은선' }; return { type: 'line' }; }
+    if (ln === 'pieChart' || ln === 'pie3DChart') return { type: 'pie' };
+    if (ln === 'doughnutChart') return { type: 'doughnut' };
+    if (ln === 'scatterChart') return { type: 'scatter' };
+    return { bad: (/area/i.test(ln) ? '영역형' : /bubble/i.test(ln) ? '거품형' : /radar/i.test(ln) ? '방사형' : /3D/.test(ln) ? '3차원' : '이 종류(' + ln.replace(/Chart$/, '') + ')의') };
+  }
   function parse(xml) {
     var d = new DOMParser().parseFromString(xml, 'application/xml');
     if (d.getElementsByTagName('parsererror').length) return { ok: false, why: '차트 파일을 읽지 못했습니다' };
@@ -163,28 +212,34 @@
     if (!chart) return { ok: false, why: '차트 구조를 알아볼 수 없습니다' };
     var mine = xml.indexOf(MARK) >= 0, bad = null;
     if (one(root, 'userShapes')) bad = '차트 위에 그림·글 상자가 얹힌';
-    if (one(chart, 'view3D')) bad = '3차원';
     var pa = one(chart, 'plotArea'); if (!pa) return { ok: false, why: '차트 구조를 알아볼 수 없습니다' };
-    var plots = kids(pa).filter(function (c) { return /Chart$/.test(c.localName); });
-    if (plots.length !== 1 && !bad) bad = plots.length > 1 ? '종류가 섞인(콤보)' : '비어 있는';
+    var plots = kids(pa).filter(function (c) { return /Chart$/.test(c.localName); }), v3 = !!one(chart, 'view3D'), combo = plots.length > 1;
+    if (!bad && !plots.length) bad = '비어 있는';
+    var pinfo = plots.map(plotType);
+    pinfo.forEach(function (pi) { if (pi.bad && !bad) bad = pi.bad; });
+    if (!bad && v3 && !(plots.length === 1 && (plots[0].localName === 'bar3DChart' || plots[0].localName === 'pie3DChart'))) bad = '3차원';
+    if (!bad && !v3 && plots.some(function (p) { return /3D/.test(p.localName); })) bad = '3차원';
+    if (!bad && combo) { pinfo.forEach(function (pi) { if (pi.type !== 'col' && pi.type !== 'line') bad = '종류가 섞인(막대·꺾은선이 아닌)'; }); if (plots.length > 4) bad = '종류가 섞인(콤보)'; }
     var info = { ok: !bad, why: bad ? bad + ' 차트는 폰에서 고칠 수 없습니다.' : '', mine: mine };
     if (bad) { info.kind = bad; return info; }
-    var pl = plots[0], ln = pl.localName, type = null, grouping = val(one(pl, 'grouping'));
-    if (ln === 'barChart') { var dir = val(one(pl, 'barDir')); type = (dir === 'bar' ? 'bar' : 'col'); if (grouping === 'stacked') type += 'Stacked'; else if (grouping === 'percentStacked') bad = '100% 누적'; }
-    else if (ln === 'lineChart') { if (grouping && grouping !== 'standard') bad = '누적 꺾은선'; type = 'line'; }
-    else if (ln === 'pieChart') type = 'pie';
-    else if (ln === 'doughnutChart') type = 'doughnut';
-    else if (ln === 'scatterChart') type = 'scatter';
-    else bad = (/area/i.test(ln) ? '영역형' : /bubble/i.test(ln) ? '거품형' : /radar/i.test(ln) ? '방사형' : /3D/.test(ln) ? '3차원' : '이 종류(' + ln.replace(/Chart$/, '') + ')의');
+    var type = combo ? 'combo' : pinfo[0].type;
+    // 축: 단일 차트는 하나씩, 콤보는 주 축 하나 + 보조 축 하나까지
     var vAx = kids(pa, 'valAx').length, cAx = kids(pa, 'catAx').length + kids(pa, 'dateAx').length;
-    if (!bad && !isPie(type) && (vAx > (type === 'scatter' ? 2 : 1) || cAx > 1)) bad = '보조 축이 있는';
+    function axKey(pl) { return kids(pl, 'axId').map(function (a) { return val(a); }).join(','); }
+    var key0 = axKey(plots[0]), keys = {}; plots.forEach(function (pl) { keys[axKey(pl)] = 1; });
+    if (!isPie(type)) {
+      if (combo) { if (Object.keys(keys).length > 2 || vAx > 2 || cAx > 2) bad = '보조 축이 둘 이상인'; }
+      else if (vAx > (type === 'scatter' ? 2 : 1) || cAx > 1) bad = '보조 축이 있는';
+    }
     if (!bad && kids(pa, 'dateAx').length) bad = '날짜 축이 있는';
-    var sers = kids(pl, 'ser');
-    if (!bad && (!sers.length)) bad = '비어 있는';
-    if (!bad && sers.some(function (s) { return one(s, 'trendline') || one(s, 'errBars'); })) bad = '추세선·오차 막대가 있는';
-    if (!bad && sers.some(function (s) { var c = one(s, 'cat'); return c && one(c, 'multiLvlStrRef'); })) bad = '항목이 여러 단계인';
+    var allSers = []; plots.forEach(function (pl, pi) { kids(pl, 'ser').forEach(function (s) { allSers.push({ s: s, pi: pi, pl: pl }); }); });
+    if (!bad && !allSers.length) bad = '비어 있는';
+    if (!bad && allSers.some(function (q) { return one(q.s, 'errBars'); })) bad = '오차 막대가 있는';
+    if (!bad && allSers.some(function (q) { var tl = one(q.s, 'trendline'); return tl && val(one(tl, 'trendlineType')) !== 'linear'; })) bad = '직선이 아닌 추세선이 있는';
+    if (!bad && allSers.some(function (q) { var c = one(q.s, 'cat'); return c && one(c, 'multiLvlStrRef'); })) bad = '항목이 여러 단계인';
     if (bad) { info.ok = false; info.why = bad + ' 차트는 폰에서 고칠 수 없습니다.'; info.kind = bad; return info; }
     var sp = { type: type, title: '', legend: '', catTitle: '', valTitle: '', labels: false, frame: !!path(root, ['spPr', 'solidFill']), cats: [], series: [] };
+    if (v3) sp.d3 = true;
     var ti = one(chart, 'title'); if (ti && val(one(chart, 'autoTitleDeleted')) !== '1') sp.title = textOf(ti);
     var lg = one(chart, 'legend'); if (lg) sp.legend = (val(one(lg, 'legendPos')) || 'r');
     if (!isPie(type)) {
@@ -192,13 +247,15 @@
       if (cAxN && one(cAxN, 'title')) sp.catTitle = textOf(one(cAxN, 'title'));
       if (vAxN && one(vAxN, 'title')) sp.valTitle = textOf(one(vAxN, 'title'));
     }
-    var dl = [one(pl, 'dLbls')].concat(sers.map(function (s) { return one(s, 'dLbls'); })).filter(Boolean);
+    var dl = plots.map(function (pl) { return one(pl, 'dLbls'); }).concat(allSers.map(function (q) { return one(q.s, 'dLbls'); })).filter(Boolean);
     dl.forEach(function (x) { if (val(one(x, 'showVal')) === '1') sp.labels = sp.labels || 'val'; if (val(one(x, 'showPercent')) === '1') sp.labels = 'pct'; });
     if (sp.labels === 'pct' && !isPie(type)) sp.labels = 'val';
-    sers.forEach(function (s, j) {
+    var built = [];
+    allSers.forEach(function (q, j) {
+      var s = q.s, ptype = combo ? pinfo[q.pi].type : type;
       var tx = one(s, 'tx'), nm = tx ? cacheOf(one(tx, 'strRef'), false) : { f: null, vals: [] }, name = nm.vals.length ? nm.vals[0] : (tx && one(tx, 'v') ? one(tx, 'v').textContent : '계열 ' + (j + 1));
-      var refs = { name: nm.f }, sv, cats = null, line = type === 'line';
-      if (type === 'scatter') {
+      var refs = { name: nm.f }, sv, cats = null;
+      if (ptype === 'scatter') {
         var xv = one(s, 'xVal'), xr = xv ? (one(xv, 'numRef') || one(xv, 'strRef')) : null, xc = cacheOf(xr, true), yv = one(s, 'yVal'), yc = cacheOf(yv ? one(yv, 'numRef') : null, true);
         sv = yc.vals; cats = xc.vals.map(function (v) { return v == null ? '' : String(v); }); refs.cat = xc.f; refs.val = yc.f;
       } else {
@@ -206,11 +263,15 @@
         sv = vc.vals; cats = cc.vals.map(String); refs.cat = cc.f; refs.val = vc.f;
       }
       if (!sp.cats.length) sp.cats = cats; else if (cats.length > sp.cats.length) sp.cats = cats;
-      var spPr = one(s, 'spPr'), col = (type === 'line') ? (clrOf(spPr, true) || clrOf(one(one(s, 'marker'), 'spPr'), false)) : (type === 'scatter' ? clrOf(one(one(s, 'marker'), 'spPr'), false) : clrOf(spPr, false));
+      var spPr = one(s, 'spPr'), col = (ptype === 'line') ? (clrOf(spPr, true) || clrOf(one(one(s, 'marker'), 'spPr'), false)) : (ptype === 'scatter' ? clrOf(one(one(s, 'marker'), 'spPr'), false) : clrOf(spPr, false));
       var ser = { name: name, vals: sv, color: col || null, refs: refs };
+      if (combo) { ser.kind = ptype === 'line' ? 'line' : 'col'; ser.sec = axKey(q.pl) !== key0; }
+      if (one(s, 'trendline')) ser.trend = 'linear';
       if (isPie(type)) { ser.ptColors = []; kids(s, 'dPt').forEach(function (p) { ser.ptColors[+val(one(p, 'idx'))] = clrOf(one(p, 'spPr'), false); }); }
-      sp.series.push(ser);
+      var ord = one(s, 'order'); built.push({ ser: ser, ord: ord ? +val(ord) : j, j: j });
     });
+    built.sort(function (a, b) { return (a.ord - b.ord) || (a.j - b.j); });          // 파일에 적힌 순서(c:order)대로
+    built.forEach(function (b) { sp.series.push(b.ser); });
     var n = sp.cats.length; sp.series.forEach(function (s) { while (s.vals.length < n) s.vals.push(null); });
     if (n > 60 || sp.series.length > 12) { info.ok = false; info.why = '항목이 아주 많은 차트는 폰에서 고칠 수 없습니다.'; info.kind = '항목이 많은'; }
     info.spec = sp; return info;
@@ -252,44 +313,62 @@
     function lbl(x, y, v, anchor) { text(x, y, v, Math.max(8, fs - 1), anchor || 'middle'); }
     if (isPie(t)) {
       var s0 = sp.series[0], vals = (s0 ? s0.vals : []).map(function (v) { return isNum(v) && v > 0 ? v : 0; }), tot = vals.reduce(function (a, b) { return a + b; }, 0);
-      var cx = (L + R) / 2, cy = (T + B) / 2, rad = Math.max(10, Math.min(R - L, B - T) / 2 - (sp.labels ? fs * 1.2 : fs * 0.4));
+      var cx = (L + R) / 2, cy = (T + B) / 2, rad = Math.max(10, Math.min(R - L, B - T) / 2 - (sp.labels ? fs * 1.2 : fs * 0.4)), p3 = !!sp.d3 && t === 'pie', ry = p3 ? rad * 0.62 : rad, hgt = p3 ? rad * 0.2 : 0; cy -= hgt / 2;
       if (!(tot > 0)) text(cx, cy, '값이 없습니다', fs);
       else {
         var ang = -Math.PI / 2, hole = t === 'doughnut' ? 0.55 : 0, k0 = vals.filter(function (v) { return v > 0; }).length;
+        if (p3) {         // 입체: 옆면(어두운 색)을 먼저 아래에 깐다
+          var ae = -Math.PI / 2; vals.forEach(function (v, k) {
+            if (!(v > 0)) return; var b2 = ae + (v / tot) * Math.PI * 2, cc = shade(ptColor(sp, k), 0.7);
+            if (k0 === 1) out.push('<ellipse cx="' + cx + '" cy="' + (cy + hgt) + '" rx="' + rad + '" ry="' + ry + '" fill="' + cc + '"/>');
+            else { var ex1 = cx + rad * Math.cos(ae), ey1 = cy + hgt + ry * Math.sin(ae), ex2 = cx + rad * Math.cos(b2), ey2 = cy + hgt + ry * Math.sin(b2); out.push('<path d="M' + cx + ' ' + (cy + hgt) + 'L' + ex1 + ' ' + ey1 + 'A' + rad + ' ' + ry + ' 0 ' + ((b2 - ae) > Math.PI ? 1 : 0) + ' 1 ' + ex2 + ' ' + ey2 + 'Z" fill="' + cc + '"/>'); }
+            ae = b2;
+          });
+        }
         vals.forEach(function (v, k) {
           if (!(v > 0)) return; var a2 = ang + (v / tot) * Math.PI * 2, col = '#' + ptColor(sp, k);
-          if (k0 === 1) { out.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rad + '" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>'); if (hole) out.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rad * hole + '" fill="' + (sp.frame || o.bg ? '#fff' : '#fff') + '"/>'); }
+          if (k0 === 1) { out.push(p3 ? '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rad + '" ry="' + ry + '" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>' : '<circle cx="' + cx + '" cy="' + cy + '" r="' + rad + '" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>'); if (hole) out.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rad * hole + '" fill="' + (sp.frame || o.bg ? '#fff' : '#fff') + '"/>'); }
           else {
-            var x1 = cx + rad * Math.cos(ang), y1 = cy + rad * Math.sin(ang), x2 = cx + rad * Math.cos(a2), y2 = cy + rad * Math.sin(a2), lg = (a2 - ang) > Math.PI ? 1 : 0;
+            var x1 = cx + rad * Math.cos(ang), y1 = cy + ry * Math.sin(ang), x2 = cx + rad * Math.cos(a2), y2 = cy + ry * Math.sin(a2), lg = (a2 - ang) > Math.PI ? 1 : 0;
             if (hole) { var r2 = rad * hole, x3 = cx + r2 * Math.cos(a2), y3 = cy + r2 * Math.sin(a2), x4 = cx + r2 * Math.cos(ang), y4 = cy + r2 * Math.sin(ang); out.push('<path d="M' + x1 + ' ' + y1 + 'A' + rad + ' ' + rad + ' 0 ' + lg + ' 1 ' + x2 + ' ' + y2 + 'L' + x3 + ' ' + y3 + 'A' + r2 + ' ' + r2 + ' 0 ' + lg + ' 0 ' + x4 + ' ' + y4 + 'Z" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>'); }
-            else out.push('<path d="M' + cx + ' ' + cy + 'L' + x1 + ' ' + y1 + 'A' + rad + ' ' + rad + ' 0 ' + lg + ' 1 ' + x2 + ' ' + y2 + 'Z" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>');
+            else out.push('<path d="M' + cx + ' ' + cy + 'L' + x1 + ' ' + y1 + 'A' + rad + ' ' + ry + ' 0 ' + lg + ' 1 ' + x2 + ' ' + y2 + 'Z" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>');
           }
-          if (sp.labels) { var mid = (ang + a2) / 2, rr = hole ? rad * (1 + hole) / 2 : rad * 0.68; text(cx + rr * Math.cos(mid), cy + rr * Math.sin(mid) + fs * 0.35, sp.labels === 'pct' ? Math.round(v / tot * 100) + '%' : fmt(v), Math.max(8, fs - 1), 'middle', ' fill-opacity="1" style="paint-order:stroke;stroke:#fff;stroke-width:2.5px"'); }
+          if (sp.labels) { var mid = (ang + a2) / 2, rr = hole ? rad * (1 + hole) / 2 : rad * 0.68; text(cx + rr * Math.cos(mid), cy + rr * Math.sin(mid) * (ry / rad) + fs * 0.35, sp.labels === 'pct' ? Math.round(v / tot * 100) + '%' : fmt(v), Math.max(8, fs - 1), 'middle', ' fill-opacity="1" style="paint-order:stroke;stroke:#fff;stroke-width:2.5px"'); }
           ang = a2;
         });
       }
       out.push('</svg>'); return out.join('');
     }
     // ---- 축이 있는 차트 ----
+    var combo = t === 'combo', d3 = !!sp.d3 && d3Ok(t);
     var hb = (t === 'bar' || t === 'barStacked'), stacked = (t === 'colStacked' || t === 'barStacked'), sc = t === 'scatter', xs = sc ? sp.cats.map(toNum) : null;
-    var mn = Infinity, mx = -Infinity;
+    function kindOf(k) { return combo ? (sp.series[k].kind === 'line' ? 'line' : 'col') : (t === 'line' ? 'line' : 'col'); }
+    function secOf(k) { return combo && !!sp.series[k].sec; }
+    var anySec = combo && sp.series.some(function (s) { return s.sec; });
+    var colIdx = [], mn = Infinity, mx = -Infinity, mn2 = Infinity, mx2 = -Infinity;
+    sp.series.forEach(function (s, k) { if (kindOf(k) === 'col') colIdx.push(k); });
     if (stacked) { for (i = 0; i < n; i++) { var pos = 0, neg = 0; sp.series.forEach(function (s) { var v = s.vals[i]; if (isNum(v)) { if (v >= 0) pos += v; else neg += v; } }); mn = Math.min(mn, neg); mx = Math.max(mx, pos); } }
-    else sp.series.forEach(function (s) { s.vals.forEach(function (v) { if (isNum(v)) { mn = Math.min(mn, v); mx = Math.max(mx, v); } }); });
+    else sp.series.forEach(function (s, k) { s.vals.forEach(function (v) { if (isNum(v)) { if (secOf(k)) { mn2 = Math.min(mn2, v); mx2 = Math.max(mx2, v); } else { mn = Math.min(mn, v); mx = Math.max(mx, v); } } }); });
     if (!isFinite(mn)) { mn = 0; mx = 1; }
     if (!sc) { mn = Math.min(mn, 0); mx = Math.max(mx, 0); }
-    var sy = nice(mn, mx, 5), sx = null;
+    var sy = nice(mn, mx, 5), sx = null, sy2 = null;
+    if (anySec) { if (!isFinite(mn2)) { mn2 = 0; mx2 = 1; } mn2 = Math.min(mn2, 0); mx2 = Math.max(mx2, 0); sy2 = nice(mn2, mx2, 5); }
     if (sc) { var xmn = Infinity, xmx = -Infinity; xs.forEach(function (v) { if (isNum(v)) { xmn = Math.min(xmn, v); xmx = Math.max(xmx, v); } }); if (!isFinite(xmn)) { xmn = 0; xmx = 1; } sx = nice(xmn, xmx, 5); }
     var vtk = sy.ticks.map(fmt), lw2 = Math.max.apply(null, vtk.map(function (s) { return s.length; }).concat([1])) * fs * 0.6;
+    var vtk2 = anySec ? sy2.ticks.map(fmt) : [], lw3 = anySec ? Math.max.apply(null, vtk2.map(function (s) { return s.length; }).concat([1])) * fs * 0.6 + fs * 0.5 : 0;
     var leftT = hb ? sp.catTitle : sp.valTitle, botT = hb ? sp.valTitle : sp.catTitle;      // 가로 막대는 항목 축이 왼쪽, 값 축이 아래
     if (leftT) { text(L + fs * 0.6, (T + B) / 2, leftT, fs, 'middle', ' transform="rotate(-90 ' + (L + fs * 0.6) + ' ' + (T + B) / 2 + ')"'); L += fs * 1.6; }
     if (botT) { text((L + R) / 2, B - fs * 0.2, botT, fs); B -= fs * 1.6; }
     var maxCat = 1; if (!sc) sp.cats.forEach(function (c) { maxCat = Math.max(maxCat, Math.min(String(c).length, 8)); });
-    var left, bottom;
+    var left, bottom, dep = d3 ? Math.max(5, Math.min(12, Math.round(fs * 0.8))) : 0;
     if (hb) { left = L + maxCat * fs * 0.62 + fs * 0.6; bottom = B - fs * 1.7; }
     else { left = L + lw2 + fs * 0.7; bottom = B - fs * 1.7; }
-    var right = R - fs * 0.6, top = T + fs * 0.6, pw = right - left, ph = bottom - top;
+    var right = R - fs * 0.6 - lw3 - dep, top = T + fs * 0.6 + dep, pw = right - left, ph = bottom - top;
     if (pw < 20 || ph < 20) { out.push('</svg>'); return out.join(''); }
     function vpx(v) { return hb ? left + (v - sy.lo) / (sy.hi - sy.lo) * pw : bottom - (v - sy.lo) / (sy.hi - sy.lo) * ph; }
+    function vpx2(v) { return bottom - (v - sy2.lo) / (sy2.hi - sy2.lo) * ph; }
+    function vpk(k, v) { return secOf(k) ? vpx2(v) : vpx(v); }
+    function shade(hex, f) { var c = [0, 2, 4].map(function (o) { return Math.max(0, Math.min(255, Math.round(parseInt(hex.substr(o, 2), 16) * f))); }); return '#' + c.map(function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join(''); }
     // 눈금선·눈금 글자
     sy.ticks.forEach(function (v, k) {
       var p = vpx(v);
@@ -297,9 +376,17 @@
       else if (sc) { out.push('<line x1="' + left + '" y1="' + p + '" x2="' + right + '" y2="' + p + '" stroke="#d9d9d9"/>'); text(left - fs * 0.4, p + fs * 0.35, vtk[k], fs, 'end'); }
       else { out.push('<line x1="' + left + '" y1="' + p + '" x2="' + right + '" y2="' + p + '" stroke="#d9d9d9"/>'); text(left - fs * 0.4, p + fs * 0.35, vtk[k], fs, 'end'); }
     });
+    if (anySec) sy2.ticks.forEach(function (v, k) { text(right + fs * 0.4, vpx2(v) + fs * 0.35, vtk2[k], fs, 'start'); });
+    function trendLine(k, xsArr, X0, X1) {      // 직선 추세선(최소제곱)
+      var s = sp.series[k]; if (s.trend !== 'linear' || d3) return; var pts = [], q;
+      for (q = 0; q < n; q++) { var xv = xsArr ? xsArr[q] : q; if (isNum(xv) && isNum(s.vals[q])) pts.push([xv, s.vals[q]]); }
+      if (pts.length < 2) return; var sxv = 0, syv = 0, sxx = 0, sxy = 0; pts.forEach(function (p) { sxv += p[0]; syv += p[1]; sxx += p[0] * p[0]; sxy += p[0] * p[1]; });
+      var m = pts.length, den = m * sxx - sxv * sxv; if (!den) return; var b1 = (m * sxy - sxv * syv) / den, b0 = (syv - b1 * sxv) / m, xa = pts[0][0], xb = pts[pts.length - 1][0];
+      out.push('<line x1="' + X0(xa) + '" y1="' + vpk(k, b0 + b1 * xa) + '" x2="' + X0(xb) + '" y2="' + vpk(k, b0 + b1 * xb) + '" stroke="#' + colorOf(sp, k) + '" stroke-width="' + Math.max(1.5, fs * 0.14) + '" stroke-dasharray="5 3" opacity=".85"/>');
+    }
     if (sc) {
       sx.ticks.forEach(function (v) { var px = left + (v - sx.lo) / (sx.hi - sx.lo) * pw; text(px, bottom + fs * 1.2, fmt(v), fs); });
-      sp.series.forEach(function (s, k) { var col = '#' + colorOf(sp, k); xs.forEach(function (xv, q) { var v = s.vals[q]; if (!isNum(xv) || !isNum(v)) return; var px = left + (xv - sx.lo) / (sx.hi - sx.lo) * pw, py = vpx(v); out.push('<circle cx="' + px + '" cy="' + py + '" r="' + Math.max(3, fs * 0.4) + '" fill="' + col + '"/>'); if (sp.labels) lbl(px, py - fs * 0.6, fmt(v)); }); });
+      sp.series.forEach(function (s, k) { var col = '#' + colorOf(sp, k); xs.forEach(function (xv, q) { var v = s.vals[q]; if (!isNum(xv) || !isNum(v)) return; var px = left + (xv - sx.lo) / (sx.hi - sx.lo) * pw, py = vpx(v); out.push('<circle cx="' + px + '" cy="' + py + '" r="' + Math.max(3, fs * 0.4) + '" fill="' + col + '"/>'); if (sp.labels) lbl(px, py - fs * 0.6, fmt(v)); }); trendLine(k, xs, function (x) { return left + (x - sx.lo) / (sx.hi - sx.lo) * pw; }); });
       out.push('<line x1="' + left + '" y1="' + bottom + '" x2="' + right + '" y2="' + bottom + '" stroke="#999"/><line x1="' + left + '" y1="' + top + '" x2="' + left + '" y2="' + bottom + '" stroke="#999"/>');
       out.push('</svg>'); return out.join('');
     }
@@ -308,31 +395,42 @@
       var ctr = (hb ? bottom - band * (q + 0.5) : left + band * (q + 0.5)), s = String(c);
       if (hb) text(left - fs * 0.4, ctr + fs * 0.35, short(s, 8), fs, 'end'); else text(ctr, bottom + fs * 1.2, short(s, Math.max(2, Math.floor(band / (fs * 0.6)))), fs);
     });
-    if (t === 'line') {
-      sp.series.forEach(function (s, k) {
-        var col = '#' + colorOf(sp, k), pts = [], d = '';
-        s.vals.forEach(function (v, q) { if (!isNum(v)) { pts.push(null); return; } pts.push([left + band * (q + 0.5), vpx(v)]); });
-        var pen = false; pts.forEach(function (p) { if (!p) { pen = false; return; } d += (pen ? 'L' : 'M') + p[0] + ' ' + p[1]; pen = true; });
-        out.push('<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + Math.max(2, fs * 0.2) + '" stroke-linejoin="round"/>');
-        pts.forEach(function (p, q) { if (!p) return; out.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + Math.max(2.5, fs * 0.28) + '" fill="' + col + '"/>'); if (sp.labels) lbl(p[0], p[1] - fs * 0.6, fmt(s.vals[q])); });
-      });
-    } else {
-      var grp = band / 1.8, bw = stacked ? grp : grp / Math.max(1, ns);
+    // 막대(콤보에서는 막대 계열만 나란히)
+    var nCol = colIdx.length;
+    if (nCol) {
+      var grp = band / 1.8, bw = stacked ? grp : grp / Math.max(1, nCol);
       for (i = 0; i < n; i++) {
         var posAcc = 0, negAcc = 0;
-        sp.series.forEach(function (s, k) {
-          var v = s.vals[i]; if (!isNum(v)) return;
+        colIdx.forEach(function (k, ci) {
+          var s = sp.series[k], v = s.vals[i]; if (!isNum(v)) return;
           var a, b; if (stacked) { if (v >= 0) { a = posAcc; b = posAcc + v; posAcc = b; } else { a = negAcc; b = negAcc + v; negAcc = b; } } else { a = 0; b = v; }
-          var pa = vpx(a), pb = vpx(b), ctr = hb ? bottom - band * (i + 0.5) : left + band * (i + 0.5), off = stacked ? -grp / 2 : -grp / 2 + bw * k, col = '#' + colorOf(sp, k), rx, ry, rw, rh;
-          if (hb) { rx = Math.min(pa, pb); rw = Math.abs(pb - pa); rh = bw; ry = stacked ? ctr - grp / 2 : ctr + grp / 2 - bw * (k + 1); }
+          var pa = vpk(k, a), pb = vpk(k, b), ctr = hb ? bottom - band * (i + 0.5) : left + band * (i + 0.5), off = stacked ? -grp / 2 : -grp / 2 + bw * ci, col = '#' + colorOf(sp, k), rx, ry, rw, rh;
+          if (hb) { rx = Math.min(pa, pb); rw = Math.abs(pb - pa); rh = bw; ry = stacked ? ctr - grp / 2 : ctr + grp / 2 - bw * (ci + 1); }
           else { rx = ctr + off; rw = bw; ry = Math.min(pa, pb); rh = Math.abs(pb - pa); }
           out.push('<rect x="' + Math.round(rx * 10) / 10 + '" y="' + Math.round(ry * 10) / 10 + '" width="' + Math.max(0.5, Math.round(rw * 10) / 10) + '" height="' + Math.max(0.5, Math.round(rh * 10) / 10) + '" fill="' + col + '"/>');
-          if (sp.labels) { if (hb) lbl(stacked ? rx + rw / 2 : (v >= 0 ? rx + rw + fs * 0.3 : rx - fs * 0.3), ry + rh / 2 + fs * 0.35, fmt(v), stacked ? 'middle' : (v >= 0 ? 'start' : 'end')); else lbl(rx + rw / 2, stacked ? ry + rh / 2 + fs * 0.35 : (v >= 0 ? ry - fs * 0.3 : ry + rh + fs), fmt(v)); }
+          if (d3) {       // 입체: 위쪽 면과 오른쪽 면을 비스듬히 덧그린다
+            var c6 = colorOf(sp, k), dx = dep * 0.8, dy = dep * 0.8;
+            out.push('<polygon points="' + rx + ',' + ry + ' ' + (rx + dx) + ',' + (ry - dy) + ' ' + (rx + rw + dx) + ',' + (ry - dy) + ' ' + (rx + rw) + ',' + ry + '" fill="' + shade(c6, 1.25) + '"/>');
+            out.push('<polygon points="' + (rx + rw) + ',' + ry + ' ' + (rx + rw + dx) + ',' + (ry - dy) + ' ' + (rx + rw + dx) + ',' + (ry + rh - dy) + ' ' + (rx + rw) + ',' + (ry + rh) + '" fill="' + shade(c6, 0.72) + '"/>');
+          }
+          if (sp.labels) { if (hb) lbl(stacked ? rx + rw / 2 : (v >= 0 ? rx + rw + fs * 0.3 : rx - fs * 0.3), ry + rh / 2 + fs * 0.35, fmt(v), stacked ? 'middle' : (v >= 0 ? 'start' : 'end')); else lbl(rx + rw / 2, stacked ? ry + rh / 2 + fs * 0.35 : (v >= 0 ? ry - fs * 0.3 - (d3 ? dep : 0) : ry + rh + fs), fmt(v)); }
         });
       }
+      colIdx.forEach(function (k) { if (!hb) trendLine(k, null, function (x) { return left + band * (x + 0.5); }); });
     }
+    // 꺾은선
+    sp.series.forEach(function (s, k) {
+      if (kindOf(k) !== 'line') return;
+      var col = '#' + colorOf(sp, k), pts = [], d = '';
+      s.vals.forEach(function (v, q) { if (!isNum(v)) { pts.push(null); return; } pts.push([left + band * (q + 0.5), vpk(k, v)]); });
+      var pen = false; pts.forEach(function (p) { if (!p) { pen = false; return; } d += (pen ? 'L' : 'M') + p[0] + ' ' + p[1]; pen = true; });
+      out.push('<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + Math.max(2, fs * 0.2) + '" stroke-linejoin="round"/>');
+      pts.forEach(function (p, q) { if (!p) return; out.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + Math.max(2.5, fs * 0.28) + '" fill="' + col + '"/>'); if (sp.labels) lbl(p[0], p[1] - fs * 0.6, fmt(s.vals[q])); });
+      trendLine(k, null, function (x) { return left + band * (x + 0.5); });
+    });
     // 축 선
     if (hb) out.push('<line x1="' + zero + '" y1="' + top + '" x2="' + zero + '" y2="' + bottom + '" stroke="#999"/>'); else out.push('<line x1="' + left + '" y1="' + zero + '" x2="' + right + '" y2="' + zero + '" stroke="#999"/>');
+    if (anySec) out.push('<line x1="' + right + '" y1="' + top + '" x2="' + right + '" y2="' + bottom + '" stroke="#999"/>');
     out.push('</svg>'); return out.join('');
   }
 
@@ -347,15 +445,36 @@
     function label(t) { body.appendChild(el('div', 'soc-l', t)); }
     function chips(list, cur, fn, cls) { var r = el('div', 'soc-r' + (cls ? ' ' + cls : '')); list.forEach(function (it) { var b = el('button', 'soc-b' + (it[0] === cur ? ' on' : ''), it[1]); b.type = 'button'; b.onclick = function () { fn(it[0]); }; r.appendChild(b); }); return r; }
     function field(ph, v, fn, max) { var i = el('input', 'soc-in'); i.type = 'text'; i.placeholder = ph; i.value = v || ''; i.maxLength = max || 60; i.setAttribute('aria-label', ph); i.addEventListener('input', function () { fn(i.value); drawPrev(); }); return i; }
-    var typeBox = el('div'), lgBox = el('div'), lbBox = el('div'), axBox = el('div');
+    var typeBox = el('div'), lgBox = el('div'), lbBox = el('div'), axBox = el('div'), d3Box = el('div'), serBox = el('div');
+    function paintD3() {
+      d3Box.innerHTML = ''; if (!d3Ok(sp.type)) return;
+      d3Box.appendChild(el('div', 'soc-l', '입체(3D) 모양'));
+      d3Box.appendChild(chips([['', '평면'], ['1', '입체']], sp.d3 ? '1' : '', function (k) { sp.d3 = !!k; if (sp.d3) sp.series.forEach(function (s) { delete s.trend; }); paintChips(); drawPrev(); }));
+    }
+    function trendAllowed() { return (sp.type === 'col' || sp.type === 'bar' || sp.type === 'line' || sp.type === 'scatter' || sp.type === 'combo') && !sp.d3; }
+    function paintSerBox() {
+      serBox.innerHTML = ''; var combo = sp.type === 'combo', tr = trendAllowed();
+      if (!combo && !tr) return;
+      serBox.appendChild(el('div', 'soc-l', combo ? '계열별 설정(막대·꺾은선·보조 축' + (tr ? '·추세선' : '') + ')' : '직선 추세선(점들의 흐름을 이은 점선)'));
+      sp.series.forEach(function (s, k) {
+        var row = el('div', 'soc-crow'); row.appendChild(el('span', 'soc-cn', String(s.name) || ('계열 ' + (k + 1)))); var r1 = el('div', 'soc-r');
+        function tog(text, on, fn) { var b = el('button', 'soc-b' + (on ? ' on' : ''), text); b.type = 'button'; b.onclick = function () { fn(); paintSerBox(); drawPrev(); }; r1.appendChild(b); }
+        if (combo) { tog('막대', s.kind !== 'line', function () { s.kind = 'col'; }); tog('꺾은선', s.kind === 'line', function () { s.kind = 'line'; }); tog('보조 축', !!s.sec, function () { s.sec = !s.sec; }); }
+        if (tr) tog('추세선', s.trend === 'linear', function () { if (s.trend === 'linear') delete s.trend; else s.trend = 'linear'; });
+        row.appendChild(r1); serBox.appendChild(row);
+      });
+    }
     function paintChips() {
       typeBox.innerHTML = ''; typeBox.appendChild(chips(TYPES, sp.type, function (k) { setType(k); }, 'g2'));
       lgBox.innerHTML = ''; lgBox.appendChild(chips([['', '없음'], ['b', '아래'], ['r', '오른쪽'], ['t', '위'], ['l', '왼쪽']], sp.legend || '', function (k) { sp.legend = k; paintChips(); drawPrev(); }));
       lbBox.innerHTML = ''; lbBox.appendChild(chips(isPie(sp.type) ? [['', '없음'], ['val', '값'], ['pct', '비율(%)']] : [['', '없음'], ['val', '값']], sp.labels || '', function (k) { sp.labels = k || false; paintChips(); drawPrev(); }));
       axBox.style.display = isPie(sp.type) ? 'none' : '';
+      paintD3(); paintSerBox();
     }
     function setType(k) {
       var was = sp.type; sp.type = k;
+      if (k === 'combo') sp.series.forEach(function (s, q) { if (s.kind !== 'col' && s.kind !== 'line') s.kind = q === 0 ? 'col' : 'line'; s.sec = !!s.sec; }); else sp.series.forEach(function (s) { delete s.kind; delete s.sec; });
+      if (!d3Ok(k)) sp.d3 = false;
       if (isPie(k) && sp.labels === 'val' && !isPie(was)) { /* 값 그대로 */ }
       if (!isPie(k) && sp.labels === 'pct') sp.labels = 'val';
       if (k === 'scatter' && table && !sp.cats.some(function (c) { return toNum(c) != null; })) sp.cats = sp.cats.map(function (c, i) { return String(i + 1); });      // 분산형은 가로 값(X)이 숫자여야 한다
@@ -415,26 +534,27 @@
       var r = R.resolve({ hdrRow: rgOpt.hdrRow, hdrCol: rgOpt.hdrCol, swap: rgOpt.swap, fresh: !!fresh, type: sp.type });
       if (r && r.err) { ctx.toast(r.err, 4200); return; }
       if (!r) return;
-      sp.cats = r.cats; var old = sp.series; sp.series = r.series.map(function (s, k) { var q = old[k]; if (q && q.color && fresh !== 'reset') s.color = q.color; return s; }); R.text = r.text; dirtyData = true;
+      sp.cats = r.cats; var old = sp.series; sp.series = r.series.map(function (s, k) { var q = old[k]; if (q && q.color && fresh !== 'reset') s.color = q.color; if (q && q.kind && sp.type === 'combo') { s.kind = q.kind; s.sec = q.sec; } if (q && q.trend) s.trend = q.trend; return s; }); R.text = r.text; dirtyData = true;
       buildRange(); paintColors(); drawPrev();
     }
     // ---- 조립 ----
     ensureSeries();
     body.appendChild(prev);
     if (o.note) body.appendChild(el('div', 'soc-note', o.note));
-    label('종류'); body.appendChild(typeBox);
+    label('종류'); body.appendChild(typeBox); body.appendChild(d3Box);
     label('제목'); body.appendChild(field('차트 제목(없어도 됩니다)', sp.title, function (v) { sp.title = v; }));
     label('범례(어느 것이 무엇인지 알려 주는 표시)'); body.appendChild(lgBox);
     label('숫자 표시'); body.appendChild(lbBox);
     body.appendChild(axBox); axBox.appendChild(el('div', 'soc-l', '축 제목')); axBox.appendChild(field('가로 축 제목(예: 학기)', sp.catTitle, function (v) { sp.catTitle = v; })); axBox.appendChild(field('세로 축 제목(예: 점수)', sp.valTitle, function (v) { sp.valTitle = v; }));
     label(table ? '데이터' : '데이터(시트의 칸)'); if (table) { body.appendChild(tblBox); buildTable(); } else { body.appendChild(rangeBox); buildRange(); }
-    label('색'); body.appendChild(colors);
+    label('색'); body.appendChild(colors); body.appendChild(serBox);
     paintChips(); paintColors();
     var btns = [{ label: '닫기' }];
     if (o.onDelete) btns.push({ label: '차트 지우기', danger: true, onClick: function () { var r = o.onDelete(); return r; } });
     btns.push({ label: o.applyLabel || '적용', primary: true, onClick: function () {
       ensureSeries();
       if (table) { for (var q = 0; q < sp.cats.length; q++) if (sp.cats[q] == null) sp.cats[q] = ''; var any = sp.series.some(function (s, k) { return (!isPie(sp.type) || k === 0) && s.vals.some(isNum); }); if (!any) { ctx.toast('숫자를 한 칸 이상 적어 주십시오.', 3000); return false; } if (sp.type === 'scatter' && !sp.cats.some(function (c) { return toNum(c) != null; })) { ctx.toast('분산형은 X 값 열에 숫자를 적어 주십시오.', 3200); return false; } }
+      if (sp.type === 'combo') { if (sp.series.length < 2) { ctx.toast('콤보 차트는 계열(열)이 둘 이상 있어야 합니다.', 3200); return false; } if (sp.series.every(function (s) { return s.sec; })) { ctx.toast('보조 축은 일부 계열에만 켤 수 있습니다. 하나는 주 축에 두십시오.', 3600); return false; } }
       var res = o.onApply(sp, { dataChanged: table || dirtyData }); return res;
     } });
     ctx.sheet({ title: o.title || '차트', body: body, wide: true, buttons: btns });
@@ -445,6 +565,6 @@
   global.SOChart = {
     PALETTE: PALETTE, TYPES: TYPES, TYPE_NAME: TYPE_NAME, MARK: MARK, CT_CHART: CT_CHART, CT_XLSX: CT_XLSX,
     blank: blank, sampleFor: sampleFor, chartXml: chartXml, parse: parse, svg: svg, workbookBytes: workbookBytes, defaultRefs: defaultRefs,
-    parseRef: parseRef, absRef: absRef, colL: colL, toNum: toNum, isNum: isNum, isPie: isPie, openEditor: openEditor, clone: clone
+    d3Ok: d3Ok, parseRef: parseRef, absRef: absRef, colL: colL, toNum: toNum, isNum: isNum, isPie: isPie, openEditor: openEditor, clone: clone
   };
 })(window);
