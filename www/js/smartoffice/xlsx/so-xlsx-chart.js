@@ -190,11 +190,19 @@
       }
       d.addEventListener('pointerup', function (e) { end(e, false); }); d.addEventListener('pointercancel', function (e) { end(e, true); });
     }
-    function box(ch) {
-      var sh = S().sh, a = ch.anchor, x0 = colPx(sh, a.from.c) + a.from.co / EMU, y0 = rowPx(sh, a.from.r) + a.from.ro / EMU, x1, y1;
+    function box(ch) { return boxFor(S().sh, ch); }
+    function boxFor(sh, ch) {
+      var a = ch.anchor, x0 = colPx(sh, a.from.c) + a.from.co / EMU, y0 = rowPx(sh, a.from.r) + a.from.ro / EMU, x1, y1;
       if (a.kind === 'twoCellAnchor' && a.to) { x1 = colPx(sh, a.to.c) + a.to.co / EMU; y1 = rowPx(sh, a.to.r) + a.to.ro / EMU; } else if (a.ext) { x1 = x0 + a.ext.cx / EMU; y1 = y0 + a.ext.cy / EMU; } else { x1 = x0 + 480; y1 = y0 + 300; }
       return { x: x0, y: y0, w: Math.max(40, x1 - x0), h: Math.max(30, y1 - y0) };
     }
+    // v10.9 3회차: PDF 내보내기용 — 시트의 차트 목록(시트 픽셀 자리 + 칸 값으로 새로 읽은 데이터)
+    U.exportCharts = function (sh) {
+      if (!S()) return Promise.resolve([]);
+      return load2().then(function () { return listCharts(env.roPkg(), sh.name); }).then(function (r) {
+        return (r.charts || []).map(function (ch) { return { box: boxFor(sh, ch), spec: ch.info && ch.info.spec ? liveSpec(ch.info.spec) : null, kind: ch.info && ch.info.kind }; });
+      });
+    };
     U.reload = function () {
       var s = S(); if (!s || !s.el || !env.roPkg) return; s.charts = null; lastKey = ''; var my = ++loading, name = s.sh.name;
       load2().then(function () { return listCharts(env.roPkg(), name); }).then(function (r) { if (my !== loading || !S()) return; S().charts = r.charts || []; sel = -1; U.paint(true); }).catch(function () { if (my === loading && S()) S().charts = []; });

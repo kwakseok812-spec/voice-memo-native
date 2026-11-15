@@ -1040,7 +1040,7 @@
       if (!S) return; var ctx = S.ctx;
       ctx.loadScript('js/smartoffice/xlsx/so-xlsx-pdf.js').then(function () {
         if (!global.SOXlsxPdf || !S) throw new Error('PDF 내보내기 부품을 불러오지 못함');
-        return global.SOXlsxPdf.run({ ctx: ctx, vis: S.vis, prep: prepSheet, display: display, cellOf: cellOf, styleAt: styleAt });
+        return global.SOXlsxPdf.run({ ctx: ctx, vis: S.vis, prep: prepSheet, display: display, cellOf: cellOf, styleAt: styleAt, roPkg: function () { return zipPkg(S.zip); }, charts: function (sh) { return S.chartUi && S.chartUi.exportCharts ? S.chartUi.exportCharts(sh) : Promise.resolve([]); } });
       }).catch(function (e) { ctx.toast('PDF 내보내기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
     },
     snapshot: snapshot,
