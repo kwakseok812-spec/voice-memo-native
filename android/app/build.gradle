@@ -77,6 +77,8 @@ dependencies {
     implementation project(':mirror')
     // v9.29(O-0607) 소리 없는 카메라 모듈(android/silentcam) — 코틀린은 그 모듈 안에서만
     implementation project(':silentcam')
+    // v10.9 6회차(O-0861): PDF 글자 인식 — ML Kit 한국어 번들 모형(기기 안에서 돔, 문서가 밖으로 나가지 않음). minSdk 23 이상이라 이 앱(24)과 맞음. 구글 저장소(google())에서 받음.
+    implementation "com.google.mlkit:text-recognition-korean:16.0.1"
 }
 
 apply from: 'capacitor.build.gradle'

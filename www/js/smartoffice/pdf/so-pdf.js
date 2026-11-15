@@ -973,6 +973,7 @@
       { name: 'qpdf (Jay Berkenbilt 외)', license: 'Apache-2.0', note: 'PDF 암호 걸기·풀기·구조 압축 — qpdf.wasm(이음오피스 배포본의 파일을 수정 없이 사용, vendor/so/pdf/qpdf/)' },
       { name: 'qpdf-wasm (WebAssembly 빌드·연결부)', license: 'ISC', note: 'qpdf 를 브라우저에서 돌리는 부품' },
       { name: 'pdf-lib · PDF.js (글 고치기·도형·첨부·정밀 보기)', license: 'MIT · Apache-2.0', note: '글 직접 고치기 엔진(so-pdf-textedit.js)·워드 변환(so-pdf-docx.js)은 이 앱이 직접 만든 코드이며 새 외부 부품은 없습니다' },
+      { name: 'Google ML Kit 한국어 글자 인식 (폰 앱 전용)', license: '구글 ML Kit 약관(오픈소스 아님)', note: 'PDF 글자 인식(OCR) — 인식 모형이 앱 안에 들어 있어 문서가 기기 밖으로 나가지 않습니다. 글 층을 얹는 코드(so-pdf-ocr.js)는 이 앱이 직접 만든 코드입니다' },
       { name: 'libjpeg-turbo · zlib', license: 'IJG · BSD-3-Clause · zlib', note: 'qpdf.wasm 안에 들어 있음' }
     ],
     canOpen: function (ext) { return ext === 'pdf'; },

@@ -49,8 +49,9 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
 
 [PDF 글 고치기·도형·첨부·정밀 보기·워드로 열기·편집 제한 — v10.9(O-0861 5회차, 스위치 SO_PDF_EDIT)]
  이 기능들은 이 앱이 직접 만든 코드(js/smartoffice/pdf/so-pdf-textedit.js · so-pdf-edit.js · so-pdf-docx.js)입니다.
- 쓰는 부품은 앱에 이미 들어 있는 pdf-lib(MIT)·PDF.js(Apache-2.0)·qpdf.wasm(편집 제한 걸기·풀기)·JSZip(워드 사본 묶기)뿐이고, 새 외부 부품은 들어 있지 않습니다.
- 글자 인식(OCR) 부품은 들어 있지 않습니다.
+ 쓰는 부품은 앱에 이미 들어 있는 pdf-lib(MIT)·PDF.js(Apache-2.0)·qpdf.wasm(편집 제한 걸기·풀기)·JSZip(워드 사본 묶기)뿐이고, 5회차까지는 새 외부 부품이 없었습니다.
+ 6회차(스위치 SO_PDF_OCR)에 PDF 글자 인식(OCR)을 더했습니다. 글자를 읽는 일은 안드로이드 앱 부품 Google ML Kit 「한국어 글자 인식」(com.google.mlkit:text-recognition-korean, 인식 모형이 앱 안에 들어 있음)이 하며, 문서 그림은 기기 밖으로 나가지 않습니다.
+ 이 부품은 오픈소스가 아니며 구글의 ML Kit 약관(https://developers.google.com/ml-kit/terms)을 따릅니다. 글 층을 파일에 얹는 코드(js/smartoffice/pdf/so-pdf-ocr.js)와 안드로이드 연결부(TextOcrPlugin.java)는 이 앱이 직접 만든 코드입니다.
 
 [차트 — v10.9(O-0861)]
  차트 만들기·고치기와 폰 화면의 미리 그림은 이 앱이 직접 만든 코드(js/smartoffice/so-chart.js, xlsx/so-xlsx-chart.js 등)입니다.

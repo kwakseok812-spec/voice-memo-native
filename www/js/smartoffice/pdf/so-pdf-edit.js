@@ -677,8 +677,10 @@
       var g6 = grp('편집 제한 — 암호 없이 열리지만 인쇄·복사·고치기를 막기');
       permsGroup(api, H, g6, act, helpers.pwInput, helpers.qpdfRun);
     }
-    var g7 = grp('글자 인식(OCR) — 스캔 PDF의 글자 뽑기');
-    g7.appendChild(el('div', 'so-sheet-note', '이 앱 안에서는 글자 인식을 할 수 없습니다. 폰 안에서 돌릴 수 있는 글자 인식 부품이 앱에 없고, 새로 들이려면 크기가 큰 인식 모형과 새 부품이 필요합니다. 필요하면 「수정 요청」을 쓰십시오.'));
+    var g7 = grp('글자 인식(OCR) — 스캔 PDF의 글자 읽기·글만 뽑아 보기');
+    if (ctx.flag && ctx.flag('pdfocr')) {
+      ctx.loadScript('js/smartoffice/pdf/so-pdf-ocr.js').then(function () { if (global.SOPdfOcr) global.SOPdfOcr.extend(api, g7, act); }).catch(function (e) { g7.appendChild(el('div', 'so-sheet-note', '글자 인식을 불러오지 못했습니다.')); try { console.warn('[S-Office PDF] 글자 인식', e); } catch (x) {} });
+    } else g7.appendChild(el('div', 'so-sheet-note', '이 버전에서는 글자 인식을 쓸 수 없습니다. 필요하면 「수정 요청」을 쓰십시오.'));
   }
 
   global.SOPdfEdit = { extend: extend, textEditScreen: textEditScreen, shapesScreen: shapesScreen, preciseView: preciseView, toWord: toWord, listAttachments: listAttachments, textImage: textImage };
