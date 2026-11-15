@@ -72,6 +72,7 @@
   var SO_XLSX_DATA = 'on';                  // v10.9 5회차 엑셀 피벗 표·슬라이서·스파크라인·부분합·통합 — 'off' = 「데이터 정리」 시트의 「분석 도구」 단추와 시트 위 슬라이서·스파크라인 그림이 사라지고, 피벗이 든 문서는 예전처럼 보기만
   var SO_CRYPT = 'on';                      // v10.9 문서 암호: 암호가 걸린 워드·엑셀·PPT 열기, 사본 저장할 때 암호 걸기 — 'off' = 암호 걸린 문서는 예전처럼 변환해서 보기만, ⋯ 메뉴의 암호 항목 없음
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
+  var SO_HWP_OBJ = 'on';                    // v10.9 6회차 한글 도형·글상자·수식 넣기·개체 고치기(그림 효과·캡션)·스타일·문단 번호 모양·쪽 번호 새로 시작 — 'off' = 그 단추들이 없다(예전 도구줄 그대로)
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
   var MODE_KEY = 'so_open_mode_v1';
   var usedNames = {};                        // 이번에 저장한 사본 이름(같은 이름이 또 나오면 _수정(2))
@@ -604,6 +605,7 @@
   function flagOn(k) {
     if (SO_EDIT_PLUS !== 'on') return false;
     if (k === 'hwp') return SO_HWP_TOOLS === 'on';
+    if (k === 'hwpobj') return SO_HWP_TOOLS === 'on' && SO_HWP_OBJ === 'on';
     if (k === 'pdf') return SO_PDF_PAGES === 'on';
     if (k === 'pdfqpdf') return SO_PDF_PAGES === 'on' && SO_PDF_QPDF === 'on';
     if (k === 'pdfedit') return SO_PDF_PAGES === 'on' && SO_PDF_EDIT === 'on';

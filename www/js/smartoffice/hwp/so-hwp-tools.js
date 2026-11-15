@@ -865,6 +865,18 @@
       picDel: { g: '🗑', l: '그림 지우기', run: run('insert:picture-delete', '그림을 지웠습니다(되돌리려면 취소 단추)') }
     };
 
+    // v10.9 6회차: 도형·글상자·수식 넣기 / 개체 고치기 / 스타일·번호(so-hwp-obj.js, 스위치 SO_HWP_OBJ). 새 단추는 「더보기」 안(글)과 그림·도형을 눌렀을 때의 줄 한 칸뿐이다.
+    if (global.SOHwpObj && env.ctx.flag && env.ctx.flag('hwpobj')) {
+      Object.keys(global.SOHwpObj.EXT).forEach(function (k) { EXT[k] = global.SOHwpObj.EXT[k]; });
+      var OS = global.SOHwpObj.sheets({ env: env, T: T, runExt: runExt, el: el, toast: toast, chipsRow: chipsRow, textIn: textIn });
+      ITEMS.shape = { g: '◇', l: '도형·글상자', run: OS.shapeSheet };
+      ITEMS.eq = { g: '∑', l: '수식', run: OS.eqSheet };
+      ITEMS.sty = { g: 'Aa', l: '스타일·번호', run: OS.styleSheet };
+      ITEMS.objfx = { g: '✎', l: '개체 고치기', run: OS.objSheet };
+      ['shape', 'eq', 'sty'].forEach(function (k) { if (ORDER.text.indexOf(k) < 0) ORDER.text.push(k); });
+      ORDER.pic = ['undo', 'picDel', 'objfx', 'redo', 'zoomOut', 'zoomIn', 'zoomFit'];
+    }
+
     function perRow() { var w = global.innerWidth; return w >= 900 ? 12 : (w >= 640 ? 10 : 6); }
     function makeBtn(it, host, inSheet) {
       var b = el('button', (inSheet ? 'so-hwp-mb ' : '') + (it.cls || '')); b.type = 'button'; b.setAttribute('aria-label', it.l); b.title = it.l;

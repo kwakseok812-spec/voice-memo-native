@@ -31,6 +31,7 @@
 
   var st = null;      // { editor, iframe, editing, wrap, frame, tb, pill, timers, pages, ... }
   var TOOLS_URL = 'js/smartoffice/hwp/so-hwp-tools.js';
+  var OBJ_URL = 'js/smartoffice/hwp/so-hwp-obj.js';      // v10.9 6회차: 도형·수식·개체 고치기·스타일(스위치 SO_HWP_OBJ)
 
   function baseOf(name) { return String(name || '문서').replace(/\.[^.]+$/, ''); }
   function readBytes(file) {
@@ -309,7 +310,10 @@
   function open(ctx) {
     // O-0861: 맥락 도구줄(so-hwp-tools.js)은 스위치가 켜졌을 때만 불러온다. 못 불러오면 예전 도구줄로 연다.
     if (ctx.flag && ctx.flag('hwp') && !global.SOHwpTools) {
-      return ctx.loadScript(TOOLS_URL).then(function () { return open2(ctx); }, function () { return open2(ctx); });
+      return ctx.loadScript(TOOLS_URL).then(function () {
+        if (ctx.flag('hwpobj') && !global.SOHwpObj) return ctx.loadScript(OBJ_URL).then(function () { return open2(ctx); }, function () { return open2(ctx); });
+        return open2(ctx);
+      }, function () { return open2(ctx); });
     }
     return open2(ctx);
   }
