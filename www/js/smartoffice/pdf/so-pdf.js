@@ -79,7 +79,9 @@
     S.pill.classList.remove('dim');
     clearTimeout(S.pillT); S.pillT = setTimeout(function () { if (S && S.pill) S.pill.classList.add('dim'); }, 2600);
   }
+  function isLocked() { if (S && S.locked) { S.ctx.toast('이 문서는 편집이 제한되어 보기만 됩니다. 고치려면 다시 열어 소유자 암호를 입력하십시오.', 4200); return true; } return false; }
   function setMode(m) {
+    if (m !== 'hand' && isLocked()) m = 'hand';
     S.mode = m; S.root.setAttribute('data-mode', m); select(null);
     Object.keys(S.modeBtns).forEach(function (k) { S.modeBtns[k].classList.toggle('on', k === m); });
     if (S.moreBtn) S.moreBtn.classList.toggle('on', !S.modeBtns[m]);
@@ -588,6 +590,7 @@
   // 반환: Promise<true|false>(저장 성공 여부) — 「수정 요청」으로 넘어가기 전 저장이 이 값을 본다
   function save() {
     var ctx = S.ctx, cur = S;
+    if (S.locked) { isLocked(); return Promise.resolve(false); }
     if (!S.anns.length && !S.workStack.length && !S.decrypted) { ctx.toast('아직 고친 것이 없습니다. 형광펜·글·메모·서명·쪽 정리를 한 뒤 저장해 주십시오.', 3000); return Promise.resolve(false); }
     select(null);
     ctx.busy('새 파일 만드는 중…');
@@ -727,7 +730,7 @@
     });
   }
   function addPhoto() {
-    if (!S || S.dead) return;
+    if (!S || S.dead || isLocked()) return;
     setMode('hand');
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp,image/gif'; inp.style.display = 'none';
     inp.onchange = function () {
@@ -751,12 +754,13 @@
   function toolsMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-tools.js').then(function () { if (!global.SOPdfTools) throw new Error('PDF 도구 부품을 불러오지 못함'); return global.SOPdfTools; }); }
   function pagesMod() { return S.ctx.loadScript('js/smartoffice/pdf/so-pdf-pages.js').then(function () { if (!global.SOPdfPages) throw new Error('쪽 정리 부품을 불러오지 못함'); return global.SOPdfPages; }); }
   function openPagesScreen() {
+    if (isLocked()) return;
     if (S.form) formStop();
     setMode('hand');
     pagesMod().then(function (M) { M.openPages(pagesApi()); }).catch(function (e) { S.ctx.toast('쪽 정리를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
   }
-  function openDecorate() { if (S.form) formStop(); setMode('hand'); pagesMod().then(function (M) { M.decorate(pagesApi()); }).catch(function (e) { S.ctx.toast('꾸미기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
-  function toggleForm() { pagesMod().then(function (M) { M.formMode(pagesApi()); }).catch(function (e) { S.ctx.toast('양식 채우기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
+  function openDecorate() { if (isLocked()) return; if (S.form) formStop(); setMode('hand'); pagesMod().then(function (M) { M.decorate(pagesApi()); }).catch(function (e) { S.ctx.toast('꾸미기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
+  function toggleForm() { if (isLocked()) return; pagesMod().then(function (M) { M.formMode(pagesApi()); }).catch(function (e) { S.ctx.toast('양식 채우기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); }); }
   function pagesApi() {
     return {
       ctx: S.ctx, root: S.root, pdfjs: global.pdfjsLib, loadLib: loadLib, getBytes: getBytes,
@@ -899,6 +903,23 @@
       });
     }).then(function (doc) {
       if (S !== cur) { try { doc.destroy(); } catch (e) {} return; }
+      if (cur.decrypted || !(ctx.flag && ctx.flag('pdfedit') && ctx.flag('pdfqpdf'))) return doc;
+      // v10.9 5회차: 열 때 암호는 없지만 암호화된(권한이 걸린) 문서 — 편집이 제한됐으면 소유자 암호를 받아 푼 사본으로 열고, 아니면 보기만
+      return doc.getPermissions().then(function (perms) {
+        if (!perms) return doc;
+        return ctx.file.arrayBuffer().then(function (b) { return toolsMod().then(function (T) { return T.unlockOpen(ctx, b, perms); }); }).then(function (r) {
+          if (S !== cur) return doc;
+          if (r && r.bytes) {
+            cur.bytes = new Uint8Array(r.bytes); cur.decrypted = true; cur.unlockedNote = r.restricted ? '편집 제한을 풀어 열었습니다. 「사본 저장」으로 저장하면 제한 없는 사본이 됩니다(원래 파일은 그대로).' : '암호화된 문서라 사본으로 열었습니다. 「사본 저장」으로 저장하면 암호화 없는 사본이 됩니다(원래 파일은 그대로).';
+            try { doc.destroy(); } catch (e) {}
+            return global.pdfjsLib.getDocument({ data: new Uint8Array(r.bytes).slice(), isEvalSupported: false }).promise;
+          }
+          if (r && r.view) cur.locked = true;
+          return doc;
+        });
+      });
+    }).then(function (doc) {
+      if (S !== cur) { try { doc.destroy(); } catch (e) {} return; }
       cur.pdf = doc; cur.n = doc.numPages;
       ctx.busy('쪽 크기 확인 중…');
       var sizes = [];
@@ -918,7 +939,8 @@
       ctx.setActions([{ label: '사본 저장', primary: true, onClick: function () { S.ctx.noticeThen(save); } }]);
       if (ctx.onSave) { ctx.onSave(function () { S.ctx.noticeThen(save); }); ctx.setSaver(function () { return save(); }); }
       buildUI(); initPages(); layout(); updateCurPage();
-      if (cur.decrypted) ctx.toast('암호를 풀어 열었습니다. 「사본 저장」으로 저장하면 암호 없는 파일이 됩니다(원래 파일은 그대로).', 5200);
+      if (cur.decrypted) ctx.toast(cur.unlockedNote || '암호를 풀어 열었습니다. 「사본 저장」으로 저장하면 암호 없는 파일이 됩니다(원래 파일은 그대로).', 5200);
+      else if (cur.locked) ctx.toast('이 문서는 편집이 제한되어 보기만 됩니다. 고치려면 다시 열어 소유자 암호를 입력하십시오.', 5200);
       return waitFirst(cur).then(function () { if (ctx.opts && ctx.opts.openPages && plus() && S === cur) setTimeout(openPagesScreen, 150); });   // 스캔 완료 화면의 「쪽 더 정리하기」
     });
   }
@@ -950,6 +972,7 @@
       { name: 'pdf-lib', license: 'MIT', note: 'PDF에 형광펜·글·메모·서명·꾸미기 넣기 (사본 저장)' },
       { name: 'qpdf (Jay Berkenbilt 외)', license: 'Apache-2.0', note: 'PDF 암호 걸기·풀기·구조 압축 — qpdf.wasm(이음오피스 배포본의 파일을 수정 없이 사용, vendor/so/pdf/qpdf/)' },
       { name: 'qpdf-wasm (WebAssembly 빌드·연결부)', license: 'ISC', note: 'qpdf 를 브라우저에서 돌리는 부품' },
+      { name: 'pdf-lib · PDF.js (글 고치기·도형·첨부·정밀 보기)', license: 'MIT · Apache-2.0', note: '글 직접 고치기 엔진(so-pdf-textedit.js)·워드 변환(so-pdf-docx.js)은 이 앱이 직접 만든 코드이며 새 외부 부품은 없습니다' },
       { name: 'libjpeg-turbo · zlib', license: 'IJG · BSD-3-Clause · zlib', note: 'qpdf.wasm 안에 들어 있음' }
     ],
     canOpen: function (ext) { return ext === 'pdf'; },

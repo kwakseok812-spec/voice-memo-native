@@ -66,6 +66,7 @@
   var SO_DOCX_TOOLS = 'on';                 // 워드 문단·스타일·서식·목록·표·그림·머리글·바꾸기·새 문서 — 'off' = 예전 워드 화면(글자 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
   var SO_PDF_QPDF = 'on';                   // PDF 암호 걸기·풀기(qpdf.wasm) — 'off' = 암호 걸린 PDF는 예전처럼 변환해서 보고, 꾸미기 시트에 암호 구역이 없다(용량 줄이기는 그림 줄이기만)
+  var SO_PDF_EDIT = 'on';                   // v10.9 PDF 글 고치기·도형·첨부·정밀 보기·편집 제한·워드로 열기 — 'off' = 꾸미기 시트에 그 구역들이 없고, 편집이 제한된 PDF도 예전처럼 연다
   var SO_CHART = 'on';                      // v10.9 차트 만들기·고치기(엑셀·PPT·워드)와 폰 화면 미리 그림 — 'off' = 차트는 예전처럼 보기·복제만(넣기 시트의 「차트」·「차트 고치기」가 사라진다)
   var SO_CRYPT = 'on';                      // v10.9 문서 암호: 암호가 걸린 워드·엑셀·PPT 열기, 사본 저장할 때 암호 걸기 — 'off' = 암호 걸린 문서는 예전처럼 변환해서 보기만, ⋯ 메뉴의 암호 항목 없음
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
@@ -603,6 +604,7 @@
     if (k === 'hwp') return SO_HWP_TOOLS === 'on';
     if (k === 'pdf') return SO_PDF_PAGES === 'on';
     if (k === 'pdfqpdf') return SO_PDF_PAGES === 'on' && SO_PDF_QPDF === 'on';
+    if (k === 'pdfedit') return SO_PDF_PAGES === 'on' && SO_PDF_EDIT === 'on';
     if (k === 'xlsx') return SO_XLSX_TOOLS === 'on';
     if (k === 'pptx') return SO_PPTX_TOOLS === 'on';
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';

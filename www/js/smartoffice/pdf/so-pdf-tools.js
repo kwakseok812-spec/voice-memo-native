@@ -92,6 +92,38 @@
     });
   }
 
+  // v10.9 5회차: 열 때 암호는 없지만 암호화된(권한이 걸린) PDF. 편집이 제한됐으면 소유자 암호를 물어 푼 사본으로 열고, 모르면 보기만 한다.
+  // 돌려주는 것: { bytes: 푼 사본 | null, view: 보기만 하는지, restricted }
+  function unlockOpen(ctx, buf, perms) {
+    var bytes = new Uint8Array(buf), P = perms || [];
+    var restricted = P.indexOf(8) < 0 || P.indexOf(32) < 0 || P.indexOf(1024) < 0;
+    function plain() { return qpdfRun(ctx, function (i, o) { return ['--decrypt', i, o]; }, bytes).then(function (r) { return r.out || null; }); }
+    if (!restricted) return plain().then(function (out) { return { bytes: out, view: !out, restricted: false }; });
+    return new Promise(function (resolve) {
+      var tries = 0, done = false;
+      function ask(msg) {
+        var body = el('div', 'spd'), inp = el('input', 'spd-in wide'); inp.type = 'password'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', '소유자 암호');
+        var note = el('div', 'so-sheet-note', msg || '이 문서는 만든 사람이 고치기·쪽 정리·메모를 막아 두었습니다. 「소유자 암호」를 아시면 입력해 제한을 푼 사본으로 열 수 있습니다. 모르면 「보기만」을 누르십시오. 원래 파일은 바뀌지 않고, 입력한 암호는 저장되지 않습니다.');
+        body.appendChild(note); body.appendChild(inp);
+        ctx.sheet({ title: '편집이 제한된 PDF', body: body, buttons: [
+          { label: '보기만', onClick: function () { if (!done) { done = true; resolve({ bytes: null, view: true, restricted: true }); } return true; } },
+          { label: '제한 풀고 열기', primary: true, onClick: function () {
+            var pw = inp.value; if (!pw) { note.textContent = '소유자 암호를 입력해 주십시오.'; return false; }
+            inp.disabled = true; note.textContent = '확인하는 중…';
+            decryptBytes(ctx, bytes, pw).then(function (out) { inp.value = ''; done = true; ctx.closeSheet(); resolve({ bytes: out, view: false, restricted: true }); }, function (e) {
+              inp.value = ''; inp.disabled = false; tries++;
+              if (e && e.wrong) { if (tries >= 5) { done = true; ctx.closeSheet(); ctx.toast('소유자 암호가 맞지 않아 보기만 합니다.', 3600); resolve({ bytes: null, view: true, restricted: true }); } else { note.textContent = '소유자 암호가 맞지 않습니다. 다시 입력해 주십시오(' + tries + '/5).'; try { inp.focus(); } catch (x) {} } }
+              else { done = true; ctx.closeSheet(); ctx.toast('제한을 풀지 못해 보기만 합니다 — ' + ((e && e.message) || e), 4200); resolve({ bytes: null, view: true, restricted: true }); }
+            });
+            return false;
+          } }
+        ], keep: function () { return !done; } });
+        setTimeout(function () { try { inp.focus(); } catch (e) {} }, 120);
+      }
+      ask();
+    });
+  }
+
   // ======================================================================== 공통 도우미
   // 문서 뿌리에서 닿지 않는 개체를 지운다(쪽 정리와 같은 방식)
   function gcDoc(L, doc) {
@@ -448,6 +480,11 @@
         }).catch(function (e) { ctx.busy(null); ctx.toast('암호를 걸지 못했습니다 — ' + ((e && e.message) || e), 4200); });
       }, 'on');
     }
+    // v10.9 5회차: 글 고치기·도형·첨부·정밀 보기·워드로 열기·편집 제한·글자 인식 안내(so-pdf-edit.js, 스위치 SO_PDF_EDIT)
+    if (ctx.flag && ctx.flag('pdfedit')) {
+      var slot = el('div'); body.appendChild(slot);
+      ctx.loadScript('js/smartoffice/pdf/so-pdf-edit.js').then(function () { if (global.SOPdfEdit) global.SOPdfEdit.extend(api, H, slot, { qpdfOn: qpdfOn(ctx), pwInput: pwInput, qpdfRun: qpdfRun }); }).catch(function (e) { try { console.warn('[S-Office PDF] 고치기 구역', e); } catch (x) {} });
+    }
   }
 
   // ======================================================================== 용량 줄이기 (큰 그림을 캔버스로 다시 줄이고, qpdf 로 구조를 압축)
@@ -691,6 +728,6 @@
   }
   function hasOutline(pdf) { return pdf.getOutline().then(function (o) { return !!(o && o.length); }, function () { return false; }); }
 
-  global.SOPdfTools = { extend: extend, redact: redact, openWithPassword: openWithPassword, outlineSheet: outlineSheet, exportMarkdown: exportMarkdown, hasOutline: hasOutline,
+  global.SOPdfTools = { unlockOpen: unlockOpen, extend: extend, redact: redact, openWithPassword: openWithPassword, outlineSheet: outlineSheet, exportMarkdown: exportMarkdown, hasOutline: hasOutline,
     _t: { pdfToMarkdown: pdfToMarkdown, writeOutline: writeOutline, readTree: readTree, remapDests: remapDests, compressBytes: compressBytes, encryptBytes: encryptBytes, decryptBytes: decryptBytes, gcDoc: gcDoc, qpdfRun: qpdfRun } };
 })(window);
