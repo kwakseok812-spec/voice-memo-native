@@ -62,6 +62,7 @@
   var SO_EDIT_PLUS = 'on';                  // O-0861(v10.3): 'off' = 편집 보강(표·그림·쪽 정리·새 문서·「수정 요청」·저장 이름 규칙·단축키)이 통째로 사라지고 v10.1과 같다
   var SO_HWP_TOOLS = 'on';                  // 한글 표·그림·글자 색·새 문서 단추 — 'off' = 예전 한글 도구줄
   var SO_XLSX_TOOLS = 'on';                 // 엑셀 줄·칸·서식·시트·계산·새 문서 — 'off' = 예전 엑셀 화면(값 고치기만)
+  var SO_PPTX_SMARTART = 'on';              // v10.9 6회차 파워포인트 진짜 SmartArt 만들기(목록·프로세스·계층)·글 고치기 — 'off' = 「도식」은 묶은 도형만, SmartArt 는 보기·옮기기·지우기만
   var SO_PPTX_TOOLS = 'on';                 // 파워포인트 슬라이드·도형·그림·표·노트·쇼·새 문서 — 'off' = 예전 PPT 화면(글자 고치기만)
   var SO_DOCX_TOOLS = 'on';                 // 워드 문단·스타일·서식·목록·표·그림·머리글·바꾸기·새 문서 — 'off' = 예전 워드 화면(글자 고치기만)
   var SO_PDF_PAGES = 'on';                  // PDF 쪽 정리·합치기·나누기·양식 칸 — 'off' = 예전 PDF 도구줄
@@ -612,6 +613,7 @@
     if (k === 'pdfocr') return SO_PDF_PAGES === 'on' && SO_PDF_EDIT === 'on' && SO_PDF_OCR === 'on';
     if (k === 'xlsx') return SO_XLSX_TOOLS === 'on';
     if (k === 'pptx') return SO_PPTX_TOOLS === 'on';
+    if (k === 'pptxsa') return SO_PPTX_TOOLS === 'on' && SO_PPTX_SMARTART === 'on';
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
     if (k === 'chart') return SO_CHART === 'on';

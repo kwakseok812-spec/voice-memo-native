@@ -170,6 +170,7 @@
     function delShape() {
       var sh = need(); if (!sh) return;
       if (sh.kind === 'chart') { delChart(sh); return; }
+      if (sh.kind === 'smart' && ST.removeSmartArt) { env.run('SmartArt 지우기', function (pkg) { return ST.removeSmartArt(pkg, st.path, sh.id); }, function (r) { if (r && r.err) { fail(r.err); return; } st.sel = null; st.cell = null; toast('SmartArt 를 지웠습니다(되돌리려면 ↶)', 2600); U.refreshAll(); }); return; }
       if (sh.media && X) { X.delMedia(sh); return; }
       op('도형 지우기', function (x) { return ST.removeShape(x, sh.id); }, J(KIND[sh.kind] || '도형', '을') + ' 지웠습니다(되돌리려면 ↶)');
     }

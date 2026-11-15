@@ -53,6 +53,11 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
  6회차(스위치 SO_PDF_OCR)에 PDF 글자 인식(OCR)을 더했습니다. 글자를 읽는 일은 안드로이드 앱 부품 Google ML Kit 「한국어 글자 인식」(com.google.mlkit:text-recognition-korean, 인식 모형이 앱 안에 들어 있음)이 하며, 문서 그림은 기기 밖으로 나가지 않습니다.
  이 부품은 오픈소스가 아니며 구글의 ML Kit 약관(https://developers.google.com/ml-kit/terms)을 따릅니다. 글 층을 파일에 얹는 코드(js/smartoffice/pdf/so-pdf-ocr.js)와 안드로이드 연결부(TextOcrPlugin.java)는 이 앱이 직접 만든 코드입니다.
 
+[PPT 진짜 SmartArt — v10.9(O-0861 6회차, 스위치 SO_PPTX_SMARTART)]
+ SmartArt(목록·프로세스·계층 구조) 만들기와 항목 글 고치기는 이 앱이 직접 만든 코드(js/smartoffice/pptx/so-pptx-smartart.js)입니다.
+ SmartArt 의 배치 정의(layout)·모양(quickStyle)·색(colors) 부품도 마이크로소프트의 내장 정의 파일을 가져오지 않고, 표준 문서(ECMA-376 DrawingML 다이어그램) 형식에 맞춰 이 앱이 직접 썼습니다(고유 이름 urn:soffice.phone/…).
+ 그래서 파워포인트가 SmartArt 로 알아보고 고칠 수 있지만, 파워포인트 갤러리의 내장 SmartArt 모양과는 이름·세부 모양이 다릅니다. 새 외부 부품은 들어 있지 않습니다.
+
 [차트 — v10.9(O-0861)]
  차트 만들기·고치기와 폰 화면의 미리 그림은 이 앱이 직접 만든 코드(js/smartoffice/so-chart.js, xlsx/so-xlsx-chart.js 등)입니다.
  차트 그리기 라이브러리(ECharts 등)나 다른 새 외부 부품은 들어 있지 않습니다. 파일 안에 만드는 차트는 표준 형식(Office Open XML)의 차트와 딸린 통합문서입니다.

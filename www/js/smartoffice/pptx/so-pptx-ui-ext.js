@@ -190,10 +190,12 @@
       inp.click();
     }
     // ======================= 도식(스마트아트 모양의 묶은 도형) =======================
+    var SA_MAP = { listh: 'list', process: 'process', tree: 'hier' };       // 도식 종류 → 진짜 SmartArt 종류
+    function saOk() { return !!(ST_.addSmartArt && api.ctx.flag && api.ctx.flag('pptxsa')); }
     function diagramSheet(editId) {
       var cur = editId != null ? ST_.readDiagram(st.xml, editId) : null;
       if (editId != null && !cur) { api.toast('이 앱에서 만든 도식만 고칠 수 있습니다.', 3200); return; }
-      var spec = cur ? { kind: cur.kind, palette: cur.palette, items: cur.items.slice() } : { kind: 'process', palette: 'multi', items: ST_.diagramDefaults('process') };
+      var spec = cur ? { kind: cur.kind, palette: cur.palette, items: cur.items.slice() } : { kind: 'process', palette: 'multi', items: ST_.diagramDefaults('process'), sa: saOk() };
       var body = el('div', 'spx'), kindBox = el('div'), listBox = el('div'), note = el('div', 'so-sheet-note'), lastKind = spec.kind;
       function fitCount() { var K = ST_.DIAGRAM_KINDS[spec.kind]; while (spec.items.length < K.min) spec.items.push(''); if (spec.items.length > K.max) spec.items.length = K.max; }
       function render() {
@@ -203,6 +205,14 @@
         ST_.DIAGRAM_KEYS.forEach(function (k) { var b = el('button', 'spx-b' + (spec.kind === k ? ' on' : ''), ST_.DIAGRAM_KINDS[k].name); b.type = 'button'; b.onclick = function () { if (!cur && spec.items.join('|') === ST_.diagramDefaults(lastKind).join('|')) spec.items = ST_.diagramDefaults(k); lastKind = k; spec.kind = k; fitCount(); render(); }; gk.appendChild(b); });
         var gp = el('div', 'spx-r'); kindBox.appendChild(el('div', 'spx-l', '색')); kindBox.appendChild(gp);
         [['여러 색', 'multi'], ['한 가지 색', 'one']].forEach(function (a) { var b = el('button', 'spx-b' + (spec.palette === a[1] ? ' on' : ''), a[0]); b.type = 'button'; b.onclick = function () { spec.palette = a[1]; render(); }; gp.appendChild(b); });
+        if (!cur && saOk()) {
+          var can = !!SA_MAP[spec.kind]; if (spec.wantSa === undefined) spec.wantSa = true; spec.sa = can && spec.wantSa;
+          kindBox.appendChild(el('div', 'spx-l', '파일에 넣는 방식'));
+          var gm = el('div', 'spx-r'); kindBox.appendChild(gm);
+          [['진짜 SmartArt', true], ['묶은 도형', false]].forEach(function (a) { var b = el('button', 'spx-b' + (!!spec.sa === a[1] ? ' on' : ''), a[0]); b.type = 'button'; if (a[1] && !can) b.disabled = true; b.onclick = function () { spec.wantSa = a[1]; render(); }; gm.appendChild(b); });
+          if (!can) kindBox.appendChild(el('div', 'so-sheet-note', '이 종류는 진짜 SmartArt 로는 넣을 수 없어 묶은 도형으로 들어갑니다(SmartArt 는 가로 목록·기본 프로세스·계층 구조).'));
+          else if (spec.sa) kindBox.appendChild(el('div', 'so-sheet-note', '파워포인트에서 SmartArt 도구 탭이 뜨고 항목을 더하거나 모양·색을 바꿀 수 있습니다. 색은 테마의 강조색을 따르고 위의 「색」 고르기는 쓰지 않습니다.' + (spec.kind === 'tree' ? ' 항목 앞에 「-」를 붙이면 바로 위 항목의 아래 단계가 됩니다.' : '')));
+        }
         listBox.innerHTML = ''; listBox.appendChild(el('div', 'spx-l', '항목 글(' + spec.items.length + '개 · ' + K.min + '~' + K.max + '개) — ' + K.hint));
         spec.items.forEach(function (t, i) {
           var row = el('div', 'spx-r'), inp = el('input', 'spx-in'); inp.type = 'text'; inp.value = t; inp.placeholder = (i + 1) + '번 항목'; inp.setAttribute('aria-label', (i + 1) + '번 항목 글'); inp.style.flex = '1'; inp.maxLength = 60;
@@ -213,13 +223,32 @@
         });
         var ad = el('button', 'spx-b big', '＋ 항목 추가'); ad.type = 'button'; if (spec.items.length >= K.max) ad.disabled = true; ad.onclick = function () { spec.items.push(''); render(); setTimeout(function () { var ins = listBox.querySelectorAll('input'); try { ins[ins.length - 1].focus(); } catch (e) {} }, 40); }; listBox.appendChild(ad);
       }
-      note.textContent = '파일에는 파워포인트의 「묶은 도형」으로 들어갑니다(진짜 SmartArt 가 아니라 같은 모양의 도형 묶음). 파워포인트에서 도형 하나하나의 글·색·크기를 마음대로 고칠 수 있고, 색 조합을 바꾸면 색이 같이 바뀝니다. 이 앱의 「도식 고치기」로 다시 그리면 직접 고친 모양은 새로 그린 모양으로 바뀝니다.';
+      note.textContent = '「묶은 도형」을 고르면 파일에 파워포인트의 묶은 일반 도형으로 들어갑니다(SmartArt 가 아니라 같은 모양의 도형 묶음). 파워포인트에서 도형 하나하나의 글·색·크기를 마음대로 고칠 수 있고, 색 조합을 바꾸면 색이 같이 바뀝니다. 이 앱의 「도식 고치기」로 다시 그리면 직접 고친 모양은 새로 그린 모양으로 바뀝니다.';
       body.appendChild(kindBox); body.appendChild(listBox); body.appendChild(note); fitCount(); render();
       api.ctx.sheet({ title: cur ? '도식 고치기' : '도식 넣기', body: body, wide: true, buttons: [{ label: '취소' }, { label: cur ? '다시 그리기' : '넣기', primary: true, onClick: function () {
         var sp = { kind: spec.kind, palette: spec.palette, items: spec.items.slice() };
         if (cur) api.op('도식 고치기', function (x) { var r = ST_.replaceDiagram(x, editId, sp); return r.err ? r : { xml: r.xml, id: editId }; }, '도식을 다시 그렸습니다(↶ 로 되돌립니다)');
+        else if (spec.sa && SA_MAP[spec.kind] && saOk()) {
+          var g2 = { x: Math.round(st.W * 0.08), y: Math.round(st.H * 0.23), w: Math.round(st.W * 0.84), h: Math.round(st.H * 0.66) };
+          api.env.run('SmartArt 넣기', function (pkg) { return ST_.addSmartArt(pkg, st.path, { kind: SA_MAP[spec.kind], items: sp.items }, g2).then(function (r) { return r.err ? r : { sel: r.id }; }); }, function (r) { if (r && r.err) { api.fail(r.err); return; } st.sel = r.sel; api.toast('SmartArt 를 넣었습니다 — 눌러서 「SmartArt 글 고치기」, 파워포인트에서는 SmartArt 도구로 모양을 바꿉니다', 4200); api.U.refreshAll(); });
+        }
         else { var gg = { x: Math.round(st.W * 0.08), y: Math.round(st.H * 0.23), w: Math.round(st.W * 0.84), h: Math.round(st.H * 0.66) }; api.op('도식 넣기', function (x) { var r = ST_.addDiagram(x, sp, gg); return r.err ? r : { xml: r.xml, id: r.id }; }, '도식을 넣었습니다 — 눌러서 「도식 고치기」, 끌어서 옮기기'); }
       } }] });
+    }
+    // ======================= SmartArt 글 고치기 =======================
+    function smartTextSheet(sh) {
+      ST_.readSmartArt(api.env.roPkg(s.info.zip), st.path, sh.id).then(function (r) {
+        if (r.err) { api.toast(r.err, 3600); return; }
+        if (!r.nodes.length) { api.toast('고칠 항목 글을 찾지 못했습니다. 파워포인트에서 고쳐 주십시오.', 3600); return; }
+        var body = el('div', 'spx'), vals = r.nodes.map(function (n) { return n.text; }), box = el('div');
+        body.appendChild(el('div', 'so-sheet-note', (r.mine ? '이 앱이 만든 SmartArt 입니다.' : '파워포인트가 만든 SmartArt 입니다.') + ' 항목 글만 고칩니다(항목을 더하거나 빼고 모양을 바꾸는 일은 파워포인트의 SmartArt 도구로). 글 길이가 크게 달라지면 파워포인트가 열 때 다시 배치합니다.'));
+        r.nodes.forEach(function (n, i) { var row = el('div', 'spx-r'), inp = el('input', 'spx-in'); inp.type = 'text'; inp.value = n.text; inp.maxLength = 200; inp.style.flex = '1'; inp.style.marginLeft = (n.lv * 14) + 'px'; inp.setAttribute('aria-label', (i + 1) + '번 항목 글'); inp.addEventListener('input', function () { vals[i] = inp.value; }); row.appendChild(inp); box.appendChild(row); });
+        body.appendChild(box);
+        api.ctx.sheet({ title: 'SmartArt 글 고치기', body: body, wide: true, buttons: [{ label: '취소' }, { label: '적용', primary: true, onClick: function () {
+          var texts = vals.slice();
+          api.env.run('SmartArt 글 고치기', function (pkg) { return ST_.setSmartArtTexts(pkg, st.path, sh.id, texts).then(function (q) { return q.err ? q : { sel: sh.id, changed: q.changed }; }); }, function (q) { if (q && q.err) { api.fail(q.err); return; } st.sel = sh.id; api.toast(q.changed ? 'SmartArt 글을 고쳤습니다(↶ 로 되돌립니다)' : '바뀐 글이 없습니다', 3000); api.U.refreshAll(); });
+        } }] });
+      }).catch(function (e) { api.toast('SmartArt 를 읽지 못했습니다 — ' + ((e && e.message) || e), 3600); });
     }
     // ======================= 동영상·소리 =======================
     function canvasPng(cv) { return new Promise(function (res, rej) { cv.toBlob(function (bl) { if (!bl) { rej(new Error('표지 그림을 만들지 못했습니다')); return; } bl.arrayBuffer().then(function (ab) { res(new Uint8Array(ab)); }, rej); }, 'image/png'); }); }
@@ -314,11 +343,12 @@
       api.btn(g, '디자인(색·글꼴·마스터)', designSheet, 'big');
     };
     X.insertButtons = function (g) {
-      api.btn(g, '도식(스마트아트 모양)', function () { diagramSheet(null); }, 'big');
+      api.btn(g, '도식·SmartArt', function () { diagramSheet(null); }, 'big');
       api.btn(g, '동영상', function () { mediaPick('video'); }, 'big'); api.btn(g, '소리', function () { mediaPick('audio'); }, 'big');
     };
     X.ctxButtons = function (b, sh) {
       if (sh.kind === 'group' && ST_.readDiagram(st.xml, sh.id)) { var db = el('button', 'spx-cb', '도식 고치기'); db.type = 'button'; db.onclick = function () { diagramSheet(sh.id); }; b.appendChild(db); }
+      if (sh.kind === 'smart' && saOk() && ST_.readSmartArt) { var sb = el('button', 'spx-cb', 'SmartArt 글 고치기'); sb.type = 'button'; sb.onclick = function () { smartTextSheet(sh); }; b.appendChild(sb); }
       if (sh.media) {
         var pb = el('button', 'spx-cb', '미리 재생'); pb.type = 'button'; pb.onclick = function () { playSheet(sh); }; b.appendChild(pb);
         var cb = el('button', 'spx-cb', '표지 그림'); cb.type = 'button'; cb.onclick = function () { posterPick(sh); }; b.appendChild(cb);
