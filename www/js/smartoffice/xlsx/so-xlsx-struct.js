@@ -256,7 +256,7 @@
     wholeline: '줄 전체나 칸 전체를 가리키는 수식이 있어서 중간에 넣고 빼기가 어렵습니다.',
     deleted: '수식이 지우려는 칸을 직접 쓰고 있어서, 지우면 계산이 깨집니다. 수식을 먼저 고쳐 주십시오.',
     shared: '수식 구조가 특이해서 중간에 줄이나 칸을 넣고 빼기가 어렵습니다.',
-    cf: '조건부 서식이나 입력 제한이 칸 주소를 쓰고 있어서, 중간에 줄이나 칸을 넣고 빼면 어긋날 수 있습니다.',
+    cf: '조건 색칠이나 입력 제한이 칸 주소를 쓰고 있어서, 중간에 줄이나 칸을 넣고 빼면 어긋날 수 있습니다.',
     breaks: '쪽 나누기 표시가 있어서 중간에 줄이나 칸을 넣고 빼기가 어렵습니다.',
     sheet: '이 시트를 찾지 못했습니다.',
     range: '수식 계산 중 범위를 벗어나는 칸이 생겨서 할 수 없습니다.'
@@ -348,7 +348,7 @@
           });
         }
         xml = serializeSheet(sd);
-        // 병합·하이퍼링크·자동 필터·조건부 서식 범위·입력 제한 범위·칸 너비 정의
+        // 병합·하이퍼링크·자동 필터·조건 색칠 범위·입력 제한 범위·칸 너비 정의
         xml = xml.replace(/<mergeCell\b[^>]*?\sref="([^"]*)"[^>]*\/>/g, function (all, ref) { var r = shiftRangeText(ref, axis, at, n, mode); return r && r.indexOf(':') > 0 ? all.replace(ref, r) : ''; });
         xml = xml.replace(/<mergeCells\b[^>]*>\s*<\/mergeCells>/, '').replace(/<mergeCells\b([^>]*?)\scount="\d+"/, function (all, a) { var c = (xml.match(/<mergeCell\b/g) || []).length; return '<mergeCells' + a + ' count="' + c + '"'; });
         xml = xml.replace(/(<(?:hyperlink|autoFilter)\b[^>]*?\sref=")([^"]*)(")/g, function (all, a, ref, c) { var r = shiftRangeText(ref, axis, at, n, mode); return r ? a + r + c : a + ref + c; });
@@ -921,7 +921,7 @@
     });
   }
 
-  // ============================== v10.8: 틀 고정 · 조건부 서식 · 입력 제한(목록) · 차트·그림 든 시트의 줄·칸 넣기 ==============================
+  // ============================== v10.8: 틀 고정 · 조건 색칠 · 입력 제한(목록) · 차트·그림 든 시트의 줄·칸 넣기 ==============================
   function rangeParts(ref) { var m = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(ref); if (!m) return null; return { c0: colNum(m[1]), r0: +m[2], c1: colNum(m[3] || m[1]), r1: +(m[4] || m[2]) }; }
   function sqrefHits(sq, rng) {                 // 공백으로 나뉜 범위들 가운데 rng({r0,c0,r1,c1} 1부터)와 겹치는 것이 있나
     return String(sq || '').split(/\s+/).some(function (t) { var p = rangeParts(t); return p && !(p.r1 < rng.r0 || p.r0 > rng.r1 || p.c1 < rng.c0 || p.c0 > rng.c1); });
@@ -962,7 +962,7 @@
     });
   }
 
-  // ---- 조건부 서식 ----
+  // ---- 조건 색칠 ----
   var CF_OP = { gt: 'greaterThan', lt: 'lessThan', ge: 'greaterThanOrEqual', le: 'lessThanOrEqual', eq: 'equal', ne: 'notEqual' };
   // 이 시트의 규칙 목록(보기용): [{ sqref, text, n }]
   function readCond(xml) {
@@ -1002,7 +1002,7 @@
       if (isText ? !String(rule.v || '').trim() : !(isFinite(parseFloat(rule.v)))) return { err: isText ? '포함할 글자를 적어 주십시오.' : '비교할 숫자를 적어 주십시오.' };
       return Promise.all([pkg.read(tgt.path), pkg.read('xl/styles.xml')]).then(function (a) {
         var xml = a[0], sx = a[1]; if (!sx) return { err: '서식 정보를 찾지 못했습니다.' };
-        var dx = dxfAdd(sx, rule.bg, rule.color); if (!dx) return { err: '이 문서의 서식 정보가 특이해서 폰에서는 조건부 서식을 넣을 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
+        var dx = dxfAdd(sx, rule.bg, rule.color); if (!dx) return { err: '이 문서의 서식 정보가 특이해서 폰에서는 조건 색칠을 넣을 수 없습니다. 「수정 요청」으로 맡겨 주십시오.' };
         var pr = 0; (xml.match(/<cfRule\b[^>]*?\spriority="(\d+)"/g) || []).forEach(function (t) { pr = Math.max(pr, +/priority="(\d+)"/.exec(t)[1]); });
         var tl = colName(rng.c0) + rng.r0, body;
         if (isText) { var tx = String(rule.v).trim(); body = '<cfRule type="containsText" dxfId="' + dx.id + '" priority="' + (pr + 1) + '" operator="containsText" text="' + escX(tx) + '"><formula>NOT(ISERROR(SEARCH("' + escX(tx.replace(/"/g, '""')) + '",' + tl + ')))</formula></cfRule>'; }
@@ -1013,7 +1013,7 @@
       });
     });
   }
-  // rng 와 겹치는 조건부 서식(전체 규칙 묶음)을 지운다. rng 가 null 이면 이 시트 전체
+  // rng 와 겹치는 조건 색칠(전체 규칙 묶음)을 지운다. rng 가 null 이면 이 시트 전체
   function clearCond(pkg, sheetName, rng) {
     return sheetTarget(pkg, sheetName).then(function (tgt) {
       if (!tgt) return { err: WHY.sheet };
@@ -1023,7 +1023,7 @@
           var sq = attrOf(blk.match(/^<conditionalFormatting\b[^>]*>/)[0], 'sqref') || '';
           if (!rng || sqrefHits(sq, rng)) { n += (blk.match(/<cfRule\b/g) || []).length || 1; return ''; } return blk;
         });
-        if (!n) return { err: '지울 조건부 서식이 없습니다.' };
+        if (!n) return { err: '지울 조건 색칠이 없습니다.' };
         pkg.write(tgt.path, xml); return { ok: true, n: n };
       });
     });

@@ -95,8 +95,8 @@
         btn(g, '아래에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.b, '', true); return { xml: y, newA: r.b + 1, newB: r.b + 1 }; }, '문단을 하나 넣었습니다', true); }, 'big');
         btn(g, '위에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.a, '', false); return { xml: y, newA: r.a, newB: r.a }; }, '문단을 하나 넣었습니다', true); }, 'big');
         btn(g, '문단 지우기', function () { ctx().confirm('고른 문단 ' + (r.b - r.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { op('문단 지우기', function (x) { return ST.deleteParas(x, r.a, r.b); }, function (q) { return q.blanked ? '내용을 비웠습니다(칸·본문의 마지막 문단이라 남겼습니다)' : '지웠습니다(되돌리려면 ↶)'; }); }, { danger: true }); }, 'big danger');
-        btn(g, '구역 나누기(다음 쪽부터)', function () { op('구역 나누기', function (x) { return ST.sectionBreakAfter(x, r.b); }, '구역을 나눴습니다(쪽 설정이 같은 새 구역)', true); }, 'big');
-        btn(g, '링크 넣기', function () { linkSheet(r); }, 'big'); btn(g, '각주 넣기', function () { noteSheet('footnote', r); }, 'big'); btn(g, '미주 넣기', function () { noteSheet('endnote', r); }, 'big');
+        btn(g, '여기부터 쪽 설정 따로', function () { op('쪽 설정 따로', function (x) { return ST.sectionBreakAfter(x, r.b); }, '여기부터 쪽 설정을 따로 바꿀 수 있게 나눴습니다(처음엔 앞과 같은 설정)', true); }, 'big');
+        btn(g, '링크', function () { linkSheet(r); }, 'big'); btn(g, '각주 넣기', function () { noteSheet('footnote', r); }, 'big'); btn(g, '미주 넣기', function () { noteSheet('endnote', r); }, 'big');
         btn(g, '쪽 나누기 넣기', function () { op('쪽 나누기', function (x) { return ST.pageBreakAfter(x, r.b); }, '쪽 나누기를 넣었습니다', true); }, 'big');
         btn(g, '위로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, -1); }, '위로 옮겼습니다'); }, 'big');
         btn(g, '아래로 옮기기', function () { op('문단 옮기기', function (x) { return ST.moveParas(x, r.a, r.b, 1); }, '아래로 옮겼습니다'); }, 'big');
@@ -111,7 +111,7 @@
     function linkSheet(r) {
       var body = el('div', 'sdx'), a = el('input', 'sdx-in'), b = el('input', 'sdx-in'); a.type = b.type = 'text'; a.placeholder = '링크로 보일 글'; b.placeholder = '주소 (https://…)'; a.setAttribute('aria-label', '링크로 보일 글'); b.setAttribute('aria-label', '링크 주소'); b.inputMode = 'url';
       body.appendChild(a); body.appendChild(b); body.appendChild(el('div', 'so-sheet-note', '고른 문단 맨 끝에 링크 글자가 붙습니다. 이미 있는 링크의 글자는 글 고치기에서 고칠 수 있습니다.'));
-      ctx().sheet({ title: '링크 넣기', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '넣기', primary: true, onClick: function () {
+      ctx().sheet({ title: '링크', body: body, wide: true, buttons: [{ label: '닫기' }, { label: '넣기', primary: true, onClick: function () {
         var t = a.value, u = b.value; env.run('링크', function (pkg) { return ST.addLink(pkg, r.b, t, u).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('링크를 넣었습니다', 2600); });
       } }] });
       setTimeout(function () { try { a.focus(); } catch (e) {} }, 300);
@@ -352,7 +352,7 @@
     function rangeBtn() { env.toggleRange(); }
 
     // ---------------- v10.8(3회차): 기호·날짜 · 책갈피 · 그림·표 이름 · 목차 · 메모 · 변경 내용 ----------------
-    var fclip = null;                                    // 「서식 복사」로 담아 둔 서식
+    var fclip = null;                                    // 「이 문단 서식 담기」로 담아 둔 서식
     function mm(tw) { return Math.round(tw / 56.7 * 10) / 10; }
     function symSheet() {
       var r = need(); if (!r) return;
@@ -564,8 +564,8 @@
     }
     function fmtPaintGroup(body) {
       var g9 = group(body, '서식 따라 하기' + (fclip ? ' — 담은 서식: 「' + (fclip.text || '빈 문단') + '」' : ''));
-      btn(g9, '이 문단 서식 복사', function () { var q = need(); if (!q) return; try { fclip = ST.copyFormat(S().xml, q.a); } catch (e) { toast('서식을 읽지 못했습니다.', 3000); return; } toast('서식을 담았습니다 — 입힐 문단(범위)을 고르고 「서식 붙이기」를 누르십시오.', 4200); setTimeout(refillSheet, 30); });
-      btn(g9, '서식 붙이기', function () { var q = need(); if (!q) return; if (!fclip) { toast('먼저 따라 할 문단을 골라 「이 문단 서식 복사」를 누르십시오.', 3600); return; } op('서식 붙이기', function (x) { return ST.pasteFormat(x, q.a, q.b, fclip); }, '서식을 입혔습니다(글 내용은 그대로입니다)', true); }, 'on');
+      btn(g9, '이 문단 서식 담기', function () { var q = need(); if (!q) return; try { fclip = ST.copyFormat(S().xml, q.a); } catch (e) { toast('서식을 읽지 못했습니다.', 3000); return; } toast('서식을 담았습니다 — 입힐 문단(범위)을 고르고 「서식 붙이기」를 누르십시오.', 4200); setTimeout(refillSheet, 30); });
+      btn(g9, '서식 붙이기', function () { var q = need(); if (!q) return; if (!fclip) { toast('먼저 따라 할 문단을 골라 「이 문단 서식 담기」를 누르십시오.', 3600); return; } op('서식 붙이기', function (x) { return ST.pasteFormat(x, q.a, q.b, fclip); }, '서식을 입혔습니다(글 내용은 그대로입니다)', true); }, 'on');
     }
     // ---------------- 도구줄 ----------------
     var ITEMS = {

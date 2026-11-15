@@ -1230,7 +1230,7 @@
     return { kids: kids, rpr: rpr, text: pText(ps).slice(0, 14) };
   }
   function pasteFormat(xml, a, b, clip) {
-    if (!clip) return { err: '먼저 따라 할 문단을 골라 「서식 복사」를 눌러 주십시오.' };
+    if (!clip) return { err: '먼저 따라 할 문단을 골라 「이 문단 서식 담기」를 눌러 주십시오.' };
     return { xml: mapParas(xml, a, b, function (p) {
       var out = withPPr(p, function (old) {
         var inner = '', keep = [];

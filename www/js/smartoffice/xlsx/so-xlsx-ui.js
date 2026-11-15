@@ -242,7 +242,7 @@
       add('붙여넣기(값·수식·서식)', function () { pasteClip('all'); }); add('값만 붙여넣기', function () { pasteClip('values'); });
       add('서식만 붙여넣기', function () { pasteClip('format'); }); add('행과 열 바꿔 붙여넣기', function () { pasteClip('transpose'); });
       body.appendChild(grid);
-      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + (clip ? ' · 복사해 둔 곳: ' + clip.at + (clip.cut ? '(오려두기)' : '') : ' · 복사해 둔 것이 없습니다') + '. 붙이려면 붙일 칸(왼쪽 위 칸)을 누르고 「붙여넣기」를 누릅니다. 다른 시트에 붙이려면 그 시트로 옮겨 붙일 칸을 누른 뒤 같은 단추를 누릅니다(오려두기는 같은 시트 안에서만). 「행과 열 바꿔」는 수식을 계산된 값으로 붙입니다. 수식은 붙이는 자리에 맞게 상대 참조가 따라 움직입니다(「$」가 붙은 칸은 그대로). 같은 시트 안에서만 되고, 합쳐진 칸이나 배열 수식이 걸리면 안내하고 하지 않습니다. 오려두기는 다른 칸의 수식이 그 칸을 쓰면 하지 않습니다. 키보드(DeX)는 Ctrl+C·X·V 입니다.'));
+      body.appendChild(el('div', 'so-sheet-note', '고른 곳: ' + rangeText() + (clip ? ' · 복사해 둔 곳: ' + clip.at + (clip.cut ? '(오려두기)' : '') : ' · 복사해 둔 것이 없습니다') + '. 붙이려면 붙일 칸(왼쪽 위 칸)을 누르고 「붙여넣기」를 누릅니다. 다른 시트에 붙이려면 그 시트로 옮겨 붙일 칸을 누른 뒤 같은 단추를 누릅니다(오려두기는 같은 시트 안에서만). 「행과 열 바꿔」는 수식을 계산된 값으로 붙입니다. 수식은 붙이는 자리에 맞게 상대 참조가 따라 움직입니다(「$」가 붙은 칸은 그대로). 합쳐진 칸이나 배열 수식이 걸리면 안내하고 하지 않습니다. 오려두기는 다른 칸의 수식이 그 칸을 쓰면 하지 않습니다. 키보드(DeX)는 Ctrl+C·X·V 입니다.'));
       S().ctx.sheet({ title: '복사·붙여넣기', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
     U.copySel = copySel; U.pasteClip = pasteClip; U.filterCol = function (k) { filterSheet(k); };
@@ -353,14 +353,14 @@
       body.appendChild(el('div', 'so-sheet-note', '엑셀·한셀에서 열면 스크롤해도 고정한 줄·칸이 머리에 남습니다. 화면 아래의 「첫 행 고정」·「첫 열 고정」은 이 앱 화면에서만 보는 용도이고 파일에는 저장되지 않습니다. 이 시트는 파일에 저장합니다.'));
       S().ctx.sheet({ title: '틀 고정', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
-    // ---------------- 조건부 서식 ----------------
+    // ---------------- 조건 색칠 ----------------
     function swatchRow(parent, list, cur, onPick) {
       var row = el('div', 'sxu-r'); parent.appendChild(row);
       list.forEach(function (c) { var b = el('button', 'sxu-b sw' + (c[1] === cur ? ' on' : ''), ''); b.type = 'button'; b.setAttribute('aria-label', c[0]); var d = el('i'); if (c[1]) d.style.background = c[1]; else d.className = 'none'; b.appendChild(d); b.appendChild(el('span', '', c[0])); b.onclick = function () { onPick(c[1]); [].forEach.call(row.children, function (x) { x.classList.remove('on'); }); b.classList.add('on'); }; row.appendChild(b); });
     }
     function condSheet() {
       var xml = sheetXml(), rules = xml ? ST.readCond(xml) : [], body = el('div', 'sxu'), r1 = rg1(), st = { op: 'ge', bg: '#FFD6E0', color: null };
-      body.appendChild(el('div', 'sxu-l', '이 시트의 조건부 서식 ' + rules.length + '개' + (rules.length ? ': ' + rules.slice(0, 6).map(function (q) { return q.sqref + ' ' + q.text; }).join(' · ') : '')));
+      body.appendChild(el('div', 'sxu-l', '이 시트의 조건 색칠 ' + rules.length + '개' + (rules.length ? ': ' + rules.slice(0, 6).map(function (q) { return q.sqref + ' ' + q.text; }).join(' · ') : '')));
       body.appendChild(el('div', 'sxu-l', '고른 곳(' + rangeText() + ')에 새로 걸기'));
       var ops = el('div', 'sxu-r'), inp = el('input', 'sxu-in wide'); body.appendChild(ops);
       inp.type = 'number'; inp.inputMode = 'decimal'; inp.placeholder = '비교할 숫자'; inp.setAttribute('aria-label', '조건 값');
@@ -369,12 +369,12 @@
       body.appendChild(el('div', 'sxu-l', '칠할 배경색')); swatchRow(body, BG, st.bg, function (v) { st.bg = v; });
       body.appendChild(el('div', 'sxu-l', '글자 색')); swatchRow(body, TXT, st.color, function (v) { st.color = v; });
       var g = el('div', 'sxu-g'), ap = el('button', 'sxu-b big on', '이 조건 걸기'), cl = el('button', 'sxu-b big danger', '고른 곳의 조건 지우기'), cla = el('button', 'sxu-b big danger', '이 시트 조건 모두 지우기'); ap.type = cl.type = cla.type = 'button';
-      ap.onclick = function () { var v = inp.value; S().ctx.closeSheet(); setTimeout(function () { run('조건부 서식', function (pkg) { return ST.addCond(pkg, nameNow(), r1, { op: st.op, v: v, bg: st.bg, color: st.color }); }, '조건부 서식을 걸었습니다(' + rangeText() + ')'); }, 60); };
-      cl.onclick = function () { S().ctx.closeSheet(); setTimeout(function () { run('조건 지우기', function (pkg) { return ST.clearCond(pkg, nameNow(), r1); }, function (x) { return '조건부 서식 ' + x.n + '개를 지웠습니다'; }); }, 60); };
-      cla.onclick = function () { S().ctx.closeSheet(); setTimeout(function () { run('조건 지우기', function (pkg) { return ST.clearCond(pkg, nameNow(), null); }, function (x) { return '조건부 서식 ' + x.n + '개를 지웠습니다'; }); }, 60); };
+      ap.onclick = function () { var v = inp.value; S().ctx.closeSheet(); setTimeout(function () { run('조건 색칠', function (pkg) { return ST.addCond(pkg, nameNow(), r1, { op: st.op, v: v, bg: st.bg, color: st.color }); }, '조건 색칠을 걸었습니다(' + rangeText() + ')'); }, 60); };
+      cl.onclick = function () { S().ctx.closeSheet(); setTimeout(function () { run('조건 지우기', function (pkg) { return ST.clearCond(pkg, nameNow(), r1); }, function (x) { return '조건 색칠 ' + x.n + '개를 지웠습니다'; }); }, 60); };
+      cla.onclick = function () { S().ctx.closeSheet(); setTimeout(function () { run('조건 지우기', function (pkg) { return ST.clearCond(pkg, nameNow(), null); }, function (x) { return '조건 색칠 ' + x.n + '개를 지웠습니다'; }); }, 60); };
       g.appendChild(ap); g.appendChild(cl); g.appendChild(cla); body.appendChild(g);
       body.appendChild(el('div', 'so-sheet-note', '값이 조건에 맞는 칸을 엑셀에서 열면 칠해서 보여 줍니다(이 앱의 보기 화면에는 색이 나오지 않을 수 있습니다). 숫자 칸은 숫자 비교, 글자 칸은 「글자 포함」을 씁니다.'));
-      S().ctx.sheet({ title: '조건부 서식', body: body, buttons: [{ label: '닫기' }], wide: true });
+      S().ctx.sheet({ title: '조건 색칠', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
     // ---------------- 입력 목록(데이터 유효성) ----------------
     function validSheet() {

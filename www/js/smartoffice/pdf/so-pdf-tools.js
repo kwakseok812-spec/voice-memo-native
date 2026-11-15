@@ -520,7 +520,7 @@
         ctx.busy(null); var s = r.stat, lv = LEVELS[level];
         if (r.out.length >= r.before * 0.97) { ctx.toast('더 줄일 곳이 거의 없습니다(' + kb(r.before) + ' → ' + kb(r.out.length) + '). 문서는 그대로입니다.', 4200); return; }
         var pct = Math.round((1 - r.out.length / r.before) * 100);
-        ctx.confirm('용량을 ' + pct + '% 줄였습니다', kb(r.before) + ' → ' + kb(r.out.length) + '\n단계: ' + lv.name + '(긴 변 ' + lv.side + '픽셀 이하, JPEG 화질 ' + Math.round(lv.q * 100) + '%)\n줄인 그림 ' + s.done + '개 / 전체 큰 그림 ' + s.imgs + '개' + (s.qpdf ? '\n구조 압축도 함께 했습니다.' : '') + '\n\n이 결과를 문서에 적용할까요? 적용 뒤에도 ↶ 로 되돌릴 수 있습니다.', '적용', function () {
+        ctx.confirm('용량을 ' + pct + '% 줄였습니다', kb(r.before) + ' → ' + kb(r.out.length) + '\n줄이는 정도: ' + lv.name + '\n줄인 그림 ' + s.done + '개 / 전체 큰 그림 ' + s.imgs + '개' + (s.qpdf ? '\n구조 압축도 함께 했습니다.' : '') + '\n\n이 결과를 문서에 적용할까요? 적용 뒤에도 ↶ 로 되돌릴 수 있습니다.', '적용', function () {
           ctx.busy('적용하는 중…'); api.applyBytes(r.out, '용량 줄이기').then(function () { ctx.busy(null); ctx.toast('적용했습니다. 저장은 「사본 저장」으로 하십시오.', 3200); }).catch(function (e) { ctx.busy(null); ctx.toast('적용하지 못했습니다 — ' + ((e && e.message) || e), 4200); });
         }, { cancelLabel: '적용 안 함' });
       }).catch(function (e) { ctx.busy(null); ctx.toast('용량을 줄이지 못했습니다 — ' + ((e && e.message) || e) + ' 문서는 그대로입니다.', 5200); });

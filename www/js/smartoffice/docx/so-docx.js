@@ -1,7 +1,7 @@
 /* so-docx.js — S-Office 워드(.docx) 보기 + 글자 고치기.
  * 출처: docx-preview 0.4.1 (Apache-2.0, https://github.com/VolodymyrBaydalka/docxjs, Volodymyr Baydalka) — 보기
  *      JSZip 3.10.2 (MIT 선택, https://github.com/Stuk/jszip) — 압축 풀기·묶기
- *      고치는 방식(고친 문단만 원본 XML 에 끼워 넣고 나머지는 그대로 둔다)의 철학은 오픈소스 이음오피스 docx-engine(Apache-2.0)에서 배웠고,
+ *      고치는 방식(고친 문단만 원본 XML 에 끼워 넣고 나머지는 그대로 둔다)의 철학은 오픈소스(Apache-2.0) 워드 편집 엔진에서 배웠고(출처·고지는 NOTICE.txt),
  *      코드는 이 앱에서 새로 썼다(소스를 복사하지 않음).
  * 고치기: 본문·표 칸 안의 "글자만 있는" 문단의 글을 고친다. 고친 글자 조각만 해당 <w:t> 에 넣고 나머지 XML·그림·스타일·번호·머리글·바닥글·각주는 그대로 둔다.
  *         그림/도형/텍스트상자/필드/링크/각주 표시/변경 추적이 든 문단과 암호·보호 문서는 보기만 된다. .doc(옛 형식)는 열 수 없어 ①로 보낸다. */
@@ -716,6 +716,9 @@
   function structUndo() {
     if (!structOn() || S.busyRun) return;
     flushBytes().then(function (cur) {
+      if (editCount() > 0) {              // 고치던 글(아직 문서에 합치지 않은 것)이 있으면 그것부터 되돌린다. ↷ 로 다시 할 수 있다(PPT 와 같은 방식)
+        return curBytes().then(function (base) { S.redo.push(cur); note('글 고친 것을 모두 되돌렸습니다(↷ 로 다시 할 수 있습니다).', 2600); return swapState(base, '되돌리는 중…'); });
+      }
       if (!S.undo.length) { note('되돌릴 것이 없습니다.', 1800); return; }
       var prev = S.undo.pop(); S.redo.push(cur); S.pkgOps = Math.max(0, S.pkgOps - 1); return swapState(prev, '되돌리는 중…');
     });

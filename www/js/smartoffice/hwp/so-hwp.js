@@ -2,12 +2,12 @@
  * so-hwp.js — S-Office 한글(HWP·HWPX) 모듈
  * ----------------------------------------------------------------------------
  * 부품 파일은 www/vendor/so/hwp/ 에 있다(앱 포함).
- *   vendor/so/hwp/studio/   rhwp-studio 편집 화면(오픈소스 이음오피스 설치본에서 가져온 빌드: 패치한 rhwp WASM 포함, AI 플러그인 뺌)
+ *   vendor/so/hwp/studio/   rhwp-studio 편집 화면(오픈소스 Apache-2.0 설치본에서 가져온 빌드: 패치한 rhwp WASM 포함, AI 플러그인 뺌 — 출처·고지는 NOTICE.txt)
  *   vendor/so/hwp/sdk/      @rhwp/editor 0.8.7 (index.js · transport.js · document-agent-contract.js) — MIT
  *   vendor/so/hwp/studio/fonts/  폰에 없는 PC 글꼴의 대체 글꼴(Pretendard·Noto Serif KR 일부 글자, OFL)
  *
- * 출처: rhwp(MIT, Copyright (c) 2025-2026 Edward Kim) / 이음오피스(IeumOffice, Apache-2.0)와 GenOffice(Apache-2.0)의
- *       일부 빌드를 사용했다. 정보 화면과 NOTICE.txt 참고. AI 플러그인은 넣지 않았다.
+ * 출처: rhwp(MIT, Copyright (c) 2025-2026 Edward Kim) / 오픈소스(Apache-2.0) 편집 화면 번들의
+ *       일부 빌드를 사용했다. 정보 화면과 NOTICE.txt 에 이름·고지를 적었다. AI 플러그인은 넣지 않았다.
  *
  * 동작
  *   · 열면 「보기 상태」: 화면을 읽기만 한다(글자 칸이 키보드를 띄우지 않게 막음). 한글 입력 실기기 확인 전까지의 안전장치.
