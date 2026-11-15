@@ -118,8 +118,21 @@
   var SUB_CODE = { sum: 9, count: 3, average: 1, max: 4, min: 5 }, SUB_LABEL = { sum: '합계', count: '개수', average: '평균', max: '최대', min: '최소' };
   function calcFn(fn, nums, cnt) { if (fn === 'count') return cnt; if (!nums.length) return fn === 'sum' ? 0 : null; var s = 0, i; for (i = 0; i < nums.length; i++) s += nums[i]; return fn === 'sum' ? s : fn === 'average' ? s / nums.length : fn === 'max' ? Math.max.apply(null, nums) : Math.min.apply(null, nums); }
   function hasSubtotal(xml) { return /<f\b[^>]*>\s*SUBTOTAL\(/i.test(xml); }
+  // 이 범위가 어느 피벗 표의 원본이면 부분합 줄을 끼울 수 없다(엑셀이 「원본에 자동 부분합이 있어」 피벗을 못 만든다)
+  function pivotSourceHit(pkg, sheet, rg) {
+    var cps = pkg.list().filter(function (p) { return /^xl\/pivotCache\/pivotCacheDefinition\d*\.xml$/.test(p); });
+    return Promise.all(cps.map(function (cp) {
+      return pkg.read(cp).then(function (cx) {
+        var m = cx && /<worksheetSource\b[^>]*>/.exec(cx); if (!m) return false; var sh = attr(m[0], 'sheet'), rf = parseRange(attr(m[0], 'ref'));
+        return !!(sh != null && rf && XX().sameName(un(sh), sheet) && !(rf.r1 < rg.r0 || rf.r0 > rg.r1 || rf.c1 < rg.c0 || rf.c0 > rg.c1));
+      });
+    })).then(function (r) { return r.some(Boolean); });
+  }
   // o: { rg:{r0,c0,r1,c1}(1부터, 맨 윗줄=이름 줄), groupCol(1부터), fn, cols:[열 번호…], grand:true }
   function addSubtotals(pkg, sheet, o) {
+    return pivotSourceHit(pkg, sheet, o.rg).then(function (hit) { return hit ? { err: '이 표는 피벗 표의 원본 자료입니다. 부분합 줄을 끼우면 피벗 표가 계산하지 못하게 되므로 하지 않습니다. 피벗 표를 지우거나, 표를 다른 시트에 복사해서 부분합을 넣어 주십시오.' } : addSubtotals2(pkg, sheet, o); });
+  }
+  function addSubtotals2(pkg, sheet, o) {
     var rg = o.rg, fn = o.fn || 'sum', code = SUB_CODE[fn];
     if (!code) return Promise.resolve({ err: '알 수 없는 계산입니다.' });
     if (!o.cols || !o.cols.length) return Promise.resolve({ err: '소계를 낼 열을 하나 이상 골라 주십시오.' });

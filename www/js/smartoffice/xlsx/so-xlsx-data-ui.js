@@ -171,7 +171,7 @@
         if (t.err) { toast(t.err, 5000); return; }
         T = t; FF = PV().buildFields(T); if (FF.err) { toast(FF.err, 5200); return; }
         if (o.mode === 'new') {      // 처음 모양 제안: 글자 열 하나를 행, 숫자 열 하나를 값
-          var tx = -1, nu = -1; FF.F.forEach(function (f) { if (tx < 0 && f.nStr >= f.nNum && f.items.length <= 30) tx = f.idx; if (nu < 0 && f.nNum > f.nStr && f.idx !== tx) nu = f.idx; });
+          var tx = -1, nu = -1; FF.F.forEach(function (f) { if (tx < 0 && f.nStr >= f.nNum && f.items.length <= 30) tx = f.idx; }); FF.F.forEach(function (f) { if (f.nNum > f.nStr && f.idx !== tx && (nu < 0 || f.items.length > FF.F[nu].items.length)) nu = f.idx; });
           if (tx >= 0) cfg.rows = [tx]; if (nu >= 0) cfg.data = [{ f: nu, fn: 'sum' }];
         }
         S().ctx.sheet({ title: o.mode === 'new' ? '새 피벗 표' : '피벗 표 고치기', body: body, wide: true, buttons: [{ label: '닫기' }, { label: o.mode === 'new' ? '피벗 표 만들기' : '적용', primary: true, onClick: function () { return apply(); } }] });
@@ -369,7 +369,7 @@
         var seen = {}, prev = null, bad = false; for (r = reg.r0 + 1; r <= reg.r1; r++) { var cv = cellAt(ws, r, st.group), k2 = cv && cv.v != null ? String(cv.v) : ''; if (k2 !== prev) { if (seen[k2]) bad = true; seen[k2] = 1; prev = k2; } }
         if (bad) { toast('기준 열의 같은 값이 떨어져 있습니다. 먼저 「정렬」에서 기준 열을 정렬해 주십시오.', 5200); return; }
         var spec = { rg: { r0: reg.r0 + 1, c0: reg.c0 + 1, r1: reg.r1 + 1, c1: reg.c1 + 1 }, groupCol: st.group + 1, fn: st.fn, cols: cols.map(function (q) { return q + 1; }), grand: true };
-        S().ctx.closeSheet(); setTimeout(function () { run('부분합', function (pkg) { return DT().addSubtotals(pkg, nameNow(), spec); }, function (x) { return '부분합을 넣었습니다(그룹 ' + x.groups + '개 · 소계·총합계 ' + x.rows + '줄). 왼쪽 + − 단추로 접고 펼 수 있습니다(되돌리려면 ↶)'; }); }, 60);
+        S().ctx.closeSheet(); setTimeout(function () { run('부분합', function (pkg) { return DT().addSubtotals(pkg, nameNow(), spec); }, function (x) { return '부분합을 넣었습니다(그룹 ' + x.groups + '개 · 소계·총합계 ' + x.rows + '줄). 엑셀에서 열면 왼쪽 + − 단추로 소계만 접어 볼 수 있습니다(되돌리려면 ↶)'; }); }, 60);
       }, 'on');
       bigBtn(g, '이 범위의 부분합 지우기', function () {
         S().ctx.closeSheet(); setTimeout(function () { S().ctx.confirm('부분합을 지울까요?', '소계·총합계 줄(SUBTOTAL)을 지우고 묶기를 풉니다. 원래 자료 줄은 그대로 남고, ↶ 로 되돌릴 수 있습니다.', '지우기', function () { var rr = { r0: reg.r0 + 1, c0: reg.c0 + 1, r1: reg.r1 + 1, c1: reg.c1 + 1 }; run('부분합 지우기', function (pkg) { return DT().removeSubtotals(pkg, nameNow(), rr); }, function (x) { return '소계 ' + x.removed + '줄을 지웠습니다(되돌리려면 ↶)'; }); }, { cancelLabel: '취소' }); }, 60);

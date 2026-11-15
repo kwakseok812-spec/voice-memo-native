@@ -114,7 +114,7 @@
     var f = F[d.f], fn = d.fn || 'sum', i, s = 0, n = 0, cnt = 0, mx = -Infinity, mn = Infinity;
     for (i = 0; i < recs.length; i++) { var it = f.raw[recs[i]]; if (it.t !== 'm') cnt++; if (it.t === 'n') { n++; s += it.v; if (it.v > mx) mx = it.v; if (it.v < mn) mn = it.v; } }
     if (fn === 'count') return cnt;
-    if (fn === 'sum') return s;
+    if (fn === 'sum') return (!n && !cnt) ? null : s;          // 빈 칸뿐인 묶음은 엑셀처럼 빈 칸으로
     if (!n) return null;
     if (fn === 'average') return s / n; if (fn === 'max') return mx; if (fn === 'min') return mn;
     return s;

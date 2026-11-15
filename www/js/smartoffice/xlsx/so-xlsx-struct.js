@@ -261,6 +261,38 @@
     sheet: '이 시트를 찾지 못했습니다.',
     range: '수식 계산 중 범위를 벗어나는 칸이 생겨서 할 수 없습니다.'
   };
+  // 줄·칸을 넣고 뺄 때 스파크라인(xm:f 데이터 범위 · xm:sqref 놓인 칸)을 같이 옮긴다. 지워지는 칸의 스파크라인은 함께 없앤다
+  function shiftSparkXml(xml, isTgt, tgtName, axis, at, n, mode) {
+    if (xml.indexOf('x14:sparkline>') < 0) return { xml: xml };
+    var err = null, out = xml.replace(/<x14:sparkline>([\s\S]*?)<\/x14:sparkline>/g, function (all, inner) {
+      if (err) return all;
+      var f = /<xm:f>([^<]*)<\/xm:f>/.exec(inner), q = /<xm:sqref>([^<]*)<\/xm:sqref>/.exec(inner); if (!f || !q) return all;
+      var ns = q[1];
+      if (isTgt) { var r = shiftRangeText(q[1], axis, at, n, mode); if (!r) return ''; ns = r; }
+      var sr = shiftRefsInFormula(unescX(f[1]), '', tgtName, axis, at, n, mode);
+      if (sr.err) { if (sr.err === 'deleted') return ''; err = sr.err; return all; }
+      return '<x14:sparkline><xm:f>' + escX(sr.f) + '</xm:f><xm:sqref>' + ns + '</xm:sqref></x14:sparkline>';
+    });
+    if (err) return { err: err };
+    out = out.replace(/<x14:sparklineGroup\b[^>]*>[\s\S]*?<\/x14:sparklineGroup>/g, function (g) { return g.indexOf('<x14:sparkline>') < 0 ? '' : g; });
+    if (out.indexOf('<x14:sparklineGroup') < 0) out = out.replace(/<ext\b[^>]*uri="\{05C60535-1F16-4fd2-B633-F4F36F0B64E0\}"[^>]*>[\s\S]*?<\/ext>/, '').replace(/<extLst>\s*<\/extLst>/, '');
+    return { xml: out };
+  }
+  // 피벗 표의 원본 범위(캐시 정의의 worksheetSource)도 줄·칸에 맞춰 옮긴다. 원본이 통째로 지워지면 멈춘다. 돌려주는 값: Promise<오류 글자|null>
+  function shiftPivotSources(pkg, tgtName, axis, at, n, mode, apply) {
+    var cps = pkg.list().filter(function (p) { return /^xl\/pivotCache\/pivotCacheDefinition\d*\.xml$/.test(p); });
+    return Promise.all(cps.map(function (cp) {
+      return pkg.read(cp).then(function (cx) {
+        if (!cx) return null; var m = /<worksheetSource\b[^>]*>/.exec(cx); if (!m) return null;
+        var sh = attrOf(m[0], 'sheet'), rf = attrOf(m[0], 'ref'); if (sh == null || rf == null || !sameName(unescX(sh), tgtName)) return null;
+        var r = shiftRangeText(rf, axis, at, n, mode), om = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rf), nm2 = r && /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(r);
+        var gone = !r || !nm2 || (nm2 && (+nm2[4] - +nm2[2] < 1)) || (om && mode === 'del' && axis === 'row' && at <= +om[2] && at + n - 1 >= +om[2]);      // 원본이 지워지거나 이름 줄이 사라지거나 자료 줄이 안 남으면
+        if (gone) return '피벗 표의 원본 자료(이름 줄 포함)가 지워지게 됩니다. 피벗 표를 먼저 지워 주십시오.';
+        if (apply && r !== rf) pkg.write(cp, cx.replace(m[0], setAttr(m[0], 'ref', r)));
+        return null;
+      });
+    })).then(function (res) { var e = null; res.forEach(function (x) { if (x && !e) e = x; }); return e; });
+  }
   function lineEdit(pkg, sheetName, axis, at, n, mode) {
     return wbInfo(pkg).then(function (info) {
       if (!info) return { err: WHY.sheet };
@@ -363,11 +395,20 @@
         }
         xml = setDimension(xml, dimensionOf(parseSheet(xml)));
         tp.xml = xml;
-        plan.forEach(function (p) { pkg.write(p.s.path, p.xml); });
-        cplan.forEach(function (c) { pkg.write(c.p, c.xml); });
-        if (dpath) return pkg.read(dpath).then(function (dx) { if (dx) pkg.write(dpath, shiftAnchors(dx, axis, at, n)); pkg.write('xl/workbook.xml', wbx); return { ok: true }; });
-        pkg.write('xl/workbook.xml', wbx);
-        return { ok: true };
+        // v10.9 5회차: 스파크라인(칸 주소)과 피벗 표 원본 범위도 같이 옮긴다
+        var spErr = null;
+        plan.forEach(function (p) { if (spErr) return; var r = shiftSparkXml(p.xml, p.s === tgt, tgt.name, axis, at, n, mode); if (r.err) spErr = r.err; else p.xml = r.xml; });
+        if (spErr) return { err: WHY[spErr] || WHY.shared, why: spErr };
+        return shiftPivotSources(pkg, tgt.name, axis, at, n, mode, false).then(function (pe0) {         // 먼저 검사만(하나라도 막히면 아무것도 쓰지 않는다)
+          if (pe0) return { err: pe0, why: 'pivotsrc' };
+          plan.forEach(function (p) { pkg.write(p.s.path, p.xml); });
+          cplan.forEach(function (c) { pkg.write(c.p, c.xml); });
+          return shiftPivotSources(pkg, tgt.name, axis, at, n, mode, true).then(function () {
+            if (dpath) return pkg.read(dpath).then(function (dx) { if (dx) pkg.write(dpath, shiftAnchors(dx, axis, at, n)); pkg.write('xl/workbook.xml', wbx); return { ok: true }; });
+            pkg.write('xl/workbook.xml', wbx);
+            return { ok: true };
+          });
+        });
       });
     });
     function mapRefsHit(t) { return new RegExp(REF_SRC).test(t.replace(/"(?:[^"]|"")*"/g, '""')); }
