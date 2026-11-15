@@ -228,8 +228,12 @@
 
   // document.xml 문자열 전체를 분석: { paras:[{s,e,a,editable,reason,text}], global: 사유|null }
   function analyzeDoc(xml, settingsXml) {
-    var g = null, revOnly = false;
-    if (/<w:(ins|del|moveFrom|moveTo)[\s>\/]/.test(xml) || (settingsXml && /<w:trackRevisions[\s\/>]/.test(settingsXml))) { if (LOOSE && window.SODocxStruct && window.SODocxUI) revOnly = true; else g = '변경 추적(고친 흔적)이 있는 문서라 보기만 됩니다.'; }   // 편집 보강이 켜져 있으면 「검토」(수락·거절)만 열어 준다
+    var g = null, revOnly = false, track = false;
+    var hasRev = /<w:(ins|del|moveFrom|moveTo)[\s>\/]/.test(xml), trackOn = !!(settingsXml && /<w:trackRevisions\b(?![^>]*w:val="(?:0|false|off)")/.test(settingsXml));
+    if (hasRev || trackOn) {
+      if (LOOSE && window.SODocxStruct && window.SODocxUI) { if (trackOn && window.SODocxTrack) track = true; else revOnly = true; }   // 변경 기록이 켜진 문서는 글 고치기를 「삽입·삭제」로 남기며 연다(v10.9). 켜지 않았는데 변경만 든 문서는 「검토」(수락·거절)만 열어 준다
+      else g = '변경 추적(고친 흔적)이 있는 문서라 보기만 됩니다.';
+    }
     else if (settingsXml && /<w:documentProtection[^>]*w:enforcement\s*=\s*["'](1|true|on)["']/.test(settingsXml)) g = '편집이 제한(보호)된 문서라 보기만 됩니다.';
     else if (/<w:altChunk[\s\/>]/.test(xml)) g = '다른 문서가 끼워진(altChunk) 문서라 보기만 됩니다.';
     var raw = scanParagraphs(xml), paras = [];
@@ -241,7 +245,7 @@
       if (revOnly && !reason) reason = 'revonly';
       paras.push({ s: p.s, e: p.e, a: a, text: a.text, norm: norm(a.text), reason: reason, editable: !reason, mixed: mixedFormat(a) });
     });
-    return { paras: paras, global: g, revOnly: revOnly };
+    return { paras: paras, global: g, revOnly: revOnly, track: track };
   }
   function mixedFormat(a) { var seen = {}, n = 0; a.runs.forEach(function (r) { if (r.text && !seen[r.rpr]) { seen[r.rpr] = 1; n++; } }); return n > 1; }
 
@@ -568,12 +572,14 @@
     var noteT2 = [];
     if (para.mixed) noteT2.push('한 문단에 글자 모양이 섞여 있습니다. 바꾼 부분만 그 자리의 글자 모양으로 들어가고 나머지 글자는 그대로입니다.');
     noteT2.push('줄을 바꾸면 줄 나눔으로 들어갑니다.');
+    if (S.track) noteT2.push('변경 기록이 켜져 있어 「적용」하면 고친 곳이 삽입·삭제 표시로 남습니다.');
     sheet.querySelector('.so-docx-sh-n').textContent = noteT2.join(' ');
     var ta = sheet.querySelector('textarea'); ta.value = cur;
     var composing = false;                                               // 한글 조합 중에는 값이 아직 확정 전이므로, 단추를 눌러도 조합이 끝난 뒤에 읽는다
     ta.addEventListener('compositionstart', function () { composing = true; });
     ta.addEventListener('compositionend', function () { composing = false; });
     function commit() {
+      if (S.track) return;                                 // 변경 기록이 켜진 문서: 「적용」을 눌러야 삽입·삭제로 남긴다(아래 act)
       var v = ta.value.replace(/\r\n?/g, '\n');
       if (v === para.text) delete S.edits[xi]; else S.edits[xi] = v;
       setRendered(pEl, (xi in S.edits) ? v : null);
@@ -585,6 +591,13 @@
       if (!sheet) return;
       if (a === 'cancel') { closeSheet(); return; }
       if (a === 'revert') { delete S.edits[xi]; setRendered(pEl, null); afterChange(); closeSheet(); return; }
+      if (S.track) {                                       // 변경 기록: 바뀐 글을 문서에 「삽입·삭제」 표시로 넣는다(되돌리기 ↶ 가능)
+        var tv = ta.value.replace(/\r\n?/g, '\n'), tnx = a === 'ok' ? -1 : neighbor(xi, a === 'next' ? 1 : -1);
+        closeSheet();
+        if (tv === para.text) { if (tnx >= 0) { var tq = S.doc.paras[tnx].r; openSheet(tq, tnx); } return; }
+        trackCommit(xi, tv).then(function (done) { if (done && tnx >= 0 && S && S.doc && S.doc.paras[tnx] && S.doc.paras[tnx].r) openSheet(S.doc.paras[tnx].r, tnx); });
+        return;
+      }
       commit();
       if (a === 'ok') { closeSheet(); return; }
       var nx = neighbor(xi, a === 'next' ? 1 : -1);
@@ -745,16 +758,44 @@
   }
   // 글만 있는(고칠 수 있는) 문단에서 찾아 바꾸기 — 문단 글 고치기(S.edits)와 같은 길로 반영한다
   function replaceAll(q, r) {
-    var n = 0, skip = 0;
+    var n = 0, skip = 0, tmap = {};
     S.doc.paras.forEach(function (p, i) {
       var t = (i in S.edits) ? S.edits[i] : p.text; if (t.indexOf(q) < 0) return;
       if (!p.editable || !p.r) { skip++; return; }
-      var nt = t.split(q).join(r); if (nt === p.text) delete S.edits[i]; else S.edits[i] = nt;
+      var nt = t.split(q).join(r);
+      if (S.track) { if (nt !== p.text) { tmap[i] = nt; n++; } return; }
+      if (nt === p.text) delete S.edits[i]; else S.edits[i] = nt;
       setRendered(p.r, (i in S.edits) ? nt : null); n++;
     });
-    if (n) afterChange();
+    if (S.track && n) trackApply(tmap);
+    if (n && !S.track) afterChange();
     return { n: n, skip: skip };
   }
+  // ---- 변경 기록(O-0861 v10.9): 글 고치기를 문서에 삽입·삭제 표시로 직접 넣는다. 바로 반영하고 ↶ 로 되돌린다
+  function trackCommit(xi, text) {
+    return structRun('글 고치기(변경 기록)', function (pkg) { return pkg.read('word/document.xml').then(function (x) {
+      var r = window.SODocxTrack.trackParaText(x, xi, text); if (r.err) return r; pkg.write('word/document.xml', r.xml); return {};
+    }); }, function (r) { if (r && r.err) ctxRef.toast(r.err, 5200); else note('고친 곳을 변경 기록(삽입·삭제)으로 남겼습니다. ↶ 로 되돌릴 수 있습니다.', 3200); });
+  }
+  function trackDeleteSel(a, b) { return structRun('문단 지우기(변경 기록)', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxTrack.trackDeleteParas(x, a, b); if (r.err) return r; pkg.write('word/document.xml', r.xml); return {}; }); }, function (r) { if (r && r.err) note(r.err, 4200); else { selSet(null); note('지운 문단을 변경 기록(삭제 표시)으로 남겼습니다.', 3000); } }); }
+  function trackApply(map) {                           // { 문단번호: 새 글 } 여러 문단을 한꺼번에
+    return structRun('글 고치기(변경 기록)', function (pkg) { return pkg.read('word/document.xml').then(function (x) {
+      var r = window.SODocxTrack.trackParaTexts(x, map); pkg.write('word/document.xml', r.xml); return { done: r.done, skipped: r.skipped };
+    }); }, function (r) { if (r && r.err) ctxRef.toast(r.err, 5200); else note('변경 기록으로 ' + (r.done || 0) + '개 문단을 고쳤습니다' + (r.skipped ? ' (특수한 문단 ' + r.skipped + '개는 건너뜀)' : '') + '. ↶ 로 되돌릴 수 있습니다.', 3600); });
+  }
+  // 글 고침 여러 개를 한꺼번에 반영(맞춤법 바꾸기 등): map = { 문단번호: 새 글 } → { n }
+  function applyTexts(map) {
+    var n = 0; Object.keys(map).forEach(function (k) { var p = S.doc.paras[+k]; if (p && p.editable && p.r) n++; else delete map[k]; });
+    if (!n) return { n: 0 };
+    if (S.track) { trackApply(map); return { n: n }; }
+    Object.keys(map).forEach(function (k) { var i = +k, p = S.doc.paras[i], nt = map[k]; if (nt === p.text) delete S.edits[i]; else S.edits[i] = nt; setRendered(p.r, (i in S.edits) ? nt : null); });
+    afterChange(); return { n: n };
+  }
+  function pageOf(xi) {                               // 문단이 화면에서 몇 쪽에 있는지(화면 기준)
+    var p = S && S.doc && S.doc.paras[xi]; if (!p || !p.r || !pageEls.length) return 0;
+    for (var i = 0; i < pageEls.length; i++) if (pageEls[i].contains(p.r)) return i + 1; return 0;
+  }
+  function paraText(xi) { var p = S && S.doc && S.doc.paras[xi]; if (!p) return null; return (xi in S.edits) ? S.edits[xi] : p.text; }
   function mountBar() {
     if (!structOn()) return;
     if (!ui) ui = window.SODocxUI.create({
@@ -763,7 +804,9 @@
       readNotes: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readNotes(rwPkg(z), kind); }); },
       readHF: function (kind) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return window.SODocxStruct.readHF(rwPkg(z), kind); }); },
       peek: function (fn) { return flushBytes().then(function (b) { return window.JSZip.loadAsync(b.slice()); }).then(function (z) { return fn(rwPkg(z)); }); },
-      replaceAll: replaceAll, toggleRange: function () { S.rangeMode = !S.rangeMode; if (ui) ui.refresh(); }
+      replaceAll: replaceAll, applyTexts: applyTexts, pageOf: pageOf, paraText: paraText, track: function () { return !!(S && S.track); }, trackDelete: function (a, b) { return structRun('문단 지우기(변경 기록)', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxTrack.trackDeleteParas(x, a, b); if (r.err) return r; pkg.write('word/document.xml', r.xml); return { partial: r.partial }; }); }, function (r) { if (r && r.err) ctxRef.toast(r.err, 5200); else note('지운 문단을 변경 기록(삭제 표시)으로 남겼습니다. ↶ 로 되돌릴 수 있습니다.', 3200); }); },
+      trackInsert: function (xi, after) { return structRun('문단 넣기(변경 기록)', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxTrack.trackInsertPara(x, xi, '', after); if (r.err) return r; pkg.write('word/document.xml', r.xml); return { newXi: r.newXi }; }); }, function (r) { if (r && r.err) ctxRef.toast(r.err, 5200); else { note('새 문단을 변경 기록(삽입 표시)으로 넣었습니다.', 2600); if (r && r.newXi != null) selSet(r.newXi, r.newXi); } }); },
+      toggleRange: function () { S.rangeMode = !S.rangeMode; if (ui) ui.refresh(); }
     });
     if (!bar) { bar = document.createElement('div'); bar.className = 'sdx-bar'; (ctxRef.body.parentNode || document.body).appendChild(bar); }
     bar.style.display = ''; ui.mount(bar); ctxRef.body.classList.add('sdx-has-bar'); bindKeys();
@@ -789,7 +832,7 @@
         }
         return;
       }
-      if (k === 'Delete' && q) { e.preventDefault(); ctxRef.confirm('고른 문단 ' + (q.b - q.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { structRun('문단 지우기', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxStruct.deleteParas(x, q.a, q.b); if (r.err) return r; pkg.write('word/document.xml', r.xml); return {}; }); }, function (r) { if (r && r.err) note(r.err, 4200); else selSet(null); }); }, { danger: true }); }
+      if (k === 'Delete' && q) { e.preventDefault(); ctxRef.confirm('고른 문단 ' + (q.b - q.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { if (S.track) { trackDeleteSel(q.a, q.b); return; } structRun('문단 지우기', function (pkg) { return pkg.read('word/document.xml').then(function (x) { var r = window.SODocxStruct.deleteParas(x, q.a, q.b); if (r.err) return r; pkg.write('word/document.xml', r.xml); return {}; }); }, function (r) { if (r && r.err) note(r.err, 4200); else selSet(null); }); }, { danger: true }); }
       else if (k === 'Escape' && q) selSet(null);
       else if ((k === 'ArrowDown' || k === 'ArrowUp') && q && S.doc) { e.preventDefault(); var n = Math.max(0, Math.min(S.doc.paras.length - 1, q.a + (k === 'ArrowDown' ? 1 : -1))); selSet(n); }
     };
@@ -899,11 +942,11 @@
           if (p.r) { p.r._soX = i; if (p.editable) { p.r.classList.add('so-docx-ok'); nEdit++; } }
         });
         S.nEdit = nEdit; S.exact = al.exact;
-        S.revOnly = !!doc.revOnly;
+        S.revOnly = !!doc.revOnly; S.track = !!doc.track;
         if (doc.global) S.disabled = doc.global;
         else if (!nEdit && !structOn()) S.disabled = '글을 고칠 수 있는 문단이 없습니다.';
         S.ready = true;
-        paintCharts();
+        paintCharts(); paintShapes();
       });
     });
   }
@@ -924,6 +967,35 @@
         d.appendChild(o);
       });
     }).catch(function () { /* 그림을 못 얹어도 문서는 그대로다 */ });
+  }
+
+  // v10.9: 미리보기 부품은 도형(wps)을 못 그려서 통째로 빠뜨린다 → 같은 값으로 우리가 그려 그 문단 바로 아래에 대략의 모양으로 얹는다(앱 화면 안에서만, 파일에는 안 들어감)
+  function paintShapes() {
+    if (!S || !S.doc || !S.xml || !structOn() || !window.SODocxMore || !wrap) return;
+    var list; try { list = window.SODocxMore.listShapes(S.xml); } catch (e) { return; }
+    [].forEach.call(wrap.querySelectorAll('.so-docx-shapes, .so-docx-shape-in'), function (e) { e.parentNode.removeChild(e); });
+    var by = {}; list.forEach(function (it) { if (it.xi >= 0) (by[it.xi] = by[it.xi] || []).push(it); });
+    var ps = null; try { ps = window.SODocxStruct.paras(S.xml); } catch (e) {}
+    Object.keys(by).forEach(function (k) {
+      var q = S.doc.paras[+k], p = q && q.r; if (!p || !p.parentNode) return;
+      // 미리보기 부품은 도형 자리에 빈 상자(inline-block)만 남긴다 → 문단 안 그림(도형·차트)이 나오는 차례와 같은 차례의 상자 안에 그린다
+      var seq = [], divs = [].slice.call(p.querySelectorAll('div[style*="inline-block"]'));
+      if (ps && ps[+k]) { (S.xml.slice(ps[+k].s, ps[+k].e).match(/<w:drawing>[\s\S]*?<\/w:drawing>/g) || []).forEach(function (d) { if (/wordprocessingShape/.test(d)) seq.push('s'); else if (/drawingml\/2006\/chart/.test(d)) seq.push('c'); }); }
+      var inside = seq.length === divs.length && by[k].length === seq.filter(function (c) { return c === 's'; }).length, si = 0;
+      if (inside) {
+        seq.forEach(function (c, i) {
+          if (c !== 's') return; var it = by[k][si++], o = document.createElement('div'); o.className = 'so-docx-shape-in'; o.style.cssText = 'position:absolute;left:0;top:0;pointer-events:auto'; o.innerHTML = window.SODocxMore.shapeHtml(it.spec, 96 / 25.4);
+          o.addEventListener('click', function () { selSet(+k, +k); }); divs[i].appendChild(o);
+        });
+        return;
+      }
+      var box = document.createElement('div'); box.className = 'so-docx-shapes'; box.setAttribute('contenteditable', 'false'); box.setAttribute('aria-label', '도형(대략의 모양)');
+      by[k].forEach(function (it) {
+        var d = document.createElement('div'); d.className = 'so-docx-shape'; d.style.textAlign = it.spec.layout === 'inline' ? 'left' : (it.spec.align || 'center'); d.innerHTML = window.SODocxMore.shapeHtml(it.spec, 96 / 25.4);
+        d.addEventListener('click', function () { selSet(+k, +k); }); box.appendChild(d);
+      });
+      p.parentNode.insertBefore(box, p.nextSibling);
+    });
   }
 
   // ---- 찾기: 화면에 그려진 문단 글 안에서 검색 → 누르면 그 문단으로 가서 잠깐 표시(바꾸기는 없음)
@@ -1033,7 +1105,7 @@
       LOOSE = !!(ctx.flag && ctx.flag('docx'));
       ctx.loadCss('js/smartoffice/docx/so-docx.css');
       return Promise.all([ctx.loadScript('vendor/so/docx/jszip.min.js')]).then(function () {
-        return ctx.loadScript('vendor/so/docx/docx-preview.min.js').then(function () { return LOOSE ? ctx.loadScript('js/smartoffice/docx/so-docx-struct.js').then(function () { return ctx.loadScript('js/smartoffice/docx/so-docx-ui.js'); }) : null; });
+        return ctx.loadScript('vendor/so/docx/docx-preview.min.js').then(function () { return LOOSE ? ctx.loadScript('js/smartoffice/docx/so-docx-struct.js').then(function () { return Promise.all(['so-docx-ui.js', 'so-docx-ui-more.js', 'so-docx-math.js', 'so-docx-track.js', 'so-docx-more.js', 'so-docx-spell.js'].map(function (f) { return ctx.loadScript('js/smartoffice/docx/' + f); })); }) : null; });
       }).then(function () {
         if (!window.docx || !window.docx.renderAsync) throw new Error('워드 부품을 찾지 못함');
         var host = ctx.body;

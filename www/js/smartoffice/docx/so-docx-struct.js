@@ -1423,7 +1423,7 @@
     return out;
   }
   // tgt: { xi, kind, bm? }  mode: 'all'(글 전체) | 'num'(이름표와 번호만 — 그림·표 이름에서만)
-  function addCrossRef(xml, fromXi, tgt, mode) {
+  function addCrossRef(xml, fromXi, tgt, mode, pageNo) {      // mode 'page' = 쪽 번호 참조(PAGEREF)
     var ps = paras(xml); if (!ps[fromXi] || !ps[tgt.xi]) return { err: '문단을 찾지 못했습니다.' };
     if (ps[fromXi].anc.indexOf('w:txbxContent') >= 0) return { err: '텍스트 상자 안에는 넣을 수 없습니다.' };
     var name = tgt.bm, shown;
@@ -1451,8 +1451,9 @@
       var bp = ps[tgt.xi]; shown = pText(xml.slice(bp.s, bp.e).replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')).replace(/\s+/g, ' ').trim();
     }
     if (!shown) return { err: '가리킬 글이 비어 있습니다.' };
+    var isPage = mode === 'page'; if (isPage) shown = String(pageNo || 1);
     var fp = ps[fromXi], fps = xml.slice(fp.s, fp.e), fhead = /^<w:p\b[^>]*?>/.exec(fps)[0];
-    var fld = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> REF ' + name + ' \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t xml:space="preserve">' + esc(shown.length > 200 ? shown.slice(0, 200) : shown) + '</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    var fld = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ' + (isPage ? 'PAGEREF' : 'REF') + ' ' + name + ' \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t xml:space="preserve">' + esc(shown.length > 200 ? shown.slice(0, 200) : shown) + '</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
     if (/\/>$/.test(fhead)) return { xml: xml.slice(0, fp.s) + fhead.replace(/\s*\/>$/, '>') + fld + '</w:p>' + xml.slice(fp.e), shown: shown };
     return { xml: xml.slice(0, fp.e - 6) + fld + xml.slice(fp.e - 6), shown: shown };
   }
@@ -1499,6 +1500,7 @@
     addCaption: addCaption, insertToc: insertToc, updateToc: updateToc, tocField: tocField, headingList: headingList,
     readComments: readComments, addComment: addComment, editComment: editComment, deleteComment: deleteComment, listChanges: listChanges, resolveChanges: resolveChanges, revertFormatChanges: revertFormatChanges, readTrack: readTrack, setTrack: setTrack,
     copyFormat: copyFormat, pasteFormat: pasteFormat, readCols: readCols, setColumnsWhole: setColumnsWhole, setColumnsRange: setColumnsRange, readPicLayout: readPicLayout, setPicLayout: setPicLayout, setPicWidth: setPicWidth,
+    H: { esc: esc, unesc: unesc, attrOf: attrOf, nextRid: nextRid, pPrOf: pPrOf, tagRe: tagRe, ranges: ranges, kidsOf: kidsOf, must: must, setProp: setProp, PPR_ORDER: PPR_ORDER, RPR_ORDER: RPR_ORDER, elemEnd: elemEnd, RT: RT, pText: pText, paras: paras },
     pageSetup: pageSetup, readPage: readPage, pageColor: pageColor, sectionBreakAfter: sectionBreakAfter, addLink: addLink, insertNote: insertNote, readNotes: readNotes, editNote: editNote, deleteNote: deleteNote,
     fmtPartial: fmtPartial, copyParas: copyParas, pasteBlock: pasteBlock, dupParas: dupParas, copyTable: copyTable, dupTable: dupTable, setCellShade: setCellShade, setTableBorders: setTableBorders, headerRow: headerRow,
     paras: paras, newPara: newPara, insertPara: insertPara, deleteParas: deleteParas, moveParas: moveParas, pageBreakAfter: pageBreakAfter, ensureStyle: ensureStyle, setStyle: setStyle,
