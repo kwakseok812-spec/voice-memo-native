@@ -353,8 +353,8 @@
       var k = kindOf(c), g = xfOf(c.xml, c.name), ph = /<p:ph\b[^>]*?\/?>/.exec(c.xml), inherited = false;
       if (!g && ph && phGeom) { g = phGeom(ph[0]); inherited = !!g; }
       var text = ''; (c.xml.match(/<a:t(?:\s[^>]*)?>[\s\S]*?<\/a:t>/g) || []).forEach(function (t) { text += unescX(t.replace(/<[^>]+>/g, '')) + ' '; });
-      var ed = !(k === 'smart' || k === 'ole' || k === 'other');
-      return { id: shapeId(c.xml), name: shapeName(c.xml), label: friendlyName(shapeName(c.xml), k, ph ? ph[0] : ''), canLine: k === 'text' || k === 'ph' || k === 'shape' || k === 'line', kind: k, name_: c.name, g: g, inherited: inherited, text: text.trim(), isPh: !!ph, phTag: ph ? ph[0] : '', canMove: ed && !!g, canText: k === 'text' || k === 'ph' || k === 'shape' || k === 'table', canFill: k === 'text' || k === 'ph' || k === 'shape' };
+      var ed = !(k === 'smart' || k === 'ole' || k === 'other'), md = k === 'pic' ? (/<a:videoFile\b/.test(c.xml) ? 'video' : /<a:audioFile\b/.test(c.xml) ? 'audio' : null) : null;
+      return { media: md, id: shapeId(c.xml), name: shapeName(c.xml), label: friendlyName(shapeName(c.xml), k, ph ? ph[0] : ''), canLine: k === 'text' || k === 'ph' || k === 'shape' || k === 'line', kind: k, name_: c.name, g: g, inherited: inherited, text: text.trim(), isPh: !!ph, phTag: ph ? ph[0] : '', canMove: ed && !!g, canText: k === 'text' || k === 'ph' || k === 'shape' || k === 'table', canFill: k === 'text' || k === 'ph' || k === 'shape' };
     }).filter(function (s) { return s.id; });
   }
   function findShape(xml, id) { var t = topShapes(xml); for (var i = 0; i < t.length; i++) if (shapeId(t[i].xml) === id) return t[i]; return null; }
@@ -362,7 +362,8 @@
   function insertShape(xml, shapeXml) {                       // 맨 위(앞쪽 그림 위)에 쌓는다 — spTree 맨 끝
     var r = spTreeRange(xml); return xml.slice(0, r.to) + shapeXml + xml.slice(r.to);
   }
-  function removeShape(xml, id) { var s = findShape(xml, id); if (!s) throw new Error('도형을 찾지 못했습니다'); return xml.slice(0, s.s) + xml.slice(s.e); }
+  function dropTiming(xml, id) { var f = global.SOPptxStruct && global.SOPptxStruct._dropTiming; return f ? f(xml, id) : xml; }    // v10.9 3회차: 지운 도형을 가리키는 움직임 효과 정리(so-pptx-anim.js)
+  function removeShape(xml, id) { var s = findShape(xml, id); if (!s) throw new Error('도형을 찾지 못했습니다'); return dropTiming(xml.slice(0, s.s) + xml.slice(s.e), id); }
   function clampGeom(g, W, H) {
     var w = Math.max(91440, Math.round(g.w)), h = Math.max(91440, Math.round(g.h));
     return { x: Math.round(g.x), y: Math.round(g.y), w: Math.min(w, W * 3), h: Math.min(h, H * 3) };
@@ -1051,7 +1052,8 @@
     var gx = '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="' + gid + '" name="Group ' + gid + '"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="' + x0 + '" y="' + y0 + '"/><a:ext cx="' + w + '" cy="' + h + '"/><a:chOff x="' + x0 + '" y="' + y0 + '"/><a:chExt cx="' + w + '" cy="' + h + '"/></a:xfrm></p:grpSpPr>' + items.map(function (it) { return it.xml; }).join('') + '</p:grpSp>';
     var out = '', cur = 0;
     items.forEach(function (it, i) { out += xml.slice(cur, it.s); if (i === items.length - 1) out += gx; cur = it.e; });
-    return { xml: out + xml.slice(cur), id: gid };
+    var nx = out + xml.slice(cur); items.forEach(function (it) { nx = dropTiming(nx, shapeId(it.xml)); });      // 묶인 도형 낱개에는 움직임 효과를 걸 수 없으므로 정리
+    return { xml: nx, id: gid };
   }
   function ungroupShape(xml, id) {
     var sh = findShape(xml, id); if (!sh || sh.name !== 'p:grpSp') return { err: '묶인 도형을 먼저 고르십시오.' };
@@ -1067,7 +1069,7 @@
       var kx = sh.xml.slice(c.s, c.e); ids.push(shapeId(kx));
       return kx.replace(FIRST_OFFEXT, function (m, x, y, cx, cy) { return '<a:off x="' + Math.round(ox + (+x - cx0) * sx) + '" y="' + Math.round(oy + (+y - cy0) * sy) + '"/><a:ext cx="' + Math.round(cx * sx) + '" cy="' + Math.round(cy * sy) + '"/>'; });
     }).join('');
-    return { xml: xml.slice(0, sh.s) + out + xml.slice(sh.e), ids: ids };
+    return { xml: dropTiming(xml.slice(0, sh.s) + out + xml.slice(sh.e), id), ids: ids };
   }
 
   // ---- 그림 자르기(비율 본보기): mode = '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | 'orig'(원래 비율로) ----
@@ -1441,6 +1443,9 @@
     setAnchor: setAnchor, friendlyName: friendlyName, formatRun: formatRun, setLineStyle: setLineStyle, copyShape: copyShape, pasteShape: pasteShape, tableMerge: tableMerge, cellSpans: cellSpans,
     setSlideBg: setSlideBg, readSlideBg: readSlideBg, setRotation: setRotation, readRotation: readRotation, changeLayout: changeLayout,
     readChart: readChart, addChart: addChart, updateChart: updateChart, removeChart: removeChart,
-    _topShapes: topShapes, _dupBlock: dupBlock
+    _topShapes: topShapes, _dupBlock: dupBlock,
+    _h: { escX: escX, unescX: unescX, attrOf: attrOf, setAttr: setAttr, relsPathOf: relsPathOf, resolvePath: resolvePath, relTarget: relTarget, parseRels: parseRels, relKind: relKind, addRel: addRel, emptyRels: emptyRels,
+      ctAdd: ctAdd, ctDel: ctDel, ctDefault: ctDefault, must: must, elemEnd: elemEnd, childrenOf: childrenOf, readDeck: readDeck, listSlides: listSlides, nextNum: nextNum, topShapes: topShapes, findShape: findShape,
+      maxId: maxId, insertShape: insertShape, shapeId: shapeId, shapeName: shapeName, kindOf: kindOf, xfOf: xfOf, spTreeRange: spTreeRange, freeName: freeName, nvBlock: nvBlock }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
