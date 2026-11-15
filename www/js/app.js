@@ -3955,6 +3955,7 @@
   APP_VERSION = 'v10.5';        // v10.5(O-0861): S-Office 편집 보강 3판(PPT) — 슬라이드 추가·복제·삭제·순서·숨기기 · 글 상자·도형·선·화살표·그림·표 넣기, 끌어 옮기고 크기 조절 · 글자 서식·색·글머리표 · 표 줄·칸 · 발표자 노트 · 슬라이드 쇼(전체 화면) · 「＋ 새 문서」에 PPT 칩 · 스위치 SO_PPTX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 149
   APP_VERSION = 'v10.6';        // v10.6(O-0861): S-Office 편집 보강 4판(워드) — 문단 넣기·지우기·옮기기 · 제목 스타일 · 글자·문단 서식 · 글머리표·번호 목록 · 표(넣기·줄 칸 추가 삭제·칸 합치기) · 그림 · 쪽 나누기 · 머리글·바닥글·쪽 번호 · 찾아 바꾸기 · 링크 글자·그림 옆 글자 고치기 · 「＋ 새 문서」에 워드 칩 · 스위치 SO_DOCX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 150
   APP_VERSION = 'v10.9';        // v10.9(O-0861): S-Office 차트 만들기·고치기(엑셀·PPT·워드, 진짜 차트 + 폰 화면 자체 미리 그림). v10.7(O-0861): S-Office 편집 보강 5판 — PPT 화면 순서 = 파일 순서(복제·순서 바꾸기 뒤 어긋남 수정) · 안내 띠(본문·도구줄을 안 가림) · 서식 시트 열어 둔 채 이어서 적용 · 쉬운 도형 이름·조사·실패 안내 · 엑셀 필터 ▽ 표시·조건 필터 · 글자 일부만 서식(PPT·워드) · 복사·붙여넣기(PPT 개체·워드 문단·표·엑셀 칸) · PPT 글꼴·맞춤·테두리·표 칸 합치기 · 워드 표 서식 — 서버·SQL·자바·권한 변경 없음 · versionCode 151
+  APP_VERSION = 'v10.10';        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
   // (직전) v9.63(O-0684): 「승진」 입력·수정(19개 종류 추가·고치기·휴지통 8초 되돌리기·충돌 처리) · 승진 설정(가점·교수업적 순위) · 실적 탭 연결·연결 제안·책임저자 표시 · 점수 더하기 해 보기 · 백업 내려받기 · 스위치 PROMO_EDIT/PROMO_LINK(끄면 v9.62) · 서버 SQL 변경 없음 · versionCode 107
@@ -10516,6 +10517,22 @@
       $('btnGames').setAttribute('aria-label', GamesTab.tileLabel());
       $('btnGames').style.display = '';
       $('btnGames').addEventListener('click', function () { try { GamesTab.onTile(); } catch (e) { toast('게임 목록을 열지 못했습니다 — 다시 눌러 주십시오.'); } });
+    } catch (e) {}
+  }
+
+  /* ---- 홈 도구 칸 순서(v10.3) — 앞의 모든 칸 정리가 끝난 맨 마지막에 한 번만 자리를 맞춘다. 칸 이름·그림·누르기·id·스위치는 건드리지 않고 순서만.
+   *   순서(3열, 위→아래·왼쪽→오른쪽): 게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록.
+   *   목록에 없는 칸(아이디어·승진 등 숨은 칸)은 건드리지 않고, 꺼져 있는 칸은 그냥 건너뛴다(보이는 칸 순서만 위와 같다).
+   *   스위치 HOME_TILE_ORDER: 'on' = 위 순서 · 'off' = 이 블록이 아무것도 안 해 v10.2 순서 그대로(되돌리는 길 — 새 번호로 재배포). */
+  var HOME_TILE_ORDER = 'on';
+  if (HOME_TILE_ORDER !== 'off') {
+    try {
+      var ordGrid = $('homeTools'), ordSub = ordGrid && ordGrid.querySelector('.tools-sub');
+      if (ordGrid && ordSub) {
+        ['btnGames', 'btnVideoApps', 'btnHub', 'btnScanTab', 'btnSearchToggle', 'btnHealth', 'btnAch', 'btnAlbum', 'btnLocker', 'btnReg', 'btnDocs', 'btnMeetings'].forEach(function (id) {
+          var t = $(id); if (t && t.parentNode === ordGrid) ordGrid.insertBefore(t, ordSub);   // 차례로 「PC 연결」 소제목 바로 앞으로 → 목록 순서대로 쌓임
+        });
+      }
     } catch (e) {}
   }
 
