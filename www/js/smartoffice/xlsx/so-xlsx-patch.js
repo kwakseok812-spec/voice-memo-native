@@ -24,7 +24,8 @@
     var files = Object.keys(zip.files);
     function has(re) { return files.some(function (k) { return re.test(k); }); }
     if (has(/^xl\/vbaProject/)) return Promise.resolve({ ok: false, reason: '매크로가 들어 있는 파일입니다.' });
-    if (has(/^xl\/pivot(Tables|Cache)\//) || has(/^xl\/(slicers|slicerCaches|timelines|timelineCaches)\//)) return Promise.resolve({ ok: false, reason: '피벗표(또는 슬라이서)가 들어 있는 파일입니다.' });
+    // v10.9 5회차: 피벗표·슬라이서가 든 문서도 연다 — 피벗이 차지한 칸은 고치지 않고(cellBlock), 저장할 때 엑셀이 피벗을 새로 고치도록 표시한다(finalize). 타임라인은 예전처럼 막는다.
+    if (has(/^xl\/(timelines|timelineCaches)\//)) return Promise.resolve({ ok: false, reason: '타임라인이 들어 있는 파일입니다.' });
     if (has(/^xl\/workbook\.bin$/)) return Promise.resolve({ ok: false, reason: '이진 형식(xlsb)입니다.' });
     if (!zip.file('xl/workbook.xml') || !zip.file('xl/_rels/workbook.xml.rels')) return Promise.resolve({ ok: false, reason: '파일 구조를 알아볼 수 없습니다.' });
     return Promise.all([zip.file('xl/workbook.xml').async('string'), zip.file('xl/_rels/workbook.xml.rels').async('string'),
@@ -56,7 +57,7 @@
         var relP = zip.file(relPath) ? zip.file(relPath).async('string') : Promise.resolve('');
         return Promise.all([zip.file(sh.path).async('string'), relP]).then(function (pair) {
           var xml = pair[0];
-          sh.xml = xml; sh.orig = xml; sh.hdr = []; sh.arr = [];
+          sh.xml = xml; sh.orig = xml; sh.hdr = []; sh.arr = []; sh.pv = [];
           // 엑셀 표(ListObject)의 머리글 행 — 머리글 글자는 표 정의와 맞아야 해서 고치지 않는다
           var tabs = (pair[1].match(/<Relationship\b[^>]*>/g) || []).filter(function (t) { return /\/table$/.test(attr(t, 'Type') || ''); });
           sh.tablePromises = tabs.map(function (t) {
@@ -77,7 +78,20 @@
           if (dec && !/^utf-?8$/i.test(dec[1])) { sh.readOnly = true; sh.why = '이 시트의 글자 인코딩이 특이해서 고칠 수 없습니다.'; }
           else if (!/<sheetData[\s>\/]/.test(xml)) { sh.readOnly = true; sh.why = '이 시트의 구조가 특이해서 고칠 수 없습니다.'; }
           else if (/<sheetProtection\b/.test(xml)) { sh.readOnly = true; if (/<sheetProtection\b[^>]*\s(password|hashValue|algorithmName)=/.test(xml)) sh.why = '암호가 걸린 보호 시트라서 고칠 수 없습니다. (엑셀에서 보호를 풀어 주십시오)'; else { sh.prot = 'nopw'; sh.why = '보호된 시트라서 고칠 수 없습니다. (「더보기」→「시트」→「복사·탭 색·보호」의 「시트 보호 해제」로 풀 수 있습니다)'; } }
-          return Promise.all(sh.tablePromises);
+          // 이 시트에 놓인 피벗표(차지한 칸 + 위쪽 필터 칸)를 적어 둔다 — 그 칸은 직접 고치지 못하게 한다
+          var pts = (pair[1].match(/<Relationship\b[^>]*>/g) || []).filter(function (t) { return /\/pivotTable$/.test(attr(t, 'Type') || ''); });
+          sh.pvPromises = pts.map(function (t) {
+            var tg = attr(t, 'Target') || '', p = tg.charAt(0) === '/' ? tg.slice(1) : sh.path.replace(/[^\/]+$/, '') + tg, parts = [];
+            p.split('/').forEach(function (x) { if (x === '..') parts.pop(); else if (x !== '.') parts.push(x); });
+            p = parts.join('/');
+            return zip.file(p) ? zip.file(p).async('string').then(function (tx) {
+              var loc = (/<location\b[^>]*>/.exec(tx) || [''])[0], rf = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(attr(loc, 'ref') || '');
+              if (!rf) return;
+              var r0 = +rf[2], pc = +(attr(loc, 'rowPageCount') || 0);
+              sh.pv.push({ r0: pc ? Math.max(1, r0 - pc - 1) : r0, c0: colNum(rf[1]), r1: +(rf[4] || rf[2]), c1: colNum(rf[3] || rf[1]), name: attr((/<pivotTableDefinition\b[^>]*>/.exec(tx) || [''])[0], 'name') || '' });
+            }) : null;
+          });
+          return Promise.all(sh.tablePromises.concat(sh.pvPromises));
         });
       })).then(function () { return { ok: true, sheets: sheets, order: order }; });
     });
@@ -212,6 +226,14 @@
     if (zip.file('xl/_rels/workbook.xml.rels')) jobs.push(zip.file('xl/_rels/workbook.xml.rels').async('string').then(function (t) {
       var n = t.replace(/<Relationship\b[^>]*calcChain[^>]*\/>/g, ''); if (n !== t) zip.file('xl/_rels/workbook.xml.rels', n, { createFolders: false });
     }));
+    Object.keys(zip.files).forEach(function (k) {          // v10.9 5회차: 피벗표가 있으면 엑셀이 열 때 새로 고치게 한다(원본 칸을 고쳤어도 피벗 숫자가 맞게)
+      if (!/^xl\/pivotCache\/pivotCacheDefinition\d*\.xml$/.test(k)) return;
+      jobs.push(zip.file(k).async('string').then(function (t) {
+        if (/<pivotCacheDefinition\b[^>]*\srefreshOnLoad="(1|true)"/.test(t)) return;
+        var n = t.replace(/<pivotCacheDefinition\b([^>]*?)>/, function (m, a) { return '<pivotCacheDefinition' + a.replace(/\srefreshOnLoad="[^"]*"/, '') + ' refreshOnLoad="1">'; });
+        if (n !== t) zip.file(k, n, { createFolders: false });
+      }));
+    });
     jobs.push(zip.file('xl/workbook.xml').async('string').then(function (t) {
       var n;
       if (/<calcPr\b/.test(t)) n = t.replace(/<calcPr\b([^>]*?)(\/?)>/, function (m, a, sl) { return '<calcPr' + a.replace(/\sfullCalcOnLoad="[^"]*"/, '') + ' fullCalcOnLoad="1"' + sl + '>'; });
@@ -230,6 +252,7 @@
     var m = /^([A-Z]+)(\d+)$/.exec(ref); if (!m || !sh) return '';
     var c = colNum(m[1]), r = +m[2], i;
     for (i = 0; i < (sh.hdr || []).length; i++) { var h = sh.hdr[i]; if (r === h.r && c >= h.c0 && c <= h.c1) return '엑셀 표의 머리글(맨 윗줄 이름)은 표 정의와 맞아야 해서 여기서 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.'; }
+    for (i = 0; i < (sh.pv || []).length; i++) { var pv = sh.pv[i]; if (r >= pv.r0 && r <= pv.r1 && c >= pv.c0 && c <= pv.c1) return '피벗 표가 차지한 칸이라 직접 고칠 수 없습니다. 「더보기」→「데이터 정리」→「피벗 표」에서 고치거나 새로 고칩니다.'; }
     for (i = 0; i < (sh.arr || []).length; i++) { var a = sh.arr[i]; if (r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1) return '배열 수식이 차지한 칸이라 고칠 수 없습니다. 엑셀에서 고쳐 주십시오.'; }
     return '';
   }

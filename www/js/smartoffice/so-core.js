@@ -68,6 +68,7 @@
   var SO_PDF_QPDF = 'on';                   // PDF 암호 걸기·풀기(qpdf.wasm) — 'off' = 암호 걸린 PDF는 예전처럼 변환해서 보고, 꾸미기 시트에 암호 구역이 없다(용량 줄이기는 그림 줄이기만)
   var SO_PDF_EDIT = 'on';                   // v10.9 PDF 글 고치기·도형·첨부·정밀 보기·편집 제한·워드로 열기 — 'off' = 꾸미기 시트에 그 구역들이 없고, 편집이 제한된 PDF도 예전처럼 연다
   var SO_CHART = 'on';                      // v10.9 차트 만들기·고치기(엑셀·PPT·워드)와 폰 화면 미리 그림 — 'off' = 차트는 예전처럼 보기·복제만(넣기 시트의 「차트」·「차트 고치기」가 사라진다)
+  var SO_XLSX_DATA = 'on';                  // v10.9 5회차 엑셀 피벗 표·슬라이서·스파크라인·부분합·통합 — 'off' = 「데이터 정리」 시트의 「분석 도구」 단추와 시트 위 슬라이서·스파크라인 그림이 사라지고, 피벗이 든 문서는 예전처럼 보기만
   var SO_CRYPT = 'on';                      // v10.9 문서 암호: 암호가 걸린 워드·엑셀·PPT 열기, 사본 저장할 때 암호 걸기 — 'off' = 암호 걸린 문서는 예전처럼 변환해서 보기만, ⋯ 메뉴의 암호 항목 없음
   var SO_NEW_DOC = 'on';                    // 문서 뷰어 첫 화면 「＋ 새 문서」 줄
   var SO_HWP_READY = 'on';                  // 한글 부품(vendor/so/hwp)이 앱에 들어온 뒤에만 'on' — 'off' 면 ②에서 한글을 고르면 곧바로 ①로 간다
@@ -610,6 +611,7 @@
     if (k === 'docx') return SO_DOCX_TOOLS === 'on';
     if (k === 'newdoc') return SO_NEW_DOC === 'on';
     if (k === 'chart') return SO_CHART === 'on';
+    if (k === 'xlsxdata') return SO_XLSX_TOOLS === 'on' && SO_XLSX_DATA === 'on';
     if (k === 'crypt') return SO_CRYPT === 'on';
     return true;
   }

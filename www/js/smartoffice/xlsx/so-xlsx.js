@@ -191,6 +191,7 @@
       el.fx.innerHTML = cellsHTML(sh, 0, 0, 0, 0, 0, 0);
     } else el.fx.style.display = 'none';
     if (S.chartUi) S.chartUi.paint();
+    if (S.dataUi) S.dataUi.paint();
   }
   function layoutSize() {
     var sh = S.sh, s = S.scale, el = S.el;
@@ -750,7 +751,7 @@
     S.scale = Math.round(fitScale() * 100) / 100; S.el.pct.textContent = Math.round(S.scale * 100) + '%'; layoutSize();
     var tabs = S.el.tabs.querySelectorAll('.sx-tab');
     for (var k = 0; k < tabs.length; k++) tabs[k].classList.toggle('on', +tabs[k].getAttribute('data-i') === i);
-    select(0, 0, true); render(true); if (S.chartUi) S.chartUi.reload();
+    select(0, 0, true); render(true); if (S.chartUi) S.chartUi.reload(); if (S.dataUi) S.dataUi.reload();
   }
   function build(ctx) {
     var root = document.createElement('div'); root.className = 'sx-root';
@@ -781,7 +782,7 @@
     q('.sx-rone').onclick = replaceCurrent; q('.sx-rall').onclick = replaceAll;
     S.el.hcol.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hcol.getBoundingClientRect(); selectLine('col', Math.min(S.sh.nc - 1, lowerIdx(S.sh.colX, (e.clientX - rc.left + S.el.sc.scrollLeft) / S.scale))); });
     S.el.hrow.addEventListener('click', function (e) { if (!S.editing || !plusOn()) return; var rc = S.el.hrow.getBoundingClientRect(); selectLine('row', Math.min(S.sh.nr - 1, lowerIdx(S.sh.rowY, (e.clientY - rc.top + S.el.sc.scrollTop) / S.scale))); });
-    if (plusOn()) { if (global.SOXlsxChart && ctx.flag('chart')) S.chartUi = global.SOXlsxChart.create(envForUI()); S.ui = global.SOXlsxUI.create(envForUI()); S.ui.mount(S.el.ops); }
+    if (plusOn()) { if (global.SOXlsxChart && ctx.flag('chart')) S.chartUi = global.SOXlsxChart.create(envForUI()); if (global.SOXlsxDataUI && global.SOXlsxPivot && global.SOXlsxData && ctx.flag('xlsxdata')) S.dataUi = global.SOXlsxDataUI.create(envForUI()); S.ui = global.SOXlsxUI.create(envForUI()); S.ui.mount(S.el.ops); }
     S.el.tabs.innerHTML = S.vis.map(function (i) { return '<button type="button" class="sx-tab" data-i="' + i + '">' + esc(S.names[i]) + '</button>'; }).join('');
     S.el.tabs.addEventListener('click', function (e) { var b = e.target.closest('.sx-tab'); if (b) showSheet(+b.getAttribute('data-i')); });
     root.addEventListener('click', function (e) {
@@ -859,7 +860,7 @@
     return loadStyles().then(function () {
       if (calcWas) { if (!calcRefresh()) S.calc.on = false; } else calcInit();
       sc.scrollTop = st; sc.scrollLeft = sl; S.lk = null;
-      select(S.sel.r, S.sel.c, true); render(true); refreshEd(); if (S.ui) S.ui.refresh(); if (S.chartUi) S.chartUi.reload();
+      select(S.sel.r, S.sel.c, true); render(true); refreshEd(); if (S.ui) S.ui.refresh(); if (S.chartUi) S.chartUi.reload(); if (S.dataUi) S.dataUi.reload();
     });
   }
   // 문서를 고치는 일 한 번(줄·칸·서식·시트…). mut(pkg) → Promise<{ok}|{err}> — 복사본에서 먼저 해 보고, 되면 화면을 갈아 끼운다.
@@ -986,7 +987,7 @@
       S: function () { return S; }, ctx: S.ctx, toast: function (m, ms) { S.ctx.toast(m, ms); }, addr: addr, colName: colName, esc: esc,
       ensureVisible: ensureVisible, selRange: selRange, startRange: startRange, clearRange: clearRange, pkgRun: pkgRun, commit: commit, select: select, render: render, applyRes: applyRes, parseInput: parseInput,
       syncDirty: syncDirty, refreshEd: refreshEd, calcRefresh: calcRefresh, undoEdit: undoEdit, redoEdit: redoEdit, resetAll: resetAll, leaveEdit: leaveEdit, toggleFind: toggleFind,
-      barText: barText, display: display, cellOf: cellOf, plusOn: plusOn, styleAt: styleAt, chartUi: function () { return S && S.chartUi; }, roPkg: function () { return zipPkg(S.zip); },
+      barText: barText, display: display, cellOf: cellOf, plusOn: plusOn, styleAt: styleAt, chartUi: function () { return S && S.chartUi; }, dataUi: function () { return S && S.dataUi; }, gotoSheet: function (n) { var i = S.names.indexOf(n); if (i >= 0 && S.vis.indexOf(i) >= 0 && S.sh.i !== i) showSheet(i); }, roPkg: function () { return zipPkg(S.zip); },
       pkgPeek: function (fn) { return currentBytes().then(function (b) { return global.JSZip.loadAsync(b.slice(), { createFolders: false }); }).then(function (z) { return fn(zipPkg(z)); }); }
     };
   }
@@ -1004,7 +1005,8 @@
       if (isX) need = need.then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-patch.js'); })
         .then(function () { return global.JSZip ? null : ctx.loadScript('vendor/so/docx/jszip.min.js'); });
       if (isX && ctx.flag && ctx.flag('xlsx')) need = need.then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-calc.js'); })
-        .then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-ui.js'); }).then(function () { return ctx.flag('chart') ? ctx.loadScript('js/smartoffice/xlsx/so-xlsx-chart.js').catch(function () {}) : null; }).catch(function () { /* 못 불러오면 예전 화면으로 연다 */ });
+        .then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-ui.js'); }).then(function () { return ctx.flag('chart') ? ctx.loadScript('js/smartoffice/xlsx/so-xlsx-chart.js').catch(function () {}) : null; })
+        .then(function () { return ctx.flag('xlsxdata') ? ctx.loadScript('js/smartoffice/xlsx/so-xlsx-pivot.js').then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-data.js'); }).then(function () { return ctx.loadScript('js/smartoffice/xlsx/so-xlsx-data-ui.js'); }).catch(function () {}) : null; }).catch(function () { /* 못 불러오면 예전 화면으로 연다 */ });
       return need.then(function () { return ctx.file.arrayBuffer(); }).then(function (buf) {
         var res = readWorkbook(ctx, buf), wb = res.wb;
         if (!wb || !wb.SheetNames || !wb.SheetNames.length) throw new Error('시트를 찾지 못했습니다');

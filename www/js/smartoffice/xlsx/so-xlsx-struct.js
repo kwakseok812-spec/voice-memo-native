@@ -655,7 +655,9 @@
       pkg.write(path, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="A1"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData/><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>');
       pkg.write('xl/_rels/workbook.xml.rels', info.rels.replace('</Relationships>', '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (mx + 1) + '.xml"/></Relationships>'));
       pkg.write('[Content_Types].xml', info.ct.replace('</Types>', '<Override PartName="/' + path + '" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'));
-      pkg.write('xl/workbook.xml', info.wb.replace('</sheets>', '<sheet name="' + escX(name) + '" sheetId="' + (sid + 1) + '" ' + ra + '="' + rid + '"/></sheets>'));
+      var wbNew = info.wb.replace('</sheets>', '<sheet name="' + escX(name) + '" sheetId="' + (sid + 1) + '" ' + ra + '="' + rid + '"/></sheets>');
+      if (/^r:/.test(ra) && !/<workbook\b[^>]*\sxmlns:r="/.test(wbNew)) wbNew = wbNew.replace(/<workbook\b/, '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"');      // 통합 문서 머리에 r 이름공간이 없는 파일에서 새 시트가 깨지던 것
+      pkg.write('xl/workbook.xml', wbNew);
       return { ok: true };
     });
   }
@@ -1801,6 +1803,8 @@
     copySheet: copySheet, setLink: setLink, readLinks: readLinks, setOutline: setOutline, readOutline: readOutline, readSst: readSst, cellVal: cellVal,
     insertWsElement: insertWsElement, addSheet: addSheet, renameSheet: renameSheet, deleteSheet: deleteSheet, moveSheet: moveSheet, checkSheetName: checkSheetName, wbInfo: wbInfo, newWorkbookFiles: newWorkbookFiles
   };
+  api.x = { parseSheet: parseSheet, serializeSheet: serializeSheet, getRow: getRow, getCell: getCell, putCell: putCell, mkCellXml: mkCellXml, setDimension: setDimension, dimensionOf: dimensionOf, withSheet: withSheet,
+    openTagOfCell: openTagOfCell, attrOf: attrOf, setAttr: setAttr, escX: escX, unescX: unescX, colNum: colNum, colName: colName, sameName: sameName, quoteSheet: quoteSheet, readSheets: readSheets, relTypesOf: relTypesOf, WHY: WHY };     // v10.9 5회차: 새 데이터 도구(so-xlsx-data.js)가 같은 도우미를 쓴다
   api.addSheet = wbGuard.addSheet; api.renameSheet = wbGuard.renameSheet; api.deleteSheet = wbGuard.deleteSheet; api.moveSheet = wbGuard.moveSheet; api.copySheet = wbGuard.copySheet;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.SOXlsxStruct = api;

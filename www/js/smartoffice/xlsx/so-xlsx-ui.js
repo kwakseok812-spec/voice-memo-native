@@ -495,6 +495,7 @@
         S().ctx.closeSheet(); setTimeout(function () { run('텍스트 나누기', function (pkg) { return ST.textToColumns(pkg, nameNow(), r.c0 + 1, rr0 + 1, rr1 + 1, d); }, function (x) { return x.rows + '줄을 ' + x.cols + '칸으로 나눴습니다(되돌리려면 ↶)'; }); }, 60);
       };
       body.appendChild(el('div', 'so-sheet-note', '중복 제거는 비교 열이 모두 같은 줄을 지웁니다(대소문자 구분 없음). 텍스트 나누기는 오른쪽 칸에 이미 내용이 있으면 덮어쓰지 않고 멈춥니다. 한 열만 골랐으면 그 열의 이어진 줄 전체를 나눕니다.'));
+      if (env.dataUi && env.dataUi()) env.dataUi().addButtons(body);
       S().ctx.sheet({ title: '데이터 정리', body: body, buttons: [{ label: '닫기' }], wide: true });
     }
     // ---------------- 인쇄(쪽 설정 · 인쇄 영역 · 반복 제목) ----------------
