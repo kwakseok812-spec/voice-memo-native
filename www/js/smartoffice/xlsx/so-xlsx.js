@@ -502,7 +502,7 @@
     return { hadFormula: hadFormula };
   }
   function syncDirty() {
-    var d = Object.keys(S.edits).length > 0 || !!S.pkgOps;
+    var d = Object.keys(S.edits).length > 0 || !!S.pkgOps || !!(S.ctx.cryptTouched && S.ctx.cryptTouched());
     if (d !== S.dirty) { S.dirty = d; S.ctx.setDirty(d); }
     refreshActions();
   }
@@ -666,6 +666,7 @@
     var msg;
     if (S.ext === 'csv') msg = '고친 값을 새 CSV 파일(' + nm + ')로 저장합니다. 원래 파일은 그대로입니다.';
     else if (S.ctx.isNew) msg = '새 엑셀 문서를 「' + nm + '」 파일로 저장합니다.';
+    else if (!S.pkgOps && !Object.keys(S.edits).length) msg = '문서 내용은 그대로 두고, 암호 설정만 바꿔 새 파일(' + nm + ')로 저장합니다. 원래 파일은 그대로입니다.';
     else if (S.pkgOps) msg = '고친 내용(줄·칸·서식·시트 포함)을 담아 새 파일(' + nm + ')로 저장합니다. 그림·차트는 그대로 둡니다. 원래 파일은 그대로입니다.';
     else msg = '고친 칸 ' + Object.keys(S.edits).length + '개만 바꿔서 새 파일(' + nm + ')로 저장합니다. 글꼴·색·차트·그림은 그대로입니다. ' +
         (anyAffected() && !(S.calc && S.calc.on) ? '고친 칸을 쓰는 다른 수식의 결과는 엑셀에서 열면 다시 계산됩니다. 합계처럼 값이 바뀌는 칸은 앱 화면과 다른 간이 보기 프로그램에서는 옛 값으로 보일 수 있습니다. ' : '') +
@@ -1042,6 +1043,7 @@
         });
       });
     },
+    cryptChanged: function () { if (S) syncDirty(); },   // 암호만 걸거나 풀어도 「사본 저장」이 켜지게
     exportPdf: function () {                           // v10.8 4회차: 「⋯」→ PDF로 내보내기(워드와 같은 그림 방식, so-xlsx-pdf.js)
       if (!S) return; var ctx = S.ctx;
       ctx.loadScript('js/smartoffice/xlsx/so-xlsx-pdf.js').then(function () {

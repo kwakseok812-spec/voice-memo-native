@@ -137,7 +137,7 @@
       }
       function swapTo(bytes, label) {
         if (s.busyRun) return Promise.resolve(false); s.busyRun = true; ctx.busy(label);
-        return adopt(bytes).then(function () { s.busyRun = false; ctx.busy(null); ctx.setDirty(s.pkgOps > 0); return true; }, function (e) { s.busyRun = false; ctx.busy(null); ctx.explainFail('되돌리지 못했습니다', e, 4200); return false; });
+        return adopt(bytes).then(function () { s.busyRun = false; ctx.busy(null); ctx.setDirty(s.pkgOps > 0 || cryptOnly()); return true; }, function (e) { s.busyRun = false; ctx.busy(null); ctx.explainFail('되돌리지 못했습니다', e, 4200); return false; });
       }
       function undoOp() {
         return loadEditorBase().then(flushEdits).then(function () {
@@ -188,6 +188,10 @@
         applyZoom();
         if (s.mode === 'one') host.scrollTop = 0;
         playIn();
+        ctx.setActions(viewActs());
+      }
+      function cryptOnly() { return !!(ctx.cryptTouched && ctx.cryptTouched()); }   // 암호만 걸거나 푼 상태도 저장할 것으로 센다
+      function viewActs() {
         var acts = [
           { label: s.mode === 'list' ? '한 장' : '목록', onClick: function () { s.mode = s.mode === 'list' ? 'one' : 'list'; s.scale = 1; render(); } },
           { label: '찾기', onClick: openFind },
@@ -196,8 +200,8 @@
           { label: '＋', onClick: function () { s.scale = Math.min(3, s.scale * 1.25); render(); } },
           { label: '고치기', primary: !anyEdit(s), onClick: enterEdit }
         ];
-        if (anyEdit(s)) acts.push({ label: '사본 저장', primary: true, onClick: saveCopy });
-        ctx.setActions(acts.filter(Boolean));
+        if (anyEdit(s) || cryptOnly()) acts.push({ label: '사본 저장', primary: true, onClick: saveCopy });
+        return acts.filter(Boolean);
       }
       function go(d) { var n = Math.max(0, Math.min(slides().length - 1, s.idx + d)); if (n === s.idx) return; s.dir = d; s.idx = n; render(); }
       nav.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(Number(b.getAttribute('data-d'))); });
@@ -382,7 +386,7 @@
           function mark() {
             var ch = Object.prototype.hasOwnProperty.call(ed, p.ord);
             card.classList.toggle('changed', ch);
-            ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
+            ctx.setDirty(anyEdit(s) || s.pkgOps > 0 || cryptOnly());
           }
           function recSel() { if (!structOn() || p.locked) return; var a = ta.selectionStart, b = ta.selectionEnd; if (b > a) { s.rsel = { slide: i, ord: p.ord, from: a, to: b, text: ta.value.slice(a, b), len: ta.value.length }; paintRunBar(); } else if (s.rsel && s.rsel.ord === p.ord && document.activeElement === ta) { s.rsel = null; paintRunBar(); } }
           ['select', 'keyup', 'mouseup', 'touchend', 'blur'].forEach(function (ev) { ta.addEventListener(ev, function () { setTimeout(recSel, ev === 'blur' ? 0 : 30); }); });
@@ -397,7 +401,7 @@
           });
           list.appendChild(card); mark(); setTimeout(fit, 0);
         });
-        ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
+        ctx.setDirty(anyEdit(s) || s.pkgOps > 0 || cryptOnly());
         function jump(k) {
           s.filter = null;
           if (composing) { try { document.activeElement.blur(); } catch (e) {} setTimeout(function () { composing = false; jump(k); }, 80); return; }   // 한글 조합 중이면 확정된 뒤에 넘어간다
@@ -417,7 +421,7 @@
       }
       function showEditor2() {
         if (!s.ui) s.ui = window.SOPptxUI.create({ s: s, ctx: ctx, host: host, run: run, undo: undoOp, redo: redoOp, roPkg: roPkg, flush: flushEdits, openText: openTextFor, exit: exitEditor2, slideshow: slideshow, toast: ctx.toast, curBytes: curBytes, save: saveCopy });
-        s.ui.show(); ctx.setDirty(s.pkgOps > 0 || anyEdit(s));
+        s.ui.show(); ctx.setDirty(s.pkgOps > 0 || anyEdit(s) || cryptOnly());
       }
       function backToEditor() { flushEdits().then(function () { if (s.panel) s.panel.style.display = 'none'; return drawDeck(host, s, s.cur); }).then(function () { showEditor2(); }, function () { showEditor2(); }); }
       function openTextFor(filter) {
@@ -457,7 +461,7 @@
         });
       }
       function saveCopy() {
-        if (structOn() && s.info && (s.pkgOps > 0 || anyEdit(s))) { saveStruct(); return; }
+        if ((structOn() || cryptOnly()) && s.info && (s.pkgOps > 0 || anyEdit(s) || cryptOnly())) { saveStruct(); return; }
         if (!s.info || !anyEdit(s)) { ctx.toast(structOn() ? '아직 고친 곳이 없습니다.' : '아직 고친 곳이 없습니다.'); return; }
         var name = (ctx.name || 'slides.pptx').replace(/\.pptx$/i, '') + '_수정.pptx';
         ctx.confirmCopy('사본으로 저장', '고친 글자를 담아 「' + name + '」로 저장합니다.\n글꼴·그림·도형·애니메이션은 그대로 두고 글자만 바꿉니다. 원본은 바꾸지 않습니다.', '사본 저장', function () {
@@ -525,6 +529,7 @@
         return hash(s.info.slides.map(function (sl) { return sl.paras.map(function (p) { return p.ord + ':' + hash(p.text); }).join(','); }).join('|'));
       }
       s.api = {
+        cryptChanged: function () { ctx.setDirty(true); if (!s.editing && s.wrapper) ctx.setActions(viewActs()); },   // 암호만 걸거나 풀어도 「사본 저장」이 켜지게
         snapshot: function () {
           if (structOn() && s.info && (s.pkgOps > 0 || anyEdit(s))) return curBytes().then(function (b) { return { v: 2, fmt: 'pptx', blob: new Blob([b], { type: MIME }) }; });
           if (!s.info || !anyEdit(s)) return null;
@@ -562,7 +567,7 @@
               var p0 = s.info.slides[x.s].paras.filter(function (y) { return y.ord === x.o; })[0];
               if (x.t === p0.text) delete s.edits[x.s][x.o]; else s.edits[x.s][x.o] = x.t;
             });
-            ctx.setDirty(anyEdit(s) || s.pkgOps > 0);
+            ctx.setDirty(anyEdit(s) || s.pkgOps > 0 || cryptOnly());
             s.mode = 'one'; leaveEdit();
             ctx.toast('이어서 고칠 수 있게 고친 글 ' + data.edits.length + '곳을 되살렸습니다.', 3600);
             return true;
@@ -585,6 +590,7 @@
     canOpen: function (ext) { return ext === 'pptx'; },
     snapshot: function () { return state && state.api ? state.api.snapshot() : null; },
     restore: function (data) { return state && state.api ? state.api.restore(data) : Promise.resolve(false); },
+    cryptChanged: function () { if (state && state.api && state.api.cryptChanged) state.api.cryptChanged(); },
     open: function (ctx) {
       ctx.loadCss('js/smartoffice/pptx/so-pptx.css');
       return ctx.loadScript('vendor/so/pptx/pptx-preview.bundle.min.js').then(function () { return ctx.flag && ctx.flag('pptx') ? ctx.loadScript('vendor/so/docx/jszip.min.js').then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-edit.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-struct.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-anim.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-theme.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-diagram.js'); }).then(function () { return ctx.flag('pptxsa') ? ctx.loadScript('js/smartoffice/pptx/so-pptx-smartart.js').catch(function () {}) : null; }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-media.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui-ext.js'); }).then(function () { return ctx.loadScript('js/smartoffice/pptx/so-pptx-ui.js'); }) : null; }).then(function () {

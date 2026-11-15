@@ -588,7 +588,17 @@
     }).then(function () { return doc.save(); });
   }
   // 반환: Promise<true|false>(저장 성공 여부) — 「수정 요청」으로 넘어가기 전 저장이 이 값을 본다
+  // 도형·손그림 같은 작업 화면이 열려 있고 아직 「넣기」를 안 눌렀으면, 그 그림이 저장에서 빠진다고 먼저 알린다
   function save() {
+    var st = S && S.root && S.root.querySelector ? S.root.querySelector('.spp') : null, okb = st && st.querySelector('.spp-hb.ok');
+    if (okb && !okb.disabled && S.ctx && typeof S.ctx.confirm === 'function') {
+      var nm = okb.textContent || '넣기';
+      S.ctx.confirm('아직 넣지 않은 작업이 있습니다', '지금 그린 것은 「' + nm + '」를 눌러 문서에 넣어야 저장됩니다. 그냥 저장하면 이 작업은 빠집니다. 먼저 「' + nm + '」를 눌러 주십시오.', '빼고 저장', function () { save0(); }, { danger: true });
+      return Promise.resolve(false);
+    }
+    return save0();
+  }
+  function save0() {
     var ctx = S.ctx, cur = S;
     if (S.locked) { isLocked(); return Promise.resolve(false); }
     if (!S.anns.length && !S.workStack.length && !S.decrypted) { ctx.toast('아직 고친 것이 없습니다. 형광펜·글·메모·서명·쪽 정리를 한 뒤 저장해 주십시오.', 3000); return Promise.resolve(false); }

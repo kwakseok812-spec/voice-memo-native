@@ -1,9 +1,8 @@
 ISC License — WebAssembly build and wrapper of qpdf (@neslinesli93/qpdf-wasm v0.3.0)
 https://github.com/neslinesli93/qpdf-wasm
 
-Copyright (c) the @neslinesli93/qpdf-wasm contributors
-(정확한 저작권자 이름은 위 저장소의 LICENSE 파일을 따릅니다. 이 PC에는 그 원문 파일이 없어, 이음오피스 배포본이
- 「WebAssembly build and wrapper: ISC License」로 밝힌 내용만 옮겼습니다.)
+Copyright (c) 2026 Tommaso Pifferi
+(위 저장소의 LICENSE 에 적힌 저작권 줄입니다.)
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice

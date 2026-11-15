@@ -103,14 +103,24 @@
     };
 
     // ================================================================ 스타일 목록·만들기·고치기
+    // 영문으로 저장된 기본 스타일 이름은 화면에서만 한글로 보여 준다(저장되는 이름은 그대로)
+    var STYLE_KO = { 'normal': '기본', 'title': '표제', 'subtitle': '부제', 'header': '머리글', 'footer': '바닥글', 'caption': '캡션', 'hyperlink': '하이퍼링크', 'list paragraph': '목록 문단', 'body text': '본문', 'footnote reference': '각주 참조', 'footnote text': '각주 내용', 'endnote reference': '미주 참조', 'endnote text': '미주 내용', 'strong': '강조(굵게)', 'emphasis': '강조(기울임)', 'quote': '인용', 'no spacing': '간격 없음', 'table grid': '표 눈금', 'toc heading': '목차 제목', 'default paragraph font': '기본 문단 글꼴', 'page number': '쪽 번호', 'bibliography': '참고 문헌', 'plain text': '일반 텍스트' };
+    function styleLabel(nm) {
+      nm = String(nm || ''); var k = nm.replace(/\s*\(기본\)\s*$/, '').toLowerCase(), m;
+      if (STYLE_KO[k]) return STYLE_KO[k];
+      if ((m = /^heading (\d)$/.exec(k))) return '제목 ' + m[1];
+      if ((m = /^toc (\d)$/.exec(k))) return '목차 ' + m[1];
+      if ((m = /^(.+) char$/i.exec(nm))) return styleLabel(m[1]) + ' (글자)';
+      return nm;
+    }
     X.styleExtras = function (body, r) {
       var holder = el('div'); body.appendChild(holder);
       env.peek(function (pkg) { return MO().listStyles(pkg); }).then(function (ls) {
         if (!holder.isConnected) return;
         var BUILT = { 'normal': 1, 'title': 1, 'heading 1': 1, 'heading 2': 1, 'heading 3': 1 }, pls = ls.filter(function (s) { return s.type === 'paragraph' && !BUILT[s.name.toLowerCase()]; }), cls = ls.filter(function (s) { return s.type === 'character'; });
         var g1 = row(holder, '이 문서의 문단 스타일 ' + pls.length + '개 — 누르면 고른 문단에 입힘');
-        pls.slice(0, 60).forEach(function (s) { var b = chip(g1, s.name, false, function () { h.ctx().closeSheet(); setTimeout(function () { applyPara(r, s); }, 60); }, s.custom ? 'bold' : ''); });
-        if (cls.length) { var g2 = row(holder, '글자 스타일 — 고른 문단의 글 전체에'); cls.slice(0, 30).forEach(function (s) { chip(g2, s.name, false, function () { h.ctx().closeSheet(); setTimeout(function () { var q = need(); if (!q) return; opx('글자 스타일', function (x) { return MO().applyCharStyle(x, q.a, q.b, s.id); }, J('「' + s.name + '」', '을') + ' 입혔습니다', true); }, 60); }); }); chip(g2, '글자 스타일 풀기', false, function () { h.ctx().closeSheet(); setTimeout(function () { var q = need(); if (!q) return; opx('글자 스타일', function (x) { return MO().applyCharStyle(x, q.a, q.b, null); }, '글자 스타일을 풀었습니다', true); }, 60); }, 'danger'); }
+        pls.slice(0, 60).forEach(function (s) { var b = chip(g1, styleLabel(s.name), false, function () { h.ctx().closeSheet(); setTimeout(function () { applyPara(r, s); }, 60); }, s.custom ? 'bold' : ''); });
+        if (cls.length) { var g2 = row(holder, '글자 스타일 — 고른 문단의 글 전체에'); cls.slice(0, 30).forEach(function (s) { chip(g2, styleLabel(s.name), false, function () { h.ctx().closeSheet(); setTimeout(function () { var q = need(); if (!q) return; opx('글자 스타일', function (x) { return MO().applyCharStyle(x, q.a, q.b, s.id); }, J('「' + s.name + '」', '을') + ' 입혔습니다', true); }, 60); }); }); chip(g2, '글자 스타일 풀기', false, function () { h.ctx().closeSheet(); setTimeout(function () { var q = need(); if (!q) return; opx('글자 스타일', function (x) { return MO().applyCharStyle(x, q.a, q.b, null); }, '글자 스타일을 풀었습니다', true); }, 60); }, 'danger'); }
         var g3 = row(holder, '스타일 만들기·고치기'); chip(g3, '스타일 만들기·고치기', false, function () { h.ctx().closeSheet(); setTimeout(function () { X.styleForm(null); }, 60); }, 'big on');
         note(holder, '직접 만든 스타일은 목록에서 굵게 보이고, 만든 뒤 워드에서도 같은 이름의 스타일로 쓸 수 있습니다.');
       });
@@ -125,7 +135,7 @@
         var f = { name: '', type: 'paragraph', font: null, size: 11, bold: false, italic: false, color: null, align: 'left', spBefore: 0, spAfter: 6, line: 1.15 }, st = { id: null, custom: false }, body = el('div', 'sdx'), sh, repaints = [];
         function repaint() { repaints.forEach(function (fn) { fn(); }); }
         var pls = ls.filter(function (s) { return s.custom; });
-        if (ls.length) { var gl = row(body, '고칠 스타일 고르기(고르지 않으면 새로 만듭니다)'); ls.filter(function (s) { return s.type === 'paragraph'; }).slice(0, 40).forEach(function (s) { chip(gl, s.name + (s.custom ? '' : ' (기본)'), false, function () { st.id = s.id; st.custom = s.custom; f.name = s.name; f.type = s.type; var q = s.fmt; f.font = q.font || null; f.size = q.size || 11; f.bold = !!q.bold; f.italic = !!q.italic; f.color = q.color || null; f.align = q.align || 'left'; f.spBefore = q.spBefore != null ? q.spBefore : 0; f.spAfter = q.spAfter != null ? q.spAfter : 6; f.line = q.line || 1.15; nm.value = f.name; nm.disabled = !s.custom; repaint(); sync(); }); }); }
+        if (ls.length) { var gl = row(body, '고칠 스타일 고르기(고르지 않으면 새로 만듭니다)'); ls.filter(function (s) { return s.type === 'paragraph'; }).slice(0, 40).forEach(function (s) { chip(gl, styleLabel(s.name) + (s.custom ? '' : ' (기본 제공)'), false, function () { st.id = s.id; st.custom = s.custom; f.name = s.name; f.type = s.type; var q = s.fmt; f.font = q.font || null; f.size = q.size || 11; f.bold = !!q.bold; f.italic = !!q.italic; f.color = q.color || null; f.align = q.align || 'left'; f.spBefore = q.spBefore != null ? q.spBefore : 0; f.spAfter = q.spAfter != null ? q.spAfter : 6; f.line = q.line || 1.15; nm.value = f.name; nm.disabled = !s.custom; repaint(); sync(); }); }); }
         var nm = input(body, '스타일 이름(새로 만들 때)', ''); nm.addEventListener('input', function () { f.name = nm.value; });
         var gt = row(body, '종류(새로 만들 때)'); [['문단 스타일', 'paragraph'], ['글자 스타일', 'character']].forEach(function (a) { var b = chip(gt, a[0], false, function () { if (st.id) return; f.type = a[1]; repaint(); }); repaints.push(function () { b.classList.toggle('on', f.type === a[1]); }); });
         var gp = row(body, ''); chip(gp, '고른 문단의 모양 가져오기', false, function () { var q = ST.readFmt(S().xml, r.a); f.font = q.font || f.font; f.size = q.size || f.size; f.bold = !!q.bold; f.italic = !!q.italic; f.color = q.color || null; if (q.align) f.align = q.align; repaint(); toast('고른 문단의 글자 모양을 가져왔습니다', 2200); }, 'big');
@@ -151,13 +161,13 @@
     // ================================================================ 입력 칸(콘텐츠 컨트롤)
     X.controlSheet = function () {
       var r = need(); if (!r) return; if (!MO()) return;
-      var body = el('div', 'sdx'), sh = null, kind = 'check', fmt = 'yyyy-MM-dd';
+      var body = el('div', 'sdx'), sh = null, kind = 'check', fmt = 'yyyy-MM-dd', keepT = '', keepI = null;   // 종류를 눌러 화면을 다시 그려도 적은 제목·항목은 남긴다
       function render() {
         env.peek(function (pkg) { return pkg.read('word/document.xml'); }).then(function (x) {
           body.innerHTML = ''; var list = MO().listControls(x);
           var gk = row(body, '고른 문단 끝에 넣을 입력 칸'); [['체크 칸 ☐', 'check'], ['목록에서 고르기', 'drop'], ['날짜 고르기', 'date'], ['글 입력 칸', 'text']].forEach(function (a) { chip(gk, a[0], kind === a[1], function () { kind = a[1]; render(); }); });
-          var ti = input(body, '칸 제목(예: 동의, 부서, 날짜)'); var items = null;
-          if (kind === 'drop') items = area(body, '고를 항목을 한 줄에 하나씩', '개발\n영업\n인사', 4);
+          var ti = input(body, '칸 제목(예: 동의, 부서, 날짜)', keepT); var items = null; ti.addEventListener('input', function () { keepT = ti.value; });
+          if (kind === 'drop') { items = area(body, '고를 항목을 한 줄에 하나씩', keepI != null ? keepI : '개발\n영업\n인사', 4); items.addEventListener('input', function () { keepI = items.value; }); }
           if (kind === 'date') { var gd = row(body, '날짜 모양'); ['yyyy-MM-dd', 'yyyy.MM.dd', 'yyyy년 M월 d일'].forEach(function (f) { chip(gd, f, fmt === f, function () { fmt = f; render(); }); }); }
           var ga = row(body, ''); chip(ga, '입력 칸 넣기', false, function () {
             var o = { label: ti.value.trim(), items: items ? items.value.split(/\r?\n/) : null, format: fmt };

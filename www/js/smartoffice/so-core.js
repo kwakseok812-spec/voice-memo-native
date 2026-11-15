@@ -339,6 +339,7 @@
       fallback: function (reason) { if (c === cur) toConvert(c.file, reason || (SOFFICE_NAME + '가 이 문서는 아직 열지 못해 변환해서 보여 드립니다.')); },
       loadScript: loadScript, loadCss: loadCss,
       saveCopy: function (f, name, o) { return saveCopy(f, name, c, o); },   // o = { exact:true } 이면 모듈이 준 이름을 그대로 쓴다(나누기처럼 「_수정」이 아닌 새 파일)
+      cryptTouched: function () { return !!c.cryptTouched; },
       setDirty: function (v) { c.dirty = !!v; if (c.dirty) startAuto(c); else stopAuto(c); },
       onBack: function (fn) { c.backFn = (typeof fn === 'function') ? fn : null; },
       confirm: function (t, m, label, fn, o) { if (typeof cfg.confirm === 'function') cfg.confirm(t, m, label, fn, o); else fn(); },
@@ -554,9 +555,11 @@
   }
   // 반환: Promise — 저장이 끝났으면 true, 실패했으면 false(실패 안내 시트는 틀이 띄운다). 모듈은 true 일 때만 성공 안내·setDirty(false) 를 한다.
   function saveCopy(f, name, c, o) {
-    if (c && c.savePw && flagOn('crypt')) return encryptForSave(f, name, c).then(function (nf) { return nf ? saveCopy0(nf, name, c, o) : false; });
-    return saveCopy0(f, name, c, o);
+    var p = (c && c.savePw && flagOn('crypt')) ? encryptForSave(f, name, c).then(function (nf) { return nf ? saveCopy0(nf, name, c, o) : false; }) : saveCopy0(f, name, c, o);
+    return Promise.resolve(p).then(function (ok) { if (ok !== false && c) c.cryptTouched = false; return ok; });   // 저장이 끝나면 「암호만 바꾼 상태」도 정리한다
   }
+  // 암호를 걸거나 풀면 고친 곳이 없어도 「사본 저장」이 되게 모듈에 알린다(모듈은 ctx.cryptTouched() 를 고침으로 센다)
+  function cryptTouch(c) { c.cryptTouched = true; try { if (c.mod && typeof c.mod.cryptChanged === 'function') c.mod.cryptChanged(); } catch (e) {} }
   function saveCopy0(f, name, c, o) {
     var file = (f instanceof File) ? f : new File([f], name || 'document', { type: (f && f.type) || 'application/octet-stream' });
     var want = name;
@@ -813,12 +816,12 @@
   function cryptSheet(c) {
     var has = !!c.savePw, pb = pwBody(true, has ? '지금은 사본을 저장할 때 암호가 걸립니다. 새 암호를 적으면 바뀌고, 「암호 풀고 저장」을 누르면 암호 없이 저장됩니다.' : '사본을 저장할 때 이 암호가 걸립니다. 열 때마다 암호를 묻습니다. 암호를 잊으면 누구도 열 수 없으니(복구 방법이 없습니다) 꼭 적어 두십시오. 암호는 이 폰 안에서만 쓰이고 저장하거나 보내지 않습니다.');
     var btns = [{ label: '닫기' }];
-    if (has) btns.push({ label: '암호 풀고 저장', danger: true, onClick: function () { c.savePw = ''; delete c.savePw; toast('이제 사본이 암호 없이 저장됩니다.', 3200); return true; } });
+    if (has) btns.push({ label: '암호 풀고 저장', danger: true, onClick: function () { c.savePw = ''; delete c.savePw; cryptTouch(c); toast('이제 사본이 암호 없이 저장됩니다. 「사본 저장」을 눌러 저장하십시오.', 3600); return true; } });
     btns.push({ label: has ? '암호 바꾸기' : '암호 걸기', primary: true, onClick: function () {
       var a = pb.a.value, b = pb.b.value;
       if (!a) { pb.msg.textContent = '암호를 적어 주십시오.'; return false; }
       if (a !== b) { pb.msg.textContent = '두 암호가 서로 다릅니다.'; return false; }
-      c.savePw = a; c.noRec = true; toast('사본을 저장할 때 암호를 겁니다. 고치던 내용은 이 앱에 임시 보관하지 않습니다.', 4200); return true;
+      c.savePw = a; c.noRec = true; cryptTouch(c); toast('사본을 저장할 때 암호를 겁니다. 이어서 「사본 저장」을 누르십시오. 고치던 내용은 이 앱에 임시 보관하지 않습니다.', 4600); return true;
     } });
     openSheet(c, { title: has ? '저장할 때 거는 암호' : '암호 걸어 저장하기', body: pb.el, buttons: btns });
     setTimeout(function () { try { pb.a.focus(); } catch (e) {} }, 300);

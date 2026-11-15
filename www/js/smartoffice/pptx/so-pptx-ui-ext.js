@@ -10,6 +10,7 @@
   'use strict';
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   var ST = function () { return global.SOPptxStruct; };
+  function fontLabel(f) { f = String(f || ''); if (f.charAt(0) !== '+') return f; return /^\+mj/.test(f) ? '테마의 제목 글꼴' : (/^\+mn/.test(f) ? '테마의 본문 글꼴' : '테마 글꼴'); }   // 내부 글꼴 코드(+mj-lt 등)는 쉬운 말로
   var X = { api: null };
 
   // ======================= 움직임 효과 시트 =======================
@@ -133,13 +134,13 @@
         var gb = api.group(body, '배경색' + (M.bg ? ' — 지금 ' + (/^[0-9A-F]{6}$/.test(M.bg) ? '#' + M.bg : '기본') : ''));
         api.btn(gb, '기본으로', function () { var o = { bg: '', allLayouts: mOpts.allLayouts }; mset(o, '마스터 배경을 기본으로 되돌렸습니다'); }, '', undefined, true);
         D_BG.forEach(function (c) { api.btn(gb, c[0], function () { mset({ bg: c[1], allLayouts: mOpts.allLayouts }, '마스터 배경색을 바꿨습니다'); }, M.bg === c[1] ? 'on' : '', c[1], true); });
-        var gt = api.group(body, '제목 글꼴' + (M.title && M.title.font ? ' — 지금 ' + M.title.font : ''));
+        var gt = api.group(body, '제목 글꼴' + (M.title && M.title.font ? ' — 지금 ' + fontLabel(M.title.font) : ''));
         D_FONTS.forEach(function (f) { api.btn(gt, f, function () { mset({ titleFont: f }, '제목 글꼴을 바꿨습니다'); }, M.title && M.title.font === f ? 'on' : '', undefined, true); });
         var gts = api.group(body, '제목 크기(pt)' + (M.title && M.title.size ? ' — 지금 ' + M.title.size : ''));
         D_TSIZES.forEach(function (z) { api.btn(gts, String(z), function () { mset({ titleSize: z }, '제목 크기를 바꿨습니다'); }, M.title && M.title.size === z ? 'on' : '', undefined, true); });
         var gtb = api.group(body, '제목 굵기'); api.btn(gtb, '굵게', function () { mset({ titleBold: true }, '제목을 굵게 했습니다'); }, M.title && M.title.bold === true ? 'on' : '', undefined, true); api.btn(gtb, '보통', function () { mset({ titleBold: false }, '제목을 보통 굵기로 했습니다'); }, M.title && M.title.bold === false ? 'on' : '', undefined, true);
         var gtc = api.group(body, '제목 색'); D_COLORS.forEach(function (c) { api.btn(gtc, c[0], function () { mset({ titleColor: c[1] }, '제목 색을 바꿨습니다'); }, M.title && M.title.color === c[1] ? 'on' : '', c[1], true); });
-        var gbf = api.group(body, '본문 글꼴' + (M.body && M.body.font ? ' — 지금 ' + M.body.font : ''));
+        var gbf = api.group(body, '본문 글꼴' + (M.body && M.body.font ? ' — 지금 ' + fontLabel(M.body.font) : ''));
         D_FONTS.forEach(function (f) { api.btn(gbf, f, function () { mset({ bodyFont: f }, '본문 글꼴을 바꿨습니다'); }, M.body && M.body.font === f ? 'on' : '', undefined, true); });
         var gbs = api.group(body, '본문 첫 단계 크기(pt, 아랫 단계는 비율대로)' + (M.body && M.body.size ? ' — 지금 ' + M.body.size : ''));
         D_BSIZES.forEach(function (z) { api.btn(gbs, String(z), function () { mset({ bodySize: z }, '본문 크기를 바꿨습니다'); }, M.body && M.body.size === z ? 'on' : '', undefined, true); });

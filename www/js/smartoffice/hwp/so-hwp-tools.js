@@ -862,7 +862,7 @@
       colLeft: { g: '←칸', l: '왼쪽 칸', run: function () { addCol('left'); } },
       cellSplit: { g: '나눔', l: '칸 나누기', run: run('table:cell-split', null) },
       tableDel: { g: '표✕', l: '표 지우기', run: run('table:delete', '표를 지웠습니다(되돌리려면 취소 단추)', { title: '표를 지우시겠습니까?', msg: '표와 표 안의 글이 모두 지워집니다. 지운 직후에는 「취소」 단추로 되돌릴 수 있습니다.', label: '표 지우기' }) },
-      picDel: { g: '🗑', l: '그림 지우기', run: run('insert:picture-delete', '그림을 지웠습니다(되돌리려면 취소 단추)') }
+      picDel: { g: '🗑', l: '개체 지우기', run: run('insert:picture-delete', '고른 그림·도형·글상자를 지웠습니다(되돌리려면 취소 단추)') }
     };
 
     // v10.9 6회차: 도형·글상자·수식 넣기 / 개체 고치기 / 스타일·번호(so-hwp-obj.js, 스위치 SO_HWP_OBJ). 새 단추는 「더보기」 안(글)과 그림·도형을 눌렀을 때의 줄 한 칸뿐이다.

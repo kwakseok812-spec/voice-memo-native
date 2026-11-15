@@ -181,7 +181,7 @@
         if (!cfg.rows.length || !cfg.data.length) { toast('행 필드와 값을 하나 이상 골라 주십시오.', 3000); return false; }
         var c = JSON.parse(JSON.stringify(cfg));
         if (o.mode === 'new') {
-          c.newSheet = (nameInp && nameInp.value.trim()) || uniqueSheet('피벗 표'); c.name = 'PivotTable';
+          c.newSheet = (nameInp && nameInp.value.trim()) || uniqueSheet('피벗 표'); c.name = '피벗표';
           run('피벗 표 만들기', function (pkg) { return PV().createPivot(pkg, c); }, function (r) { return '피벗 표를 만들었습니다(「' + c.newSheet + '」 시트, 자료 ' + r.nRec + '줄 반영)'; }, function (r) { U.goto(c.newSheet); });
         } else {
           run('피벗 표 고치기', function (pkg) { return PV().updatePivot(pkg, o.name, { rows: c.rows, cols: c.cols, pages: c.pages, data: c.data, hidden: c.hidden, pageSel: c.pageSel }); }, '피벗 표를 고쳤습니다', function () { U.goto(o.sheet); });
@@ -326,7 +326,7 @@
       var rg = rangeOfSel(), nm = nameNow(), single = rg.r0 === rg.r1 && rg.c0 === rg.c1, ex = spkAtSel();
       var st = { dir: (rg.c1 - rg.c0) >= (rg.r1 - rg.r0) ? 'row' : 'col', type: 'line', color: '376092', marks: {} }, body = el('div', 'sxu');
       if (ex.length) { st.type = ex[0].type; st.color = (ex[0].colors.series || 'FF376092').slice(2); ['high', 'low', 'first', 'last', 'negative', 'markers'].forEach(function (k) { st.marks[k] = !!ex[0][k]; }); }
-      body.appendChild(el('div', 'sxu-l', ex.length ? '고른 칸의 스파크라인(' + ex.reduce(function (a, g) { return a + g.items.length; }, 0) + '개) 모양 바꾸기' : '고른 범위 ' + a1(rg) + (single ? ' — 두 칸 이상 골라 주십시오' : '') + ' 에 스파크라인 넣기'));
+      body.appendChild(el('div', 'sxu-l', ex.length ? '고른 칸의 스파크라인(' + ex.reduce(function (a, g) { return a + g.items.length; }, 0) + '개) 모양 바꾸기' : (single ? '스파크라인을 넣으려면 먼저 시트에서 숫자가 든 칸을 두 칸 이상 골라 주십시오. 지금은 ' + a1(rg) + ' 한 칸만 골라져 있습니다.' : '고른 범위 ' + a1(rg) + ' 에 스파크라인을 넣습니다.')));
       chips(body, '종류', [['line', '꺾은선'], ['column', '막대'], ['stacked', '승패(+/−)']], function () { return st.type; }, function (v) { st.type = v; });
       if (!ex.length) chips(body, '그래프 하나가 되는 방향', [['row', '줄마다(오른쪽 칸에)'], ['col', '열마다(아래 칸에)']], function () { return st.dir; }, function (v) { st.dir = v; });
       chips(body, '색', SPK_COLORS.map(function (c) { return [c[1], c[0]]; }), function () { return st.color; }, function (v) { st.color = v; });

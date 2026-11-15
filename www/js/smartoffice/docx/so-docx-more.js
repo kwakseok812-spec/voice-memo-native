@@ -255,7 +255,7 @@
       pr += '<w:dropDownList>' + items.map(function (s) { return '<w:listItem w:displayText="' + esc(s) + '" w:value="' + esc(s) + '"/>'; }).join('') + '</w:dropDownList>'; content = sdtRun(items[0]);
     } else if (kind === 'date') {
       var fmt = o.format || 'yyyy-MM-dd'; pr += '<w:date><w:dateFormat w:val="' + esc(fmt) + '"/><w:lid w:val="ko-KR"/><w:storeMappedDataAs w:val="dateTime"/><w:calendar w:val="gregorian"/></w:date>'; content = sdtRun(fmtDate(new Date(), fmt));
-    } else if (kind === 'text') { pr += '<w:text/>'; content = sdtRun(o.value || '내용을 적으세요'); }
+    } else if (kind === 'text') { pr += '<w:text/>'; content = sdtRun(o.value || '내용을 적으십시오'); }
     else return { err: '알 수 없는 종류입니다.' };
     var sdt = '<w:sdt' + ns + '>' + pr + '</w:sdtPr><w:sdtContent>' + content + '</w:sdtContent></w:sdt>';
     var r = appendToPara(xml, xi, sdt); if (r.err) return r; return { xml: r.xml, id: id };

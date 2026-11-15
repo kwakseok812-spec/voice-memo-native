@@ -287,7 +287,14 @@
       var s = S(), ws = wsOf(s.sh.name), c = rg.c1 + 2, r = rg.r0; if (!ws || !ws['!ref']) return { c: c, r: r };
       var d = X().utils.decode_range(ws['!ref']), busy = false;
       for (var rr = r; rr < r + 15 && !busy; rr++) for (var cc = c; cc < c + 8; cc++) { var x = cellAt(ws, rr, cc); if (x && x.v != null && x.v !== '') { busy = true; break; } }
-      return busy ? { c: Math.max(c, d.e.c + 2), r: r } : { c: c, r: r };
+      var at = busy ? { c: Math.max(c, d.e.c + 2), r: r } : { c: c, r: r };
+      // 앞서 넣은 차트와 겹치면 그 아래로 내려 놓는다(연달아 넣어도 한 자리에 쌓이지 않게)
+      var boxes = (s.charts || []).map(function (ch) { var a = ch.anchor || {}; if (!a.from) return null; return { c0: a.from.c, r0: a.from.r, c1: a.to ? a.to.c + 1 : a.from.c + 8, r1: a.to ? a.to.r + 1 : a.from.r + 15 }; }).filter(Boolean);
+      for (var k = 0; k < 40; k++) {
+        var hit = boxes.filter(function (b) { return at.c < b.c1 && at.c + 8 > b.c0 && at.r < b.r1 && at.r + 15 > b.r0; })[0];
+        if (!hit) break; at = { c: at.c, r: hit.r1 + 1 };
+      }
+      return at;
     }
     // ---------------- 새 차트 ----------------
     U.create = function () {
@@ -306,7 +313,7 @@
           note: '고른 칸(' + b.text.replace(/^[^!]*!/, '') + ')으로 만든 그림입니다. 엑셀에서 칸 값을 고치면 차트도 따라 바뀝니다.',
           onApply: function (spec) {
             var at = placeAt(cur.rg), sx = Ch().clone(spec), fin = liveSpec(sx);
-            run('차트 만들기', function (pkg) { return addChart(pkg, S().sh.name, fin, at); }, '차트를 넣었습니다(' + Ch().TYPE_NAME[fin.type] + ') — 눌러서 고치기·옮기기', function () { setTimeout(function () { var ss = S(); if (ss && ss.el) { var px = colPx(ss.sh, at.c) * ss.scale - 20, py = rowPx(ss.sh, at.r) * ss.scale - 20; ss.el.sc.scrollLeft = Math.max(0, px); ss.el.sc.scrollTop = Math.max(0, py); } }, 400); });
+            run('차트 만들기', function (pkg) { return addChart(pkg, S().sh.name, fin, at); }, '차트를 넣었습니다(' + Ch().TYPE_NAME[fin.type] + (fin.d3 ? ', 입체' : '') + ') — 눌러서 고치기·옮기기', function () { setTimeout(function () { var ss = S(); if (ss && ss.el) { var px = colPx(ss.sh, at.c) * ss.scale - 20, py = rowPx(ss.sh, at.r) * ss.scale - 20; ss.el.sc.scrollLeft = Math.max(0, px); ss.el.sc.scrollTop = Math.max(0, py); } }, 400); });
           } });
       }).catch(function (e) { toast('차트 부품을 불러오지 못했습니다: ' + ((e && e.message) || e), 4200); });
     };

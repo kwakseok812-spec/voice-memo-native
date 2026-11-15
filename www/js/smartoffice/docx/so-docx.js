@@ -394,7 +394,7 @@
       ctx.setActions([
         { label: '보기로', onClick: function () { exitEdit(); } }
       ].concat(structOn() ? [{ label: '↶', onClick: function () { structUndo(); } }, { label: '↷', onClick: function () { structRedo(); } }] : [], [
-        { label: '사본 저장', primary: true, disabled: n === 0 && !(structOn() && S.pkgOps > 0), onClick: function () { saveEdits(); } }
+        { label: '사본 저장', primary: true, disabled: n === 0 && !(structOn() && S.pkgOps > 0) && !cryptOnly(), onClick: function () { saveEdits(); } }
       ]));
     } else {
       ctx.setActions([
@@ -627,8 +627,9 @@
     else { nodes[0].nodeValue = text; for (var i = 1; i < nodes.length; i++) nodes[i].nodeValue = ''; }
     p.classList.add('so-docx-edited');
   }
+  function cryptOnly() { return !!(ctxRef && ctxRef.cryptTouched && ctxRef.cryptTouched()); }   // 암호만 걸거나 푼 상태도 저장할 것으로 센다
   function afterChange() {
-    ctxRef.setDirty(editCount() > 0 || (S && S.pkgOps > 0));
+    ctxRef.setDirty(editCount() > 0 || (S && S.pkgOps > 0) || cryptOnly());
     setActions(); setTip();
   }
 
@@ -842,9 +843,9 @@
 
   // ---- 저장: 고친 문단만 끼워 넣고, 다시 열어 스스로 검사한다
   function saveEdits() {
-    if (!S || !(editCount() || (structOn() && S.pkgOps > 0))) return;
+    if (!S || !(editCount() || (structOn() && S.pkgOps > 0) || cryptOnly())) return;
     var ctx = ctxRef, n = editCount();
-    if (structOn() && S.pkgOps > 0) { saveStruct(); return; }
+    if (structOn() && (S.pkgOps > 0 || (cryptOnly() && !n))) { saveStruct(); return; }
     var base = String(ctx.name || 'document').replace(/\.docx$/i, '');
     var outName = base + '_수정.docx';
     ctx.confirmCopy('사본으로 저장', n + '개 문단을 고친 사본을 「' + outName + '」로 저장합니다.\n그림·표·번호·머리글 같은 나머지는 원본 그대로 두고, 원본 파일은 바꾸지 않습니다.', '사본 저장', function () {
@@ -1187,6 +1188,7 @@
       });
     },
     exportPdf: function () { exportPdf(); },
+    cryptChanged: function () { if (S && ctxRef) afterChange(); },
     close: function () {
       if (bar && bar.parentNode) bar.parentNode.removeChild(bar); bar = null; ui = null; unbindKeys();
       cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = [];

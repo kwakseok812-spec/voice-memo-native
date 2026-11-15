@@ -425,7 +425,7 @@
         var wbx = info.wb, mx = 0; (wbx.match(/<pivotCache\b[^>]*>/g) || []).forEach(function (t) { mx = Math.max(mx, +(attr(t, 'cacheId') || 0)); });
         var names = {}; return listPivots(pkg).then(function (ex) {
           ex.forEach(function (p) { names[p.name.toLowerCase()] = 1; });
-          var base = cfg.name || 'PivotTable', nm = base, k = 1; while (names[nm.toLowerCase()]) nm = base + (++k); cfg.name = nm;
+          var base = cfg.name || '피벗표', nm = base, k = 1; while (names[nm.toLowerCase()]) nm = base + (++k); cfg.name = nm;
           var place = { tablePath: 'xl/pivotTables/pivotTable' + nTable + '.xml', cachePath: 'xl/pivotCache/pivotCacheDefinition' + nCache + '.xml', recPath: 'xl/pivotCache/pivotCacheRecords' + nRec + '.xml', cacheId: mx + 1, x14: String(100000000 + Math.floor(Math.random() * 800000000)), r0: cfg.r0, c0: cfg.c0 };
           return buildAll(pkg, cfg, place, null, null).then(function (res) {
             if (res.err) return res;
