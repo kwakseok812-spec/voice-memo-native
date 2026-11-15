@@ -98,3 +98,11 @@ html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0
 .sdx-chg .sdx-r .sdx-b{min-width:88px}
 
 .sdx-stat{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--glass);min-width:96px}.sdx-stat span{font-size:12px;opacity:.7}.sdx-stat b{font-size:15px}
+/* v10.9 4회차: 도형 미리 그림 · 수식 미리 보기 */
+.so-docx-shapes{margin:2px 0 4px;padding:0}
+.so-docx-shape{margin:2px 0;cursor:pointer}
+.so-docx-shape:active{opacity:.8}
+.sdx-mathprev{min-height:54px;margin:6px 0 8px;padding:10px;border-radius:12px;border:1.5px dashed var(--glass-b,#ccd);background:var(--in-bg,rgba(127,127,127,.06));overflow-x:auto;text-align:center;font-size:20px;color:var(--text,#111)}
+.sdx-mathprev math{font-size:1.15em}
+.sdx-shape-prev{min-height:46px;margin:2px 0 8px;padding:10px;border-radius:12px;border:1.5px dashed var(--glass-b,#ccd);background:var(--in-bg,rgba(127,127,127,.06));overflow:auto;text-align:center}
+.sdx-b.sym{min-width:46px;padding:0 10px;font-size:17px}

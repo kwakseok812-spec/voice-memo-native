@@ -35,6 +35,9 @@
         setTimeout(refillSheet, 30);
       });
     }
+    var X = null;
+    function XM() { if (!X && global.SODocxUIMore) X = global.SODocxUIMore.create({ env: env, ST: ST, ctx: ctx, toast: toast, need: need, fail: fail, S: S, J: J, op: op }); return X; }
+    function xcall(name) { return function () { var x = XM(); if (x && x[name]) x[name](); else toast('이 기능의 부품을 불러오지 못했습니다.', 3200); }; }
     var curSheet = null, keepMode = false;
     function sheet(title, build, noBtn, keep) {            // keep=true 면 항목을 눌러도 닫히지 않는다(「닫기」로 닫음) — 적용한 뒤 시트 안을 문서 상태에 맞게 다시 그린다
       var body = el('div', 'sdx'); keepMode = !!keep; build(body); keepMode = false;
@@ -92,9 +95,9 @@
       var r = need(); if (!r) return;
       sheet('문단 ' + (r.a + 1) + (r.b > r.a ? '~' + (r.b + 1) : ''), function (body) {
         var g = grid(body);
-        btn(g, '아래에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.b, '', true); return { xml: y, newA: r.b + 1, newB: r.b + 1 }; }, '문단을 하나 넣었습니다', true); }, 'big');
-        btn(g, '위에 문단 넣기', function () { op('문단 넣기', function (x) { var y = ST.insertPara(x, r.a, '', false); return { xml: y, newA: r.a, newB: r.a }; }, '문단을 하나 넣었습니다', true); }, 'big');
-        btn(g, '문단 지우기', function () { ctx().confirm('고른 문단 ' + (r.b - r.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { op('문단 지우기', function (x) { return ST.deleteParas(x, r.a, r.b); }, function (q) { return q.blanked ? '내용을 비웠습니다(칸·본문의 마지막 문단이라 남겼습니다)' : '지웠습니다(되돌리려면 ↶)'; }); }, { danger: true }); }, 'big danger');
+        btn(g, '아래에 문단 넣기', function () { if (S().track) { env.trackInsert(r.b, true); return; } op('문단 넣기', function (x) { var y = ST.insertPara(x, r.b, '', true); return { xml: y, newA: r.b + 1, newB: r.b + 1 }; }, '문단을 하나 넣었습니다', true); }, 'big');
+        btn(g, '위에 문단 넣기', function () { if (S().track) { env.trackInsert(r.a, false); return; } op('문단 넣기', function (x) { var y = ST.insertPara(x, r.a, '', false); return { xml: y, newA: r.a, newB: r.a }; }, '문단을 하나 넣었습니다', true); }, 'big');
+        btn(g, '문단 지우기', function () { ctx().confirm('고른 문단 ' + (r.b - r.a + 1) + '개를 지우시겠습니까?', '지운 직후에는 ↶ 로 되돌릴 수 있습니다.', '지우기', function () { if (S().track) { env.trackDelete(r.a, r.b); return; } op('문단 지우기', function (x) { return ST.deleteParas(x, r.a, r.b); }, function (q) { return q.blanked ? '내용을 비웠습니다(칸·본문의 마지막 문단이라 남겼습니다)' : '지웠습니다(되돌리려면 ↶)'; }); }, { danger: true }); }, 'big danger');
         btn(g, '여기부터 쪽 설정 따로', function () { op('쪽 설정 따로', function (x) { return ST.sectionBreakAfter(x, r.b); }, '여기부터 쪽 설정을 따로 바꿀 수 있게 나눴습니다(처음엔 앞과 같은 설정)', true); }, 'big');
         btn(g, '링크', function () { linkSheet(r); }, 'big'); btn(g, '각주 넣기', function () { noteSheet('footnote', r); }, 'big'); btn(g, '미주 넣기', function () { noteSheet('endnote', r); }, 'big');
         btn(g, '쪽 나누기 넣기', function () { op('쪽 나누기', function (x) { return ST.pageBreakAfter(x, r.b); }, '쪽 나누기를 넣었습니다', true); }, 'big');
@@ -104,6 +107,7 @@
         if (r.a === r.b) btn(g, '글 고치기', function () { env.editText(r.a); }, 'big');
         body.appendChild(el('div', 'sdx-l', '넣기')); var g2 = grid(body);
         btn(g2, '기호·날짜 넣기', symSheet, 'big'); btn(g2, '책갈피', bookmarkSheet, 'big'); btn(g2, '상호 참조', refSheet, 'big'); btn(g2, '그림·표 이름', captionSheet, 'big'); btn(g2, '목차 넣기·갱신', tocNow, 'big');
+        btn(g2, '수식', xcall('mathSheet'), 'big'); btn(g2, '입력 칸(체크·목록·날짜)', xcall('controlSheet'), 'big'); btn(g2, '인용·참고문헌', xcall('citeSheet'), 'big'); btn(g2, '색인', xcall('indexSheet'), 'big');
         body.appendChild(el('div', 'so-sheet-note', '문서에서 문단을 눌러 고르면 맨 위에 「고른 문단」이 보입니다. 여러 문단은 「범위」로 고릅니다. 같은 문단을 한 번 더 누르면 글 고치기가 열립니다.'));
       });
     }
@@ -168,6 +172,7 @@
           }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('「' + it[0] + '」로 바꿨습니다', 2400); });
         }, 'big'); });
         body.appendChild(el('div', 'so-sheet-note', '제목 스타일은 쪽·목차 이동의 「목차」에 나타납니다.'));
+        var xm = XM(); if (xm) xm.styleExtras(body, r);
       });
     }
     // ---------------- 서식 ----------------
@@ -307,6 +312,7 @@
         var g = grid(body);
         btn(g, '그림 넣기(사진·파일)', pickPicture, 'big');
         if (chartOn()) { btn(g, '차트 넣기', chartNew, 'big'); btn(g, '차트 고치기', chartEdit, 'big'); btn(g, '차트 지우기', chartDel, 'big danger'); }
+        btn(g, '도형 넣기·고치기', xcall('shapeSheet'), 'big');
         btn(g, '그림 지우기', function () { var r = need(); if (!r) return; op('그림 지우기', function (x) { return ST.removePicture(x, r.a); }, '그림을 지웠습니다(되돌리려면 ↶)', true); }, 'big danger');
         btn(g, '크게 ×1.25', function () { var r = need(); if (!r) return; op('그림 크기', function (x) { return ST.scalePicture(x, r.a, 1.25); }, '그림을 키웠습니다', true); }, 'big');
         btn(g, '작게 ×0.8', function () { var r = need(); if (!r) return; op('그림 크기', function (x) { return ST.scalePicture(x, r.a, 0.8); }, '그림을 줄였습니다', true); }, 'big');
@@ -396,18 +402,18 @@
         var body = el('div', 'sdx');
         body.appendChild(el('div', 'sdx-l', '고른 문단 맨 끝에 넣을 참조 — 무엇을 가리킬까요?'));
         var gm = group(body, '넣을 모양'), bm = {};
-        [['all', '글 전체(예: 제목·이름 글)'], ['num', '이름표와 번호만(예: 그림 1)']].forEach(function (k) { var b = el('button', 'sdx-b', k[1]); b.type = 'button'; b.onclick = function () { mode = k[0]; paint(); }; gm.appendChild(b); bm[k[0]] = b; });
+        [['all', '글 전체(예: 제목·이름 글)'], ['num', '이름표와 번호만(예: 그림 1)'], ['page', '쪽 번호(예: 3)']].forEach(function (k) { var b = el('button', 'sdx-b', k[1]); b.type = 'button'; b.onclick = function () { mode = k[0]; paint(); }; gm.appendChild(b); bm[k[0]] = b; });
         function paint() { Object.keys(bm).forEach(function (k) { bm[k].classList.toggle('on', mode === k); }); } paint();
         if (!list.length) body.appendChild(el('div', 'so-sheet-note', '가리킬 것이 없습니다. 제목 스타일을 쓴 문단, 「그림·표 이름」을 넣은 문단, 책갈피가 있으면 여기에 나타납니다.'));
         var g = el('div', 'sdx-g'); body.appendChild(g);
         list.slice(0, 80).forEach(function (t) {
           var b = el('button', 'sdx-b big', t.label); b.type = 'button';
           b.onclick = function () { ctx().closeSheet(); setTimeout(function () {
-            op('상호 참조', function (x) { var q = ST.addCrossRef(x, r.b, t, t.kind === 'caption' ? mode : 'all'); return q.err ? q : { xml: q.xml }; }, '상호 참조를 넣었습니다(글이 바뀌면 워드에서 「필드 업데이트」로 따라 바뀝니다)', true);
+            op('상호 참조', function (x) { var q = ST.addCrossRef(x, r.b, t, mode === 'page' ? 'page' : (t.kind === 'caption' ? mode : 'all'), mode === 'page' ? (env.pageOf(t.xi) || 1) : 0); return q.err ? q : { xml: q.xml }; }, '상호 참조를 넣었습니다(글이 바뀌면 워드에서 「필드 업데이트」로 따라 바뀝니다)', true);
           }, 60); };
           g.appendChild(b);
         });
-        body.appendChild(el('div', 'so-sheet-note', '넣은 글은 눌러 가는 링크(워드에서 Ctrl+누르기)이며, 가리키는 제목·이름의 글이 나중에 바뀌면 워드에서 「필드 업데이트」를 해 주십시오. 폰 화면에서는 넣을 때의 글이 보입니다. 이름표와 번호만은 「그림·표 이름」을 넣은 문단에서만 됩니다.'));
+        body.appendChild(el('div', 'so-sheet-note', '「쪽 번호」는 가리키는 곳이 있는 쪽 번호(폰 화면 기준)를 넣는 진짜 쪽 번호 참조입니다(워드에서 「필드 업데이트」로 맞춤). 넣은 글은 눌러 가는 링크(워드에서 Ctrl+누르기)이며, 가리키는 제목·이름의 글이 나중에 바뀌면 워드에서 「필드 업데이트」를 해 주십시오. 폰 화면에서는 넣을 때의 글이 보입니다. 이름표와 번호만은 「그림·표 이름」을 넣은 문단에서만 됩니다.'));
         ctx().sheet({ title: '상호 참조', body: body, wide: true, buttons: [{ label: '닫기' }] });
       });
     }
@@ -457,13 +463,9 @@
           btn2(g2, '모두 수락', function () { resolveAll(true); }, 'big'); btn2(g2, '모두 거절', function () { resolveAll(false); }, 'big danger');
           btn2(g2, '하나씩 보기', function () { ctx().closeSheet(); setTimeout(function () { changeList(chs); }, 60); }, 'big wide');
         }
-        body.appendChild(el('div', 'sdx-l', '변경 기록'));
-        if (trk) {
-          var g3 = grid(body), tb = el('button', 'sdx-b big', '변경 기록 끄기'); tb.type = 'button';
-          tb.onclick = function () { env.run('변경 기록', function (pkg) { return ST.setTrack(pkg, false).then(function (z) { return z.err ? z : {}; }); }, function (z) { if (z && z.err) { fail(z.err); return; } toast('변경 기록을 껐습니다. 이미 남은 변경 내용은 위에서 수락·거절합니다.', 4200); }); };
-          g3.appendChild(tb);
-          body.appendChild(el('div', 'so-sheet-note', '이 문서는 변경 기록이 켜져 있어 폰에서는 글을 고칠 수 없습니다(고친 내용이 기록 없이 들어가는 것을 막기 위해서입니다). 변경 내용을 모두 처리한 뒤 「변경 기록 끄기」를 누르면 글을 고칠 수 있습니다.'));
-        } else body.appendChild(el('div', 'so-sheet-note', '이 앱에서 직접 고친 내용은 변경 기록으로 남기지 않고 바로 반영합니다. 변경 기록을 켜서 고치려면 워드·한컴에서 열어 주십시오.'));
+        var xm = XM(); body.appendChild(el('div', 'sdx-l', '점검·비교'));
+        if (xm) { xm.reviewButtons(body); xm.trackGroup(body, trk); }
+        else body.appendChild(el('div', 'so-sheet-note', '이 앱에서 직접 고친 내용은 변경 기록으로 남기지 않고 바로 반영합니다.'));
         ctx().sheet({ title: '메모·변경 내용', body: body, wide: true, buttons: [{ label: '닫기' }] });
       });
     }
@@ -596,6 +598,7 @@
       if (!U.lab) return; var r = rg(), s = S();
       if (s && s.revOnly) { U.lab.textContent = '변경 추적 문서입니다 — 「검토」에서 변경 내용을 수락·거절한 뒤에 고칠 수 있습니다'; return; }
       U.lab.textContent = s && s.rangeMode ? '범위의 끝 문단을 눌러 주십시오…' : (r ? '고른 문단 ' + (r.a + 1) + (r.b > r.a ? '~' + (r.b + 1) + ' (' + (r.b - r.a + 1) + '개)' : '') + (r.b === r.a ? ' · 한 번 더 누르면 글 고치기' : '') : '문단을 한 번 누르면 고릅니다 · 점선 문단은 한 번 더 누르면 글을 고칩니다');
+      if (s && s.track && !s.rangeMode) U.lab.textContent += ' · 변경 기록 켜짐(글·문단만 기록)';
       if (U.rangeB) { U.rangeB.classList.toggle('on', !!(s && s.rangeMode)); U.rangeB.querySelector('.l').textContent = s && s.rangeMode ? '범위 취소' : '범위'; }
     };
     return U;
