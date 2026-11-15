@@ -492,9 +492,9 @@
         var st = ctx.flateStream(bytes), ref = ctx.register(st);
         page.node.set(N('Contents'), ref);
       } else {
-        var old = o.u.stream.stream, nd = ctx.obj({});
-        old.dict.entries().forEach(function (e) { var k = e[0].asString(); if (k !== '/Filter' && k !== '/DecodeParms' && k !== '/Length' && k !== '/DL') nd.set(e[0], e[1]); });
-        var ns = ctx.flateStream(bytes, nd);
+        var old = o.u.stream.stream, plain = {};
+        old.dict.entries().forEach(function (e) { var k = e[0].asString(); if (k !== '/Filter' && k !== '/DecodeParms' && k !== '/Length' && k !== '/DL') plain[k.slice(1)] = e[1]; });
+        var ns = ctx.flateStream(bytes, plain);
         ctx.assign(o.u.stream.ref, ns);
       }
     });

@@ -651,7 +651,7 @@
         return global.SOPdfDocx.convert(api.pdfDoc(), { JSZip: global.JSZip, onProgress: function (i, n) { ctx.busy('워드 사본을 만드는 중… (' + i + '/' + n + '쪽)'); } });
       }).then(function (r) {
         ctx.busy(null); var base = (ctx.name || 'document').replace(/\.pdf$/i, '').replace(/_수정(\(\d+\))?$/, '');
-        return Promise.resolve(ctx.saveCopy(r.blob, base + '.docx', { exact: true })).then(function (ok) { if (ok !== false) ctx.toast('워드 사본을 저장했습니다(' + r.paras + '문단 · 그림 ' + r.images + '개' + (r.scanPages ? ' · 쪽 그림 ' + r.scanPages + '쪽' : '') + '). 저장한 파일을 열면 S-Office 워드로 고칠 수 있습니다.', 6000); });
+        return Promise.resolve(ctx.saveCopy(r.blob, base + '.docx', { exact: true })).then(function (ok) { if (ok !== false) ctx.toast('워드 사본을 저장했습니다(' + r.paras + '문단 · 그림 ' + Math.max(0, r.images - r.scanPages) + '개' + (r.scanPages ? ' · 쪽 그림 ' + r.scanPages + '쪽' : '') + '). 저장한 파일을 열면 S-Office 워드로 고칠 수 있습니다.', 6000); });
       }).catch(function (e) { ctx.busy(null); ctx.toast('워드로 바꾸지 못했습니다 — ' + ((e && e.message) || e), 4200); });
     }, { cancelLabel: '취소' });
   }
