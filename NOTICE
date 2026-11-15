@@ -45,11 +45,16 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
  2) qpdf.js — 같은 패키지의 연결부(dist/qpdf.js) 코드를 「그대로」 옮기고, 맨 위에 설명 주석, 맨 아래에 전역 이름 한 줄(window.SOQpdfFactory)만 붙였습니다.
     (Apache 4항 「바뀐 부분 표시」: 이 두 줄 외에 코드는 바뀐 곳이 없습니다.)
  3) S-Office가 이 부품을 쓰는 코드(js/smartoffice/pdf/so-pdf-tools.js)는 자체 작성이며 이음오피스의 소스를 복사하지 않았습니다.
-    이음오피스에는 이 부품 외에 pdfium.wasm·hb-subset.wasm 도 있으나, 현재 쓰는 기능이 없어 앱에 넣지 않았습니다.
+    이음오피스에는 이 부품 외에 pdfium.wasm·hb-subset.wasm 도 있으나, 앱에 넣지 않았습니다(v10.9 5회차의 「글 직접 고치기」·「정밀 보기」도 이 부품 없이 자체 코드로 만들었습니다).
  4) 이음오피스 배포본에서 로고·템플릿·글꼴은 가져오지 않았습니다.
  5) 이음오피스·GenOffice 의 Apache License 2.0 전문과 원본 NOTICE 는 vendor/so/hwp/studio/ 의
     LICENSE-IeumOffice-GenOffice-Apache-2.0.txt, NOTICE-GenOffice-original.txt 에 그대로 있습니다(한글 편집 화면 번들과 qpdf.wasm 에 공통).
  6) @rhwp/editor(vendor/so/hwp/sdk/)의 MIT 고지: vendor/so/hwp/sdk/LICENSE-rhwp-editor-MIT.txt
+
+[PDF 글 고치기·도형·첨부·정밀 보기·워드로 열기·편집 제한 — v10.9(O-0861 5회차, 스위치 SO_PDF_EDIT)]
+ 이 기능들은 이 앱이 직접 만든 코드(js/smartoffice/pdf/so-pdf-textedit.js · so-pdf-edit.js · so-pdf-docx.js)입니다.
+ 쓰는 부품은 앱에 이미 들어 있는 pdf-lib(MIT)·PDF.js(Apache-2.0)·qpdf.wasm(편집 제한 걸기·풀기)·JSZip(워드 사본 묶기)뿐이고, 새 외부 부품은 들어 있지 않습니다.
+ 글자 인식(OCR) 부품은 들어 있지 않습니다.
 
 [차트 — v10.9(O-0861)]
  차트 만들기·고치기와 폰 화면의 미리 그림은 이 앱이 직접 만든 코드(js/smartoffice/so-chart.js, xlsx/so-xlsx-chart.js 등)입니다.
