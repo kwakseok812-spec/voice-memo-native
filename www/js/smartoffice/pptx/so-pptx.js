@@ -61,7 +61,7 @@
     var host = ctx.body;
     host.classList.add('so-pptx-host');
     var stage = document.createElement('div'); stage.className = 'so-pptx-stage'; host.appendChild(stage);
-    var s = state = { prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, cur: buf, undo: [], redo: [], pkgOps: 0, ui: null, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null, sh: 540, drawW: 0, dir: 0 };
+    var s = state = { ctx: ctx, prev: null, mode: 'list', idx: 0, slides: [], wrapper: null, scale: 1, stage: stage, orig: buf, cur: buf, undo: [], redo: [], pkgOps: 0, ui: null, info: null, edits: [], editing: false, drawnKey: '', panel: null, JSZip: null, sh: 540, drawW: 0, dir: 0 };
     return drawDeck(host, s, buf).then(function () {
       var slides = function () { return s.slides; };
       function structOn() { return !!(ctx.flag && ctx.flag('pptx') && window.SOPptxUI && window.SOPptxStruct); }
@@ -591,6 +591,13 @@
         if (!window.pptxPreview || !window.pptxPreview.init) throw new Error('파워포인트 부품을 찾지 못함');
         return ctx.file.arrayBuffer();
       }).then(function (buf) { return setup(ctx, buf); });
+    },
+    exportPdf: function () {                           // v10.9 2회차: 「⋯」→ PDF로 내보내기(슬라이드 / 유인물 2·4·6장, 그림 방식 — so-pptx-pdf.js)
+      var s = state; if (!s || !s.slides || !s.slides.length || !s.ctx) { return; } var ctx = s.ctx;
+      ctx.loadScript('js/smartoffice/pptx/so-pptx-pdf.js').then(function () {
+        if (!window.SOPptxPdf || state !== s) throw new Error('PDF 내보내기 부품을 불러오지 못함');
+        window.SOPptxPdf.run({ ctx: ctx, slides: s.slides, stage: s.stage });
+      }).catch(function (e) { ctx.toast('PDF 내보내기를 열지 못했습니다 — ' + ((e && e.message) || e), 4200); });
     },
     close: function () {
       cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = [];

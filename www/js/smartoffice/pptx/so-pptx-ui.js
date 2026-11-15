@@ -243,7 +243,7 @@
         btn(g, hid ? '숨김 풀기' : '숨기기', function () { env.run('숨기기', function (pkg) { return ST.hideSlide(pkg, i, !hid).then(function () { return { slide: i }; }); }, function () { toast(hid ? '다시 보이게 했습니다' : '쇼에서 건너뛰도록 숨겼습니다', 2400); U.refreshAll(); }); }, 'big');
         btn(g, '쇼 보기', function () { env.slideshow(i); }, 'big');
         btn(g, '이 슬라이드 배치 바꾸기', changeLayoutSheet, 'big');
-        btn(g, '쪽 번호·날짜·바닥글', footerSheet, 'big'); btn(g, '화면 전환', transSheet, 'big'); btn(g, '슬라이드 크기', sizeSheet, 'big');
+        btn(g, '쪽 번호·날짜·바닥글', footerSheet, 'big'); btn(g, '화면 전환', transSheet, 'big'); btn(g, '슬라이드 크기', sizeSheet, 'big'); btn(g, '구역(섹션)', sectionSheet, 'big');
         var gb = group(body, '이 슬라이드 배경색'); BGC.forEach(function (c) { btn(gb, c[0], function () { op('배경색', function (x) { return ST.setSlideBg(x, c[1]); }, c[1] ? '배경색을 바꿨습니다' : '배경을 배치의 것으로 되돌렸습니다', true); }, 'sw', c[1] || ''); });
         body.appendChild(el('div', 'so-sheet-note', '새 슬라이드·복제는 지금 장 바로 뒤에 들어갑니다. 삽입 개체(표·문서를 통째로 끼운 것)가 든 장은 복제할 수 없고(이유를 알려 드립니다), 순서 바꾸기·지우기는 됩니다. 지운 직후에는 ↶ 로 되돌릴 수 있습니다.'));
       });
@@ -549,6 +549,32 @@
         });
         body.appendChild(el('div', 'so-sheet-note', '크기를 바꾸면 모든 장이 한꺼번에 바뀝니다. 바꾼 뒤 장마다 한 번 훑어보시기 바랍니다.'));
         ctx.sheet({ title: '슬라이드 크기', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
+    // ---- 구역(섹션): 슬라이드를 묶음으로 나누고 이름을 붙인다(파워포인트의 구역과 같다) ----
+    function sectionSheet() {
+      var i0 = s.idx;
+      ST.readSections(env.roPkg(s.info.zip)).then(function (r) {
+        var body = el('div', 'spx'), nm = el('input', 'spx-in'); nm.type = 'text'; nm.maxLength = 64; nm.placeholder = '구역 이름'; nm.setAttribute('aria-label', '구역 이름');
+        body.appendChild(el('div', 'spx-l', '구역 이름(만들기·이름 바꾸기에 씁니다)')); body.appendChild(nm);
+        function go(label, op, msg) { env.run(label, function (pkg) { return ST.sectionOp(pkg, op).then(function (q) { return q.err ? q : { slide: i0 }; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(msg, 3000); }); }
+        var g = grid(body);
+        btn(g, (i0 + 1) + '번 슬라이드부터 새 구역', function () { var t = nm.value.trim(); if (!t) { toast('위 칸에 구역 이름을 먼저 적어 주십시오.', 2800); return; } ctx.closeSheet(); setTimeout(function () { go('구역 만들기', { kind: 'add', at: i0, name: t }, '구역을 만들었습니다(「' + t + '」)'); }, 60); }, 'big on');
+        if (!r.ok) body.appendChild(el('div', 'so-sheet-note', '이 파일의 구역 목록이 슬라이드 순서와 맞지 않아 폰에서는 고칠 수 없습니다.'));
+        if (r.secs.length) {
+          body.appendChild(el('div', 'spx-l', '이 문서의 구역 ' + r.secs.length + '개'));
+          r.secs.forEach(function (sec, k) {
+            var row = el('div', 'spx-r'), first = r.ids.indexOf(sec.ids[0]) + 1, cap = el('div', 'spx-b big', sec.name + ' — ' + (sec.ids.length ? first + '번부터 ' + sec.ids.length + '장' : '슬라이드 없음'));
+            cap.style.flex = '1'; cap.style.justifyContent = 'flex-start'; row.appendChild(cap);
+            var rn = el('button', 'spx-b', '이름'); rn.type = 'button'; rn.setAttribute('aria-label', '구역 이름 바꾸기');
+            rn.onclick = function () { var t = nm.value.trim(); if (!t) { toast('위 칸에 새 이름을 쓴 뒤 「이름」을 누르십시오.', 2800); return; } ctx.closeSheet(); setTimeout(function () { go('구역 이름', { kind: 'rename', idx: k, name: t }, '구역 이름을 바꿨습니다'); }, 60); };
+            var rm = el('button', 'spx-b', '지우기'); rm.type = 'button'; rm.setAttribute('aria-label', '구역 지우기');
+            rm.onclick = function () { ctx.closeSheet(); setTimeout(function () { go('구역 지우기', { kind: 'remove', idx: k }, '구역을 지웠습니다(슬라이드는 지워지지 않고 앞 구역에 합쳐졌습니다)'); }, 60); };
+            row.appendChild(rn); row.appendChild(rm); body.appendChild(row);
+          });
+        } else body.appendChild(el('div', 'so-sheet-note', '아직 구역이 없습니다. 「새 구역」을 만들면 그 앞 슬라이드는 「기본 구역」으로 묶입니다.'));
+        body.appendChild(el('div', 'so-sheet-note', '구역은 파워포인트의 슬라이드 목록에서 접었다 펴는 묶음입니다. 쇼와 인쇄 모양은 바뀌지 않습니다. 구역을 지워도 슬라이드는 그대로 남습니다. 되돌리려면 ↶ 를 쓰십시오.'));
+        ctx.sheet({ title: '구역(섹션)', body: body, wide: true, buttons: [{ label: '닫기' }] });
       });
     }
     function linkSheet() {

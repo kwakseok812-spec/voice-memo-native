@@ -1370,7 +1370,66 @@
     return { ok: true };
   }
 
+  // ============================== v10.9 2회차(O-0861): 구역(섹션) 만들기·이름 바꾸기·지우기 ==============================
+  // 구역은 presentation.xml 끝 확장 목록의 p14:sectionLst 에 들어 있다. 슬라이드를 더하고 지우고 옮기는 쪽(sectionInsert·sectionRemove)이 이미 이 목록을 따라 고친다.
+  var SEC_URI = '{521415D9-36F7-43E2-AB2F-B90AF26B5E84}';
+  function secXesc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function secUnesc(s) { return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&'); }
+  function secGuid() { var h = '0123456789ABCDEF', o = ''; for (var i = 0; i < 36; i++) { if (i === 8 || i === 13 || i === 18 || i === 23) o += '-'; else if (i === 14) o += '4'; else if (i === 19) o += h.charAt(8 + Math.floor(Math.random() * 4)); else o += h.charAt(Math.floor(Math.random() * 16)); } return '{' + o + '}'; }
+  function secReadFrom(pres) {
+    var m = /<p14:sectionLst\b[^>]*>([\s\S]*?)<\/p14:sectionLst>/.exec(pres), out = [];
+    if (!m) return out;
+    (m[1].match(/<p14:section\b[\s\S]*?<\/p14:section>/g) || []).forEach(function (sec) {
+      var open = /^<p14:section\b[^>]*>/.exec(sec)[0];
+      out.push({ name: secUnesc(attrOf(open, 'name') || ''), id: attrOf(open, 'id') || secGuid(), ids: (sec.match(/<p14:sldId\s+id="(\d+)"/g) || []).map(function (t) { return +/id="(\d+)"/.exec(t)[1]; }) });
+    });
+    return out;
+  }
+  function secSlideIds(pres) { return (pres.match(/<p:sldId\b[^>]*?\sid="(\d+)"/g) || []).map(function (t) { return +/id="(\d+)"/.exec(t)[1]; }); }
+  function secWrite(pres, secs) {
+    var xml = '<p14:sectionLst xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main">' + secs.map(function (s) {
+      return '<p14:section name="' + secXesc(s.name) + '" id="' + s.id + '"><p14:sldIdLst>' + s.ids.map(function (i) { return '<p14:sldId id="' + i + '"/>'; }).join('') + '</p14:sldIdLst></p14:section>';
+    }).join('') + '</p14:sectionLst>';
+    var cur = /<p14:sectionLst\b[\s\S]*?<\/p14:sectionLst>/.exec(pres);
+    if (cur) return pres.replace(cur[0], xml);
+    var ext = '<p:ext uri="' + SEC_URI + '">' + xml + '</p:ext>';
+    if (/<p:extLst>/.test(pres)) return pres.replace(/<p:extLst>/, '<p:extLst>' + ext);
+    return pres.replace(/<\/p:presentation>\s*$/, '<p:extLst>' + ext + '</p:extLst></p:presentation>');
+  }
+  // 슬라이드 목록 순서와 어긋난 구역 목록은 건드리지 않는다(어긋남 = 파일이 특이한 것)
+  function secOk(pres, secs) { var all = []; secs.forEach(function (s) { all = all.concat(s.ids); }); var ids = secSlideIds(pres); return all.length === ids.length && all.every(function (v, i) { return v === ids[i]; }); }
+  async function readSections(pkg) {
+    var pres = await must(pkg, 'ppt/presentation.xml'), secs = secReadFrom(pres), ids = secSlideIds(pres);
+    return { secs: secs, ids: ids, ok: !secs.length || secOk(pres, secs) };
+  }
+  // op: { kind:'add', at:슬라이드번호(0부터), name } · { kind:'rename', idx, name } · { kind:'remove', idx }
+  async function sectionOp(pkg, op) {
+    var pres = await must(pkg, 'ppt/presentation.xml'), secs = secReadFrom(pres), ids = secSlideIds(pres), name = String(op.name == null ? '' : op.name).replace(/[\u0000-\u001F]/g, '').trim().slice(0, 64);
+    if (secs.length && !secOk(pres, secs)) return { err: '이 파일의 구역 목록이 슬라이드 순서와 맞지 않아 폰에서는 고칠 수 없습니다. 파워포인트에서 고쳐 주십시오.' };
+    if (op.kind === 'add') {
+      if (!name) return { err: '구역 이름을 적어 주십시오.' };
+      if (op.at < 0 || op.at >= ids.length) return { err: '슬라이드를 찾지 못했습니다.' };
+      if (!secs.length) secs = [{ name: '기본 구역', id: secGuid(), ids: ids.slice() }];
+      var hit = -1, pos = -1; secs.forEach(function (s, k) { var p = s.ids.indexOf(ids[op.at]); if (p >= 0) { hit = k; pos = p; } });
+      if (hit < 0) return { err: '슬라이드를 구역에서 찾지 못했습니다.' };
+      if (pos === 0 && hit > 0) return { err: '이 슬라이드는 이미 구역의 맨 앞입니다. 이름을 바꾸려면 구역 목록에서 「이름 바꾸기」를 쓰십시오.' };
+      if (pos === 0 && hit === 0) { secs[0].name = name; }
+      else { var cur = secs[hit], tail = cur.ids.slice(pos); cur.ids = cur.ids.slice(0, pos); secs.splice(hit + 1, 0, { name: name, id: secGuid(), ids: tail }); }
+    } else if (op.kind === 'rename') {
+      if (!name) return { err: '구역 이름을 적어 주십시오.' }; if (!secs[op.idx]) return { err: '구역을 찾지 못했습니다.' };
+      secs[op.idx].name = name;
+    } else if (op.kind === 'remove') {
+      if (!secs[op.idx]) return { err: '구역을 찾지 못했습니다.' };
+      if (secs.length === 1) { var pr = pres.replace(/<p:ext uri="\{521415D9-36F7-43E2-AB2F-B90AF26B5E84\}">[\s\S]*?<\/p:ext>/, '').replace(/<p:extLst>\s*<\/p:extLst>/, ''); pkg.write('ppt/presentation.xml', pr); return { ok: true, none: true }; }
+      var gone = secs.splice(op.idx, 1)[0];
+      if (op.idx === 0) secs[0].ids = gone.ids.concat(secs[0].ids); else secs[op.idx - 1].ids = secs[op.idx - 1].ids.concat(gone.ids);      // 지운 구역의 슬라이드는 앞 구역(첫 구역이면 다음 구역)에 합친다
+    } else return { err: '알 수 없는 구역 작업입니다.' };
+    pkg.write('ppt/presentation.xml', secWrite(pres, secs)); return { ok: true, count: secs.length };
+  }
+
+
   global.SOPptxStruct = {
+    readSections: readSections, sectionOp: sectionOp,
     tableGeom: tableGeom, setTableCols: setTableCols, setTableRows: setTableRows, groupShapes: groupShapes, ungroupShape: ungroupShape, cropPicture: cropPicture, readCrop: readCrop,
     setShadow: setShadow, readShadow: readShadow, setGradient: setGradient, readFillKind: readFillKind, stepShape: stepShape, alignShapes: alignShapes, distributeShapes: distributeShapes,
     setFooters: setFooters, readFooters: readFooters, SLIDE_SIZES: SLIDE_SIZES, setSlideSize: setSlideSize, readSlideSize: readSlideSize, setLink: setLink, readLink: readLink,
