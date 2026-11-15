@@ -34,7 +34,7 @@
       list.forEach(function (o) { var b = el('button', 'sxu-b', o[1]); b.type = 'button'; b.onclick = function () { set(o[0]); paint(); }; row.appendChild(b); });
       paint(); return { row: row, paint: paint };
     }
-    function bigBtn(parent, text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = fn; parent.appendChild(b); return b; }
+    function bigBtn(parent, text, fn, cls) { var b = el('button', 'sxu-b big' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = fn; if (cls === 'on') b.style.gridColumn = '1 / -1'; parent.appendChild(b); return b; }
     function sheetOf(title, body, buttons, extra) { var o = Object.assign({ title: title, body: body, buttons: buttons || [{ label: '닫기' }], wide: true }, extra || {}); S().ctx.sheet(o); }
     function regionAround(ws, r, c, nr, nc) {
       function has(rr, cc) { if (rr < 0 || cc < 0 || rr >= nr || cc >= nc) return false; var x = cellAt(ws, rr, cc); return !!(x && x.v != null && x.v !== ''); }
@@ -303,7 +303,7 @@
       var sel = x.items.filter(function (i) { return i.sel; }).map(function (i) { return i.label; }), has = sel.indexOf(it.label) >= 0, next;
       if (has) { next = sel.filter(function (l) { return l !== it.label; }); if (!next.length) { toast('하나는 켜 두어야 합니다. 다른 항목을 먼저 켜 주십시오.', 3000); return; } }
       else next = sel.concat([it.label]);
-      run('슬라이서', function (pkg) { return PV().setSlicerSelection(pkg, x.name, next); }, function (r) { return '「' + it.label + '」을(를) ' + (has ? '껐' : '켰') + '습니다 — 피벗 숫자는 ' + r.shown + '줄로 다시 계산했습니다'; });
+      run('슬라이서', function (pkg) { return PV().setSlicerSelection(pkg, x.name, next); }, function (r) { return '「' + it.label + '」 항목을 ' + (has ? '껐' : '켰') + '습니다 — 피벗 숫자는 ' + r.shown + '줄로 다시 계산했습니다'; });
     };
     U.slicerMenu = function (x) {
       var s = S(), body = el('div', 'sxu'), g = el('div', 'sxu-g');

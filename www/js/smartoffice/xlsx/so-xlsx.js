@@ -1013,6 +1013,8 @@
         var an = isX ? global.JSZip.loadAsync(buf, { createFolders: false }).then(function (z) { return global.SOXlsxPatch.analyze(z).then(function (a) { return { zip: z, an: a }; }); })
           .catch(function () { return { zip: null, an: { ok: false, reason: '파일 구조를 알아볼 수 없습니다.' } }; }) : Promise.resolve(null);
         return an.then(function (pk) {
+          // 스위치 SO_XLSX_DATA 가 꺼져 있으면 피벗·슬라이서가 든 문서는 예전처럼 보기만
+          if (isX && pk.an && pk.an.ok && pk.zip && !(ctx.flag && ctx.flag('xlsxdata')) && Object.keys(pk.zip.files).some(function (k) { return /^xl\/(pivotTables|pivotCache|slicers|slicerCaches)\//.test(k); })) pk.an = { ok: false, reason: '피벗표(또는 슬라이서)가 들어 있는 파일입니다.' };
           var reason = lossReason(ctx.ext), mode = '';
           if (isX) {
             if (pk.an.ok) mode = 'patch';
@@ -1022,6 +1024,8 @@
             showHdr: hdrPref(), hw: 0, hh: 0, lp: false, lk: null, edits: {}, dirty: false, editing: false, sel: { r: 0, c: 0 }, editable: !reason, noteText: reason, mode: mode,
             zip: pk && pk.zip, an: pk && pk.an, patched: {}, undo: [], redo: [], orig: {}, origRef: {}, fmap: null, finds: null, origBuf: buf, pkgOps: 0, smap: {}, styles: null, calc: { on: false, why: '', has: false } };
           S.hw = S.showHdr ? HDR_W : 0; S.hh = S.showHdr ? HDR_H : 0;
+          if (isX && pk.an && pk.an.sheets && !S.noteText && Object.keys(pk.an.sheets).some(function (n) { var q = pk.an.sheets[n]; return q && q.pv && q.pv.length; }))      // v10.9 5회차: 피벗 표가 든 문서도 고칠 수 있게 연다 — 안내 한 줄
+            S.noteText = '피벗 표가 든 문서입니다. 피벗 표가 차지한 칸은 직접 고칠 수 없고(「더보기」→「데이터 정리」→「피벗 표」에서 고칩니다), 원본 칸을 고치면 저장한 파일을 엑셀에서 열 때 피벗 숫자가 새로 계산됩니다.';
           build(ctx);
           ctx.onBack(function () { if (S && S.el && S.el.det) { closeDetail(); return true; } return false; });
           refreshActions();

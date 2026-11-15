@@ -60,6 +60,10 @@ S-Office (스마트비서 안 문서 열기·고치기 기능) — 출처와 라
  차트 만들기·고치기와 폰 화면의 미리 그림은 이 앱이 직접 만든 코드(js/smartoffice/so-chart.js, xlsx/so-xlsx-chart.js 등)입니다.
  차트 그리기 라이브러리(ECharts 등)나 다른 새 외부 부품은 들어 있지 않습니다. 파일 안에 만드는 차트는 표준 형식(Office Open XML)의 차트와 딸린 통합문서입니다.
 
+[엑셀 피벗 표·슬라이서·스파크라인·부분합·통합과 콤보·입체 차트 — v10.9(O-0861 5회차, 스위치 SO_XLSX_DATA)]
+ 이 기능들은 이 앱이 직접 만든 코드(js/smartoffice/xlsx/so-xlsx-pivot.js · so-xlsx-data.js · so-xlsx-data-ui.js, 차트는 so-chart.js)입니다.
+ 파일 안에 만드는 피벗 표·슬라이서·스파크라인·차트는 표준 형식(Office Open XML)의 진짜 개체이고, 새 외부 부품은 들어 있지 않습니다.
+
 [앱의 다른 부품 — S-Office 밖(고지 보강, v10.9)]
  - page-flip 2.0.7 (StPageFlip, MIT License) — 책 넘김 화면 부품. www/vendor/page-flip.browser.min.js
    라이선스 원문: www/vendor/LICENSE-page-flip-MIT.txt (MIT 전문 · 저작권자 줄은 원본 저장소 확인 뒤 맞출 것이 남아 있음)
