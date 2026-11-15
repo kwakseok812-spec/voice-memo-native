@@ -516,7 +516,7 @@
   function preciseView(api) {
     var ctx = api.ctx, root = api.root, pdf = api.pdfDoc(), N = api.pageCount();
     if (root.querySelector('.spp')) return;
-    var cur = Math.min(Math.max(1, api.curPage()), N), zoom = 1, tok = 0, task = null, vp0 = null, fit = 1, destroyed = false, textTask = null, hits = [], hitIdx = -1, tcache = {}, renderT = 0, tdivs = [], tstrs = [];
+    var cur = Math.min(Math.max(1, api.curPage()), N), zoom = 1, tok = 0, task = null, vp0 = null, fit = 1, destroyed = false, textTask = null, hits = [], hitIdx = -1, tcache = {}, renderT = 0, tdivs = [], tstrs = [], rtok = 0;
     var back = el('div', 'spp spv'), bar = el('div', 'spp-bar'), stage = el('div', 'spv-stage'), host = el('div', 'spv-host'), cv = el('canvas', 'spv-cv'), tl = el('div', 'textLayer spv-tl'), hl = el('div', 'spv-hl'), foot = el('div', 'spp-foot spr-foot');
     var btnC = el('button', 'spp-hb', '닫기'), tt = el('div', 'spp-t', ''), btnCopy = el('button', 'spp-hb ok', '글 복사');
     [btnC, btnCopy].forEach(function (b) { b.type = 'button'; });
@@ -549,7 +549,7 @@
       upd();
     }
     function load() {
-      var my = ++tok; if (task) { try { task.cancel(); } catch (e) {} task = null; }
+      var my = ++tok; ++rtok; if (task) { try { task.cancel(); } catch (e) {} task = null; }
       pdf.getPage(cur).then(function (pg) {
         if (destroyed || my !== tok) return;
         pgObj = pg; vp0 = pg.getViewport({ scale: 1 }); layout();
@@ -570,7 +570,7 @@
     function schedule() { clearTimeout(renderT); renderT = setTimeout(function () { render(); }, 130); }
     // 보이는 곳 + 여백만 화면 해상도로 그린다
     function render() {
-      if (!pgObj || destroyed) return; var my = ++tok; if (task) { try { task.cancel(); } catch (e) {} task = null; }
+      if (!pgObj || destroyed) return; var my = ++rtok; if (task) { try { task.cancel(); } catch (e) {} task = null; }
       var dpr = Math.min(global.devicePixelRatio || 1, 3), vw = stage.clientWidth, vh = stage.clientHeight, mx = vw * 0.25, my2 = vh * 0.25;
       var x0 = clamp(stage.scrollLeft - 8 - mx, 0, cssW), y0 = clamp(stage.scrollTop - 8 - my2, 0, cssH), x1 = clamp(stage.scrollLeft - 8 + vw + mx, 0, cssW), y1 = clamp(stage.scrollTop - 8 + vh + my2, 0, cssH);
       var w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0), k = Math.min(dpr, Math.sqrt(8e6 / (w * h)));
@@ -580,7 +580,7 @@
       var vp = pgObj.getViewport({ scale: S * k, offsetX: -x0 * k, offsetY: -y0 * k });
       task = pgObj.render({ canvasContext: g, viewport: vp });
       task.promise.then(function () {
-        task = null; if (destroyed || my !== tok) return;
+        task = null; if (destroyed || my !== rtok) return;
         if (cv.parentNode === host) host.replaceChild(c2, cv); else host.insertBefore(c2, tl); cv = c2;
       }, function () {});
     }

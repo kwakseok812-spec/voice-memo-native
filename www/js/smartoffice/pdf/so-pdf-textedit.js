@@ -39,7 +39,7 @@
           if (nx === 'n') out += '\n'; else if (nx === 'r') out += '\r'; else if (nx === 't') out += '\t'; else if (nx === 'b') out += '\b'; else if (nx === 'f') out += '\f';
           else if (nx === '(' || nx === ')' || nx === '\\') out += nx;
           else if (nx === '\r') { if (src.charAt(i + 2) === '\n') i++; }
-          else if (nx === '\n') { /* 줄 이음 */ }
+          else if (nx === '\n') { /* 줄 잇기 */ }
           else if (nx >= '0' && nx <= '7') { var o = nx, k = 2; while (k-- > 0 && src.charAt(i + 1 + o.length) >= '0' && src.charAt(i + 1 + o.length) <= '7') o += src.charAt(i + 1 + o.length); out += String.fromCharCode(parseInt(o, 8) & 255); i += o.length - 1; }
           else out += nx;
           i += 2; continue;
