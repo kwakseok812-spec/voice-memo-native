@@ -103,7 +103,7 @@
         btn(g, '복사', function () { copySel(false); }, 'big'); btn(g, '오려두기', function () { copySel(true); }, 'big'); btn(g, '붙여넣기', pasteClip, 'big'); btn(g, '문단 복제', dupSel, 'big');
         if (r.a === r.b) btn(g, '글 고치기', function () { env.editText(r.a); }, 'big');
         body.appendChild(el('div', 'sdx-l', '넣기')); var g2 = grid(body);
-        btn(g2, '기호·날짜 넣기', symSheet, 'big'); btn(g2, '책갈피', bookmarkSheet, 'big'); btn(g2, '그림·표 이름', captionSheet, 'big'); btn(g2, '목차 넣기·갱신', tocNow, 'big');
+        btn(g2, '기호·날짜 넣기', symSheet, 'big'); btn(g2, '책갈피', bookmarkSheet, 'big'); btn(g2, '상호 참조', refSheet, 'big'); btn(g2, '그림·표 이름', captionSheet, 'big'); btn(g2, '목차 넣기·갱신', tocNow, 'big');
         body.appendChild(el('div', 'so-sheet-note', '문서에서 문단을 눌러 고르면 맨 위에 「고른 문단」이 보입니다. 여러 문단은 「범위」로 고릅니다. 같은 문단을 한 번 더 누르면 글 고치기가 열립니다.'));
       });
     }
@@ -388,6 +388,29 @@
         var tx = a.value; op('책갈피 링크', function (x) { var q = ST.addAnchorLink(x, r.b, tx, bm.name); return q.err ? q : { xml: q.xml }; }, '문서 안 링크를 넣었습니다', true);
       } }] });
     }
+    // ---- 상호 참조: 제목·그림/표 이름·책갈피를 가리키는 글(REF 필드)을 고른 문단 끝에 넣는다 ----
+    function refSheet() {
+      var r = need(); if (!r) return; var mode = 'all';
+      env.peek(function (pkg) { return pkg.read('word/styles.xml'); }).then(function (sx) {
+        var list = []; try { list = ST.refTargets(S().xml, sx || ''); } catch (e) {}
+        var body = el('div', 'sdx');
+        body.appendChild(el('div', 'sdx-l', '고른 문단 맨 끝에 넣을 참조 — 무엇을 가리킬까요?'));
+        var gm = group(body, '넣을 모양'), bm = {};
+        [['all', '글 전체(예: 제목·이름 글)'], ['num', '이름표와 번호만(예: 그림 1)']].forEach(function (k) { var b = el('button', 'sdx-b', k[1]); b.type = 'button'; b.onclick = function () { mode = k[0]; paint(); }; gm.appendChild(b); bm[k[0]] = b; });
+        function paint() { Object.keys(bm).forEach(function (k) { bm[k].classList.toggle('on', mode === k); }); } paint();
+        if (!list.length) body.appendChild(el('div', 'so-sheet-note', '가리킬 것이 없습니다. 제목 스타일을 쓴 문단, 「그림·표 이름」을 넣은 문단, 책갈피가 있으면 여기에 나타납니다.'));
+        var g = el('div', 'sdx-g'); body.appendChild(g);
+        list.slice(0, 80).forEach(function (t) {
+          var b = el('button', 'sdx-b big', t.label); b.type = 'button';
+          b.onclick = function () { ctx().closeSheet(); setTimeout(function () {
+            op('상호 참조', function (x) { var q = ST.addCrossRef(x, r.b, t, t.kind === 'caption' ? mode : 'all'); return q.err ? q : { xml: q.xml }; }, '상호 참조를 넣었습니다(글이 바뀌면 워드에서 「필드 업데이트」로 따라 바뀝니다)', true);
+          }, 60); };
+          g.appendChild(b);
+        });
+        body.appendChild(el('div', 'so-sheet-note', '넣은 글은 눌러 가는 링크(워드에서 Ctrl+누르기)이며, 가리키는 제목·이름의 글이 나중에 바뀌면 워드에서 「필드 업데이트」를 해 주십시오. 폰 화면에서는 넣을 때의 글이 보입니다. 이름표와 번호만은 「그림·표 이름」을 넣은 문단에서만 됩니다.'));
+        ctx().sheet({ title: '상호 참조', body: body, wide: true, buttons: [{ label: '닫기' }] });
+      });
+    }
     function captionSheet() {
       var r = need(); if (!r) return; var lab = '그림', pos = 'below', touched = false;
       var body = el('div', 'sdx'), t = el('input', 'sdx-in'); t.type = 'text'; t.placeholder = '이름 글(예: 실험 장치 구성)'; t.setAttribute('aria-label', '이름 글');
@@ -405,7 +428,7 @@
       setTimeout(function () { try { t.focus(); } catch (e) {} }, 300);
     }
     function tocNow() { var r = need(); if (!r) return; var has = false; try { has = !!ST.tocField(S().xml); } catch (e) {}
-      if (has) { env.run('목차 갱신', function (pkg) { return ST.updateToc(pkg).then(function (q) { return q.err ? q : { n: q.n }; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('목차를 새로 만들었습니다(제목 ' + q.n + '개). 쪽 번호는 워드에서 열어 「필드 업데이트」를 하면 정확해집니다.', 5200); }); }
+      if (has) { env.run('목차 갱신', function (pkg) { return ST.updateToc(pkg).then(function (q) { return q.err ? q : { n: q.n }; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('목차를 갱신했습니다(제목 ' + q.n + '개). 쪽 번호는 워드에서 열어 「필드 업데이트」를 하면 정확해집니다.', 5200); }); }
       else { env.run('목차 넣기', function (pkg) { return ST.insertToc(pkg, r.b).then(function (q) { return q.err ? q : { n: q.n }; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast('고른 문단 아래에 목차를 넣었습니다(제목 ' + q.n + '개). 쪽 번호는 워드에서 열어 「필드 업데이트」를 하면 채워집니다.', 5200); }); }
     }
     // ---- 검토: 메모 · 변경 내용 ----
@@ -505,6 +528,20 @@
       var tp = false, wmNow = null, cols = 1; try { tp = ST.readTitlePg(S().xml); cols = ST.readCols(S().xml); } catch (e) {}
       var g1 = group(body, '첫 쪽 다르게 — 지금 ' + (tp ? '켜짐' : '꺼짐'));
       btn(g1, tp ? '첫 쪽도 같게(끄기)' : '첫 쪽 머리글·바닥글 다르게', function () { env.run('첫 쪽', function (pkg) { return ST.setTitlePg(pkg, !tp).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(!tp ? '첫 쪽의 머리글·바닥글이 따로 갑니다(처음에는 비어 있습니다).' : '첫 쪽도 다른 쪽과 같은 머리글·바닥글을 씁니다.', 3600); }); }, tp ? 'on' : '');
+      var gs0 = group(body, '문서 통계'); var st0 = null; try { st0 = ST.docStats(S().xml); } catch (e) {}
+      if (st0) {
+        var pg0 = S().pages || 0;
+        [['쪽', pg0 ? pg0 + '쪽(화면 기준)' : '—'], ['글자(공백 포함)', st0.chars.toLocaleString('ko-KR') + '자'], ['글자(공백 뺌)', st0.noSpace.toLocaleString('ko-KR') + '자'], ['낱말', st0.words.toLocaleString('ko-KR') + '개'], ['문단', st0.paras.toLocaleString('ko-KR') + '개'], ['표 · 그림', st0.tables + '개 · ' + st0.pics + '개']].forEach(function (k) { var b = el('div', 'sdx-stat'); b.appendChild(el('span', null, k[0])); b.appendChild(el('b', null, k[1])); gs0.appendChild(b); });
+      }
+      body.appendChild(el('div', 'so-sheet-note', '쪽 수는 폰 화면에 그려진 기준이라 워드와 한두 쪽 다를 수 있습니다. 글자·낱말 수는 본문과 표 안의 글만 셉니다(각주·머리글 제외, 지운 것으로 표시된 글 제외).'));
+      var gp0 = group(body, '읽기 전용 · 편집 제한(암호 없이)');
+      env.peek(function (pkg) { return ST.readProt(pkg); }).then(function (pr) {
+        if (!pr || !gp0.isConnected) return;
+        function setP(kind, on, msg) { env.run('편집 제한', function (pkg) { return ST.setProt(pkg, kind, on).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(msg, 3600); }); }
+        btn(gp0, pr.recommend ? '읽기 전용 권장 끄기' : '읽기 전용 권장 켜기', function () { setP('recommend', !pr.recommend, !pr.recommend ? '열 때 「읽기 전용으로 열까요?」 안내가 뜨도록 했습니다(워드)' : '읽기 전용 권장을 껐습니다'); }, pr.recommend ? 'on' : '');
+        btn(gp0, pr.edit ? '편집 제한 풀기' : '편집 제한 걸기(읽기만 가능)', function () { setP('edit', !pr.edit, !pr.edit ? '편집을 제한했습니다. 워드에서는 「편집 제한」 창의 「보호 중지」로 풀 수 있습니다(암호 없음)' : '편집 제한을 풀었습니다'); }, pr.edit ? 'on' : '');
+      });
+      body.appendChild(el('div', 'so-sheet-note', '읽기 전용 권장은 워드에서 열 때 읽기 전용으로 열지 묻고, 편집 제한은 워드에서 글을 고치지 못하게 합니다(암호가 없어 「보호 중지」로 풀 수 있는 가벼운 잠금입니다). 이 앱은 암호를 입력하거나 걸지 않으며, 암호가 걸린 제한은 풀 수 없습니다.'));
       var gw = group(body, '배경 글자(초안·대외비)');
       var wi = el('input', 'sdx-in'); wi.type = 'text'; wi.placeholder = '직접 적기(예: 시험 문제)'; wi.setAttribute('aria-label', '배경 글자'); body.appendChild(wi);
       function setWm(txt, msg) { env.run('배경 글자', function (pkg) { return ST.setWatermark(pkg, txt).then(function (q) { return q.err ? q : {}; }); }, function (q) { if (q && q.err) { fail(q.err); return; } toast(msg, 3600); }); }

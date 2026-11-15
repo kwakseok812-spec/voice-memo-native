@@ -1409,10 +1409,93 @@
     return { ok: true };
   }
 
+  // ============================== v10.9 2회차(O-0861): 상호 참조 · 문서 통계 · 읽기 전용·편집 제한 ==============================
+  // ---- 상호 참조: 제목·그림/표 이름·책갈피를 가리키는 REF 필드를 고른 문단 끝에 넣는다 ----
+  function refTargets(xml, sx) {
+    var out = [], ps = paras(xml);
+    headingList(xml, sx, 9).forEach(function (h) { out.push({ xi: h.xi, kind: 'heading', label: '제목 · ' + (h.text.length > 26 ? h.text.slice(0, 26) + '…' : h.text) }); });
+    ps.forEach(function (p, i) {
+      if (p.anc.indexOf('w:txbxContent') >= 0) return;
+      var s = xml.slice(p.s, p.e); if (!/SEQ\s+[A-Za-z가-힣]/.test(s)) return;
+      var t = pText(s.replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')).replace(/\s+/g, ' ').trim(); if (t) out.push({ xi: i, kind: 'caption', label: '이름 · ' + (t.length > 26 ? t.slice(0, 26) + '…' : t) });
+    });
+    listBookmarks(xml).forEach(function (b) { out.push({ xi: b.para, kind: 'bookmark', bm: b.name, label: '책갈피 · ' + b.name }); });
+    return out;
+  }
+  // tgt: { xi, kind, bm? }  mode: 'all'(글 전체) | 'num'(이름표와 번호만 — 그림·표 이름에서만)
+  function addCrossRef(xml, fromXi, tgt, mode) {
+    var ps = paras(xml); if (!ps[fromXi] || !ps[tgt.xi]) return { err: '문단을 찾지 못했습니다.' };
+    if (ps[fromXi].anc.indexOf('w:txbxContent') >= 0) return { err: '텍스트 상자 안에는 넣을 수 없습니다.' };
+    var name = tgt.bm, shown;
+    if (!name) {
+      var used = {}; (xml.match(/<w:bookmarkStart\b[^>]*>/g) || []).forEach(function (t) { used[attrOf(t, 'name')] = 1; });
+      var k = 100000000 + Math.floor(Math.random() * 899999999); name = '_Ref' + k; while (used[name]) { k++; name = '_Ref' + k; }
+      var tp = ps[tgt.xi], tps = xml.slice(tp.s, tp.e), mx = 0; (xml.match(/<w:bookmarkStart\b[^>]*\sw:id="(\d+)"/g) || []).forEach(function (s) { mx = Math.max(mx, +/(\d+)/.exec(s)[1]); });
+      var id = mx + 1, st = '<w:bookmarkStart w:id="' + id + '" w:name="' + name + '"/>', en = '<w:bookmarkEnd w:id="' + id + '"/>', head = /^<w:p\b[^>]*?>/.exec(tps)[0], np;
+      if (/\/>$/.test(head)) return { err: '빈 문단은 가리킬 수 없습니다.' };
+      var pp = pPrOf(tps), bodyStart = pp ? pp.e : head.length, bodyEnd = tps.length - 6, endAt = bodyEnd;
+      if (mode === 'num') {
+        var seqAt = tps.search(/SEQ\s+[A-Za-z가-힣]/), cut = -1;
+        if (seqAt >= 0) {
+          var fs = tps.lastIndexOf('<w:fldSimple', seqAt);
+          if (fs >= 0 && tps.slice(fs, seqAt).indexOf('</w:fldSimple>') < 0 && tps.indexOf('</w:fldSimple>', seqAt) >= 0) { cut = tps.indexOf('</w:fldSimple>', seqAt) + '</w:fldSimple>'.length; }
+          else { var fe = /<w:fldChar\b[^>]*w:fldCharType="end"[^>]*\/>\s*<\/w:r>/g; fe.lastIndex = seqAt; var mm = fe.exec(tps); if (mm) cut = mm.index + mm[0].length; }
+        }
+        if (cut < 0) return { err: '이 문단에서 이름표와 번호를 찾지 못했습니다. 「글 전체」로 넣어 주십시오.' };
+        endAt = cut;
+      }
+      np = tps.slice(0, bodyStart) + st + tps.slice(bodyStart, endAt) + en + tps.slice(endAt);
+      shown = pText(tps.slice(bodyStart, endAt).replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')).replace(/\s+/g, ' ').trim();
+      xml = xml.slice(0, tp.s) + np + xml.slice(tp.e); ps = paras(xml);
+    } else {
+      var bp = ps[tgt.xi]; shown = pText(xml.slice(bp.s, bp.e).replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')).replace(/\s+/g, ' ').trim();
+    }
+    if (!shown) return { err: '가리킬 글이 비어 있습니다.' };
+    var fp = ps[fromXi], fps = xml.slice(fp.s, fp.e), fhead = /^<w:p\b[^>]*?>/.exec(fps)[0];
+    var fld = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> REF ' + name + ' \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t xml:space="preserve">' + esc(shown.length > 200 ? shown.slice(0, 200) : shown) + '</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    if (/\/>$/.test(fhead)) return { xml: xml.slice(0, fp.s) + fhead.replace(/\s*\/>$/, '>') + fld + '</w:p>' + xml.slice(fp.e), shown: shown };
+    return { xml: xml.slice(0, fp.e - 6) + fld + xml.slice(fp.e - 6), shown: shown };
+  }
+
+  // ---- 문서 통계(본문·표 안의 글. 지운 것으로 표시된 글은 뺀다) ----
+  function docStats(xml) {
+    var ps = paras(xml), chars = 0, noSp = 0, words = 0, np = 0;
+    ps.forEach(function (p) {
+      var t = pText(xml.slice(p.s, p.e).replace(/<w:del\b[\s\S]*?<\/w:del>/g, '')); if (!t.trim()) return;
+      np++; chars += t.length; noSp += t.replace(/\s+/g, '').length; words += t.trim().split(/\s+/).length;
+    });
+    return { chars: chars, noSpace: noSp, words: words, paras: np, tables: (xml.match(/<w:tbl>|<w:tbl\s/g) || []).length, pics: (xml.match(/<w:drawing>/g) || []).length };
+  }
+
+  // ---- 읽기 전용 권장 · 편집 제한(암호 없이) ----
+  async function readProt(pkg) {
+    var sx = await pkg.read('word/settings.xml') || '', dp = /<w:documentProtection\b[^>]*\/>/.exec(sx);
+    return { recommend: /<w:writeProtection\b[^>]*w:recommended="(?:1|true)"/.test(sx), edit: !!(dp && /w:enforcement="(?:1|true)"/.test(dp[0])), pw: !!(dp && /w:(?:hash|cryptProviderType|algorithmName|salt)/.test(dp[0])), has: !!sx };
+  }
+  async function setProt(pkg, kind, on) {
+    var sx = await pkg.read('word/settings.xml'); if (sx == null) return { err: '문서 설정 파일(settings.xml)이 없어 바꿀 수 없습니다.' };
+    if (kind === 'recommend') {
+      sx = sx.replace(/<w:writeProtection\b[^>]*\/>/g, '');
+      if (on) { var o = /<w:settings\b[^>]*>/.exec(sx); if (!o) return { err: '문서 설정 구조가 특이해서 바꿀 수 없습니다.' }; sx = sx.slice(0, o.index + o[0].length) + '<w:writeProtection w:recommended="1"/>' + sx.slice(o.index + o[0].length); }
+    } else {
+      var cur = /<w:documentProtection\b[^>]*\/>/.exec(sx);
+      if (!on && cur && /w:(?:hash|cryptProviderType|algorithmName|salt)/.test(cur[0])) return { err: '암호가 걸린 편집 제한입니다. 암호를 모르면 풀 수 없고, 암호를 입력하는 일은 이 앱에서 하지 않습니다. 워드에서 풀어 주십시오.' };
+      if (on && cur && /w:enforcement="(?:1|true)"/.test(cur[0])) return { err: '이미 편집이 제한된 문서입니다.' };
+      sx = sx.replace(/<w:documentProtection\b[^>]*\/>/g, '');
+      if (on) {
+        var m = new RegExp('<w:(?:' + SETTINGS_AFTER_TRACK.slice(3).join('|') + ')\\b').exec(sx), tag = '<w:documentProtection w:edit="readOnly" w:enforcement="1"/>';
+        sx = m ? sx.slice(0, m.index) + tag + sx.slice(m.index) : sx.replace(/<\/w:settings>\s*$/, tag + '</w:settings>');
+      }
+    }
+    pkg.write('word/settings.xml', sx); return { ok: true };
+  }
+
+
   global.SODocxStruct = {
     SYMBOLS: SYMBOLS, dateChoices: dateChoices,
     tableGeomInfo: tableGeomInfo, setColWidth: setColWidth, setRowHeight: setRowHeight, setTableAlign: setTableAlign, tableLook: tableLook, appendText: appendText,
     readTitlePg: readTitlePg, setTitlePg: setTitlePg, readWatermark: readWatermark, setWatermark: setWatermark, listBookmarks: listBookmarks, addBookmark: addBookmark, deleteBookmark: deleteBookmark, addAnchorLink: addAnchorLink,
+    refTargets: refTargets, addCrossRef: addCrossRef, docStats: docStats, readProt: readProt, setProt: setProt,
     addCaption: addCaption, insertToc: insertToc, updateToc: updateToc, tocField: tocField, headingList: headingList,
     readComments: readComments, addComment: addComment, editComment: editComment, deleteComment: deleteComment, listChanges: listChanges, resolveChanges: resolveChanges, revertFormatChanges: revertFormatChanges, readTrack: readTrack, setTrack: setTrack,
     copyFormat: copyFormat, pasteFormat: pasteFormat, readCols: readCols, setColumnsWhole: setColumnsWhole, setColumnsRange: setColumnsRange, readPicLayout: readPicLayout, setPicLayout: setPicLayout, setPicWidth: setPicWidth,

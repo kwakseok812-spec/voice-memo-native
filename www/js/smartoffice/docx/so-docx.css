@@ -96,3 +96,5 @@ html[data-style="dark"] .so-docx-box .docx-wrapper>section.docx{box-shadow:0 0 0
 .sdx-chg{padding:8px 0;border-bottom:1px solid var(--glass-b,#ccd)}
 .sdx-chl{font-size:13.5px;line-height:1.45;margin-bottom:6px;word-break:keep-all;color:var(--text,#111)}
 .sdx-chg .sdx-r .sdx-b{min-width:88px}
+
+.sdx-stat{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--glass-b);background:var(--glass);min-width:96px}.sdx-stat span{font-size:12px;opacity:.7}.sdx-stat b{font-size:15px}

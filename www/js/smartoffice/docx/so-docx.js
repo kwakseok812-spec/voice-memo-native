@@ -668,11 +668,23 @@
     });
   }
   function pushUndo(b) { S.undo.push(b); if (S.undo.length > 10) S.undo.shift(); S.redo = []; }
+  // 미리보기 부품이 각주 번호를 2·4·6…(또는 중간에 건너뛰게) 매기는 일이 있어, 본문의 각주 표시 번호를 문서 순서대로 1부터 다시 매긴다(저장되는 문서와는 무관)
+  function fixNoteNumbers(root, xml) {
+    try {
+      if (xml && /<w:endnoteReference/.test(xml) && /<w:footnoteReference/.test(xml)) return;      // 각주·미주가 함께 있으면 어느 것인지 가를 수 없어 건드리지 않는다
+      var n = 0;
+      [].slice.call(root.querySelectorAll('section.docx sup > sup')).forEach(function (el) {
+        if (el.closest && el.closest('li, ol, aside, footer, header')) return;
+        if (!/^\d+$/.test((el.textContent || '').trim())) return;
+        el.textContent = String(++n);
+      });
+    } catch (e) {}
+  }
   function reopen(u8) {
     var host = ctxRef.body, st = host.scrollTop, sl = host.scrollLeft;
     S.curBlob = new Blob([u8], { type: DOCX_MIME }); S.ready = false;
     return window.docx.renderAsync(S.curBlob, wrap, S.styleBox, RENDER_OPTS).then(function () {
-      pageEls = [].slice.call(wrap.querySelectorAll('section.docx')); S.pages = pageEls.length;
+      pageEls = [].slice.call(wrap.querySelectorAll('section.docx')); S.pages = pageEls.length; fixNoteNumbers(wrap, S.xml);
       wrap.classList.add('so-docx-editing'); applyScale();
       S.prepP = prepareEdit(wrap); return S.prepP;
     }).then(function () {
@@ -1035,7 +1047,7 @@
         host.style.setProperty('--soh', host.clientHeight + 'px');
         wrap = box; S.styleBox = styleBox;
         return window.docx.renderAsync(ctx.file, box, styleBox, RENDER_OPTS).then(function () {
-          pageEls = [].slice.call(box.querySelectorAll('section.docx'));
+          pageEls = [].slice.call(box.querySelectorAll('section.docx')); fixNoteNumbers(box, null);
           var pages = pageEls.length;
           if (!pages) throw new Error('쪽을 그리지 못함');
           S.pages = pages;
