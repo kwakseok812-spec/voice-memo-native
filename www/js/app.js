@@ -122,9 +122,11 @@
   /* v9.89(O-0802) 위에서 고른 「결제 카드」(= 운영비/연구비 구분)를 PC 로도 함께 보낸다 — 행 meta.scan.pick = 'opex'|'research'. 예전(v9.51~v9.88)에는 이 기기의 기록에만 붙여 두어
    *   PC 는 선택을 알 수 없었고(영수증 카드번호는 가려져 있어 PC 가 장부를 못 정함) 그래서 자동 등록이 멈췄다. 'off' 면 v9.88 과 같음(선택을 PC 로 보내지 않음). 못 고른 경우(칩 해제)는 보내지 않는다 → PC 가 먼저 여쭘. */
   var RECEIPT_PICK_SEND = 'on';
-  var RP_CARDS = [{ v: '9801', app: 'opex', t: '보직자 운영비 카드 9801' }, { v: '8837', app: 'research', t: '교내 연구비 카드 8837' }];
+  /* 20261117: 카드번호 라벨 제거 — 영수증 카드번호는 가려져 구분이 안 되므로 「운영비」「과제비(연구비)」 두 칩으로만 고른다. 옛 저장값 9801→opex·8837→research 는 읽을 때 이관 */
+  var RP_CARDS = [{ v: 'opex', app: 'opex', t: '운영비' }, { v: 'research', app: 'research', t: '과제비(연구비)' }];
+  function rpNorm(v) { return v === '9801' ? 'opex' : (v === '8837' ? 'research' : (v === 'opex' || v === 'research' ? v : '')); }
   var RP = { card: '', memo: '' };
-  try { var _rc = localStorage.getItem('smart_rcpt_card'); if (_rc === '9801' || _rc === '8837') RP.card = _rc; } catch (e) {}
+  try { var _rc = localStorage.getItem('smart_rcpt_card'); var _rn = rpNorm(_rc); if (_rn) { RP.card = _rn; if (_rn !== _rc) localStorage.setItem('smart_rcpt_card', _rn); } } catch (e) {}
   function rpOn() { return RECEIPT_PICK === 'on' && SCAN_HUB === 'on'; }
   function rpSendPick() { return (RECEIPT_PICK_SEND === 'on' && rpOn()) ? rpApp(RP.card) : ''; }   // 'opex' | 'research' | ''
   function rpScan(batch) {          // 영수증 행 meta.scan 에 실을 값(한 장·묶음 공통). pick 은 고른 경우에만
@@ -133,10 +135,10 @@
     if (batch) o.batch = batch;
     return o;
   }
-  function rpApp(card) { for (var i = 0; i < RP_CARDS.length; i++) if (RP_CARDS[i].v === card) return RP_CARDS[i].app; return ''; }
+  function rpApp(card) { card = rpNorm(card); for (var i = 0; i < RP_CARDS.length; i++) if (RP_CARDS[i].v === card) return RP_CARDS[i].app; return ''; }
   function rpFields() { return rpOn() ? { card_pick: RP.card || '', memo_pick: String(RP.memo || '').trim() } : {}; }
   function rpHtml() {
-    return '<div class="scan-pick"><div class="label">어느 카드로 결제하셨습니까? <span class="hint">(선택 · 한 번 누르면 기억합니다)</span></div><div class="scan-chips" data-rp-chips>' +
+    return '<div class="scan-pick"><div class="label">운영비인가요 과제비인가요? <span class="hint">(선택 · 한 번 누르면 기억합니다)</span></div><div class="scan-chips" data-rp-chips>' +
       RP_CARDS.map(function (c) { return '<button type="button" class="chip hchip scan-chip' + (RP.card === c.v ? ' on' : '') + '" data-rp-card="' + c.v + '" aria-pressed="' + (RP.card === c.v) + '">' + c.t + '</button>'; }).join('') + '</div>' +
       '<div class="label">메모 <span class="hint">(선택 · 사용 목적 등 20자 이내 · 개인정보는 적지 마십시오)</span></div>' +
       '<div class="input filled"><input type="text" data-rp-memo maxlength="20" autocomplete="off" placeholder="예: 연구 회의 간식" value="' + esc(RP.memo) + '"></div></div>';
@@ -1750,8 +1752,6 @@
       var why = scanLockWhy(sc, d), conf = sc.conf || {};
       var warns = (Array.isArray(sc.warnings) ? sc.warnings : []).map(function (w) { return '<div class="scan-warn">⚠ ' + esc(w) + '</div>'; }).join('');
       if (sc.dup_of) warns = '<div class="scan-warn">⚠ 이미 처리한 영수증과 같습니다</div>' + warns;
-      if (rpOn() && e.card_pick && /^\d{4}$/.test(String(sc.card_last4 || '')) && String(sc.card_last4) !== e.card_pick)      // v9.51: 고르신 카드와 영수증에서 읽은 끝자리가 다르면 분명히 알린다(앱 기본값은 영수증 쪽을 따른다)
-        warns = '<div class="scan-warn">⚠ 선택하신 카드(끝 ' + esc(e.card_pick) + ')와 영수증의 카드 끝자리(' + esc(String(sc.card_last4)) + ')가 다릅니다. 어느 앱에 넣을지 확인해 주십시오</div>' + warns;
       if (sc.last_error) warns = '<div class="scan-warn scan-reject">⚠ ' + esc(scanRejectWhy(sc.last_error)) + '</div>' + warns;
       var fields =
         scanFld('date', '날짜', d.date, 'type="date"', !scanDateOk(d.date) || conf.date === 'low') +
@@ -3956,6 +3956,7 @@
   APP_VERSION = 'v10.6';        // v10.6(O-0861): S-Office 편집 보강 4판(워드) — 문단 넣기·지우기·옮기기 · 제목 스타일 · 글자·문단 서식 · 글머리표·번호 목록 · 표(넣기·줄 칸 추가 삭제·칸 합치기) · 그림 · 쪽 나누기 · 머리글·바닥글·쪽 번호 · 찾아 바꾸기 · 링크 글자·그림 옆 글자 고치기 · 「＋ 새 문서」에 워드 칩 · 스위치 SO_DOCX_TOOLS — 서버·SQL·자바·권한 변경 없음 · versionCode 150
   APP_VERSION = 'v10.9';        // v10.9(O-0861): S-Office 차트 만들기·고치기(엑셀·PPT·워드, 진짜 차트 + 폰 화면 자체 미리 그림). v10.7(O-0861): S-Office 편집 보강 5판 — PPT 화면 순서 = 파일 순서(복제·순서 바꾸기 뒤 어긋남 수정) · 안내 띠(본문·도구줄을 안 가림) · 서식 시트 열어 둔 채 이어서 적용 · 쉬운 도형 이름·조사·실패 안내 · 엑셀 필터 ▽ 표시·조건 필터 · 글자 일부만 서식(PPT·워드) · 복사·붙여넣기(PPT 개체·워드 문단·표·엑셀 칸) · PPT 글꼴·맞춤·테두리·표 칸 합치기 · 워드 표 서식 — 서버·SQL·자바·권한 변경 없음 · versionCode 151
   APP_VERSION = 'v10.11';        // v10.11: S-Office 엑셀 화면을 PC 엑셀에 가깝게 — 글꼴 이름 따옴표 때문에 굵게·글자색·가운데 맞춤·테두리가 통째로 사라지던 문제 고침, 선 굵기·색, 세로 맞춤, 테마색, 글자 넘침, 틀 고정 첫 줄·칸. 스위치 SO_XLSX_FIDELITY(so-core.js, off=v10.10 그리기) — 서버·SQL·권한·자바 변경 없음 · versionCode 155
+  APP_VERSION = 'v10.12';        // v10.12: 영수증 보내기 전 선택 칸 라벨을 「운영비」「과제비(연구비)」로(카드번호 문구 제거, 옛 저장값 9801/8837 자동 이관), 카드 끝자리 불일치 경고 삭제. 전송값 meta.scan.pick 그대로. 서버·SQL·권한 변경 없음
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
