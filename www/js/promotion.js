@@ -80,7 +80,7 @@
   }
 
   /* ---------- 상태 ---------- */
-  var S = { edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, lastLoadAt: 0, lastLoadEp: -1, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
+  var S = { ux: false, open: {}, filter: 'all', more: {}, emptyOpen: false, pxSheet: false, hint: {}, edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, lastLoadAt: 0, lastLoadEp: -1, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };
   var _toast = function () {}, _saveFile = null, built = false, animTimer = null;
   function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ at: Date.now(), profile: S.profile, items: S.items, rules: S.rules, rulesVer: S.rulesVer })); } catch (e) {} }
   function readCache() { try { var c = JSON.parse(localStorage.getItem(CKEY) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) {} return null; }
@@ -211,6 +211,7 @@
     if (!S.profile && !S.items.length) { v.innerHTML = banner() + emptyHtml('none'); wireRetry(); return; }
     var A = compute();
     if (A.error) { v.innerHTML = banner() + emptyHtml('rules'); wireRetry(); return; }
+    if (S.ux) { renderMain2(A, v); return; }      // v10.19: 개편 B안(스위치 PROMO_UX_V2). 'off' 면 아래 v10.17 모양 그대로
     var T = A.T, ten = A.tenure, c = A.checks, ph = '', i, k;
     /* hero */
     ph += banner();
@@ -308,14 +309,228 @@
   }
   function animate(A, v) {
     var m = $('pMeter'), mw = Math.min(100, A.today.total / (A.T.total * 2) * 100);
-    var fills = v.querySelectorAll('.pfill, .pghost'), j;
+    var fills = v.querySelectorAll('.pfill, .pghost, .pxf, .pxg'), j;
     var key = A.today.total + '|' + A.expected.total + '|' + S.rev, again = (S.lastAnim === key);       // 같은 값을 다시 그릴 때(타일 누르기 등)는 효과를 되풀이하지 않는다
-    S.lastAnim = key;
+    S.lastAnim = key; v.classList.toggle('pxfirst', !again);      // v10.19: 통과 ✓ 팝은 처음 그릴 때만
     if (again) { var tt = $('pTotal'), ee = $('pExp'); if (tt) tt.textContent = fmt(A.today.total); if (ee) ee.textContent = fmt(A.expected.total); if (m) { m.style.transition = 'none'; m.style.width = mw + '%'; } for (j = 0; j < fills.length; j++) { fills[j].style.transition = 'none'; fills[j].style.width = fills[j].getAttribute('data-w') + '%'; } return; }
     countTo($('pTotal'), A.today.total); countTo($('pExp'), A.expected.total);
     if (calm()) { if (m) m.style.width = mw + '%'; for (j = 0; j < fills.length; j++) fills[j].style.width = fills[j].getAttribute('data-w') + '%'; return; }
     if (animTimer) clearTimeout(animTimer);
     animTimer = setTimeout(function () { if (m) m.style.width = mw + '%'; for (j = 0; j < fills.length; j++) (function (f, k) { setTimeout(function () { f.style.width = f.getAttribute('data-w') + '%'; }, k * 25); })(fills[j], j); }, 45);
+  }
+
+  /* ---------- v10.19: 승진 화면 개편 B안 「한눈 요약 + 부문 접이식」 (스위치 PROMO_UX_V2 — 'off' 면 위의 render()·아래 renderSection() 그대로, 즉 v10.17 모양) ----------
+   * 점수·판정·점검 안내는 PC.computeAll 이 준 것을 그대로 그린다(계산은 바꾸지 않음). 이 블록은 「어떻게 보여 주나」만 다시 짠 것이다. */
+  var ICO = {
+    unk: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.5"/><path d="M7.9 8a2.2 2.2 0 1 1 3.2 2c-.7.4-1.1.8-1.1 1.6" stroke-linecap="round"/><circle cx="10" cy="14.2" r=".6" fill="currentColor"/></svg>',
+    exc: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.5"/><path d="M4.8 15.2 15.2 4.8"/></svg>',
+    dup: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><rect x="3" y="6" width="9.5" height="9.5" rx="2"/><path d="M7.5 4.5A2 2 0 0 1 9.5 3H15a2 2 0 0 1 2 2v5.5a2 2 0 0 1-1.5 2"/></svg>',
+    part: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.5"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="currentColor" stroke="none"/></svg>',
+    clip: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M13.5 7 8 12.6a1.8 1.8 0 0 0 2.6 2.5l6-6.2a3.5 3.5 0 0 0-5-5L5.4 10.2a5.2 5.2 0 0 0 7.4 7.4"/></svg>',
+    chev: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 8 5 5 5-5"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 12h8m-8 0 3-3m-3 3 3 3M16 7v10m4-10v10"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>',
+    bin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>',
+    dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>',
+    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
+  };
+  function ico(k) { return '<span class="px-mk m-' + k + '" aria-hidden="true">' + ICO[k] + '</span>'; }
+  function catOf(r) {          // 항목 한 줄 앞의 표시 하나(우선순위: 중복 의심 > 확인 전 > 점수 제외 > 일부 인정 > 정상)
+    if (r.flags.dup_suspect) return 'dup';
+    if (r.flags.unverified) return 'unk';
+    if (r.status === 'excluded' || r.status === 'before') return 'exc';
+    if (r.status === 'partial') return 'part';
+    return 'in';
+  }
+  var CATTXT = { unk: '확인 전', exc: '점수 제외', dup: '중복 의심', part: '부분 인정', 'in': '' };
+  var FILTERS = [['all', '전체'], ['unk', '확인 전'], ['exc', '제외'], ['dup', '중복 의심']];
+  function filterHit(f, r) {
+    if (f === 'unk') return !!r.flags.unverified;
+    if (f === 'exc') return r.status === 'excluded' || r.status === 'before';
+    if (f === 'dup') return !!r.flags.dup_suspect;
+    return true;
+  }
+  function dateMeta(it) {      // 제목에 날짜가 안 든 종류만 날짜를 따로 보여 준다(제목에 이미 든 종류는 중복 표시 안 함)
+    var c = it.item_code, v = isObj(it.value) ? it.value : {};
+    if (/^(1-1|1-2|1-4|1-6|3-1|4-1|4-2)$/.test(c)) return '';
+    if (c === '3-3' && !(Number(v.endYear) || Number(v.completionYear))) return '날짜 없음';
+    if (it.academic_year) return it.academic_year + '학년도';
+    var y = v.endYear || v.completionYear || v.year || v.startYear;
+    return y ? String(y) : '';
+  }
+  function hasPdf(it) { var ev = isObj(it.evidence) ? it.evidence : null; return !!(ev && Array.isArray(ev.files) && ev.files.some(function (f) { return f && f.fid; })); }
+  function pxRow(r, code, idx) {
+    var R = S.rules, cat = catOf(r), meta = [], words = [], sc1 = r.score, label = PC.rowLabel(r.it, R), rs = rsOf(r.reasons), zero = (r.status === 'excluded' || r.status === 'before');
+    if (code === '1-1' && r.part !== null && r.part !== undefined) sc1 = r.part;
+    var scTxt = zero ? '0' : fmtS(sc1);
+    var dm = dateMeta(r.it); if (dm) meta.push(esc(dm));
+    if (r.status === 'partial') words.push('부분 인정');
+    if (r.flags.unverified && r.status === 'in') words.push('확인 전');
+    if (r.flags.dup_suspect && r.status === 'in') words.push('중복 의심');
+    if (r.flags.series) words.push('같은 사업 연차별');
+    if (r.flags.term_confirmed) words.push('임기 확인됨');
+    if (r.flags.corrected) words.push('정정해 가져옴');
+    if (words.length) meta.push('<span class="px-w">' + esc(words.join(' · ')) + '</span>');
+    if (rs.length && r.status !== 'in') meta.push(esc(lbl(rs.join(' · '))));
+    else if (code === '3-1') meta.push('재임 ' + r.months + '개월 인정' + (r.monthsRaw !== r.months ? ' (입력 ' + r.monthsRaw + '개월)' : '') + (rs.length ? ' · ' + esc(lbl(rs.join(' · '))) : ''));
+    var pdf = hasPdf(r.it);
+    var inner = '<span class="px-ld">' + (cat === 'in' ? '<i class="px-dot" aria-hidden="true"></i>' : ico(cat)) + '</span><span class="px-tx"><span class="px-t">' + esc(label) + '</span>'
+      + ((meta.length || pdf) ? '<span class="px-m">' + meta.join('<span class="px-sep" aria-hidden="true"> · </span>') + (pdf ? '<span class="px-pdf">' + ico('clip') + '<span class="px-sr">증빙 PDF 있음</span></span>' : '') + '</span>' : '')
+      + '</span><b class="px-p' + (zero ? ' x' : '') + '">' + scTxt + '<span class="px-sr">점</span></b>';
+    var cls = 'px-it' + (zero ? ' x' : ''), st = idx < 6 ? ' style="--i:' + idx + '"' : '';
+    if (S.edit) return '<button type="button" class="plrow ' + cls + (S.flashId === r.id ? ' flash' : '') + '"' + st + ' data-id="' + esc(r.id) + '" data-code="' + code + '" aria-label="' + esc(label + (CATTXT[cat] ? ', ' + CATTXT[cat] : '') + ', ' + scTxt + '점 — 고치기') + '">' + inner + '</button>';
+    return '<div class="' + cls + '"' + st + '>' + inner + '</div>';
+  }
+  function pxCodes(s, A) {
+    var codes = [], R = S.rules;
+    A.today.rows.forEach(function (r) { if (parseInt(r.code.charAt(0), 10) === s && codes.indexOf(r.code) < 0) codes.push(r.code); });
+    if (S.edit) Object.keys(R.names || {}).forEach(function (c) { if (parseInt(c.charAt(0), 10) === s && codes.indexOf(c) < 0) codes.push(c); });
+    return codes.sort();
+  }
+  function pxGroupHead(code, tot, n) {
+    var R = S.rules;
+    return '<div class="px-grp"><span class="px-gn"><b>' + esc(code + ' ' + ((R.names || {})[code] || '')) + '</b><small>' + (n === null ? '' : fmtS(tot) + '점 · ' + n + '건') + '</small></span>'
+      + (S.edit ? '<button type="button" class="px-add" data-add="' + code + '" aria-label="' + esc(code + ' 항목 추가') + '">＋ 추가</button>' : '') + '</div>';
+  }
+  function pxAcc(i, A, maxV, f) {
+    var secs = A.today.sections, sc = secs[i], T = A.T, R = S.rules, codes = pxCodes(i, A), body = '', idx = 0, matched = 0, cnt = 0, h;
+    codes.forEach(function (code) {
+      var all = A.today.rows.filter(function (r) { return r.code === code; }), rows = all.filter(function (r) { return filterHit(f, r); }), tot = A.today.itemTotals[code] || 0, lim = 99, more = 0;
+      cnt += all.length;
+      if (f !== 'all' && !rows.length) return;
+      rows.sort(function (a, b) { return String(a.id) < String(b.id) ? -1 : 1; });
+      if (f === 'all' && rows.length > 6 && !S.more[code]) { lim = 5; more = rows.length - 5; }
+      body += pxGroupHead(code, tot, all.length);
+      if (!rows.length) body += '<div class="px-none">아직 넣은 항목이 없습니다.</div>';
+      rows.slice(0, lim).forEach(function (r) { body += pxRow(r, code, idx++); });
+      if (more) body += '<button type="button" class="px-more" data-more="' + code + '">나머지 ' + more + '건 보기 ' + ico('chev') + '</button>';
+      matched += rows.length;
+    });
+    if (f !== 'all' && !matched) return '';
+    var open = f !== 'all' || !!S.open[i], cap = '';
+    if (sc.capped) cap = '<span class="px-cap warn">최대 ' + sc.max + '점까지 인정 · 실제 ' + fmtS(sc.raw) + '점 — 더 써도 안 오릅니다</span>';
+    else if (sc.max && i !== 3) cap = '<span class="px-cap">세로선 = 최대 인정 ' + sc.max + '점</span>';
+    if (i === 3) cap += '<span class="px-cap">세로선 = 대학발전 기준 ' + T.sec3 + '점</span>';
+    var nm = (R.sections || {})[i] || '';
+    h = '<section class="px-acc' + (open ? ' open' : '') + '" data-sec="' + i + '" style="--c:var(--sc' + i + ')"><button type="button" class="px-hd" data-sec="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="pxb' + i + '" aria-label="부문 ' + i + ' ' + esc(nm) + ', ' + fmtS(sc.used) + '점, ' + cnt + '건">'
+      + '<span class="px-h1"><span class="px-no" aria-hidden="true">' + i + '</span><span class="px-nm">' + esc(nm) + '<small>' + cnt + '건</small></span><b class="px-sc">' + fmtS(sc.used) + '</b><span class="px-chev" aria-hidden="true">' + ICO.chev + '</span></span>'
+      + '<span class="px-tr"><span class="px-track" aria-hidden="true"><span class="pxg" data-w="' + (sc.capped ? Math.min(100, sc.raw / maxV * 100) : 0) + '"></span><span class="pxf" data-w="' + Math.min(100, sc.used / maxV * 100) + '"></span>'
+      + (i === 3 ? '<u style="left:' + (T.sec3 / maxV * 100) + '%"></u>' : '') + (sc.max ? '<u style="left:' + (sc.max / maxV * 100) + '%"></u>' : '') + '</span></span>' + cap
+      + '</button><div class="px-bd" id="pxb' + i + '"><div>' + body + '</div></div></section>';
+    return h;
+  }
+  function checkLists(A) {
+    return { chk: A.notes.filter(function (n) { return n.level === 'check'; }), oth: A.notes.filter(function (n) { return n.level === 'ok' || n.level === 'info'; }), refs: A.notes.filter(function (n) { return n.level === 'ref'; }) };
+  }
+  function noteLi(n) {
+    var mark = n.level === 'ok' ? '<em class="okm" aria-hidden="true">✓</em>' : (n.level === 'info' ? '<em class="inm" aria-hidden="true">i</em>' : '<em aria-hidden="true">!</em>');
+    return '<li class="' + n.level + '"><b>' + mark + esc(lbl(n.title)) + '</b><span class="psb">' + esc(lbl(n.text)) + '</span>' + (n.k === 'link_suggest' && S.edit ? '<button type="button" class="pbtn sm" data-go="suggest">확인하기</button>' : '') + '</li>';
+  }
+  function openChecks() {      // 「확인할 것」 시트 — 하실 일(check) · 안내(ok/info) · 참고(규정이 분명하지 않은 부분, 접이식). 문구는 계산 파일이 준 것 그대로.
+    var L = $('promoLayer'), A = compute(); if (!L || A.error) return;
+    var ls = checkLists(A), h = '';
+    S.pxSheet = true;
+    h += '<div class="pscrim" id="promoScrim"></div><div class="psheet pxsheet' + (calm() ? ' pcalm' : '') + '" role="dialog" aria-label="확인할 것"><div class="psh-hd"><h4 id="pxShT" tabindex="-1">확인할 것 ' + ls.chk.length + '건</h4><button type="button" class="psh-x" id="pxShX" aria-label="닫기">✕</button></div>';
+    h += ls.chk.length ? '<ul class="pwarn">' + ls.chk.map(noteLi).join('') + '</ul>' : '<p class="psnote">지금 하실 일은 없습니다.</p>';
+    if (ls.oth.length) h += '<h5 class="px-sh5">안내</h5><ul class="pwarn">' + ls.oth.map(noteLi).join('') + '</ul>';
+    if (ls.refs.length) {
+      h += '<h5 class="px-sh5"><button type="button" class="prefbtn" id="pRefBtn" aria-expanded="' + (S.refOpen ? 'true' : 'false') + '" aria-controls="pRefL"><span>규정이 분명하지 않은 부분 <small>(참고)</small></span><span class="pcnt">' + ls.refs.length + '건 <i aria-hidden="true">' + (S.refOpen ? '▴' : '▾') + '</i></span></button></h5>'
+        + '<p class="psb">점수에는 아래 기본값으로 이미 넣었습니다. 따로 하실 일은 없습니다.</p><ul class="pwarn" id="pRefL"' + (S.refOpen ? '' : ' style="display:none"') + '>' + ls.refs.map(function (n) { return '<li class="ref"><b><em class="inm" aria-hidden="true">i</em>' + esc(lbl(n.title)) + '</b><span class="psb">' + esc(lbl(n.text)) + '</span></li>'; }).join('') + '</ul>';
+    }
+    h += '</div>';
+    L.innerHTML = h; L.classList.add('show');
+    $('promoScrim').onclick = closeSheet; $('pxShX').onclick = closeSheet;
+    var rb = $('pRefBtn'); if (rb) rb.onclick = function () { S.refOpen = !S.refOpen; var l = $('pRefL'); if (l) l.style.display = S.refOpen ? '' : 'none'; this.setAttribute('aria-expanded', S.refOpen ? 'true' : 'false'); var ic = this.querySelector('i'); if (ic) ic.textContent = S.refOpen ? '▴' : '▾'; };
+    var sg = L.querySelector('[data-go="suggest"]'); if (sg) sg.onclick = function () { closeSheet(); if (PE() && S.edit) PE().openSuggest(); };
+    try { $('pxShT').focus({ preventScroll: true }); } catch (e) {}
+  }
+  function renderMain2(A, v) {
+    var T = A.T, ten = A.tenure, c = A.checks, R = S.rules, secs = A.today.sections, ph = '', i, f = S.filter || 'all';
+    var gapV = c.total.value - c.total.need, st = c.total.s, pctTot = Math.round(A.today.total / T.total * 100);
+    ph += banner();
+    /* 맨 위 한 카드 — 오늘 점수 하나만 크게 */
+    ph += '<section class="pcard phero px-hero" aria-label="승진 점수 요약"><p class="px-sr" id="promoSay">' + esc(A.say) + '</p>';
+    ph += '<div class="px-l1"><span class="plab">오늘 기준 승진 점수</span><button type="button" class="px-chip ' + st + (S.sel === 'total' ? ' sel' : '') + '" data-k="total" aria-expanded="' + (S.sel === 'total' ? 'true' : 'false') + '" aria-controls="pDetail"><span class="px-ci" aria-hidden="true">' + SIC[st] + '</span>합격선 ' + SW[st] + '</button></div>';
+    ph += '<div class="pbig"><span id="pTotal">0</span><small>/ ' + T.total + '</small></div>';
+    ph += '<div class="pmeter" role="img" aria-label="합격선 대비 오늘 기준 ' + pctTot + '퍼센트"><i id="pMeter"></i><u></u></div>';
+    ph += '<div class="px-gaprow"><span class="px-gap' + (gapV >= 0 ? ' ok' : '') + '" id="pGap">합격선' + (gapV >= 0 ? '보다 <b>' + fmt(gapV) + '</b>점 많습니다' : '까지 <b>' + fmt(-gapV) + '</b>점 남았습니다') + '</span><span class="px-gapn">합격선 ' + T.total + ' · ' + pctTot + '%</span></div>';
+    ph += '<div class="px-tiles" id="pTiles">';
+    ['sec3', 'lead', 'eval', 'tenure'].forEach(function (key) {
+      var s2 = c[key].s, nm = key === 'tenure' ? '재직 6년' : PC.CHECK_NAMES[key], stt = (key === 'tenure' && s2 === 'wait' && ten.eligible) ? PC.fmtDay(ten.eligible) : SW[s2];
+      ph += '<button type="button" class="px-tile ' + s2 + (S.sel === key ? ' sel' : '') + '" data-k="' + key + '" aria-expanded="' + (S.sel === key ? 'true' : 'false') + '" aria-controls="pDetail" aria-label="' + esc(nm + ', ' + SW[s2] + (stt !== SW[s2] ? ', ' + stt : '')) + '"><span class="px-tn">' + esc(nm) + '</span><span class="px-ts"><i class="px-ti" aria-hidden="true">' + SIC[s2] + '</i>' + esc(stt) + '</span></button>';
+    });
+    ph += '</div><div class="pdetail' + (S.sel ? ' show' : '') + '" id="pDetail" role="region" aria-live="polite" aria-label="판정 자세히">' + (S.sel ? detailHtml(S.sel, A) : '') + '</div>';
+    ph += '<div class="pnote">지금 입력된 자료 기준입니다.' + (A.bonus ? ' 총장 가점 ' + A.bonus + '점이 들어 있습니다.' : '') + ' 오늘 기준은 보직을 지금(' + ymText(A.todayCut) + ')까지 재임한 개월만 센 값입니다.</div></section>';
+    /* 확인할 것 — 하실 일만 한 줄 */
+    var ls = checkLists(A), nChk = ls.chk.length, nRest = ls.oth.length + ls.refs.length;
+    if (nChk) ph += '<button type="button" class="px-alert" id="pxChecks" aria-haspopup="dialog"><i class="px-dot" aria-hidden="true"></i><span class="px-at"><b>확인할 것 ' + nChk + '건</b><small>' + esc(ls.chk.map(function (n) { return lbl(n.title).split(' — ')[0]; }).join(' · ')) + (nRest ? ' · 안내·참고 ' + nRest + '건' : '') + '</small></span><span class="px-ar" aria-hidden="true">›</span></button>';
+    else if (nRest) ph += '<button type="button" class="px-alert calmrow" id="pxChecks" aria-haspopup="dialog"><i class="px-dot ok" aria-hidden="true"></i><span class="px-at"><b>지금 하실 일은 없습니다</b><small>안내·참고 ' + nRest + '건 보기</small></span><span class="px-ar" aria-hidden="true">›</span></button>';
+    /* 부문별 점수 */
+    var vals = [secs[4].raw], maxV;
+    for (i = 1; i <= 5; i++) vals.push(secs[i].used);
+    maxV = Math.max(700, Math.ceil(Math.max.apply(null, vals) / 100) * 100);
+    var nUnk = 0, nExc = 0, nDup = 0;
+    A.today.rows.forEach(function (r) { if (filterHit('unk', r)) nUnk++; if (filterHit('exc', r)) nExc++; if (filterHit('dup', r)) nDup++; });
+    var cnts = { all: null, unk: nUnk, exc: nExc, dup: nDup };
+    ph += '<div class="px-sechd"><h3>부문별 점수</h3></div><div class="px-chips" role="group" aria-label="항목 걸러 보기">' + FILTERS.map(function (x) {
+      return '<button type="button" class="px-cp' + (f === x[0] ? ' on' : '') + '" data-f="' + x[0] + '" aria-pressed="' + (f === x[0] ? 'true' : 'false') + '">' + (x[0] === 'all' ? '' : ico(x[0])) + x[1] + (cnts[x[0]] !== null ? ' <em>' + cnts[x[0]] + '</em>' : '') + '</button>';
+    }).join('') + '</div>';
+    var accs = '', emptyIdx = [];
+    for (i = 1; i <= 5; i++) { if (!secs[i].has) { emptyIdx.push(i); continue; } accs += pxAcc(i, A, maxV, f); }
+    if (f !== 'all' && !accs) ph += '<div class="px-nores" role="status">해당하는 항목이 없습니다.</div>';
+    ph += accs;
+    if (f === 'all' && emptyIdx.length) {
+      ph += '<div class="px-empty"><i class="px-dot dim" aria-hidden="true"></i><div class="px-tx"><b>' + emptyIdx.map(function (n) { return '부문 ' + n + ' ' + esc((R.sections || {})[n] || ''); }).join(' · ') + '</b><br>비어 있습니다 · 안 채워도 됩니다</div>' + (S.edit ? '<button type="button" class="px-add" id="pxEmptyBtn" aria-expanded="' + (S.emptyOpen ? 'true' : 'false') + '" aria-controls="pxEmptyBody">＋ 추가</button>' : '') + '</div>';
+      if (S.edit && S.emptyOpen) {
+        ph += '<div class="px-emptybody" id="pxEmptyBody">' + emptyIdx.map(function (n) {
+          return '<section class="px-acc open" style="--c:var(--sc' + n + ')"><div class="px-ehd"><span class="px-no" aria-hidden="true">' + n + '</span><b>' + esc((R.sections || {})[n] || '') + '</b></div><div class="px-bd"><div>' + pxCodes(n, A).map(function (code) { return pxGroupHead(code, 0, null); }).join('') + '</div></div></section>';
+        }).join('') + '</div>';
+      }
+    }
+    ph += '<p class="px-legend">' + ico('unk') + ' 확인 전 &nbsp;' + ico('exc') + ' 제외 &nbsp;' + ico('dup') + ' 중복 의심 &nbsp;' + ico('part') + ' 일부 인정 &nbsp;' + ico('clip') + ' 증빙 PDF</p>';
+    /* 승진 일정 — 표 3줄 */
+    var dl = S.profile && S.profile.apply_deadline ? PC.fmtDay(PC.parseDay(S.profile.apply_deadline)) : (ten.deadlineYear ? ten.deadlineYear + '년 4~5월쯤' : '비어 있습니다');
+    var kv = [['현 직급 시작일', ten.start ? PC.fmtDay(ten.start) : '입력 전', '부교수 승진 발령일입니다.'],
+      ['승진임용 가능일', ten.eligible ? PC.fmtDay(ten.eligible) + (ten.daysLeft > 0 ? ' · ' + ten.daysLeft.toLocaleString('ko-KR') + '일 남음' : '') : '확인 전', '6년을 채운 뒤 첫 9월 1일입니다.'],
+      ['신청 마감', dl, '대략 4~5월입니다.' + (S.profile && S.profile.apply_deadline ? '' : ' 마감일은 아직 비어 있습니다 — 알게 되면 「' + (S.edit ? '승진 설정' : '날짜 고치기') + '」에서 넣을 수 있습니다.')]];
+    ph += '<section class="pcard ptenure px-sched"><h3>승진 일정 <button type="button" class="pbtn sm" id="promoEdit">' + (S.edit ? '승진 설정' : '날짜 고치기') + '</button></h3>';
+    kv.forEach(function (x, k) { ph += '<div class="px-kv"><span>' + x[0] + '<button type="button" class="px-i" data-hint="' + k + '" aria-label="' + x[0] + ' 설명" aria-expanded="' + (S.hint[k] ? 'true' : 'false') + '">ⓘ</button></span><b>' + esc(x[1]) + '</b></div><div class="px-hint" id="pxh' + k + '"' + (S.hint[k] ? '' : ' hidden') + '>' + esc(x[2]) + '</div>'; });
+    ph += '</section>';
+    /* 도구 */
+    if (S.edit) {
+      var trashN = S.items.filter(function (x) { return x.deleted_at; }).length, sugN = (A.suggestions || []).length, linkedN = A.linkInfo ? A.linkInfo.linked : 0;
+      ph += '<section class="pcard pmanage px-tools"><h3>도구</h3><div class="px-tg">'
+        + '<button type="button" class="px-tool" data-go="sim">' + ico('undo') + '<span>점수 더하기 해 보기</span></button>'
+        + '<button type="button" class="px-tool" data-go="profile">' + ico('gear') + '<span>승진 설정</span></button>'
+        + (S.link ? '<button type="button" class="px-tool" data-go="suggest"' + (sugN ? '' : ' disabled') + '>' + ico('link') + '<span>실적 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '<small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '실적 탭 자료를 못 불러왔습니다') + '</small></span></button>' : '')
+        + '<button type="button" class="px-tool" data-go="trash">' + ico('bin') + '<span>휴지통' + (trashN ? '<em>' + trashN + '건</em>' : '') + '</span></button>'
+        + '<button type="button" class="px-tool" data-go="backup">' + ico('dl') + '<span>백업 내려받기<small>' + (S.xlsx ? '엑셀 파일로 저장합니다' : '파일로 저장·공유합니다') + '</small></span></button></div></section>';
+    }
+    ph += '<p class="pfoot">참고 계산이며 공식 판정이 아닙니다 · 규정판 ' + esc(S.rulesVer || '') + ' · 규정 방식(반올림, 보직은 재임 개월 비율을 내림)</p>';
+    var se = document.scrollingElement || document.documentElement, y0 = se ? se.scrollTop : 0;
+    v.classList.add('px2'); v.classList.toggle('pcalm', calm());
+    v.innerHTML = ph;
+    try { if (se) se.scrollTop = y0; } catch (e) {}
+    /* 이벤트 */
+    var els = v.querySelectorAll('.px-tile, .px-chip[data-k]');
+    for (i = 0; i < els.length; i++) els[i].onclick = function () { var kk = this.getAttribute('data-k'); S.sel = (S.sel === kk) ? '' : kk; render(); var d = $('pDetail'); if (d && S.sel) d.scrollIntoView({ block: 'nearest', behavior: calm() ? 'auto' : 'smooth' }); };
+    var hds = v.querySelectorAll('.px-hd');
+    for (i = 0; i < hds.length; i++) hds[i].onclick = function () {
+      var n = parseInt(this.getAttribute('data-sec'), 10), acc = this.parentNode, on = !acc.classList.contains('open');
+      S.open[n] = on; acc.classList.toggle('open', on); this.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (on && !calm()) { acc.classList.add('rise'); setTimeout(function () { acc.classList.remove('rise'); }, 700); }
+    };
+    var cps = v.querySelectorAll('.px-cp');
+    for (i = 0; i < cps.length; i++) cps[i].onclick = function () { var nf = this.getAttribute('data-f'); S.filter = (S.filter === nf && nf !== 'all') ? 'all' : nf; render(); };
+    var mores = v.querySelectorAll('.px-more');
+    for (i = 0; i < mores.length; i++) mores[i].onclick = function () { S.more[this.getAttribute('data-more')] = true; render(); };
+    var ca = $('pxChecks'); if (ca) ca.onclick = openChecks;
+    var eb = $('pxEmptyBtn'); if (eb) eb.onclick = function () { S.emptyOpen = !S.emptyOpen; render(); };
+    var hints = v.querySelectorAll('.px-i');
+    for (i = 0; i < hints.length; i++) hints[i].onclick = function () { var k = this.getAttribute('data-hint'), box = $('pxh' + k); S.hint[k] = !S.hint[k]; if (box) box.hidden = !S.hint[k]; this.setAttribute('aria-expanded', S.hint[k] ? 'true' : 'false'); };
+    var ed = $('promoEdit'); if (ed) ed.onclick = function () { if (S.edit) PE().openProfile(); else openSheet(); };
+    wireGo(v); wireRetry();
+    animate(A, v);
   }
 
   /* ---------- 부문 화면(항목 목록 · v9.63 부터 눌러서 고치고 ＋로 추가) ---------- */
@@ -385,7 +600,7 @@
     $('promoScrim').onclick = closeSheet; $('promoCancel').onclick = closeSheet; $('promoSave').onclick = saveDates;
     $('promoRs').oninput = $('promoRs').onchange = function () { S.clearOk = false; var b = $('promoSave'); if (b) b.textContent = '저장'; var m = $('promoMsg'); if (m && /비우/.test(m.textContent)) m.textContent = ''; };
   }
-  function closeSheet() { var L = $('promoLayer'); S.sheet = false; if (L) { L.classList.remove('show'); L.innerHTML = ''; } }
+  function closeSheet() { var L = $('promoLayer'); S.sheet = false; S.pxSheet = false; if (L) { L.classList.remove('show'); L.innerHTML = ''; } }
   function saveDates() {
     if (S.saving) return;
     var rs = $('promoRs').value || null, dl = $('promoDl').value || null, msg = $('promoMsg');
@@ -420,7 +635,7 @@
     var rb = $('promoReload'); if (rb) rb.onclick = function () { S.err = null; load(false); };
   }
   function makeCtx() {
-    return { S: S, PC: PC, slimAch: slimAch, forecast: S.fc, rsOf: rsOf, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+    return { S: S, PC: PC, slimAch: slimAch, ux: S.ux, forecast: S.fc, rsOf: rsOf, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없습니다')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
@@ -428,7 +643,7 @@
   function init(o) {
     if (o && o.toast) _toast = o.toast;
     if (o && typeof o.saveFile === 'function') _saveFile = o.saveFile;         // v9.66: 폰 저장 길(app.js savePhoneFile) — 백업 내려받기가 쓴다
-    S.fc = !!(o && o.forecast); S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx); S.files = (o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function') ? o.files : null;      // v10.15: 증빙 PDF 열기·내려받기(app.js PROMO_FILES)      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
+    S.ux = !!(o && o.ux); S.fc = !!(o && o.forecast); S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx); S.files = (o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function') ? o.files : null;      // v10.15: 증빙 PDF 열기·내려받기(app.js PROMO_FILES)      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();
   }
@@ -438,7 +653,8 @@
     build();
     var keep = !!(o && o.keep === true);
     if (keep) { var sn = $('promoSnack'); if (sn) sn.className = 'psnack'; }      // 방금 지운 항목의 8초 되돌리기 안내는 화면을 떠나면 사라진다(항목은 휴지통에 그대로 있다)
-    else { S.sel = ''; S.sec = 0; S.lastAnim = ''; S.rev = (S.rev || 0) + 1; closeSheet(); if (S.edit) { try { global.PromoEdit.close(); } catch (e) {} } }
+    else { S.sel = ''; S.sec = 0; S.lastAnim = ''; S.open = {}; S.filter = 'all'; S.more = {}; S.emptyOpen = false; S.hint = {};      // v10.19: 처음 들어올 때는 부문이 모두 접힘·걸러 보기 없음
+      S.rev = (S.rev || 0) + 1; closeSheet(); if (S.edit) { try { global.PromoEdit.close(); } catch (e) {} } }
     var c = readCache();
     if (!S.loaded && c) { applyData(c); S.loaded = true; S.fromCache = true; S.offline = false; S.cachedAt = c.at; }      // 저장본을 먼저 보여 주는 동안은 배너 없음
     render();
@@ -447,6 +663,7 @@
   }
   /* 뒤로 가기: 창이 열려 있으면 창부터, 부문 화면이면 점수판으로. true = 여기서 처리함 */
   function back() {
+    if (S.pxSheet) { closeSheet(); return true; }      // v10.19: 「확인할 것」 시트
     if (S.edit && S.sheet && global.PromoEdit && global.PromoEdit.back()) return true;
     if (S.sheet) { closeSheet(); return true; }
     if (S.sec) { S.sec = 0; render(); return true; }

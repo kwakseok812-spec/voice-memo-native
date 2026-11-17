@@ -265,10 +265,19 @@
     return I.d.lead === 'auto' ? (l === true ? '실적 탭의 순번·교신 표시로는 책임저자로 보입니다.' : (l === false ? '실적 탭의 표시로는 책임저자가 아닙니다.' : '실적 탭에는 순번·교신 표시가 없어 모르는 상태입니다. 아는 대로 골라 주십시오.')) : '고른 값을 실적 탭 항목에 적어 둡니다.';
   }
 
+  /* v10.19(화면 개편 B안): 항목 고치기 창 맨 위 「이 항목이 점수에 어떻게 잡혔나」 한 줄 — 목록 한 줄에서 덜어 낸 사유를 여기서 읽을 수 있게 한다(계산 결과를 그대로 말할 뿐) */
+  function scoreLine() {
+    try {
+      var A = X.compute(); if (A.error) return ''; var r = null; A.today.rows.forEach(function (x) { if (x.id === I.id) r = x; }); if (!r) return '';
+      var z = r.status === 'excluded' || r.status === 'before', rs = X.rsOf(r.reasons || []), sc = (I.code === '1-1' && r.part !== null && r.part !== undefined) ? r.part : r.score;
+      return '<b>점수 상태</b> ' + (z ? '점수에는 0점으로 잡혔습니다' + (rs.length ? ' — ' + esc(rs.join(' · ')) : '') : '점수에 ' + X.fmtS(sc) + '점으로 잡혀 있습니다' + (r.status === 'partial' && rs.length ? ' — ' + esc(rs.join(' · ')) : '')) + '.';
+    } catch (e) { return ''; }
+  }
   function renderForm(keepScroll) {
     var code = I.code, d = I.d, f = fieldsFor(code), h = '', title = (I.sim ? '점수 더하기 해 보기 · ' : (I.mode === 'new' ? '항목 추가 · ' : '항목 고치기 · ')) + code + ' ' + nameOf(code);
     var scr = 0; var sh = $('promoSheet'); if (sh && keepScroll) scr = sh.scrollTop;
     var sub = '';
+    if (X.ux && I.mode === 'edit' && !I.sim) sub = scoreLine();
     if (I.sim) sub = '<b>저장되지 않습니다.</b> 값을 넣어 보면 점수가 얼마나 달라지는지만 보여 드립니다.';
     h += head(title, sub);
     h += '<div id="promoFields">' + linkBox() + fileBox();

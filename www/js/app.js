@@ -3964,6 +3964,7 @@
   APP_VERSION = 'v10.16';       // v10.16(O-0904 후속): 「승진」 점수판에서 앞날을 추정하는 점수(임기 끝까지·신청 마감까지 예상, 예전 앱과의 비교 줄, 「아직 안 온 N개월」 설명, 엑셀의 같은 열)를 보이지 않게 함(스위치 PROMO_FORECAST_ON = 'off'). 오늘 기준 점수·부문 합계·합격선 비교는 그대로, 계산 파일 변경 없음.
   APP_VERSION = 'v10.17';       // v10.17(급여 탭): 「성과」 알약을 「실적 | 승진 | 급여」로 — 급여 화면(월별·연도별 지급총액·공제·차인지급액 표와 그래프, 금액 가리기)을 더함. 스위치 PAY_TAB. 금액은 서버 비공개 표(pay_slips)에만 있고 폰에는 저장하지 않는다. 승진·실적 화면·계산 변경 없음.
   APP_VERSION = 'v10.18';       // v10.18(승진 화면 정리 1단계): 승진 점수판에서 실적 탭 연결을 끔 — 스위치 PROMO_LINK='off'(연결 제안·연결 상자·「실적 탭 연결」 표시·실적 목록 읽기·엑셀의 연결 열이 모두 사라짐, 점수 계산·서버·데이터·ach_id 칸은 그대로, 'on' 으로 되돌리면 v10.17 과 같음) · versionCode 162
+  APP_VERSION = 'v10.19';       // v10.19(승진 화면 개편 2단계): 「승진」 화면을 「한눈 요약 + 부문 접이식」으로 — 맨 위 점수 한 카드·확인할 것 한 줄·부문 접이식(처음 모두 접힘, 부문 색)·상태 아이콘·걸러 보기(확인 전·제외·중복 의심)·승진 일정 표·도구 묶음. 스위치 PROMO_UX_V2='off' 면 v10.17 모양 그대로, 점수 계산·서버·데이터 변경 없음 · versionCode 163
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
@@ -10299,6 +10300,8 @@
   /* v9.68: 백업 내려받기의 엑셀(PROMO_XLSX). 'off' 면 창을 열자마자 JSON 백업을 저장하던 v9.67 모양으로 돌아간다(서버·SQL 무관). */
   /* v10.16(O-0904 후속): 앞날을 추정하는 점수(임기 끝까지·신청 마감까지 예상, 예전 앱과 비교)의 표시 스위치 PROMO_FORECAST_ON — 'off' = 보이지 않음(지금 값) · 'on' = v10.15 와 같이 보임. 오늘 기준 계산(promotion-calc.js)은 어느 쪽이든 그대로. */
   var PROMO_FORECAST_ON = 'off';
+  /* v10.19: 승진 화면 개편 B안(한눈 요약 + 부문 접이식)의 스위치 PROMO_UX_V2 — 'on' = 새 화면 · 'off' = v10.17 모양 그대로(점수 계산·서버·데이터는 어느 쪽이든 같다). */
+  var PROMO_UX_V2 = 'on';
   /* v10.18: PROMO_LINK 기본값을 'off' 로 — 승진 화면이 실적 탭을 읽지도, 연결 상자를 보이지도 않는다. 'on' 으로 바꾸면 v10.17 의 연결 기능이 그대로 돌아온다(데이터·ach_id 칸은 지우지 않았다). */
   var PROMO_EDIT = 'on', PROMO_LINK = 'off', PROMO_XLSX = 'on', PROMO_FILES = 'on';   /* v10.15: 항목 증빙 PDF 열기·내려받기(PROMO_FILES) — 'off' 면 v10.14 와 같음(서버 함수 promo-file) */
   var promoView = $('promoView');
@@ -10308,7 +10311,7 @@
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
-      PromoTab.init({ toast: toast, forecast: PROMO_FORECAST_ON === 'on', edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', files: PROMO_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null, saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
+      PromoTab.init({ toast: toast, ux: PROMO_UX_V2 !== 'off', forecast: PROMO_FORECAST_ON === 'on', edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', files: PROMO_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null, saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
       perfPromoOk = true;
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로
