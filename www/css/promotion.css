@@ -291,3 +291,7 @@ html[data-style="light"] #promoView, html[data-style="light"] #promoLayer { --pd
 #promoLayer .psheet .pferow label { display: flex; align-items: center; gap: 5px; margin: 0; font-weight: 500; font-size: 12px; }
 #promoLayer .pmoney { margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--p1); min-height: 0; }
 #promoLayer .pmoney:empty { display: none; }
+
+#promoLayer .pfilebox .pfile { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 0; flex-wrap: wrap; }
+#promoLayer .pfilebox .plt { flex: 1 1 140px; min-width: 0; word-break: break-all; }
+#promoLayer .pfilebox .pfbtns { display: flex; gap: 6px; }

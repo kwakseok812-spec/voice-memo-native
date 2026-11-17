@@ -235,6 +235,31 @@
     }
     return h;
   }
+  /* v10.15: 증빙 PDF — 항목에 붙은 파일을 열기·내려받기(서버 함수 promo-file). 파일이 없거나 스위치가 꺼져 있으면 아무것도 안 보인다 */
+  function fileBox() {
+    if (!X.files || I.mode !== 'edit' || I.sim || !I.base) return '';
+    var ev = I.base.evidence, fl = ev && Array.isArray(ev.files) ? ev.files.filter(function (f) { return f && f.fid; }) : [];
+    if (!fl.length) return '';
+    var h = '<div class="plinkbox on pfilebox"><b>증빙 PDF</b>';
+    fl.forEach(function (f) {
+      var meta = [f.pages ? f.pages + '쪽' : '', f.size ? (f.size >= 1048576 ? (Math.round(f.size / 104857.6) / 10) + 'MB' : Math.max(1, Math.round(f.size / 1024)) + 'KB') : ''].filter(Boolean).join(' · ');
+      h += '<div class="pfile"><span class="plt">' + esc(f.name || 'evidence.pdf') + (meta ? '<small> ' + esc(meta) + '</small>' : '') + '</span><span class="pfbtns"><button type="button" class="pbtn sm" data-pf="view" data-fid="' + esc(f.fid) + '">열기</button><button type="button" class="pbtn sm ghost" data-pf="dl" data-fid="' + esc(f.fid) + '">내려받기</button></span></div>';
+    });
+    return h + '</div>';
+  }
+  function fileAct(kind, fid, btn) {
+    if (!X.files || !I || !I.base || I.fbusy) return;
+    var f = ((I.base.evidence || {}).files || []).filter(function (x) { return x && x.fid === fid; })[0]; if (!f) return;
+    if (S().offline) { X.toast('인터넷에 연결되면 PDF를 열 수 있습니다.'); return; }
+    if (kind !== 'dl' && typeof X.files.guard === 'function') { var gm = X.files.guard(f.name || ''); if (gm) { X.toast(gm, 4200); return; } }
+    I.fbusy = true; if (btn) btn.disabled = true;
+    function done() { if (I) I.fbusy = false; if (btn) btn.disabled = false; }
+    X.fileApi({ a: 'sign', id: I.base.id, fid: fid, want: kind === 'dl' ? 'download' : 'view' }).then(function (r) {
+      done(); if (!r.url) throw new Error('NO_URL');
+      try { if (kind === 'dl') X.files.download(r.url, r.name || f.name || 'evidence.pdf'); else X.files.view({ url: r.url, name: r.name || f.name || 'evidence.pdf', mime: 'application/pdf' }); }
+      catch (e) { X.toast('PDF를 ' + (kind === 'dl' ? '내려받지' : '열지') + ' 못했습니다 — 다시 눌러 주십시오.'); }
+    }).catch(function (e) { done(); X.toast(e && e.kind === 'net' ? '인터넷이 끊겨 PDF를 못 받았습니다.' : (e && e.kind === 'nofile' ? 'PDF가 서버에 없습니다.' : 'PDF를 불러오지 못했습니다 — 다시 눌러 주십시오.'), 3600); });
+  }
   function leadHint(a) {
     var l = PC.leadOf(a);
     return I.d.lead === 'auto' ? (l === true ? '실적 탭의 순번·교신 표시로는 책임저자로 보입니다.' : (l === false ? '실적 탭의 표시로는 책임저자가 아닙니다.' : '실적 탭에는 순번·교신 표시가 없어 모르는 상태입니다. 아는 대로 골라 주십시오.')) : '고른 값을 실적 탭 항목에 적어 둡니다.';
@@ -246,7 +271,7 @@
     var sub = '';
     if (I.sim) sub = '<b>저장되지 않습니다.</b> 값을 넣어 보면 점수가 얼마나 달라지는지만 보여 드립니다.';
     h += head(title, sub);
-    h += '<div id="promoFields">' + linkBox();
+    h += '<div id="promoFields">' + linkBox() + fileBox();
     f.forEach(function (x) { if (!covered(x)) h += fieldHtml(x); });
     h += statusBox();
     h += '</div><div id="pDup" class="pwarn2" role="status" aria-live="polite"></div><div class="psprev" id="promoPrev" role="status" aria-live="polite"></div><div class="psmsg" id="promoMsg" role="alert" aria-live="assertive"></div>';
@@ -303,6 +328,7 @@
         else I.d.val[sg] = (val === '1');
         schedulePreview(); return;
       }
+      if (b.getAttribute('data-pf')) { fileAct(b.getAttribute('data-pf'), b.getAttribute('data-fid'), b); return; }
       if (b.id === 'pPick') { readForm(); I.view = 'pick'; I.q = ''; renderPick(); }
       else if (b.id === 'pUnlink') doUnlink();
     };

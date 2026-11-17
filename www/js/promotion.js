@@ -49,6 +49,23 @@
     };
   }
   function cfg() { return (global.OfficeBridge && global.OfficeBridge.CONFIG) || null; }
+  /* v10.15: 항목에 붙인 증빙 PDF 주소 받기 — 서버 함수 promo-file(연동 암호 확인 뒤 짧게 유효한 주소). 응답은 항상 HTTP 200 + {ok, error?} */
+  function promoFileApi(body) {
+    var c = cfg(); if (!c) return Promise.reject(mkErr('NO_CONFIG', 'server'));
+    var pass = syncPass(); if (!pass) { needPass('PC 연동 암호를 입력해 주십시오.'); return Promise.reject(mkErr('NO_PASS', 'badpass')); }
+    var b = {}, k; for (k in (body || {})) b[k] = body[k]; b.pass = pass;
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+    return global.fetch(c.url + '/functions/v1/promo-file', { method: 'POST', headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' }, body: JSON.stringify(b), signal: ctl ? ctl.signal : undefined }).then(function (r) {
+      if (tm) clearTimeout(tm);
+      if (!r.ok) throw mkErr('HTTP_' + r.status, 'server');
+      return r.json().then(function (j) {
+        if (j && j.ok === true) return j;
+        var kind = j && j.error === 'bad_pass' ? 'badpass' : (j && j.error === 'no_file' ? 'nofile' : 'server');
+        if (kind === 'badpass') needPass('연동 암호가 맞지 않습니다. 다시 입력해 주십시오.');
+        throw mkErr('FILE_' + (j && j.error), kind);
+      }, function () { throw mkErr('BAD_JSON', 'server'); });
+    }, function () { if (tm) clearTimeout(tm); throw mkErr('NETWORK', 'net'); });
+  }
   function syncPass() { try { return localStorage.getItem('smart_sync_pass') || ''; } catch (e) { return ''; } }
   function needPass(msg) { try { if (global.SmartHome && SmartHome.needPass) SmartHome.needPass(msg); } catch (e) {} }
   var rpcRaw = makeRpc({ cfg: cfg, pass: syncPass, needPass: needPass, fetch: function () { return global.fetch.apply(global, arguments); } });
@@ -392,7 +409,7 @@
     var rb = $('promoReload'); if (rb) rb.onclick = function () { S.err = null; load(false); };
   }
   function makeCtx() {
-    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, xlsx: S.xlsx, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없습니다')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
@@ -400,7 +417,7 @@
   function init(o) {
     if (o && o.toast) _toast = o.toast;
     if (o && typeof o.saveFile === 'function') _saveFile = o.saveFile;         // v9.66: 폰 저장 길(app.js savePhoneFile) — 백업 내려받기가 쓴다
-    S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx);      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
+    S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx); S.files = (o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function') ? o.files : null;      // v10.15: 증빙 PDF 열기·내려받기(app.js PROMO_FILES)      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();
   }
