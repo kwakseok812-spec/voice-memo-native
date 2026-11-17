@@ -204,7 +204,7 @@
       if (!it || it.deleted_at) return;
       var r = { id: it.id, it: it, code: it.item_code, sub: it.sub_type, ay: it.academic_year, n: Math.max(1, Math.floor(num(it.participants)) || 1), v: isObj(it.value) ? it.value : {}, flags: isObj(it.flags) ? it.flags : {},
         score: 0, part: null, status: 'in', reasons: [], months: null, monthsRaw: null };
-      if (mode === 'official' && r.flags.excluded_default) { r.status = 'excluded'; r.reasons.push('기본은 점수에서 뺐습니다(중복 의심)'); }
+      if (mode === 'official' && r.flags.excluded_default) { r.status = 'excluded'; r.reasons.push(r.flags.dup_suspect || !r.flags.excluded_why ? '기본은 점수에서 뺐습니다(중복 의심)' : String(r.flags.excluded_why)); }
       rows.push(r);
       (by[r.code] = by[r.code] || []).push(r);
     });

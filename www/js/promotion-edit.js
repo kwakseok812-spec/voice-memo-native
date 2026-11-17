@@ -173,7 +173,7 @@
     for (k in d.val) if (!blank(d.val[k])) v[k] = d.val[k];
     if (d.jc) ev.journal_check = d.jc; else delete ev.journal_check;
     if (d.unv) delete fl.unverified;
-    if (d.incl) { delete fl.excluded_default; delete fl.dup_suspect; }
+    if (d.incl) { delete fl.excluded_default; delete fl.dup_suspect; delete fl.excluded_why; }
     return { id: I.id, section: sectionOf(I.code), item_code: I.code, sub_type: d.sub || null, academic_year: d.ay || '', participants: Math.max(1, Math.floor(num(d.part)) || 1), value: v, memo: d.memo || null, evidence: ev, flags: fl, ach_id: d.ach_id || null, deleted_at: null };
   }
 
@@ -287,7 +287,7 @@
   function statusBox() {
     var d = I.d, fl = d.flags || {}, h = '';
     if (I.mode === 'edit' && fl.unverified) h += '<label class="pchk"><input type="checkbox" id="pf_unv"' + (d.unv ? ' checked' : '') + '><span><b>확인했습니다 — 확인됨으로 바꾸기</b><small>지금은 「확인 전」입니다. 원고·증빙을 확인했으면 체크해 주십시오.</small></span></label>';
-    if (I.mode === 'edit' && fl.excluded_default) h += '<label class="pchk"><input type="checkbox" id="pf_incl"' + (d.incl ? ' checked' : '') + '><span>점수에서 뺀 항목입니다(중복 의심). <b>중복이 아닙니다 — 점수에 넣기</b></span></label>';
+    if (I.mode === 'edit' && fl.excluded_default) h += '<label class="pchk"><input type="checkbox" id="pf_incl"' + (d.incl ? ' checked' : '') + '><span>' + (fl.dup_suspect || !fl.excluded_why ? '점수에서 뺀 항목입니다(중복 의심). <b>중복이 아닙니다 — 점수에 넣기</b>' : esc(fl.excluded_why) + ' <b>— 점수에 넣기</b>') + '</span></label>';
     return h;
   }
 
@@ -454,7 +454,7 @@
     row.value = val;
     var ev = {}; if (I.code === '4-1' || I.code === '4-2') ev.journal_check = d.jc || (I.base && I.base.evidence && I.base.evidence.journal_check ? null : undefined); if (ev.journal_check === undefined) delete ev.journal_check;
     row.evidence = ev;
-    var fl = {}; if (d.unv && d.flags.unverified) fl.unverified = null; if (d.incl && d.flags.excluded_default) { fl.excluded_default = null; fl.dup_suspect = null; }
+    var fl = {}; if (d.unv && d.flags.unverified) fl.unverified = null; if (d.incl && d.flags.excluded_default) { fl.excluded_default = null; fl.dup_suspect = null; fl.excluded_why = null; }
     row.flags = fl;
     if (I.mode === 'edit' && I.base) row.base_rev = I.base.rev; else row.ext_key = 'app:' + I.id;
     return row;
