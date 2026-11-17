@@ -117,7 +117,7 @@
   }
 
   /* ---------- 시트 2: 항목 목록 ---------- */
-  var ITEM_HEAD = ['부문', '종류', '제목·내용', '일자', '점수', '확인', '점수 상태', '실적 탭 연결', '휴지통에 있음'];
+  var ITEM_HEAD = ['부문', '종류', '제목·내용', '일자', '점수', '확인', '점수 상태', '실적 탭 연결', '휴지통에 있음'], LINK_COL = 7;      // v10.18: 실적 탭 연결을 끄면(o.link 가 아님) 「실적 탭 연결」 열(LINK_COL)을 뺀다
   function itemRows(o, A, R, PC) {
     var byId = {}; A.today.rows.forEach(function (r) { byId[r.id] = r; });
     var list = (o.items || []).filter(function (it) { return !!it; });
@@ -138,7 +138,9 @@
       else if (r.status === 'excluded' || r.status === 'before') sc = fx(0, ZP);
       else sc = fx(it.item_code === '1-1' && r.part !== null && r.part !== undefined ? r.part : r.score, ZP);        // 부문 화면에 보이는 값과 같다
       var sec = parseInt(String(it.item_code).charAt(0), 10);
-      return [sectionText(R, sec), kindText(R, it), PC.rowLabel(it, R), dateOf(it), sc, fl.unverified ? '확인 전' : '확인됨', tags.join(' · '), it.ach_id ? '연결됨' : '연결 안 됨', trashed ? '예' : '아니오'];
+      var row = [sectionText(R, sec), kindText(R, it), PC.rowLabel(it, R), dateOf(it), sc, fl.unverified ? '확인 전' : '확인됨', tags.join(' · '), it.ach_id ? '연결됨' : '연결 안 됨', trashed ? '예' : '아니오'];
+      if (!o.link) row.splice(LINK_COL, 1);
+      return row;
     });
   }
 
@@ -168,11 +170,11 @@
     if (!A || A.error) throw new Error('점수를 계산하지 못해 엑셀을 만들 수 없습니다');
     var now = o.now || new Date(), items = o.items || [];
     var iRows = itemRows(o, A, R, PC), trashN = items.filter(function (x) { return x && x.deleted_at; }).length;
-    var head = ITEM_HEAD, all = [head].concat(iRows);
+    var head = o.link ? ITEM_HEAD : ITEM_HEAD.filter(function (x, i) { return i !== LINK_COL; }), all = [head].concat(iRows);
     var sums = summaryRows(o, A, R, now), guide = guideRows(o, R, now, items.length, trashN);
     return { fileName: fileName(now), sheets: [
       { name: SHEET_SUM, rows: sums, widths: widths(sums, 10, 46, 40), filter: null },
-      { name: SHEET_ITEMS, rows: all, widths: widths(all, 8, 70, 0, [24, 60, 110, 28, 14, 12, 100, 16, 16]), filter: 'A1:' + colName(head.length - 1) + all.length },
+      { name: SHEET_ITEMS, rows: all, widths: widths(all, 8, 70, 0, o.link ? [24, 60, 110, 28, 14, 12, 100, 16, 16] : [24, 60, 110, 28, 14, 12, 100, 16]), filter: 'A1:' + colName(head.length - 1) + all.length },
       { name: SHEET_GUIDE, rows: guide, widths: widths(guide, 10, 60), filter: null }
     ] };
   }

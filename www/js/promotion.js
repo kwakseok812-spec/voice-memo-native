@@ -72,7 +72,12 @@
   function rpc(name, body) { if (!/_list$/.test(name) && global.PerfSeg && PerfSeg.noteWrite) PerfSeg.noteWrite(); return rpcRaw(name, body); }   // O-0782: 서버에 쓴 일(승진 항목·프로필·책임저자 표시)을 알린다 — 알약 전환 때 방금 읽은 자료가 낡았는지 보려고
   function perfEp() { return global.PerfSeg && PerfSeg.epoch ? PerfSeg.epoch() : 0; }
   /* O-0782: 계산 파일(promotion-calc.js)이 만드는 점검 안내 글에 든 옛 이름 「곽호석 탭」을 화면에 그릴 때만 「실적 탭」으로 바꿔 보여 준다(계산 결과 객체는 그대로) */
-  function lbl(t) { return String(t == null ? '' : t).split('곽호석 탭').join('실적 탭'); }
+  /* v10.18: 실적 탭 연결을 끄면(PROMO_LINK='off') 「실적 탭」이라는 말을 화면에 내지 않는다 — 중복 의심 안내의 「곽호석 탭에는 한 편입니다」는 「같은 논문이 2건이라 한 건은 점수에서 뺐습니다」로 바꿔 보여 준다(저장된 글·계산 결과 객체는 그대로) */
+  function lbl(t) {
+    t = String(t == null ? '' : t);
+    if (!S.link) t = t.split(' — 곽호석 탭에는 한 편입니다.').join(' — 같은 논문이 2건이라 한 건은 점수에서 뺐습니다.');
+    return t.split('곽호석 탭').join('실적 탭');
+  }
 
   /* ---------- 상태 ---------- */
   var S = { edit: false, link: false, ach: null, achCats: null, achErr: null, refOpen: false, flashId: '', fromCache: false, diffOpen: false, clearOk: false, loaded: false, loading: null, err: null, offline: false, cachedAt: null, lastLoadAt: 0, lastLoadEp: -1, profile: null, items: [], rules: null, rulesVer: null, sel: '', sec: 0, sheet: false, saving: false };

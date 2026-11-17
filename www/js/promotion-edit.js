@@ -78,7 +78,7 @@
       case '4-1':
       case '4-2': F = [(code === '4-2' ? subF(code, '학술지 종류', subOpts(code)) : null), txt('title', '논문 제목', { req: true, max: 400, cover: true }), txt('journal', '학술지', { max: 200, cover: true }),
         it('pubYear', '발행 연도', { req: true, min: 1990, max: 2100, ph: '2025', cover: true }), it('pubMonth', '발행 월', { min: 1, max: 12, hint: '모르면 비워 두십시오', ph: '7' }),
-        Object.assign(part('저자 수(나 포함)', '실적 탭에서 고르면 거기 값을 씁니다'), { cover: true }),
+        Object.assign(part('저자 수(나 포함)', X.link ? '실적 탭에서 고르면 거기 값을 씁니다' : ''), { cover: true }),
         { id: 'isCorresponding', where: 'val', key: 'isCorresponding', kind: 'bool', label: '책임저자입니까?', hint: '제1저자 또는 교신저자', cover: true, lead: true },
         { id: 'jc', where: 'ev', key: 'journal_check', kind: 'sel', label: '학술지 분류 확인', hint: 'SCI·등재지인지', opts: [['', '입력한 그대로'], ['confirmed', '확인됨'], ['need', '확인 필요']] }].filter(Boolean); break;
       case '4-3': F = [subF(code, '종류', subOpts(code)), txt('title', '이름', { req: true, max: 300, cover: true }), part('공동 발명자 수(나 포함)')]; break;
@@ -830,7 +830,7 @@
       if (!P || !XL || !XL.write) throw new Error('이 앱 버전에서는 엑셀 만들기를 쓸 수 없습니다');
       var A = X.compute();
       if (!A || A.error) throw new Error('점수를 계산하지 못했습니다(점수 규칙표를 받지 못했을 수 있습니다)');
-      return P.toFile(XL, P.model({ A: A, forecast: !!X.forecast, items: S().items, rules: S().rules, rulesVer: S().rulesVer, now: new Date() }));
+      return P.toFile(XL, P.model({ A: A, forecast: !!X.forecast, link: !!X.link, items: S().items, rules: S().rules, rulesVer: S().rulesVer, now: new Date() }));
     }
     function run(kind) {
       if (my.busy) return;
