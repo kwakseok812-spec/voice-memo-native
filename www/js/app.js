@@ -279,7 +279,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('hubView'), $('promoView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('hubView'), $('promoView'), $('payView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -337,6 +337,7 @@
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층도 닫기(알림·바로가기로 다른 화면에 갈 때 게임이 덮고 있지 않게)
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
+    if (window.PayTab && PayTab.leave) { try { PayTab.leave(); } catch (e) {} }   // v10.17: 홈으로 나가면 급여 금액을 메모리에서 비운다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
     try { if (window.KScene && KScene.reset) KScene.reset(); } catch (e) {}   // v9.5: 화면을 새로 열면 장면이 스르륵 다시 등장
     try { paintHomeGreet(); } catch (e) {}                // v9.4: 시간대가 바뀌었으면 인사만 갱신
@@ -358,6 +359,7 @@
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
     if (window.SmartDocs && SmartDocs.leave && el !== $('docsView')) { try { SmartDocs.leave(); } catch (e) {} }
     if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층(고정 오버레이)도 다른 화면을 가리지 않게 닫는다
+    if (el !== $('payView') && window.PayTab && PayTab.leave) { try { PayTab.leave(); } catch (e) {} }   // v10.17: 급여 화면을 떠나면 메모리의 금액을 비운다(폰에 저장하지 않는다)
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
     if (el !== searchPanelRef()) clearSearch();
@@ -3960,6 +3962,7 @@
   APP_VERSION = 'v10.14';       // v10.14(O-0890): 게임 칸에 「세균 방어전」(타워 디펜스 — 배양접시로 몰려오는 세균을 막는 게임) 추가 — 홈 「게임」 칸 작은 글씨 「장기·오목 외 4」, 목록 시트 5줄. 게임 파일은 공개 저장소 main 그대로의 복사본(www/games/towerdefense, 인터넷 없이 열림). 서버·SQL·자바·권한 변경 없음 · versionCode 158
   APP_VERSION = 'v10.15';       // v10.15(O-0900): 「승진」 항목을 열면 붙어 있는 증빙 PDF 열기·내려받기(스위치 PROMO_FILES, 서버 함수 promo-file·저장소 promo-files — 서버 준비됨). 점수 계산 변경 없음.
   APP_VERSION = 'v10.16';       // v10.16(O-0904 후속): 「승진」 점수판에서 앞날을 추정하는 점수(임기 끝까지·신청 마감까지 예상, 예전 앱과의 비교 줄, 「아직 안 온 N개월」 설명, 엑셀의 같은 열)를 보이지 않게 함(스위치 PROMO_FORECAST_ON = 'off'). 오늘 기준 점수·부문 합계·합격선 비교는 그대로, 계산 파일 변경 없음.
+  APP_VERSION = 'v10.17';       // v10.17(급여 탭): 「성과」 알약을 「실적 | 승진 | 급여」로 — 급여 화면(월별·연도별 지급총액·공제·차인지급액 표와 그래프, 금액 가리기)을 더함. 스위치 PAY_TAB. 금액은 서버 비공개 표(pay_slips)에만 있고 폰에는 저장하지 않는다. 승진·실적 화면·계산 변경 없음.
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
@@ -9772,6 +9775,10 @@
       if (window.PcStatus && PcStatus.back && PcStatus.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('payView'))) {        // v10.17: 급여 — 열린 세부 창부터 닫고, 더 닫을 게 없으면 홈으로
+      if (window.PayTab && PayTab.back && PayTab.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('promoView'))) {      // O-0684 v9.62: 승진 — 열린 날짜 창·부문 상세부터 닫고, 더 닫을 게 없으면 홈으로
       if (window.PromoTab && PromoTab.back && PromoTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
@@ -10308,33 +10315,48 @@
     } catch (e) {}
   }
 
-  /* ---- 성과(O-0782 v9.82): 알약으로 실적 ↔ 승진 오가기 + 홈 칸·머리줄 글자 바꾸기 ---- */
+  /* ---- 급여 탭(v10.17): 「성과」 알약의 세 번째 칸 — 화면은 pay.js, 서버는 읽기 함수 pay_list 하나(쓰기 없음)·비공개 표 pay_slips ----
+   *   스위치 PAY_TAB: 'on' = 알약이 「실적 | 승진 | 급여」 세 칸 · 'off' = 두 칸(v10.16 과 같다. 서버는 그대로 두어도 무해).
+   *   PAY_CHART_ANIM: 'on' = 선 그래프가 처음 열 때 0.4초 그려짐(「움직임 줄이기」면 바로 표시) · 'off' = 바로 표시.
+   *   PAY_XLSX: 'off' — 엑셀 내려받기 단추는 만들지 않았다. 지금 앱의 폰 저장 길(savePhoneFile)은 파일을 공개 공유함에 먼저 올리므로 금액이 공개 주소에 남는다. PC 도구(pay_export_xlsx.py)가 만들어 앱 채팅으로 보내는 길로 대신한다.
+   *   금액은 폰에 저장하지 않는다(localStorage·IndexedDB 에 쓰지 않음): 화면을 떠나면 메모리에서도 비운다. 저장하는 것은 「금액 가리기」 켬/끔 한 칸뿐. */
+  var PAY_TAB = 'on', PAY_CHART_ANIM = 'on', PAY_XLSX = 'off';
+  var payView = $('payView'), payOk = false, PAY_ON = false;
+  function openPay(keep) { openScreen(payView); if (window.PayTab && PayTab.open) { try { PayTab.open(keep === true ? { keep: true } : undefined); } catch (e) {} } }
+  if (PAY_TAB !== 'off' && payView && $('payBody') && window.PayTab && PayTab.init) {
+    try { PayTab.init({ toast: toast, anim: PAY_CHART_ANIM !== 'off' }); payOk = true; } catch (e) {}
+  }
+
+  /* ---- 성과(O-0782 v9.82): 알약으로 실적 ↔ 승진(↔ 급여) 오가기 + 홈 칸·머리줄 글자 바꾸기 ---- */
   var PERF_HINT_KEY = 'smart_perf_hint_v1';
   function perfHintOnce() {   // 「성과」를 처음 여는 한 번만 — 승진 칸이 어디 갔는지 한 줄로 알린다(저장이 막혀도 동작에는 영향 없음)
     try { if (localStorage.getItem(PERF_HINT_KEY)) return; localStorage.setItem(PERF_HINT_KEY, '1'); } catch (e) { return; }
     try { toast('승진 점수판은 여기 ‘승진’ 탭으로 옮겼습니다.', 3600, true); } catch (e) {}
   }
   function openPerf(tab) {    // 알약 누름: 지금 화면의 스크롤을 기억하고 다른 쪽을 연다(홈 칸으로 열 때와 달리 검색어 등을 지우지 않는다). 뒤로 가기 기록은 쌓지 않는다
-    var from = isOpen(achView) ? 'ach' : (isOpen(promoView) ? 'promo' : '');
-    if (!from || from === tab || (tab !== 'ach' && tab !== 'promo')) return;
+    var from = isOpen(achView) ? 'ach' : (isOpen(promoView) ? 'promo' : (PAY_ON && isOpen(payView) ? 'pay' : ''));
+    if (!from || from === tab || (tab !== 'ach' && tab !== 'promo' && !(tab === 'pay' && PAY_ON))) return;
     try { perfScroll[from] = window.pageYOffset || document.documentElement.scrollTop || 0; } catch (e) {}
-    if (tab === 'promo') openPromo(true); else openAch(true);
-    try { window.scrollTo(0, perfScroll[tab] || 0); } catch (e) {}      // 복원은 한 번만 — 문서보다 길면 브라우저가 맨 아래로 맞춘다
-    try { var pb = document.querySelector('#' + (tab === 'promo' ? 'perfSegP' : 'perfSegA') + ' .hseg-btn.on'); if (pb) pb.focus({ preventScroll: true }); } catch (e) {}   // 눌렀던 단추는 화면과 함께 숨겨졌으므로 새 화면의 같은 칸으로
+    if (tab === 'pay') openPay(true); else if (tab === 'promo') openPromo(true); else openAch(true);
+    try { window.scrollTo(0, tab === 'pay' ? 0 : (perfScroll[tab] || 0)); } catch (e) {}      // 복원은 한 번만 — 문서보다 길면 브라우저가 맨 아래로 맞춘다. 급여는 화면을 떠나면 비우므로 늘 맨 위에서
+    try { var pb = document.querySelector('#' + (tab === 'pay' ? 'perfSegY' : (tab === 'promo' ? 'perfSegP' : 'perfSegA')) + ' .hseg-btn.on'); if (pb) pb.focus({ preventScroll: true }); } catch (e) {}   // 눌렀던 단추는 화면과 함께 숨겨졌으므로 새 화면의 같은 칸으로
   }
   if (PERF_ON) {
     try {
+      PAY_ON = payOk && !!(PerfSeg.setPay);   // v10.17: 급여 칸은 성과 합침이 켜졌을 때만(알약이 있어야 들어갈 길이 있다)
+      if (PAY_ON) PerfSeg.setPay(true);
       var perfTitleA = achView && achView.querySelector('.subbar .title'), perfTitleP = promoView && promoView.querySelector('.subbar .title'), perfGear = $('achGear');
       if (perfTitleA) perfTitleA.textContent = '성과';
       if (perfTitleP) perfTitleP.textContent = '성과';
       if (perfGear) { perfGear.setAttribute('aria-label', '실적 설정'); perfGear.setAttribute('title', '실적 설정'); }
       var perfTile = $('btnAch'), perfTb = perfTile.querySelector('b'), perfTs = perfTile.querySelector('small'), perfTi = perfTile.querySelector('.ic');
       if (perfTb) perfTb.textContent = '성과';
-      if (perfTs) perfTs.textContent = '실적·승진';
+      if (perfTs) perfTs.textContent = PAY_ON ? '실적·승진·급여' : '실적·승진';
       if (perfTi) perfTi.className = 'ic blue';   // 홈 격자의 청록·파랑 번갈아 규칙 유지(승진 칸이 빠져도 사진첩과 같은 색이 붙지 않게)
-      perfTile.setAttribute('aria-label', '성과, 실적과 승진');
+      perfTile.setAttribute('aria-label', PAY_ON ? '성과, 실적과 승진과 급여' : '성과, 실적과 승진');
       PerfSeg.mount($('achBody'), 'perfSegA', 'ach', openPerf);
       PerfSeg.mount($('promoBody'), 'perfSegP', 'promo', openPerf);
+      if (PAY_ON) PerfSeg.mount($('payBody'), 'perfSegY', 'pay', openPerf);
       document.documentElement.classList.add('perfmerge');
     } catch (e) {}
   }

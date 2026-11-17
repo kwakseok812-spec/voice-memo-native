@@ -1,0 +1,140 @@
+/* ============================================================================
+ * pay.css — 「급여」 탭 (v10.17)
+ * 모든 규칙은 #payView(화면) · #payLayer(세부 시트) 안에서만 먹는다 — 다른 화면에 영향 없음.
+ * 색 이름은 styles.css 변수(--text --muted --glass --glass-b --p1 --p2 --in-bg --ok --warn --rec)를 그대로 쓴다(밝은·어두운 화면 자동).
+ * 그래프 색은 색만으로 구분하지 않는다: 지급총액=파랑 실선(굵게) · 공제=주황 점선(막대는 빗금) · 차인지급액=초록 실선 + 끝점에 이름.
+ * ==========================================================================*/
+#payView, #payLayer { --py-gross: #60a5fa; --py-ded: #fbbf24; --py-net: #4ade80; --py-sheet: var(--bg1); --py-scrim: rgba(3,6,18,.62); --py-dim: #8F9CBE; --py-grid: rgba(143,156,190,.28); }
+html[data-style="light"] #payView, html[data-style="light"] #payLayer { --py-gross: #1d4ed8; --py-ded: #b45309; --py-net: #15803d; --py-sheet: var(--bg0); --py-scrim: rgba(15,23,42,.35); --py-dim: var(--dim); --py-grid: rgba(71,85,105,.3); }
+
+#payView { padding-bottom: 96px; }
+#payView button { font-family: inherit; }
+#payBody { position: relative; }
+#payView .pycard { border-radius: 20px; padding: 16px; background: var(--glass); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); margin-bottom: 10px; word-break: keep-all; overflow-wrap: anywhere; }
+#payView .pyload { color: var(--muted); font-size: 14.5px; text-align: center; padding: 28px 16px; }
+#payView .pybanner { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; line-height: 1.5; }
+#payView .pybanner span { min-width: 0; }
+#payView .pybtn, #payLayer .pybtn { min-height: 44px; padding: 0 18px; border-radius: 14px; border: 0; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); font-size: 15px; font-weight: 800; cursor: pointer; }
+#payView .pybtn.sm { min-height: 36px; padding: 0 12px; font-size: 13px; flex: none; }
+#payLayer .pybtn.ghost { background: var(--glass); color: var(--muted); border: 1px solid var(--glass-b); width: 100%; margin-top: 10px; }
+#payView .pybtn:active, #payLayer .pybtn:active, #payView .pyrow:active, #payView .pychip:active { transform: scale(.98); }
+
+/* ----- 머리 카드: 가장 최근 달 ----- */
+#payView .pyhd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+#payView .pyhdt { font-size: 13px; font-weight: 700; color: var(--py-dim); min-width: 0; line-height: 1.4; }
+#payView .pyeye { width: 44px; height: 44px; flex: none; border-radius: 14px; border: 1px solid var(--glass-b); background: var(--in-bg); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin: -6px 0; }
+#payView .pyeye[aria-pressed="true"] { color: var(--text); border-color: var(--p1); }
+#payView .pyl { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--glass-b); }
+#payView .pyhd + .pyl { border-top: 0; }
+#payView .pyl span { font-size: 14px; color: var(--muted); white-space: nowrap; }
+#payView .pyl b { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; margin-left: auto; }
+#payView .pyl.big span { color: var(--text); font-weight: 800; }
+#payView .pyl.big b { font-size: clamp(22px, 7vw, 28px); font-weight: 900; color: var(--py-net); }
+#payView .pychk, #payLayer .pychk { margin-top: 8px; font-size: 12.5px; line-height: 1.5; }
+#payView .pyok, #payLayer .pyok { color: var(--ok); font-weight: 700; }
+#payView .pybad, #payLayer .pybad { color: var(--rec); font-weight: 700; }
+#payView .pytag, #payLayer .pytag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--warn); border: 1px solid var(--warn); border-radius: 9px; padding: 0 6px; margin-left: 2px; vertical-align: 1px; white-space: nowrap; }
+
+/* ----- 보기 칩 ----- */
+#payView .pyctl { margin: 0 0 8px; }
+#payView .pychips { display: flex; gap: 6px; margin-bottom: 8px; }
+#payView .pyyears { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#payView .pyyears::-webkit-scrollbar { display: none; }
+#payView .pychip { flex: none; min-height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--muted); font-size: 15px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+#payView .pychips .pychip { flex: 1 1 0; min-height: 44px; font-size: 16px; font-weight: 800; }
+#payView .pychip.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); }
+
+/* ----- 그래프 ----- */
+#payView .pychartc { padding: 12px 8px 10px; }
+#payView .pychart { position: relative; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+#payView .pychart svg { display: block; max-width: 100%; }
+#payView .pyt { font-size: 11px; fill: var(--py-dim); font-variant-numeric: tabular-nums; }
+#payView .pygrid { stroke: var(--py-grid); stroke-width: 1; }
+#payView .pygrid.zero { stroke: var(--py-dim); }
+#payView .pyln { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+#payView .pyln.pl-gross { stroke-width: 3.4; }
+#payView .pl-gross { stroke: var(--py-gross); }
+#payView .pl-ded { stroke: var(--py-ded); }
+#payView .pl-net { stroke: var(--py-net); }
+#payView .pyln.dash { stroke-dasharray: 7 5; }
+#payView .pl-grosst { fill: var(--py-gross); stroke: none; }
+#payView .pl-dedt { fill: var(--py-ded); stroke: none; }
+#payView .pl-nett { fill: var(--py-net); stroke: none; }
+#payView .pyend { font-weight: 800; }
+#payView .pyrk { stroke: var(--py-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+#payView .pyrkt { font-weight: 700; }
+#payView .pyguide { stroke: var(--text); stroke-width: 1; opacity: .55; }
+#payView .pyd { stroke: var(--bg0); stroke-width: 1.5; }
+#payView .pl-grossf { fill: var(--py-gross); }
+#payView .pl-dedf { fill: var(--py-ded); }
+#payView .pl-netf { fill: var(--py-net); }
+#payView .pytip { position: absolute; top: 4px; left: 0; z-index: 2; max-width: 100%; padding: 8px 10px; border-radius: 12px; background: var(--py-sheet); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); font-size: 12.5px; line-height: 1.5; pointer-events: none; white-space: nowrap; }
+#payView .pytip b { display: block; font-size: 13px; }
+#payView .pytip span { display: block; font-variant-numeric: tabular-nums; }
+#payView .pytip .g { color: var(--py-gross); } #payView .pytip .d { color: var(--py-ded); } #payView .pytip .n { color: var(--py-net); }
+#payView .pybar.net { fill: var(--py-net); }
+#payView .pybar.ded { fill: url(#pyHatch); stroke: var(--py-ded); stroke-width: 1.5; }
+#payView .pyhb { fill: transparent; }
+#payView .pyhl { stroke: var(--py-ded); stroke-width: 2; }
+#payView g.part { opacity: .8; }
+#payView .pylg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 6px 0; font-size: 12.5px; color: var(--muted); align-items: center; }
+#payView .pylg span { display: inline-flex; align-items: center; gap: 5px; }
+#payView .pysw { width: 26px; height: 10px; overflow: visible; }
+#payView .pysw line { stroke-width: 3; }
+#payView .pyb { display: inline-block; width: 14px; height: 12px; border-radius: 3px; }
+#payView .pyb.net { background: var(--py-net); }
+#payView .pyb.ded { background: repeating-linear-gradient(45deg, var(--py-ded) 0 2px, transparent 2px 5px); border: 1.5px solid var(--py-ded); }
+#payView .pylgn { flex-basis: 100%; }
+#payView .pynote { margin: 4px 4px 12px; font-size: 12px; color: var(--py-dim); line-height: 1.55; }
+
+/* ----- 목록: 한 줄(월 + 세 열) → 안 들어가면 두 줄 카드(pay.js 의 fit 이 .stack 을 붙인다) ----- */
+#payView .pylist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+#payView .pyrow { display: grid; grid-template-columns: minmax(44px, .7fr) repeat(3, minmax(0, 1fr)); column-gap: 6px; align-items: center; width: 100%; padding: 10px 10px; border-radius: 14px; border: 1px solid var(--glass-b); background: var(--glass); color: var(--text); text-align: right; cursor: pointer; }
+#payView .pyrow.pyhdr { background: transparent; border-color: transparent; cursor: default; padding: 0 10px; font-size: 11.5px; color: var(--py-dim); font-weight: 700; }
+#payView .pyrow.pyhdr span { text-align: right; min-width: 0; }
+#payView .pyrow.pyhdr span:first-child { text-align: left; }
+#payView .pym { text-align: left; font-weight: 800; font-size: 14px; display: flex; flex-direction: column; gap: 1px; }
+#payView .pym small { font-size: 11px; font-weight: 600; color: var(--py-dim); }
+#payView .pym small.pytag { color: var(--warn); }
+#payView .pym small.pybad { color: var(--rec); }
+#payView .pyc { min-width: 0; display: block; }
+#payView .pyc em { display: none; font-style: normal; font-size: 12px; color: var(--py-dim); }
+#payView .pyc b { display: block; min-width: 0; overflow: hidden; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#payView .pyc.net b { color: var(--py-net); }
+#payView .pyavg { grid-column: 1 / -1; text-align: left; font-size: 12px; color: var(--py-dim); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--glass-b); line-height: 1.5; }
+#payView .pyavg b { color: var(--text); font-variant-numeric: tabular-nums; }
+#payView .pylist.stack .pyhdr { display: none; }
+#payView .pylist.stack .pyrow { display: flex; flex-wrap: wrap; gap: 2px 14px; text-align: left; }
+#payView .pylist.stack .pym { flex: 1 0 100%; flex-direction: row; align-items: baseline; gap: 8px; font-size: 15px; }
+#payView .pylist.stack .pyc { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
+#payView .pylist.stack .pyc em { display: inline; }
+#payView .pylist.stack .pyc b { overflow: visible; font-size: 14px; }
+#payView .pylist.stack .pyc.net { flex-basis: 100%; }
+#payView .pylist.stack .pyavg { flex: 1 0 100%; }
+
+/* ----- 세부 시트 ----- */
+#payLayer { display: none; position: fixed; inset: 0; z-index: 60; }
+#payLayer.show { display: block; }
+#payLayer .pyscrim { position: absolute; inset: 0; background: var(--py-scrim); }
+#payLayer .pysheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88vh; overflow: auto; background: var(--py-sheet); color: var(--text); border-radius: 22px 22px 0 0; padding: 18px 16px 22px; box-shadow: 0 -8px 30px rgba(0,0,0,.35); word-break: keep-all; overflow-wrap: anywhere; font-family: inherit; }
+#payLayer .pysheet h4 { margin: 0 0 4px; font-size: 17px; }
+#payLayer .pysub { font-size: 13px; color: var(--py-dim); margin-bottom: 4px; }
+#payLayer .pysec { margin: 14px 0 4px; font-size: 13px; font-weight: 800; color: var(--py-dim); }
+#payLayer .pyitems, #payLayer .pybars { list-style: none; margin: 0; padding: 0; }
+#payLayer .pyitems li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--glass-b); font-size: 14.5px; }
+#payLayer .pyitems li:first-child { border-top: 0; }
+#payLayer .pyitems li b { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+#payLayer .pyitems li.tot { font-weight: 800; border-top: 2px solid var(--glass-b); }
+#payLayer .pyitems li.big { font-size: 17px; }
+#payLayer .pyitems li.big b { color: var(--py-net); }
+#payLayer .pyitems li.pynone { color: var(--py-dim); font-size: 13px; }
+#payLayer .pybarrow { padding: 7px 0; border-top: 1px solid var(--glass-b); }
+#payLayer .pybarrow:first-child { border-top: 0; }
+#payLayer .pybh { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+#payLayer .pybh b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#payLayer .pybt { height: 8px; border-radius: 6px; background: var(--in-bg); margin: 5px 0 2px; overflow: hidden; }
+#payLayer .pybt i { display: block; height: 100%; border-radius: 6px; background: var(--py-ded); }
+#payLayer .pypc { font-size: 11.5px; color: var(--py-dim); }
+#payLayer .pyfoot { margin-top: 14px; }
+#payLayer .pyfoot .pybtn { width: 100%; }
+@media (prefers-reduced-motion: reduce) { #payView .pyrow:active, #payView .pychip:active { transform: none; } }

@@ -4,14 +4,18 @@
 
 /* 머리줄 바로 아래 놓이는 알약 — 아래 화면과 간격은 건강 탭 값(margin 4px 0 14px) 그대로, 위쪽은 머리줄이 이미 간격을 갖고 있다 */
 .perfseg { margin-top: 0; }
+/* v10.17: 「실적 | 승진 | 급여」 세 칸(PAY_TAB 이 켜졌을 때만 .three 가 붙는다) */
+.perfseg.three { grid-template-columns: 1fr 1fr 1fr; }
 
 /* 글자 확대(작게·크게·아주 크게): 누르는 칸 높이는 44px 아래로 안 내려가고, 글자만 배율에 맞춘다 */
 html[data-fs] .perfseg .hseg-btn { height: auto; min-height: 44px; font-size: calc(16px * var(--fsx)); line-height: 1.2; padding: 6px 4px; }
 
 /* 머리줄 제목 맞춤: 승진 화면 제목에만 있던 폭 비례 글자 크기(promotion.css)가 「성과」 두 글자에는 필요 없고, 전환할 때 제목이 튀므로 두 화면을 같게 한다 */
 html.perfmerge #achView .subbar .title,
-html.perfmerge #promoView .subbar .title { font-size: 20px; padding: 0 14px; }
+html.perfmerge #promoView .subbar .title,
+html.perfmerge #payView .subbar .title { font-size: 20px; padding: 0 14px; }
 
 /* 폭 380px 이하에서 승진 화면만 오른쪽 단추 자리를 44px 로 줄여 둔 값(promotion.css, 긴 제목 「정교수 승진」 때문)은 「성과」 두 글자에는 필요 없고,
    실적 화면(76px)과 달라 전환할 때 제목이 16px 옮겨 보이므로 같게 한다 */
-html.perfmerge #promoView .subbar .spacer.end { min-width: 76px; }
+html.perfmerge #promoView .subbar .spacer.end,
+html.perfmerge #payView .subbar .spacer.end { min-width: 76px; }

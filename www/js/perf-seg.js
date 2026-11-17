@@ -6,17 +6,20 @@
  * 쓰이는 곳: app.js(mount) · achievements.js · promotion.js(noteWrite · epoch). */
 (function (global) {
   'use strict';
-  var wn = 0;
+  var wn = 0, payOn = false;
+  /* v10.17: 「급여」 칸을 더할지(app.js 의 PAY_TAB 이 켜졌을 때만 true). 꺼져 있으면 v10.16 과 같은 두 칸 */
+  function setPay(on) { payOn = !!on; }
   function noteWrite() { wn += 1; return wn; }
   function epoch() { return wn; }
 
-  /* host 바로 앞(머리줄 아래)에 알약을 붙인다. active = 'ach' | 'promo' (그 화면이 지금 보여 주는 쪽), onPick(tab) = 다른 쪽을 눌렀을 때 */
+  /* host 바로 앞(머리줄 아래)에 알약을 붙인다. active = 'ach' | 'promo' | 'pay' (그 화면이 지금 보여 주는 쪽), onPick(tab) = 다른 쪽을 눌렀을 때 */
   function mount(host, id, active, onPick) {
     if (!host || !host.parentNode || !id) return null;
     var old = document.getElementById(id); if (old && old.parentNode) old.parentNode.removeChild(old);
     var el = document.createElement('div');
     el.className = 'hseg perfseg'; el.id = id; el.setAttribute('role', 'tablist'); el.setAttribute('aria-label', '성과 보기');
     var spec = [['ach', '실적'], ['promo', '승진']], h = '', i;
+    if (payOn) { spec.push(['pay', '급여']); el.className += ' three'; }
     for (i = 0; i < spec.length; i++) {
       h += '<button type="button" class="hseg-btn' + (spec[i][0] === active ? ' on' : '') + '" data-perf="' + spec[i][0] + '" role="tab" aria-selected="' + (spec[i][0] === active ? 'true' : 'false') + '">' + spec[i][1] + '</button>';
     }
@@ -30,5 +33,5 @@
     host.parentNode.insertBefore(el, host);
     return el;
   }
-  global.PerfSeg = { mount: mount, noteWrite: noteWrite, epoch: epoch };
+  global.PerfSeg = { mount: mount, noteWrite: noteWrite, epoch: epoch, setPay: setPay };
 })(typeof window !== 'undefined' ? window : globalThis);
