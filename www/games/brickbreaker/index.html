@@ -49,6 +49,30 @@ svg{display:block}
 .act{white-space:nowrap;display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;border-radius:14px;background:linear-gradient(180deg,#ecbd58,#d19a32);border:1.5px solid #f3cc78;color:#2a1c08;font-weight:800;font-size:16px;transition:transform .12s}
 .act:active{transform:scale(.96)}
 .act[hidden]{display:none}
+.stat .chev{display:none;width:11px;height:11px;margin-left:-1px}
+#lvBox.pickable .chev{display:block}
+#lvBox:not(.pickable){pointer-events:none;cursor:default}
+#lvBox.pickable{cursor:pointer;transition:transform .12s}
+#lvBox.pickable:active{transform:scale(.95)}
+#pickBox{width:min(95%,344px);padding:14px 12px 12px;max-height:97%;overflow-y:auto;touch-action:pan-y}
+#pickBox h2{margin-bottom:3px}
+#pickBox p{margin-bottom:10px;font-size:13.5px;color:var(--dim);line-height:1.45}
+#pickGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:4px 2px 2px}
+.cell{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:48px;border-radius:11px;border:1.5px solid transparent;font-family:var(--serif);transition:transform .12s;padding:0}
+.cell b{font-size:18px;font-weight:900;line-height:1}
+.cell i{font-style:normal;font-family:var(--sans);font-size:9.5px;font-weight:800;margin-top:3px;line-height:1;white-space:nowrap}
+.cell:active:not(:disabled){transform:scale(.92)}
+.cell.t0{background:linear-gradient(180deg,#f4cc6c,#c48a22);color:#2a1c08;border-color:#f8dc96}
+.cell.t1{background:linear-gradient(180deg,#ec8a3c,#a9561a);color:#2a1305;border-color:#f3b07a}
+.cell.t2{background:linear-gradient(180deg,#d94a3c,#86201a);color:#fff3ee;border-color:#ef8a7f}
+.cell.t3{background:linear-gradient(180deg,#a97be6,#5a3a98);color:#fff;border-color:#c9aef2}
+.cell.lock{background:rgba(255,255,255,.04);border-color:var(--line);color:#7d6e5b;opacity:.75;cursor:default}
+.cell.lock small{font-size:12px;font-family:var(--sans);font-weight:700;line-height:1}
+.cell.lock svg{width:13px;height:13px;margin-bottom:3px}
+.cell.cur{position:relative;z-index:1;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink),0 0 13px 3px rgba(243,233,216,.5);animation:curPulse 1.4s ease-in-out infinite}
+.cell.arm{position:relative;z-index:1;box-shadow:0 0 0 2px var(--bg),0 0 0 4px #fff}
+@keyframes curPulse{50%{transform:scale(1.07)}}
+#pickBox .act.sub{margin-top:12px}
 .act.sub{margin-top:9px;min-height:46px;background:var(--panel);border-color:var(--line);color:var(--ink);font-size:14.5px}
 @media (min-aspect-ratio:6/5){
   #app{grid-template-columns:minmax(0,1fr) 150px;grid-template-rows:minmax(0,1fr)}
@@ -65,12 +89,13 @@ html.calm *,html.calm *::before{animation:none!important;transition:none!importa
   <div id="hud">
     <div class="stat"><small>점수</small><b id="sc">0</b></div>
     <div class="stat" id="lives" aria-label="남은 목숨"></div>
-    <div class="stat" id="lvBox"><small>판</small><b id="lv">1</b></div>
+    <button class="stat" id="lvBox" type="button" aria-label="판 고르기"><small>판</small><b id="lv">1</b><svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="#b9a88f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button id="bPause" type="button" aria-label="잠깐 멈춤"><svg viewBox="0 0 24 24" fill="#f3e9d8"><rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/></svg></button>
   </div>
   <div id="stage">
     <canvas id="cv"></canvas>
-    <div class="box" id="pauseBox" hidden><h2>잠깐 멈춤</h2><p id="pauseMsg"></p><button class="act" id="bResume" type="button">계속하기</button><button class="act sub" id="bSkip" type="button" hidden>13판부터 새로</button></div>
+    <div class="box" id="pauseBox" hidden><h2>잠깐 멈춤</h2><p id="pauseMsg"></p><button class="act" id="bResume" type="button">계속하기</button><button class="act sub" id="bPick" type="button" hidden>판 고르기</button></div>
+    <div class="box" id="pickBox" hidden><h2>판 고르기</h2><p id="pickMsg"></p><div id="pickGrid"></div><button class="act sub" id="bPickBack" type="button">뒤로</button></div>
     <div class="box" id="endBox" hidden></div>
   </div>
 </div>
@@ -388,6 +413,12 @@ function deserialize(o){
   if(!o||o.v!==1||typeof o.lv!=='number'||o.lv<0||o.lv>=LEVELS.length||typeof o.score!=='number'||o.score<0||typeof o.lives!=='number'||o.lives<1||o.lives>MAXLIVES)return null;
   return {lv:o.lv|0,score:o.score|0,lives:o.lives|0};
 }
+/* 판 고르기(2026-11-18): 화면과 무관한 순수 규칙 — 도달한 판까지만 고를 수 있고, 기록(best)은 줄지 않는다 */
+function tierOf(i){return Math.min(3,Math.floor(i/6));}   // i: 0부터. 6판마다 색 단계(1~6 금 · 7~12 주황 · 13~18 빨강 · 19~24 보라)
+function reachOf(bestLv,curLv){var r=Math.max(bestLv|0,(curLv|0)+1,1);return Math.min(r,LEVELS.length);}
+function canStartAt(bestLv,curLv,n){return n>=1&&n<=LEVELS.length&&n===(n|0)&&n<=reachOf(bestLv,curLv);}
+function mergeBest(b,score,lvNum,withScore){var o={score:(b&&b.score)|0,lv:(b&&b.lv)|0};if(withScore&&score>o.score)o.score=score|0;if(lvNum>o.lv)o.lv=lvNum|0;return o;}
+function pickStart(n){return {lv:n-1,score:0,lives:3};}
 /* 모든 판이 깨질 수 있는 배치인지: 바깥(위·아래)과 이어진 빈칸에 닿은 깨지는 벽돌부터 차례로 깨 본다 */
 function levelBreakable(lay){
   var R=lay.length,g=[],r,c;
@@ -464,6 +495,7 @@ var HEART='<svg viewBox="-12 -12 24 24"><path d="M0 9C-15-2-10-12-4-9-2-8 0-6 0-
 function hud(){
   $('sc').textContent=G.score;$('lv').textContent=(G.lv+1)+'/'+LEVELS.length;
   var h='';for(var i=0;i<G.lives;i++)h+=HEART;$('lives').innerHTML=h;
+  $('lvBox').classList.toggle('pickable',reach()>=2);
 }
 
 /* ---------- 새 판·이어하기·저장 ---------- */
@@ -472,10 +504,8 @@ function save(){
   lsSet(KEY_GAME,serialize(G,elapsedMs));
 }
 function saveBest(withScore){   // 점수는 판을 깼을 때·끝났을 때만 올린다(이어하면 점수가 판 시작 값으로 돌아가므로 도중 점수로는 올리지 않는다)
-  var b=best,ch=false;
-  if(withScore&&G.score>b.score){b.score=G.score;ch=true;}
-  if(G.lv+1>b.lv){b.lv=G.lv+1;ch=true;}
-  if(ch)lsSet(KEY_BEST,b);
+  var nb=mergeBest(best,G.score,G.lv+1,withScore);   // 기록은 늘기만 한다(낮은 판을 골라 시작해도 줄지 않음)
+  if(nb.score!==best.score||nb.lv!==best.lv){best=nb;lsSet(KEY_BEST,best);}
 }
 function startGame(resume){
   var H=stageH();
@@ -489,9 +519,9 @@ function startGame(resume){
 function showEnd(won){
   over=true;saveBest(true);lsDel(KEY_GAME);
   var b=$('endBox');
-  b.innerHTML='<h2>'+(won?'24판을 모두 깼습니다':'게임 끝')+'</h2><p>점수 '+G.score+'<br>도달한 판 '+(G.lv+1)+'판<br>최고 점수 '+best.score+' · 가장 먼 판 '+best.lv+'판</p><button class="act" id="bAgain" type="button">다시 하기</button>'+(best.lv>=12?'<button class="act sub" id="bAgain13" type="button">13판부터 새로</button>':'');
+  b.innerHTML='<h2>'+(won?'24판을 모두 깼습니다':'게임 끝')+'</h2><p>점수 '+G.score+'<br>도달한 판 '+(G.lv+1)+'판<br>최고 점수 '+best.score+' · 가장 먼 판 '+best.lv+'판</p><button class="act" id="bAgain" type="button">다시 하기</button>'+(reach()>=2?'<button class="act sub" id="bPick2" type="button">판 고르기</button>':'');
   b.hidden=false;$('bAgain').onclick=function(){lsDel(KEY_GAME);startGame(null);};
-  if($('bAgain13'))$('bAgain13').onclick=function(){lsDel(KEY_GAME);startGame({lv:12,score:0,lives:3});};
+  if($('bPick2'))$('bPick2').onclick=function(){openPick('end');};
 }
 
 /* ---------- 멈춤 ---------- */
@@ -499,21 +529,42 @@ function pause(){
   if(!G||over||paused)return false;
   paused=true;save();saveBest(false);
   $('pauseMsg').innerHTML='점수 '+G.score+' · '+(G.lv+1)+'판<br>최고 점수 '+best.score+' · 가장 먼 판 '+best.lv+'판';
-  var sk=$('bSkip');sk.hidden=!(best.lv>=12&&G.lv<12);sk.textContent='13판부터 새로';skipArm=false;
+  $('bPick').hidden=reach()<2;
   $('pauseBox').hidden=false;return true;
 }
-function resume(){if(!paused)return;paused=false;$('pauseBox').hidden=true;lastFrame=performance.now();resumeWait=calm?0.3:1;}
-$('bPause').addEventListener('click',function(){paused?resume():pause();});
+function resume(){if(!paused||!$('pickBox').hidden)return;paused=false;$('pauseBox').hidden=true;lastFrame=performance.now();resumeWait=calm?0.3:1;}
+$('bPause').addEventListener('click',function(){if(!$('pickBox').hidden){closePick();return;}paused?resume():pause();});
 $('bResume').addEventListener('click',resume);
-var skipArm=false;   // 12판을 깬 분이 앞 판을 건너뛰는 단추: 실수로 누르지 않도록 두 번 눌러야 한다
-$('bSkip').addEventListener('click',function(){
-  if(!skipArm){skipArm=true;$('bSkip').textContent='정말요? 한 번 더 누르세요';return;}
-  lsDel(KEY_GAME);startGame({lv:12,score:0,lives:3});
+
+/* ---------- 판 고르기 ---------- */
+var pickFrom='',armN=0;
+function reach(){return reachOf(best.lv,G?G.lv:0);}
+function hasRun(){return !!G&&!over&&!(G.lv===0&&G.score===0&&G.lives>=3&&G.state==='ready');}   // 하던 판이 있나(없으면 한 번 탭으로 시작)
+var LOCK='<svg viewBox="0 0 14 14"><rect x="2.5" y="6" width="9" height="6.5" rx="1.6" fill="#7d6e5b"/><path d="M4.6 6V4.5a2.4 2.4 0 014.8 0V6" fill="none" stroke="#7d6e5b" stroke-width="1.5"/></svg>';
+function buildPick(){
+  var r=reach(),h='',i,n;
+  for(i=0;i<LEVELS.length;i++){n=i+1;
+    if(n>r)h+='<button class="cell lock" type="button" disabled aria-label="'+n+'판 잠김">'+LOCK+'<small>'+n+'</small></button>';
+    else h+='<button class="cell t'+tierOf(i)+(n===r?' cur':'')+(n===armN?' arm':'')+'" type="button" data-n="'+n+'" aria-label="'+n+'판'+(n===r?', 지금 여기':'')+'"><b>'+n+'</b>'+(n===armN?'<i>한 번 더</i>':(n===r?'<i>여기</i>':''))+'</button>';
+  }
+  $('pickGrid').innerHTML=h;
+  $('pickMsg').innerHTML=armN?armN+'판부터 새로 시작해요<br>하던 판은 사라집니다. 한 번 더 누르세요':'지금 여기는 '+r+'판이에요';
+}
+function openPick(from){pickFrom=from;armN=0;$('pauseBox').hidden=true;$('endBox').hidden=true;buildPick();$('pickBox').hidden=false;}
+function closePick(){$('pickBox').hidden=true;armN=0;if(pickFrom==='end')$('endBox').hidden=false;else $('pauseBox').hidden=false;pickFrom='';}
+$('bPick').addEventListener('click',function(){openPick('pause');});
+$('bPickBack').addEventListener('click',closePick);
+$('lvBox').addEventListener('click',function(){if(!G||over||!$('pickBox').hidden||reach()<2)return;if(!paused)pause();openPick('pause');});
+$('pickGrid').addEventListener('click',function(e){
+  var c=e.target.closest&&e.target.closest('.cell');if(!c||c.disabled)return;
+  var n=+c.getAttribute('data-n');if(!G||!canStartAt(best.lv,G.lv,n))return;
+  if(pickFrom==='pause'&&hasRun()&&armN!==n){armN=n;buildPick();return;}   // 하던 판이 있으면 두 번 눌러야 시작(실수 방지)
+  $('pickBox').hidden=true;pickFrom='';armN=0;lsDel(KEY_GAME);startGame(pickStart(n));
 });
 document.addEventListener('visibilitychange',function(){if(document.hidden)pause();else lastFrame=performance.now();});
 window.addEventListener('pagehide',function(){pause();save();});
 window.addEventListener('blur',function(){pause();});
-window.__gameBack=function(){if(over)return false;if(!paused){pause();return true;}return false;};
+window.__gameBack=function(){if(!$('pickBox').hidden){closePick();return true;}if(over)return false;if(!paused){pause();return true;}return false;};
 
 /* ---------- 손가락 ---------- */
 var drag=null;
@@ -538,7 +589,7 @@ stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercance
 document.addEventListener('keydown',function(e){
   if(e.key==='ArrowLeft')keyDir=-1;else if(e.key==='ArrowRight')keyDir=1;
   else if(e.key===' '||e.key==='Enter'){if(G&&G.state==='ready'&&!paused&&!over)launch(G);e.preventDefault();}
-  else if(e.key==='p'||e.key==='P'||e.key==='Escape'){paused?resume():pause();}
+  else if(e.key==='p'||e.key==='P'||e.key==='Escape'){if(!$('pickBox').hidden)closePick();else paused?resume():pause();}
   if(e.key.indexOf('Arrow')===0)e.preventDefault();
 });
 document.addEventListener('keyup',function(e){if((e.key==='ArrowLeft'&&keyDir<0)||(e.key==='ArrowRight'&&keyDir>0))keyDir=0;});
@@ -697,7 +748,7 @@ resize();
 var sv=deserialize(lsGet(KEY_GAME));
 startGame(sv);
 if(sv&&(sv.lv>0||sv.score>0||sv.lives<3))banner.text=(G.lv+1)+'판 · 이어서 합니다';
-window.__bricks={get G(){return G;},get paused(){return paused;},get resumeWait(){return resumeWait;},pause:pause,resume:resume,startGame:startGame,launch:function(){return launch(G);},resize:resize,get over(){return over;}};
+window.__bricks={get G(){return G;},get paused(){return paused;},get resumeWait(){return resumeWait;},pause:pause,resume:resume,startGame:startGame,launch:function(){return launch(G);},resize:resize,get over(){return over;},get best(){return best;},openPick:openPick,closePick:closePick};
 lastFrame=performance.now();requestAnimationFrame(loop);
 })();
 </script>

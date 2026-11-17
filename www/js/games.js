@@ -33,7 +33,7 @@
     { id: 'solitaire', name: '카드 정리', sub: '카드 정리', desc: '혼자 하는 카드 놀이(솔리테어)',
       src: 'games/solitaire/index.html', icon: 'games/solitaire/icon-192.png', url: 'https://kwakseok812-spec.github.io/solitaire/',
       ready: '__solitaire', saves: [{ key: 'solitaire.game.v1', arr: 'moves' }], mode: '' },
-    { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 24판 · 불꽃 벽돌',
+    { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 24판 · 판 고르기',
       src: 'games/brickbreaker/index.html', icon: 'games/brickbreaker/icon-192.png', url: 'https://kwakseok812-spec.github.io/brickbreaker/',
       ready: '__bricks', saves: [{ key: 'bricks.game.v1', arr: 'moves' }], mode: '' },
     { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스 · 3탄',
