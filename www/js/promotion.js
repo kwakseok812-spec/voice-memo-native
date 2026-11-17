@@ -474,7 +474,7 @@
     var cnts = { all: null, unk: nUnk, exc: nExc, dup: nDup };
     ph += '<div class="px-sechd"><h3>부문별 점수</h3></div><div class="px-chips" role="group" aria-label="항목 걸러 보기">' + FILTERS.map(function (x) {
       return '<button type="button" class="px-cp' + (f === x[0] ? ' on' : '') + '" data-f="' + x[0] + '" aria-pressed="' + (f === x[0] ? 'true' : 'false') + '">' + (x[0] === 'all' ? '' : ico(x[0])) + x[1] + (cnts[x[0]] !== null ? ' <em>' + cnts[x[0]] + '</em>' : '') + '</button>';
-    }).join('') + '</div>';
+    }).join('') + '</div><p class="px-fnote">「제외」는 점수에서 빠진 항목입니다. 「확인 전」은 증빙을 확인하기 전 항목으로, 그중 일부는 일단 점수에서 빠져 있어 두 칩에 함께 나옵니다.</p>';
     var accs = '', emptyIdx = [];
     for (i = 1; i <= 5; i++) { if (!secs[i].has) { emptyIdx.push(i); continue; } accs += pxAcc(i, A, maxV, f); }
     if (f !== 'all' && !accs) ph += '<div class="px-nores" role="status">해당하는 항목이 없습니다.</div>';
@@ -487,7 +487,7 @@
         }).join('') + '</div>';
       }
     }
-    ph += '<p class="px-legend">' + ico('unk') + ' 확인 전 &nbsp;' + ico('exc') + ' 제외 &nbsp;' + ico('dup') + ' 중복 의심 &nbsp;' + ico('part') + ' 일부 인정 &nbsp;' + ico('clip') + ' 증빙 PDF</p>';
+    ph += '<p class="px-legend">' + [['unk', '확인 전'], ['exc', '제외'], ['dup', '중복 의심'], ['part', '일부 인정'], ['clip', '증빙 PDF']].map(function (x) { return '<span class="px-lg">' + ico(x[0]) + x[1] + '</span>'; }).join('') + '</p>';
     /* 승진 일정 — 표 3줄 */
     var dl = S.profile && S.profile.apply_deadline ? PC.fmtDay(PC.parseDay(S.profile.apply_deadline)) : (ten.deadlineYear ? ten.deadlineYear + '년 4~5월쯤' : '비어 있습니다');
     var kv = [['현 직급 시작일', ten.start ? PC.fmtDay(ten.start) : '입력 전', '부교수 승진 발령일입니다.'],
@@ -500,11 +500,11 @@
     if (S.edit) {
       var trashN = S.items.filter(function (x) { return x.deleted_at; }).length, sugN = (A.suggestions || []).length, linkedN = A.linkInfo ? A.linkInfo.linked : 0;
       ph += '<section class="pcard pmanage px-tools"><h3>도구</h3><div class="px-tg">'
-        + '<button type="button" class="px-tool" data-go="sim">' + ico('undo') + '<span>점수 더하기 해 보기</span></button>'
+        + '<button type="button" class="px-tool" data-go="sim">' + ico('undo') + '<span>점수 더해 보기</span></button>'
         + '<button type="button" class="px-tool" data-go="profile">' + ico('gear') + '<span>승진 설정</span></button>'
         + (S.link ? '<button type="button" class="px-tool" data-go="suggest"' + (sugN ? '' : ' disabled') + '>' + ico('link') + '<span>실적 탭 연결 제안' + (sugN ? ' ' + sugN + '건' : '') + '<small>' + (S.ach ? '연결된 항목 ' + linkedN + '건' : '실적 탭 자료를 못 불러왔습니다') + '</small></span></button>' : '')
         + '<button type="button" class="px-tool" data-go="trash">' + ico('bin') + '<span>휴지통' + (trashN ? '<em>' + trashN + '건</em>' : '') + '</span></button>'
-        + '<button type="button" class="px-tool" data-go="backup">' + ico('dl') + '<span>백업 내려받기<small>' + (S.xlsx ? '엑셀 파일로 저장합니다' : '파일로 저장·공유합니다') + '</small></span></button></div></section>';
+        + '<button type="button" class="px-tool" data-go="backup">' + ico('dl') + '<span>백업 내려받기<small>' + (S.xlsx ? '엑셀로 저장' : '파일로 저장') + '</small></span></button></div></section>';
     }
     ph += '<p class="pfoot">참고 계산이며 공식 판정이 아닙니다 · 규정판 ' + esc(S.rulesVer || '') + ' · 규정 방식(반올림, 보직은 재임 개월 비율을 내림)</p>';
     var se = document.scrollingElement || document.documentElement, y0 = se ? se.scrollTop : 0;
@@ -638,7 +638,7 @@
     return { S: S, PC: PC, slimAch: slimAch, ux: S.ux, forecast: S.fc, rsOf: rsOf, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없습니다')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
-      flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
+      flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash, #promoBody button.plrow.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
   }
   function init(o) {
     if (o && o.toast) _toast = o.toast;
