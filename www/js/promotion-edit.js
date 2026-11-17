@@ -361,9 +361,10 @@
     else if (sim.secCapped && Math.abs(sim.dToday) < 0.005) h += '<b class="pdn">이 부문은 이미 최대 인정(' + X.fmtS(sim.secMax) + '점)이라 합계가 그대로입니다 (+0점)</b>';
     else if (Math.abs(sim.dToday) < 0.005) h += '<b class="pdn">점수는 그대로입니다 (+0점)</b> <span>오늘 기준 ' + X.fmt(sim.before.today) + '</span>';
     else h += '<b class="pdn ' + (sim.dToday > 0 ? 'up' : (sim.dToday < 0 ? 'down' : '')) + '">' + sign(sim.dToday) + '점</b> <span>오늘 기준 ' + X.fmt(sim.before.today) + ' → ' + X.fmt(sim.after.today) + '</span>';
-    if (Math.abs(sim.dExpected - sim.dToday) >= 0.005 && sim.status !== 'before') h += '<div class="psb">임기 끝까지 예상은 ' + sign(sim.dExpected) + '점입니다.</div>';
+    if (X.forecast && Math.abs(sim.dExpected - sim.dToday) >= 0.005 && sim.status !== 'before') h += '<div class="psb">임기 끝까지 예상은 ' + sign(sim.dExpected) + '점입니다.</div>';
     if (Math.abs(sim.itemAfter - sim.itemBefore) >= 0.005) h += '<div class="psb">이 종류 합계 ' + X.fmtS(sim.itemBefore) + ' → ' + X.fmtS(sim.itemAfter) + '</div>';
-    if (sim.reasons && sim.reasons.length && sim.status !== 'before') h += '<div class="psb">' + esc(sim.reasons.join(' · ')) + '</div>';
+    var simRs = X.rsOf ? X.rsOf(sim.reasons) : (sim.reasons || []);
+    if (simRs.length && sim.status !== 'before') h += '<div class="psb">' + esc(simRs.join(' · ')) + '</div>';
     el.innerHTML = h;
     dupCheck();
   }
@@ -829,7 +830,7 @@
       if (!P || !XL || !XL.write) throw new Error('이 앱 버전에서는 엑셀 만들기를 쓸 수 없습니다');
       var A = X.compute();
       if (!A || A.error) throw new Error('점수를 계산하지 못했습니다(점수 규칙표를 받지 못했을 수 있습니다)');
-      return P.toFile(XL, P.model({ A: A, items: S().items, rules: S().rules, rulesVer: S().rulesVer, now: new Date() }));
+      return P.toFile(XL, P.model({ A: A, forecast: !!X.forecast, items: S().items, rules: S().rules, rulesVer: S().rulesVer, now: new Date() }));
     }
     function run(kind) {
       if (my.busy) return;

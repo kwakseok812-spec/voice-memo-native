@@ -3959,6 +3959,7 @@
   APP_VERSION = 'v10.12';        // v10.12: 영수증 보내기 전 선택 칸 라벨을 「운영비」「과제비(연구비)」로(카드번호 문구 제거, 옛 저장값 9801/8837 자동 이관), 카드 끝자리 불일치 경고 삭제. 전송값 meta.scan.pick 그대로. 서버·SQL·권한 변경 없음
   APP_VERSION = 'v10.14';       // v10.14(O-0890): 게임 칸에 「세균 방어전」(타워 디펜스 — 배양접시로 몰려오는 세균을 막는 게임) 추가 — 홈 「게임」 칸 작은 글씨 「장기·오목 외 4」, 목록 시트 5줄. 게임 파일은 공개 저장소 main 그대로의 복사본(www/games/towerdefense, 인터넷 없이 열림). 서버·SQL·자바·권한 변경 없음 · versionCode 158
   APP_VERSION = 'v10.15';       // v10.15(O-0900): 「승진」 항목을 열면 붙어 있는 증빙 PDF 열기·내려받기(스위치 PROMO_FILES, 서버 함수 promo-file·저장소 promo-files — 서버 준비됨). 점수 계산 변경 없음.
+  APP_VERSION = 'v10.16';       // v10.16(O-0904 후속): 「승진」 점수판에서 앞날을 추정하는 점수(임기 끝까지·신청 마감까지 예상, 예전 앱과의 비교 줄, 「아직 안 온 N개월」 설명, 엑셀의 같은 열)를 보이지 않게 함(스위치 PROMO_FORECAST_ON = 'off'). 오늘 기준 점수·부문 합계·합격선 비교는 그대로, 계산 파일 변경 없음.
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
   // (직전) v9.65(O-0691): 「승진」 화면 폭 맞춤 — 폴드 접은 화면·글자 확대에서 큰 숫자·타일·제목이 화면 밖으로 나가던 것 고침(점수 계산·입력 변경 없음) · versionCode 109
   // (직전) v9.64(O-0691): 「승진」 점수판 맨 위 카드에서 케이 그림 뺌(큰 숫자·요약만) · 점수 계산·입력·연결 변경 없음
@@ -10288,6 +10289,8 @@
   var PROMO_TAB = 'on';
   /* v9.63: 입력·수정(PROMO_EDIT)과 실적 탭 연결(PROMO_LINK). 'off' 면 각각 꺼져 v9.62 와 같다(서버·SQL 무관). 둘 다 PROMO_TAB 이 켜져 있을 때만 뜻이 있다. */
   /* v9.68: 백업 내려받기의 엑셀(PROMO_XLSX). 'off' 면 창을 열자마자 JSON 백업을 저장하던 v9.67 모양으로 돌아간다(서버·SQL 무관). */
+  /* v10.16(O-0904 후속): 앞날을 추정하는 점수(임기 끝까지·신청 마감까지 예상, 예전 앱과 비교)의 표시 스위치 PROMO_FORECAST_ON — 'off' = 보이지 않음(지금 값) · 'on' = v10.15 와 같이 보임. 오늘 기준 계산(promotion-calc.js)은 어느 쪽이든 그대로. */
+  var PROMO_FORECAST_ON = 'off';
   var PROMO_EDIT = 'on', PROMO_LINK = 'on', PROMO_XLSX = 'on', PROMO_FILES = 'on';   /* v10.15: 항목 증빙 PDF 열기·내려받기(PROMO_FILES) — 'off' 면 v10.14 와 같음(서버 함수 promo-file) */
   var promoView = $('promoView');
   function openPromo(keep) {   // keep === true = 알약으로 넘어옴(열어 둔 부문·판정 칸 유지·숫자 움직임 반복 안 함·방금 읽었으면 서버 안 읽음)
@@ -10296,7 +10299,7 @@
   }
   if (PROMO_TAB !== 'off' && window.PromoTab && window.PromoCalc && $('btnPromo')) {
     try {
-      PromoTab.init({ toast: toast, edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', files: PROMO_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null, saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
+      PromoTab.init({ toast: toast, forecast: PROMO_FORECAST_ON === 'on', edit: PROMO_EDIT !== 'off', link: PROMO_LINK !== 'off', xlsx: PROMO_XLSX !== 'off', files: PROMO_FILES !== 'off' ? { view: openPdfFromAch, download: downloadAttachment, guard: achViewerFull } : null, saveFile: function (f) { return savePhoneFile(f, { quiet: true }); } });
       perfPromoOk = true;
       var promoGrid = $('homeTools'), promoSub = promoGrid && promoGrid.querySelector('.tools-sub');
       if (promoGrid && promoSub) promoGrid.insertBefore($('btnPromo'), promoSub);   // 홈 도구 맨 끝(실적 다음) — 기존 칸 자리는 그대로

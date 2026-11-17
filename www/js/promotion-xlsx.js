@@ -58,8 +58,8 @@
   }
 
   /* 부문 화면(promotion.js renderSection)이 항목 밑에 보여 주는 설명과 같은 말: 점수에서 빠졌거나 부분 인정이면 이유, 보직(3-1)이면 인정 개월 */
-  function noteOf(r) {
-    var rs = r.reasons || [];
+  function noteOf(r, fc) {
+    var rs = (r.reasons || []).filter(function (t) { return fc || String(t).indexOf('아직 안 온') < 0; });      // 꺼져 있으면 「아직 안 온 N개월…」 앞날 설명 제외
     if (rs.length && r.status !== 'in') return rs.join(' · ');
     if (r.code === '3-1') return '재임 ' + r.months + '개월 인정' + (r.monthsRaw !== r.months ? ' (입력 ' + r.monthsRaw + '개월)' : '') + (rs.length ? ' · ' + rs.join(' · ') : '');
     return '';
@@ -71,30 +71,31 @@
   /* ---------- 시트 1: 점수 요약 ---------- */
   function summaryRows(o, A, R, now) {
     var T = A.T, c = A.checks, ten = A.tenure, i, rows = [], CN = global.PromoCalc.CHECK_NAMES;
+    var fc = !!o.forecast;      // O-0904 후속: 앞날(임기 끝·신청 마감까지) 추정 점수는 스위치 PROMO_FORECAST_ON 이 켜져 있을 때만 넣는다
     var expLabel = A.expCut ? '신청 마감(' + ymText(A.expCut) + ')까지 예상' : '임기 끝까지 예상';
     rows.push([T.label + ' 점수 요약 (참고용)']);
     rows.push(['만든 날짜', dayText(now)]);
     rows.push(['규정판', o.rulesVer || R.ver || '']);
     rows.push([]);
-    rows.push(['구분', '오늘 기준(바닥값)', expLabel, '합격선']);
-    rows.push(['총점', fx(A.today.total), fx(A.expected.total), fx(T.total)]);
-    if (A.bonus) rows.push(['총장 가점(총점에만 들어갑니다)', fx(A.bonus), fx(A.bonus), '']);
-    rows.push(['대학발전(부문 3)', fx(A.today.sec3), fx(A.expected.sec3), fx(T.sec3)]);
+    rows.push(fc ? ['구분', '오늘 기준(바닥값)', expLabel, '합격선'] : ['구분', '오늘 기준', '합격선']);
+    rows.push(fc ? ['총점', fx(A.today.total), fx(A.expected.total), fx(T.total)] : ['총점', fx(A.today.total), fx(T.total)]);
+    if (A.bonus) rows.push(fc ? ['총장 가점(총점에만 들어갑니다)', fx(A.bonus), fx(A.bonus), ''] : ['총장 가점(총점에만 들어갑니다)', fx(A.bonus), '']);
+    rows.push(fc ? ['대학발전(부문 3)', fx(A.today.sec3), fx(A.expected.sec3), fx(T.sec3)] : ['대학발전(부문 3)', fx(A.today.sec3), fx(T.sec3)]);
     rows.push([]);
-    rows.push(['부문', '오늘 기준 인정 점수', expLabel + ' 인정 점수', '인정 한도', '항목 점수 합계(한도 적용 전)', '항목 수']);
+    rows.push(fc ? ['부문', '오늘 기준 인정 점수', expLabel + ' 인정 점수', '인정 한도', '항목 점수 합계(한도 적용 전)', '항목 수'] : ['부문', '오늘 기준 인정 점수', '인정 한도', '항목 점수 합계(한도 적용 전)', '항목 수']);
     var cnt = {}; A.today.rows.forEach(function (r) { var s = parseInt(r.code.charAt(0), 10); cnt[s] = (cnt[s] || 0) + 1; });
     for (i = 1; i <= 5; i++) {
       var sc = A.today.sections[i], se = A.expected.sections[i];
-      rows.push([sectionText(R, i), fx(sc.used), fx(se.used), sc.max ? fx(sc.max) : '없음', fx(sc.raw), cnt[i] || 0]);
+      rows.push(fc ? [sectionText(R, i), fx(sc.used), fx(se.used), sc.max ? fx(sc.max) : '없음', fx(sc.raw), cnt[i] || 0] : [sectionText(R, i), fx(sc.used), sc.max ? fx(sc.max) : '없음', fx(sc.raw), cnt[i] || 0]);
     }
     rows.push([]);
     rows.push(['필수 요건', '판정', '현재', '기준', '설명']);
     /* 총점 */
     rows.push([CN.total, SW[c.total.s], fx(c.total.value), fx(c.total.need), c.total.s === 'pass'
-      ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다. ' + expLabel + '은 ' + fmt(A.expected.total) + '점입니다.'
+      ? (fc ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다. ' + expLabel + '은 ' + fmt(A.expected.total) + '점입니다.' : '오늘 기준으로 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다.')
       : '합격선까지 ' + fmt(c.total.need - c.total.value) + '점이 모자랍니다.']);
     /* 대학발전 */
-    rows.push([CN.sec3, SW[c.sec3.s], fx(c.sec3.value), fx(c.sec3.need), '보직·TFT·정책연구 점수입니다. 오늘 기준은 보직을 지금까지 재임한 개월만 셉니다. ' + expLabel + '은 ' + fmt(A.expected.sec3) + '점입니다.']);
+    rows.push([CN.sec3, SW[c.sec3.s], fx(c.sec3.value), fx(c.sec3.need), '보직·TFT·정책연구 점수입니다. 오늘 기준은 보직을 지금까지 재임한 개월만 셉니다.' + (fc ? ' ' + expLabel + '은 ' + fmt(A.expected.sec3) + '점입니다.' : '')]);
     /* 책임저자 */
     var nl = c.lead.papers.length;
     var minL = num(R.qual && R.qual.min_lead_papers);
@@ -131,7 +132,7 @@
       else if (r) {
         if (r.status !== 'in' && TAGS[r.status]) tags.push(TAGS[r.status]);
         if (fl.dup_suspect) tags.push('중복 의심');
-        var nt = noteOf(r); if (nt) tags.push(nt);
+        var nt = noteOf(r, !!o.forecast); if (nt) tags.push(nt);
       }
       if (trashed || !r) sc = '';
       else if (r.status === 'excluded' || r.status === 'before') sc = fx(0, ZP);
@@ -150,7 +151,7 @@
       ['규정판', o.rulesVer || R.ver || ''],
       [],
       ['시트', '들어 있는 것'],
-      [SHEET_SUM, '오늘 기준·임기 끝까지 예상 점수, 부문별 점수와 인정 한도, 필수 요건 판정'],
+      [SHEET_SUM, (o.forecast ? '오늘 기준·임기 끝까지 예상 점수' : '오늘 기준 점수') + ', 부문별 점수와 인정 한도, 필수 요건 판정'],
       [SHEET_ITEMS, '입력한 승진 항목 ' + nItems + '건을 한 줄씩. 휴지통에 있는 항목(지금 ' + nTrash + '건)도 맨 아래에 함께 보이고 점수에는 안 들어갑니다.'],
       [],
       ['알아 두십시오', '항목 점수를 모두 더해도 총점과 다를 수 있습니다. 강의평가는 평균으로 계산하고, 일부 부문에는 인정 한도가 있기 때문입니다.'],

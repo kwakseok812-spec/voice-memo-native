@@ -137,6 +137,7 @@
     return PC.computeAll(computeOpts());
   }
   var SW = { pass: '통과', fail: '부족', unknown: '확인 전', wait: '기다리는 중' }, SIC = { pass: '✓', fail: '✗', unknown: '?', wait: '⏳' };
+  function rsOf(list) { list = list || []; return S.fc ? list : list.filter(function (t) { return String(t).indexOf('아직 안 온') < 0; }); }      // O-0904 후속: 「아직 안 온 N개월…(채우면 올라갑니다)」 같은 앞날 설명은 스위치가 꺼져 있으면 감춘다
   function ymText(cut) { return cut ? (cut[0] + '.' + cut[1]) : ''; }
   function yearsText(list) {
     if (!list.length) return '';
@@ -150,10 +151,10 @@
     var T = A.T, c = A.checks, h = '', ten = A.tenure;
     if (k === 'total') {
       h = '<b class="ph">총점 ' + fmt(c.total.value) + ' / ' + c.total.need + ' — ' + SW[c.total.s] + '</b>' + (c.total.s === 'pass'
-        ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다. 임기 끝까지 예상은 ' + fmt(A.expected.total) + '점입니다.'
+        ? '오늘 기준(바닥값)으로도 합격선보다 ' + fmt(c.total.value - c.total.need) + '점 많습니다.' + (S.fc ? ' 임기 끝까지 예상은 ' + fmt(A.expected.total) + '점입니다.' : '')
         : '합격선까지 ' + fmt(c.total.need - c.total.value) + '점이 모자랍니다.');
     } else if (k === 'sec3') {
-      h = '<b class="ph">대학발전 ' + fmt(c.sec3.value) + ' / ' + c.sec3.need + ' — ' + SW[c.sec3.s] + '</b>보직·TFT·정책연구 점수입니다. 오늘 기준은 보직을 지금까지의 재임 개월만 셉니다(재임 개월 비율). 임기 끝까지 예상은 ' + fmt(A.expected.sec3) + '점입니다.';
+      h = '<b class="ph">대학발전 ' + fmt(c.sec3.value) + ' / ' + c.sec3.need + ' — ' + SW[c.sec3.s] + '</b>보직·TFT·정책연구 점수입니다. 오늘 기준은 보직을 지금까지의 재임 개월만 셉니다(재임 개월 비율).' + (S.fc ? ' 임기 끝까지 예상은 ' + fmt(A.expected.sec3) + '점입니다.' : '');
     } else if (k === 'lead') {
       h = '<b class="ph">책임저자 논문 — ' + SW[c.lead.s] + '</b>필수 요건은 SCI·등재급 책임저자(제1저자 또는 교신저자) 논문 1편 이상입니다.';
       if (c.lead.papers.length) {
@@ -210,13 +211,17 @@
     ph += banner();
     ph += '<section class="pcard phero" aria-label="승진 점수 요약">';
     ph += '<p class="psay" id="promoSay">' + esc(A.say) + '</p>';
-    ph += '<div class="ppair"><div><div class="plab">오늘 기준 <span class="pfloor">바닥값</span></div><div class="pbig"><span id="pTotal">0</span><small>/ ' + T.total + '</small></div></div>';
-    ph += '<div><div class="plab">' + (A.expCut ? '신청 마감(' + ymText(A.expCut) + ')까지 예상' : '임기 끝까지 예상') + '</div><div class="pmid" id="pExp">0</div></div></div>';
+    ph += '<div class="ppair' + (S.fc ? '' : ' nofc') + '"><div><div class="plab">오늘 기준' + (S.fc ? ' <span class="pfloor">바닥값</span>' : '') + '</div><div class="pbig"><span id="pTotal">0</span><small>/ ' + T.total + '</small></div></div>';
+    if (S.fc) ph += '<div><div class="plab">' + (A.expCut ? '신청 마감(' + ymText(A.expCut) + ')까지 예상' : '임기 끝까지 예상') + '</div><div class="pmid" id="pExp">0</div></div></div>';
+    else {      // O-0904 후속: 앞날 추정 점수는 보이지 않는다(PROMO_FORECAST_ON='off') — 빈 자리에는 오늘 점수와 합격선의 차이(실제 값)를 둔다
+      var gapV = c.total.value - c.total.need;
+      ph += '<div class="pgapw"><div class="pgap' + (gapV >= 0 ? ' ok' : '') + '" id="pGap">합격선' + (gapV >= 0 ? '보다 <b>' + fmt(gapV) + '</b>점 많습니다' : '까지 <b>' + fmt(-gapV) + '</b>점 남았습니다') + '</div></div></div>';
+    }
     ph += '<div class="pmeter" role="img" aria-label="합격선 대비 오늘 기준 ' + Math.round(A.today.total / T.total * 100) + '퍼센트"><i id="pMeter"></i><u></u></div><div class="pmscale"><span>0</span><span>합격선 ' + T.total + '</span><span>합격선의 ' + Math.round(A.today.total / T.total * 100) + '%</span></div>';
     var PEXP = { future: '보직 점수는 지금까지 재임한 개월만 셉니다(임기를 채우면 올라갑니다)', round: '반올림·절사를 규정대로 맞췄습니다', before: '현 직급 시작 이전 실적은 뺍니다' };
-    ph += '<div class="pdiff"><button type="button" class="pdiffbtn" id="pDiffBtn" aria-expanded="' + (S.diffOpen ? 'true' : 'false') + '"><span>예전 승진 앱(<b>' + fmt(A.vsLegacy.legacyTotal) + '</b>)보다 <b>' + fmt(A.vsLegacy.diff) + '점</b> 적습니다</span>' + (A.vsLegacy.parts.length ? '<i aria-hidden="true">' + (S.diffOpen ? '▴' : '▾') + '</i>' : '') + '</button>'
+    if (S.fc) ph += '<div class="pdiff"><button type="button" class="pdiffbtn" id="pDiffBtn" aria-expanded="' + (S.diffOpen ? 'true' : 'false') + '"><span>예전 승진 앱(<b>' + fmt(A.vsLegacy.legacyTotal) + '</b>)보다 <b>' + fmt(A.vsLegacy.diff) + '점</b> 적습니다</span>' + (A.vsLegacy.parts.length ? '<i aria-hidden="true">' + (S.diffOpen ? '▴' : '▾') + '</i>' : '') + '</button>'
       + (A.vsLegacy.parts.length ? '<ul class="pdiffl" id="pDiffL"' + (S.diffOpen ? '' : ' style="display:none"') + '>' + A.vsLegacy.parts.map(function (p) { return '<li><span>' + esc(PEXP[p.key] || p.label) + '</span><b>−' + fmt(p.pts) + '</b></li>'; }).join('') + '</ul>' : '') + '</div>';
-    ph += '<div class="pnote">지금 입력된 자료 기준입니다.' + (A.bonus ? ' 총장 가점 ' + A.bonus + '점이 들어 있습니다.' : '') + ' 오늘 기준은 보직을 지금(' + ymText(A.todayCut) + ')까지 재임한 개월만 센 값이라, 임기를 채우면 올라가는 바닥값입니다.</div></section>';
+    ph += '<div class="pnote">지금 입력된 자료 기준입니다.' + (A.bonus ? ' 총장 가점 ' + A.bonus + '점이 들어 있습니다.' : '') + ' 오늘 기준은 보직을 지금(' + ymText(A.todayCut) + ')까지 재임한 개월만 센 값' + (S.fc ? '이라, 임기를 채우면 올라가는 바닥값입니다.' : '입니다.') + '</div></section>';
     /* 타일 */
     ph += '<div class="ptiles" id="pTiles">';
     ['total', 'sec3', 'lead', 'eval', 'tenure'].forEach(function (key) {
@@ -339,8 +344,9 @@
         var sc1 = r.score; if (code === '1-1' && r.part !== null && r.part !== undefined) sc1 = r.part;
         var inner = '<div class="pl1"><span class="plb">' + esc(PC.rowLabel(r.it, R)) + '</span><b class="psc">' + (r.status === 'excluded' || r.status === 'before' ? '0' : fmtS(sc1)) + '</b></div>';
         if (tags.length) inner += '<div class="ptags">' + tags.join('') + '</div>';
-        if (r.reasons.length && r.status !== 'in') inner += '<div class="psb">' + esc(r.reasons.join(' · ')) + '</div>';
-        else if (code === '3-1') inner += '<div class="psb">재임 ' + r.months + '개월 인정' + (r.monthsRaw !== r.months ? ' (입력 ' + r.monthsRaw + '개월)' : '') + (r.reasons.length ? ' · ' + esc(r.reasons.join(' · ')) : '') + '</div>';
+        var rs = rsOf(r.reasons);
+        if (rs.length && r.status !== 'in') inner += '<div class="psb">' + esc(rs.join(' · ')) + '</div>';
+        else if (code === '3-1') inner += '<div class="psb">재임 ' + r.months + '개월 인정' + (r.monthsRaw !== r.months ? ' (입력 ' + r.monthsRaw + '개월)' : '') + (rs.length ? ' · ' + esc(rs.join(' · ')) : '') + '</div>';
         h += '<li' + (S.flashId === r.id ? ' class="flash"' : '') + '>' + (S.edit ? '<button type="button" class="plrow" data-id="' + esc(r.id) + '" data-code="' + code + '" aria-label="' + esc(PC.rowLabel(r.it, R) + ' — 고치기') + '">' + inner + '</button>' : inner) + '</li>';
       });
       h += '</ul></section>';
@@ -409,7 +415,7 @@
     var rb = $('promoReload'); if (rb) rb.onclick = function () { S.err = null; load(false); };
   }
   function makeCtx() {
-    return { S: S, PC: PC, slimAch: slimAch, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
+    return { S: S, PC: PC, slimAch: slimAch, forecast: S.fc, rsOf: rsOf, edit: S.edit, link: S.link, xlsx: S.xlsx, files: S.files, fileApi: promoFileApi, rpc: rpc, fmt: fmt, fmtS: fmtS, errText: errText, compute: compute, opts: computeOpts, load: load, saveCache: saveCache, saveAch: saveAch,
       saveFile: function (f) { if (!_saveFile) return Promise.reject(new Error('이 앱 버전에서는 파일 저장을 쓸 수 없습니다')); return _saveFile(f); },
       toast: function (m, ms) { _toast(m, ms); }, render: function () { if (shown()) render(); }, achReload: function () { return loadAch(true); },
       flash: function (id) { S.flashId = id; setTimeout(function () { if (S.flashId === id) { S.flashId = ''; var f = document.querySelector('#promoBody li.flash'); if (f) f.classList.remove('flash'); } }, 2600); } };
@@ -417,7 +423,7 @@
   function init(o) {
     if (o && o.toast) _toast = o.toast;
     if (o && typeof o.saveFile === 'function') _saveFile = o.saveFile;         // v9.66: 폰 저장 길(app.js savePhoneFile) — 백업 내려받기가 쓴다
-    S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx); S.files = (o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function') ? o.files : null;      // v10.15: 증빙 PDF 열기·내려받기(app.js PROMO_FILES)      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
+    S.fc = !!(o && o.forecast); S.edit = !!(o && o.edit && global.PromoEdit); S.link = !!(o && o.link); S.xlsx = !!(o && o.xlsx); S.files = (o && o.files && typeof o.files.view === 'function' && typeof o.files.download === 'function') ? o.files : null;      // v10.15: 증빙 PDF 열기·내려받기(app.js PROMO_FILES)      // v9.68: 백업 내려받기의 엑셀 스위치(app.js PROMO_XLSX)
     if (S.edit) global.PromoEdit.init(makeCtx());
     build();
   }
