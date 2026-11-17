@@ -2,5 +2,5 @@
 janggi 9d58d95de94c360c18434962b798596de10f3743 https://github.com/kwakseok812-spec/janggi (origin/main 파일 그대로, 복사한 날 2026-11-08)
 minesweeper 88083f064fca8fd11a577669fd906eaee2c9e9f9 https://github.com/kwakseok812-spec/minesweeper (공개 main 파일 그대로, 복사한 날 2026-11-14)
 solitaire 5ffcba4ac05fac1dd9bd2c0eb61fae8fb95fd4fe https://github.com/kwakseok812-spec/solitaire (공개 main 파일 그대로, 복사한 날 2026-11-14)
-brickbreaker c6b3ab75c2e084c4094b48ca770170dbea6978fc https://github.com/kwakseok812-spec/brickbreaker (공개 main 파일 그대로, 복사한 날 2026-11-14)
+brickbreaker 64c3d31 (로컬 원본 appsrickbreaker 의 커밋, 24판판 — 공개 저장소 https://github.com/kwakseok812-spec/brickbreaker 는 아직 c6b3ab7 이며 「올려」 뒤 같은 파일을 push 하면 같아진다, 복사한 날 2026-11-18)
 towerdefense 0a62ff5c3c2f1b5941383c593aa075bd1bae20f5 https://github.com/kwakseok812-spec/towerdefense (공개 main 파일 그대로, 복사한 날 2026-11-17)
