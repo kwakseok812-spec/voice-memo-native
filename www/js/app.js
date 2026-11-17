@@ -979,7 +979,7 @@
    *   길게 누르면(약 0.55초) 예전 「녹음 준비」 화면(케이 영상 · 회의자료 먼저 붙이기)이 열린다. 'off' = 예전 그대로(누르면 준비 화면).
    *   잘못 눌렀을 때: 시작 10초 안의 [녹음 취소]는 묻지 않고 버린다(그 녹음은 서버·PC로 가지 않는다) · 10초 뒤는 예전과 같이 확인 창.
    *   녹음 중 자료 붙이기 줄은 만들지 않았다(녹음 중 파일 고르기 창이 떠도 녹음이 이어지는지 실기기 미확인) — 자료는 「녹음 완료」 화면에서 붙인다. */
-  var REC_ONE_TAP = 'on';
+  var REC_ONE_TAP = 'off';   // v10.13: 홈 「회의 녹음」은 준비 화면에서 멈춘다(대표님 확인 — 곧바로 켜지지 않게). 'on' 으로 되돌리면 v10.12 의 한 번에 시작
   var REC_LP_HINT_KEY = 'smart_rec_lp_hint';       // 「길게 누르면 자료를 먼저 붙일 수 있다」 안내를 한 번 보였음
   var recLpT = null, recLpFired = false, recLpAt = 0, recLpGuard = 0, recLpHintWant = false;
   function openRecPrep() {                          // 예전 「준비 화면」 열기(길게 누름 · 스위치 off)
