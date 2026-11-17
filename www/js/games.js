@@ -36,7 +36,7 @@
     { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 12판',
       src: 'games/brickbreaker/index.html', icon: 'games/brickbreaker/icon-192.png', url: 'https://kwakseok812-spec.github.io/brickbreaker/',
       ready: '__bricks', saves: [{ key: 'bricks.game.v1', arr: 'moves' }], mode: '' },
-    { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스',
+    { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스 · 3탄',
       src: 'games/towerdefense/index.html', icon: 'games/towerdefense/icon-192.png', url: 'https://kwakseok812-spec.github.io/towerdefense/',
       ready: '__td', saves: [], mode: '' }
   ];
