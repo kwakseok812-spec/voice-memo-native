@@ -10318,9 +10318,9 @@
   /* ---- 급여 탭(v10.17): 「성과」 알약의 세 번째 칸 — 화면은 pay.js, 서버는 읽기 함수 pay_list 하나(쓰기 없음)·비공개 표 pay_slips ----
    *   스위치 PAY_TAB: 'on' = 알약이 「실적 | 승진 | 급여」 세 칸 · 'off' = 두 칸(v10.16 과 같다. 서버는 그대로 두어도 무해).
    *   PAY_CHART_ANIM: 'on' = 선 그래프가 처음 열 때 0.4초 그려짐(「움직임 줄이기」면 바로 표시) · 'off' = 바로 표시.
-   *   PAY_XLSX: 'off' — 엑셀 내려받기 단추는 만들지 않았다. 지금 앱의 폰 저장 길(savePhoneFile)은 파일을 공개 공유함에 먼저 올리므로 금액이 공개 주소에 남는다. PC 도구(pay_export_xlsx.py)가 만들어 앱 채팅으로 보내는 길로 대신한다.
+   *   (엑셀 내려받기 단추는 만들지 않았다. 지금 앱의 폰 저장 길(savePhoneFile)은 파일을 공개 공유함에 먼저 올리므로 금액이 공개 주소에 남는다. PC 도구(pay_export_xlsx.py)가 만들어 앱 채팅으로 보내는 길로 대신한다.)
    *   금액은 폰에 저장하지 않는다(localStorage·IndexedDB 에 쓰지 않음): 화면을 떠나면 메모리에서도 비운다. 저장하는 것은 「금액 가리기」 켬/끔 한 칸뿐. */
-  var PAY_TAB = 'on', PAY_CHART_ANIM = 'on', PAY_XLSX = 'off';
+  var PAY_TAB = 'on', PAY_CHART_ANIM = 'on';
   var payView = $('payView'), payOk = false, PAY_ON = false;
   function openPay(keep) { openScreen(payView); if (window.PayTab && PayTab.open) { try { PayTab.open(keep === true ? { keep: true } : undefined); } catch (e) {} } }
   if (PAY_TAB !== 'off' && payView && $('payBody') && window.PayTab && PayTab.init) {

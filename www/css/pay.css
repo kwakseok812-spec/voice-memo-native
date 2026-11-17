@@ -29,7 +29,7 @@ html[data-style="light"] #payView, html[data-style="light"] #payLayer { --py-gro
 #payView .pyl span { font-size: 14px; color: var(--muted); white-space: nowrap; }
 #payView .pyl b { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; margin-left: auto; }
 #payView .pyl.big span { color: var(--text); font-weight: 800; }
-#payView .pyl.big b { font-size: clamp(22px, 7vw, 28px); font-weight: 900; color: var(--py-net); }
+#payView .pyl.big b { font-size: clamp(20px, 6.3vw, 26px); font-weight: 900; color: var(--py-net); }
 #payView .pychk, #payLayer .pychk { margin-top: 8px; font-size: 12.5px; line-height: 1.5; }
 #payView .pyok, #payLayer .pyok { color: var(--ok); font-weight: 700; }
 #payView .pybad, #payLayer .pybad { color: var(--rec); font-weight: 700; }
@@ -45,6 +45,7 @@ html[data-style="light"] #payView, html[data-style="light"] #payLayer { --py-gro
 #payView .pychip.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); }
 
 /* ----- 그래프 ----- */
+#payView .pyunit { font-size: 12px; font-weight: 700; color: var(--py-dim); margin: 0 6px 2px; }
 #payView .pychartc { padding: 12px 8px 10px; }
 #payView .pychart { position: relative; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 #payView .pychart svg { display: block; max-width: 100%; }
@@ -104,12 +105,11 @@ html[data-style="light"] #payView, html[data-style="light"] #payLayer { --py-gro
 #payView .pyavg { grid-column: 1 / -1; text-align: left; font-size: 12px; color: var(--py-dim); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--glass-b); line-height: 1.5; }
 #payView .pyavg b { color: var(--text); font-variant-numeric: tabular-nums; }
 #payView .pylist.stack .pyhdr { display: none; }
-#payView .pylist.stack .pyrow { display: flex; flex-wrap: wrap; gap: 2px 14px; text-align: left; }
-#payView .pylist.stack .pym { flex: 1 0 100%; flex-direction: row; align-items: baseline; gap: 8px; font-size: 15px; }
-#payView .pylist.stack .pyc { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
-#payView .pylist.stack .pyc em { display: inline; }
-#payView .pylist.stack .pyc b { overflow: visible; font-size: 14px; }
-#payView .pylist.stack .pyc.net { flex-basis: 100%; }
+#payView .pylist.stack .pyrow { display: flex; flex-direction: column; gap: 3px; text-align: left; }
+#payView .pylist.stack .pym { flex-direction: row; align-items: baseline; gap: 8px; font-size: 15px; margin-bottom: 2px; }
+#payView .pylist.stack .pyc { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+#payView .pylist.stack .pyc em { display: inline; font-size: 13px; }
+#payView .pylist.stack .pyc b { overflow: visible; font-size: 14px; text-align: right; }
 #payView .pylist.stack .pyavg { flex: 1 0 100%; }
 
 /* ----- 세부 시트 ----- */

@@ -77,7 +77,9 @@
   var EYEOFF = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.9 10.9 0 0 1 12 19.5C5.3 19.5 1.5 12 1.5 12a19 19 0 0 1 4.6-5.7M9.9 4.6A10 10 0 0 1 12 4.5C18.7 4.5 22.5 12 22.5 12a19 19 0 0 1-2.4 3.4"/><path d="M1 1l22 22"/><path d="M14.1 14.1a3 3 0 0 1-4.2-4.2"/></svg>';
   function eyeBtn() { return '<button type="button" class="pyeye" id="pyEye" aria-pressed="' + (S.hide ? 'true' : 'false') + '" aria-label="' + (S.hide ? '금액 보이기' : '금액 가리기') + '" title="' + (S.hide ? '금액 보이기' : '금액 가리기') + '">' + (S.hide ? EYEOFF : EYE) + '</button>'; }
   function check(r) { return rowOk(r) ? '<span class="pyok">✔ 지급총액 − 공제 = 차인지급액 맞음</span>' : '<span class="pybad">⚠ 지급총액 − 공제가 차인지급액과 다릅니다(확인 필요)</span>'; }
-  function tag(r) { return r.verified ? '' : ' <span class="pytag">눈 대조 전</span>'; }
+  function tag(r) { return r.verified ? '' : ' <span class="pytag">확인 전</span>'; }
+  function unverNote(rs) { for (var i = 0; i < rs.length; i++) if (!rs[i].verified) return '<div class="pynote pyunv">‘확인 전’은 이번에 새로 들어온 달이라 명세서 원본과 한 번 더 맞춰 보기 전이라는 뜻입니다. 숫자는 명세서에서 읽은 그대로입니다.</div>'; return ''; }
+  function unitLine() { return S.hide ? '' : '<div class="pyunit">단위: 만원</div>'; }
   function dayTxt(r) { return r.day ? ' (' + r.day + '일)' : ''; }
 
   function heroHtml(r) {
@@ -85,7 +87,7 @@
       '<div class="pyl"><span>지급총액</span><b>' + won(r.gross) + '</b></div>' +
       '<div class="pyl"><span>공제</span><b>' + won(r.ded) + '</b></div>' +
       '<div class="pyl big"><span>차인지급액</span><b>' + won(r.net) + '</b></div>' +
-      '<div class="pychk">' + check(r) + '</div></div>';
+      '<div class="pychk">' + check(r) + '</div>' + unverNote([r]) + '</div>';
   }
   function chipsHtml(ys) {
     var h = '<div class="pyctl"><div class="pychips" role="tablist" aria-label="보기 방식">' +
@@ -109,7 +111,7 @@
     var h = '<div class="pylist" id="payList"><div class="pyrow pyhdr" aria-hidden="true"><span></span><span>지급총액</span><span>공제</span><span>차인지급액</span></div>', i;
     for (i = rs.length - 1; i >= 0; i--) {
       var r = rs[i];
-      h += '<button type="button" class="pyrow" data-ym="' + r.ym + '" aria-label="' + esc(ymLabel(r)) + ' 자세히 보기"><span class="pym">' + r.m + '월' + (r.day ? '<small>' + r.day + '일</small>' : '') + (r.verified ? '' : '<small class="pytag">눈 대조 전</small>') + (rowOk(r) ? '' : '<small class="pybad">확인 필요</small>') + '</span>' +
+      h += '<button type="button" class="pyrow" data-ym="' + r.ym + '" aria-label="' + esc(ymLabel(r)) + ' 자세히 보기"><span class="pym">' + r.m + '월' + (r.day ? '<small>' + r.day + '일</small>' : '') + (r.verified ? '' : '<small class="pytag">확인 전</small>') + (rowOk(r) ? '' : '<small class="pybad">확인 필요</small>') + '</span>' +
         '<span class="pyc"><em>지급총액</em><b>' + won(r.gross) + '</b></span><span class="pyc"><em>공제</em><b>' + won(r.ded) + '</b></span><span class="pyc net"><em>차인지급액</em><b>' + won(r.net) + '</b></span></button>';
     }
     return h + '</div>';
@@ -160,7 +162,7 @@
     for (i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < fs * 1.2) ends[i].y = ends[i - 1].y + fs * 1.2;
     var el = ends.map(function (e) { return '<text x="' + (X(n - 1) + 5) + '" y="' + (e.y + fs * 0.35) + '" class="pyt pyend ' + e.c + 't">' + e.t + '</text>'; }).join('');
     var sum = (all ? '전체 기간' : rs[0].y + '년') + ' 월별 지급총액·공제·차인지급액 선 그래프' + (S.hide ? '(금액 가림)' : '');
-    return '<div class="pychart" id="payChart" data-kind="line"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(sum) + '" id="paySvg">' +
+    return unitLine() + '<div class="pychart" id="payChart" data-kind="line"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(sum) + '" id="paySvg">' +
       '<defs><clipPath id="pyClip"><rect id="pyClipR" x="0" y="0" width="' + (S.play && anim && !calm() ? 0 : W) + '" height="' + H + '"/></clipPath></defs>' + g + rk + xl +
       '<g clip-path="url(#pyClip)"><path d="' + path('gross') + '" class="pyln pl-gross"/><path d="' + path('ded') + '" class="pyln pl-ded dash"/><path d="' + path('net') + '" class="pyln pl-net"/></g>' + el +
       '<line id="pyGuide" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" class="pyguide" style="display:none"/><circle id="pyD1" r="4" class="pyd pl-grossf" style="display:none"/><circle id="pyD2" r="4" class="pyd pl-dedf" style="display:none"/><circle id="pyD3" r="4" class="pyd pl-netf" style="display:none"/>' +
@@ -170,17 +172,17 @@
     var n = blocks.length, fs = fontPx(), W = chartBox(), H = Math.round(190 + fs * 3), i;
     var L = S.hide ? 10 : Math.round(fs * 3.9 + 10), R = 8, T = 12, B = Math.round(fs * 1.5 + 12);
     var mx = 1; for (i = 0; i < n; i++) if (blocks[i].t.gross > mx) mx = blocks[i].t.gross;
-    var nm = niceMax(mx), pw = W - L - R, ph = H - T - B, slot = pw / n, bw = Math.min(40, slot * 0.62);
+    var nm = niceMax(mx), pw = W - L - R, ph = H - T - B, slot = pw / n, bw = Math.min(40, slot * 0.62), step = slot < fs * 3.6 ? 2 : 1;
     function Y(v) { return T + ph - ph * v / nm.max; }
     var g = '', t, b = '';
     for (t = 0; t <= nm.max + 1; t += nm.step) { var yy = Y(t); g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" class="pygrid' + (t === 0 ? ' zero' : '') + '"/>' + (S.hide ? '' : '<text x="' + (L - 5) + '" y="' + (yy + fs * 0.35) + '" text-anchor="end" class="pyt">' + man(t) + '</text>'); }
     for (i = 0; i < n; i++) {
       var k = blocks[i], cx = L + slot * (i + 0.5), x0 = cx - bw / 2, yNet = Y(k.t.net), yTop = Y(k.t.net + k.t.ded);
       b += '<g' + (k.partial ? ' class="part"' : '') + '><rect x="' + x0 + '" y="' + yNet + '" width="' + bw + '" height="' + Math.max(0, Y(0) - yNet) + '" class="pybar net"/><rect x="' + x0 + '" y="' + yTop + '" width="' + bw + '" height="' + Math.max(0, yNet - yTop) + '" class="pybar ded"/></g>' +
-        '<text x="' + cx + '" y="' + (H - B + fs * 1.25) + '" text-anchor="middle" class="pyt">' + String(k.y).slice(2) + (k.partial ? '*' : '') + '</text>';
+        '<text x="' + cx + '" y="' + (H - B + fs * 1.25) + '" text-anchor="middle" class="pyt">' + (i % step === 0 || i === n - 1 ? String(k.y).slice(2) + '년' + (k.partial ? '*' : '') : '') + '</text>';
     }
     var sum = '연도별 차인지급액과 공제를 쌓은 막대 그래프(합치면 지급총액)' + (S.hide ? '(금액 가림)' : '');
-    return '<div class="pychart" data-kind="bar"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(sum) + '"><defs><pattern id="pyHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="pyhb"/><line x1="0" y1="0" x2="0" y2="6" class="pyhl"/></pattern></defs>' + g + b + '</svg></div>' +
+    return unitLine() + '<div class="pychart" data-kind="bar"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(sum) + '"><defs><pattern id="pyHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="pyhb"/><line x1="0" y1="0" x2="0" y2="6" class="pyhl"/></pattern></defs>' + g + b + '</svg></div>' +
       '<div class="pynote">* 막대는 그 해 합계입니다. 별표(*)가 붙은 해는 12개월이 아닌 부분 연도입니다.</div>';
   }
 
@@ -250,7 +252,7 @@
     if (S.mode === 'month') {
       var rs = S.year === 'all' ? rows : rowsOfYear(rows, Number(S.year));
       h += '<div class="pycard pychartc">' + lineChartHtml(rs, S.year === 'all') + legendHtml(false) + '</div>';
-      h += S.year === 'all' ? '<div class="pynote">연도를 고르면 그 해의 월별 표가 나옵니다. 그래프에 손가락을 대고 끌면 그 달의 값이 보입니다.</div>' : monthListHtml(rs) + '<div class="pynote">줄을 누르면 항목별 내역이 나옵니다.</div>';
+      h += S.year === 'all' ? '<div class="pynote">연도를 고르면 그 해의 월별 표가 나옵니다. 그래프에 손가락을 대고 끌면 그 달의 값이 보입니다.</div>' : monthListHtml(rs) + unverNote(rs) + '<div class="pynote">줄을 누르면 항목별 내역이 나옵니다.</div>';
     } else {
       var bl = yearBlocks(rows);
       h += '<div class="pycard pychartc">' + barChartHtml(bl) + legendHtml(true) + '</div>' + yearListHtml(bl) + '<div class="pynote">줄을 누르면 연도별 항목 합계가 나옵니다. 앱은 명세서의 숫자를 그대로 보여 드릴 뿐 평가하지 않습니다.</div>';
