@@ -38,7 +38,22 @@
       ready: '__bricks', saves: [{ key: 'bricks.game.v1', arr: 'moves' }], mode: '' },
     { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스 · 3탄',
       src: 'games/towerdefense/index.html', icon: 'games/towerdefense/icon-192.png', url: 'https://kwakseok812-spec.github.io/towerdefense/',
-      ready: '__td', saves: [], mode: '' }
+      ready: '__td', saves: [], mode: '' },
+    { id: 'reversi', name: '리버시', sub: '리버시', desc: '돌을 뒤집어 판을 차지하는 오델로 · 컴퓨터 3단계',
+      src: 'games/reversi/index.html', icon: 'games/reversi/icon-192.png', url: 'https://kwakseok812-spec.github.io/reversi/',
+      ready: '__reversi', saves: [], mode: '' },
+    { id: 'connect4', name: '사목 잇기', sub: '사목 잇기', desc: '먼저 넷을 잇는 쪽이 이기는 커넥트 4',
+      src: 'games/connect4/index.html', icon: 'games/connect4/icon-192.png', url: 'https://kwakseok812-spec.github.io/connect4/',
+      ready: '__connect4', saves: [], mode: '' },
+    { id: 'chess', name: '체스', sub: '체스', desc: '입체 말로 두는 체스 · 컴퓨터 3단계',
+      src: 'games/chess/index.html', icon: 'games/chess/icon-192.png', url: 'https://kwakseok812-spec.github.io/chess/',
+      ready: '__chess', saves: [], mode: '' },
+    { id: 'yut', name: '윷놀이', sub: '윷놀이', desc: '컴퓨터와 겨루는 윷놀이 · 말 4개',
+      src: 'games/yut/index.html', icon: 'games/yut/icon-192.png', url: 'https://kwakseok812-spec.github.io/yut/',
+      ready: '__yut', saves: [], mode: '' },
+    { id: 'marble', name: '캠퍼스 한 바퀴', sub: '캠퍼스 한 바퀴', desc: '캠퍼스 땅을 사고 건물을 올리는 보드게임',
+      src: 'games/marble/index.html', icon: 'games/marble/icon-192.png', url: 'https://kwakseok812-spec.github.io/marble/',
+      ready: '__marble', saves: [], mode: '' }
   ];
   var TXT = {
     head: '한 판 둘까요?', load: '판을 펴는 중입니다…', fail: '게임을 불러오지 못했습니다', failTab: '인터넷 주소로 열기', badge: '두던 판이 있습니다', close: '닫기',

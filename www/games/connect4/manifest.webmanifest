@@ -1,0 +1,11 @@
+{
+  "name": "사목 잇기",
+  "short_name": "사목 잇기",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14233d",
+  "theme_color": "#14233d",
+  "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png"}]
+}

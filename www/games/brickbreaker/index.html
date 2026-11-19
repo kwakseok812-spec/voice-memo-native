@@ -73,6 +73,7 @@ svg{display:block}
 .cell.arm{position:relative;z-index:1;box-shadow:0 0 0 2px var(--bg),0 0 0 4px #fff}
 @keyframes curPulse{50%{transform:scale(1.07)}}
 #pickBox .act.sub{margin-top:12px}
+@media (orientation:landscape) and (max-height:520px){#pickBox{width:min(96%,640px);padding:10px 12px 10px}#pickBox h2{font-size:20px;margin-bottom:1px}#pickBox p{margin-bottom:6px}#pickGrid{grid-template-columns:repeat(12,1fr);gap:5px}.cell{min-height:42px}.cell b{font-size:16px}#pickBox .act.sub{margin-top:8px;min-height:44px}}
 .act.sub{margin-top:9px;min-height:46px;background:var(--panel);border-color:var(--line);color:var(--ink);font-size:14.5px}
 @media (min-aspect-ratio:6/5){
   #app{grid-template-columns:minmax(0,1fr) 150px;grid-template-rows:minmax(0,1fr)}
@@ -149,7 +150,7 @@ function newGame(seed,H){
 function newLevel(G,i,H){
   if(H)G.H=H;
   var lay=LEVELS[i],r,c;
-  G.lv=i;G.mv=MOVES[i]||null;G.shT=0;G.bricks=[];G.grid=[];G.left=0;G.speed=levelSpeed(i);G.startScore=G.score;G.startLives=G.lives;
+  G.lv=i;G.mv=MOVES[i]||null;G.shT=0;G.bricks=[];G.grid=[];G.left=0;G.speed=levelSpeed(i);G.startScore=G.score;G.startLives=G.lives;G.left0=0;
   for(r=0;r<lay.length;r++){
     G.grid.push([]);
     for(c=0;c<COLS;c++){
@@ -160,6 +161,7 @@ function newLevel(G,i,H){
       G.grid[r].push(b);if(b)G.bricks.push(b);
     }
   }
+  G.left0=G.left;
   G.paddle={x:W/2,w:BASE_PW,target:W/2,y:G.H-44};
   G.pus=[];G.fx={wide:0,slow:0,pierce:0};G.sinceBreak=0;G.nudgeT=0;
   G.balls=[{x:W/2,y:G.paddle.y-BR,vx:0,vy:0,stuck:true}];
@@ -419,6 +421,7 @@ function reachOf(bestLv,curLv){var r=Math.max(bestLv|0,(curLv|0)+1,1);return Mat
 function canStartAt(bestLv,curLv,n){return n>=1&&n<=LEVELS.length&&n===(n|0)&&n<=reachOf(bestLv,curLv);}
 function mergeBest(b,score,lvNum,withScore){var o={score:(b&&b.score)|0,lv:(b&&b.lv)|0};if(withScore&&score>o.score)o.score=score|0;if(lvNum>o.lv)o.lv=lvNum|0;return o;}
 function pickStart(n){return {lv:n-1,score:0,lives:3};}
+function progressOf(G){if(!G)return false;if(G.score>0||G.lives<3||G.state==='clear')return true;if(G.left<G.left0)return true;for(var i=0;i<G.bricks.length;i++){var k=G.bricks[i];if(!k.steel&&k.hp<k.max)return true;}return false;}
 /* 모든 판이 깨질 수 있는 배치인지: 바깥(위·아래)과 이어진 빈칸에 닿은 깨지는 벽돌부터 차례로 깨 본다 */
 function levelBreakable(lay){
   var R=lay.length,g=[],r,c;
@@ -539,16 +542,16 @@ $('bResume').addEventListener('click',resume);
 /* ---------- 판 고르기 ---------- */
 var pickFrom='',armN=0;
 function reach(){return reachOf(best.lv,G?G.lv:0);}
-function hasRun(){return !!G&&!over&&!(G.lv===0&&G.score===0&&G.lives>=3&&G.state==='ready');}   // 하던 판이 있나(없으면 한 번 탭으로 시작)
+function hasRun(){return !!G&&!over&&progressOf(G);}   // 잃을 진행이 있나(점수·깬 벽돌·잃은 목숨이 없으면 경고 없이 한 번 탭으로 시작)
 var LOCK='<svg viewBox="0 0 14 14"><rect x="2.5" y="6" width="9" height="6.5" rx="1.6" fill="#7d6e5b"/><path d="M4.6 6V4.5a2.4 2.4 0 014.8 0V6" fill="none" stroke="#7d6e5b" stroke-width="1.5"/></svg>';
 function buildPick(){
   var r=reach(),h='',i,n;
   for(i=0;i<LEVELS.length;i++){n=i+1;
     if(n>r)h+='<button class="cell lock" type="button" disabled aria-label="'+n+'판 잠김">'+LOCK+'<small>'+n+'</small></button>';
-    else h+='<button class="cell t'+tierOf(i)+(n===r?' cur':'')+(n===armN?' arm':'')+'" type="button" data-n="'+n+'" aria-label="'+n+'판'+(n===r?', 지금 여기':'')+'"><b>'+n+'</b>'+(n===armN?'<i>한 번 더</i>':(n===r?'<i>여기</i>':''))+'</button>';
+    else h+='<button class="cell t'+tierOf(i)+(n===r?' cur':'')+(n===armN?' arm':'')+'" type="button" data-n="'+n+'" aria-label="'+n+'판'+(n===r?', 가장 멀리 간 판':'')+'"><b>'+n+'</b>'+(n===armN?'<i>한 번 더</i>':(n===r?'<i>최고</i>':''))+'</button>';
   }
   $('pickGrid').innerHTML=h;
-  $('pickMsg').innerHTML=armN?armN+'판부터 새로 시작해요<br>하던 판은 사라집니다. 한 번 더 누르세요':'지금 여기는 '+r+'판이에요';
+  $('pickMsg').innerHTML=armN?armN+'판부터 새로 시작해요<br>지금 점수와 목숨은 사라져요. 한 번 더 누르세요':'가장 멀리 간 판: '+r+'판';
 }
 function openPick(from){pickFrom=from;armN=0;$('pauseBox').hidden=true;$('endBox').hidden=true;buildPick();$('pickBox').hidden=false;}
 function closePick(){$('pickBox').hidden=true;armN=0;if(pickFrom==='end')$('endBox').hidden=false;else $('pauseBox').hidden=false;pickFrom='';}

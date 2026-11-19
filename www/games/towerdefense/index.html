@@ -157,7 +157,7 @@ svg{display:block}
 @keyframes pulse2{50%{transform:scale(1.05)}}
 
 /* ---- 2탄 확장: 새 포탑 표시·판 고르기·확인 상자·결과 별 ---- */
-.tw .new{position:absolute;top:-8px;right:-3px;padding:2px 6px;border-radius:9px;font-size:10px;font-weight:900;letter-spacing:.3px;color:#2b1a00;
+.tw .new{position:absolute;top:-12px;right:6px;padding:2px 6px;border-radius:9px;font-size:10px;font-weight:900;letter-spacing:.3px;color:#2b1a00;
   background:linear-gradient(180deg,#ffe58a,#ffb830);box-shadow:0 2px 0 #7a4a00,0 0 10px rgba(255,200,80,.6);animation:newb .8s ease-in-out infinite alternate;pointer-events:none;display:none}
 @keyframes newb{to{transform:translateY(-2px) scale(1.1)}}
 #row1.n4{gap:6px}
@@ -391,12 +391,12 @@ const WAVES2=[
 const WAVES3=[
   [['n',8,1.1]],
   [['n',8,1.0],['f',4,.7]],
-  [['f',10,.55],['n',6,1.0]],
+  [['f',9,.6],['n',6,1.0]],
   [['s',5,1.6],['n',8,.9]],
   [['h',3,1.8],['n',10,.8]],
   [['f',14,.5],['h',3,1.6]],
   [['a',6,1.4],['h',4,1.5]],
-  [['s',10,1.0],['f',10,.5]],
+  [['s',9,1.05],['f',9,.55]],
   [['t',10,1.1],['h',5,1.4]],
   [['a',8,1.2],['s',8,1.0],['h',4,1.5]],
   [['f',20,.35],['a',8,1.2]],
@@ -419,7 +419,7 @@ const STAGES=[
   {id:2,name:'합류 혈관',total:13,gold:180,hp:20,hpScale:.26,bonus:6,ver:1,towers:['bolt','blast','frost','toxin'],
    routes:[[[-20,60],[60,60],[60,380],[180,380],[180,456]],[[380,60],[300,60],[300,380],[180,380],[180,456]]],
    ent:[{x:3,y:60,f:0},{x:357,y:60,f:1}],waves:WAVES2,newE:['s','a','b2']},
-  {id:3,name:'지름길 장',total:15,gold:200,hp:20,hpScale:.22,bonus:6,ver:1,towers:['bolt','blast','frost','toxin','boost'],
+  {id:3,name:'지름길 장',total:15,gold:200,hp:20,hpScale:.24,bonus:6,ver:2,towers:['bolt','blast','frost','toxin','boost'],
    routes:[[[-20,60],[60,60],[60,380],[60,456]],[[-20,60],[60,60],[300,60],[300,180],[140,180],[140,300],[300,300],[300,380],[60,380],[60,456]]],
    ent:[{x:3,y:60,f:0}],waves:WAVES3,newE:['s','a','h','b3'],routeOf:{f:0,s:0},shortcut:[[60,150],[60,250],[60,330]]}
 ];
@@ -434,7 +434,7 @@ let G;
 const ui={pickT:0,startShown:true,view:'start',dlg:false,noSave:false,justUnlocked:0};
 function newGame(){
   G={gold:S.gold,hp:S.hp,wave:0,active:false,queue:[],clock:0,enemies:[],towers:[],projs:[],parts:[],rings:[],floats:[],
-     time:0,healT:1.6,state:'play',speed:1,sel:null,build:'bolt',shake:0,nid:1,hover:null,flashBase:0,hintUp:false};
+     time:0,healT:1.6,state:'play',speed:1,sel:null,build:'bolt',shake:0,nid:1,hover:null,pend:null,flashBase:0,hintUp:false};
   syncUI(); ov.classList.remove('show','win','lose','st');
 }
 const $=id=>document.getElementById(id);
@@ -651,7 +651,7 @@ function syncUI(){
     if(sellArm&&sellArm!==t)disarmSell(); $('bSellT').textContent=sellArm?'한 번 더':'판매'; $('bSell').classList.toggle('armed',!!sellArm);
   }
 }
-document.querySelectorAll('.tw').forEach(b=>b.addEventListener('click',()=>{disarmSell();G.build=b.dataset.t;G.sel=null;ui.pickT=3.5;const tt=b.dataset.t; if((tt==='toxin'||tt==='boost')&&!mem.seen[tt]){mem.seen[tt]=1;saveNow();updateNew();}syncUI();}));
+document.querySelectorAll('.tw').forEach(b=>b.addEventListener('click',()=>{disarmSell();G.build=b.dataset.t;G.sel=null;G.pend=null;ui.pickT=3.5;const tt=b.dataset.t; if((tt==='toxin'||tt==='boost')&&!mem.seen[tt]){mem.seen[tt]=1;saveNow();updateNew();}syncUI();}));
 $('bUp').addEventListener('click',()=>{if(G.sel){if(!upgradeTower(G.sel)){hudPulse('gold','bad');float(G.sel.x,G.sel.y-22,'돈 부족','#ff8f8f');}}});
 let sellArm=null,sellTimer=0;
 function disarmSell(){sellArm=null;clearTimeout(sellTimer);const b=$('bSellT');if(b){b.textContent='판매';$('bSell').classList.remove('armed');}}
@@ -761,10 +761,10 @@ $('dlgB').addEventListener('click',()=>{const k=dlgKind,a=dlgArg;closeDlg();if(k
 $('home').addEventListener('click',()=>{ if(G.state!=='play')return; if(G.wave===0&&!G.active)showSel(); else openDlg('quit'); });
 $('nextBtn').addEventListener('click',()=>enterStage(+$('nextBtn').dataset.id));
 $('listBtn').addEventListener('click',showSel);
-/* 앱의 뒤로가기: 판 고르기·시작 화면에서는 false(게임 닫힘), 결과 화면은 판 고르기로, 첫 파도 전은 확인 없이 나감 */
+/* 앱의 뒤로가기: 판 고르기·시작 화면에서는 false(게임 닫힘), 결과 화면은 판 고르기로, 첫 파도 전은 확인 없이 나감, 싸우는 중 첫 뒤로는 확인 상자, 상자가 떠 있을 때 또 뒤로는 false */
 window.__gameBack=function(){
   if(!BACK_ON||!STAGE_SELECT)return false;
-  if(ui.dlg){closeDlg();return true;}
+  if(ui.dlg){closeDlg();return false;}   // 확인 상자가 떠 있는데 한 번 더 뒤로 = 앱이 닫음(다른 게임과 같은 규약)
   if(ui.view!=='game')return false;
   if(G.state==='won'||G.state==='lost'){showSel();return true;}
   if(G.wave===0&&!G.active){showSel();return true;}
@@ -799,11 +799,16 @@ cv.addEventListener('pointerdown',ev=>{
   ev.preventDefault(); if(G.state!=='play')return;
   const p=cellOf(ev),c=Math.floor(p.x/CELL),r=Math.floor(p.y/CELL);
   const t=G.towers.find(t=>t.c===c&&t.r===r);
-  if(t){if(G.sel!==t)disarmSell();G.sel=t;t.show=1.2;syncUI();return;}
-  if(G.sel){disarmSell();G.sel=null;syncUI();return;}
-  if(c<0||r<0||c>=COLS||r>=ROWS)return;
+  if(t){G.pend=null;if(G.sel!==t)disarmSell();G.sel=t;t.show=1.2;syncUI();return;}
+  if(G.sel){G.pend=null;disarmSell();G.sel=null;syncUI();return;}
+  if(c<0||r<0||c>=COLS||r>=ROWS){G.pend=null;return;}
   const fx=c*CELL+CELL/2,fy=r*CELL+CELL/2;
-  if(blocked[r][c]){float(fx,fy,'길 위','#ff8f8f');return;}
+  if(blocked[r][c]){G.pend=null;float(fx,fy,'길 위','#ff8f8f');return;}
+  // 터치로 응원 포탑을 놓을 때: 첫 탭은 닿는 범위를 보여 주고, 같은 칸을 한 번 더 누르면 설치(마우스는 올려 두면 이미 보임)
+  if(ev.pointerType!=='mouse'&&TYPES[G.build].noAtk&&!(G.pend&&G.pend.c===c&&G.pend.r===r&&G.pend.type===G.build)){
+    if(G.gold<TYPES[G.build].cost){G.pend=null;hudPulse('gold','bad');float(fx,fy,'돈 부족','#ff8f8f');return;}
+    G.pend={c,r,type:G.build,t0:G.time}; return; }
+  G.pend=null;
   if(!placeTower(c,r,G.build)){hudPulse('gold','bad');float(fx,fy,'돈 부족','#ff8f8f');}
 });
 cv.addEventListener('pointermove',ev=>{ if(ev.pointerType==='mouse'){const p=cellOf(ev);G.hover=[Math.floor(p.x/CELL),Math.floor(p.y/CELL)];} });
@@ -1113,6 +1118,9 @@ function drawEnemyTo(c,e,t){
     path();c.fillStyle=grad(-R*.35,-R*.4,R*1.15);c.fill();c.lineWidth=1.8;c.strokeStyle=d.dk;c.stroke();
     c.fillStyle='#1fae5c';rr(c,-R*.58,R*.02,R*1.16,R*.38,R*.1);c.fill();rr(c,-R*.19,-R*.28,R*.38,R*1.16,R*.1);c.fill();
     overlays();
+    if(e.pz||e.slowT>0){ // 독·얼음 색이 덮은 위에 십자를 흰 테두리로 한 번 더(작은 화면에서도 치유 적으로 보이게)
+      c.save();c.lineWidth=2.6;c.lineJoin='round';c.strokeStyle='#f4fff8';rr(c,-R*.58,R*.02,R*1.16,R*.38,R*.1);c.stroke();rr(c,-R*.19,-R*.28,R*.38,R*1.16,R*.1);c.stroke();
+      c.fillStyle='#17a352';rr(c,-R*.58,R*.02,R*1.16,R*.38,R*.1);c.fill();rr(c,-R*.19,-R*.28,R*.38,R*1.16,R*.1);c.fill();c.restore(); }
     for(const sx of[-1,1])eyeAt(c,sx*R*.36,-R*.42,R*.24,fx,fy);
     top=R*1.3;
   }else if(e.type==='b3'){
@@ -1245,7 +1253,7 @@ function drawFloats(c){
       rr(c,-w/2,-17,w,34,17);c.fillStyle='rgba(8,22,32,.85)';c.fill();c.lineWidth=2;c.strokeStyle='#ffd166';c.stroke();
       coinAt(c,-w/2+20,0,8);c.fillStyle='#ffe7a3';c.fillText(q.text,12,1);c.restore();
     }else{
-      c.font='900 14px '+FONT;const tw=c.measureText(q.text).width,ic=q.icon==='coin',x=q.x+(ic?7:0);
+      c.font='900 14px '+FONT;const tw=c.measureText(q.text).width,ic=q.icon==='coin',hw=tw/2+(ic?14:0)+6,x=Math.min(W-hw,Math.max(hw,q.x))+(ic?7:0);
       if(ic)coinAt(c,x-tw/2-8,q.y,5.5);
       c.lineWidth=3.5;c.strokeStyle='rgba(0,0,0,.65)';c.lineJoin='round';c.strokeText(q.text,x,q.y);c.fillStyle=q.col;c.fillText(q.text,x,q.y);
     }
@@ -1257,7 +1265,7 @@ function drawSlots(c,a,col,soft){
   for(let r=0;r<ROWS;r++)for(let cc=0;cc<COLS;cc++){
     if(blocked[r][cc]||!nearPath(cc,r)||G.towers.some(t=>t.c===cc&&t.r===r))continue;
     const x=cc*CELL+20,y=r*CELL+20,h=13,l=5;
-    if(soft){c.globalAlpha=a;rr(c,x-h,y-h,h*2,h*2,7);c.fillStyle='rgba(200,255,240,.10)';c.fill();c.lineWidth=1;c.strokeStyle='rgba(200,255,240,.22)';c.stroke();continue;}
+    if(soft){c.globalAlpha=a;rr(c,x-h,y-h,h*2,h*2,7);c.fillStyle='rgba(200,255,240,.14)';c.fill();c.lineWidth=1.2;c.strokeStyle='rgba(200,255,240,.34)';c.stroke();continue;}
     c.globalAlpha=a*.35;rr(c,x-h,y-h,h*2,h*2,6);c.fillStyle='rgba(255,255,255,.08)';c.fill();
     c.globalAlpha=a;c.beginPath();
     for(const [sx,sy] of[[-1,-1],[1,-1],[1,1],[-1,1]]){c.moveTo(x+sx*h,y+sy*(h-l));c.lineTo(x+sx*h,y+sy*h);c.lineTo(x+sx*(h-l),y+sy*h);}
@@ -1276,8 +1284,8 @@ function render(){
   if(!bg||bg.width!==cv.width||bg.height!==cv.height)buildBg();
   c.drawImage(bg,0,0,W,H);
   drawFlow(c,T); for(const en of M.ent)drawPortal(c,T,en.x,en.y,en.f); drawLaneArrows(c);
-  // 설치 자리: 처음 시작했을 때와 포탑을 막 고른 동안만
-  const showSlots=G.state==='play'&&!G.sel&&((!G.towers.length&&G.wave===0)||ui.pickT>0);
+  // 설치 자리: 첫 파도 전 포탑이 3개가 될 때까지와 포탑을 막 고른 동안
+  const showSlots=G.state==='play'&&!G.sel&&((G.towers.length<3&&G.wave===0)||ui.pickT>0);
   if(showSlots){ if(ui.pickT>0){const a=(.6+.3*Math.sin(T*5))*Math.min(1,ui.pickT/.5);drawSlots(c,REDUCE?.75:a,TYPES[G.build].color);}
     else drawSlots(c,REDUCE?.8:.6+.4*Math.sin(T*2.5),null,true); }
   const ts=G.towers.slice().sort((a,b)=>a.y-b.y);
@@ -1298,6 +1306,12 @@ function render(){
     const x=cc*CELL+20,y=r*CELL+20,ok=G.gold>=TYPES[G.build].cost; drawRange(c,x,y,TYPES[G.build].lv[0].rng,ok?'#ffffff':'#ff6b6b',T);
     if(TYPES[G.build].noAtk)for(const o of G.towers){ if(!TYPES[o.type].noAtk&&Math.hypot(o.x-x,o.y-y)<=TYPES[G.build].lv[0].rng){c.save();c.strokeStyle='rgba(255,215,90,.9)';c.lineWidth=3;circ(c,o.x,o.y,21);c.stroke();c.restore();} }
     drawTowerTo(c,{type:G.build,x,y,lv:0,ang:-Math.PI/2,rec:0,born:1},T,.6);} }
+  if(G.pend&&!G.sel&&G.state==='play'){const pc=G.pend; if(G.towers.some(t=>t.c===pc.c&&t.r===pc.r)||G.build!==pc.type)G.pend=null; else{
+    const x=pc.c*CELL+20,y=pc.r*CELL+20,rg=TYPES[pc.type].lv[0].rng,ok=G.gold>=TYPES[pc.type].cost; drawRange(c,x,y,rg,ok?'#ffd35e':'#ff6b6b',T);
+    let n=0; for(const o of G.towers){ if(!TYPES[o.type].noAtk&&Math.hypot(o.x-x,o.y-y)<=rg){n++;c.save();c.strokeStyle='rgba(255,215,90,.95)';c.lineWidth=3;circ(c,o.x,o.y,21);c.stroke();c.setLineDash([4,4]);c.lineWidth=2;c.beginPath();c.moveTo(x,y);c.lineTo(o.x,o.y);c.stroke();c.restore();} }
+    drawTowerTo(c,{type:pc.type,x,y,lv:0,ang:-Math.PI/2,rec:0,born:1},T,.6);
+    const lab=n?'한 번 더 누르면 설치 · 힘 받는 포탑 '+n:'한 번 더 누르면 설치 · 닿는 포탑 없음'; c.save();c.font='900 12px '+FONT;c.textAlign='center';c.textBaseline='middle';
+    const lw=c.measureText(lab).width+18, lx=Math.min(W-lw/2-4,Math.max(lw/2+4,x)), ly=y>H-60?y-34:y+34; rr(c,lx-lw/2,ly-11,lw,22,11);c.fillStyle='rgba(8,22,32,.88)';c.fill();c.lineWidth=1.5;c.strokeStyle=n?'#ffd35e':'#9fb4c4';c.stroke();c.fillStyle=n?'#ffe7a3':'#cfe0ec';c.fillText(lab,lx,ly+.5);c.restore(); } }
   const es=G.enemies.slice().sort((a,b)=>a.y-b.y); for(const e of es)drawEnemyTo(c,e,T);
   for(const p of G.projs)drawProj(c,p,T);
   for(const q of G.rings){const a=q.life/q.max;c.globalAlpha=a;c.strokeStyle=q.col;c.lineWidth=q.w;circ(c,q.x,q.y,q.r);

@@ -114,6 +114,8 @@ svg{display:block}
 #win[hidden]{display:none}
 #win h2{margin:0 0 6px;font-family:var(--serif);font-size:24px;color:var(--gold)}
 #win p{margin:0 0 14px;color:var(--ink);font-size:14.5px;line-height:1.5}
+#stockCnt{position:absolute;left:0;top:0;z-index:90;pointer-events:none;min-width:22px;padding:1px 6px;border-radius:999px;background:rgba(18,14,10,.82);border:1px solid rgba(227,176,75,.55);color:var(--ink);font-size:11px;font-weight:800;line-height:1.35;text-align:center;font-variant-numeric:tabular-nums}
+#stockCnt[hidden]{display:none}
 #fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
 .cf{position:absolute;top:-30px;width:26px;height:26px;animation:fall linear forwards}
 @keyframes fall{to{transform:translate(var(--dx),calc(var(--vh,600px) + 60px)) rotate(var(--rot))}}
@@ -137,6 +139,7 @@ html.calm *,html.calm *::before{animation:none!important;transition:none!importa
   </div>
   <div id="tableWrap">
     <div id="table"></div>
+    <div id="stockCnt" hidden aria-hidden="true"></div>
     <div id="fx"></div>
     <div id="win" hidden></div>
   </div>
@@ -153,6 +156,7 @@ html.calm *,html.calm *::before{animation:none!important;transition:none!importa
     <button class="act" id="shNo" type="button" style="width:100%">취소</button>
   </div>
 </div>
+<div class="sheet" id="leave" hidden role="alertdialog" aria-label="나가기 확인"><div class="box"><h2>게임을 나갈까요?</h2><p>진행 중인 판은 저장되어 있어, 다시 들어오면 이어서 할 수 있습니다. 나가려면 뒤로 가기를 한 번 더 눌러 주십시오.</p><button class="act primary" id="leaveBtn" type="button" style="width:100%">계속하기</button></div></div>
 <div id="toast" hidden role="status"><span>새 판을 시작했습니다.</span><button id="toastBtn" type="button">이전 판으로 되돌리기</button></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -331,7 +335,7 @@ function validState(S){
 (function(){
 'use strict';
 var $=function(id){return document.getElementById(id);};
-var KEY_GAME='solitaire.game.v1',KEY_BEST='solitaire.best.v1',KEY_SET='solitaire.set.v1';
+var KEY_GAME='solitaire.game.v1',KEY_BEST='solitaire.best.v1',KEY_SET='solitaire.set.v1',KEY_STATS='solitaire.stats.v1',UNDO_MAX=150;
 function lsGet(k){try{var v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 function lsDel(k){try{localStorage.removeItem(k);}catch(e){}}
@@ -391,6 +395,11 @@ function placeSlots(){
   put(slotEl.stock,M.col(0),M.top);
   for(var s=0;s<4;s++)put(slotEl['f'+s],M.col(3+s),M.top);
   for(var c=0;c<7;c++)put(slotEl['t'+c],M.col(c),M.tabTop);
+  placeCnt();
+}
+function placeCnt(){
+  var e=$('stockCnt'),w=e.offsetWidth||26;
+  e.style.transform='translate('+Math.round(M.col(0)+(M.cw-w)/2)+'px,'+(M.top+M.ch-8)+'px)';
 }
 function build(){
   table.innerHTML='';cardEl=[];slotEl={};
@@ -432,6 +441,7 @@ function render(opt){
     else if(el.style.transitionDelay)el.style.transitionDelay='';
     el.classList.toggle('up',p.up);
   }
+  var cn=$('stockCnt');cn.hidden=!S.stock.length;if(S.stock.length){cn.textContent=S.stock.length;placeCnt();}
   slotEl.stock.style.color=S.waste.length&&!S.stock.length?'rgba(243,233,216,.7)':'rgba(243,233,216,.28)';
   slotEl.stock.firstChild.style.visibility=(!S.stock.length&&S.waste.length)?'visible':'hidden';
   head();
@@ -457,6 +467,8 @@ function save(){
   lsSet(KEY_GAME,{v:1,draw:S.draw,stock:S.stock,waste:S.waste,found:S.found,tab:S.tab,up:S.up,mc:S.moves,t:elapsed,undos:undos,moves:undo});
 }
 function best(){return lsGet(KEY_BEST)||{};}
+function stats(){var o=lsGet(KEY_STATS);return (o&&typeof o==='object')?o:{};}
+function winsOf(d){var e=stats()['d'+d];return e?(e.w|0):0;}
 
 /* ---------- 새 판 ---------- */
 function newGame(draw){
@@ -476,7 +488,7 @@ function newGame(draw){
 function inProgress(){return S&&!won&&S.moves>=3;}
 
 /* ---------- 행동 ---------- */
-function pushUndo(){undo.push(encState(S));if(undo.length>600)undo.shift();}
+function pushUndo(){undo.push(encState(S));while(undo.length>UNDO_MAX)undo.shift();}
 function afterMove(){
   tickStart();render();
   if(isWin(S)){win();return;}
@@ -649,12 +661,14 @@ function stopAuto(){if(autoRun){clearInterval(autoRun.t);autoRun=null;note('');i
 /* ---------- 이겼을 때 ---------- */
 function win(){
   tickStop();won=true;lsDel(KEY_GAME);note('');
+  var st=stats(),sk='d'+S.draw;st[sk]={w:((st[sk]&&st[sk].w)|0)+1};lsSet(KEY_STATS,st);
   var sec=Math.max(1,Math.round(elapsed/1000)),b=best(),key='d'+S.draw,rec=false,cur=b[key];
   if(undos===0&&(!cur||S.moves<cur.m||(S.moves===cur.m&&sec<cur.t))){b[key]={t:sec,m:S.moves};lsSet(KEY_BEST,b);rec=true;}
   var msg=S.moves+'수, '+fmt(elapsed)+' 걸렸습니다.';
   if(rec)msg+='<br>'+S.draw+'장 뽑기 최고 기록입니다.';
   else if(undos>0)msg+='<br>(무르기를 쓴 판은 기록에 오르지 않습니다.)';
   else if(cur)msg+='<br>최고 기록 '+cur.m+'수 · '+fmt(cur.t*1000)+'.';
+  msg+='<br>'+S.draw+'장 뽑기 모두 '+winsOf(S.draw)+'번째 승리입니다.';
   var w=$('win');w.innerHTML='<h2>다 풀었습니다</h2><p>'+msg+'</p><button class="act primary" id="wNew" type="button" style="width:100%">새 판</button>';
   w.hidden=false;$('wNew').onclick=function(){freshGame(S.draw);};
   head();vib([30,50,30,50,90]);confetti();
@@ -688,7 +702,7 @@ $('toastBtn').addEventListener('click',function(){
 });
 function openSheet(){
   $('shMsg').textContent=inProgress()?'고르면 그 방식으로 새 판을 시작합니다. (지금 판은 닫힙니다.)':'고르면 그 방식으로 새 판을 시작합니다.';
-  var b=$('shSeg').children;for(var i=0;i<b.length;i++)b[i].setAttribute('aria-pressed',(+b[i].dataset.d===S.draw)?'true':'false');
+  var b=$('shSeg').children;for(var i=0;i<b.length;i++){var dd=+b[i].dataset.d,w=winsOf(dd);b[i].setAttribute('aria-pressed',(dd===S.draw)?'true':'false');b[i].querySelector('small').textContent=(dd===1?'쉬운 방식':'어려운 방식')+(w?' · '+w+'승':'');}
   $('sheet').hidden=false;
 }
 $('shSeg').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;$('sheet').hidden=true;freshGame(+b.dataset.d);});
@@ -703,19 +717,28 @@ window.addEventListener('resize',relayout);
 window.addEventListener('orientationchange',function(){setTimeout(relayout,120);});
 document.addEventListener('visibilitychange',function(){if(document.hidden)save();else lastTick=performance.now();});
 window.addEventListener('pagehide',save);
-window.__gameBack=function(){if(!$('sheet').hidden){$('sheet').hidden=true;return true;}return false;};
+function hideLeave(){$('leave').hidden=true;}
+$('leaveBtn').addEventListener('click',hideLeave);
+$('leave').addEventListener('click',function(e){if(e.target===$('leave'))hideLeave();});
+window.__gameBack=function(){
+  if(!$('leave').hidden){hideLeave();return false;}                 // 확인창이 떠 있는데 한 번 더 뒤로 = 나가기
+  if(!$('sheet').hidden){$('sheet').hidden=true;return true;}
+  if(won&&!$('win').hidden){$('win').hidden=true;return true;}       // 승리 창이 떠 있으면 창부터 닫는다
+  if(inProgress()){stopAuto();$('leave').hidden=false;return true;}  // 진행 중인 판이 있으면 먼저 확인
+  return false;
+};
 
 /* ---------- 시작 ---------- */
 metrics();build();placeSlots();
 var sv=lsGet(KEY_GAME);
 if(sv&&sv.v===1){
   var cand={draw:sv.draw,stock:sv.stock,waste:sv.waste,found:sv.found,tab:sv.tab,up:sv.up,moves:sv.mc|0};
-  if(validState(cand)&&!isWin(cand)){S=cand;undo=Array.isArray(sv.moves)?sv.moves.filter(function(x){return typeof x==='string';}):[];elapsed=+sv.t||0;undos=sv.undos|0;
+  if(validState(cand)&&!isWin(cand)){S=cand;undo=Array.isArray(sv.moves)?sv.moves.filter(function(x){return typeof x==='string';}).slice(-UNDO_MAX):[];elapsed=+sv.t||0;undos=sv.undos|0;
     render();tickStart();note('이어서 하는 판입니다.');}
 }
 if(!S)newGame(drawPref);
 requestAnimationFrame(relayout);
-window.__solitaire={get S(){return S;},newGame:newGame,actMove:actMove,actDraw:actDraw,doUndo:doUndo,doHint:doHint,relayout:relayout,get undo(){return undo;},checkAuto:checkAuto,get won(){return won;}};
+window.__solitaire={get stats(){return stats();},get S(){return S;},newGame:newGame,actMove:actMove,actDraw:actDraw,doUndo:doUndo,doHint:doHint,relayout:relayout,get undo(){return undo;},checkAuto:checkAuto,get won(){return won;}};
 })();
 </script>
 </body>

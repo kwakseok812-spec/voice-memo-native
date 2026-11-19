@@ -1469,6 +1469,7 @@ html[data-fs] .today .td-voice small{font-size:calc(12px * var(--fsx))}
 .today .td-wx.rain .td-main b .wx-cond{color:var(--p1)}
 html[data-fs] .today .td-wx.now .td-main b{font-size:calc(16px * var(--fsx))}
 .wx-sheet .sheet-box{max-height:92vh;overflow-y:auto;overscroll-behavior:contain}
+.gm-sheet .sheet-box{max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain}   /* O-0917 v10.22: 게임 10개 — 목록이 화면보다 길면 시트 안에서 스크롤 */
 .wx-sheet .sheet-box>*{flex-shrink:0}   /* 큰 글자에서 창이 화면보다 길어지면 버튼이 눌려 납작해지지 않고 창 안에서 스크롤 */
 .wx-sheet .wx-body{display:flex;flex-direction:column;gap:10px;min-width:0}
 .wx-sheet .wx-nowbox{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:18px;background:var(--in-bg);border:1px solid var(--glass-b)}
