@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="벽돌 깨기">
-<meta name="description" content="공을 튕겨 벽돌을 깨는 게임. 24판.">
+<meta name="description" content="공을 튕겨 벽돌을 깨는 게임. 36판.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -66,6 +66,8 @@ svg{display:block}
 .cell.t1{background:linear-gradient(180deg,#ec8a3c,#a9561a);color:#2a1305;border-color:#f3b07a}
 .cell.t2{background:linear-gradient(180deg,#d94a3c,#86201a);color:#fff3ee;border-color:#ef8a7f}
 .cell.t3{background:linear-gradient(180deg,#a97be6,#5a3a98);color:#fff;border-color:#c9aef2}
+.cell.t4{background:linear-gradient(180deg,#4fc9b4,#1f7a72);color:#04201d;border-color:#8fe4d4}
+.cell.t5{background:linear-gradient(180deg,#5e86e6,#243c8f);color:#fff;border-color:#9db6f4}
 .cell.lock{background:rgba(255,255,255,.04);border-color:var(--line);color:#7d6e5b;opacity:.75;cursor:default}
 .cell.lock small{font-size:12px;font-family:var(--sans);font-weight:700;line-height:1}
 .cell.lock svg{width:13px;height:13px;margin-bottom:3px}
@@ -106,7 +108,9 @@ html.calm *,html.calm *::before{animation:none!important;transition:none!importa
 /* 물리·규칙만 담은 부분 — 화면과 무관(그대로 node 에서 시험한다). 바깥 변수를 쓰지 않는다.
    세계 좌표: 가로 360 고정, 세로 H(판마다 화면 비율에 맞춤, 480~700). 시간은 고정 간격(STEP)으로만 흐른다 → 화면 주사율과 무관하게 같은 결과. */
 var W=360,PH=12,BR=6,COLS=8,BW=40,BH=18,BX0=12,BY0=52,PX=42,PY=20,STEP=1/120,PADDLE_MAX=1700,BASE_PW=64,MAXANG=1.13,MINVY=0.26,DROP=0.14,MAXLIVES=5;
-/* '.' 빈칸 · 1·2·3 = 맞아야 하는 횟수 · '#' = 안 깨지는 벽돌 · 'B' = 불꽃 벽돌(한 번에 깨지고, 터지면 둘레 8칸을 한 번씩 때림) */
+/* '.' 빈칸 · 1·2·3 = 맞아야 하는 횟수 · '#' = 안 깨지는 벽돌 · 'B' = 불꽃 벽돌(한 번에 깨지고, 터지면 둘레 8칸을 한 번씩 때림)
+   'K' = 열쇠 벽돌(한 번에 깨지고, 깨지면 모든 'D' 자물쇠가 풀림) · 'D' = 자물쇠 벽돌(열쇠를 깨기 전엔 안 깨지는 벽돌, 풀린 뒤엔 한 번에 깨짐)
+   'p','q' / 'r','s' = 순간이동 문 짝(빈칸에 놓인다. 공이 들어가면 짝 문에서 나온다. 밀리는 줄에는 두지 않는다) */
 var LEVELS=[
  ["11111111","11111111"],
  ["...11...","..1111..",".111111.","11111111"],
@@ -132,10 +136,23 @@ var LEVELS=[
  ["33333333","3#B33B#3","3#3..3#3","3.2222.3","#B1111B#","2222222."],
  ["3B3B3B3B","33333333","#.#..#.#","3333333.","1B1B1B1.","33333333"],
  ["33333333","3B3333B3","3#3223#3","33B22B33","3#3333#3","2222222.","3333333."],
- ["3B3B3B3B","33#33#33","3333333.",".3B33B33","#3333333","3333333.","B3B33B3B"]
+ ["3B3B3B3B","33#33#33","3333333.",".3B33B33","#3333333","3333333.","B3B33B3B"],
+ /* 25~36판 (2026-11-20 추가): 25판 열쇠(K)·자물쇠(D) · 27판 순간이동 문(p-q · r-s 짝, 빈칸에 놓임) · 30·36판 큰 판 */
+ ["33333333","2DDDDDD2","2D3333D2","2DDDDDD2","3K3333K3"],
+ ["33333333","3DDBBDD3","3D3223D3","3BDDDDB3","3K3333K3"],
+ ["333q3333","22222222","#####...","22222p22"],
+ ["3B3333Bq","22222222","3#3333#3","p.2BB2.3","22222222"],
+ ["3333q333","3DDDDDD3","3D3BB3D3","3DDDDDD3","#K3333K#","11111p11"],
+ ["#3B33B3#","33333333","3K#33#K3","3DDDDDD3","3D2BB2D3","3DDDDDD3","3333333."],
+ ["3K3333K3","33DDDD33","3D2222D3","3333333.","B2B22B2B"],
+ ["q3K33K3s","3BB33BB3","3#3DD3#3","p3D22D3r","3#3DD3#3","33333333","3333333."],
+ ["3K3333K3","3#BBBB#3","3DDDDDD3","3D3q23D3","3DDDDDD3","22222222","1p111111"],
+ ["3B3333B3","K3#33#3K","3DDDDDD3","3D3BB3D3","3DDDDDD3","33333333","3#3333#3","3333333."],
+ ["33K33K3p","3B3333B3","3DDDDDD3","3D2BB2D3","3DDDDDD3","q#3333#3","33333333","3333333."],
+ ["3B3333B3","33#33#33","3K3q33K3","3DDDDDD3","3D3BB3D3","3DDDDDD3","p3333333","33333333","3333333."]
 ];
 /* 옆으로 밀리는 줄: 판 번호(0부터) → {줄:방향(1=오른쪽,-1=왼쪽)}. 줄 안 벽돌이 SHIFT_T 초마다 한 칸씩 밀리고 끝에서 반대편으로 돌아 나온다 */
-var MOVES={14:{1:1},15:{2:-1},16:{4:-1},17:{2:1,4:-1},19:{4:1,5:-1},20:{5:1},21:{3:1,4:-1},22:{5:-1,6:1},23:{2:1,5:-1}};
+var MOVES={14:{1:1},15:{2:-1},16:{4:-1},17:{2:1,4:-1},19:{4:1,5:-1},20:{5:1},21:{3:1,4:-1},22:{5:-1,6:1},23:{2:1,5:-1},29:{1:1},30:{4:1},31:{6:-1},33:{6:1,7:-1},34:{7:1},35:{0:1,1:-1,8:1}};
 var SHIFT_T=2.4;
 var PU_TYPES=['wide','multi','slow','life','pierce'],PU_W=[24,20,18,8,18];
 function rnd(G){G.seed=(G.seed+0x6D2B79F5)|0;var t=G.seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}
@@ -150,7 +167,7 @@ function newGame(seed,H){
 function newLevel(G,i,H){
   if(H)G.H=H;
   var lay=LEVELS[i],r,c;
-  G.lv=i;G.mv=MOVES[i]||null;G.shT=0;G.bricks=[];G.grid=[];G.left=0;G.speed=levelSpeed(i);G.startScore=G.score;G.startLives=G.lives;G.left0=0;
+  G.lv=i;G.mv=MOVES[i]||null;G.shT=0;G.bricks=[];G.grid=[];G.left=0;G.portals=[];G.speed=levelSpeed(i);G.startScore=G.score;G.startLives=G.lives;G.left0=0;
   for(r=0;r<lay.length;r++){
     G.grid.push([]);
     for(c=0;c<COLS;c++){
@@ -158,9 +175,13 @@ function newLevel(G,i,H){
       if(ch==='#')b={c:c,r:r,x:BX0+c*PX,y:BY0+r*PY,w:BW,h:BH,hp:99,max:99,steel:true};
       else if(ch>='1'&&ch<='3'){var n=+ch;b={c:c,r:r,x:BX0+c*PX,y:BY0+r*PY,w:BW,h:BH,hp:n,max:n,steel:false};G.left++;}
       else if(ch==='B'){b={c:c,r:r,x:BX0+c*PX,y:BY0+r*PY,w:BW,h:BH,hp:1,max:1,steel:false,bomb:true};G.left++;}
+      else if(ch==='K'){b={c:c,r:r,x:BX0+c*PX,y:BY0+r*PY,w:BW,h:BH,hp:1,max:1,steel:false,key:true};G.left++;}
+      else if(ch==='D')b={c:c,r:r,x:BX0+c*PX,y:BY0+r*PY,w:BW,h:BH,hp:99,max:99,steel:true,door:true};   // 열쇠를 깨기 전까지는 안 깨지는 벽돌
+      else if(ch==='p'||ch==='q'||ch==='r'||ch==='s'){G.portals.push({c:c,r:r,x:BX0+c*PX+BW/2,y:BY0+r*PY+BH/2,pair:(ch==='p'||ch==='q')?0:1,to:null});}
       G.grid[r].push(b);if(b)G.bricks.push(b);
     }
   }
+  for(var pi=0;pi<G.portals.length;pi++)for(var pj=0;pj<G.portals.length;pj++)if(pi!==pj&&G.portals[pi].pair===G.portals[pj].pair)G.portals[pi].to=G.portals[pj];
   G.left0=G.left;
   G.paddle={x:W/2,w:BASE_PW,target:W/2,y:G.H-44};
   G.pus=[];G.fx={wide:0,slow:0,pierce:0};G.sinceBreak=0;G.nudgeT=0;
@@ -196,10 +217,14 @@ function dropPU(G,b){
 }
 function damage(G,b,all){
   if(b.steel)return;
-  b.hp=all?0:b.hp-1;G.sinceBreak=0;
+  b.hp=all?0:b.hp-1;G.sinceBreak=0;G.aimN=0;
   if(b.hp<=0){
     G.grid[b.r][b.c]=null;var ix=G.bricks.indexOf(b);if(ix>=0)G.bricks.splice(ix,1);G.left--;
     G.score+=10*b.max;G.ev.push({t:'break',x:b.x+b.w/2,y:b.y+b.h/2,max:b.max});dropPU(G,b);
+    if(b.key){   // 열쇠 벽돌: 모든 자물쇠가 풀려 한 번에 깨지는 벽돌이 된다(풀린 벽돌도 깨야 판이 끝난다)
+      var un=0;for(var di=0;di<G.bricks.length;di++){var dk=G.bricks[di];if(dk.door&&dk.steel){dk.steel=false;dk.hp=1;dk.max=1;G.left++;un++;}}
+      G.ev.push({t:'unlock',x:b.x+b.w/2,y:b.y+b.h/2,n:un});
+    }
     if(b.bomb){   // 불꽃 벽돌: 둘레 8칸을 한 번씩 때린다(안 깨지는 벽돌은 그대로, 불꽃 벽돌끼리는 이어서 터진다)
       G.ev.push({t:'boom',x:b.x+b.w/2,y:b.y+b.h/2});
       for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){
@@ -216,6 +241,13 @@ function moveBall(G,b,h,sp){
   if(b.x<BR){b.x=BR;if(b.vx<0)b.vx=-b.vx;fixVel(b,sp);}
   else if(b.x>W-BR){b.x=W-BR;if(b.vx>0)b.vx=-b.vx;fixVel(b,sp);}
   if(b.y<BR){b.y=BR;if(b.vy<0)b.vy=-b.vy;fixVel(b,sp);}
+  // 순간이동 문: 들어가면 짝 문 가운데에서 같은 속도로 나온다(바로 되돌아 들어가지 않게 잠깐 쉰다)
+  if(b.tp>0)b.tp-=h;
+  else if(G.portals&&G.portals.length){
+    for(i=0;i<G.portals.length;i++){var pt=G.portals[i];
+      if(pt.to&&Math.abs(b.x-pt.x)<15&&Math.abs(b.y-pt.y)<7){G.ev.push({t:'tp',x:pt.x,y:pt.y,x2:pt.to.x,y2:pt.to.y,pair:pt.pair});b.x=pt.to.x;b.y=pt.to.y;b.tp=0.3;break;}
+    }
+  }
   // 벽돌
   var c0=Math.floor((b.x-BR-BX0)/PX),c1=Math.floor((b.x+BR-BX0)/PX),r0=Math.floor((b.y-BR-BY0)/PY),r1=Math.floor((b.y+BR-BY0)/PY);
   for(i=Math.max(0,r0);i<=Math.min(G.grid.length-1,r1);i++)for(j=Math.max(0,c0);j<=Math.min(COLS-1,c1);j++){
@@ -233,6 +265,11 @@ function moveBall(G,b,h,sp){
     var dot=b.vx*nx+b.vy*ny;
     if(dot<0){b.vx-=2*dot*nx;b.vy-=2*dot*ny;fixVel(b,sp);damage(G,k,false);}
   }
+  // 안전장치: 밀리는 줄 때문에 공 중심이 안 깨지는 벽돌 안으로 들어갔으면 그 벽돌 위로 꺼낸다(닫힌 방에 갇히는 것 방지)
+  for(i=Math.max(0,r0);i<=Math.min(G.grid.length-1,r1);i++)for(j=Math.max(0,c0);j<=Math.min(COLS-1,c1);j++){
+    var sk=G.grid[i][j];
+    if(sk&&sk.steel&&b.x>sk.x&&b.x<sk.x+sk.w&&b.y>sk.y&&b.y<sk.y+sk.h){b.y=sk.y-BR-0.5;if(b.vy>0)b.vy=-b.vy;}
+  }
   // 받침대
   var p=G.paddle,left=p.x-p.w/2;
   var qx=clamp(b.x,left,left+p.w),qy=clamp(b.y,p.y,p.y+PH),ex=b.x-qx,ey=b.y-qy;
@@ -243,11 +280,11 @@ function moveBall(G,b,h,sp){
       if(G.sinceBreak>6){   // 오래 못 깼으면 받침대 튕김에도 보정을 얹는다(같은 길만 왕복하는 것 방지)
         ang+=(rnd(G)-0.5)*0.6;
         if(G.sinceBreak>10){var tg=nearestTarget(G,b);if(tg)ang=0.4*ang+0.6*Math.atan2(tg.tx-b.x,-(tg.ty-b.y)+1);}
-        if(G.left<=3&&G.sinceBreak>15){var dt2=planAngle(G,b);if(dt2===null)dt2=directAim(G,b);if(dt2!==null)ang=dt2;}   // 마지막 벽돌이 남았는데 오래 못 깼으면: 여러 각도를 미리 굴려 보고 벽돌을 실제로 깨는 각도를 고른다
+        if(G.left<=3&&G.sinceBreak>15){var dt2=planAngle(G,b);if(dt2===null)dt2=directAim(G,b);if(dt2!==null){G.aimN=(G.aimN|0)+1;if(G.aimN>2)dt2+=(rnd(G)-0.5)*0.04*Math.min(G.aimN,8);ang=dt2;}}   // 마지막 벽돌이 남았는데 오래 못 깼으면: 여러 각도를 미리 굴려 보고 벽돌을 실제로 깨는 각도를 고른다
         ang=clamp(ang,-MAXANG,MAXANG);
       }
       b.vx=sp*Math.sin(ang);b.vy=-sp*Math.cos(ang);
-      G.ev.push({t:'paddle'});
+      G.ev.push({t:'paddle'});G.sincePad=0;
     }else if(b.y>p.y+4){
       // 윗면 아래로 내려간 공: 받침대 옆면에서 바깥으로 밀어내고 아래로 떨어지게 한다(통과 방지)
       var sx=b.x<p.x?-1:1,ox=sx<0?left-BR:left+p.w+BR;
@@ -260,10 +297,10 @@ function moveBall(G,b,h,sp){
 /* 판의 복사본(공 연습용) */
 function cloneForPlan(G){
   var C={seed:G.seed,H:G.H,lv:G.lv,score:0,lives:99,steps:0,t:0,acc:0,state:'play',ev:[],hook:null,clearT:0,sinceBreak:0,nudgeT:0,
-    paddle:{x:G.paddle.x,w:G.paddle.w,target:G.paddle.x,y:G.paddle.y},balls:[],bricks:[],grid:[],left:G.left,pus:[],fx:{wide:0,slow:0,pierce:0},speed:G.speed,startScore:0,startLives:3,mv:G.mv,shT:G.shT};
+    paddle:{x:G.paddle.x,w:G.paddle.w,target:G.paddle.x,y:G.paddle.y},balls:[],bricks:[],grid:[],left:G.left,pus:[],fx:{wide:0,slow:0,pierce:0},speed:G.speed,startScore:0,startLives:3,mv:G.mv,shT:G.shT,portals:G.portals};
   for(var r=0;r<G.grid.length;r++){
     C.grid.push([]);
-    for(var c=0;c<COLS;c++){var o=G.grid[r][c],n=null;if(o){n={c:o.c,r:o.r,x:o.x,y:o.y,w:o.w,h:o.h,hp:o.hp,max:o.max,steel:o.steel,bomb:o.bomb,wr:o.wr};C.bricks.push(n);}C.grid[r].push(n);}
+    for(var c=0;c<COLS;c++){var o=G.grid[r][c],n=null;if(o){n={c:o.c,r:o.r,x:o.x,y:o.y,w:o.w,h:o.h,hp:o.hp,max:o.max,steel:o.steel,bomb:o.bomb,key:o.key,door:o.door,wr:o.wr};C.bricks.push(n);}C.grid[r].push(n);}
   }
   return C;
 }
@@ -277,7 +314,7 @@ function planAngle(G,b){
       C.balls=[{x:b.x,y:G.paddle.y-BR,vx:sp*Math.sin(a),vy:-sp*Math.cos(a),stuck:false}];
       for(var i=0;i<lim;i++){
         step(C,STEP);
-        if(C.left<left0){if(C.t<bt){bt=C.t;best=a;}break;}
+        if(C.left!==left0){if(C.t<bt){bt=C.t;best=a;}break;}
         var q=C.balls[0];if(!q||C.state!=='play'||(q.vy>0&&q.y>=C.paddle.y-BR-1))break;
         if(C.t>=bt)break;
       }
@@ -387,10 +424,10 @@ function step(G,dt){
   }
   if(!G.balls.length){loseLife(G);return;}
   // 갇힘 방지: 오래 못 깨면 각도를 살짝 흔든다
-  G.sinceBreak+=dt;
+  G.sinceBreak+=dt;G.sincePad=(G.sincePad||0)+dt;
   if(G.sinceBreak>6){
     G.nudgeT+=dt;
-    if(G.nudgeT>=1.5&&!(G.left<=3&&G.sinceBreak>15)){   // 마지막 벽돌 겨냥 중(미리 굴려 고른 각도)에는 공중에서 흔들지 않는다
+    if(G.nudgeT>=1.5&&!(G.left<=3&&G.sinceBreak>15&&G.sincePad<8)){   // 마지막 벽돌 겨냥 중(미리 굴려 고른 각도)에는 공중에서 흔들지 않는다
       G.nudgeT=0;
       for(i=0;i<G.balls.length;i++){
         var q=G.balls[i];if(q.stuck)continue;
@@ -416,16 +453,16 @@ function deserialize(o){
   return {lv:o.lv|0,score:o.score|0,lives:o.lives|0};
 }
 /* 판 고르기(2026-11-18): 화면과 무관한 순수 규칙 — 도달한 판까지만 고를 수 있고, 기록(best)은 줄지 않는다 */
-function tierOf(i){return Math.min(3,Math.floor(i/6));}   // i: 0부터. 6판마다 색 단계(1~6 금 · 7~12 주황 · 13~18 빨강 · 19~24 보라)
+function tierOf(i){return Math.min(5,Math.floor(i/6));}   // i: 0부터. 6판마다 색 단계(1~6 금 · 7~12 주황 · 13~18 빨강 · 19~24 보라 · 25~30 청록 · 31~36 남색)
 function reachOf(bestLv,curLv){var r=Math.max(bestLv|0,(curLv|0)+1,1);return Math.min(r,LEVELS.length);}
 function canStartAt(bestLv,curLv,n){return n>=1&&n<=LEVELS.length&&n===(n|0)&&n<=reachOf(bestLv,curLv);}
-function mergeBest(b,score,lvNum,withScore){var o={score:(b&&b.score)|0,lv:(b&&b.lv)|0};if(withScore&&score>o.score)o.score=score|0;if(lvNum>o.lv)o.lv=lvNum|0;return o;}
+function mergeBest(b,score,lvNum,withScore){var o={score:(b&&b.score)|0,lv:(b&&b.lv)|0,m:(b&&b.m)|0};if(withScore&&score>o.score)o.score=score|0;if(lvNum>o.lv)o.lv=lvNum|0;return o;}
 function pickStart(n){return {lv:n-1,score:0,lives:3};}
 function progressOf(G){if(!G)return false;if(G.score>0||G.lives<3||G.state==='clear')return true;if(G.left<G.left0)return true;for(var i=0;i<G.bricks.length;i++){var k=G.bricks[i];if(!k.steel&&k.hp<k.max)return true;}return false;}
 /* 모든 판이 깨질 수 있는 배치인지: 바깥(위·아래)과 이어진 빈칸에 닿은 깨지는 벽돌부터 차례로 깨 본다 */
 function levelBreakable(lay){
   var R=lay.length,g=[],r,c;
-  for(r=0;r<R;r++){g.push([]);for(c=0;c<COLS;c++)g[r].push(lay[r].charAt(c));}
+  for(r=0;r<R;r++){g.push([]);for(c=0;c<COLS;c++){var ch0=lay[r].charAt(c);g[r].push(ch0==='K'||ch0==='D'?'1':(ch0==='p'||ch0==='q'||ch0==='r'||ch0==='s'?'.':ch0));}}   // 열쇠·자물쇠는 한 번에 깨지는 벽돌로, 문은 빈칸으로 본다
   var left=0;for(r=0;r<R;r++)for(c=0;c<COLS;c++)if((g[r][c]>='1'&&g[r][c]<='3')||g[r][c]==='B')left++;
   if(left===0)return false;
   for(var guard=0;guard<100;guard++){
@@ -470,7 +507,9 @@ var cv=$('cv'),ctx=cv.getContext('2d'),stage=$('stage');
 var G=null,paused=false,over=false,sc=1,ox=0,oy=0,dpr=1,cssW=0,cssH=0;
 var resumeWait=0,parts=[],banner={t:0,text:''},shake=0,lastFrame=0,elapsedMs=0,saveT=0,keyDir=0;
 var best=lsGet(KEY_BEST)||{score:0,lv:0};
-var SUBS={12:'불꽃 벽돌: 터지면 둘레도 함께 맞습니다',14:'화살표 줄은 옆으로 밀립니다'};   // 새 요소가 처음 나오는 판에서만 한 줄
+if(!best.m){best.m=1;if(best.lv===24)best.lv=25;lsSet(KEY_BEST,best);}   // 옛 저장: 24판이 옛 마지막 판이었으니 24판을 다 깬 것으로 보고 25판까지 열어 준다(한 번만)
+var SUBS={12:'불꽃 벽돌: 터지면 둘레도 함께 맞습니다',14:'화살표 줄은 옆으로 밀립니다',24:'열쇠를 깨면 자물쇠가 열립니다',26:'문에 들어간 공은 짝 문으로 나옵니다'};
+var ICONS={24:'key',26:'portal'};   // 새 장치 첫 등장 판: 글 위에 그림 한 줄   // 새 요소가 처음 나오는 판에서만 한 줄
 
 /* ---------- 크기 ---------- */
 function stageH(){var w=stage.clientWidth||360,h=stage.clientHeight||600;return clamp(Math.round(W*h/w),400,700);}
@@ -508,7 +547,7 @@ function save(){
 }
 function saveBest(withScore){   // 점수는 판을 깼을 때·끝났을 때만 올린다(이어하면 점수가 판 시작 값으로 돌아가므로 도중 점수로는 올리지 않는다)
   var nb=mergeBest(best,G.score,G.lv+1,withScore);   // 기록은 늘기만 한다(낮은 판을 골라 시작해도 줄지 않음)
-  if(nb.score!==best.score||nb.lv!==best.lv){best=nb;lsSet(KEY_BEST,best);}
+  if(nb.score!==best.score||nb.lv!==best.lv||nb.m!==best.m){best=nb;lsSet(KEY_BEST,best);}
 }
 function startGame(resume){
   var H=stageH();
@@ -516,13 +555,13 @@ function startGame(resume){
   if(resume){G.lv=resume.lv;G.score=resume.score;G.lives=resume.lives;G.ev=[];newLevel(G,resume.lv);}
   G.ev=[];over=false;parts=[];elapsedMs=0;paused=false;
   $('endBox').hidden=true;$('pauseBox').hidden=true;
-  banner={t:(SUBS[G.lv]?2.6:(calm?1.2:1.6)),text:(G.lv+1)+'판',sub:SUBS[G.lv]||''};
+  banner={t:(SUBS[G.lv]?2.6:(calm?1.2:1.6)),text:(G.lv+1)+'판',sub:SUBS[G.lv]||'',icon:ICONS[G.lv]||''};
   resize();hud();save();
 }
 function showEnd(won){
   over=true;saveBest(true);lsDel(KEY_GAME);
   var b=$('endBox');
-  b.innerHTML='<h2>'+(won?'24판을 모두 깼습니다':'게임 끝')+'</h2><p>점수 '+G.score+'<br>도달한 판 '+(G.lv+1)+'판<br>최고 점수 '+best.score+' · 가장 먼 판 '+best.lv+'판</p><button class="act" id="bAgain" type="button">다시 하기</button>'+(reach()>=2?'<button class="act sub" id="bPick2" type="button">판 고르기</button>':'');
+  b.innerHTML='<h2>'+(won?LEVELS.length+'판을 모두 깼습니다':'게임 끝')+'</h2><p>점수 '+G.score+'<br>도달한 판 '+(G.lv+1)+'판<br>최고 점수 '+best.score+' · 가장 먼 판 '+best.lv+'판</p><button class="act" id="bAgain" type="button">다시 하기</button>'+(reach()>=2?'<button class="act sub" id="bPick2" type="button">판 고르기</button>':'');
   b.hidden=false;$('bAgain').onclick=function(){lsDel(KEY_GAME);startGame(null);};
   if($('bPick2'))$('bPick2').onclick=function(){openPick('end');};
 }
@@ -598,20 +637,22 @@ document.addEventListener('keydown',function(e){
 document.addEventListener('keyup',function(e){if((e.key==='ArrowLeft'&&keyDir<0)||(e.key==='ArrowRight'&&keyDir>0))keyDir=0;});
 
 /* ---------- 그리기 ---------- */
-var BC={B:['#4a3a36','#2a1e1b'],1:['#f4cc6c','#c48a22'],2:['#ec8a3c','#a9561a'],3:['#d94a3c','#86201a'],S:['#a3afbb','#5a6572']};
+var BC={K:['#ffe07a','#c8981c'],L:['#8c6b2c','#4a3512'],B:['#4a3a36','#2a1e1b'],1:['#f4cc6c','#c48a22'],2:['#ec8a3c','#a9561a'],3:['#d94a3c','#86201a'],S:['#a3afbb','#5a6572']};
 function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 function drawBrick(b,slide){
-  var col=b.steel?BC.S:(b.bomb?BC.B:BC[b.hp]),y=b.y-slide,bx=b.x,al=1;
+  var col=b.door&&b.steel?BC.L:(b.steel?BC.S:(b.key?BC.K:(b.bomb?BC.B:BC[b.hp]))),y=b.y-slide,bx=b.x,al=1;
   if(G.mv&&G.mv[b.r]&&G.shT<0.28&&!calm){   // 줄이 한 칸 밀릴 때 미끄러지는 모습(끝에서 돌아 나오는 벽돌은 서서히 나타남)
     var f=1-G.shT/0.28;f=1-f*f;var d=G.mv[b.r];
     if(b.wr)al=f;else bx=b.x-d*PX*(1-f);
   }
   if(al<1)ctx.globalAlpha=al;
-  var X=b.x;b={x:bx,y:b.y,w:b.w,h:b.h,hp:b.hp,max:b.max,steel:b.steel,bomb:b.bomb};
+  var X=b.x;b={x:bx,y:b.y,w:b.w,h:b.h,hp:b.hp,max:b.max,steel:b.steel,bomb:b.bomb,key:b.key,door:b.door};
   rr(b.x,y,b.w,b.h,3.5);ctx.fillStyle=col[1];ctx.fill();
   rr(b.x,y,b.w,b.h-3,3.5);ctx.fillStyle=col[0];ctx.fill();
   ctx.fillStyle='rgba(255,255,255,.32)';ctx.fillRect(b.x+3,y+1.5,b.w-6,2);
-  if(b.steel){ctx.fillStyle='rgba(30,38,46,.55)';[8,b.w-8].forEach(function(dx){ctx.beginPath();ctx.arc(b.x+dx,y+b.h/2-1.5,2,0,6.3);ctx.fill();});}
+  if(b.door&&b.steel){lockGlyph(b.x+b.w/2,y+b.h/2-1.5);}
+  else if(b.key){keyGlyph(b.x+b.w/2,y+b.h/2-1.5,1);}
+  else if(b.steel){ctx.fillStyle='rgba(30,38,46,.55)';[8,b.w-8].forEach(function(dx){ctx.beginPath();ctx.arc(b.x+dx,y+b.h/2-1.5,2,0,6.3);ctx.fill();});}
   else if(b.bomb){   // 불꽃 벽돌: 검은 몸통 + 깜빡이는 불꽃 + 테두리
     var fl=0.6+0.4*Math.sin(G.t*14+b.x);
     ctx.strokeStyle='rgba(255,140,40,'+(0.55+0.3*fl)+')';ctx.lineWidth=1.6;rr(b.x+1,y+1,b.w-2,b.h-2,3);ctx.stroke();
@@ -620,6 +661,49 @@ function drawBrick(b,slide){
   }
   else if(b.hp<b.max){ctx.strokeStyle='rgba(40,20,8,.55)';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(b.x+b.w*0.3,y+2);ctx.lineTo(b.x+b.w*0.45,y+b.h*0.5);ctx.lineTo(b.x+b.w*0.36,y+b.h-3);ctx.stroke();}
   ctx.globalAlpha=1;
+}
+/* 열쇠·자물쇠 그림: 열쇠 = 동그란 머리 + 막대 + 이빨, 자물쇠 = 몸통 + 걸쇠 */
+function keyGlyph(cx,cy,k){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(k,k);ctx.strokeStyle='#5a3b05';ctx.fillStyle='#5a3b05';ctx.lineWidth=2.2;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(-8,0,4.2,0,6.3);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-3.8,0);ctx.lineTo(10,0);ctx.moveTo(6,0);ctx.lineTo(6,4);ctx.moveTo(10,0);ctx.lineTo(10,4);ctx.stroke();
+  ctx.restore();
+}
+function lockGlyph(cx,cy){
+  ctx.save();ctx.translate(cx,cy);
+  ctx.strokeStyle='#f0d58a';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-1.5,4.4,Math.PI,0);ctx.stroke();
+  ctx.fillStyle='#f0d58a';rr(-6.5,-1.5,13,9,2);ctx.fill();
+  ctx.fillStyle='#4a3512';ctx.beginPath();ctx.arc(0,2.2,1.6,0,6.3);ctx.fill();ctx.fillRect(-0.8,2.5,1.6,3);
+  ctx.restore();
+}
+/* 순간이동 문: 짝끼리 같은 색(보라·청록), 소용돌이가 천천히 돈다 */
+var PORC=[['#b07cff','#3a1d78'],['#38d4e4','#0b5560']];
+function portalShape(x,y,pair,t,sc2){
+  var c=PORC[pair]||PORC[0];
+  ctx.save();ctx.translate(x,y);ctx.scale(sc2,sc2);
+  ctx.fillStyle=c[1];ctx.beginPath();ctx.ellipse(0,0,16,8.5,0,0,6.3);ctx.fill();
+  ctx.strokeStyle=c[0];ctx.lineWidth=2.4;ctx.beginPath();ctx.ellipse(0,0,16,8.5,0,0,6.3);ctx.stroke();
+  ctx.lineWidth=2;ctx.lineCap='round';
+  for(var k=0;k<2;k++){var a=t*3+k*Math.PI;ctx.beginPath();ctx.ellipse(0,0,10,5,0,a,a+2.1);ctx.stroke();}
+  ctx.fillStyle=c[0];ctx.globalAlpha=0.6+0.4*Math.sin(t*5);ctx.beginPath();ctx.ellipse(0,0,3.2,1.8,0,0,6.3);ctx.fill();
+  ctx.restore();
+}
+function drawPortals(slide){
+  if(!G.portals||!G.portals.length)return;
+  for(var i=0;i<G.portals.length;i++){var pt=G.portals[i];portalShape(pt.x,pt.y-slide,pt.pair,calm?0:G.t,1);}
+}
+/* 새 장치 첫 등장 판 안내 그림(글 위 한 줄): 열쇠 → 풀린 벽돌 / 문 → 짝 문 */
+function drawIntroIcon(kind,cx,cy){
+  ctx.save();
+  if(kind==='key'){
+    rr(cx-62,cy-9,40,18,3.5);ctx.fillStyle=BC.K[1];ctx.fill();rr(cx-62,cy-9,40,15,3.5);ctx.fillStyle=BC.K[0];ctx.fill();keyGlyph(cx-42,cy-1.5,1);
+    arrowR(cx);
+    rr(cx+22,cy-9,40,18,3.5);ctx.fillStyle=BC.L[1];ctx.fill();rr(cx+22,cy-9,40,15,3.5);ctx.fillStyle=BC.L[0];ctx.fill();lockGlyph(cx+42,cy-1.5);
+  }else{
+    portalShape(cx-44,cy,0,0.6,1);arrowR(cx);portalShape(cx+44,cy,0,2.2,1);
+  }
+  ctx.restore();
+  function arrowR(x){ctx.strokeStyle='#ffd27a';ctx.lineWidth=2.6;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x-9,cy);ctx.lineTo(x+9,cy);ctx.moveTo(x+3,cy-6);ctx.lineTo(x+10,cy);ctx.lineTo(x+3,cy+6);ctx.stroke();}
 }
 /* 옆으로 밀리는 줄 표시: 줄 양끝의 화살표(밀리기 직전에 밝아짐) */
 function drawMoveMarks(slide){
@@ -668,6 +752,7 @@ function draw(dtReal){
   // 벽돌(판 시작 때 위에서 내려앉는 연출)
   var slide=(!calm&&G.t<0.45&&G.state!=='clear')?(0.45-G.t)/0.45*60:0;
   for(var i=0;i<G.bricks.length;i++)drawBrick(G.bricks[i],slide);
+  drawPortals(slide);
   drawMoveMarks(slide);
   // 아이템
   for(i=0;i<G.pus.length;i++){ctx.save();ctx.translate(G.pus[i].x,G.pus[i].y);ctx.scale(1.45,1.45);drawPU(G.pus[i].type,0,0);ctx.restore();}
@@ -694,7 +779,7 @@ function draw(dtReal){
   drawFxBars();
   // 안내 글
   ctx.textAlign='center';ctx.font='800 22px '+getComputedStyle(document.body).fontFamily;
-  if(banner.t>0&&!paused){ctx.globalAlpha=Math.min(1,banner.t*2);ctx.fillStyle='#f3e9d8';ctx.fillText(banner.text,W/2,G.H*0.52);if(banner.sub){ctx.font='700 14px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle='#ffd27a';ctx.fillText(banner.sub,W/2,G.H*0.52+26);}ctx.globalAlpha=1;}
+  if(banner.t>0&&!paused){ctx.globalAlpha=Math.min(1,banner.t*2);ctx.fillStyle='#f3e9d8';ctx.fillText(banner.text,W/2,G.H*0.52);if(banner.icon)drawIntroIcon(banner.icon,W/2,G.H*0.52-44);if(banner.sub){ctx.font='700 14px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle='#ffd27a';ctx.fillText(banner.sub,W/2,G.H*0.52+26);}ctx.globalAlpha=1;}
   if(G.state==='ready'&&!paused){
     ctx.font='700 14px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle='rgba(243,233,216,.8)';
     ctx.fillText('화면을 누르면 공이 나갑니다',W/2,G.H*0.62);ctx.fillText('좌우로 끌면 받침대가 움직입니다',W/2,G.H*0.62+20);
@@ -722,10 +807,12 @@ function drain(){
     var e=ev[i];
     if(e.t==='break'){spawnParts(e.x,e.y,e.max===3?'#d94a3c':(e.max===2?'#ec8a3c':'#f4cc6c'));hud();}
     else if(e.t==='boom'){if(!calm){shake=Math.max(shake,.35);for(var q=0;q<10;q++)spawnParts(e.x,e.y,q%2?'#ffb02e':'#ff6a2e');}}
+    else if(e.t==='unlock'){if(!calm){shake=Math.max(shake,.2);spawnParts(e.x,e.y,'#ffe07a');for(var u=0;u<G.bricks.length;u++)if(G.bricks[u].door)spawnParts(G.bricks[u].x+G.bricks[u].w/2,G.bricks[u].y+G.bricks[u].h/2,'#ffe07a');}hud();}
+    else if(e.t==='tp'){spawnParts(e.x,e.y,PORC[e.pair][0]);spawnParts(e.x2,e.y2,PORC[e.pair][0]);}
     else if(e.t==='hit'){spawnParts(e.x,e.y,'#f3e9d8');}
     else if(e.t==='lose'){shake=.5;hud();save();}
     else if(e.t==='clear'){hud();saveBest(true);save();for(var k=0;k<5;k++)spawnParts(60+k*60,G.H*0.4,'#e3b04b');}
-    else if(e.t==='level'){banner={t:(SUBS[e.lv]?2.6:(calm?1.2:1.6)),text:(e.lv+1)+'판',sub:SUBS[e.lv]||''};hud();save();}
+    else if(e.t==='level'){banner={t:(SUBS[e.lv]?2.6:(calm?1.2:1.6)),text:(e.lv+1)+'판',sub:SUBS[e.lv]||'',icon:ICONS[e.lv]||''};hud();save();}
     else if(e.t==='pu'){hud();}
     else if(e.t==='won'){showEnd(true);}
   }
