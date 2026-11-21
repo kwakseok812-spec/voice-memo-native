@@ -1,0 +1,68 @@
+/* v10.24(O-0929) PC 화면 맞춤 — B안(폭만 넓힘, 왼쪽 메뉴 없음).
+   적용 조건: 폭 1024px 이상 + 마우스(hover:hover) + 정밀 포인터(pointer:fine). 폰·폴드·태블릿(손가락)에서는 한 줄도 먹지 않는다.
+   끄기: app.js 의 PC_LAYOUT = 'off'(= <html data-pc="off">). 안드로이드 앱(Capacitor) 안에서도 자동으로 꺼진다.
+   이 파일은 index.html 에서 가장 마지막에 불러와, 같은 점수의 옛 규칙(예: html.kwf-wide .app)을 순서로 이긴다. */
+@media (min-width:1024px) and (hover:hover) and (pointer:fine){
+
+  /* ===== 1. 폭 ===== */
+  html:not([data-pc="off"]) .app{max-width:860px;padding-left:32px;padding-right:32px}
+  html.home-on:not([data-pc="off"]) .app{max-width:1120px}
+  html:not([data-pc="off"]) footer,
+  html.home-on:not([data-pc="off"]) footer{max-width:1120px}
+  html:not([data-pc="off"]):not(.home-on) footer{max-width:860px}
+
+  /* ===== 2. 읽기 편한 줄 길이 ===== */
+  html:not([data-pc="off"]) .bubble{max-width:min(84%,620px)}
+  html:not([data-pc="off"]) #meetingsView,
+  html:not([data-pc="off"]) #docsView,
+  html:not([data-pc="off"]) #lockerView{max-width:100%}
+
+  /* ===== 3. 배경 빛무리: 큰 화면 비율에 맞게 ===== */
+  html:not([data-pc="off"]) .bg-layer .orb.a{max-width:620px;max-height:620px}
+  html:not([data-pc="off"]) .bg-layer .orb.b{max-width:560px;max-height:560px}
+  html:not([data-pc="off"]) .bg-layer .orb.c{max-width:520px;max-height:520px}
+
+  /* ===== 4. 홈: 도구 칸 크게 ===== */
+  html.home-on:not([data-pc="off"]) #homeTools{grid-template-columns:repeat(6,minmax(0,1fr))}
+  html.home-on:not([data-pc="off"]) #homeTools .tool.wide{grid-column:span 2}
+
+  /* ===== 5. 아래에서 올라오는 시트 → 가운데 창 ===== */
+  html:not([data-pc="off"]) .modal,
+  html:not([data-pc="off"]) .sheet,
+  html:not([data-pc="off"]) .pcs-sheet,
+  html:not([data-pc="off"]) #achLayer .ach-sheet,
+  html:not([data-pc="off"]) #albumLayer .alb-sheet,
+  html:not([data-pc="off"]) #docRoot #dvSheet,
+  html:not([data-pc="off"]) #docRoot #dvAsk,
+  html:not([data-pc="off"]) #docRoot #dvEdit,
+  html:not([data-pc="off"]) #docRoot #dvFix,
+  html:not([data-pc="off"]) .mk-sheet,
+  html:not([data-pc="off"]) .so-sheet-back:not(.keep){align-items:center}
+  html:not([data-pc="off"]) .modal-box,
+  html:not([data-pc="off"]) .sheet-box,
+  html:not([data-pc="off"]) .pcs-sbox,
+  html:not([data-pc="off"]) #achLayer .ach-box,
+  html:not([data-pc="off"]) #albumLayer .alb-box,
+  html:not([data-pc="off"]) #docRoot .dvs-panel,
+  html:not([data-pc="off"]) #docRoot .dva-panel,
+  html:not([data-pc="off"]) #docRoot .dve-panel,
+  html:not([data-pc="off"]) .mk-panel,
+  html:not([data-pc="off"]) .so-sheet:not(.keep){border-radius:22px;max-height:88vh}
+  html:not([data-pc="off"]) .modal-box,
+  html:not([data-pc="off"]) .sheet-box,
+  html:not([data-pc="off"]) .pcs-sbox,
+  html:not([data-pc="off"]) #achLayer .ach-box,
+  html:not([data-pc="off"]) #albumLayer .alb-box{max-width:560px}
+  /* 위·아래에 붙어 있던 시트(모서리 둥글림·그림자 맞춤) */
+  html:not([data-pc="off"]) #promoLayer .psheet,
+  html:not([data-pc="off"]) #payLayer .pysheet{top:0;bottom:0;left:0;right:0;margin:auto;height:fit-content;width:min(600px,92vw);max-height:88vh;border-radius:22px;animation:none}
+  html:not([data-pc="off"]) .hv-panel{top:50%;bottom:auto;border-radius:22px;border-bottom:1px solid var(--glass-b2);transform:translate(-50%,calc(-50% + 60vh));max-width:560px}
+  html:not([data-pc="off"]) .hv-sheet.on .hv-panel{transform:translate(-50%,-50%)}
+
+  /* ===== 6. 입력칸·폼 폭 상한 — 숫자 한 칸이 가로로 길게 늘어나지 않게 ===== */
+  html:not([data-pc="off"]) .hstep,
+  html:not([data-pc="off"]) .hsleep-row{max-width:460px}
+
+  /* ===== 7. 채팅 입력줄: 폰에서 글 위를 덮던 단색 띠를 PC에서는 없앤다(입력 상자는 따로 바탕이 있다) ===== */
+  html:not([data-pc="off"]) .chatbar{background:none}
+}
