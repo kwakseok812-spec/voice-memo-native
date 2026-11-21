@@ -65,4 +65,7 @@
 
   /* ===== 7. 채팅 입력줄: 폰에서 글 위를 덮던 단색 띠를 PC에서는 없앤다(입력 상자는 따로 바탕이 있다) ===== */
   html:not([data-pc="off"]) .chatbar{background:none}
+
+  /* ===== 8. 건강 기록 보기 그래프: 옆으로만 늘어나 숫자가 눌려 보이지 않게, 가로·세로 비율을 지킨 채 폭 상한 ===== */
+  html:not([data-pc="off"]) .hsvg{width:100%;max-width:480px;height:auto;aspect-ratio:320/120;margin:0 auto}
 }
