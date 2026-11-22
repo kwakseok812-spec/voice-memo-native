@@ -53,7 +53,10 @@
       ready: '__yut', saves: [], mode: '' },
     { id: 'marble', name: '캠퍼스 한 바퀴', sub: '캠퍼스 한 바퀴', desc: '캠퍼스 땅을 사고 건물을 올리는 보드게임',
       src: 'games/marble/index.html', icon: 'games/marble/icon-192.png', url: 'https://kwakseok812-spec.github.io/marble/',
-      ready: '__marble', saves: [], mode: '' }
+      ready: '__marble', saves: [], mode: '' },
+    { id: 'snowcamp', name: '눈밭 캠프', sub: '눈밭 캠프', desc: '눈보라 속에서 캠프를 키우는 서바이벌 · 1막 눈밭, 2막 서리못 나루',
+      src: 'games/snowcamp/index.html', icon: 'games/snowcamp/icon-192.png', url: 'https://kwakseok812-spec.github.io/voice-memo-native/games/snowcamp/index.html',
+      ready: '__snowcamp', saves: [], mode: '' }   /* O-0931 v10.25: 별도 저장소 없이 앱 안 복사본이 원본(출처 SOURCE.txt) */
   ];
   var TXT = {
     head: '한 판 둘까요?', load: '판을 펴는 중입니다…', fail: '게임을 불러오지 못했습니다', failTab: '인터넷 주소로 열기', badge: '두던 판이 있습니다', close: '닫기',

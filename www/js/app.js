@@ -3970,6 +3970,7 @@
   APP_VERSION = 'v10.22';       // v10.22(O-0917): 게임 칸에 보드게임 5종(리버시·사목 잇기·체스·윷놀이·캠퍼스 한 바퀴) 추가 + 기존 5종 보완판 교체(장기·오목·지뢰·카드 정리·벽돌 깨기·세균 방어전 — 전적·뒤로가기 확인창 통일 등). 게임 파일은 각 공개 저장소 main 그대로. 서버·SQL·자바·권한 변경 없음 · versionCode 166
   APP_VERSION = 'v10.23'; // O-0919 벽돌 깨기 36판·세균 방어전 5탄
   APP_VERSION = 'v10.24';       // v10.24(O-0929): PC 화면 맞춤(B안) — 폭 1024px 이상·마우스 화면에서만 홈 1120px·하위 화면 860px·시트는 가운데 창·말풍선 줄 길이 상한(css/pc-layout.css 한 파일). 폰·폴드·태블릿은 변화 0. 스위치 PC_LAYOUT='off'(=<html data-pc="off">) 면 v10.23 과 같음. 서버·SQL·자바·권한 변경 없음 · versionCode 168
+  APP_VERSION = 'v10.25';       // v10.25(O-0931): 게임 칸에 「눈밭 캠프」(눈보라 서바이벌 · 1막·2막) 추가 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3f4d736). 게임 코드·서버·SQL·자바·권한 변경 없음 · versionCode 169
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
