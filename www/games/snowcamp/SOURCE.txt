@@ -1,2 +1,2 @@
-출처 = 로컬 저장소 apps\snowcamp 커밋 3f4d736 (별도 공개 저장소·Pages 없음. 복사한 날 2026-11-23)
-복사: index.html, icon-192.png, favicon.ico, img\list.json 과 list.json 에 적힌 그림 96장. 복사 안 함: index.html.before-*, img\skip.txt, img\update_list.py, tools\
+출처 = 로컬 저장소 apps\snowcamp 커밋 3d22f67 (별도 공개 저장소·Pages 없음. 복사한 날 2026-11-23)
+복사: index.html, icon-192.png, favicon.ico, img\list.json 과 list.json 에 적힌 그림 125장. 복사 안 함: index.html.before-*, img\skip.txt, img\update_list.py, tools\

@@ -9,4 +9,4 @@ connect4 f5435dfb6bf85b223a5b6522ff6899cc54bea9ad https://github.com/kwakseok812
 chess a84dbb8cb257d40d3d62088caa509dc3d2346cd8 https://github.com/kwakseok812-spec/chess (공개 main 파일 그대로, 복사한 날 2026-11-20)
 yut 87495d745006cdde89532ee41e7fb0df48ed0eb9 https://github.com/kwakseok812-spec/yut (공개 main 파일 그대로, 복사한 날 2026-11-20)
 marble 46c97f379c87802dbab8d9cd0c55ca3bb2c54f40 https://github.com/kwakseok812-spec/marble (공개 main 파일 그대로, 복사한 날 2026-11-20)
-snowcamp 3f4d736 로컬 저장소 apps\snowcamp (별도 공개 저장소·Pages 없음 — 앱 안 복사본이 공개 위치, 복사한 날 2026-11-23)
+snowcamp 3d22f67 로컬 저장소 apps\snowcamp (별도 공개 저장소·Pages 없음 — 앱 안 복사본이 공개 위치, 복사한 날 2026-11-23)
