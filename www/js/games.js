@@ -33,10 +33,10 @@
     { id: 'solitaire', name: '카드 정리', sub: '카드 정리', desc: '혼자 하는 카드 놀이(솔리테어)',
       src: 'games/solitaire/index.html', icon: 'games/solitaire/icon-192.png', url: 'https://kwakseok812-spec.github.io/solitaire/',
       ready: '__solitaire', saves: [{ key: 'solitaire.game.v1', arr: 'moves' }], mode: '' },
-    { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 24판 · 판 고르기',
+    { id: 'brickbreaker', name: '벽돌 깨기', sub: '벽돌 깨기', desc: '공을 튕겨 벽돌을 깨는 36판 · 판 고르기',
       src: 'games/brickbreaker/index.html', icon: 'games/brickbreaker/icon-192.png', url: 'https://kwakseok812-spec.github.io/brickbreaker/',
       ready: '__bricks', saves: [{ key: 'bricks.game.v1', arr: 'moves' }], mode: '' },
-    { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스 · 3탄',
+    { id: 'towerdefense', name: '세균 방어전', sub: '세균 방어전', desc: '배양접시로 몰려오는 세균을 막는 타워 디펜스 · 5탄',
       src: 'games/towerdefense/index.html', icon: 'games/towerdefense/icon-192.png', url: 'https://kwakseok812-spec.github.io/towerdefense/',
       ready: '__td', saves: [], mode: '' },
     { id: 'reversi', name: '리버시', sub: '리버시', desc: '돌을 뒤집어 판을 차지하는 오델로 · 컴퓨터 3단계',
@@ -54,7 +54,7 @@
     { id: 'marble', name: '캠퍼스 한 바퀴', sub: '캠퍼스 한 바퀴', desc: '캠퍼스 땅을 사고 건물을 올리는 보드게임',
       src: 'games/marble/index.html', icon: 'games/marble/icon-192.png', url: 'https://kwakseok812-spec.github.io/marble/',
       ready: '__marble', saves: [], mode: '' },
-    { id: 'snowcamp', name: '눈밭 캠프', sub: '눈밭 캠프', desc: '눈보라 속에서 캠프를 키우는 서바이벌 · 2막',
+    { id: 'snowcamp', name: '눈밭 캠프', sub: '눈밭 캠프', desc: '눈보라 속에서 캠프를 키우는 서바이벌 · 3막',
       src: 'games/snowcamp/index.html', icon: 'games/snowcamp/icon-192.png', url: 'https://kwakseok812-spec.github.io/voice-memo-native/games/snowcamp/index.html',
       ready: '__snowcamp', saves: [], mode: '' }   /* O-0931 v10.25: 별도 저장소 없이 앱 안 복사본이 원본(출처 SOURCE.txt) */
   ];
