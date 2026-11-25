@@ -66,8 +66,8 @@
     var pcAge = ps === null ? null : (now - ps) / 1000;
     var info = (st.relay_info && typeof st.relay_info === 'object') ? st.relay_info : {};
     if (relayAge !== null && relayAge < K.RELAY_LIVE) {
-      if (info.suwayomi === false) return { k: 'sw', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '' };
-      return { k: 'ok', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '' };
+      if (info.suwayomi === false) return { k: 'sw', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '', plat: info.plat || '', pf: info.pf || null };
+      return { k: 'ok', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '', plat: info.plat || '', pf: info.pf || null };
     }
     if (pcAge === null || pcAge > K.PC_STALE) return { k: 'pcoff', relayAge: relayAge, pcAge: pcAge };
     return { k: 'relay', relayAge: relayAge, pcAge: pcAge };
@@ -259,7 +259,7 @@
 
   /* 이 기기 저장소(localStorage)에 적는 읽은 위치·방향·마지막 읽은 곳. 저장소가 막혀 있어도(시험·사생활 보호 창) 앱은 그대로 돈다. */
   function makeStore(ls) {
-    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_', SORT = 'smart_manga_sort_', BROWSE = 'smart_manga_browse', HINT = 'smart_manga_libhint';
+    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_', SORT = 'smart_manga_sort_', BROWSE = 'smart_manga_browse', HINT = 'smart_manga_libhint', PFK = 'smart_manga_pf', PFI = 'smart_manga_pfinfo';
     function rd(k) { try { return ls ? ls.getItem(k) : null; } catch (e) { return null; } }
     function wr(k, v) { try { if (ls) ls.setItem(k, v); } catch (e) {} }
     function pos() { try { var o = JSON.parse(rd(POS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
@@ -283,9 +283,134 @@
       setSort: function (mid, d) { if (okDir(d)) wr(SORT + mid, d); },
       getBrowse: function () { try { return JSON.parse(rd(BROWSE) || 'null'); } catch (e) { return null; } },
       setBrowse: function (o) { wr(BROWSE, JSON.stringify(o)); },
+      getPf: function () { try { return JSON.parse(rd(PFK) || 'null'); } catch (e) { return null; } },
+      setPf: function (o) { wr(PFK, JSON.stringify(o)); },
+      getPfInfo: function () { try { return JSON.parse(rd(PFI) || 'null'); } catch (e) { return null; } },
+      setPfInfo: function (o) { wr(PFI, JSON.stringify(o)); },
       getHint: function () { return rd(HINT) || ''; },
       setHint: function (v) { wr(HINT, v); }
     };
+  }
+
+  /* ---------------------------------------------------------------------
+   * v10.31(O-0967) 플랫폼 고르기 — 순수 함수. 표(MangaPlatforms.rows) 항목 = [pf, 이름, 그룹, 언어, 방식, 사유, 주소]
+   * 방식: r 앱에서 읽기(네이버웹툰만) · c 확인 중(PC가 알려 주기 전) · l 정식 사이트 열기만 / 사유 L·P·A·N
+   * ------------------------------------------------------------------- */
+  var PF_WHY = { L: '로그인이 필요해요', P: '사 보는 곳이에요', A: '성인 작품이 많은 곳이에요', N: '앱 안에서 읽는 길이 아직 없어요' };
+  var PF_WHYK = { login: 'L', paid: 'P', adult: 'A', none: 'N' };
+  var PF_GROUPS = [['kr', '국내'], ['en', '영어'], ['ja', '일본어'], ['zh', '중국어'], ['br', '게임·브랜드'], ['au', '작가 직영']];
+  var PF_LANG = { 'ko': '한국어', 'ko-KR': '한국어', 'en': '영어', 'ja': '일본어', 'zh': '중국어', 'zh-Hans': '중국어', 'zh-Hant': '중국어', 'es': '스페인어', 'fr': '프랑스어', 'de': '독일어', 'pt-BR': '포르투갈어', 'id': '인도네시아어', 'th': '태국어', 'vi': '베트남어', 'ru': '러시아어', 'all': '여러 언어' };
+  function pfRows(tbl) {
+    var rs = (tbl && tbl.rows) || [];
+    return rs.map(function (r) { return { pf: r[0], n: r[1], g: r[2], lang: r[3], m: r[4], w: r[5], url: r[6] || '' }; });
+  }
+  /* 한 플랫폼의 지금 상태: {s:'read'|'chk'|'link', w:사유 글자}. info = PC가 알려 준 그 플랫폼 칸({r:'on'|'test'|'off', w?}) 또는 없음.
+   * 시험 전에는 네이버웹툰만 읽기, 나머지는 확인 중. 시험 통과 = 읽기, 탈락 = 정식 사이트 열기 + 사유. */
+  function pfStatus(row, info) {
+    if (row.m === 'r') return { s: 'read', w: '' };
+    if (info && info.r === 'on') return { s: 'read', w: '' };
+    if (info && info.r === 'off') return { s: 'link', w: PF_WHYK[info.w] || 'N' };
+    if (row.m === 'l') return { s: 'link', w: row.w || 'N' };
+    return { s: 'chk', w: '' };
+  }
+  function pfReason(w) { return PF_WHY[w] || PF_WHY.N; }
+  function pfLangRank(lang) { return /^한국어/.test(lang || '') ? 0 : (lang === '영어' ? 1 : 2); }
+  /* 기본 순서: 앱에서 읽기 → 한국어 → 영어 → 나머지(작가 직영은 맨 뒤), 같은 무리 안에서는 이름순 */
+  function pfDefaultOrder(rows, infos) {
+    return rows.slice().sort(function (a, b) {
+      var ra = pfStatus(a, infos && infos[a.pf]).s === 'read' ? 0 : 1, rb = pfStatus(b, infos && infos[b.pf]).s === 'read' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      var ua = a.g === 'au' ? 1 : 0, ub = b.g === 'au' ? 1 : 0; if (ua !== ub) return ua - ub;      // 작가 직영은 맨 뒤
+      var la = pfLangRank(a.lang), lb = pfLangRank(b.lang); if (la !== lb) return la - lb;
+      var ha = /^[가-힣]/.test(a.n) ? 0 : 1, hb = /^[가-힣]/.test(b.n) ? 0 : 1; if (ha !== hb) return ha - hb;      // 이름순: 한글 이름이 먼저
+      var na = String(a.n).toLowerCase(), nb = String(b.n).toLowerCase();
+      return na < nb ? -1 : (na > nb ? 1 : 0);
+    });
+  }
+  /* 저장해 둔 설정을 믿을 수 있는 값으로. favs 가 없으면 네이버웹툰만 ★(처음 화면은 지금과 같게). */
+  function pfNormPrefs(o, rows) {
+    o = (o && typeof o === 'object') ? o : {};
+    var ok = {}; rows.forEach(function (r) { ok[r.pf] = 1; });
+    var favs = Array.isArray(o.favs) ? o.favs.filter(function (p, i, a) { return ok[p] && a.indexOf(p) === i; }) : ['naver'];
+    var hid = Array.isArray(o.hid) ? o.hid.filter(function (p, i, a) { return ok[p] && a.indexOf(p) === i; }) : [];
+    var mode = {}, k; if (o.mode && typeof o.mode === 'object') for (k in o.mode) if (ok[k] && o.mode[k] && typeof o.mode[k] === 'object') mode[k] = { m: o.mode[k].m === 'new' ? 'new' : 'pop', l: typeof o.mode[k].l === 'string' && /^[A-Za-z-]{1,12}$/.test(o.mode[k].l) ? o.mode[k].l : '' };
+    return { cur: ok[o.cur] ? o.cur : 'naver', favs: favs.filter(function (p) { return hid.indexOf(p) < 0; }), hid: hid, mode: mode };
+  }
+  /* 시트에 보이는 순서: ★ 붙인 곳(고른 순서) → 나머지(기본 순서). 숨긴 곳은 showHid 일 때만 맨 뒤에. */
+  function pfSheetOrder(rows, infos, prefs, showHid) {
+    var by = {}; rows.forEach(function (r) { by[r.pf] = r; });
+    var out = prefs.favs.map(function (p) { return by[p]; }).filter(function (r) { return !!r; });
+    var rest = pfDefaultOrder(rows.filter(function (r) { return prefs.favs.indexOf(r.pf) < 0 && prefs.hid.indexOf(r.pf) < 0; }), infos);
+    out = out.concat(rest);
+    if (showHid) out = out.concat(pfDefaultOrder(rows.filter(function (r) { return prefs.hid.indexOf(r.pf) >= 0; }), infos));
+    return out;
+  }
+  /* 웹툰 탭 칩 줄: ★ 붙인 곳(고른 순서) → 앱에서 읽을 수 있는 곳(기본 순서, 숨긴 곳 제외) — 지금 보는 곳은 항상 들어 있다 */
+  function pfChipList(rows, infos, prefs, max) {
+    max = max || 14;
+    var by = {}; rows.forEach(function (r) { by[r.pf] = r; });
+    var out = prefs.favs.map(function (p) { return by[p]; }).filter(function (r) { return !!r; });
+    pfDefaultOrder(rows.filter(function (r) { return prefs.favs.indexOf(r.pf) < 0 && prefs.hid.indexOf(r.pf) < 0 && pfStatus(r, infos && infos[r.pf]).s === 'read'; }), infos).forEach(function (r) { if (out.length < max) out.push(r); });
+    if (prefs.cur && !out.some(function (r) { return r.pf === prefs.cur; }) && by[prefs.cur]) out.splice(Math.min(1, out.length), 0, by[prefs.cur]);
+    return out;
+  }
+  function pfFilter(list, group, q) {
+    q = String(q || '').trim().toLowerCase();
+    return list.filter(function (r) { return (!group || group === 'all' || r.g === group) && (!q || String(r.n).toLowerCase().indexOf(q) >= 0 || String(r.lang).indexOf(q) >= 0); });
+  }
+  /* 그룹 칩 숫자 — 지금 시트에 보이는 곳(숨긴 곳은 「숨긴 곳 보기」를 켰을 때만) 기준이라 그룹 합이 「전체」와 맞는다 */
+  function pfGroupCounts(rows, prefs, showHid) {
+    var shown = rows.filter(function (r) { return showHid || prefs.hid.indexOf(r.pf) < 0; });
+    var c = { all: shown.length }; PF_GROUPS.forEach(function (g) { c[g[0]] = 0; });
+    shown.forEach(function (r) { c[r.g] = (c[r.g] || 0) + 1; });
+    return c;
+  }
+  function pfToggleFav(prefs, pf) {
+    var i = prefs.favs.indexOf(pf), o = { cur: prefs.cur, favs: prefs.favs.slice(), hid: prefs.hid.slice(), mode: prefs.mode };
+    if (i >= 0) o.favs.splice(i, 1); else { o.favs.push(pf); o.hid = o.hid.filter(function (p) { return p !== pf; }); }
+    return o;
+  }
+  /* ▲▼ 는 ★ 붙인 곳들 사이에서만 */
+  function pfMoveFav(prefs, pf, dir) {
+    var i = prefs.favs.indexOf(pf), j = i + (dir < 0 ? -1 : 1), o = { cur: prefs.cur, favs: prefs.favs.slice(), hid: prefs.hid.slice(), mode: prefs.mode };
+    if (i < 0 || j < 0 || j >= o.favs.length) return o;
+    o.favs.splice(i, 1); o.favs.splice(j, 0, pf); return o;
+  }
+  function pfToggleHide(prefs, pf) {
+    var i = prefs.hid.indexOf(pf), o = { cur: prefs.cur, favs: prefs.favs.slice(), hid: prefs.hid.slice(), mode: prefs.mode };
+    if (i >= 0) o.hid.splice(i, 1); else { o.hid.push(pf); o.favs = o.favs.filter(function (p) { return p !== pf; }); if (o.cur === pf) o.cur = 'naver'; }
+    return o;
+  }
+  /* 표가 서로 어긋나지 않는지(시험용): 같은 pf 두 번 · 이름 없음 · 알 수 없는 그룹·방식 · 주소가 https 아님 */
+  function pfCheckTable(rows) {
+    var seen = {}, bad = [], gs = {}; PF_GROUPS.forEach(function (g) { gs[g[0]] = 1; });
+    rows.forEach(function (r) {
+      if (!/^[a-z0-9_]{1,24}$/.test(r.pf) || seen[r.pf]) bad.push('pf:' + r.pf); seen[r.pf] = 1;
+      if (!r.n) bad.push('name:' + r.pf);
+      if (!gs[r.g]) bad.push('group:' + r.pf);
+      if (['r', 'c', 'l'].indexOf(r.m) < 0) bad.push('mode:' + r.pf);
+      if (r.url && !/^https:\/\/[A-Za-z0-9.-]+(\/|$)/.test(r.url)) bad.push('url:' + r.pf);
+      if (r.m === 'l' && ['L', 'P', 'A', 'N'].indexOf(r.w) < 0) bad.push('why:' + r.pf);
+    });
+    return bad;
+  }
+  /* 정식 사이트로 열어도 되는 주소인가 — 표에 있는 https 주소 그대로만 */
+  function pfSiteUrl(rows, pf) { var i; for (i = 0; i < rows.length; i++) if (rows[i].pf === pf) return /^https:\/\//.test(rows[i].url) ? rows[i].url : ''; return ''; }
+  /* 서버 상태에서 온 플랫폼 칸을 믿을 수 있는 값으로(모르는 글자·너무 큰 값 버림) */
+  function pfCleanInfo(o) {
+    var out = {}, k, v, c;
+    if (!o || typeof o !== 'object') return out;
+    for (k in o) {
+      if (!/^[a-z0-9_]{1,24}$/.test(k) || !o.hasOwnProperty(k)) continue;
+      v = o[k]; if (!v || typeof v !== 'object') continue;
+      c = { r: v.r === 'on' || v.r === 'off' ? v.r : 'test' };
+      if (typeof v.w === 'string' && PF_WHYK[v.w]) c.w = v.w;
+      if (num(v.b) > 0) c.b = Math.min(7200, num(v.b));
+      if (v.c && typeof v.c === 'object') c.c = { pop: v.c.pop === 0 ? 0 : 1, 'new': v.c['new'] === 0 ? 0 : 1, search: v.c.search === 0 ? 0 : 1 };
+      if (Array.isArray(v.l)) c.l = v.l.filter(function (x) { return typeof x === 'string' && /^[A-Za-z-]{1,12}$/.test(x); }).slice(0, 12);
+      out[k] = c;
+    }
+    return out;
   }
 
   var MangaPure = {
@@ -293,7 +418,9 @@
     judgeState: judgeState, errKind: errKind, fmtMB: fmtMB, chapterBytes: chapterBytes, avgRatio: avgRatio, pageToIdx: pageToIdx, idxToPage: idxToPage,
     naverUrl: naverUrl, webItems: webItems, mergeChapter: mergeChapter, resumeTarget: resumeTarget, nextChapterIdx: nextChapterIdx, wantedPages: wantedPages, makeStore: makeStore,
     verAtLeast: verAtLeast, kstInfo: kstInfo, normBrowse: normBrowse, isSample: isSample, libIsThin: libIsThin, clockHM: clockHM, fmtStar: fmtStar, listTitle: listTitle, listKey: listKey,
-    chapterOrder: chapterOrder, resumeHighlight: resumeHighlight, takeCoverBatch: takeCoverBatch, DAY_NAME: DAY_NAME
+    chapterOrder: chapterOrder, resumeHighlight: resumeHighlight, takeCoverBatch: takeCoverBatch, DAY_NAME: DAY_NAME,
+    PF_WHY: PF_WHY, PF_GROUPS: PF_GROUPS, PF_LANG: PF_LANG, pfRows: pfRows, pfStatus: pfStatus, pfReason: pfReason, pfDefaultOrder: pfDefaultOrder, pfNormPrefs: pfNormPrefs, pfSheetOrder: pfSheetOrder, pfChipList: pfChipList,
+    pfFilter: pfFilter, pfGroupCounts: pfGroupCounts, pfToggleFav: pfToggleFav, pfMoveFav: pfMoveFav, pfToggleHide: pfToggleHide, pfCheckTable: pfCheckTable, pfSiteUrl: pfSiteUrl, pfCleanInfo: pfCleanInfo
   };
   global.MangaPure = MangaPure;
 
@@ -393,7 +520,7 @@
   /* =====================================================================
    * 3. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, browse: true, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
+  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, browse: true, platforms: true, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
   var $ = function (id) { return document.getElementById(id); };
   var api = null, store = null, inited = false, built = false;
   var view = 'lib';                  // lib | chap | find
@@ -424,6 +551,8 @@
   }
   function sayCard(key, opt) {
     var s = SAY[key] || SAY.fail; opt = opt || {};
+    var pn = pfCtxName();
+    if (pn && GEN_SAY[key]) { var gs = GEN_SAY[key](pn); opt = { say: gs.say, sub: opt.sub != null ? opt.sub : gs.sub, extra: opt.extra }; }
     var acts = '';
     if (s.retry) acts += '<button type="button" class="mg-btn" data-act="retry">다시 확인하기</button>';
     if (s.pass) acts += '<button type="button" class="mg-btn" data-act="pass">연동 암호 ' + (key === 'badpass' ? '확인' : '넣기') + '</button>';
@@ -458,7 +587,7 @@
   function pollState() {
     if (!api) return Promise.resolve(null);
     return api.state(true).then(function (st) {
-      var j = judgeState(st), was = lastJudge; lastJudge = j;
+      var j = judgeState(st), was = lastJudge; lastJudge = j; pfSync(j);
       if (rd) readerState(j);
       if (view === 'lib' && !rd && shellKind && shellKind !== (browseOn() ? 'browse' : 'old') && isShown()) { renderShell(); if (browseOn()) { markTab(); if (tab === 'wt') paintWtShell(); } if (lib && lib.mangas) paintLibrary(); }
       // 멈춰 있던 PC·중계가 되살아났고 서재를 아직 못 받았으면 저절로 다시 받는다
@@ -578,7 +707,7 @@
       }
       html += '<button type="button" class="mg-card' + (motionOn() ? ' in' : '') + '" role="listitem" data-m="' + mid + '"' + (web ? ' data-o="web"' : '') + ' style="--i:' + Math.min(i, 12) + '">' +
         '<span class="mg-cov"' + (url ? '' : ' data-wait="1"') + '>' + (url ? '<img alt="" src="' + esc(url) + '">' : '<i></i>') + badge +
-        (web ? '<em class="mg-pill">웹툰</em>' : '') + '</span>' +
+        (web ? '<em class="mg-pill">' + esc((m.pf && pfNameOf(m.pf)) || '웹툰') + '</em>' : '') + '</span>' +
         '<b class="mg-t">' + esc(m.title) + '</b><small>' + esc(sub) + '</small>' + (web && done ? '<small class="mg-free">앞부분만 무료예요</small>' : '') + '</button>';
     }
     g.innerHTML = plus + html;      // 「+ 웹툰 찾기」 칸은 맨 앞 — 눈에 바로 띄게
@@ -640,7 +769,7 @@
   function paintChapHead() {
     var m = curManga, el = body().querySelector('#mgChHead'); if (!el || !m) return;
     var url = coverOf(m);
-    el.innerHTML = '<div class="mg-chhead"><span class="mg-chcov">' + (url ? '<img alt="" src="' + esc(url) + '">' : '') + (isWebManga(m) ? '<em class="mg-pill">웹툰</em>' : '') + '</span><div class="mg-chinfo"><b>' + esc(m.title) + '</b><small id="mgChSub">' + (chapItems ? chapSub() : '회차를 가져오는 중…') + '</small><small id="mgChFree" class="mg-free"' + (isWebManga(m) && m.status === 'done' ? '' : ' hidden') + '>앞부분만 무료예요</small><div id="mgChBtn" class="mg-btnrow"></div></div></div>';
+    el.innerHTML = '<div class="mg-chhead"><span class="mg-chcov">' + (url ? '<img alt="" src="' + esc(url) + '">' : '') + (isWebManga(m) ? '<em class="mg-pill">' + esc((m.pf && pfNameOf(m.pf)) || '웹툰') + '</em>' : '') + '</span><div class="mg-chinfo"><b>' + esc(m.title) + '</b><small id="mgChSub">' + (chapItems ? chapSub() : '회차를 가져오는 중…') + '</small><small id="mgChFree" class="mg-free"' + (isWebManga(m) && m.status === 'done' ? '' : ' hidden') + '>앞부분만 무료예요</small><div id="mgChBtn" class="mg-btnrow"></div></div></div>';
     if (chapItems) paintChapBtn();
     else if (browseOn() && isWebManga(m) && m.id && !isShelf(m)) { var bb = body().querySelector('#mgChBtn'); if (bb) bb.innerHTML = '<button type="button" class="mg-btn" data-act="addcur">서재에 담기</button>'; }
   }
@@ -875,6 +1004,7 @@
   function initBrowseState() {
     var raw = store.getBrowse(); bs = normBrowse(raw);
     userTab = !!bs.tab; tab = bs.tab || (store.getHint() === 'real' ? 'lib' : 'wt');
+    pfInit();
   }
   function markTab() {
     var tb = $('mgTabs'); if (!tb) return;
@@ -905,10 +1035,12 @@
   function paintChips() {
     var el = $('mgWChips'); if (!el) return;
     el.hidden = !!sres.on;
+    if (!isNaverCur()) { el.innerHTML = gChips(); return; }
     el.innerHTML = chipRow('보기', [['day', '요일별'], ['done', '완결']], bs.view, 'bv') + (bs.view === 'day' ? dayRow() : '') +
       chipRow('정렬', bs.view === 'day' ? [['pop', '인기'], ['upd', '업데이트'], ['star', '별점']] : [['upd', '최신 완결'], ['star', '별점']], curSort(), 'bs');
   }
   function wtTitleText() {
+    if (!isNaverCur()) return gTitleText();
     if (sres.on) return '검색 결과 · ' + ((sres.items || []).length) + '편';
     var same = bl.key === curKey() && bl.loaded;
     if (!same) return bs.view === 'done' ? '완결 웹툰' : DAY_NAME[bs.day] + '요 웹툰';
@@ -916,17 +1048,17 @@
   }
   function paintWHead() {
     var el = $('mgWHead'); if (!el) return;
-    var note = '';
-    if (!sres.on && bl.loaded && bl.key === curKey()) {
-      if (bl.limited && bl.updated) note = '방금 불러왔어요 ' + clockHM(bl.updated);
-      else if (bl.stale && bl.updated) note = '저장해 둔 목록이에요 ' + clockHM(bl.updated);
+    var note = '', gen = !isNaverCur(), L = gen ? gl : bl;
+    if (!sres.on && L.loaded && L.key === (gen ? gKey() : curKey())) {
+      if (L.limited && L.updated) note = '방금 불러왔어요 ' + clockHM(L.updated);
+      else if (L.stale && L.updated) note = '저장해 둔 목록이에요 ' + clockHM(L.updated);
     }
     el.innerHTML = '<div class="mg-whrow"><b id="mgBTitle">' + esc(wtTitleText()) + '</b><span class="mg-whbtn">' +
       (sres.on ? '<button type="button" class="mg-c" data-act="bsearchclose">목록으로</button>' :
         '<button type="button" class="mg-ibt' + (sres.open ? ' on' : '') + '" data-act="bsearch" aria-label="이름으로 찾기">' + SEARCH_SVG + '</button>') +
       '<button type="button" class="mg-c" data-act="bcols" aria-pressed="' + (bs.cols === 2 ? 'true' : 'false') + '">' + (bs.cols === 2 ? '작게 보기' : '크게 보기') + '</button></span></div>' +
       (note ? '<small class="mg-wnote" id="mgWNote" role="status">' + esc(note) + '</small>' : '') +
-      (!sres.on && bs.view === 'done' ? '<small class="mg-wnote free">앞부분만 무료인 작품이 많아요</small>' : '');
+      (!sres.on && !gen && bs.view === 'done' ? '<small class="mg-wnote free">앞부분만 무료인 작품이 많아요</small>' : '');
   }
   function bcard(it) {
     var t = num(it.t), url = bcov[t] || '', pills = '';
@@ -940,6 +1072,7 @@
   }
   function searchCard(it) { return { t: it.t, n: it.title, a: it.author, mark: it.in_shelf ? '담았어요' : (it.status === 'done' ? '완결' : '') }; }
   function paintWList() {
+    if (!isNaverCur()) return paintGList();
     var box = $('mgWList'); if (!box) return;
     var items, html = '';
     if (sres.on) {
@@ -964,13 +1097,14 @@
   }
   function paintWtShell() {
     var pane = $('mgPaneWt'); if (!pane) return;
-    pane.innerHTML = '<div id="mgWTop"></div><div id="mgWChips" class="mg-wchips"></div><div id="mgWHead" class="mg-whead"></div><div id="mgWSearch"></div><div id="mgWList"></div>';
-    paintChips(); paintWHead(); paintSearch(); paintWList();
+    pane.innerHTML = '<div id="mgWPlat"></div><div id="mgWTop"></div><div id="mgWChips" class="mg-wchips"></div><div id="mgWHead" class="mg-whead"></div><div id="mgWSearch"></div><div id="mgWList"></div>';
+    paintPfBar(); paintChips(); paintWHead(); paintSearch(); paintWList();
   }
   function wtStatus(k, extra) { var t = $('mgWTop'); if (t) t.innerHTML = k ? sayCard(k, extra) : ''; }
 
   /* 목록 받기 — 폰에 저장된 마지막 목록을 먼저 그린 뒤 새로 받는다. o.manual = 새로고침 단추 */
   function wtLoad(o) {
+    if (!isNaverCur()) return gLoad(o);
     o = o || {};
     if (!api || !host.getPass() || !bs) return;
     var tok = ++wtTok, key = curKey(), page = o.page || 1;
@@ -1088,6 +1222,7 @@
   function closeWSearch() { sres = { open: false, on: false, q: '', items: null }; paintChips(); paintWHead(); paintSearch(); paintWList(); }
   function doWSearch() {
     var q = ($('mgWQ').value || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40);
+    if (q && !isNaverCur()) return gSearch(q);
     if (!q) { toast('찾을 웹툰 이름을 적어 주세요.', 2000); return; }
     if (lastJudge && (lastJudge.web === 'blocked' || lastJudge.web === 'off')) { wtStatus(lastJudge.web === 'off' ? 'weboff' : 'blocked'); return; }
     sres.q = q; var tok = ++wtTok; wtStatus('findload');
@@ -1149,7 +1284,7 @@
     });
   }
   function isShelf(m) { return !!(m && (m.shelf === true || (lib && lib.mangas && lib.mangas.some(function (x) { return x.id === m.id; })))); }
-  function coverOf(m) { return (lib && lib.cov[m.id]) || (m.t && bcov[m.t]) || ''; }
+  function coverOf(m) { return (lib && lib.cov[m.id]) || (m.t && bcov[m.t]) || (m.pk && pcov[m.pk]) || ''; }
   function addCurrent() {
     var m = curManga; if (!m || !m.id || !isWebManga(m)) return;
     var btn = body().querySelector('[data-act="addcur"]'); if (!btn || btn.disabled) return;
@@ -1160,7 +1295,7 @@
         lib = lib || { mangas: [], at: Date.now(), cov: {} };
         lib.mangas = lib.mangas.filter(function (x) { return x.id !== card.id; }); lib.mangas.push(card);
         lib.mangas.sort(function (a, b) { return a.title < b.title ? -1 : (a.title > b.title ? 1 : 0); });
-        if (m.t && bcov[m.t]) lib.cov[card.id] = bcov[m.t];
+        if (m.t && bcov[m.t]) lib.cov[card.id] = bcov[m.t]; else if (m.pk && pcov[m.pk]) lib.cov[card.id] = pcov[m.pk];
       }
       m.shelf = true; toast('서재에 담았어요.', 2200);
       if (view === 'chap' && curManga === m) { paintChapHead(); paintChapters(); }
@@ -1174,6 +1309,349 @@
     if (sres.on || sres.open) { sres = { open: false, on: false, q: '', items: null }; paintSearch(); }
     saveBs(); paintChips(); paintWHead();
     wtLoad({ force: true });
+  }
+
+  /* =====================================================================
+   * 3-B. v10.31(O-0967) 플랫폼 고르기 — 웹툰 탭 칩 줄 · 전체 플랫폼 시트 · 다른 플랫폼 탐색(인기·최신·검색)
+   * 설정(자주 보는 곳 ★·숨김·보는 방식)은 이 폰에만 저장된다. 읽기 가능 여부는 PC가 알려 주는 상태(하트비트 pf 칸)만 믿는다.
+   * 스위치 host.platforms(app.js MANGA_PLATFORMS) = false 면 이 블록은 전부 잠자고 v10.30 화면 그대로.
+   * ===================================================================*/
+  var PFR = [], pfPrefs = null, pfInfo = {};
+  var pfUi = { open: false, group: 'all', q: '', reorder: false, showHid: false, sel: '', undo: '', undoTimer: 0 };
+  var gl = { key: '', items: [], total: 0, page: 1, pages: 1, hasNext: false, stale: false, limited: false, updated: 0, hidden: 0, loaded: false, loading: false, err: '', at: 0 };
+  var pcov = {}, pq = { queue: [], inflight: 0, pending: {}, io: null, budget: {}, timer: 0 };
+  var EYE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20L20 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  var GEN_SAY = {
+    blocked: function (n) { return { say: '「' + n + '」 사이트가 지금 답하지 않아요.', sub: '한 시간쯤 뒤에 다시 해 보세요.' }; },
+    locked: function () { return { say: '이 화는 앱에서 볼 수 없어요.', sub: '정식 사이트에서는 볼 수 있을지도 몰라요.' }; },
+    weboff: function () { return { say: '지금은 이 플랫폼을 앱에서 읽을 수 없어요.', sub: '정식 사이트에서 볼 수 있어요.' }; },
+    listload: function (n) { return { say: '케이가 「' + n + '」 작품을 가져오고 있어요.', sub: '' }; },
+    listempty: function () { return { say: '불러온 작품이 없어요.', sub: '잠깐 뒤에 다시 해 볼까요?' }; },
+    budget: function () { return { say: '오늘은 여기까지 불러왔어요.', sub: '내일 다시 열어 드릴게요. 서재에 있는 만화는 그대로 볼 수 있어요.' }; }
+  };
+
+  function platOn() { return host.platforms !== false && browseOn() && !!(global.MangaPlatforms && global.MangaPlatforms.rows); }
+  function pfInit() {
+    if (!PFR.length && global.MangaPlatforms) PFR = pfRows(global.MangaPlatforms);
+    if (!pfPrefs) { pfPrefs = pfNormPrefs(store.getPf(), PFR); pfInfo = pfCleanInfo(store.getPfInfo()); }
+  }
+  function pfRow(pf) { var i; for (i = 0; i < PFR.length; i++) if (PFR[i].pf === pf) return PFR[i]; return null; }
+  function pfNameOf(pf) { var r = pfRow(pf); return r ? r.n : ''; }
+  /* PC가 알려 준 상태. 중계가 살아 있고 플랫폼 기능이 꺼져 있으면(옛 중계·스위치) 네이버 말고는 아무것도 읽을 수 없다. PC가 꺼져 있으면 마지막으로 받은 상태를 쓴다. */
+  function pfInfoNow() {
+    if (lastJudge && lastJudge.k === 'ok') return lastJudge.plat === 'on' ? (lastJudge.pfc || {}) : {};
+    return pfInfo;
+  }
+  function pfSt(pf) { var r = pfRow(pf); return r ? pfStatus(r, pfInfoNow()[pf]) : { s: 'chk', w: '' }; }
+  function curPf() { if (!platOn() || !pfPrefs) return 'naver'; var p = pfPrefs.cur; return (p === 'naver' || pfSt(p).s === 'read') ? p : 'naver'; }
+  function isNaverCur() { return curPf() === 'naver'; }
+  function pfCtxName() { if (!platOn() || !pfPrefs) return ''; if (view === 'chap' && curManga && curManga.pf) return pfNameOf(curManga.pf); if (view === 'lib' && tab === 'wt' && !isNaverCur()) return pfNameOf(curPf()); return ''; }
+  function pfSave() { store.setPf({ cur: pfPrefs.cur, favs: pfPrefs.favs, hid: pfPrefs.hid, mode: pfPrefs.mode }); }
+  var pfSnap = '';
+  function pfSync(j) {
+    if (j && j.pf) {
+      j.pfc = pfCleanInfo(j.pf);
+      if (j.plat === 'on' && JSON.stringify(j.pfc) !== JSON.stringify(pfInfo)) { pfInfo = j.pfc; try { store.setPfInfo(j.pfc); } catch (e) {} }
+    }
+    var snap = JSON.stringify(pfInfoNow());
+    if (snap !== pfSnap) {
+      pfSnap = snap;
+      if (platOn() && pfPrefs) {
+        paintPfBar(); if (pfUi.open) paintPf();
+        if (view === 'lib' && tab === 'wt' && pfPrefs.cur !== 'naver' && !isNaverCur()) { /* 그대로 */ }
+        else if (view === 'lib' && tab === 'wt' && pfPrefs.cur !== 'naver' && isNaverCur() && $('mgWList')) { paintWtShell(); wtLoad({}); }
+      }
+    }
+  }
+
+  /* ---- 웹툰 탭 위 한 줄: 칩 줄 + 「전체 N곳」 ---- */
+  function paintPfBar() {
+    var el = $('mgWPlat'); if (!el) return;
+    if (!platOn()) { el.innerHTML = ''; return; }
+    pfInit();
+    var cur = curPf(), infos = pfInfoNow();
+    var chips = pfChipList(PFR, infos, pfPrefs).map(function (r) { return '<button type="button" class="mg-pfc' + (r.pf === cur ? ' on' : '') + '" data-pfc="' + r.pf + '" aria-pressed="' + (r.pf === cur ? 'true' : 'false') + '">' + esc(r.n) + '</button>'; }).join('');
+    el.innerHTML = '<div class="mg-pfbar"><div class="mg-pfchips" role="group" aria-label="플랫폼">' + chips + '</div><button type="button" class="mg-pfall" data-act="pfall">전체 ' + PFR.length + '곳</button></div>';
+    var on = el.querySelector('.mg-pfc.on'); if (on && on.scrollIntoView) { try { on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {} }
+  }
+  function pfUse(pf) {
+    if (!pfRow(pf) || pfSt(pf).s !== 'read') return;
+    pfInit(); pfPrefs.cur = pf; pfSave(); wtTok++;
+    sres = { open: false, on: false, q: '', items: null };
+    if (pfUi.open) closePf();
+    if (view === 'lib' && tab === 'wt') { window.scrollTo(0, 0); paintWtShell(); wtLoad({}); }
+    else if (view === 'lib') selectTab('wt', true);
+  }
+
+  /* ---- 전체 플랫폼 시트 ---- */
+  function ensurePf() {
+    var el = $('mgPf'); if (el) return el;
+    el = document.createElement('div'); el.id = 'mgPf'; el.className = 'mg-pfbg'; el.style.display = 'none';
+    el.innerHTML = '<div class="mg-pfpanel" role="dialog" aria-modal="true" aria-label="만화 플랫폼"><div class="mg-pfhead"><b>만화 플랫폼</b><button type="button" class="mg-pfx" data-pfa="close" aria-label="닫기">✕</button></div>' +
+      '<div class="mg-pfscroll"><input class="mg-pfq" id="mgPfQ" type="search" maxlength="30" placeholder="플랫폼 이름 찾기" autocomplete="off" aria-label="플랫폼 이름 찾기"><div class="mg-pfgroups" id="mgPfGroups"></div><div class="mg-pfgroups" id="mgPfTools"></div><div class="mg-pfcards" id="mgPfCards"></div>' +
+      '<p class="mg-pfnote">★을 누른 곳이 웹툰 탭 맨 앞에 와요. 순서와 숨김은 이 폰에만 저장돼서, 폰을 바꾸면 처음으로 돌아가요.</p></div>' +
+      '<div class="mg-pffoot"><div class="mg-pfundo" id="mgPfUndo" hidden></div><div class="mg-pfdet" id="mgPfDet" hidden></div></div></div>';
+    document.body.appendChild(el);
+    el.addEventListener('click', onPfClick);
+    el.addEventListener('keydown', function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.getAttribute && ev.target.getAttribute('data-pfp')) { ev.preventDefault(); onPfClick(ev); } });
+    $('mgPfQ').addEventListener('input', function () { pfUi.q = this.value; paintPfCards(); });
+    return el;
+  }
+  function pfIsOpen() { return !!pfUi.open; }
+  function openPf(sel) {
+    if (!platOn()) return; pfInit();
+    var el = ensurePf(); pfUi.open = true; pfUi.sel = sel || ''; pfUi.q = ''; pfUi.group = 'all'; pfUi.reorder = false; $('mgPfQ').value = '';
+    paintPf(); el.style.display = 'flex'; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+    if (pfUi.sel) { var c = el.querySelector('[data-pfp="' + pfUi.sel + '"]'); if (c && c.scrollIntoView) { try { c.scrollIntoView({ block: 'center' }); } catch (e) {} } }
+  }
+  function closePf() {
+    var el = $('mgPf'); if (!el || !pfUi.open) return false;
+    pfUi.open = false; el.classList.remove('on'); el.style.display = 'none'; clearTimeout(pfUi.undoTimer); pfUi.undo = ''; return true;
+  }
+  function paintPf() {
+    if (!$('mgPf')) return;
+    var cnt = pfGroupCounts(PFR, pfPrefs, pfUi.showHid), h = '';
+    h += '<button type="button" class="mg-c' + (pfUi.group === 'all' ? ' on' : '') + '" data-pfg="all" aria-pressed="' + (pfUi.group === 'all') + '">전체 ' + cnt.all + '</button>';
+    PF_GROUPS.forEach(function (g) { if (cnt[g[0]]) h += '<button type="button" class="mg-c' + (pfUi.group === g[0] ? ' on' : '') + '" data-pfg="' + g[0] + '" aria-pressed="' + (pfUi.group === g[0]) + '">' + g[1] + ' ' + cnt[g[0]] + '</button>'; });
+    $('mgPfGroups').innerHTML = h;
+    var nh = pfPrefs.hid.length;
+    $('mgPfTools').innerHTML = (pfPrefs.favs.length > 1 ? '<button type="button" class="mg-c' + (pfUi.reorder ? ' on' : '') + '" data-pft="reorder" aria-pressed="' + pfUi.reorder + '">' + (pfUi.reorder ? '순서 바꾸기 끝' : '★ 순서 바꾸기') + '</button>' : '') +
+      (nh ? '<button type="button" class="mg-c' + (pfUi.showHid ? ' on' : '') + '" data-pft="hid" aria-pressed="' + pfUi.showHid + '">숨긴 곳 ' + nh + '</button>' : '');
+    paintPfCards(); paintPfDet(); paintPfUndo();
+  }
+  function pfBadge(st) { return st.s === 'read' ? '<span class="mg-pfbd rd">앱에서 읽기</span>' : (st.s === 'chk' ? '<span class="mg-pfbd ck">확인 중</span>' : '<span class="mg-pfbd lk">정식 사이트</span>'); }
+  function paintPfCards() {
+    var box = $('mgPfCards'); if (!box) return;
+    var list = pfFilter(pfSheetOrder(PFR, pfInfoNow(), pfPrefs, pfUi.showHid), pfUi.group, pfUi.q), h = '';
+    list.forEach(function (r) {
+      var st = pfSt(r.pf), fav = pfPrefs.favs.indexOf(r.pf) >= 0, hid = pfPrefs.hid.indexOf(r.pf) >= 0;
+      h += '<div class="mg-pc ' + st.s + (hid ? ' hid' : '') + (pfUi.sel === r.pf ? ' sel' : '') + '" role="button" tabindex="0" data-pfp="' + r.pf + '"><b class="nm">' + esc(r.n) + '</b><span class="lg">' + esc(r.lang) + '</span>' + pfBadge(st) +
+        '<button type="button" class="mg-pfstar' + (fav ? ' on' : '') + '" data-pfstar="' + r.pf + '" aria-pressed="' + fav + '" aria-label="' + esc(r.n) + (fav ? ' 자주 보는 곳에서 빼기' : ' 자주 보는 곳에 넣기') + '">' + (fav ? '★' : '☆') + '</button>' +
+        '<button type="button" class="mg-pfeye" data-pfeye="' + r.pf + '" aria-label="' + esc(r.n) + (hid ? ' 다시 보이기' : ' 숨기기') + '">' + (hid ? EYE_OFF_SVG : EYE_SVG) + '</button>' +
+        (pfUi.reorder && fav ? '<span class="mg-pfmv"><button type="button" data-pfmv="' + r.pf + '" data-d="-1" aria-label="앞으로">▲</button><button type="button" data-pfmv="' + r.pf + '" data-d="1" aria-label="뒤로">▼</button></span>' : '') + '</div>';
+    });
+    box.innerHTML = h || '<p class="mg-pfnone">찾는 플랫폼이 없어요.</p>';
+  }
+  function paintPfDet() {
+    var el = $('mgPfDet'); if (!el) return;
+    var r = pfUi.sel ? pfRow(pfUi.sel) : null;
+    if (!r) { el.hidden = true; el.innerHTML = ''; return; }
+    var st = pfSt(r.pf), h = '<b>' + esc(r.n) + '</b><small>' + esc(r.lang) + '</small>';
+    if (st.s === 'read') h += '<div class="mg-acts"><button type="button" class="mg-btn pri" data-pfa="use">이 플랫폼 보기</button></div>';
+    else {
+      h += '<p class="mg-pfsay">' + (st.s === 'chk' ? '아직 확인 중이에요' : esc(pfReason(st.w))) + '</p>' + (st.s === 'chk' ? '<small class="mg-pfsub">앱 안에서 읽을 수 있는지 살펴보고 있어요.</small>' : '');
+      h += r.url ? '<div class="mg-acts"><button type="button" class="mg-btn pri" data-pfa="site">정식 사이트 열기</button></div>' : '<p class="mg-pfnoaddr">주소 확인 중이에요</p>';
+    }
+    el.innerHTML = h; el.hidden = false;
+  }
+  function paintPfUndo() {
+    var el = $('mgPfUndo'); if (!el) return;
+    if (!pfUi.undo) { el.hidden = true; el.innerHTML = ''; return; }
+    el.innerHTML = '<span>' + esc(pfNameOf(pfUi.undo)) + ' 숨겼어요</span><button type="button" data-pfa="undo">되돌리기</button>'; el.hidden = false;
+  }
+  function onPfClick(ev) {
+    var t = ev.target, el = t.closest ? t.closest('[data-pfp],[data-pfstar],[data-pfeye],[data-pfmv],[data-pfg],[data-pft],[data-pfa]') : null;
+    if (!el) { if (t === $('mgPf')) closePf(); return; }
+    var pf;
+    if (el.hasAttribute('data-pfstar')) { pf = el.getAttribute('data-pfstar'); pfPrefs = pfNormPrefs(pfToggleFav(pfPrefs, pf), PFR); pfSave(); paintPf(); paintPfBar(); return; }
+    if (el.hasAttribute('data-pfeye')) {
+      pf = el.getAttribute('data-pfeye'); var was = pfPrefs.hid.indexOf(pf) >= 0;
+      pfPrefs = pfNormPrefs(pfToggleHide(pfPrefs, pf), PFR); pfSave();
+      clearTimeout(pfUi.undoTimer); pfUi.undo = was ? '' : pf;
+      if (!was) pfUi.undoTimer = setTimeout(function () { pfUi.undo = ''; paintPfUndo(); }, 3000);
+      if (pfUi.sel === pf && !was && !pfUi.showHid) pfUi.sel = '';
+      paintPf(); paintPfBar(); if (!was && view === 'lib' && tab === 'wt' && pfPrefs.cur === 'naver' && platOn() && !isNaverCur()) { paintWtShell(); wtLoad({}); } return;
+    }
+    if (el.hasAttribute('data-pfmv')) { pf = el.getAttribute('data-pfmv'); pfPrefs = pfNormPrefs(pfMoveFav(pfPrefs, pf, num(el.getAttribute('data-d'))), PFR); pfSave(); paintPf(); paintPfBar(); return; }
+    if (el.hasAttribute('data-pfg')) { pfUi.group = el.getAttribute('data-pfg'); paintPf(); return; }
+    if (el.hasAttribute('data-pft')) { if (el.getAttribute('data-pft') === 'reorder') pfUi.reorder = !pfUi.reorder; else pfUi.showHid = !pfUi.showHid; paintPf(); return; }
+    if (el.hasAttribute('data-pfp')) { pf = el.getAttribute('data-pfp'); pfUi.sel = pfUi.sel === pf ? '' : pf; paintPfCards(); paintPfDet(); return; }
+    var a = el.getAttribute('data-pfa');
+    if (a === 'close') return void closePf();
+    if (a === 'use') return pfUse(pfUi.sel);
+    if (a === 'site') { var u = pfSiteUrl(PFR, pfUi.sel); if (u) { try { host.openUrl(u); } catch (e) { toast('링크를 열지 못했어요.', 2000); } } return; }
+    if (a === 'undo') { var up = pfUi.undo; if (up) { pfPrefs = pfNormPrefs(pfToggleHide(pfPrefs, up), PFR); pfSave(); } clearTimeout(pfUi.undoTimer); pfUi.undo = ''; paintPf(); paintPfBar(); return; }
+  }
+
+  /* ---- 다른 플랫폼 탐색(인기·최신·검색) ---- */
+  function gModeState() {
+    var pf = curPf(), info = pfInfoNow()[pf] || {}, pm = pfPrefs.mode[pf] || { m: 'pop', l: '' }, c = info.c || {};
+    var m = (pm.m === 'new' && c['new'] !== 0) ? 'new' : 'pop';
+    var l = (info.l && info.l.length) ? (info.l.indexOf(pm.l) >= 0 ? pm.l : info.l[0]) : '';
+    return { m: m, l: l };
+  }
+  function gKey() { var s = gModeState(); return curPf() + ':' + s.m + ':' + s.l; }
+  function gItems(raw) { var pf = curPf(); return (raw || []).filter(function (it) { return it && it.k; }).map(function (it) { return { k: num(it.k), pk: pf + ':' + num(it.k), n: String(it.n || ''), a: it.a || '', d: it.m === 'done' }; }); }
+  function gItem(pk) { var a = sres.on ? (sres.items || []) : gl.items, i; for (i = 0; i < a.length; i++) if (a[i].pk === pk) return a[i]; return null; }
+  function gTitleText() {
+    var s = gModeState(), same = gl.key === gKey() && gl.loaded;
+    if (sres.on) return '검색 결과 · ' + ((sres.items || []).length) + '편';
+    return pfNameOf(curPf()) + ' · ' + (s.m === 'new' ? '최신' : '인기') + (same ? ' · ' + (gl.total || gl.items.length) + '편' : '');
+  }
+  function gChips() {
+    var s = gModeState(), info = pfInfoNow()[curPf()] || {}, c = info.c || {}, modes = [['pop', '인기']];
+    if (c['new'] !== 0) modes.push(['new', '최신']);
+    var h = chipRow('보기', modes, s.m, 'gm');
+    if (info.l && info.l.length > 1) h += chipRow('언어', info.l.map(function (l) { return [l, PF_LANG[l] || l]; }), s.l, 'gl');
+    return h;
+  }
+  function gCard(it) {
+    var url = pcov[it.pk] || '', pills = it.d ? '<em class="mg-fin">완결</em>' : '';
+    var sub = bs && bs.cols === 2 ? String(it.a || '').trim() : '';
+    return '<button type="button" class="mg-bcard" data-pk="' + esc(it.pk) + '"><span class="mg-bcov"' + (url ? '' : ' data-wait="1"') + '>' + (url ? '<img alt="" src="' + esc(url) + '">' : '<i></i>') + pills + '</span><b class="mg-bt">' + esc(it.n) + '</b>' + (sub ? '<small class="mg-bsub">' + esc(sub) + '</small>' : '') + '</button>';
+  }
+  function paintGList() {
+    var box = $('mgWList'); if (!box) return;
+    var items = sres.on ? (sres.items || []) : gl.items, html = '', i;
+    if (!items.length) {
+      if (!sres.on && gl.err) { box.innerHTML = ''; return; }
+      box.innerHTML = sres.on ? sayCard('noresult') : ((gl.loaded && gl.key === gKey()) ? sayCard('listempty') : sayCard('listload'));
+      return;
+    }
+    for (i = 0; i < items.length; i++) html += gCard(items[i]);
+    var more = (!sres.on && gl.hasNext && gl.page < 5) ? '<div class="mg-more"><button type="button" class="mg-btn" data-act="gmore">더 보기</button></div>' : '';
+    box.innerHTML = '<div class="mg-bgrid c' + (bs ? bs.cols : 3) + (motionOn() ? ' fadein' : '') + '" role="list">' + html + '</div>' + more;
+    gWatch();
+  }
+  function gApply(res, key, page, fromCache) {
+    var items = gItems(res.items);
+    if (page > 1 && !fromCache) gl.items = gl.items.concat(items); else gl.items = items;
+    gl.key = key; gl.total = num(res.total, items.length); gl.page = num(res.page, page); gl.pages = num(res.pages, 1); gl.hasNext = !!res.has_next;
+    gl.updated = num(res.updated); gl.stale = !!res.stale || !!fromCache; gl.limited = !!res.limited; gl.hidden = num(res.hidden); gl.at = Date.now(); gl.loaded = true;
+    if (!fromCache && page === 1) IDB.put('bl', key, { at: Date.now(), data: res });
+    if (!fromCache) wtStatus('');
+    paintChips(); paintWHead(); paintGList();
+  }
+  function gLoad(o) {
+    o = o || {};
+    if (!api || !host.getPass() || !bs) return;
+    var pf = curPf(), st = gModeState(), key = gKey(), page = o.page || 1, tok = ++wtTok;
+    var same = gl.key === key && gl.loaded;
+    if (!o.manual && page === 1 && same && Date.now() - gl.at < K.BL_FRESH_MS && !o.force) { paintChips(); paintWHead(); paintGList(); return; }
+    gl.loading = true; gl.err = ''; wtStatus('');
+    if (page === 1 && !same) {
+      gl.key = key; gl.items = []; gl.total = 0; gl.loaded = false; gl.page = 1; gl.hasNext = false; paintChips(); paintWHead(); paintGList();
+      IDB.get('bl', key).then(function (rec) { if (tok !== wtTok || gl.loaded || !rec || !rec.data) return; gApply(rec.data, key, 1, true); });
+    }
+    pollState(true).then(function (r) {
+      if (tok !== wtTok) return;
+      if (r.j.k === 'pcoff' || r.j.k === 'relay' || r.j.k === 'sw') { gl.loading = false; gl.err = r.j.k; wtStatus(r.j.k, gl.loaded ? { sub: (SAY[r.j.k].sub ? SAY[r.j.k].sub + ' ' : '') + '(마지막으로 받은 목록을 보여 드리고 있어요.)' } : null); paintGList(); return; }
+      var prm = { pf: pf, mode: st.m, p: page, r: !!o.manual }; if (st.l) prm.lang = st.l;
+      return api.request('plat_list', prm, { max: 120000, cancelled: function () { return tok !== wtTok; } }).then(function (res) {
+        if (tok !== wtTok) return;
+        gl.loading = false; gl.err = '';
+        gApply(res, key, page, false);
+        if (o.manual) toast(res.limited ? '방금 불러왔어요. 삼십 분쯤 뒤에 다시 눌러 주세요.' : '새로 불러왔어요.', 2200);
+      });
+    }).then(null, function (e) {
+      if (tok !== wtTok || (e && e.kind === 'cancel')) return;
+      gl.loading = false;
+      pollState(false).then(function (r) { gFail(e, r && r.st); }, function () { gFail(e, null); });
+    });
+    function gFail(e, st2) {
+      if (tok !== wtTok) return;
+      var k = errKind(e, st2); gl.err = k;
+      if (e && e.kind === 'failed' && e.code === 'out_of_scope') { k = 'weboff'; gl.err = k; }
+      if (gl.loaded) { wtStatus(k, { sub: (SAY[k].sub ? SAY[k].sub + ' ' : '') + '(마지막으로 받은 목록을 보여 드리고 있어요.)' }); toast(SAY[k].say, 2200); } else wtStatus(k);
+      paintGList();
+    }
+  }
+  function gSearch(q) {
+    var pf = curPf(), st = gModeState(), tok = ++wtTok; sres.q = q; wtStatus('listload');
+    var prm = { pf: pf, mode: 'search', q: q, p: 1 }; if (st.l) prm.lang = st.l;
+    api.request('plat_list', prm, { max: 120000, cancelled: function () { return tok !== wtTok; } }).then(function (res) {
+      if (tok !== wtTok) return;
+      wtStatus(''); sres.items = gItems(res.items); sres.on = true;
+      paintChips(); paintWHead(); paintGList();
+    }, function (e) {
+      if (tok !== wtTok || (e && e.kind === 'cancel')) return;
+      pollState(false).then(function (r) { var k = errKind(e, r && r.st); if (e && e.kind === 'failed' && e.code === 'out_of_scope') k = 'weboff'; wtStatus(k); }, function () { wtStatus(errKind(e, null)); });
+    });
+  }
+  /* 표지 — 화면에 보이는 것부터 묶어서 요청(폰에 기억해 둔 것은 다시 받지 않는다). 키는 「플랫폼:작품번호」 */
+  function gWatch() {
+    var cards = body().querySelectorAll('#mgWList .mg-bcard[data-pk]'), i;
+    if (pq.io) { try { pq.io.disconnect(); } catch (e) {} pq.io = null; }
+    if (typeof IntersectionObserver === 'undefined') { for (i = 0; i < cards.length; i++) gCoverWant(cards[i].getAttribute('data-pk')); return; }
+    pq.io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var k = e.target.getAttribute('data-pk'); pq.io.unobserve(e.target); gCoverWant(k); } }); }, { rootMargin: '900px 0px' });
+    for (i = 0; i < cards.length; i++) { var pk = cards[i].getAttribute('data-pk'); if (!pcov[pk]) pq.io.observe(cards[i]); }
+  }
+  function gCoverWant(pk) { if (!pk || pcov[pk] || pq.pending[pk] || pq.queue.indexOf(pk) >= 0) return; pq.queue.push(pk); clearTimeout(pq.timer); pq.timer = setTimeout(gPump, 30); }
+  function gSetCov(pk, src) {
+    if (pcov[pk]) { try { if (/^blob:/.test(src)) URL.revokeObjectURL(src); } catch (e) {} return; }
+    pcov[pk] = src;
+    var cs = body().querySelectorAll('.mg-bcard[data-pk="' + pk + '"] .mg-bcov'), j;
+    for (j = 0; j < cs.length; j++) { var c = cs[j], ic = c.querySelector('i'); if (ic) { var im = document.createElement('img'); im.alt = ''; im.src = src; c.insertBefore(im, c.firstChild); ic.parentNode.removeChild(ic); c.removeAttribute('data-wait'); } }
+    if (curManga && curManga.pk === pk) { var h = body().querySelector('.mg-chcov'); if (h && !h.querySelector('img')) { var im2 = document.createElement('img'); im2.alt = ''; im2.src = src; h.insertBefore(im2, h.firstChild); } }
+  }
+  var pqNeed = [];
+  function gPump() {
+    var ks = pq.queue.splice(0, pq.queue.length).filter(function (k) { return !pcov[k] && !pq.pending[k]; });
+    if (!ks.length) return;
+    ks.forEach(function (k) { pq.pending[k] = 1; });
+    Promise.all(ks.map(function (k) { return IDB.get('cv', k).then(function (rec) { return { k: k, rec: rec }; }); })).then(function (rs) {
+      rs.forEach(function (x) {
+        if (x.rec && x.rec.b && Date.now() - (x.rec.at || 0) < K.CV_KEEP_MS) { var u = ''; try { u = URL.createObjectURL(x.rec.b); } catch (e) {} if (u) { gSetCov(x.k, u); delete pq.pending[x.k]; return; } }
+        if (pq.budget[x.k.split(':')[0]]) delete pq.pending[x.k]; else pqNeed.push(x.k);
+      });
+      gPumpNet();
+    });
+  }
+  function gPumpNet() {
+    while (pq.inflight < K.COV_PAR && pqNeed.length && api) {
+      var pf = pqNeed[0].split(':')[0], batch = [], rest = [];
+      pqNeed.splice(0, pqNeed.length).forEach(function (k) { if (k.split(':')[0] === pf && batch.length < K.COV_BATCH) batch.push(k); else rest.push(k); });
+      pqNeed = rest; pq.inflight++;
+      gFetchCovers(pf, batch).then(function () { pq.inflight--; gPumpNet(); }, function () { pq.inflight--; gPumpNet(); });
+    }
+  }
+  function gFetchCovers(pf, pks) {
+    var ks = pks.map(function (p) { return num(p.split(':')[1]); });
+    return api.request('plat_covers', { pf: pf, ks: ks }, { max: 90000 }).then(function (res) {
+      var files = res.files || {}, ids = [], byId = {}, jobs = [], i;
+      if (res.budget) pq.budget[pf] = true;
+      pks.forEach(function (pk) { var f = files[String(num(pk.split(':')[1]))]; if (f && f.id) { ids.push(f.id); byId[f.id] = pk; } });
+      for (i = 0; i < ids.length; i += K.SIGN_MAX) (function (grp) {
+        jobs.push(api.sign(grp).then(function (s) {
+          return Promise.all(grp.map(function (id) {
+            var u = s.urls[id]; if (!u) return null;
+            return api.fetchBlob(u).then(function (b) { var pk = byId[id], src = ''; try { src = URL.createObjectURL(b); } catch (e) {} if (src) gSetCov(pk, src); IDB.put('cv', pk, { b: b, at: Date.now() }); }, function () {});
+          }));
+        }));
+      })(ids.slice(i, i + K.SIGN_MAX));
+      return Promise.all(jobs);
+    }).then(null, function () {}).then(function () { pks.forEach(function (k) { delete pq.pending[k]; }); });
+  }
+  /* 담지 않고 열기(플랫폼): plat_open(중계가 목록·소스·성인 낱말을 확인) → 회차 목록 */
+  function openPk(pk) {
+    var it = gItem(pk); if (!it || !api) return;
+    var pf = pk.split(':')[0];
+    wtScrollY = window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0;
+    var m = { id: null, k: it.k, pf: pf, pk: pk, title: it.n, origin: 'web', status: it.d ? 'done' : 'ongoing', shelf: false, from: 'wt' };
+    curManga = m; view = 'chap'; chapItems = null; wtTok++;
+    setTitle(m.title); setRefresh(true);
+    body().innerHTML = '<div class="mg-wrap"><div id="mgChHead"></div><div id="mgTop"></div><div id="mgSortRow" class="mg-sortrow"></div><div id="mgList" class="mg-list"></div></div>';
+    paintChapHead();
+    var top = body().querySelector('#mgTop'); if (top) top.innerHTML = sayCard('openload');
+    window.scrollTo(0, 0);
+    var tok = ++loadTok;
+    pollState(true).then(function (r) {
+      if (tok !== loadTok) return;
+      if (r.j.k === 'pcoff' || r.j.k === 'relay' || r.j.k === 'sw') { if (top) top.innerHTML = sayCard(r.j.k); return; }
+      return api.request('plat_open', { pf: pf, k: it.k }, { max: 120000, cancelled: function () { return tok !== loadTok; } }).then(function (res) {
+        if (tok !== loadTok) return;
+        var c = res.manga || {};
+        if (!c.id) throw mkErr('failed', { code: 'not_openable' });
+        m.id = c.id; m.shelf = !!c.shelf; if (c.status) m.status = c.status; if (c.title) m.title = c.title;
+        setTitle(m.title); paintChapHead();
+        loadChapters(m, false);
+      });
+    }).then(null, function (e) {
+      if (tok !== loadTok || (e && e.kind === 'cancel')) return;
+      pollState(false).then(function (r) { fail(r && r.st); }, function () { fail(null); });
+      function fail(st) { var k = errKind(e, st); if (e && e.kind === 'failed' && (e.code === 'not_offered' || e.code === 'out_of_scope')) k = 'notopen'; if (k === 'agebad') k = 'agebado'; else if (k === 'ageunk') k = 'ageunko'; var tp = body().querySelector('#mgTop'); if (tp) tp.innerHTML = sayCard(k); }
+    });
   }
 
   /* ---------------------------------------------------------------- 아래에서 올라오는 시트 */
@@ -1204,10 +1682,10 @@
       '<div class="mg-acts"><button type="button" class="mg-btn pri" id="mgShAdd" data-sh="add"' + (it.in_shelf ? ' disabled' : '') + '>' + (it.in_shelf ? '이미 담았어요' : '서재에 담기') + '</button><button type="button" class="mg-btn" data-sh="close">닫기</button></div>');
   }
   function showLockedSheet(chap) {
-    var u = naverUrl(chap && chap.u);
-    showSheet({ t: 'locked', chap: chap },
-      '<div class="mg-sh-lock">' + kfig('sorry') + '<div><b>' + esc(SAY.locked.say) + '</b><p>' + esc(SAY.locked.sub) + '</p></div></div>' +
-      '<div class="mg-acts">' + (u ? '<button type="button" class="mg-btn pri" data-sh="ext">네이버웹툰에서 보기</button>' : '') + '<button type="button" class="mg-btn" data-sh="close">닫기</button></div>');
+    var gp = curManga && curManga.pf, u = gp ? pfSiteUrl(PFR, gp) : naverUrl(chap && chap.u), lk = gp ? GEN_SAY.locked() : SAY.locked;
+    showSheet({ t: 'locked', chap: chap, pf: gp || '' },
+      '<div class="mg-sh-lock">' + kfig('sorry') + '<div><b>' + esc(lk.say) + '</b><p>' + esc(lk.sub) + '</p></div></div>' +
+      '<div class="mg-acts">' + (u ? '<button type="button" class="mg-btn pri" data-sh="ext">' + (gp ? '정식 사이트 열기' : '네이버웹툰에서 보기') + '</button>' : '') + '<button type="button" class="mg-btn" data-sh="close">닫기</button></div>');
   }
   function showRemoveSheet(m) {
     var local = m.origin !== 'web';
@@ -1220,7 +1698,7 @@
   function onSheet(act) {
     var c = sheetCtx; if (!c) return;
     if (act === 'close') return closeSheet();
-    if (act === 'ext' && c.t === 'locked') { var u = naverUrl(c.chap && c.chap.u); if (u) { try { host.openUrl(u); } catch (e) { toast('링크를 열지 못했어요.', 2000); } } return; }
+    if (act === 'ext' && c.t === 'locked') { var u = c.pf ? pfSiteUrl(PFR, c.pf) : naverUrl(c.chap && c.chap.u); if (u) { try { host.openUrl(u); } catch (e) { toast('링크를 열지 못했어요.', 2000); } } return; }
     if (act === 'add' && c.t === 'add') return sheetAdd(c.item);
     if (act === 'rm' && c.t === 'rm') return sheetRemove(c.m);
   }
@@ -1272,10 +1750,14 @@
 
   /* ---------------------------------------------------------------- 눌림 */
   function onBodyClick(ev) {
-    var t = ev.target, el = t.closest ? t.closest('[data-m],[data-c],[data-act],[data-resume],[data-f],[data-tab],[data-bv],[data-bd],[data-bs],[data-t],[data-csort]') : null;
+    var t = ev.target, el = t.closest ? t.closest('[data-m],[data-c],[data-act],[data-resume],[data-f],[data-tab],[data-bv],[data-bd],[data-bs],[data-t],[data-csort],[data-pfc],[data-pk],[data-gm],[data-gl]') : null;
     if (!el) return;
     if (Date.now() - lpFired < 600) { ev.preventDefault(); return; }       // 길게 눌러 시트가 뜬 뒤에 따라오는 눌림은 무시
     if (el.hasAttribute('data-tab')) return selectTab(el.getAttribute('data-tab'), true);
+    if (el.hasAttribute('data-pfc')) { var pc = el.getAttribute('data-pfc'); if (pfSt(pc).s === 'read') return pfUse(pc); return openPf(pc); }
+    if (el.hasAttribute('data-pk')) return openPk(el.getAttribute('data-pk'));
+    if (el.hasAttribute('data-gm')) { var gp1 = curPf(); pfPrefs.mode[gp1] = { m: el.getAttribute('data-gm') === 'new' ? 'new' : 'pop', l: gModeState().l }; pfSave(); sres = { open: false, on: false, q: '', items: null }; paintSearch(); paintChips(); paintWHead(); return gLoad({ force: true }); }
+    if (el.hasAttribute('data-gl')) { var gp2 = curPf(); pfPrefs.mode[gp2] = { m: gModeState().m, l: el.getAttribute('data-gl') }; pfSave(); sres = { open: false, on: false, q: '', items: null }; paintSearch(); paintChips(); paintWHead(); return gLoad({ force: true }); }
     if (el.hasAttribute('data-bv')) return setBs({ view: el.getAttribute('data-bv') === 'done' ? 'done' : 'day' });
     if (el.hasAttribute('data-bd')) return setBs({ day: Math.max(0, Math.min(6, num(el.getAttribute('data-bd')))) });
     if (el.hasAttribute('data-bs')) { var sv = el.getAttribute('data-bs'); return setBs(bs.view === 'done' ? { sortDone: sv } : { sort: sv }); }
@@ -1285,7 +1767,9 @@
     if (el.hasAttribute('data-m')) return openManga(Number(el.getAttribute('data-m')));
     if (el.hasAttribute('data-resume')) return resumeFromBand();
     var act = el.getAttribute('data-act');
-    if (act === 'retry') { if (view === 'chap' && curManga && !curManga.id && curManga.t) return openBrowse(curManga.t); return view === 'find' ? (finder.pop = null, openFind()) : refresh(true); }
+    if (act === 'pfall') return openPf('');
+    if (act === 'gmore') { gLoad({ page: gl.page + 1, force: true }); return; }
+    if (act === 'retry') { if (view === 'chap' && curManga && !curManga.id && curManga.pk) return openPk(curManga.pk); if (view === 'chap' && curManga && !curManga.id && curManga.t) return openBrowse(curManga.t); return view === 'find' ? (finder.pop = null, openFind()) : refresh(true); }
     if (act === 'gowt') return selectTab('wt', true);
     if (act === 'addcur') return addCurrent();
     if (act === 'bsearch') return toggleSearch();
@@ -1775,6 +2259,7 @@
    * 5. 앱 연결
    * ===================================================================*/
   function back() {
+    if (pfIsOpen()) { closePf(); return true; }
     if (sheetIsOpen()) { closeSheet(); return true; }
     if (rd) { closeReader(); return true; }
     if (view === 'chap' || view === 'find') {
@@ -1796,7 +2281,7 @@
     return false;                       // 더 닫을 게 없으면 홈으로(app.js)
   }
   function leave() {
-    closeSheet(); findTok++; wtTok++;
+    closePf(); closeSheet(); findTok++; wtTok++;
     if (rd) teardown(true);
     stopStateTimer(); loadTok++;
   }
@@ -1819,6 +2304,6 @@
   }
   global.MangaTab = {
     init: init, open: open, back: back, leave: leave, resume: resume,
-    _test: { bl: function () { return bl; }, bs: function () { return bs; }, tab: function () { return tab; }, bcov: function () { return bcov; }, browseOn: browseOn, openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode }
+    _test: { bl: function () { return bl; }, bs: function () { return bs; }, tab: function () { return tab; }, bcov: function () { return bcov; }, browseOn: browseOn, openPf: openPf, closePf: closePf, pf: function () { return { prefs: pfPrefs, info: pfInfoNow(), cur: curPf(), rows: PFR, gl: gl, pcov: pcov }; }, openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode }
   };
 })(typeof window !== 'undefined' ? window : this);

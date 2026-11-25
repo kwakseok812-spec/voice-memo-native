@@ -284,3 +284,63 @@ html[data-style="light"] .mg-sheet { background: #fff; }
 
 /* v10.29 보완: 크게 보기의 「작가 · ★별점」 줄 — 넘치면 말줄임 */
 .mg-bsub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============================================================================
+ * v10.31(O-0967) 플랫폼 고르기 — 웹툰 탭 위 한 줄 · 전체 플랫폼 시트
+ * ==========================================================================*/
+.mg-pfbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mg-pfchips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 4px 3px; -webkit-overflow-scrolling: touch; }
+.mg-pfchips::-webkit-scrollbar { display: none; }
+.mg-pfc { flex: none; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap; transition: transform .12s; }
+.mg-pfc:active { transform: scale(.96); }
+.mg-pfc.on { border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; box-shadow: var(--glow-s); }
+.mg-pfall { flex: none; height: 38px; padding: 0 12px; border-radius: 12px; border: 1px dashed var(--muted); background: transparent; color: var(--text); font-size: 13.5px; font-weight: 800; cursor: pointer; white-space: nowrap; transition: transform .12s; }
+.mg-pfall:active { transform: scale(.96); }
+
+.mg-pfbg { position: fixed; inset: 0; z-index: 970; display: none; align-items: flex-end; justify-content: center; background: rgba(4, 6, 14, .55); }
+.mg-pfpanel { width: 100%; max-width: 920px; height: calc(100% - 40px); display: flex; flex-direction: column; border-radius: 22px 22px 0 0; background: var(--bg1, #12162a); color: var(--text);
+  border: 1px solid var(--glass-b); box-shadow: 0 -12px 40px rgba(0, 0, 0, .4); }
+html[data-style="light"] .mg-pfpanel { background: #fff; }
+.mg-pfbg.on .mg-pfpanel { animation: mgSheetUp .22s ease both; }
+.mg-pfhead { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; }
+.mg-pfhead b { font-size: 17px; font-weight: 800; }
+.mg-pfx { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--glass2); color: var(--text); font-size: 16px; cursor: pointer; }
+.mg-pfscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 12px; -webkit-overflow-scrolling: touch; }
+.mg-pfq { width: 100%; height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 15px; font-family: inherit; }
+.mg-pfgroups { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 3px 2px; }
+.mg-pfgroups::-webkit-scrollbar { display: none; }
+.mg-pfgroups:empty { display: none; }
+.mg-pfcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+@media (min-width: 600px) { .mg-pfcards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 750px) { .mg-pfcards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .mg-pfcards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mg-pc { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; min-height: 92px; padding: 10px 10px 10px 12px; border-radius: 14px; text-align: left; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-b); color: var(--text); transition: transform .12s; }
+.mg-pc:active { transform: scale(.97); }
+.mg-pc.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.mg-pc.hid { opacity: .55; }
+.mg-pc .nm { max-width: 100%; padding-right: 58px; font-size: 14.5px; font-weight: 800; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: keep-all; overflow-wrap: anywhere; }
+.mg-pc .lg { font-size: 11.5px; color: var(--dim); }
+.mg-pfbd { display: inline-block; margin-top: auto; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; }
+.mg-pfbd.rd { background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; }
+.mg-pfbd.ck { border: 1px solid var(--warn); color: var(--warn); }
+.mg-pfbd.lk { background: var(--glass2); color: var(--muted); border: 1px solid var(--glass-b2); }
+.mg-pfstar, .mg-pfeye { position: absolute; top: 2px; width: 34px; height: 34px; border: 0; background: transparent; color: var(--muted); font-size: 19px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.mg-pfstar { right: 30px; } .mg-pfeye { right: 0; }
+.mg-pfstar.on { color: #f5b301; }
+.mg-pfmv { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.mg-pfmv button { width: 32px; height: 30px; border-radius: 8px; border: 0; background: var(--glass2); color: var(--text); font-size: 13px; cursor: pointer; }
+.mg-pfnote { margin: 14px 2px 4px; font-size: 12px; line-height: 1.55; color: var(--dim); }
+.mg-pfnone { grid-column: 1 / -1; font-size: 13.5px; color: var(--muted); }
+.mg-pffoot { flex: none; padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 12px); }
+.mg-pfundo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; margin-bottom: 8px; border-radius: 12px; background: var(--glass2); border: 1px solid var(--glass-b2); font-size: 13.5px; font-weight: 700; }
+.mg-pfundo button { border: 0; background: transparent; color: var(--cyan); font-size: 14px; font-weight: 800; cursor: pointer; padding: 4px 8px; }
+.mg-pfundo[hidden], .mg-pfdet[hidden] { display: none; }
+.mg-pfdet { padding: 12px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-b2); box-shadow: 0 -6px 18px rgba(0, 0, 0, .18); }
+.mg-pfdet b { font-size: 16px; font-weight: 800; }
+.mg-pfdet small { margin-left: 8px; font-size: 12px; color: var(--dim); }
+.mg-pfdet .mg-pfsub { display: block; margin: 2px 0 0; }
+.mg-pfsay { margin: 6px 0 0; font-size: 14.5px; font-weight: 700; color: var(--warn); }
+.mg-pfnoaddr { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--muted); }
+.mg-pfdet .mg-acts .mg-btn { width: 100%; }
+@media (prefers-reduced-motion: reduce) { .mg-pc, .mg-pfc, .mg-pfall, .mg-pfbg.on .mg-pfpanel { transition: none; animation: none; } }
