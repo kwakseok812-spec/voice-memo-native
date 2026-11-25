@@ -8,13 +8,16 @@
  *   · 세로로 아주 긴 그림(높이/폭 > 2.2)이 첫 쪽이면 「세로」, 아니면 「좌→우」가 기본값. 읽는 중 위쪽 알약을 한 번 누르면
  *     세로 → 좌→우 → 우→좌 순으로 바뀌고, 만화별로 기억한다(설정 화면 없음).
  * 사실대로 말하기: 못 불러온 것을 「0건」으로 꾸미지 않는다. 상태 문구는 서버가 알려 준 시각으로만 판정한다
- *   (PC 꺼짐 / 중계 멈춤 / 만화 서버 쉬는 중 / 서재 비어 있음 / 못 불러옴 / 암호 불일치 / 서버 준비 중 / 인터넷 불안정).
+ *   (PC 꺼짐 / 중계 멈춤 / 만화 프로그램 쉬는 중 / 서재 비어 있음 / 못 불러옴 / 암호 불일치 / 서버 준비 중 / 인터넷 불안정).
  * 쪽 받기: 중계가 현재 쪽 기준 앞 6쪽·뒤 2쪽만 서버에 올려 두므로(그림은 3시간짜리 서명 주소), 앱은 보기 직전에 주소를 받아
  *   그림을 이 기기 메모리(blob)에 담아 둔다. 이미 본 쪽은 서버에서 지워져도 다시 볼 수 있다(최대 36쪽, 넘으면 먼 쪽부터 비움).
  *   폰에 파일을 저장하지 않는다(메모리뿐 · 화면을 닫으면 비움).
  * 스위치: app.js 의 MANGA_UI('on' | 'off' — off 면 홈 칸이 없어 v10.26 과 같다). 새 권한·새 네이티브 코드 없음.
  *   v10.28: MANGA_WEB('on' | 'off' — off 면 「웹툰 찾기」 칸과 웹툰 표시가 없어 v10.27 과 같다). 웹툰은 서재에 PC 만화와 한 목록, 세로 이어 읽기가 기본,
  *   볼 수 없는 화는 「이 화는 앱에서 볼 수 없어요」 안내 + 「네이버웹툰에서 보기」(바깥 브라우저·앱으로 열기, 앱이 직접 받지 않음).
+ *   v10.29(O-0961·O-0960): 스위치 MANGA_BROWSE('on' | 'off' — off 면 v10.28 화면 그대로). 서재 | 웹툰 탭, 웹툰 탭은 요일별·완결 전체 목록을 표지 격자로(3열/크게 보기 2열),
+ *   표지를 누르면 서재에 담지 않고 바로 회차 목록 → 읽기(서재에 담기는 선택), 회차 「1화부터 / 최신 화부터」 정렬(작품별 기억), PC 만화도 서재에서 뺄 수 있다(PC의 보관 폴더로 옮김, 삭제 아님).
+ *   PC 중계가 0.4 미만이면 v10.28 방식(+ 웹툰 찾기 칸)으로 보인다.
  * 시험: MangaPure · MangaApiFactory 는 화면 없이 밖에서 시험할 수 있게 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
 (function (global) {
@@ -33,8 +36,15 @@
     WEBTOON: 2.2,          // 높이/폭이 이보다 크면 웹툰형(서버와 같은 기준)
     BLOB_MAX: 36,          // 한 번에 기기 메모리에 담아 두는 쪽 수 상한
     SIGN_MAX: 12,          // 서명 함수 한 번에 받는 id 수(서버 상한)
-    BARS_MS: 3200          // 읽기 화면 위·아래 줄이 저절로 숨는 시간
+    BARS_MS: 3200,         // 읽기 화면 위·아래 줄이 저절로 숨는 시간
+    COV_BATCH: 18,         // 표지를 한 번에 요청하는 수(중계 상한 24)
+    COV_PAR: 2,            // 동시에 보내는 표지 요청 수(서버 대기 한도 때문에 한두 개씩)
+    CV_KEEP_MS: 14 * 86400000, CV_MAX: 700,    // 폰에 기억하는 표지: 14일·700장까지
+    BL_KEEP_MS: 3 * 86400000,                  // 폰에 기억하는 마지막 목록(글자)
+    BL_FRESH_MS: 300000,   // 뒤로 돌아왔을 때 이 시간 안이면 목록을 다시 받지 않는다
+    NEED_VER: '0.4'        // 웹툰 목록 기능이 있는 중계 버전
   };
+  var DAY_NAME = ['월', '화', '수', '목', '금', '토', '일'];
   var MODES = ['v', 'ltr', 'rtl'];
   var MODE_NAME = { v: '세로', ltr: '좌→우', rtl: '우→좌' };
   var MODE_SAY = { v: '세로로 읽어요', ltr: '왼쪽에서 오른쪽으로 읽어요', rtl: '오른쪽에서 왼쪽으로 읽어요' };
@@ -56,8 +66,8 @@
     var pcAge = ps === null ? null : (now - ps) / 1000;
     var info = (st.relay_info && typeof st.relay_info === 'object') ? st.relay_info : {};
     if (relayAge !== null && relayAge < K.RELAY_LIVE) {
-      if (info.suwayomi === false) return { k: 'sw', relayAge: relayAge, pcAge: pcAge, web: info.web || '' };
-      return { k: 'ok', relayAge: relayAge, pcAge: pcAge, web: info.web || '' };
+      if (info.suwayomi === false) return { k: 'sw', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '' };
+      return { k: 'ok', relayAge: relayAge, pcAge: pcAge, web: info.web || '', ver: info.v || '', browse: info.browse || '' };
     }
     if (pcAge === null || pcAge > K.PC_STALE) return { k: 'pcoff', relayAge: relayAge, pcAge: pcAge };
     return { k: 'relay', relayAge: relayAge, pcAge: pcAge };
@@ -67,13 +77,13 @@
   var SAY = {
     pcoff: { say: 'PC가 꺼져 있어요.', sub: '켜지면 다시 볼 수 있어요.', pose: 'sorry', retry: true },
     relay: { say: 'PC의 만화 연결이 멈춰 있어요.', sub: 'PC는 켜져 있는데 만화를 가져오는 부분만 쉬고 있어요. 케이에게 다시 켜 달라고 말씀해 주세요.', pose: 'sorry', retry: true },
-    sw: { say: '만화 서버가 쉬고 있어요.', sub: '조금 있다가 다시 확인해 볼게요.', pose: 'sorry', retry: true },
-    empty: { say: '서재가 비어 있어요.', sub: 'PC에 만화를 넣어 두시면 바로 여기에 나타나요. 아래 +를 눌러 웹툰을 담을 수도 있어요.', pose: 'guide', retry: true },
+    sw: { say: 'PC의 만화 프로그램이 쉬고 있어요.', sub: '조금 있다가 다시 확인해 볼게요.', pose: 'sorry', retry: true },
+    empty: { say: '서재가 비어 있어요.', sub: 'PC에 만화를 넣거나 아래 +로 웹툰을 담아 보세요.', pose: 'guide', retry: true },
     fail: { say: '못 불러왔어요.', sub: '잠깐 뒤에 다시 해 볼까요?', pose: 'sorry', retry: true },
     net: { say: '인터넷이 불안정한 것 같아요.', sub: '연결을 확인하고 다시 해 볼까요?', pose: 'sorry', retry: true },
     badpass: { say: '연동 암호가 맞지 않아요.', sub: '암호를 다시 확인해 주세요.', pose: 'sorry', pass: true },
     nopass: { say: '연동 암호를 넣으면 PC의 만화를 볼 수 있어요.', sub: '', pose: 'guide', pass: true },
-    notready: { say: '만화 서버가 아직 준비되지 않았어요.', sub: '준비가 끝나면 이 화면에서 바로 보여요.', pose: 'sorry', retry: true },
+    notready: { say: 'PC의 만화 프로그램이 아직 준비되지 않았어요.', sub: '준비가 끝나면 이 화면에서 바로 보여요.', pose: 'sorry', retry: true },
     load: { say: 'PC에서 서재를 가져오고 있어요.', sub: '', pose: 'desk' },
     slow: { say: '조금 걸리고 있어요.', sub: 'PC가 바쁜 것 같아요. 조금만 기다려 주세요.', pose: 'desk' },
     nopages: { say: '이 화에는 볼 쪽이 없어요.', sub: '', pose: 'sorry' },
@@ -87,7 +97,19 @@
     ageunk: { say: '지금은 담을 수 없어요.', sub: '잠시 뒤에 다시 해 보세요.', pose: 'sorry' },
     full: { say: '웹툰 서재가 가득 찼어요.', sub: '안 보는 웹툰을 빼고 다시 담아 주세요.', pose: 'sorry' },
     findload: { say: '케이가 웹툰을 찾고 있어요.', sub: '', pose: 'desk' },
-    noresult: { say: '찾는 웹툰이 없어요.', sub: '다른 말로 다시 찾아 보세요.', pose: 'guide' }
+    noresult: { say: '찾는 웹툰이 없어요.', sub: '다른 말로 다시 찾아 보세요.', pose: 'guide' },
+    /* v10.29(O-0961·O-0960) */
+    budget: { say: '오늘은 많이 봤어요.', sub: '내일 다시 열어 드릴게요. 서재에 있는 만화는 그대로 볼 수 있어요.', pose: 'sorry' },
+    notopen: { say: '지금은 열 수 없는 작품이에요.', sub: '다른 작품을 골라 주세요.', pose: 'sorry' },
+    localbusy: { say: '지금 읽고 있나 봐요.', sub: '잠시 뒤에 다시 해 주세요.', pose: 'sorry' },
+    removeoff: { say: '지금은 PC 만화 빼기가 꺼져 있어요.', sub: '', pose: 'sorry' },
+    lfail: { say: '서재에서 빼지 못했어요.', sub: '잠깐 뒤에 다시 해 볼까요?', pose: 'sorry' },
+    openload: { say: '케이가 작품을 열고 있어요.', sub: '', pose: 'desk' },
+    listload: { say: '케이가 웹툰 목록을 가져오고 있어요.', sub: '', pose: 'desk' },
+    listempty: { say: '이 요일에 올라온 작품이 없어요.', sub: '', pose: 'guide' },
+    agebado: { say: '이 작품은 열 수 없어요.', sub: '연령 제한이 있는 작품이에요.', pose: 'sorry' },
+    ageunko: { say: '지금은 열 수 없어요.', sub: '잠시 뒤에 다시 해 보세요.', pose: 'sorry' },
+    wtempty: { say: '서재가 비어 있어요.', sub: 'PC에 만화를 넣거나 웹툰 탭에서 담아 보세요.', pose: 'guide' }
   };
   /* 요청 오류 → 말할 문장 종류 */
   function errKind(e, st) {
@@ -110,6 +132,11 @@
       if (c === 'age_blocked') return 'agebad';
       if (c === 'age_unknown') return 'ageunk';
       if (c === 'shelf_full') return 'full';
+      if (c === 'budget_exhausted') return 'budget';
+      if (c === 'not_openable') return 'notopen';
+      if (c === 'local_busy') return 'localbusy';
+      if (c === 'remove_off') return 'removeoff';
+      if (c === 'bad_path' || c === 'local_fail') return 'lfail';
       return 'fail';
     }
     if (k === 'timeout') return 'timeout';
@@ -174,9 +201,65 @@
     return out;
   }
 
+  /* ---- v10.29 순수 함수 ---- */
+  /* "0.4" 같은 버전 문자열을 숫자 마디로 비교(0.10 > 0.4). 모르면 false */
+  function verAtLeast(v, min) {
+    var a = String(v || '').split('.'), b = String(min || '').split('.'), i;
+    if (!/^\d+(\.\d+)*$/.test(String(v || ''))) return false;
+    for (i = 0; i < Math.max(a.length, b.length); i++) { var x = parseInt(a[i] || '0', 10), y = parseInt(b[i] || '0', 10); if (x !== y) return x > y; }
+    return true;
+  }
+  /* 한국시간 날짜·요일(월=0 … 일=6). 폰 시계가 어느 나라든 한국 기준으로 */
+  function kstInfo(ms) {
+    var d = new Date((ms === undefined ? Date.now() : ms) + 9 * 3600000);
+    var y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+    return { date: y + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd, wd: (d.getUTCDay() + 6) % 7 };
+  }
+  var VIEWS = ['day', 'done'], SORTS_DAY = ['pop', 'upd', 'star'], SORTS_DONE = ['upd', 'star'];
+  /* 저장해 둔 보기 상태를 믿을 수 있는 값으로 고친다. 같은 날이면 그대로, 날짜가 바뀌면 요일만 오늘로. */
+  function normBrowse(o, nowMs) {
+    o = (o && typeof o === 'object') ? o : {};
+    var k = kstInfo(nowMs), out = {};
+    out.tab = o.tab === 'lib' || o.tab === 'wt' ? o.tab : '';
+    out.view = VIEWS.indexOf(o.view) >= 0 ? o.view : 'day';
+    out.sort = SORTS_DAY.indexOf(o.sort) >= 0 ? o.sort : 'pop';
+    out.sortDone = SORTS_DONE.indexOf(o.sortDone) >= 0 ? o.sortDone : 'upd';
+    out.cols = o.cols === 2 ? 2 : 3;
+    out.date = k.date;
+    out.day = (o.date === k.date && o.day >= 0 && o.day <= 6 && o.day === (o.day | 0)) ? o.day : k.wd;
+    return out;
+  }
+  function isSample(title) { return /^샘플(\s|$)/.test(String(title || '')); }
+  /* 서재가 비었거나 샘플뿐이면 true — 「웹툰」 탭을 기본으로 보일지 정할 때 쓴다 */
+  function libIsThin(mangas) { var a = mangas || []; return a.length === 0 || a.every(function (m) { return isSample(m.title); }); }
+  function clockHM(ms) { var d = new Date(ms); return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes(); }
+  function fmtStar(s) { var n = Number(s); return isFinite(n) && n > 0 ? '★' + n.toFixed(2) : ''; }
+  function listTitle(view, day, total) { return (view === 'done' ? '완결 웹툰' : DAY_NAME[day] + '요 웹툰') + ' · ' + total + '편'; }
+  function listKey(view, day, sort) { return view === 'done' ? 'done:' + sort : 'day:' + day + ':' + sort; }
+  /* 회차를 보이는 순서로: asc = 1화부터, desc = 최신 화부터. chapItems 자체는 늘 번호 오름차순이라 「다음 화」 계산이 틀어지지 않는다. */
+  function chapterOrder(items, dir) { var a = (items || []).slice(); return dir === 'desc' ? a.reverse() : a; }
+  function okDir(d) { return d === 'asc' || d === 'desc' ? d : ''; }
+  /* 이어 읽던 화 — 읽은 흔적이 있을 때만(처음 읽기 전에는 강조하지 않는다) */
+  function resumeHighlight(items) {
+    var t = resumeTarget(items || []);
+    if (!t) return -1;
+    var started = (items || []).some(function (c) { return c.state === 'read' || c.state === 'prog'; });
+    return started ? t.idx : -1;
+  }
+  /* 표지 요청 묶음 만들기 — 이미 있는·이미 요청 중인 것은 빼고, 앞에서부터 max 개 */
+  function takeCoverBatch(queue, have, pending, max) {
+    var out = [], rest = [];
+    for (var i = 0; i < queue.length; i++) {
+      var t = queue[i];
+      if (have[t] || pending[t]) continue;
+      if (out.length < max && out.indexOf(t) < 0) out.push(t); else if (rest.indexOf(t) < 0) rest.push(t);
+    }
+    return { batch: out, rest: rest };
+  }
+
   /* 이 기기 저장소(localStorage)에 적는 읽은 위치·방향·마지막 읽은 곳. 저장소가 막혀 있어도(시험·사생활 보호 창) 앱은 그대로 돈다. */
   function makeStore(ls) {
-    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_';
+    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_', SORT = 'smart_manga_sort_', BROWSE = 'smart_manga_browse', HINT = 'smart_manga_libhint';
     function rd(k) { try { return ls ? ls.getItem(k) : null; } catch (e) { return null; } }
     function wr(k, v) { try { if (ls) ls.setItem(k, v); } catch (e) {} }
     function pos() { try { var o = JSON.parse(rd(POS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
@@ -194,14 +277,23 @@
       getMode: function (mid) { return okMode(rd(MODE + mid) || ''); },
       setMode: function (mid, m) { if (okMode(m)) wr(MODE + mid, m); },
       getSeen: function (mid) { var v = rd(SEEN + mid); if (v === null || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; },   // 웹툰 — 마지막으로 회차 목록을 본 때의 가장 새 화 번호(없으면 처음 본 것)
-      setSeen: function (mid, n) { wr(SEEN + mid, String(n)); }
+      setSeen: function (mid, n) { wr(SEEN + mid, String(n)); },
+      /* v10.29: 회차 정렬(작품별만 — 새 작품의 기본은 늘 1화부터) · 웹툰 보기 상태 · 서재에 만화가 있었는지 */
+      getSort: function (mid) { return okDir(rd(SORT + mid) || ''); },
+      setSort: function (mid, d) { if (okDir(d)) wr(SORT + mid, d); },
+      getBrowse: function () { try { return JSON.parse(rd(BROWSE) || 'null'); } catch (e) { return null; } },
+      setBrowse: function (o) { wr(BROWSE, JSON.stringify(o)); },
+      getHint: function () { return rd(HINT) || ''; },
+      setHint: function (v) { wr(HINT, v); }
     };
   }
 
   var MangaPure = {
     K: K, MODES: MODES, MODE_NAME: MODE_NAME, MODE_SAY: MODE_SAY, SAY: SAY, esc: esc, isWebtoon: isWebtoon, autoMode: autoMode, nextMode: nextMode,
     judgeState: judgeState, errKind: errKind, fmtMB: fmtMB, chapterBytes: chapterBytes, avgRatio: avgRatio, pageToIdx: pageToIdx, idxToPage: idxToPage,
-    naverUrl: naverUrl, webItems: webItems, mergeChapter: mergeChapter, resumeTarget: resumeTarget, nextChapterIdx: nextChapterIdx, wantedPages: wantedPages, makeStore: makeStore
+    naverUrl: naverUrl, webItems: webItems, mergeChapter: mergeChapter, resumeTarget: resumeTarget, nextChapterIdx: nextChapterIdx, wantedPages: wantedPages, makeStore: makeStore,
+    verAtLeast: verAtLeast, kstInfo: kstInfo, normBrowse: normBrowse, isSample: isSample, libIsThin: libIsThin, clockHM: clockHM, fmtStar: fmtStar, listTitle: listTitle, listKey: listKey,
+    chapterOrder: chapterOrder, resumeHighlight: resumeHighlight, takeCoverBatch: takeCoverBatch, DAY_NAME: DAY_NAME
   };
   global.MangaPure = MangaPure;
 
@@ -301,7 +393,7 @@
   /* =====================================================================
    * 3. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
+  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, browse: true, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
   var $ = function (id) { return document.getElementById(id); };
   var api = null, store = null, inited = false, built = false;
   var view = 'lib';                  // lib | chap | find
@@ -314,6 +406,8 @@
   var fcov = {};                     // 찾기 화면 표지(그림 id → 기기 메모리 주소)
   var lpTimer = 0, lpFired = 0;
   function webOn() { return host.web !== false && !(lastJudge && lastJudge.web === 'off'); }
+  /* v10.29: 서재 | 웹툰 탭 화면. 앱 스위치(MANGA_BROWSE)가 꺼졌거나 PC 중계가 0.4 미만(또는 목록 기능을 끔)이면 v10.28 화면(+ 웹툰 찾기 칸)으로 보인다. */
+  function browseOn() { return webOn() && host.browse !== false && !(lastJudge && lastJudge.ver !== undefined && (lastJudge.browse === 'off' || !verAtLeast(lastJudge.ver, K.NEED_VER))); }
   var LOCK_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   var PLUS_SVG = '<svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
@@ -349,11 +443,12 @@
     b.addEventListener('click', onBodyClick);
     var lx = 0, ly = 0;      // 웹툰 칸을 길게 누르면 「서재에서 빼기」 시트(PC 에서는 오른쪽 단추)
     function lpClear() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = 0; } }
+    function lpSel() { return browseOn() ? '#mgGrid .mg-card[data-m]' : '.mg-card[data-o="web"]'; }       // v10.29: PC 만화도 길게 눌러 뺄 수 있다
     function lpStart(card) { lpClear(); lpTimer = setTimeout(function () { lpTimer = 0; var mid = Number(card.getAttribute('data-m')), m = null; if (lib && lib.mangas) lib.mangas.forEach(function (x) { if (x.id === mid) m = x; }); if (m && view === 'lib') { lpFired = Date.now(); showRemoveSheet(m); } }, 600); }
-    b.addEventListener('pointerdown', function (ev) { var c = ev.target.closest ? ev.target.closest('.mg-card[data-o="web"]') : null; if (c && view === 'lib') { lx = ev.clientX; ly = ev.clientY; lpStart(c); } });
+    b.addEventListener('pointerdown', function (ev) { var c = ev.target.closest ? ev.target.closest(lpSel()) : null; if (c && view === 'lib') { lx = ev.clientX; ly = ev.clientY; lpStart(c); } });
     b.addEventListener('pointermove', function (ev) { if (lpTimer && (Math.abs(ev.clientX - lx) > 10 || Math.abs(ev.clientY - ly) > 10)) lpClear(); });
     b.addEventListener('pointerup', lpClear); b.addEventListener('pointercancel', lpClear);
-    b.addEventListener('contextmenu', function (ev) { var c = ev.target.closest ? ev.target.closest('.mg-card[data-o="web"]') : null; if (c && view === 'lib') { ev.preventDefault(); lpClear(); var mid = Number(c.getAttribute('data-m')), m = null; if (lib && lib.mangas) lib.mangas.forEach(function (x) { if (x.id === mid) m = x; }); if (m) { lpFired = Date.now(); showRemoveSheet(m); } } });
+    b.addEventListener('contextmenu', function (ev) { var c = ev.target.closest ? ev.target.closest(lpSel()) : null; if (c && view === 'lib') { ev.preventDefault(); lpClear(); var mid = Number(c.getAttribute('data-m')), m = null; if (lib && lib.mangas) lib.mangas.forEach(function (x) { if (x.id === mid) m = x; }); if (m) { lpFired = Date.now(); showRemoveSheet(m); } } });
     var rf = $('mangaRefresh');
     if (rf) rf.addEventListener('click', function () { refresh(true); });
     buildReader();
@@ -365,6 +460,7 @@
     return api.state(true).then(function (st) {
       var j = judgeState(st), was = lastJudge; lastJudge = j;
       if (rd) readerState(j);
+      if (view === 'lib' && !rd && shellKind && shellKind !== (browseOn() ? 'browse' : 'old') && isShown()) { renderShell(); if (browseOn()) { markTab(); if (tab === 'wt') paintWtShell(); } if (lib && lib.mangas) paintLibrary(); }
       // 멈춰 있던 PC·중계가 되살아났고 서재를 아직 못 받았으면 저절로 다시 받는다
       if (was && was.k !== 'ok' && j.k === 'ok' && isShown() && !rd && view === 'lib' && (!lib || libFailed) && !libLoading) refresh(false, !!lib);
       return { st: st, j: j };
@@ -387,13 +483,32 @@
     if (host.openScreen) host.openScreen();
     setTitle('만화');
     startStateTimer();
-    if (!host.getPass()) { renderShell(); body().querySelector('#mgTop').innerHTML = sayCard('nopass'); setRefresh(false); return; }
+    initBrowseState();
+    if (!host.getPass()) { renderShell(); var tp0 = body().querySelector('#mgTop') || body().querySelector('#mgWTop'); if (tp0) tp0.innerHTML = sayCard('nopass'); setRefresh(false); return; }
     renderShell();
-    if (lib && lib.mangas) { paintLibrary(); refresh(false, true); } else refresh(false);
+    IDB.prune();
+    if (browseOn()) {
+      markTab();
+      if (tab === 'wt') {
+        paintWtShell(); wtLoad({}); if (lib && lib.mangas) paintLibrary();
+        // 서재는 웹툰 목록·첫 표지가 먼저 오도록 잠깐 뒤에 조용히 확인한다(PC가 서재 갱신으로 바쁠 때 목록이 늦어지지 않게)
+        setTimeout(function () { if (view === 'lib' && tab === 'wt' && isShown() && !libLoading && !rd) refreshLib(false, true); }, 3000);
+        return;
+      }
+    }
+    if (lib && lib.mangas) { paintLibrary(); refreshLib(false, true); } else refreshLib(false);
   }
   function setRefresh(on) { var rf = $('mangaRefresh'); if (rf) rf.style.visibility = on ? '' : 'hidden'; }
   function renderShell() {
-    body().innerHTML = '<div class="mg-wrap"><div id="mgTop"></div><div id="mgResume"></div><div id="mgGrid" class="mg-grid" role="list"></div></div>';
+    if (browseOn()) {
+      shellKind = 'browse';
+      body().innerHTML = '<div class="mg-wrap"><div class="mg-tabs" role="tablist" id="mgTabs"><button type="button" role="tab" data-tab="lib">서재</button><button type="button" role="tab" data-tab="wt">웹툰</button></div>' +
+        '<div id="mgPaneLib"><div id="mgTop"></div><div id="mgResume"></div><div id="mgGrid" class="mg-grid" role="list"></div></div><div id="mgPaneWt"></div></div>';
+      markTab();
+    } else {
+      shellKind = 'old';
+      body().innerHTML = '<div class="mg-wrap"><div id="mgTop"></div><div id="mgResume"></div><div id="mgGrid" class="mg-grid" role="list"></div></div>';
+    }
     setRefresh(true);
   }
 
@@ -402,6 +517,11 @@
     if (!api) return;
     if (view === 'chap') return loadChapters(curManga, true, true);
     if (view === 'find') return;
+    if (browseOn() && tab === 'wt') { if (sres.on) return; wtLoad({ manual: !!force, force: true }); return; }
+    refreshLib(force, quiet);
+  }
+  function refreshLib(force, quiet) {
+    if (!api) return;
     var tok = ++loadTok;
     libLoading = true; libFailed = false;
     var top = body().querySelector('#mgTop');
@@ -413,6 +533,8 @@
         if (tok !== loadTok) return;
         libLoading = false;
         lib = { mangas: res.mangas || [], at: Date.now(), cov: (lib && lib.cov) || {} };
+        store.setHint(libIsThin(lib.mangas) ? 'thin' : 'real');
+        if (browseOn() && !userTab && !tabAutoDone) { tabAutoDone = true; if (!libIsThin(lib.mangas) && tab === 'wt') { tab = 'lib'; markTab(); } }
         paintLibrary();
         loadCovers(tok);
       });
@@ -436,8 +558,11 @@
     if (view !== 'lib' || !body().querySelector('#mgGrid')) return;
     var ms = ((lib && lib.mangas) || []).filter(function (m) { return m.origin !== 'web' || webOn(); });
     var top = body().querySelector('#mgTop'), g = body().querySelector('#mgGrid');
-    var plus = webOn() ? plusTile() : '';
-    if (!ms.length) { top.innerHTML = sayCard('empty'); g.innerHTML = plus; body().querySelector('#mgResume').innerHTML = ''; return; }
+    var plus = (webOn() && !browseOn()) ? plusTile() : '';       // v10.29: 탭이 「+ 웹툰 찾기」 칸을 대신한다
+    if (!ms.length) {
+      top.innerHTML = browseOn() ? sayCard('wtempty', { extra: '<button type="button" class="mg-btn pri" data-act="gowt">웹툰 보러 가기</button>' }) : sayCard('empty');
+      g.innerHTML = plus; body().querySelector('#mgResume').innerHTML = ''; return;
+    }
     top.innerHTML = '<div class="mg-hello" role="status"><b>만화가 ' + ms.length + '개 있어요.<br>뭘 볼까요?</b>' + kfig('guide', 'hi') + '</div>';
     var html = '', i;
     for (i = 0; i < ms.length; i++) {
@@ -503,18 +628,21 @@
   function openManga(mid) {
     var m = null; if (lib && lib.mangas) lib.mangas.forEach(function (x) { if (x.id === mid) m = x; });
     if (!m) return;
-    curManga = m; view = 'chap'; chapItems = null;
+    curManga = m; view = 'chap'; chapItems = null; m.from = 'lib'; m.shelf = true; m.scrolled = false;
+    wtScrollY = window.pageYOffset || 0;
     setTitle(m.title);
-    body().innerHTML = '<div class="mg-wrap"><div id="mgChHead"></div><div id="mgTop"></div><div id="mgList" class="mg-list"></div></div>';
+    body().innerHTML = '<div class="mg-wrap"><div id="mgChHead"></div><div id="mgTop"></div><div id="mgSortRow" class="mg-sortrow"></div><div id="mgList" class="mg-list"></div></div>';
     paintChapHead();
+    window.scrollTo(0, 0);
     loadChapters(m, false);
   }
   function isWebManga(m) { return !!(m && m.origin === 'web'); }
   function paintChapHead() {
     var m = curManga, el = body().querySelector('#mgChHead'); if (!el || !m) return;
-    var url = (lib && lib.cov[m.id]) || '';
+    var url = coverOf(m);
     el.innerHTML = '<div class="mg-chhead"><span class="mg-chcov">' + (url ? '<img alt="" src="' + esc(url) + '">' : '') + (isWebManga(m) ? '<em class="mg-pill">웹툰</em>' : '') + '</span><div class="mg-chinfo"><b>' + esc(m.title) + '</b><small id="mgChSub">' + (chapItems ? chapSub() : '회차를 가져오는 중…') + '</small><small id="mgChFree" class="mg-free"' + (isWebManga(m) && m.status === 'done' ? '' : ' hidden') + '>앞부분만 무료예요</small><div id="mgChBtn" class="mg-btnrow"></div></div></div>';
     if (chapItems) paintChapBtn();
+    else if (browseOn() && isWebManga(m) && m.id && !isShelf(m)) { var bb = body().querySelector('#mgChBtn'); if (bb) bb.innerHTML = '<button type="button" class="mg-btn" data-act="addcur">서재에 담기</button>'; }
   }
   function chapSub() {
     var n = chapItems.length, un = chapItems.filter(function (c) { return c.state !== 'read'; }).length;
@@ -522,12 +650,13 @@
     return '총 ' + n + '화 · ' + (un ? '안 읽은 ' + un + '화' : '다 읽었어요');
   }
   function paintChapBtn() {
-    var t = resumeTarget(chapItems), el = body().querySelector('#mgChBtn'); if (!el) return;
+    var t = resumeTarget(chapItems || []), el = body().querySelector('#mgChBtn'); if (!el) return;
     var h = t ? '<button type="button" class="mg-btn pri" data-act="go" data-c="' + num(chapItems[t.idx].id) + '" data-p="' + num(t.page) + '"' + (chapItems[t.idx].locked ? ' data-lock="1"' : '') + '>' + esc(t.label) + (t.page > 0 && !isWebManga(curManga) ? ' · ' + (t.page + 1) + '쪽' : '') + '</button>' : '';
     if (t && isWebManga(curManga) && chapItems.length && (t.idx > 0 || t.page > 0)) {      // 웹툰: 「이어 읽기」 옆에 「처음부터」
       var f = chapItems[0];
       h += '<button type="button" class="mg-btn" data-act="go" data-c="' + num(f.id) + '" data-p="0"' + (f.locked ? ' data-lock="1"' : '') + '>처음부터</button>';
     }
+    if (browseOn() && isWebManga(curManga) && curManga.id && !isShelf(curManga)) h += '<button type="button" class="mg-btn" data-act="addcur">서재에 담기</button>';      // 서재에 담지 않고 읽는 작품 — 담기는 선택
     el.innerHTML = h;
   }
   function loadChapters(m, quiet, refresh) {
@@ -569,9 +698,18 @@
     });
     function failChap(e, st) { if (top && !chapItems) top.innerHTML = sayCard(errKind(e, st)); else toast(SAY[errKind(e, st)].say, 2500); }
   }
+  function chapDir() { return (curManga && store.getSort(curManga.id)) || 'asc'; }       // 새 작품의 기본은 늘 1화부터(기억은 작품별로만)
+  function paintSortRow() {
+    var el = body().querySelector('#mgSortRow'); if (!el) return;
+    if (!browseOn() || !chapItems || chapItems.length < 2) { el.innerHTML = ''; return; }
+    var d = chapDir();
+    el.innerHTML = '<span class="mg-clab">회차 순서</span><div class="mg-chips"><button type="button" class="mg-c' + (d === 'asc' ? ' on' : '') + '" data-csort="asc" aria-pressed="' + (d === 'asc' ? 'true' : 'false') + '">1화부터</button>' +
+      '<button type="button" class="mg-c' + (d === 'desc' ? ' on' : '') + '" data-csort="desc" aria-pressed="' + (d === 'desc' ? 'true' : 'false') + '">최신 화부터</button></div>';
+  }
   function paintChapters() {
     var list = body().querySelector('#mgList'); if (!list || !chapItems) return;
-    var html = '', web = isWebManga(curManga), arr = web ? chapItems.slice().reverse() : chapItems;      // 웹툰은 새 화가 위
+    var html = '', web = isWebManga(curManga), dir = browseOn() ? chapDir() : (web ? 'desc' : 'asc'), arr = chapterOrder(chapItems, dir);      // v10.29: 기본은 1화부터(이전 판 웹툰은 새 화가 위)
+    var hi = (browseOn() && dir === 'asc') ? resumeHighlight(chapItems) : -1, hiId = hi >= 0 ? chapItems[hi].id : -1;
     arr.forEach(function (c) {
       var st;
       if (c.locked) st = '<span class="mg-st lock">' + LOCK_SVG + '앱에서 볼 수 없어요</span>';
@@ -579,12 +717,26 @@
       else if (c.state === 'prog') st = '<span class="mg-st prog">' + (web ? '읽는 중' : '읽는 중 · ' + (c.page + 1) + '쪽' + (c.total ? ' / ' + c.total : '')) + '</span>';
       else if (web) st = c.isnew ? '<span class="mg-st new">새 화</span>' : '';
       else st = '<span class="mg-st new">새 화</span>';
-      html += '<button type="button" class="mg-ch ' + c.state + (c.locked ? ' lock' : '') + (web && c.isnew ? ' isnew' : '') + '" data-c="' + num(c.id) + '" data-p="' + (c.state === 'prog' ? num(c.page) : 0) + '"' + (c.locked ? ' data-lock="1"' : '') + '><span class="mg-chn">' + esc(c.name) + (!web && c.pages > 0 ? '<small>' + c.pages + '쪽</small>' : '') + '</span>' + st + '</button>';
+      html += '<button type="button" class="mg-ch ' + c.state + (c.locked ? ' lock' : '') + (web && c.isnew ? ' isnew' : '') + (c.id === hiId ? ' cur' : '') + '" data-c="' + num(c.id) + '" data-p="' + (c.state === 'prog' ? num(c.page) : 0) + '"' + (c.locked ? ' data-lock="1"' : '') + '><span class="mg-chn">' + esc(c.name) + (!web && c.pages > 0 ? '<small>' + c.pages + '쪽</small>' : '') + '</span>' + st + '</button>';
     });
-    list.innerHTML = html + (web ? '<div class="mg-foot"><button type="button" class="mg-linkbtn" data-act="rmcur">서재에서 빼기</button></div>' : '');
+    var canRm = browseOn() ? isShelf(curManga) : web;
+    list.innerHTML = html + (canRm ? '<div class="mg-foot"><button type="button" class="mg-linkbtn" data-act="rmcur">서재에서 빼기</button></div>' : '');
     var sub = $('mgChSub'); if (sub) sub.textContent = chapSub();
-    paintChapBtn();
+    paintChapBtn(); paintSortRow();
+    if (hiId !== -1 && curManga && !curManga.scrolled) {          // 1화부터 보기: 이어 읽던 화로 스크롤해 강조(긴 목록을 위에서부터 내려가지 않게)
+      curManga.scrolled = true;
+      var he = list.querySelector('.mg-ch.cur'); if (he && he.scrollIntoView) { try { he.scrollIntoView({ block: 'center' }); } catch (e) { he.scrollIntoView(); } }
+    }
   }
+  function sortChapters(d) {
+    if (!curManga || !okDirLocal(d) || !chapItems) return;
+    store.setSort(curManga.id, d); curManga.scrolled = true;
+    var list = body().querySelector('#mgList');
+    if (list && motionOn()) { list.classList.remove('fade'); void list.offsetWidth; list.classList.add('fade'); }
+    paintChapters();
+    var row = body().querySelector('#mgSortRow'); if (row && row.scrollIntoView) { try { row.scrollIntoView({ block: 'start' }); } catch (e) {} }
+  }
+  function okDirLocal(d) { return d === 'asc' || d === 'desc'; }
 
   /* ---------------------------------------------------------------- 웹툰 찾기 (v10.28, O-0954) */
   var findTok = 0;
@@ -665,6 +817,365 @@
     })(need.slice(i, i + K.SIGN_MAX));
   }
 
+  /* ---------------------------------------------------------------- 웹툰 탭 (v10.29, O-0961) — 요일별·완결 전체 목록을 표지 격자로 */
+  /* 폰에 기억하는 것: 마지막 목록(글자)·표지 그림. IndexedDB 를 쓰고, 막혀 있으면 이번 실행 동안 메모리만(앱은 그대로 돈다). */
+  var IDB = (function () {
+    var dbp = null, mem = { cv: {}, bl: {} };
+    function db() {
+      if (dbp) return dbp;
+      dbp = new Promise(function (res) {
+        try {
+          var r = global.indexedDB.open('smart_manga', 1);
+          r.onupgradeneeded = function () { var d = r.result; if (!d.objectStoreNames.contains('cv')) d.createObjectStore('cv'); if (!d.objectStoreNames.contains('bl')) d.createObjectStore('bl'); };
+          r.onsuccess = function () { res(r.result); }; r.onerror = function () { res(null); }; r.onblocked = function () { res(null); };
+        } catch (e) { res(null); }
+      });
+      return dbp;
+    }
+    function get(st, k) {
+      return db().then(function (d) {
+        if (!d) return mem[st][k] || null;
+        return new Promise(function (res) { try { var q = d.transaction(st, 'readonly').objectStore(st).get(k); q.onsuccess = function () { res(q.result || null); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } });
+      });
+    }
+    function put(st, k, v) {
+      return db().then(function (d) {
+        if (!d) { mem[st][k] = v; return; }
+        return new Promise(function (res) { try { var tx = d.transaction(st, 'readwrite'); tx.objectStore(st).put(v, k); tx.oncomplete = function () { res(); }; tx.onerror = tx.onabort = function () { mem[st][k] = v; res(); }; } catch (e) { mem[st][k] = v; res(); } });
+      });
+    }
+    /* 오래된 표지·목록 정리(열 때 한 번) */
+    function prune() {
+      db().then(function (d) {
+        if (!d) return;
+        try {
+          ['cv', 'bl'].forEach(function (st) {
+            var keep = st === 'cv' ? K.CV_KEEP_MS : K.BL_KEEP_MS, all = [];
+            var tx = d.transaction(st, 'readwrite'), os = tx.objectStore(st), cur = os.openCursor();
+            cur.onsuccess = function () {
+              var c = cur.result;
+              if (c) { var at = (c.value && c.value.at) || 0; if (Date.now() - at > keep) c.delete(); else all.push({ k: c.key, at: at }); c.continue(); return; }
+              if (st === 'cv' && all.length > K.CV_MAX) { all.sort(function (a, b) { return a.at - b.at; }); all.slice(0, all.length - K.CV_MAX).forEach(function (x) { os.delete(x.k); }); }
+            };
+          });
+        } catch (e) {}
+      });
+    }
+    return { get: get, put: put, prune: prune };
+  })();
+
+  var tab = 'lib', userTab = false, tabAutoDone = false, bs = null, shellKind = '';
+  var bl = { key: '', items: [], total: 0, at: 0, updated: 0, stale: false, limited: false, page: 1, pages: 1, hasNext: false, hidden: 0, loaded: false, loading: false, err: '' };
+  var wtTok = 0, bcov = {}, bq = { queue: [], need: [], pending: {}, inflight: 0, timer: 0, io: null }, wtScrollY = 0, sres = { open: false, on: false, q: '', items: null };
+  var SEARCH_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 16l5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
+  function curSort() { return bs.view === 'done' ? bs.sortDone : bs.sort; }
+  function curKey() { return listKey(bs.view, bs.day, curSort()); }
+  function saveBs() { var o = {}, k; for (k in bs) if (bs.hasOwnProperty(k)) o[k] = bs[k]; o.tab = userTab ? tab : ''; store.setBrowse(o); }
+  function initBrowseState() {
+    var raw = store.getBrowse(); bs = normBrowse(raw);
+    userTab = !!bs.tab; tab = bs.tab || (store.getHint() === 'real' ? 'lib' : 'wt');
+  }
+  function markTab() {
+    var tb = $('mgTabs'); if (!tb) return;
+    var bt = tb.querySelectorAll('[data-tab]'), i;
+    for (i = 0; i < bt.length; i++) { var on = bt[i].getAttribute('data-tab') === tab; bt[i].classList.toggle('on', on); bt[i].setAttribute('aria-selected', on ? 'true' : 'false'); }
+    var pl = $('mgPaneLib'), pw = $('mgPaneWt'); if (pl) pl.hidden = tab !== 'lib'; if (pw) pw.hidden = tab !== 'wt';
+  }
+  function selectTab(t, user) {
+    if (!browseOn() || (t !== 'lib' && t !== 'wt')) return;
+    if (user) userTab = true;
+    var changed = t !== tab; tab = t; saveBs(); markTab();
+    if (view !== 'lib') return;
+    if (t === 'wt') { if (!$('mgWList')) paintWtShell(); wtLoad({}); }
+    else { if (lib && lib.mangas) { paintLibrary(); if (!libLoading) refreshLib(false, true); } else if (!libLoading) refreshLib(false); }
+    if (changed) window.scrollTo(0, 0);
+  }
+
+  function chipRow(label, opts, cur, attr) {
+    var h = '<div class="mg-crow"><span class="mg-clab">' + label + '</span><div class="mg-chips">';
+    opts.forEach(function (o) { h += '<button type="button" class="mg-c' + (o[0] === cur ? ' on' : '') + '" data-' + attr + '="' + o[0] + '" aria-pressed="' + (o[0] === cur ? 'true' : 'false') + '">' + o[1] + '</button>'; });
+    return h + '</div></div>';
+  }
+  function dayRow() {
+    var today = kstInfo().wd, h = '<div class="mg-crow"><span class="mg-clab">요일</span><div class="mg-days" role="group" aria-label="요일">';
+    for (var i = 0; i < 7; i++) h += '<button type="button" class="mg-d' + (i === bs.day ? ' on' : '') + '" data-bd="' + i + '" aria-pressed="' + (i === bs.day ? 'true' : 'false') + '" aria-label="' + DAY_NAME[i] + '요일' + (i === today ? ' (오늘)' : '') + '">' + DAY_NAME[i] + (i === today ? '<i class="mg-dot" aria-hidden="true"></i>' : '') + '</button>';
+    return h + '</div></div>';
+  }
+  function paintChips() {
+    var el = $('mgWChips'); if (!el) return;
+    el.hidden = !!sres.on;
+    el.innerHTML = chipRow('보기', [['day', '요일별'], ['done', '완결']], bs.view, 'bv') + (bs.view === 'day' ? dayRow() : '') +
+      chipRow('정렬', bs.view === 'day' ? [['pop', '인기'], ['upd', '업데이트'], ['star', '별점']] : [['upd', '최신 완결'], ['star', '별점']], curSort(), 'bs');
+  }
+  function wtTitleText() {
+    if (sres.on) return '검색 결과 · ' + ((sres.items || []).length) + '편';
+    var same = bl.key === curKey() && bl.loaded;
+    if (!same) return bs.view === 'done' ? '완결 웹툰' : DAY_NAME[bs.day] + '요 웹툰';
+    return listTitle(bs.view, bs.day, bs.view === 'done' ? bl.items.length : bl.total);
+  }
+  function paintWHead() {
+    var el = $('mgWHead'); if (!el) return;
+    var note = '';
+    if (!sres.on && bl.loaded && bl.key === curKey()) {
+      if (bl.limited && bl.updated) note = '방금 불러왔어요 ' + clockHM(bl.updated);
+      else if (bl.stale && bl.updated) note = '저장해 둔 목록이에요 ' + clockHM(bl.updated);
+    }
+    el.innerHTML = '<div class="mg-whrow"><b id="mgBTitle">' + esc(wtTitleText()) + '</b><span class="mg-whbtn">' +
+      (sres.on ? '<button type="button" class="mg-c" data-act="bsearchclose">목록으로</button>' :
+        '<button type="button" class="mg-ibt' + (sres.open ? ' on' : '') + '" data-act="bsearch" aria-label="이름으로 찾기">' + SEARCH_SVG + '</button>') +
+      '<button type="button" class="mg-c" data-act="bcols" aria-pressed="' + (bs.cols === 2 ? 'true' : 'false') + '">' + (bs.cols === 2 ? '작게 보기' : '크게 보기') + '</button></span></div>' +
+      (note ? '<small class="mg-wnote" id="mgWNote" role="status">' + esc(note) + '</small>' : '') +
+      (!sres.on && bs.view === 'done' ? '<small class="mg-wnote free">앞부분만 무료인 작품이 많아요</small>' : '');
+  }
+  function bcard(it) {
+    var t = num(it.t), url = bcov[t] || '', pills = '';
+    if (it.u) pills += '<em class="mg-up">UP</em>';
+    if (it.r) pills += '<em class="mg-rest">휴재</em>';
+    if (it.mark) pills += '<em class="mg-fin' + (it.mark === '담았어요' ? ' on' : '') + '">' + esc(it.mark) + '</em>';
+    var star = fmtStar(it.s);
+    var sub = bs && bs.cols === 2 ? [String(it.a || '').trim(), star].filter(function (x) { return x; }).join(' · ') : star;      // 크게 보기일 때만 「작가 · ★9.87」(작가 값이 없는 옛 저장 목록은 ★만)
+    return '<button type="button" class="mg-bcard" data-t="' + t + '"><span class="mg-bcov"' + (url ? '' : ' data-wait="1"') + '>' + (url ? '<img alt="" src="' + esc(url) + '">' : '<i></i>') + pills + '</span>' +
+      '<b class="mg-bt">' + esc(it.n) + '</b>' + (sub ? '<small class="mg-bsub">' + esc(sub) + '</small>' : '') + '</button>';
+  }
+  function searchCard(it) { return { t: it.t, n: it.title, a: it.author, mark: it.in_shelf ? '담았어요' : (it.status === 'done' ? '완결' : '') }; }
+  function paintWList() {
+    var box = $('mgWList'); if (!box) return;
+    var items, html = '';
+    if (sres.on) {
+      items = (sres.items || []).map(searchCard);
+      if (!items.length) { box.innerHTML = sayCard('noresult'); return; }
+    } else {
+      items = bl.items;
+      if (!items.length) {
+        if (bl.err) { box.innerHTML = ''; return; }
+        box.innerHTML = (bl.loaded && bl.key === curKey()) ? sayCard('listempty') : sayCard('listload');
+        return;
+      }
+    }
+    var cls = 'mg-bgrid c' + bs.cols, i;
+    for (i = 0; i < items.length; i++) html += bcard(items[i]);
+    var more = '';
+    if (!sres.on) {
+      if (bs.view === 'done') more = bl.hasNext ? '<div class="mg-more"><button type="button" class="mg-btn" data-act="bmore">더 보기</button></div>' : '<p class="mg-wtend">더 찾으려면 위의 돋보기로 이름을 찾아 보세요.</p>';
+    }
+    box.innerHTML = '<div class="' + cls + (motionOn() ? ' fadein' : '') + '" id="mgBGrid" role="list">' + html + '</div>' + more;
+    watchCovers();
+  }
+  function paintWtShell() {
+    var pane = $('mgPaneWt'); if (!pane) return;
+    pane.innerHTML = '<div id="mgWTop"></div><div id="mgWChips" class="mg-wchips"></div><div id="mgWHead" class="mg-whead"></div><div id="mgWSearch"></div><div id="mgWList"></div>';
+    paintChips(); paintWHead(); paintSearch(); paintWList();
+  }
+  function wtStatus(k, extra) { var t = $('mgWTop'); if (t) t.innerHTML = k ? sayCard(k, extra) : ''; }
+
+  /* 목록 받기 — 폰에 저장된 마지막 목록을 먼저 그린 뒤 새로 받는다. o.manual = 새로고침 단추 */
+  function wtLoad(o) {
+    o = o || {};
+    if (!api || !host.getPass() || !bs) return;
+    var tok = ++wtTok, key = curKey(), page = o.page || 1;
+    var same = bl.key === key && bl.loaded;
+    if (!o.manual && page === 1 && same && Date.now() - bl.at < K.BL_FRESH_MS && !o.force) { paintWHead(); paintWList(); return; }
+    bl.loading = true; bl.err = ''; wtStatus('');
+    if (page === 1 && !same) {
+      bl.key = key; bl.items = []; bl.total = 0; bl.loaded = false; bl.page = 1; bl.hasNext = false; paintWHead(); paintWList();
+      IDB.get('bl', key).then(function (rec) { if (tok !== wtTok || bl.loaded || !rec || !rec.data) return; applyList(rec.data, key, 1, true); });
+    }
+    pollState(true).then(function (r) {
+      if (tok !== wtTok) return;
+      if (r.j.k === 'pcoff' || r.j.k === 'relay' || r.j.k === 'sw') { bl.loading = false; bl.err = r.j.k; wtStatus(r.j.k, bl.loaded ? { sub: (SAY[r.j.k].sub ? SAY[r.j.k].sub + ' ' : '') + '(마지막으로 받은 목록을 보여 드리고 있어요.)' } : null); paintWList(); return; }
+      return api.request('browse_list', { v: bs.view, d: bs.day, s: curSort(), p: page, r: !!o.manual }, { max: 90000, cancelled: function () { return tok !== wtTok; } }).then(function (res) {
+        if (tok !== wtTok) return;
+        bl.loading = false; bl.err = '';
+        applyList(res, key, page, false);
+        if (o.manual) { if (res.limited) toast('방금 불러왔어요. 삼십 분쯤 뒤에 다시 눌러 주세요.', 2600); else toast('새로 불러왔어요.', 1800); }
+      });
+    }).then(null, function (e) {
+      if (tok !== wtTok || (e && e.kind === 'cancel')) return;
+      bl.loading = false;
+      pollState(false).then(function (r) { wtFail(e, r && r.st); }, function () { wtFail(e, null); });
+    });
+    function wtFail(e, st) {
+      if (tok !== wtTok) return;
+      var k = errKind(e, st); bl.err = k;
+      if (bl.loaded) { wtStatus(k, { sub: (SAY[k].sub ? SAY[k].sub + ' ' : '') + '(마지막으로 받은 목록을 보여 드리고 있어요.)' }); toast(SAY[k].say, 2200); }
+      else wtStatus(k);
+      paintWList();
+    }
+  }
+  function applyList(res, key, page, fromCache) {
+    var items = res.items || [];
+    if (page > 1 && !fromCache) bl.items = bl.items.concat(items); else bl.items = items;
+    bl.key = key; bl.total = num(res.total, items.length); bl.page = num(res.page, page); bl.pages = num(res.pages, 1); bl.hasNext = !!res.has_next;
+    bl.updated = num(res.updated); bl.stale = !!res.stale || !!fromCache; bl.limited = !!res.limited; bl.hidden = num(res.hidden); bl.at = Date.now(); bl.loaded = true;
+    if (!fromCache && page === 1) IDB.put('bl', key, { at: Date.now(), data: res });
+    if (!fromCache) wtStatus('');
+    paintChips(); paintWHead(); paintWList();
+  }
+
+  /* 표지 — 화면에 보이는 것(+한 화면 앞)부터 18장씩 묶어 요청, 폰에 기억해 둔 것은 다시 받지 않는다 */
+  function watchCovers() {
+    var cards = body().querySelectorAll('#mgWList .mg-bcard');
+    if (bq.io) { try { bq.io.disconnect(); } catch (e) {} bq.io = null; }
+    var i, t;
+    if (typeof IntersectionObserver === 'undefined') { for (i = 0; i < cards.length; i++) coverWant(num(cards[i].getAttribute('data-t'))); return; }
+    bq.io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { var t2 = num(e.target.getAttribute('data-t')); bq.io.unobserve(e.target); coverWant(t2); } });
+    }, { rootMargin: '900px 0px' });
+    for (i = 0; i < cards.length; i++) { t = num(cards[i].getAttribute('data-t')); if (bcov[t]) continue; bq.io.observe(cards[i]); }
+  }
+  function coverWant(t) {
+    if (!t || bcov[t] || bq.pending[t] || bq.queue.indexOf(t) >= 0) return;
+    if (searchCov[t]) return;
+    bq.queue.push(t); clearTimeout(bq.timer); bq.timer = setTimeout(pumpCovers, 30);
+  }
+  var searchCov = {};      // 검색 결과 표지는 목록 표지와 다른 사본이라 따로 받는다(loadSearchCovers)
+  function setBcov(t, src) {
+    if (bcov[t]) { try { if (/^blob:/.test(src)) URL.revokeObjectURL(src); } catch (e) {} return; }
+    bcov[t] = src;
+    var cs = body().querySelectorAll('.mg-bcard[data-t="' + t + '"] .mg-bcov'), j;
+    for (j = 0; j < cs.length; j++) { var c = cs[j], ic = c.querySelector('i'); if (ic) { var im = document.createElement('img'); im.alt = ''; im.src = src; c.insertBefore(im, c.firstChild); ic.parentNode.removeChild(ic); c.removeAttribute('data-wait'); } }
+    if (curManga && curManga.t === t) { var h = body().querySelector('.mg-chcov'); if (h && !h.querySelector('img')) { var im2 = document.createElement('img'); im2.alt = ''; im2.src = src; h.insertBefore(im2, h.firstChild); } }
+  }
+  function pumpCovers() {
+    var ts = bq.queue.splice(0, bq.queue.length).filter(function (t) { return !bcov[t] && !bq.pending[t]; });
+    if (!ts.length) return;
+    ts.forEach(function (t) { bq.pending[t] = 1; });
+    Promise.all(ts.map(function (t) { return IDB.get('cv', t).then(function (rec) { return { t: t, rec: rec }; }); })).then(function (rs) {
+      rs.forEach(function (x) {
+        if (x.rec && x.rec.b && Date.now() - (x.rec.at || 0) < K.CV_KEEP_MS) { var u = ''; try { u = URL.createObjectURL(x.rec.b); } catch (e) {} if (u) { setBcov(x.t, u); delete bq.pending[x.t]; return; } }
+        if (bq.budget) delete bq.pending[x.t]; else bq.need.push(x.t);      // 예산이 찼으면 폰에 저장된 표지만 쓰고 서버에는 더 묻지 않는다
+      });
+      pumpNet();
+    });
+  }
+  function pumpNet() {
+    while (bq.inflight < K.COV_PAR && bq.need.length && api) {
+      var batch = bq.need.splice(0, K.COV_BATCH); bq.inflight++;
+      fetchCoverBatch(batch).then(function () { bq.inflight--; pumpNet(); }, function () { bq.inflight--; pumpNet(); });
+    }
+  }
+  function fetchCoverBatch(ts) {
+    return api.request('browse_covers', { ts: ts }, { max: 90000 }).then(function (res) {
+      var files = res.files || {}, ids = [], byId = {}, jobs = [], i;
+      if (res.budget) bq.budget = true;       // 오늘 표지 예산이 다 찼다 — 오류 창 없이 표지 자리를 비워 두고(제목은 보임) 더 요청하지 않는다
+      ts.forEach(function (t) { var f = files[String(t)]; if (f && f.id) { ids.push(f.id); byId[f.id] = t; } });
+      for (i = 0; i < ids.length; i += K.SIGN_MAX) (function (grp) {
+        jobs.push(api.sign(grp).then(function (s) {
+          return Promise.all(grp.map(function (id) {
+            var u = s.urls[id]; if (!u) return null;
+            return api.fetchBlob(u).then(function (b) { var t = byId[id]; var src = ''; try { src = URL.createObjectURL(b); } catch (e) {} if (src) setBcov(t, src); IDB.put('cv', t, { b: b, at: Date.now() }); }, function () {});
+          }));
+        }));
+      })(ids.slice(i, i + K.SIGN_MAX));
+      return Promise.all(jobs);
+    }).then(null, function () { /* 표지가 안 와도 글자 칸은 보인다 */ }).then(function () { ts.forEach(function (t) { delete bq.pending[t]; }); });
+  }
+
+  /* 이름으로 찾기(웹툰 탭 안) — 결과도 목록과 같은 격자, 열 때는 같은 나이 확인·열기 허용을 거친다(browse_open) */
+  function paintSearch() {
+    var el = $('mgWSearch'); if (!el) return;
+    if (!sres.open) { el.innerHTML = ''; return; }
+    el.innerHTML = '<form class="mg-search" id="mgWForm" role="search"><input id="mgWQ" type="search" maxlength="40" placeholder="웹툰 이름" enterkeyhint="search" autocomplete="off" aria-label="웹툰 이름"><button type="submit" class="mg-btn pri">찾기</button></form>';
+    $('mgWQ').value = sres.q || '';
+    $('mgWForm').addEventListener('submit', function (ev) { ev.preventDefault(); doWSearch(); });
+  }
+  function toggleSearch() {
+    if (sres.on) { closeWSearch(); return; }
+    sres.open = !sres.open; paintWHead(); paintSearch();
+    if (sres.open) { var q = $('mgWQ'); if (q) q.focus(); }
+  }
+  function closeWSearch() { sres = { open: false, on: false, q: '', items: null }; paintChips(); paintWHead(); paintSearch(); paintWList(); }
+  function doWSearch() {
+    var q = ($('mgWQ').value || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40);
+    if (!q) { toast('찾을 웹툰 이름을 적어 주세요.', 2000); return; }
+    if (lastJudge && (lastJudge.web === 'blocked' || lastJudge.web === 'off')) { wtStatus(lastJudge.web === 'off' ? 'weboff' : 'blocked'); return; }
+    sres.q = q; var tok = ++wtTok; wtStatus('findload');
+    api.request('source_search', { q: q, page: 1 }, { max: 120000, cancelled: function () { return tok !== wtTok; } }).then(function (res) {
+      if (tok !== wtTok) return;
+      wtStatus('');
+      sres.items = (res.items || []).filter(function (it) { return it && it.t; }); sres.on = true;
+      paintChips(); paintWHead(); paintWList(); loadSearchCovers(sres.items);
+    }, function (e) {
+      if (tok !== wtTok || (e && e.kind === 'cancel')) return;
+      pollState(false).then(function (r) { wtStatus(errKind(e, r && r.st)); }, function () { wtStatus(errKind(e, null)); });
+    });
+  }
+  function loadSearchCovers(items) {
+    var need = items.filter(function (it) { return it.cover && it.cover.id && !bcov[it.t]; }), i;
+    need.forEach(function (it) { searchCov[it.t] = 1; });
+    for (i = 0; i < need.length; i += K.SIGN_MAX) (function (grp) {
+      api.sign(grp.map(function (it) { return it.cover.id; })).then(function (sg) {
+        grp.forEach(function (it) {
+          var u = sg.urls[it.cover.id]; if (!u) return;
+          api.fetchBlob(u).then(function (b) { return URL.createObjectURL(b); }, function () { return u; }).then(function (src) { delete searchCov[it.t]; setBcov(it.t, src); });
+        });
+      }, function () {});
+    })(need.slice(i, i + K.SIGN_MAX));
+  }
+
+  /* 담지 않고 열기: 표지를 누르면 browse_open(나이 확인 + 정식연재 확인) → 회차 목록 */
+  function wtItemByT(t) {
+    var a = sres.on ? (sres.items || []).map(function (it) { return { t: it.t, n: it.title, f: it.status === 'done' ? 1 : 0 }; }) : bl.items, i;
+    for (i = 0; i < a.length; i++) if (a[i].t === t) return a[i];
+    return null;
+  }
+  function openBrowse(t) {
+    var it = wtItemByT(t); if (!it || !api) return;
+    wtScrollY = window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0;
+    var m = { id: null, t: t, title: it.n, origin: 'web', status: it.f ? 'done' : 'ongoing', shelf: false, from: 'wt' };
+    curManga = m; view = 'chap'; chapItems = null; wtTok++;
+    setTitle(m.title); setRefresh(true);
+    body().innerHTML = '<div class="mg-wrap"><div id="mgChHead"></div><div id="mgTop"></div><div id="mgSortRow" class="mg-sortrow"></div><div id="mgList" class="mg-list"></div></div>';
+    paintChapHead();
+    var top = body().querySelector('#mgTop'); if (top) top.innerHTML = sayCard('openload');
+    window.scrollTo(0, 0);
+    var tok = ++loadTok;
+    pollState(true).then(function (r) {
+      if (tok !== loadTok) return;
+      if (r.j.k === 'pcoff' || r.j.k === 'relay' || r.j.k === 'sw') { if (top) top.innerHTML = sayCard(r.j.k); return; }
+      return api.request('browse_open', { t: t }, { max: 120000, cancelled: function () { return tok !== loadTok; } }).then(function (res) {
+        if (tok !== loadTok) return;
+        var c = res.manga || {};
+        if (!c.id) throw mkErr('failed', { code: 'not_openable' });
+        m.id = c.id; m.shelf = !!c.shelf; if (c.status) m.status = c.status; if (c.title) m.title = c.title;
+        setTitle(m.title); paintChapHead();
+        loadChapters(m, false);
+      });
+    }).then(null, function (e) {
+      if (tok !== loadTok || (e && e.kind === 'cancel')) return;
+      pollState(false).then(function (r) { fail(r && r.st); }, function () { fail(null); });
+      function fail(st) { var k = errKind(e, st); if (e && e.kind === 'failed' && e.code === 'not_offered') k = 'notopen'; if (k === 'agebad') k = 'agebado'; else if (k === 'ageunk') k = 'ageunko'; var tp = body().querySelector('#mgTop'); if (tp) tp.innerHTML = sayCard(k); }
+    });
+  }
+  function isShelf(m) { return !!(m && (m.shelf === true || (lib && lib.mangas && lib.mangas.some(function (x) { return x.id === m.id; })))); }
+  function coverOf(m) { return (lib && lib.cov[m.id]) || (m.t && bcov[m.t]) || ''; }
+  function addCurrent() {
+    var m = curManga; if (!m || !m.id || !isWebManga(m)) return;
+    var btn = body().querySelector('[data-act="addcur"]'); if (!btn || btn.disabled) return;
+    btn.disabled = true; btn.textContent = '담는 중…';
+    api.request('library_add', { manga_id: m.id }, { max: 120000 }).then(function (res) {
+      var card = res && res.manga;
+      if (card) {
+        lib = lib || { mangas: [], at: Date.now(), cov: {} };
+        lib.mangas = lib.mangas.filter(function (x) { return x.id !== card.id; }); lib.mangas.push(card);
+        lib.mangas.sort(function (a, b) { return a.title < b.title ? -1 : (a.title > b.title ? 1 : 0); });
+        if (m.t && bcov[m.t]) lib.cov[card.id] = bcov[m.t];
+      }
+      m.shelf = true; toast('서재에 담았어요.', 2200);
+      if (view === 'chap' && curManga === m) { paintChapHead(); paintChapters(); }
+    }, function (e) {
+      pollState(false).then(function (r) { fail(r && r.st); }, function () { fail(null); });
+      function fail(st) { var k = errKind(e, st), say = SAY[k] || SAY.fail; toast(say.say + (say.sub ? ' ' + say.sub : ''), 3200); if (k === 'agebad') { btn.textContent = '담을 수 없어요'; return; } btn.disabled = false; btn.textContent = '서재에 담기'; }
+    });
+  }
+  function setBs(patch) {
+    var k; for (k in patch) if (patch.hasOwnProperty(k)) bs[k] = patch[k];
+    if (sres.on || sres.open) { sres = { open: false, on: false, q: '', items: null }; paintSearch(); }
+    saveBs(); paintChips(); paintWHead();
+    wtLoad({ force: true });
+  }
+
   /* ---------------------------------------------------------------- 아래에서 올라오는 시트 */
   var sheetCtx = null;
   function ensureSheet() {
@@ -699,9 +1210,10 @@
       '<div class="mg-acts">' + (u ? '<button type="button" class="mg-btn pri" data-sh="ext">네이버웹툰에서 보기</button>' : '') + '<button type="button" class="mg-btn" data-sh="close">닫기</button></div>');
   }
   function showRemoveSheet(m) {
+    var local = m.origin !== 'web';
     showSheet({ t: 'rm', m: m },
       '<div class="mg-sh-head"><span class="mg-sh-cov">' + ((lib && lib.cov[m.id]) ? '<img alt="" src="' + esc(lib.cov[m.id]) + '">' : '') + '</span><div class="mg-sh-info"><b>' + esc(m.title) + '</b><small>서재에서 뺄까요?</small></div></div>' +
-      '<p class="mg-sh-note">다시 담을 수 있어요. 이 폰에 적어 둔 읽은 기록은 그대로 남아요.</p>' +
+      (local ? '<p class="mg-sh-note" id="mgShNote">PC의 보관 폴더로 옮겨 둬요. 지워지지 않아요.<br>다시 넣고 싶으면 케이에게 말씀해 주세요.</p>' : '<p class="mg-sh-note" id="mgShNote">다시 담을 수 있어요. 이 폰에 적어 둔 읽은 기록은 그대로 남아요.</p>') +
       '<div class="mg-acts"><button type="button" class="mg-btn pri" data-sh="rm" id="mgShRm">서재에서 빼기</button><button type="button" class="mg-btn" data-sh="close">그만두기</button></div>');
   }
   function sheetNote(t) { var n = $('mgShNote'); if (n) n.textContent = t; }
@@ -739,14 +1251,14 @@
   function sheetRemove(m) {
     var btn = $('mgShRm'); if (!btn || btn.disabled) return;
     btn.disabled = true; btn.textContent = '빼는 중…';
-    api.request('library_remove', { manga_id: m.id }, { max: 60000 }).then(function () {
+    api.request(m.origin === 'web' ? 'library_remove' : 'local_remove', { manga_id: m.id }, { max: 60000 }).then(function () {
       if (lib && lib.mangas) lib.mangas = lib.mangas.filter(function (x) { return x.id !== m.id; });
       closeSheet(); toast('서재에서 뺐어요.', 2000);
       if (view === 'lib') paintLibrary();
-      else if (view === 'chap') { loadTok++; view = 'lib'; curManga = null; chapItems = null; setTitle('만화'); renderShell(); paintLibrary(); }
+      else if (view === 'chap') { loadTok++; view = 'lib'; curManga = null; chapItems = null; setTitle('만화'); renderShell(); if (browseOn()) { tab = 'lib'; markTab(); } paintLibrary(); }
     }, function (e) {
       pollState(false).then(function (r) { fail(r && r.st); }, function () { fail(null); });
-      function fail(st) { var k = errKind(e, st); toast((SAY[k] || SAY.fail).say, 2500); btn.disabled = false; btn.textContent = '서재에서 빼기'; }
+      function fail(st) { var k = errKind(e, st), say = SAY[k] || SAY.fail; toast(say.say, 2500); sheetNote(say.say + (say.sub ? ' ' + say.sub : '')); btn.disabled = false; btn.textContent = '서재에서 빼기'; }
     });
   }
   function markLocked(cid) {
@@ -760,16 +1272,28 @@
 
   /* ---------------------------------------------------------------- 눌림 */
   function onBodyClick(ev) {
-    var t = ev.target, el = t.closest ? t.closest('[data-m],[data-c],[data-act],[data-resume],[data-f]') : null;
+    var t = ev.target, el = t.closest ? t.closest('[data-m],[data-c],[data-act],[data-resume],[data-f],[data-tab],[data-bv],[data-bd],[data-bs],[data-t],[data-csort]') : null;
     if (!el) return;
     if (Date.now() - lpFired < 600) { ev.preventDefault(); return; }       // 길게 눌러 시트가 뜬 뒤에 따라오는 눌림은 무시
+    if (el.hasAttribute('data-tab')) return selectTab(el.getAttribute('data-tab'), true);
+    if (el.hasAttribute('data-bv')) return setBs({ view: el.getAttribute('data-bv') === 'done' ? 'done' : 'day' });
+    if (el.hasAttribute('data-bd')) return setBs({ day: Math.max(0, Math.min(6, num(el.getAttribute('data-bd')))) });
+    if (el.hasAttribute('data-bs')) { var sv = el.getAttribute('data-bs'); return setBs(bs.view === 'done' ? { sortDone: sv } : { sort: sv }); }
+    if (el.hasAttribute('data-csort')) return sortChapters(el.getAttribute('data-csort'));
+    if (el.hasAttribute('data-t')) return openBrowse(num(el.getAttribute('data-t')));
     if (el.hasAttribute('data-f')) { var fi = findItem(Number(el.getAttribute('data-f'))); if (fi) showItemSheet(fi); return; }
     if (el.hasAttribute('data-m')) return openManga(Number(el.getAttribute('data-m')));
     if (el.hasAttribute('data-resume')) return resumeFromBand();
     var act = el.getAttribute('data-act');
-    if (act === 'retry') return view === 'find' ? (finder.pop = null, openFind()) : refresh(true);
+    if (act === 'retry') { if (view === 'chap' && curManga && !curManga.id && curManga.t) return openBrowse(curManga.t); return view === 'find' ? (finder.pop = null, openFind()) : refresh(true); }
+    if (act === 'gowt') return selectTab('wt', true);
+    if (act === 'addcur') return addCurrent();
+    if (act === 'bsearch') return toggleSearch();
+    if (act === 'bsearchclose') return closeWSearch();
+    if (act === 'bcols') { bs.cols = bs.cols === 2 ? 3 : 2; saveBs(); paintWHead(); paintWList(); return; }
+    if (act === 'bmore') { wtLoad({ page: bl.page + 1, force: true }); return; }
     if (act === 'find') return openFind();
-    if (act === 'rmcur') { if (curManga && isWebManga(curManga)) showRemoveSheet(curManga); return; }
+    if (act === 'rmcur') { if (curManga && (browseOn() ? isShelf(curManga) : isWebManga(curManga))) showRemoveSheet(curManga); return; }
     if (act === 'pass') { if (host.askPass) host.askPass(''); return; }
     if (el.hasAttribute('data-c')) {
       var cid = Number(el.getAttribute('data-c')), p = Number(el.getAttribute('data-p') || 0);
@@ -1255,15 +1779,24 @@
     if (rd) { closeReader(); return true; }
     if (view === 'chap' || view === 'find') {
       findTok++;
+      var from = curManga && curManga.from;
       loadTok++; view = 'lib'; curManga = null; chapItems = null; setTitle('만화');
-      renderShell(); if (lib && lib.mangas) { paintLibrary(); refresh(false, true); } else refresh(false);
+      renderShell();
+      if (browseOn()) {
+        markTab();
+        if (from === 'wt') { tab = 'wt'; markTab(); paintWtShell(); wtLoad({}); var y = wtScrollY; setTimeout(function () { window.scrollTo(0, y); }, 0); setTimeout(function () { window.scrollTo(0, y); }, 250); }
+        if (lib && lib.mangas) { paintLibrary(); refreshLib(false, true); } else refreshLib(false, true);
+        if (from !== 'wt' && tab === 'wt') { paintWtShell(); wtLoad({}); }
+        return true;
+      }
+      if (lib && lib.mangas) { paintLibrary(); refresh(false, true); } else refresh(false);
       return true;
     }
     stopStateTimer(); loadTok++;
     return false;                       // 더 닫을 게 없으면 홈으로(app.js)
   }
   function leave() {
-    closeSheet(); findTok++;
+    closeSheet(); findTok++; wtTok++;
     if (rd) teardown(true);
     stopStateTimer(); loadTok++;
   }
@@ -1286,6 +1819,6 @@
   }
   global.MangaTab = {
     init: init, open: open, back: back, leave: leave, resume: resume,
-    _test: { openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode }
+    _test: { bl: function () { return bl; }, bs: function () { return bs; }, tab: function () { return tab; }, bcov: function () { return bcov; }, browseOn: browseOn, openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode }
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -3976,6 +3976,7 @@
   APP_VERSION = 'v10.26';       // v10.26(O-0939): 게임 「눈밭 캠프」를 9판(3막 노을벌 목장 추가)으로 교체 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3d22f67), 게임 목록 설명 정정(벽돌 깨기 36판·세균 방어전 5탄). 게임 코드·서버·SQL·자바·권한 변경 없음
   APP_VERSION = 'v10.28';       // v10.28(O-0954): 「만화」에 웹툰 찾기·담기 — 서재에 PC 만화와 웹툰을 한 목록으로(웹툰 표시·완결 표시), + 칸에서 찾기(검색 + 인기) → 표지 시트 → 서재에 담기, 길게 눌러 빼기, 회차 목록(새 화·자물쇠), 볼 수 없는 화 안내 시트, 웹툰은 세로 이어 읽기가 기본. 스위치 MANGA_WEB, versionCode 172. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
   APP_VERSION = 'v10.29';       // v10.29(O-0965): 홈 「규정 도우미」 칸을 「업무 앱」 화면 맨 앞 카드로 옮김(홈 12칸·스위치 REG_IN_HUB) + (O-0963): OTT 시트 맨 끝에 「바로뷰」 줄(작은 글씨 「저장한 주소 · 전체화면」) — 누르면 폰의 별개 앱 바로뷰의 첫 화면(없으면 「바로뷰가 설치되어 있지 않습니다」 안내 시트, 스토어 없음). 스위치 BAROVIEW_TAB · 새 권한 없음 · versionCode 173
+  APP_VERSION = 'v10.30';       // v10.30(O-0961·O-0960): 「만화」 — 서재 | 웹툰 탭, 웹툰 요일별·완결 전체 목록(표지 격자 3열·크게 보기 2열에서 작가 줄, 인기·업데이트·별점), 표지를 누르면 서재에 담지 않고 바로 읽기, 회차 1화부터/최신 화부터 정렬(작품별 기억), PC 만화도 서재에서 빼기(PC 보관 폴더로 옮김). 스위치 MANGA_BROWSE, versionCode 174. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
@@ -10597,9 +10598,10 @@
    *   스위치 MANGA_UI: 'on' = 칸 보임 · 'off' = 칸이 보이지 않고 화면 코드가 불리지 않는다(v10.26 과 같음). 새 권한·새 네이티브 코드 없음. */
   var MANGA_UI = 'on';
   var MANGA_WEB = 'on';        // v10.28(O-0954): 'off' = 「웹툰 찾기」 칸과 웹툰 표시가 없어 v10.27 과 같다(PC 쪽 스위치는 voice-memo-collector\manga_web.OFF)
+  var MANGA_BROWSE = 'on';     // v10.30(O-0961·O-0960): 'off' = 「서재 | 웹툰」 탭·전체 목록·담지 않고 열기·회차 정렬 없이 v10.28 화면 그대로(PC 쪽 스위치는 manga_browse.OFF). PC 만화 빼기는 별개로 켜 둠(PC 쪽 manga_localremove.OFF 로 끔)
   if (MANGA_UI !== 'off' && window.MangaTab && $('btnManga')) {
     try {
-      MangaTab.init({ web: MANGA_WEB !== 'off', openUrl: function (u) { var w = null; try { w = window.open(u, '_blank'); } catch (e) {} if (!w) toast('링크를 열지 못했습니다.'); }, toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen($('mangaView')); },
+      MangaTab.init({ web: MANGA_WEB !== 'off', browse: MANGA_BROWSE !== 'off', openUrl: function (u) { var w = null; try { w = window.open(u, '_blank'); } catch (e) {} if (!w) toast('링크를 열지 못했습니다.'); }, toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen($('mangaView')); },
         cfg: function () { var c = window.OfficeBridge && OfficeBridge.CONFIG; return c ? { url: c.url, key: c.key } : null; } });
       var mgGrid = $('homeTools'), mgSub = mgGrid && mgGrid.querySelector('.tools-sub');
       if (mgGrid && mgSub) mgGrid.insertBefore($('btnManga'), mgSub);   // 홈 도구 맨 끝 — 위 「홈 도구 칸 순서」 정리가 끝난 뒤라 항상 맨 끝

@@ -207,3 +207,80 @@ html[data-style="light"] .mg-sheet { background: #fff; }
 .mg-list .mg-foot { grid-column: 1 / -1; display: flex; justify-content: center; padding: 18px 0 6px; }
 .mg-linkbtn { border: 0; background: none; color: var(--dim); font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 8px 12px; font-family: inherit; }
 .mg-plus .mg-cov { color: var(--muted); }
+
+/* ============================================================================
+ * v10.29 (O-0961·O-0960) 서재 | 웹툰 탭 · 웹툰 목록(표지 격자) · 회차 정렬 · 글자 표시(UP·휴재·완결)
+ * 칩 높이 36px(누르는 자리는 위아래 여백 포함 44px 안쪽), 요일 7칸은 균등 폭으로 스크롤 없이 한 줄, 보기·정렬 칩은 넘치면 옆으로 밀기
+ * ==========================================================================*/
+.mg-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-b); }
+.mg-tabs button { height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s, background .15s; }
+.mg-tabs button:active { transform: scale(.97); }
+.mg-tabs button.on { background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; box-shadow: var(--glow-s); }
+#mgPaneLib, #mgPaneWt { display: flex; flex-direction: column; gap: 12px; }
+#mgPaneLib[hidden], #mgPaneWt[hidden] { display: none; }
+
+.mg-wchips { display: flex; flex-direction: column; gap: 6px; }
+.mg-wchips[hidden] { display: none; }
+.mg-crow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mg-clab { flex: none; width: 34px; font-size: 12px; font-weight: 800; color: var(--dim); }
+.mg-chips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; -webkit-overflow-scrolling: touch; }
+.mg-chips::-webkit-scrollbar { display: none; }
+.mg-c { flex: none; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 13.5px; font-weight: 800; cursor: pointer; white-space: nowrap; font-family: inherit; transition: transform .12s; }
+.mg-c:active { transform: scale(.96); }
+.mg-c.on { border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; }       /* 옆으로 미는 줄 안이라 번지는 빛은 뺀다(잘려 네모로 보임) */
+.mg-days { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 4px 0; }
+.mg-d { position: relative; height: 38px; padding: 0; border-radius: 12px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; transition: transform .12s; }
+.mg-d:active { transform: scale(.94); }
+.mg-d.on { border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; box-shadow: var(--glow-s); }
+.mg-dot { position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--cyan); }
+.mg-d.on .mg-dot { background: #fff; }
+
+.mg-whead { display: flex; flex-direction: column; gap: 2px; }
+.mg-whrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+.mg-whrow b { min-width: 0; font-size: 16.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-whbtn { flex: none; display: flex; align-items: center; gap: 6px; }
+.mg-ibt { width: 40px; height: 36px; border-radius: 999px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); display: grid; place-items: center; cursor: pointer; }
+.mg-ibt.on { border-color: var(--p1); color: var(--p1); }
+.mg-ibt:active { transform: scale(.94); }
+.mg-wnote { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+.mg-wnote.free { color: var(--warn, #d99a1a); font-weight: 700; }
+
+/* 웹툰 표지 격자 — 기본 3열, 「크게 보기」 2열. 칸 비율을 고정해 표지가 올 때 화면이 튀지 않게 */
+.mg-bgrid { display: grid; gap: 14px 8px; }
+.mg-bgrid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mg-bgrid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+@media (min-width: 600px) { .mg-bgrid.c3 { grid-template-columns: repeat(5, minmax(0, 1fr)); } .mg-bgrid.c2 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .mg-bgrid.c3 { grid-template-columns: repeat(7, minmax(0, 1fr)); } .mg-bgrid.c2 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mg-bgrid.fadein { animation: mgFade .15s ease both; }
+@keyframes mgFade { from { opacity: 0; } to { opacity: 1; } }
+.mg-bcard { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; font-family: inherit; }
+.mg-bcov { position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); transition: transform .12s; }
+.mg-bcard:active .mg-bcov { transform: scale(.96); }
+.mg-bcov img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-bcov i { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, var(--glass2) 50%, transparent 80%); background-size: 220% 100%; animation: mgShim 1.3s linear infinite; }
+.mg-bt { font-size: 13px; font-weight: 800; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-bgrid.c2 .mg-bt { font-size: 14.5px; }
+.mg-bcard small { font-size: 11.5px; color: var(--dim); }
+.mg-up, .mg-rest, .mg-fin { position: absolute; padding: 2px 7px; border-radius: 8px; font-style: normal; font-size: 10.5px; font-weight: 800; line-height: 1.3; color: #fff; z-index: 1; }
+.mg-up { right: 5px; top: 5px; background: #e5484d; }
+.mg-rest { left: 5px; top: 5px; background: rgba(60, 66, 90, .88); }
+.mg-fin { left: 5px; bottom: 5px; background: rgba(20, 28, 60, .82); }
+.mg-fin.on { background: rgba(16, 120, 80, .9); }
+.mg-more { display: flex; justify-content: center; padding: 14px 0 4px; }
+.mg-wtend { margin: 14px 0 2px; text-align: center; font-size: 12.5px; color: var(--dim); }
+
+/* 회차 정렬 줄 · 이어 읽던 화 강조 */
+.mg-sortrow { display: flex; align-items: center; gap: 8px; min-height: 0; }
+.mg-sortrow:empty { display: none; }
+.mg-sortrow .mg-clab { width: auto; }
+.mg-sortrow .mg-chips { flex: 0 1 auto; }
+.mg-ch.cur { outline: 2px solid var(--p1); outline-offset: -2px; }
+.mg-list.fade { animation: mgFade .2s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-bgrid.fadein, .mg-list.fade, .mg-bcov i { animation: none; }
+  .mg-c, .mg-d, .mg-tabs button, .mg-bcov { transition: none; }
+}
+
+/* v10.29 보완: 크게 보기의 「작가 · ★별점」 줄 — 넘치면 말줄임 */
+.mg-bsub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
