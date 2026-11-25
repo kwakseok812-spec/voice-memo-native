@@ -309,9 +309,9 @@
   function pfStatus(row, info) {
     if (row.m === 'e') return { s: 'end', w: 'E' };      // 서비스가 끝난 곳 — PC 상태와 상관없이 늘 이 표시
     if (row.m === 'r') return { s: 'read', w: '' };
+    if (row.m === 'l') return { s: 'link', w: row.w || 'N' };      // 정식 사이트 열기 전용 줄은 PC가 on 을 보내도 읽기로 바뀌지 않는다(앱 표에서 읽기 대상인 곳만 PC 상태를 반영)
     if (info && info.r === 'on') return { s: 'read', w: '' };
     if (info && info.r === 'off') return { s: 'link', w: PF_WHYK[info.w] || 'N' };
-    if (row.m === 'l') return { s: 'link', w: row.w || 'N' };
     return { s: 'chk', w: '' };
   }
   function pfReason(w) { return PF_WHY[w] || PF_WHY.N; }
@@ -1420,7 +1420,7 @@
     $('mgPfGroups').innerHTML = h;
     var nh = pfPrefs.hid.length;
     $('mgPfTools').innerHTML = '<button type="button" class="mg-c' + (pfUi.onlyRead ? ' on' : '') + '" data-pft="read" aria-pressed="' + pfUi.onlyRead + '">앱에서 읽는 곳만</button>' + (pfPrefs.favs.length > 1 ? '<button type="button" class="mg-c' + (pfUi.reorder ? ' on' : '') + '" data-pft="reorder" aria-pressed="' + pfUi.reorder + '">' + (pfUi.reorder ? '순서 바꾸기 끝' : '★ 순서 바꾸기') + '</button>' : '') +
-      (nh ? '<button type="button" class="mg-c' + (pfUi.showHid ? ' on' : '') + '" data-pft="hid" aria-pressed="' + pfUi.showHid + '">숨긴 곳 ' + nh + '</button>' : '') + '<button type="button" class="mg-c" data-pft="reset">기본으로 되돌리기</button>';
+      (nh ? '<button type="button" class="mg-c' + (pfUi.showHid ? ' on' : '') + '" data-pft="hid" aria-pressed="' + pfUi.showHid + '">숨긴 곳 보기 ' + nh + '</button>' : '') + '<button type="button" class="mg-c" data-pft="reset">기본으로 되돌리기</button>';
     paintPfCards(); paintPfDet(); paintPfUndo();
   }
   function pfBadge(st) { if (st.s === 'end') return '<span class="mg-pfbd ed">서비스 종료</span>'; return st.s === 'read' ? '<span class="mg-pfbd rd">앱에서 읽기</span>' : (st.s === 'chk' ? '<span class="mg-pfbd ck">확인 중</span>' : '<span class="mg-pfbd lk">정식 사이트</span>'); }

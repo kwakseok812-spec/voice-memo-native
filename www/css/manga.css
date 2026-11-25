@@ -319,7 +319,7 @@ html[data-style="light"] .mg-pfpanel { background: #fff; }
 .mg-pc:active { transform: scale(.97); }
 .mg-pc.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
 .mg-pc.hid { opacity: .55; }
-.mg-pc .nm { max-width: 100%; padding-right: 58px; font-size: 14.5px; font-weight: 800; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: keep-all; overflow-wrap: anywhere; }
+.mg-pc .nm { max-width: 100%; padding-right: 52px; font-size: 14px; letter-spacing: -.01em; font-weight: 800; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: keep-all; overflow-wrap: break-word; }
 .mg-pc .lg { font-size: 11.5px; color: var(--dim); }
 .mg-pfbd { display: inline-block; margin-top: auto; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; }
 .mg-pfbd.rd { background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; }
