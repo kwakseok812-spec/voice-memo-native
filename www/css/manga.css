@@ -344,3 +344,8 @@ html[data-style="light"] .mg-pfpanel { background: #fff; }
 .mg-pfnoaddr { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--muted); }
 .mg-pfdet .mg-acts .mg-btn { width: 100%; }
 @media (prefers-reduced-motion: reduce) { .mg-pc, .mg-pfc, .mg-pfall, .mg-pfbg.on .mg-pfpanel { transition: none; animation: none; } }
+
+/* 서비스가 끝난 곳 · 설정 되돌리기 확인 줄 */
+.mg-pfbd.ed { background: transparent; color: var(--dim); border: 1px dashed var(--muted); }
+.mg-pc.end { opacity: .7; }
+.mg-pfundo > span:last-child { display: flex; gap: 2px; }

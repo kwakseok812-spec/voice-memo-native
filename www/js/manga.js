@@ -296,9 +296,9 @@
    * v10.31(O-0967) 플랫폼 고르기 — 순수 함수. 표(MangaPlatforms.rows) 항목 = [pf, 이름, 그룹, 언어, 방식, 사유, 주소]
    * 방식: r 앱에서 읽기(네이버웹툰만) · c 확인 중(PC가 알려 주기 전) · l 정식 사이트 열기만 / 사유 L·P·A·N
    * ------------------------------------------------------------------- */
-  var PF_WHY = { L: '로그인이 필요해요', P: '사 보는 곳이에요', A: '성인 작품이 많은 곳이에요', N: '앱 안에서 읽는 길이 아직 없어요' };
-  var PF_WHYK = { login: 'L', paid: 'P', adult: 'A', none: 'N' };
-  var PF_GROUPS = [['kr', '국내'], ['en', '영어'], ['ja', '일본어'], ['zh', '중국어'], ['br', '게임·브랜드'], ['au', '작가 직영']];
+  var PF_WHY = { L: '로그인이 필요해요', P: '사 보는 곳이에요', A: '성인 작품이 많은 곳이에요', X: '성인 전용이에요', E: '서비스가 끝났어요', N: '앱 안에서 읽는 길이 아직 없어요' };
+  var PF_WHYK = { login: 'L', paid: 'P', adult: 'A', none: 'N' };      // 성인 전용(X)은 표에만 있다(PC가 알리는 사유는 이 넷)
+  var PF_GROUPS = [['kr', '국내'], ['en', '영어'], ['ja', '일본어'], ['zh', '중국어'], ['br', '게임·브랜드'], ['au', '작가 직영'], ['ad', '성인']];
   var PF_LANG = { 'ko': '한국어', 'ko-KR': '한국어', 'en': '영어', 'ja': '일본어', 'zh': '중국어', 'zh-Hans': '중국어', 'zh-Hant': '중국어', 'es': '스페인어', 'fr': '프랑스어', 'de': '독일어', 'pt-BR': '포르투갈어', 'id': '인도네시아어', 'th': '태국어', 'vi': '베트남어', 'ru': '러시아어', 'all': '여러 언어' };
   function pfRows(tbl) {
     var rs = (tbl && tbl.rows) || [];
@@ -307,6 +307,7 @@
   /* 한 플랫폼의 지금 상태: {s:'read'|'chk'|'link', w:사유 글자}. info = PC가 알려 준 그 플랫폼 칸({r:'on'|'test'|'off', w?}) 또는 없음.
    * 시험 전에는 네이버웹툰만 읽기, 나머지는 확인 중. 시험 통과 = 읽기, 탈락 = 정식 사이트 열기 + 사유. */
   function pfStatus(row, info) {
+    if (row.m === 'e') return { s: 'end', w: 'E' };      // 서비스가 끝난 곳 — PC 상태와 상관없이 늘 이 표시
     if (row.m === 'r') return { s: 'read', w: '' };
     if (info && info.r === 'on') return { s: 'read', w: '' };
     if (info && info.r === 'off') return { s: 'link', w: PF_WHYK[info.w] || 'N' };
@@ -318,9 +319,9 @@
   /* 기본 순서: 앱에서 읽기 → 한국어 → 영어 → 나머지(작가 직영은 맨 뒤), 같은 무리 안에서는 이름순 */
   function pfDefaultOrder(rows, infos) {
     return rows.slice().sort(function (a, b) {
-      var ra = pfStatus(a, infos && infos[a.pf]).s === 'read' ? 0 : 1, rb = pfStatus(b, infos && infos[b.pf]).s === 'read' ? 0 : 1;
+      var sa = pfStatus(a, infos && infos[a.pf]).s, sb = pfStatus(b, infos && infos[b.pf]).s, ra = sa === 'read' ? 0 : (sa === 'end' ? 2 : 1), rb = sb === 'read' ? 0 : (sb === 'end' ? 2 : 1);      // 서비스 종료는 맨 뒤
       if (ra !== rb) return ra - rb;
-      var ua = a.g === 'au' ? 1 : 0, ub = b.g === 'au' ? 1 : 0; if (ua !== ub) return ua - ub;      // 작가 직영은 맨 뒤
+      var ua = a.g === 'ad' ? 2 : (a.g === 'au' ? 1 : 0), ub = b.g === 'ad' ? 2 : (b.g === 'au' ? 1 : 0); if (ua !== ub) return ua - ub;      // 작가 직영 → 성인 순으로 맨 뒤
       var la = pfLangRank(a.lang), lb = pfLangRank(b.lang); if (la !== lb) return la - lb;
       var ha = /^[가-힣]/.test(a.n) ? 0 : 1, hb = /^[가-힣]/.test(b.n) ? 0 : 1; if (ha !== hb) return ha - hb;      // 이름순: 한글 이름이 먼저
       var na = String(a.n).toLowerCase(), nb = String(b.n).toLowerCase();
@@ -359,8 +360,8 @@
     return list.filter(function (r) { return (!group || group === 'all' || r.g === group) && (!q || String(r.n).toLowerCase().indexOf(q) >= 0 || String(r.lang).indexOf(q) >= 0); });
   }
   /* 그룹 칩 숫자 — 지금 시트에 보이는 곳(숨긴 곳은 「숨긴 곳 보기」를 켰을 때만) 기준이라 그룹 합이 「전체」와 맞는다 */
-  function pfGroupCounts(rows, prefs, showHid) {
-    var shown = rows.filter(function (r) { return showHid || prefs.hid.indexOf(r.pf) < 0; });
+  function pfGroupCounts(rows, prefs, showHid, infos, onlyRead) {
+    var shown = rows.filter(function (r) { return (showHid || prefs.hid.indexOf(r.pf) < 0) && (!onlyRead || pfStatus(r, infos && infos[r.pf]).s === 'read'); });
     var c = { all: shown.length }; PF_GROUPS.forEach(function (g) { c[g[0]] = 0; });
     shown.forEach(function (r) { c[r.g] = (c[r.g] || 0) + 1; });
     return c;
@@ -388,13 +389,15 @@
       if (!/^[a-z0-9_]{1,24}$/.test(r.pf) || seen[r.pf]) bad.push('pf:' + r.pf); seen[r.pf] = 1;
       if (!r.n) bad.push('name:' + r.pf);
       if (!gs[r.g]) bad.push('group:' + r.pf);
-      if (['r', 'c', 'l'].indexOf(r.m) < 0) bad.push('mode:' + r.pf);
+      if (['r', 'c', 'l', 'e'].indexOf(r.m) < 0) bad.push('mode:' + r.pf);
       if (r.url && !/^https:\/\/[A-Za-z0-9.-]+(\/|$)/.test(r.url)) bad.push('url:' + r.pf);
-      if (r.m === 'l' && ['L', 'P', 'A', 'N'].indexOf(r.w) < 0) bad.push('why:' + r.pf);
+      if (r.m === 'l' && ['L', 'P', 'A', 'N', 'X'].indexOf(r.w) < 0) bad.push('why:' + r.pf);
+      if (r.m === 'e' && r.url) bad.push('endurl:' + r.pf);      // 끝난 서비스에는 열 주소를 두지 않는다
     });
     return bad;
   }
   /* 정식 사이트로 열어도 되는 주소인가 — 표에 있는 https 주소 그대로만 */
+  function pfOnlyRead(list, infos) { return list.filter(function (r) { return pfStatus(r, infos && infos[r.pf]).s === 'read'; }); }
   function pfSiteUrl(rows, pf) { var i; for (i = 0; i < rows.length; i++) if (rows[i].pf === pf) return /^https:\/\//.test(rows[i].url) ? rows[i].url : ''; return ''; }
   /* 서버 상태에서 온 플랫폼 칸을 믿을 수 있는 값으로(모르는 글자·너무 큰 값 버림) */
   function pfCleanInfo(o) {
@@ -420,7 +423,7 @@
     verAtLeast: verAtLeast, kstInfo: kstInfo, normBrowse: normBrowse, isSample: isSample, libIsThin: libIsThin, clockHM: clockHM, fmtStar: fmtStar, listTitle: listTitle, listKey: listKey,
     chapterOrder: chapterOrder, resumeHighlight: resumeHighlight, takeCoverBatch: takeCoverBatch, DAY_NAME: DAY_NAME,
     PF_WHY: PF_WHY, PF_GROUPS: PF_GROUPS, PF_LANG: PF_LANG, pfRows: pfRows, pfStatus: pfStatus, pfReason: pfReason, pfDefaultOrder: pfDefaultOrder, pfNormPrefs: pfNormPrefs, pfSheetOrder: pfSheetOrder, pfChipList: pfChipList,
-    pfFilter: pfFilter, pfGroupCounts: pfGroupCounts, pfToggleFav: pfToggleFav, pfMoveFav: pfMoveFav, pfToggleHide: pfToggleHide, pfCheckTable: pfCheckTable, pfSiteUrl: pfSiteUrl, pfCleanInfo: pfCleanInfo
+    pfFilter: pfFilter, pfGroupCounts: pfGroupCounts, pfToggleFav: pfToggleFav, pfMoveFav: pfMoveFav, pfToggleHide: pfToggleHide, pfCheckTable: pfCheckTable, pfSiteUrl: pfSiteUrl, pfCleanInfo: pfCleanInfo, pfOnlyRead: pfOnlyRead
   };
   global.MangaPure = MangaPure;
 
@@ -1317,7 +1320,7 @@
    * 스위치 host.platforms(app.js MANGA_PLATFORMS) = false 면 이 블록은 전부 잠자고 v10.30 화면 그대로.
    * ===================================================================*/
   var PFR = [], pfPrefs = null, pfInfo = {};
-  var pfUi = { open: false, group: 'all', q: '', reorder: false, showHid: false, sel: '', undo: '', undoTimer: 0 };
+  var pfUi = { open: false, group: 'all', q: '', reorder: false, showHid: false, onlyRead: false, confirm: false, sel: '', undo: '', undoTimer: 0 };
   var gl = { key: '', items: [], total: 0, page: 1, pages: 1, hasNext: false, stale: false, limited: false, updated: 0, hidden: 0, loaded: false, loading: false, err: '', at: 0 };
   var pcov = {}, pq = { queue: [], inflight: 0, pending: {}, io: null, budget: {}, timer: 0 };
   var EYE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
@@ -1401,7 +1404,7 @@
   function pfIsOpen() { return !!pfUi.open; }
   function openPf(sel) {
     if (!platOn()) return; pfInit();
-    var el = ensurePf(); pfUi.open = true; pfUi.sel = sel || ''; pfUi.q = ''; pfUi.group = 'all'; pfUi.reorder = false; $('mgPfQ').value = '';
+    var el = ensurePf(); pfUi.open = true; pfUi.sel = sel || ''; pfUi.q = ''; pfUi.group = 'all'; pfUi.reorder = false; pfUi.onlyRead = false; pfUi.confirm = false; $('mgPfQ').value = '';
     paintPf(); el.style.display = 'flex'; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
     if (pfUi.sel) { var c = el.querySelector('[data-pfp="' + pfUi.sel + '"]'); if (c && c.scrollIntoView) { try { c.scrollIntoView({ block: 'center' }); } catch (e) {} } }
   }
@@ -1411,19 +1414,20 @@
   }
   function paintPf() {
     if (!$('mgPf')) return;
-    var cnt = pfGroupCounts(PFR, pfPrefs, pfUi.showHid), h = '';
+    var cnt = pfGroupCounts(PFR, pfPrefs, pfUi.showHid, pfInfoNow(), pfUi.onlyRead), h = '';
     h += '<button type="button" class="mg-c' + (pfUi.group === 'all' ? ' on' : '') + '" data-pfg="all" aria-pressed="' + (pfUi.group === 'all') + '">전체 ' + cnt.all + '</button>';
     PF_GROUPS.forEach(function (g) { if (cnt[g[0]]) h += '<button type="button" class="mg-c' + (pfUi.group === g[0] ? ' on' : '') + '" data-pfg="' + g[0] + '" aria-pressed="' + (pfUi.group === g[0]) + '">' + g[1] + ' ' + cnt[g[0]] + '</button>'; });
     $('mgPfGroups').innerHTML = h;
     var nh = pfPrefs.hid.length;
-    $('mgPfTools').innerHTML = (pfPrefs.favs.length > 1 ? '<button type="button" class="mg-c' + (pfUi.reorder ? ' on' : '') + '" data-pft="reorder" aria-pressed="' + pfUi.reorder + '">' + (pfUi.reorder ? '순서 바꾸기 끝' : '★ 순서 바꾸기') + '</button>' : '') +
-      (nh ? '<button type="button" class="mg-c' + (pfUi.showHid ? ' on' : '') + '" data-pft="hid" aria-pressed="' + pfUi.showHid + '">숨긴 곳 ' + nh + '</button>' : '');
+    $('mgPfTools').innerHTML = '<button type="button" class="mg-c' + (pfUi.onlyRead ? ' on' : '') + '" data-pft="read" aria-pressed="' + pfUi.onlyRead + '">앱에서 읽는 곳만</button>' + (pfPrefs.favs.length > 1 ? '<button type="button" class="mg-c' + (pfUi.reorder ? ' on' : '') + '" data-pft="reorder" aria-pressed="' + pfUi.reorder + '">' + (pfUi.reorder ? '순서 바꾸기 끝' : '★ 순서 바꾸기') + '</button>' : '') +
+      (nh ? '<button type="button" class="mg-c' + (pfUi.showHid ? ' on' : '') + '" data-pft="hid" aria-pressed="' + pfUi.showHid + '">숨긴 곳 ' + nh + '</button>' : '') + '<button type="button" class="mg-c" data-pft="reset">기본으로 되돌리기</button>';
     paintPfCards(); paintPfDet(); paintPfUndo();
   }
-  function pfBadge(st) { return st.s === 'read' ? '<span class="mg-pfbd rd">앱에서 읽기</span>' : (st.s === 'chk' ? '<span class="mg-pfbd ck">확인 중</span>' : '<span class="mg-pfbd lk">정식 사이트</span>'); }
+  function pfBadge(st) { if (st.s === 'end') return '<span class="mg-pfbd ed">서비스 종료</span>'; return st.s === 'read' ? '<span class="mg-pfbd rd">앱에서 읽기</span>' : (st.s === 'chk' ? '<span class="mg-pfbd ck">확인 중</span>' : '<span class="mg-pfbd lk">정식 사이트</span>'); }
   function paintPfCards() {
     var box = $('mgPfCards'); if (!box) return;
     var list = pfFilter(pfSheetOrder(PFR, pfInfoNow(), pfPrefs, pfUi.showHid), pfUi.group, pfUi.q), h = '';
+    if (pfUi.onlyRead) list = pfOnlyRead(list, pfInfoNow());
     list.forEach(function (r) {
       var st = pfSt(r.pf), fav = pfPrefs.favs.indexOf(r.pf) >= 0, hid = pfPrefs.hid.indexOf(r.pf) >= 0;
       h += '<div class="mg-pc ' + st.s + (hid ? ' hid' : '') + (pfUi.sel === r.pf ? ' sel' : '') + '" role="button" tabindex="0" data-pfp="' + r.pf + '"><b class="nm">' + esc(r.n) + '</b><span class="lg">' + esc(r.lang) + '</span>' + pfBadge(st) +
@@ -1439,6 +1443,7 @@
     if (!r) { el.hidden = true; el.innerHTML = ''; return; }
     var st = pfSt(r.pf), h = '<b>' + esc(r.n) + '</b><small>' + esc(r.lang) + '</small>';
     if (st.s === 'read') h += '<div class="mg-acts"><button type="button" class="mg-btn pri" data-pfa="use">이 플랫폼 보기</button></div>';
+    else if (st.s === 'end') h += '<p class="mg-pfsay">서비스가 끝난 곳이에요</p>';
     else {
       h += '<p class="mg-pfsay">' + (st.s === 'chk' ? '아직 확인 중이에요' : esc(pfReason(st.w))) + '</p>' + (st.s === 'chk' ? '<small class="mg-pfsub">앱 안에서 읽을 수 있는지 살펴보고 있어요.</small>' : '');
       h += r.url ? '<div class="mg-acts"><button type="button" class="mg-btn pri" data-pfa="site">정식 사이트 열기</button></div>' : '<p class="mg-pfnoaddr">주소 확인 중이에요</p>';
@@ -1447,6 +1452,7 @@
   }
   function paintPfUndo() {
     var el = $('mgPfUndo'); if (!el) return;
+    if (pfUi.confirm) { el.innerHTML = '<span>내 설정을 처음으로 되돌릴까요?</span><span><button type="button" data-pfa="resetgo">되돌리기</button><button type="button" data-pfa="resetno">그만두기</button></span>'; el.hidden = false; return; }
     if (!pfUi.undo) { el.hidden = true; el.innerHTML = ''; return; }
     el.innerHTML = '<span>' + esc(pfNameOf(pfUi.undo)) + ' 숨겼어요</span><button type="button" data-pfa="undo">되돌리기</button>'; el.hidden = false;
   }
@@ -1465,12 +1471,19 @@
     }
     if (el.hasAttribute('data-pfmv')) { pf = el.getAttribute('data-pfmv'); pfPrefs = pfNormPrefs(pfMoveFav(pfPrefs, pf, num(el.getAttribute('data-d'))), PFR); pfSave(); paintPf(); paintPfBar(); return; }
     if (el.hasAttribute('data-pfg')) { pfUi.group = el.getAttribute('data-pfg'); paintPf(); return; }
-    if (el.hasAttribute('data-pft')) { if (el.getAttribute('data-pft') === 'reorder') pfUi.reorder = !pfUi.reorder; else pfUi.showHid = !pfUi.showHid; paintPf(); return; }
+    if (el.hasAttribute('data-pft')) { var tl = el.getAttribute('data-pft'); if (tl === 'reorder') pfUi.reorder = !pfUi.reorder; else if (tl === 'read') pfUi.onlyRead = !pfUi.onlyRead; else if (tl === 'reset') { pfUi.confirm = true; clearTimeout(pfUi.undoTimer); pfUi.undo = ''; } else pfUi.showHid = !pfUi.showHid; paintPf(); return; }
     if (el.hasAttribute('data-pfp')) { pf = el.getAttribute('data-pfp'); pfUi.sel = pfUi.sel === pf ? '' : pf; paintPfCards(); paintPfDet(); return; }
     var a = el.getAttribute('data-pfa');
     if (a === 'close') return void closePf();
     if (a === 'use') return pfUse(pfUi.sel);
     if (a === 'site') { var u = pfSiteUrl(PFR, pfUi.sel); if (u) { try { host.openUrl(u); } catch (e) { toast('링크를 열지 못했어요.', 2000); } } return; }
+    if (a === 'resetno') { pfUi.confirm = false; paintPfUndo(); return; }
+    if (a === 'resetgo') {
+      pfUi.confirm = false; pfUi.reorder = false; pfUi.showHid = false; pfUi.onlyRead = false; pfUi.sel = ''; pfUi.group = 'all'; pfUi.q = ''; $('mgPfQ').value = '';
+      var wasCur = pfPrefs.cur; pfPrefs = pfNormPrefs(null, PFR); pfSave(); paintPf(); paintPfBar();
+      if (wasCur !== 'naver' && view === 'lib' && tab === 'wt') { wtTok++; sres = { open: false, on: false, q: '', items: null }; paintWtShell(); wtLoad({}); }
+      toast('처음 상태로 되돌렸어요.', 1800); return;
+    }
     if (a === 'undo') { var up = pfUi.undo; if (up) { pfPrefs = pfNormPrefs(pfToggleHide(pfPrefs, up), PFR); pfSave(); } clearTimeout(pfUi.undoTimer); pfUi.undo = ''; paintPf(); paintPfBar(); return; }
   }
 
