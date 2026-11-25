@@ -11,6 +11,8 @@
  * v9.87(O-0794) 미니뷰 줄: 시트 맨 위 「유튜브」 줄이 「미니뷰」 줄로 바뀐다(별개 앱 com.kwak.tubelab 을 패키지로 열 뿐 — 그 앱의 코드는 이 저장소에 없다).
  *       누르면 미니뷰의 첫 화면. 미니뷰가 없으면 예전처럼 Brave 로 유튜브를 열고(openBrave 그대로 — Brave 도 없으면 기존 「Brave 앱이 없습니다」 시트) 안내 한 줄.
  *       PC·브라우저: 유튜브 새 탭. 되돌림 스위치 = app.js YT_MODE('tube'|'brave'): 'brave' 면 예전 「유튜브 · Brave로 열기」 줄(v9.86 과 같음).
+ * v10.29(O-0963) 바로뷰 줄: 시트 맨 끝 「바로뷰 · 저장한 주소 · 전체화면」 — 별개 앱 com.kwak.baroview 의 첫 화면만 연다(새 네이티브 방법 없음, STORE_ALLOWED 에는 넣지 않음).
+ *       없으면 「바로뷰가 설치되어 있지 않습니다」 안내 시트(스토어 없음). 스위치 = app.js BAROVIEW_TAB('on'|'off', 기본 'on').
  * 연타: 홈 칸·시트 줄·업무 앱 카드·유튜브가 하나의 잠금(700ms)을 쓴다 — 같은 줄이 두 번, 다른 앱 두 개가 겹쳐 열리지 않는다.
  * PC(비 Capacitor)·폰 일반 브라우저: 화면은 폰과 똑같이 보이고 동작만 다르다 — 유튜브 줄 = 새 탭, 나머지 = 「폰에서만 열립니다」 안내.
  * 스위치(app.js): VIDEO_TAB('on'|'brave'|'off') · YT_MODE('tube'|'brave') · POINT_APPS('on'|'off').
@@ -33,6 +35,9 @@
   var MINVIEW_MISSING_DESC = '미니뷰가 없어서 Brave로 열립니다';
   var MINVIEW_PC_DESC = '새 탭으로 유튜브 열기';
   var CODEK_PKG = 'com.kwak.codek';   // v10.1(O-0858) 코드 K(별개 앱) — 홈 「코드 K」 줄이 첫 화면만 연다. 이 저장소에는 그 앱의 코드·열쇠가 없다(패키지 이름만)
+  var BAROVIEW_PKG = 'com.kwak.baroview';   // v10.29(O-0963) 바로뷰(별개 앱) — OTT 시트 맨 끝 줄이 첫 화면만 연다. 이 저장소에는 그 앱의 코드·주소·목록이 없다(패키지 이름만)
+  var BAROVIEW_DESC = '저장한 주소 · 전체화면';
+  var ROW_BAROVIEW = { id: 'baroview', name: '바로뷰', pkg: BAROVIEW_PKG, desc: BAROVIEW_DESC, nostore: true };   // 스토어 줄 없음(코드 K 와 같은 방식) — 없으면 안내 시트만
   var ROW_MINVIEW = { id: 'minview', name: '미니뷰', pkg: MINVIEW_PKG, desc: MINVIEW_DESC, minview: true };   // v9.87(O-0794) 기본 첫 줄
   var ROW_BRAVE = { id: 'youtube', name: '유튜브', desc: 'Brave로 열기', brave: true };                       // v9.86 까지의 첫 줄 — 지우지 않고 남겨 둔다(YT_MODE='brave' 일 때 init 이 이 줄로 바꿔 끼운다)
   var VIDEO = [
@@ -40,7 +45,8 @@
     { id: 'netflix', name: '넷플릭스', pkg: 'com.netflix.mediaclient', desc: '앱 열기' },
     { id: 'wavve', name: '웨이브', pkg: 'kr.co.captv.pooqV2', desc: '앱 열기' },        // 옛 푹 시절 주소(…pooq)는 플레이에서 404 — 쓰지 않는다
     { id: 'tving', name: '티빙', pkg: 'net.cj.cjhv.gs.tving', desc: '앱 열기' },
-    { id: 'disney', name: '디즈니+', pkg: 'com.disney.disneyplus', desc: '앱 열기' }
+    { id: 'disney', name: '디즈니+', pkg: 'com.disney.disneyplus', desc: '앱 열기' },
+    ROW_BAROVIEW   // v10.29(O-0963) 맨 끝(디즈니+ 아래) — 스위치 BAROVIEW_TAB='off' 면 init 이 이 줄을 뺀다
   ];
   /* 업무 앱 「포인트 앱 바로 열기」 7장(순서 그대로, 2열 같은 크기 칸 — 칸에는 아이콘과 앱 이름만, 설명어구 없음). store = 미설치 시트·실패 토스트에 쓰는 스토어 이름(카드 이름과 다를 때만).
    * v9.81: 「머니워크(에이헬스)」→「에이헬스」, 「캐시슬라이드」(잠금화면 앱 com.cashslide — 걷기 앱이 아님)→「캐시슬라이드 스텝업」(com.nbt.moves, 플레이 스토어 제목 「캐시슬라이드 스텝업 - 걸으면 돈버는 만보기」, NBT Inc.). */
@@ -61,6 +67,7 @@
   function packages() {
     var a = all().filter(function (x) { return x.pkg; }).map(function (x) { return x.pkg; });
     if (a.indexOf(MINVIEW_PKG) < 0) a.unshift(MINVIEW_PKG);
+    if (a.indexOf(BAROVIEW_PKG) < 0) a.push(BAROVIEW_PKG);   // 스위치가 꺼져도 허용 목록·매니페스트에는 남는다(무해)
     if (a.indexOf(CODEK_PKG) < 0) a.push(CODEK_PKG);   // 코드 K 도 허용 목록·매니페스트에는 있고 OTT 시트 줄은 아니다
     return a;
   }
@@ -84,7 +91,7 @@
     return bad;
   }
 
-  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, ROW_MINVIEW: ROW_MINVIEW, ROW_BRAVE: ROW_BRAVE, MINVIEW_PKG: MINVIEW_PKG, CODEK_PKG: CODEK_PKG, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
+  var PhonePure = { VIDEO: VIDEO, POINTS: POINTS, ROW_MINVIEW: ROW_MINVIEW, ROW_BRAVE: ROW_BRAVE, ROW_BAROVIEW: ROW_BAROVIEW, BAROVIEW_PKG: BAROVIEW_PKG, MINVIEW_PKG: MINVIEW_PKG, CODEK_PKG: CODEK_PKG, PC_DESC: PC_DESC, PC_MSG: PC_MSG, OLD_APK_MSG: OLD_APK_MSG, all: all, byId: byId, packages: packages, storeName: storeName, missingTitle: missingTitle, missingMsg: missingMsg, failMsg: failMsg, validate: validate };
   if (typeof module !== 'undefined' && module.exports) { module.exports = { PhonePure: PhonePure }; }
   if (typeof document === 'undefined') return;   // node 시험: 화면 부분은 건너뜀
 
@@ -112,6 +119,11 @@
     try {
       EA.launchApp({ pkg: it.pkg }).then(function (r) {
         if (r && r.opened) return;   // 그 앱이 앞으로 나옴 — 말 없이 끝
+        if (it.nostore && r && (r.reason === 'not_installed' || r.reason === 'not_allowed')) {   // 바로뷰: 스토어로 보내지 않는다 — 안내 시트만
+          if (r.reason === 'not_allowed') { ctx.toast(OLD_APK_MSG, 3000); return; }
+          ctx.openSheet(nm + '가 설치되어 있지 않습니다', '설치 파일이 필요합니다. 사무소에서 보낸 설치 파일로 설치한 뒤 다시 눌러 주십시오.', '확인', function () {}, null, null, { positive: true, icon: 'i-check', cancelLabel: '닫기' });
+          return;
+        }
         if (r && r.reason === 'not_installed') {
           ctx.openSheet(missingTitle(nm), missingMsg(nm), '스토어 열기', function () {
             try { EA.openStore({ pkg: it.pkg }).then(function (s) { if (!s || !s.opened) storeFail(); }, storeFail); } catch (e) { storeFail(); }
@@ -198,6 +210,7 @@
 
   function init(c) {
     ctx = c;
+    if (c && c.baroview === 'off') { var bi = VIDEO.indexOf(ROW_BAROVIEW); if (bi >= 0) VIDEO.splice(bi, 1); }   // 되돌림 스위치(app.js BAROVIEW_TAB='off'): 시트에서 바로뷰 줄을 뺀다
     if (c && c.ytMode === 'brave') VIDEO[0] = ROW_BRAVE;   // 되돌림 스위치(app.js YT_MODE='brave'): 첫 줄을 예전 「유튜브 · Brave로 열기」로
     return true;
   }

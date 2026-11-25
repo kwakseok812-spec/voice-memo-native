@@ -3975,6 +3975,7 @@
   APP_VERSION = 'v10.25';       // v10.25(O-0931): 게임 칸에 「눈밭 캠프」(눈보라 서바이벌 · 1막·2막) 추가 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3f4d736). 게임 코드·서버·SQL·자바·권한 변경 없음 · versionCode 169
   APP_VERSION = 'v10.26';       // v10.26(O-0939): 게임 「눈밭 캠프」를 9판(3막 노을벌 목장 추가)으로 교체 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3d22f67), 게임 목록 설명 정정(벽돌 깨기 36판·세균 방어전 5탄). 게임 코드·서버·SQL·자바·권한 변경 없음
   APP_VERSION = 'v10.28';       // v10.28(O-0954): 「만화」에 웹툰 찾기·담기 — 서재에 PC 만화와 웹툰을 한 목록으로(웹툰 표시·완결 표시), + 칸에서 찾기(검색 + 인기) → 표지 시트 → 서재에 담기, 길게 눌러 빼기, 회차 목록(새 화·자물쇠), 볼 수 없는 화 안내 시트, 웹툰은 세로 이어 읽기가 기본. 스위치 MANGA_WEB, versionCode 172. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
+  APP_VERSION = 'v10.29';       // v10.29(O-0963): OTT 시트 맨 끝에 「바로뷰」 줄(작은 글씨 「저장한 주소 · 전체화면」) — 누르면 폰의 별개 앱 바로뷰의 첫 화면(없으면 「바로뷰가 설치되어 있지 않습니다」 안내 시트, 스토어 없음). 스위치 BAROVIEW_TAB · 새 권한 없음 · versionCode 173
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
@@ -10494,6 +10495,7 @@
    *     · 'brave' = v9.86 과 똑같은 「유튜브 · Brave로 열기」 줄(미니뷰에 문제가 있을 때 새 번호 하나로 예전 줄로 돌아가는 길). 아래 openBrave 코드는 지우지 않고 그대로 두 줄이 함께 쓴다. */
   var YT_MODE = 'tube';
   var VIDEO_TAB = 'on';
+  var BAROVIEW_TAB = 'on';   // v10.29(O-0963): 'on' = OTT 시트 맨 끝 「바로뷰」 줄 · 'off' = 줄 없음(v10.28 과 같은 5줄)
   var HOME_OTT_FIRST = 'on';   // v9.94(O-0821): 'on' = 홈에서 OTT 칸과 S-Office 칸의 자리를 맞바꾼다 · 'off' = v9.93 순서
   var BRAVE_URL = 'https://www.youtube.com';
   var BRAVE_PKG = 'com.brave.browser';
@@ -10525,7 +10527,7 @@
       }, fail);
     } catch (e) { fail(); }
   }
-  if (window.PhoneApps) { try { PhoneApps.init({ toast: toast, openSheet: openSheet, openBrave: openBrave, ytMode: YT_MODE }); } catch (e) {} }
+  if (window.PhoneApps) { try { PhoneApps.init({ toast: toast, openSheet: openSheet, openBrave: openBrave, ytMode: YT_MODE, baroview: BAROVIEW_TAB }); } catch (e) {} }
   if (VIDEO_TAB !== 'off' && $('btnVideoApps')) {
     var videoGrid = $('homeTools'), videoSub = videoGrid && videoGrid.querySelector('.tools-sub');
     if (videoGrid && videoSub) videoGrid.insertBefore($('btnVideoApps'), videoSub);   // 홈 도구 맨 끝(규정 도우미 다음) — 앞의 칸들이 「PC 연결」 앞으로 옮겨진 뒤라 이렇게 해야 맨 끝에 온다
