@@ -3974,7 +3974,7 @@
   APP_VERSION = 'v10.24';       // v10.24(O-0929): PC 화면 맞춤(B안) — 폭 1024px 이상·마우스 화면에서만 홈 1120px·하위 화면 860px·시트는 가운데 창·말풍선 줄 길이 상한(css/pc-layout.css 한 파일). 폰·폴드·태블릿은 변화 0. 스위치 PC_LAYOUT='off'(=<html data-pc="off">) 면 v10.23 과 같음. 서버·SQL·자바·권한 변경 없음 · versionCode 168
   APP_VERSION = 'v10.25';       // v10.25(O-0931): 게임 칸에 「눈밭 캠프」(눈보라 서바이벌 · 1막·2막) 추가 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3f4d736). 게임 코드·서버·SQL·자바·권한 변경 없음 · versionCode 169
   APP_VERSION = 'v10.26';       // v10.26(O-0939): 게임 「눈밭 캠프」를 9판(3막 노을벌 목장 추가)으로 교체 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3d22f67), 게임 목록 설명 정정(벽돌 깨기 36판·세균 방어전 5탄). 게임 코드·서버·SQL·자바·권한 변경 없음
-  APP_VERSION = 'v10.27';       // v10.27(O-0950): 홈 「만화」 칸 — PC 에 둔 만화를 앱 안에서 읽는다(서재 겉그림 격자·이어 읽기 띠 → 회차 목록 → 읽기: 세로 스크롤·좌→우·우→좌 넘김, 만화별 기억, 쪽 번호·데이터 사용량 안내). 스위치 MANGA_UI(app.js), 코드 js/manga.js · css/manga.css, versionCode 171. 서버는 0단계에서 만든 manga_* 함수·manga-file 을 쓰고 새 권한·새 네이티브 코드 없음
+  APP_VERSION = 'v10.28';       // v10.28(O-0954): 「만화」에 웹툰 찾기·담기 — 서재에 PC 만화와 웹툰을 한 목록으로(웹툰 표시·완결 표시), + 칸에서 찾기(검색 + 인기) → 표지 시트 → 서재에 담기, 길게 눌러 빼기, 회차 목록(새 화·자물쇠), 볼 수 없는 화 안내 시트, 웹툰은 세로 이어 읽기가 기본. 스위치 MANGA_WEB, versionCode 172. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
@@ -10591,9 +10591,10 @@
    *   PC 의 만화 폴더에 둔 파일을 PC 의 중계 프로그램이 줄여 서버 임시 보관함에 올리고, 앱이 서버 함수(manga_*)·서명 주소(manga-file)로 받아 읽는다. 연동 암호는 다른 PC 연동 기능과 같은 값.
    *   스위치 MANGA_UI: 'on' = 칸 보임 · 'off' = 칸이 보이지 않고 화면 코드가 불리지 않는다(v10.26 과 같음). 새 권한·새 네이티브 코드 없음. */
   var MANGA_UI = 'on';
+  var MANGA_WEB = 'on';        // v10.28(O-0954): 'off' = 「웹툰 찾기」 칸과 웹툰 표시가 없어 v10.27 과 같다(PC 쪽 스위치는 voice-memo-collector\manga_web.OFF)
   if (MANGA_UI !== 'off' && window.MangaTab && $('btnManga')) {
     try {
-      MangaTab.init({ toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen($('mangaView')); },
+      MangaTab.init({ web: MANGA_WEB !== 'off', openUrl: function (u) { var w = null; try { w = window.open(u, '_blank'); } catch (e) {} if (!w) toast('링크를 열지 못했습니다.'); }, toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen($('mangaView')); },
         cfg: function () { var c = window.OfficeBridge && OfficeBridge.CONFIG; return c ? { url: c.url, key: c.key } : null; } });
       var mgGrid = $('homeTools'), mgSub = mgGrid && mgGrid.querySelector('.tools-sub');
       if (mgGrid && mgSub) mgGrid.insertBefore($('btnManga'), mgSub);   // 홈 도구 맨 끝 — 위 「홈 도구 칸 순서」 정리가 끝난 뒤라 항상 맨 끝

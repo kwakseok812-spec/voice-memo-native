@@ -61,7 +61,7 @@
 
 /* 회차 목록 */
 .mg-chhead { display: flex; gap: 14px; align-items: flex-end; margin: 2px 0 4px; }
-.mg-chcov { flex: none; width: 104px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); }
+.mg-chcov { position: relative; flex: none; width: 104px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); }
 .mg-chcov img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mg-chinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .mg-chinfo b { font-size: 19px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: break-word; }
@@ -152,3 +152,54 @@ html[data-style="light"] .mg-reader { --mg-bg: #eceef4; --mg-fg: #141a30; --mg-d
   .mg-rtop, .mg-rbot, .mg-rbadge, .mg-btn, .mg-chip, .mg-resume, .mg-ch, .mg-cov { transition: none; }
   .mg-track { transition: none !important; }
 }
+
+/* ============================================================================
+ * v10.28 (O-0954) 웹툰 찾기·담기 — 작은 「웹툰」 표시, 「+」 칸, 찾기 화면, 아래에서 올라오는 시트, 볼 수 없는 화(자물쇠)
+ * ==========================================================================*/
+.mg-pill { position: absolute; right: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; font-style: normal; font-size: 11.5px; font-weight: 800; color: #fff; background: rgba(20, 28, 60, .82); border: 1px solid rgba(255, 255, 255, .25); }
+.mg-pill.on { background: rgba(16, 120, 80, .88); }
+.mg-pill.inl { position: static; display: inline-block; align-self: flex-start; margin-top: 2px; }
+.mg-badge.new { background: var(--p1); border-color: transparent; }
+.mg-free { color: var(--warn, #d99a1a) !important; font-weight: 700; }
+.mg-btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mg-btnrow .mg-btn { margin-top: 0; }
+.mg-pcard { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.mg-pcard:active .mg-cov { transform: scale(.97); }
+.mg-pcard small { font-size: 12px; color: var(--dim); }
+.mg-plus .mg-cov { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 2px dashed var(--glass-b2); box-shadow: none; color: var(--muted); }
+.mg-plus .mg-cov b { font-size: 14px; font-weight: 800; }
+.mg-card.fi .mg-t { -webkit-line-clamp: 2; }
+.mg-sec { margin: 6px 2px 2px; font-size: 15px; font-weight: 800; color: var(--text); }
+.mg-prow { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.mg-prow .mg-card { flex: none; width: 112px; scroll-snap-align: start; }
+.mg-grid.fg { margin-bottom: 4px; }
+.mg-search { display: flex; gap: 8px; align-items: center; }
+.mg-search input { flex: 1; min-width: 0; height: 46px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--glass-b2); background: var(--glass); color: var(--text); font-size: 15.5px; font-family: inherit; outline: none; }
+.mg-search input:focus { border-color: var(--p1); }
+.mg-ch.lock { opacity: .7; }
+.mg-st.lock { display: inline-flex; align-items: center; gap: 4px; background: var(--ic-bg); color: var(--dim); }
+.mg-ch.isnew { border-color: var(--cyan); }
+
+.mg-sheetbg { position: fixed; inset: 0; z-index: 960; display: none; align-items: flex-end; justify-content: center; background: rgba(4, 6, 14, .55); }
+.mg-sheet { width: 100%; max-width: 560px; max-height: 86vh; overflow: auto; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 18px); border-radius: 24px 24px 0 0;
+  background: var(--bg1, #12162a); color: var(--text); border: 1px solid var(--glass-b2); box-shadow: 0 -12px 40px rgba(0, 0, 0, .4); }
+html[data-style="light"] .mg-sheet { background: #fff; }
+.mg-sheetbg.on .mg-sheet { animation: mgSheetUp .24s ease both; }
+@keyframes mgSheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 700px) { .mg-sheetbg { align-items: center; } .mg-sheet { border-radius: 24px; } }
+.mg-sh-head { display: flex; gap: 14px; align-items: flex-end; }
+.mg-sh-cov { flex: none; width: 112px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); }
+.mg-sh-cov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-sh-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mg-sh-info b { font-size: 19px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: break-word; }
+.mg-sh-info small { font-size: 13px; color: var(--muted); }
+.mg-sh-note { margin: 12px 2px 0; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.mg-sh-lock { display: flex; align-items: flex-end; gap: 6px; }
+.mg-sh-lock b { display: block; font-size: 17px; font-weight: 800; line-height: 1.45; }
+.mg-sh-lock p { margin: 6px 0 14px; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.mg-sh-lock .mg-kfig.cut img { height: 120px; }
+.mg-sh-lock .mg-kfig.photo { width: 80px; height: 80px; margin: 0; }
+
+/* 웹툰 읽기 — 조각 번호·쪽 표기 숨김, 빈칸에는 번호 대신 돌아가는 표시만 */
+.mg-reader.web .mg-rrange, .mg-reader.web #mgRPage, .mg-reader.web .mg-ph b { display: none; }
+.mg-rbadge:empty { display: none; }
