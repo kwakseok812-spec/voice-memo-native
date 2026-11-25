@@ -1,0 +1,154 @@
+/* ============================================================================
+ * manga.css — 「만화」 (v10.27, O-0950)
+ * 모든 규칙은 #mangaView(서재·회차 목록) 또는 #mgReader(읽기 화면, body 직속 고정 층) 안에서만 먹는다.
+ * 색은 styles.css 의 변수(--text --muted --dim --glass --glass-b --p1 --p2 --cyan --ok --warn --rec ...)를 그대로 쓴다(밝은·어두운 화면 자동).
+ * 움직임: 겉그림 올라오기 0.28초 · 쪽 넘김 0.22초 · 누름 반응 · 줄 나타남 0.2초. 「움직임 줄이기」면 전부 즉시(JS 가 .in 을 안 붙이고 넘김 전환을 끈다 + 아래 미디어 쿼리).
+ * ==========================================================================*/
+
+#mangaView { padding-bottom: 96px; position: relative; }
+#mangaView button, #mgReader button { font-family: inherit; }
+.mg-wrap { display: flex; flex-direction: column; gap: 12px; }
+
+/* 케이가 말하는 칸(상태·빈 서재·오류) — 케이를 작은 동그라미에 가두지 않고 그림을 크게 */
+.mg-say { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; min-height: 176px; padding: 18px 6px 0 18px; overflow: hidden;
+  background: var(--glass); border: 1px solid var(--glass-b); border-radius: 22px; box-shadow: var(--card-sh); }
+.mg-sayt { flex: 1; min-width: 0; align-self: center; padding: 0 0 18px; }
+.mg-sayt b { display: block; font-size: 17px; font-weight: 800; line-height: 1.45; color: var(--text); word-break: keep-all; overflow-wrap: break-word; }
+.mg-sayt p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--muted); word-break: keep-all; overflow-wrap: break-word; }
+.mg-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mg-kfig { flex: none; display: block; line-height: 0; align-self: flex-end; }
+.mg-kfig.cut img { display: block; height: 172px; width: auto; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .32)); }
+.mg-kfig.photo { width: 112px; height: 112px; border-radius: 50%; overflow: hidden; background: #dfe3ea; margin: 0 10px 14px 0; box-shadow: 0 0 0 3px var(--glass-b2); }
+.mg-kfig.photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; display: block; }
+.mg-hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-height: 108px; margin: 0 2px; padding: 4px 4px 0 2px; }
+.mg-hello b { align-self: center; font-size: 17px; font-weight: 800; line-height: 1.5; word-break: keep-all; }
+.mg-kfig.hi.cut img { height: 108px; }
+.mg-kfig.hi.photo { width: 84px; height: 84px; margin: 0 0 6px; box-shadow: 0 0 0 2px var(--glass-b2); }
+
+/* 단추 */
+.mg-btn { height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--glass-b2); background: var(--glass2); color: var(--text); font-size: 14.5px; font-weight: 800; cursor: pointer; transition: transform .12s; }
+.mg-btn:active { transform: scale(.96); }
+.mg-btn.pri { border-color: transparent; background: linear-gradient(135deg, var(--p1), var(--p2)); color: #fff; box-shadow: var(--glow-s); }
+.mg-btn[disabled] { opacity: .5; cursor: default; box-shadow: none; }
+
+/* 이어 읽기 띠 */
+.mg-resume { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; text-align: left; color: var(--text); cursor: pointer;
+  background: linear-gradient(135deg, rgba(59, 130, 246, .20), rgba(139, 92, 246, .18)); border: 1px solid var(--glass-b2); border-radius: 18px; box-shadow: var(--card-sh); transition: transform .12s; }
+.mg-resume:active { transform: scale(.985); }
+.mg-rc { flex: none; width: 52px; height: 70px; border-radius: 10px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); }
+.mg-rc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mg-rt small { font-size: 12px; font-weight: 800; color: var(--cyan); letter-spacing: .02em; }
+.mg-rt b { font-size: 16px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-rt span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-resume i { font-style: normal; font-size: 26px; line-height: 1; color: var(--muted); flex: none; }
+
+/* 서재 격자 — 접은 폰 2줄 · 펼친 폴드 3줄 · PC 4줄 */
+.mg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+@media (min-width: 600px) { .mg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .mg-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mg-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.mg-card.in { animation: mgUp .28s ease both; animation-delay: calc(var(--i, 0) * 30ms); }
+@keyframes mgUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.mg-cov { position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); transition: transform .12s; }
+.mg-card:active .mg-cov { transform: scale(.97); }
+.mg-cov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-cov i { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, var(--glass2) 50%, transparent 80%); background-size: 220% 100%; animation: mgShim 1.3s linear infinite; }
+@keyframes mgShim { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.mg-badge { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; font-style: normal; font-size: 11.5px; font-weight: 800; color: #fff; background: rgba(20, 28, 60, .82); border: 1px solid rgba(255, 255, 255, .25); }
+.mg-t { font-size: 14.5px; font-weight: 800; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: break-word; }
+.mg-card small { font-size: 12px; color: var(--dim); }
+
+/* 회차 목록 */
+.mg-chhead { display: flex; gap: 14px; align-items: flex-end; margin: 2px 0 4px; }
+.mg-chcov { flex: none; width: 104px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: var(--ic-bg); border: 1px solid var(--glass-b); box-shadow: var(--card-sh); }
+.mg-chcov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-chinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mg-chinfo b { font-size: 19px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: break-word; }
+.mg-chinfo small { font-size: 13px; color: var(--muted); }
+.mg-chinfo .mg-btn { margin-top: 8px; }
+.mg-list { display: flex; flex-direction: column; gap: 8px; }
+@media (min-width: 900px) { .mg-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mg-ch { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 56px; padding: 10px 16px; text-align: left; color: var(--text); cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-b); border-radius: 16px; transition: transform .12s; }
+.mg-ch:active { transform: scale(.985); }
+.mg-ch.read { opacity: .62; }
+.mg-ch.prog { border-color: var(--p1); background: linear-gradient(135deg, rgba(59, 130, 246, .16), rgba(139, 92, 246, .10)); }
+.mg-chn { min-width: 0; font-size: 15.5px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+.mg-chn small { font-size: 12px; font-weight: 600; color: var(--dim); }
+.mg-st { flex: none; font-size: 12.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--ic-bg); color: var(--muted); }
+.mg-st.prog { background: var(--p1); color: #fff; }
+.mg-st.new { background: rgba(34, 211, 238, .18); color: var(--cyan); }
+.mg-st.read { color: var(--ok); }
+
+/* ===================== 읽기 화면(body 직속 고정 층) ===================== */
+html.mg-rd-on { overflow: hidden; }
+.mg-reader { --mg-bg: #07090f; --mg-fg: #f3f6ff; --mg-dim: #8591b0; --mg-bar: rgba(7, 9, 15, .9); --mg-ph: #10141f; --mg-line: rgba(255, 255, 255, .16);
+  position: fixed; inset: 0; z-index: 950; background: var(--mg-bg); color: var(--mg-fg); overflow: hidden; }
+html[data-style="light"] .mg-reader { --mg-bg: #eceef4; --mg-fg: #141a30; --mg-dim: #75809c; --mg-bar: rgba(236, 238, 244, .94); --mg-ph: #dde2ee; --mg-line: rgba(20, 26, 48, .18); }
+.mg-rbody { position: absolute; inset: 0; }
+.mg-rload { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 70px 16px 24px; overflow: auto; }
+.mg-rload .mg-say { width: 100%; max-width: 560px; }
+
+.mg-rtop { position: absolute; left: 0; right: 0; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 22px;
+  background: linear-gradient(to bottom, var(--mg-bar) 55%, transparent); transition: opacity .2s, transform .2s; }
+.mg-rbot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 26px 18px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  background: linear-gradient(to top, var(--mg-bar) 55%, transparent); transition: opacity .2s, transform .2s; }
+.mg-reader:not(.bars) .mg-rtop { opacity: 0; pointer-events: none; transform: translateY(-10px); }
+.mg-reader:not(.bars) .mg-rbot { opacity: 0; pointer-events: none; transform: translateY(10px); }
+.mg-ibtn { flex: none; width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--mg-line); background: rgba(128, 138, 170, .18); color: var(--mg-fg); display: grid; place-items: center; cursor: pointer; }
+.mg-ibtn:active { transform: scale(.95); }
+.mg-rtitle { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mg-rtitle b { font-size: 15.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-rtitle small { font-size: 12.5px; color: var(--mg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-chip { flex: none; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--mg-line); background: rgba(128, 138, 170, .2); color: var(--mg-fg); font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap; transition: transform .12s; }
+.mg-chip:active { transform: scale(.95); }
+.mg-rrange { padding: 0 2px; }
+.mg-rrange input { width: 100%; height: 28px; accent-color: var(--p1); background: transparent; margin: 0; }
+.mg-rinfo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 2px; }
+.mg-rinfo span:first-child { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mg-rinfo span:last-child { font-size: 12px; color: var(--mg-dim); text-align: right; }
+.mg-rbadge { position: absolute; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); z-index: 2; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: #fff; background: rgba(10, 14, 30, .62); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.mg-rbadge.show { opacity: 1; }
+.mg-rbadge.msg { right: auto; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); font-size: 14px; padding: 8px 16px; z-index: 4; white-space: nowrap; background: rgba(10, 14, 30, .8); }
+.mg-rnote { position: absolute; z-index: 4; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 72px); max-width: 88%; padding: 9px 16px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; font-weight: 700; text-align: center;
+  color: #fff; background: rgba(120, 50, 70, .9); pointer-events: none; word-break: keep-all; }
+
+/* 가로 넘김 */
+.mg-stage { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.mg-track { display: flex; height: 100%; width: 100%; will-change: transform; }
+.mg-sl { position: relative; flex: 0 0 100%; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.mg-sl img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.mg-sl.tall { overflow-y: auto; align-items: flex-start; touch-action: pan-y; }
+.mg-sl.tall img { width: 100%; max-width: 760px; max-height: none; margin: 0 auto; }
+.mg-sl.end { overflow-y: auto; }
+
+/* 세로 이어 읽기 */
+.mg-vs { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; outline: 0; }
+.mg-vp { position: relative; width: 100%; max-width: 760px; margin: 0 auto; background: var(--mg-ph); }
+.mg-vp img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; user-select: none; }
+.mg-vp.end { aspect-ratio: auto; min-height: 70vh; display: flex; align-items: center; justify-content: center; background: transparent; padding: 24px 0 calc(env(safe-area-inset-bottom, 0px) + 40px); }
+.mg-vp:first-child { padding-top: 0; }
+
+/* 자리표시(그림이 오기 전) */
+.mg-ph { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--mg-dim); pointer-events: none; }
+.mg-ph i { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--mg-line); border-top-color: var(--p1); animation: mgSpin .9s linear infinite; }
+.mg-ph b { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+@keyframes mgSpin { to { transform: rotate(360deg); } }
+.mg-sl .mg-ph, .mg-vp .mg-ph { gap: 6px; }
+
+/* 다 읽었어요 카드 */
+.mg-end { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 24px 20px; max-width: 420px; }
+.mg-end .mg-kfig { align-self: center; margin-bottom: 4px; }
+.mg-end .mg-kfig.cut img { height: 150px; }
+.mg-end .mg-kfig.photo { margin: 0 0 6px; }
+.mg-end b { font-size: 19px; font-weight: 800; line-height: 1.4; }
+.mg-end p { margin: 0 0 6px; font-size: 13.5px; color: var(--mg-dim); }
+.mg-end .mg-acts { justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-card.in, .mg-cov i, .mg-ph i { animation: none; }
+  .mg-rtop, .mg-rbot, .mg-rbadge, .mg-btn, .mg-chip, .mg-resume, .mg-ch, .mg-cov { transition: none; }
+  .mg-track { transition: none !important; }
+}

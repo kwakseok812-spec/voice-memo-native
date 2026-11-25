@@ -279,7 +279,7 @@
   }
 
   /* ---------- 화면 전환(홈 ↔ 서브화면) ---------- */
-  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('hubView'), $('promoView'), $('payView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
+  var SUBS = [recPrep, recView, recordedPanel, filePanelRef(), searchPanelRef(), $('chatView'), $('lockerView'), $('meetingsView'), $('ideasView'), $('healthView'), $('achView'), $('albumView'), $('pcView'), $('mangaView'), $('hubView'), $('promoView'), $('payView'), $('docsView'), $('ordersView'), $('kWardrobeView'), $('remindersView'), $('starsView'), processing, resultWrap, $('rcbWrap')];   // v6.0: kWardrobeView(케이 꾸미기)   // v5.5: ideasView(아이디어 수첩) 등록 · v5.8: ordersView(작업 현황)
   function filePanelRef() { return $('filePanel'); }
   function searchPanelRef() { return $('searchPanel'); }
   var homeFooter = $('homeFooter');
@@ -336,6 +336,7 @@
     dropChatReturn();
     if (window.SmartDocs && SmartDocs.leave) { try { SmartDocs.leave(); } catch (e) {} }   // 문서 뷰어 오버레이 닫기
     if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층도 닫기(알림·바로가기로 다른 화면에 갈 때 게임이 덮고 있지 않게)
+    if (window.MangaTab && MangaTab.leave) { try { MangaTab.leave(); } catch (e) {} }   // v10.27(O-0950): 만화 읽기 층·상태 확인을 닫는다(알림·바로가기로 홈에 갈 때 읽기 화면이 덮고 있지 않게)
     try { if (isOpen($('kWardrobeView'))) kwHush(); } catch (e) {}   // v9.10: 케이 꾸미기를 [뒤로] 아닌 길(바로가기 등)로 떠날 때도 틀어 둔 소리를 멈춘다
     if (window.PayTab && PayTab.leave) { try { PayTab.leave(); } catch (e) {} }   // v10.17: 홈으로 나가면 급여 금액을 메모리에서 비운다
     SUBS.forEach(hide); clearSearch(); show(homeView); scrollTop(); syncHomeOn();
@@ -359,6 +360,7 @@
     // 문서 뷰어(고정 오버레이)는 문서 화면으로 갈 때가 아니면 닫는다(다른 화면을 가리지 않게)
     if (window.SmartDocs && SmartDocs.leave && el !== $('docsView')) { try { SmartDocs.leave(); } catch (e) {} }
     if (window.GamesTab && GamesTab.leave) { try { GamesTab.leave(); } catch (e) {} }   // v9.83(O-0783): 게임 층(고정 오버레이)도 다른 화면을 가리지 않게 닫는다
+    if (el !== $('mangaView') && window.MangaTab && MangaTab.leave) { try { MangaTab.leave(); } catch (e) {} }   // v10.27(O-0950): 만화 화면을 떠나면 읽기 층을 닫고 읽은 위치를 적는다
     if (el !== $('payView') && window.PayTab && PayTab.leave) { try { PayTab.leave(); } catch (e) {} }   // v10.17: 급여 화면을 떠나면 메모리의 금액을 비운다(폰에 저장하지 않는다)
     hide(homeView);
     SUBS.forEach(function (x) { if (x !== el) hide(x); });
@@ -3972,6 +3974,7 @@
   APP_VERSION = 'v10.24';       // v10.24(O-0929): PC 화면 맞춤(B안) — 폭 1024px 이상·마우스 화면에서만 홈 1120px·하위 화면 860px·시트는 가운데 창·말풍선 줄 길이 상한(css/pc-layout.css 한 파일). 폰·폴드·태블릿은 변화 0. 스위치 PC_LAYOUT='off'(=<html data-pc="off">) 면 v10.23 과 같음. 서버·SQL·자바·권한 변경 없음 · versionCode 168
   APP_VERSION = 'v10.25';       // v10.25(O-0931): 게임 칸에 「눈밭 캠프」(눈보라 서바이벌 · 1막·2막) 추가 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3f4d736). 게임 코드·서버·SQL·자바·권한 변경 없음 · versionCode 169
   APP_VERSION = 'v10.26';       // v10.26(O-0939): 게임 「눈밭 캠프」를 9판(3막 노을벌 목장 추가)으로 교체 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3d22f67), 게임 목록 설명 정정(벽돌 깨기 36판·세균 방어전 5탄). 게임 코드·서버·SQL·자바·권한 변경 없음
+  APP_VERSION = 'v10.27';       // v10.27(O-0950): 홈 「만화」 칸 — PC 에 둔 만화를 앱 안에서 읽는다(서재 겉그림 격자·이어 읽기 띠 → 회차 목록 → 읽기: 세로 스크롤·좌→우·우→좌 넘김, 만화별 기억, 쪽 번호·데이터 사용량 안내). 스위치 MANGA_UI(app.js), 코드 js/manga.js · css/manga.css, versionCode 171. 서버는 0단계에서 만든 manga_* 함수·manga-file 을 쓰고 새 권한·새 네이티브 코드 없음
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
@@ -6868,6 +6871,7 @@
     if (isOpen(chatView)) renderChat();               //   채팅 맨 위 「연동 암호를 넣으면 …」 안내 줄을 내린다
     try { if (window.KChar && KChar.assets) KChar.assets.refresh(); } catch (e) {}     // v9.5: 케이 자산(자세 그림·영상·새 옷)도 암호가 있어야 받는다
     try { if (window.HealthTab && HealthTab.flush) HealthTab.flush(); } catch (e) {}   // v9.4(O-0344): 암호가 없어 폰에만 남아 있던 건강 기록 올리기
+    try { if (isOpen($('mangaView')) && window.MangaTab && MangaTab.resume) MangaTab.resume(); } catch (e) {}   // v10.27(O-0950): 만화 화면에서 암호를 넣었으면 바로 다시 받는다
     try { if (isOpen($('pcView')) && window.PcStatus && PcStatus.resume) PcStatus.resume(); } catch (e) {}   // v9.96(O-0854 B-5): PC 상태 화면에서 넣었으면 바로 다시 읽는다
     if (isOpen($('meetingsView'))) openMeetings();    // v5.2: 회의 요약 탭에서 암호를 넣었으면 바로 다시 불러온다
     if (isOpen($('ideasView'))) refreshIdeas(false);  // v5.5: 아이디어 화면에서 암호를 넣었으면 바로 다시 불러온다
@@ -9781,6 +9785,10 @@
       if (window.AlbumTab && AlbumTab.back && AlbumTab.back()) return true;
       showHome(); setStatus('대기 중', 'idle'); return true;
     }
+    if (isOpen($('mangaView'))) {      // v10.27(O-0950): 만화 — 읽기 화면 → 회차 목록 → 서재 순으로 한 단계씩, 더 닫을 게 없으면 홈으로
+      if (window.MangaTab && MangaTab.back && MangaTab.back()) return true;
+      showHome(); setStatus('대기 중', 'idle'); return true;
+    }
     if (isOpen($('hubView'))) { showHome(); setStatus('대기 중', 'idle'); return true; }   // v9.76: 업무 앱 목록 — 열린 창이 없다, 뒤로 = 홈으로
     if (isOpen($('pcView'))) {         // O-0755 v9.75: PC 상태 — 열린 확인 시트부터 닫고, 더 닫을 게 없으면 홈으로
       if (window.PcStatus && PcStatus.back && PcStatus.back()) return true;
@@ -10576,6 +10584,21 @@
           var t = $(id); if (t && t.parentNode === ordGrid) ordGrid.insertBefore(t, ordSub);   // 차례로 「PC 연결」 소제목 바로 앞으로 → 목록 순서대로 쌓임
         });
       }
+    } catch (e) {}
+  }
+
+  /* ---- 「만화」 칸(v10.27, O-0950) = 홈 도구 맨 끝 칸. 누르면 앱 안 「만화」 화면(서재 → 회차 목록 → 읽기). 로직은 manga.js(MangaTab) ----
+   *   PC 의 만화 폴더에 둔 파일을 PC 의 중계 프로그램이 줄여 서버 임시 보관함에 올리고, 앱이 서버 함수(manga_*)·서명 주소(manga-file)로 받아 읽는다. 연동 암호는 다른 PC 연동 기능과 같은 값.
+   *   스위치 MANGA_UI: 'on' = 칸 보임 · 'off' = 칸이 보이지 않고 화면 코드가 불리지 않는다(v10.26 과 같음). 새 권한·새 네이티브 코드 없음. */
+  var MANGA_UI = 'on';
+  if (MANGA_UI !== 'off' && window.MangaTab && $('btnManga')) {
+    try {
+      MangaTab.init({ toast: toast, getPass: getSyncPass, askPass: function (m) { showSyncGate(true, m); }, openScreen: function () { openScreen($('mangaView')); },
+        cfg: function () { var c = window.OfficeBridge && OfficeBridge.CONFIG; return c ? { url: c.url, key: c.key } : null; } });
+      var mgGrid = $('homeTools'), mgSub = mgGrid && mgGrid.querySelector('.tools-sub');
+      if (mgGrid && mgSub) mgGrid.insertBefore($('btnManga'), mgSub);   // 홈 도구 맨 끝 — 위 「홈 도구 칸 순서」 정리가 끝난 뒤라 항상 맨 끝
+      $('btnManga').style.display = '';
+      $('btnManga').addEventListener('click', function () { try { MangaTab.open(); } catch (e) { toast('만화 화면을 열지 못했습니다 — 다시 눌러 주십시오.'); } });
     } catch (e) {}
   }
 
