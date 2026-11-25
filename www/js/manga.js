@@ -66,7 +66,7 @@
   /* 화면에 말할 문장(케이 말투, 기술 용어 없음). pose 는 케이가 취할 자세. */
   var SAY = {
     pcoff: { say: 'PC가 꺼져 있어요.', sub: '켜지면 다시 볼 수 있어요.', pose: 'sorry', retry: true },
-    relay: { say: '만화 중계가 멈춰 있어요.', sub: 'PC는 켜져 있는데 만화를 가져오는 프로그램만 쉬고 있어요. 케이에게 다시 켜 달라고 말씀해 주세요.', pose: 'sorry', retry: true },
+    relay: { say: 'PC의 만화 연결이 멈춰 있어요.', sub: 'PC는 켜져 있는데 만화를 가져오는 부분만 쉬고 있어요. 케이에게 다시 켜 달라고 말씀해 주세요.', pose: 'sorry', retry: true },
     sw: { say: '만화 서버가 쉬고 있어요.', sub: '조금 있다가 다시 확인해 볼게요.', pose: 'sorry', retry: true },
     empty: { say: '서재가 비어 있어요.', sub: 'PC에 만화를 넣어 두시면 바로 여기에 나타나요. 아래 +를 눌러 웹툰을 담을 수도 있어요.', pose: 'guide', retry: true },
     fail: { say: '못 불러왔어요.', sub: '잠깐 뒤에 다시 해 볼까요?', pose: 'sorry', retry: true },
@@ -430,7 +430,7 @@
   function renderLibraryStatus(k) { var top = body().querySelector('#mgTop'); if (top && view === 'lib') top.innerHTML = sayCard(k, { sub: (SAY[k].sub ? SAY[k].sub + ' ' : '') + '(마지막으로 받은 서재를 보여 드리고 있어요.)' }); }
 
   function plusTile() {
-    return '<button type="button" class="mg-pcard mg-plus" data-act="find" aria-label="웹툰 찾아서 담기"><span class="mg-cov">' + PLUS_SVG + '<b>웹툰 찾기</b></span><b class="mg-t">웹툰 담기</b><small>찾아서 서재에 담아요</small></button>';
+    return '<button type="button" class="mg-pcard mg-plus" data-act="find" aria-label="웹툰 찾아서 담기"><span class="mg-cov">' + PLUS_SVG + '</span><b class="mg-t">웹툰 찾기</b><small>찾아서 서재에 담아요</small></button>';
   }
   function paintLibrary() {
     if (view !== 'lib' || !body().querySelector('#mgGrid')) return;
@@ -581,7 +581,7 @@
       else st = '<span class="mg-st new">새 화</span>';
       html += '<button type="button" class="mg-ch ' + c.state + (c.locked ? ' lock' : '') + (web && c.isnew ? ' isnew' : '') + '" data-c="' + num(c.id) + '" data-p="' + (c.state === 'prog' ? num(c.page) : 0) + '"' + (c.locked ? ' data-lock="1"' : '') + '><span class="mg-chn">' + esc(c.name) + (!web && c.pages > 0 ? '<small>' + c.pages + '쪽</small>' : '') + '</span>' + st + '</button>';
     });
-    list.innerHTML = html;
+    list.innerHTML = html + (web ? '<div class="mg-foot"><button type="button" class="mg-linkbtn" data-act="rmcur">서재에서 빼기</button></div>' : '');
     var sub = $('mgChSub'); if (sub) sub.textContent = chapSub();
     paintChapBtn();
   }
@@ -611,7 +611,7 @@
     var rb = body().querySelector('#mgFRes'), pb = body().querySelector('#mgPopBox'); if (!rb || !pb) return;
     if (finder.res) rb.innerHTML = '<div class="mg-sec"><b>찾은 웹툰</b></div>' + (finder.res.items.length ? '<div class="mg-grid fg">' + finder.res.items.map(findCard).join('') + '</div>' : sayCard('noresult'));
     else rb.innerHTML = '';
-    if (finder.pop) pb.innerHTML = finder.pop.items.length ? '<div class="mg-sec"><b>지금 인기</b></div><div class="mg-prow">' + finder.pop.items.map(findCard).join('') + '</div>' : '';
+    if (finder.pop) pb.innerHTML = finder.pop.items.length ? '<div class="mg-sec"><b>연재 중인 웹툰</b></div><div class="mg-prow">' + finder.pop.items.map(findCard).join('') + '</div>' : '';
   }
   function findFail(e, where) {
     pollState(false).then(function (r) { show(r && r.st); }, function () { show(null); });
@@ -743,6 +743,7 @@
       if (lib && lib.mangas) lib.mangas = lib.mangas.filter(function (x) { return x.id !== m.id; });
       closeSheet(); toast('서재에서 뺐어요.', 2000);
       if (view === 'lib') paintLibrary();
+      else if (view === 'chap') { loadTok++; view = 'lib'; curManga = null; chapItems = null; setTitle('만화'); renderShell(); paintLibrary(); }
     }, function (e) {
       pollState(false).then(function (r) { fail(r && r.st); }, function () { fail(null); });
       function fail(st) { var k = errKind(e, st); toast((SAY[k] || SAY.fail).say, 2500); btn.disabled = false; btn.textContent = '서재에서 빼기'; }
@@ -768,6 +769,7 @@
     var act = el.getAttribute('data-act');
     if (act === 'retry') return view === 'find' ? (finder.pop = null, openFind()) : refresh(true);
     if (act === 'find') return openFind();
+    if (act === 'rmcur') { if (curManga && isWebManga(curManga)) showRemoveSheet(curManga); return; }
     if (act === 'pass') { if (host.askPass) host.askPass(''); return; }
     if (el.hasAttribute('data-c')) {
       var cid = Number(el.getAttribute('data-c')), p = Number(el.getAttribute('data-p') || 0);

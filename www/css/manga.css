@@ -203,3 +203,7 @@ html[data-style="light"] .mg-sheet { background: #fff; }
 /* 웹툰 읽기 — 조각 번호·쪽 표기 숨김, 빈칸에는 번호 대신 돌아가는 표시만 */
 .mg-reader.web .mg-rrange, .mg-reader.web #mgRPage, .mg-reader.web .mg-ph b { display: none; }
 .mg-rbadge:empty { display: none; }
+
+.mg-list .mg-foot { grid-column: 1 / -1; display: flex; justify-content: center; padding: 18px 0 6px; }
+.mg-linkbtn { border: 0; background: none; color: var(--dim); font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 8px 12px; font-family: inherit; }
+.mg-plus .mg-cov { color: var(--muted); }
