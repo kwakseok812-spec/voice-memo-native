@@ -13,6 +13,8 @@
  * 스위치(app.js): HUB_APPS('on'|'off') · HUB_REG('on'|'off') · HUB_OPEN('tab'|'browser') — off 면 칸이 보이지 않아 v9.75 와 같다.
  * v9.80(O-0781): 화면 맨 위에 「포인트 앱 바로 열기」 묶음(phone-apps.js 의 앱 코드 고정 목록 7장) — 서버 목록·로딩·실패와 무관하게 항상 첫 줄에 있고 움직이지 않는다.
  *       카드를 누르면 폰의 그 앱이 열린다(PhoneApps.openApp). 스위치 POINT_APPS(app.js) = ctx.points. 서버 목록의 웹 「걷기 포인트」 카드(기록 앱)는 그대로 아래 목록에 있다.
+ * v10.29(O-0965): 「규정 도우미」를 홈 칸에서 이 화면 안으로 — 화면 맨 위(포인트 앱 묶음보다 앞)에 앱 코드 고정 카드 한 장(서버 목록·로딩·실패·오프라인과 무관하게 항상 보임). 누르면 홈 칸과 같은 openReg().
+ *       스위치 REG_IN_HUB(app.js) = ctx.regIn. off 면 카드가 없고 홈에 예전 칸이 돌아온다.
  * app.js 연결: HubApps.init({toast,getPass,openScreen,showGate,mode}) · HubApps.open() · HubApps.openReg() · HubApps.back()
  * 시험: HubPure(순수 함수)는 화면 없이 시험할 수 있게 밖으로 내놓았다(node 에서도 require 가능).
  * ==========================================================================*/
@@ -169,8 +171,8 @@
   function build() {
     if (HTML_BUILT || !$('hubBody')) return;
     HTML_BUILT = true;
-    $('hubBody').innerHTML = '<div id="hubPoint"></div><div class="hub-say"><span class="kface sm hub-kf" data-kface="head" aria-hidden="true"></span><b id="hubSay"></b></div><div id="hubList"></div>';
-    renderPoints();
+    $('hubBody').innerHTML = '<div id="hubReg"></div><div id="hubPoint"></div><div class="hub-say"><span class="kface sm hub-kf" data-kface="head" aria-hidden="true"></span><b id="hubSay"></b></div><div id="hubList"></div>';
+    renderReg(); renderPoints();
     $('hubBody').addEventListener('click', function (ev) {
       var pt = ev.target.closest && ev.target.closest('[data-pt]');
       if (pt) { if (global.PhoneApps && PhoneApps.openApp) PhoneApps.openApp(pt.getAttribute('data-pt')); return; }   // v9.80: 폰 앱 열기(잠금·미설치 시트·PC 안내는 phone-apps.js)
@@ -184,7 +186,8 @@
       var r = ev.target.closest && ev.target.closest('[data-hubact]');
       if (!r) return;
       var act = r.getAttribute('data-hubact');
-      if (act === 'retry') load(true);
+      if (act === 'reg') openReg();           // v10.29: 홈 「규정 도우미」 칸과 똑같은 함수
+      else if (act === 'retry') load(true);
       else if (act === 'gate' && ctx.showGate) ctx.showGate(true);
     });
     var rf = $('hubRefresh'); if (rf) rf.addEventListener('click', function () { load(true).then(function (ok) { if (ok) ctx.toast('목록을 새로 받았습니다.', 1600); }); });
@@ -244,10 +247,20 @@
     }
     list.innerHTML = html;
   }
+  /* v10.29(O-0965) 규정 도우미 고정 카드 — 화면 맨 위(포인트 앱 묶음보다 앞). 서버 목록과 독립(render 가 지우지 않는다 — 어느 상태에서도 보인다). 글자는 홈에 있던 칸과 같다. 다른 카드와 같은 .hub-card 모양 */
+  function renderReg() {
+    var box = $('hubReg'); if (!box) return;
+    if (!(ctx && ctx.regIn)) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="hub-cat"><span aria-hidden="true">📖</span> 규정</div>' +
+      '<button type="button" class="hub-card hub-reg" data-hubact="reg">' +
+      '<span class="hub-ic" aria-hidden="true">🔍</span>' +
+      '<span class="hub-tx"><b>규정 도우미</b><small>질문마다 약 15원</small></span>' +
+      '<svg class="hub-go" aria-hidden="true"><use href="#i-chev-r"/></svg></button>';
+  }
 
   function open() {
     if (!ctx) return;
-    build(); renderPoints(); ctx.openScreen();
+    build(); renderReg(); renderPoints(); ctx.openScreen();
     S.lastOpen = Date.now();
     if (!S.m) loadSaved();
     var recent = !!(S.m && S.status === 'ok' && Date.now() - S.lastOk < 60000);     // 방금 받았으면 다시 묻지 않는다

@@ -58,3 +58,12 @@ html[data-fs] .hub-pt b { font-size: calc(15px * var(--fsx)); }
 @media (min-width: 600px) {
   .hub-ptgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }   /* 칸 크기는 폰과 같게(약 150~170px) 두고 열만 늘어난다 — 750 폭에서 3열 */
 }
+
+/* v10.29 (O-0965) 맨 위 「규정」 카드 — #hubReg 안에서만. 폰은 한 줄 카드, 600px 이상은 업무 앱 목록과 같은 2열 한 칸 크기(.hub-card 그대로) */
+#hubReg:empty { display: none; }
+#hubReg + #hubPoint .hub-cat { margin-top: 16px; }
+@media (min-width: 600px) {
+  #hubReg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-items: start; }
+  #hubReg .hub-cat { grid-column: 1 / -1; margin-bottom: 0; }
+  #hubReg .hub-card { margin: 0; }
+}

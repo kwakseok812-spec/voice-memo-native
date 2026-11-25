@@ -3975,7 +3975,7 @@
   APP_VERSION = 'v10.25';       // v10.25(O-0931): 게임 칸에 「눈밭 캠프」(눈보라 서바이벌 · 1막·2막) 추가 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3f4d736). 게임 코드·서버·SQL·자바·권한 변경 없음 · versionCode 169
   APP_VERSION = 'v10.26';       // v10.26(O-0939): 게임 「눈밭 캠프」를 9판(3막 노을벌 목장 추가)으로 교체 — 앱 안 복사본 games/snowcamp(출처 로컬 snowcamp 3d22f67), 게임 목록 설명 정정(벽돌 깨기 36판·세균 방어전 5탄). 게임 코드·서버·SQL·자바·권한 변경 없음
   APP_VERSION = 'v10.28';       // v10.28(O-0954): 「만화」에 웹툰 찾기·담기 — 서재에 PC 만화와 웹툰을 한 목록으로(웹툰 표시·완결 표시), + 칸에서 찾기(검색 + 인기) → 표지 시트 → 서재에 담기, 길게 눌러 빼기, 회차 목록(새 화·자물쇠), 볼 수 없는 화 안내 시트, 웹툰은 세로 이어 읽기가 기본. 스위치 MANGA_WEB, versionCode 172. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
-  APP_VERSION = 'v10.29';       // v10.29(O-0963): OTT 시트 맨 끝에 「바로뷰」 줄(작은 글씨 「저장한 주소 · 전체화면」) — 누르면 폰의 별개 앱 바로뷰의 첫 화면(없으면 「바로뷰가 설치되어 있지 않습니다」 안내 시트, 스토어 없음). 스위치 BAROVIEW_TAB · 새 권한 없음 · versionCode 173
+  APP_VERSION = 'v10.29';       // v10.29(O-0965): 홈 「규정 도우미」 칸을 「업무 앱」 화면 맨 앞 카드로 옮김(홈 12칸·스위치 REG_IN_HUB) + (O-0963): OTT 시트 맨 끝에 「바로뷰」 줄(작은 글씨 「저장한 주소 · 전체화면」) — 누르면 폰의 별개 앱 바로뷰의 첫 화면(없으면 「바로뷰가 설치되어 있지 않습니다」 안내 시트, 스토어 없음). 스위치 BAROVIEW_TAB · 새 권한 없음 · versionCode 173
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
@@ -10463,19 +10463,22 @@
    *   스위치 HUB_OPEN: 'tab' = 크롬 맞춤 탭(앱 위에 얹혀 열리고 ✕·뒤로 가기로 돌아옴. 안 열리면 일반 브라우저로 자동 전환) · 'browser' = 예전 방식(window.open = 폰 기본 브라우저 전체 화면).
    *   목록·주소는 서버(get_hub_apps, 연동 암호)에서 받아 폰에 저장해 둔다 — 주소는 APK 안에 없다. 칸이 모두 꺼지면 v9.75 와 같다(서버 무관). */
   var HUB_APPS = 'on', HUB_REG = 'on', HUB_OPEN = 'tab';
+  /* v10.29(O-0965) 스위치 REG_IN_HUB: 'on' = 「규정 도우미」가 홈 칸이 아니라 「업무 앱」 화면 맨 앞 카드로(홈 12칸) · 'off' = 예전처럼 홈 칸(되돌리는 길 — 새 번호로 재배포). 업무 앱 칸이 꺼져 있으면(HUB_APPS='off') 갈 곳이 없으므로 홈 칸으로 남는다. */
+  var REG_IN_HUB = 'on';
+  var REG_IN = REG_IN_HUB !== 'off' && HUB_APPS !== 'off' && HUB_REG !== 'off';
   /* v9.80(O-0781) 스위치 POINT_APPS: 'on' = 「업무 앱」 화면 맨 위에 「포인트 앱 바로 열기」 7장(폰 앱 열기) · 'off' = 이 묶음만 사라진다(나머지 업무 앱 화면은 v9.79 와 같음). 목록은 phone-apps.js 의 고정 배열. */
   var POINT_APPS = 'on';
   var hubView = $('hubView');
   function openHub() { if (window.HubApps && HubApps.open) { try { HubApps.open(); } catch (e) { openScreen(hubView); } } else openScreen(hubView); }
   if ((HUB_APPS !== 'off' || HUB_REG !== 'off') && window.HubApps) {
     try {
-      HubApps.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(hubView); }, showGate: function (f) { showSyncGate(!!f); }, mode: HUB_OPEN, points: POINT_APPS !== 'off' });
+      HubApps.init({ toast: toast, getPass: getSyncPass, openScreen: function () { openScreen(hubView); }, showGate: function (f) { showSyncGate(!!f); }, mode: HUB_OPEN, points: POINT_APPS !== 'off', regIn: REG_IN });
       var hubGrid = $('homeTools'), hubSub = hubGrid && hubGrid.querySelector('.tools-sub');
       if (HUB_APPS !== 'off' && $('btnHub')) {
         if (hubGrid && hubSub) hubGrid.insertBefore($('btnHub'), hubSub);   // 홈 도구 맨 끝(사진첩 다음) — 기존 칸 자리는 그대로
         $('btnHub').style.display = ''; $('btnHub').addEventListener('click', openHub);
       }
-      if (HUB_REG !== 'off' && $('btnReg')) {
+      if (HUB_REG !== 'off' && !REG_IN && $('btnReg')) {   // REG_IN 이면 홈 칸은 만들지 않는다(업무 앱 화면 안 카드로 간다)
         if (hubGrid && hubSub) hubGrid.insertBefore($('btnReg'), hubSub);
         $('btnReg').style.display = ''; $('btnReg').addEventListener('click', function () { try { HubApps.openReg(); } catch (e) { toast('규정 도우미를 열지 못했습니다.'); } });
       }
