@@ -1986,10 +1986,10 @@
   function endCard() {
     var nextOK = rd.items ? nextChapterIdx(rd.items, rd.cid) >= 0 : null, nc = nextOK ? rd.items[nextChapterIdx(rd.items, rd.cid)] : null;
     var ez = easyOn(), cd = ez && rd.cd, more = ez && rd.more, lock = !!(nc && nc.locked), acts, head, extra = '';
-    head = more ? '<b>계속 볼까요?</b><p>' + esc(rd.mtitle) + ' · 세 화를 이어서 봤어요. 톡 하면 이어서 열어요.</p>' : '<b>여기까지예요. 다 읽었어요!</b><p>' + esc(rd.mtitle) + ' · ' + esc(rd.cname) + '</p>';
+    head = more ? '<b>계속 볼까요?</b><p>' + esc(rd.mtitle) + ' · 세 화를 이어서 열었어요</p>' : '<b>여기까지예요. 다 읽었어요!</b><p>' + esc(rd.mtitle) + ' · ' + esc(rd.cname) + '</p>';
     if (cd) {
       extra = '<div class="mg-cd' + (motionOn() ? '' : ' nomo') + '" id="mgCd"><i></i><span id="mgCdT">' + esc(cdText()) + '</span></div>';
-      acts = '<button type="button" class="mg-btn pri" data-end="next">지금 열기</button><button type="button" class="mg-btn" data-end="cdstop">그만 보기</button><button type="button" class="mg-btn" data-end="list">목록으로</button>';
+      acts = '<button type="button" class="mg-btn pri" data-end="next">지금 열기</button><button type="button" class="mg-btn" data-end="cdstop">멈추기</button><button type="button" class="mg-btn" data-end="list">목록으로</button>';
     } else if (more) {
       acts = '<button type="button" class="mg-btn pri" data-end="more">이어서 보기</button><button type="button" class="mg-btn" data-end="list">목록으로</button>';
     } else {
@@ -2409,7 +2409,7 @@
     store.setFlag('easy_hint');
     var R = $('mgReader'); if (!R) return;
     var z = document.createElement('div'); z.id = 'mgZH'; z.className = 'mg-zhint'; z.setAttribute('aria-hidden', 'true');
-    z.innerHTML = '<div class="z1"><span>위를 톡 → 한 화면 위로</span></div><div class="z2"><span>가운데를 톡 → 위아래 띠</span></div><div class="z3"><span>아래를 톡 → 한 화면 아래로</span></div>';
+    z.innerHTML = '<div class="z1"><span>위를 톡 → 한 화면 위로</span></div><div class="z2"><span>가운데를 톡 → 메뉴</span></div><div class="z3"><span>아래를 톡 → 한 화면 아래로</span></div>';
     R.appendChild(z); rd.timers.zh = setTimeout(zoneHintOff, 3200);
   }
   function zoneHintOff() { var z = $('mgZH'); if (z && z.parentNode) z.parentNode.removeChild(z); }
@@ -2563,7 +2563,7 @@
       (v ? '<button type="button" class="mg-btn pri" data-sh="auto">▶︎ 시작</button>' : '') + '</div>' +
       '<div class="mg-ez-sp' + (v ? '' : ' dim') + '"><span>느리게</span><div>' + sp + '</div><span>빠르게</span></div>' +
       sw('tap', '화면을 톡 눌러 넘기기', v ? '아래를 톡 → 한 화면 아래로, 위를 톡 → 위로' : '좌우를 톡 → 이전·다음 쪽', c.tap) +
-      sw('vol', '음량 버튼으로 넘기기', volOK ? '읽는 동안엔 소리를 못 바꿔요. 가운데를 눌러 띠를 켜면 바꿀 수 있어요' : '이 폰 앱에서만 쓸 수 있어요', c.vol && volOK, !volOK) +
+      sw('vol', '음량 버튼으로 넘기기', volOK ? '읽는 동안엔 소리를 못 바꿔요. 가운데를 눌러 메뉴를 켜면 바꿀 수 있어요' : '이 폰 앱에서만 쓸 수 있어요', c.vol && volOK, !volOK) +
       sw('wake', '읽는 동안 화면 켜 두기', '', c.wake) +
       sw('next', '다 읽으면 다음 화로 이어서', '5초 뒤에 열려요. 화면을 누르면 멈춰요', c.next) +
       '<div class="mg-acts"><button type="button" class="mg-btn" data-sh="reset">처음 설정으로 되돌리기</button></div></div>';
