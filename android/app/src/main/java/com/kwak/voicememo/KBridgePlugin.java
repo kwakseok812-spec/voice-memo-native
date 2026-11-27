@@ -103,6 +103,18 @@ public class KBridgePlugin extends Plugin {
         call.resolve();
     }
 
+    // v10.32(O-0980) 만화 읽기 「음량 버튼으로 넘기기」 — 켜 두는 수명은 45초(웹이 15초마다 갱신). 웹이 죽거나 새로고침돼도 45초 뒤 저절로 풀린다.
+    private static volatile long sVolUntil = 0L;
+    static boolean volActive() { return System.currentTimeMillis() < sVolUntil; }
+    static void volOff() { sVolUntil = 0L; }
+
+    @PluginMethod
+    public void setVolumeKeys(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        sVolUntil = on ? System.currentTimeMillis() + 45000L : 0L;
+        call.resolve();
+    }
+
     @PluginMethod
     public void updateWidget(PluginCall call) {
         // 숫자는 JS 쪽에서 문자열로 넘긴다(JSON 숫자는 크기에 따라 Integer/Long/Double 로 갈려 읽기가 불안정).

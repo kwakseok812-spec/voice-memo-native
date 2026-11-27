@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.util.Base64;
+import android.view.KeyEvent;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
@@ -79,9 +80,29 @@ public class MainActivity extends BridgeActivity {
         try { KNotify.cancel(this); KNotify.resetHist(this); } catch (Exception ignored) {}
     }
 
+    // v10.32(O-0980) 만화 읽기 「음량 버튼으로 넘기기」: 웹이 setVolumeKeys 로 켠 동안(수명 45초)만 음량 키를 가로채 웹에 넘긴다.
+    //   그 밖에는 super 그대로(= 원래 음량 동작). 권한 필요 없음.
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        try {
+            int kc = event.getKeyCode();
+            if ((kc == KeyEvent.KEYCODE_VOLUME_UP || kc == KeyEvent.KEYCODE_VOLUME_DOWN) && KBridgePlugin.volActive()) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    JSObject o = new JSObject();
+                    o.put("dir", kc == KeyEvent.KEYCODE_VOLUME_DOWN ? "down" : "up");
+                    o.put("repeat", event.getRepeatCount());
+                    KBridgePlugin.emit("volKey", o);
+                }
+                return true;
+            }
+        } catch (Exception ignored) {}
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     public void onPause() {
         sForeground = false;
+        KBridgePlugin.volOff(); // v10.32(O-0980) 앱이 뒤로 가면 음량 가로채기는 반드시 푼다
         super.onPause();
     }
 

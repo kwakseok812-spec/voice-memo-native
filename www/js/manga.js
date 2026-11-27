@@ -257,9 +257,23 @@
     return { batch: out, rest: rest };
   }
 
+  /* v10.32(O-0980) 편하게 보기 — 설정 한 묶음(톡·음량·화면 켜 두기·다음 화 이어 가기·속도). 기본값은 받자마자 쓸 수 있게 모두 켬, 속도 3.
+     속도 = 한 화면을 내리는 데 걸리는 초(화면 높이에 비례하므로 폰 크기와 상관없이 같은 느낌). */
+  var EASY_DEF = { tap: 1, vol: 1, wake: 1, next: 1, speed: 3 };
+  var EASY_SEC = [0, 20, 12, 8, 5.5, 3.6];
+  function easyNorm(o) {
+    var r = {}, k, v; o = (o && typeof o === 'object') ? o : {};
+    for (k in EASY_DEF) {
+      v = o[k];
+      if (k === 'speed') { v = Math.round(Number(v)); r[k] = (v >= 1 && v <= 5) ? v : EASY_DEF.speed; }
+      else r[k] = (v === 0 || v === false) ? 0 : ((v === 1 || v === true) ? 1 : EASY_DEF[k]);
+    }
+    return r;
+  }
+
   /* 이 기기 저장소(localStorage)에 적는 읽은 위치·방향·마지막 읽은 곳. 저장소가 막혀 있어도(시험·사생활 보호 창) 앱은 그대로 돈다. */
   function makeStore(ls) {
-    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_', SORT = 'smart_manga_sort_', BROWSE = 'smart_manga_browse', HINT = 'smart_manga_libhint', PFK = 'smart_manga_pf', PFI = 'smart_manga_pfinfo';
+    var POS = 'smart_manga_pos', LAST = 'smart_manga_last', MODE = 'smart_manga_mode_', SEEN = 'smart_manga_seen_', SORT = 'smart_manga_sort_', BROWSE = 'smart_manga_browse', HINT = 'smart_manga_libhint', PFK = 'smart_manga_pf', PFI = 'smart_manga_pfinfo', EASYK = 'smart_manga_easy';
     function rd(k) { try { return ls ? ls.getItem(k) : null; } catch (e) { return null; } }
     function wr(k, v) { try { if (ls) ls.setItem(k, v); } catch (e) {} }
     function pos() { try { var o = JSON.parse(rd(POS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
@@ -288,7 +302,12 @@
       getPfInfo: function () { try { return JSON.parse(rd(PFI) || 'null'); } catch (e) { return null; } },
       setPfInfo: function (o) { wr(PFI, JSON.stringify(o)); },
       getHint: function () { return rd(HINT) || ''; },
-      setHint: function (v) { wr(HINT, v); }
+      setHint: function (v) { wr(HINT, v); },
+      /* v10.32(O-0980) 편하게 보기 설정 한 묶음 · 처음 안내를 봤는지(easy_hint = 톡 구역, easy_autohint = 저절로 내리기) */
+      getEasy: function () { try { return easyNorm(JSON.parse(rd(EASYK) || 'null')); } catch (e) { return easyNorm(null); } },
+      setEasy: function (o) { wr(EASYK, JSON.stringify(easyNorm(o))); },
+      getFlag: function (k) { return rd('smart_manga_' + k) === '1'; },
+      setFlag: function (k) { wr('smart_manga_' + k, '1'); }
     };
   }
 
@@ -523,7 +542,7 @@
   /* =====================================================================
    * 3. 화면
    * ===================================================================*/
-  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, browse: true, platforms: true, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
+  var host = { toast: function () {}, getPass: function () { return ''; }, askPass: null, openScreen: function () {}, cfg: function () { return null; }, web: true, browse: true, platforms: true, easy: true, kb: null, screen: null, openUrl: function (u) { try { global.open(u, '_blank'); } catch (e) {} } };
   var $ = function (id) { return document.getElementById(id); };
   var api = null, store = null, inited = false, built = false;
   var view = 'lib';                  // lib | chap | find
@@ -1683,9 +1702,10 @@
   function showSheet(ctx, html) {
     var el = ensureSheet(); sheetCtx = ctx; $('mgSheetBox').innerHTML = html;
     el.style.display = 'flex'; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+    if (rd) syncVol();
   }
   function sheetIsOpen() { var el = $('mgSheet'); return !!(el && el.style.display !== 'none'); }
-  function closeSheet() { var el = $('mgSheet'); if (!el || el.style.display === 'none') return false; el.classList.remove('on'); el.style.display = 'none'; sheetCtx = null; return true; }
+  function closeSheet() { var el = $('mgSheet'); if (!el || el.style.display === 'none') return false; el.classList.remove('on'); el.style.display = 'none'; sheetCtx = null; if (rd) syncVol(); return true; }
   function statName(st) { return st === 'done' ? '완결' : (st === 'ongoing' ? '연재 중' : ''); }
   function showItemSheet(it) {
     var url = fcov[it.id] || '', sn = statName(it.status);
@@ -1711,6 +1731,7 @@
   function onSheet(act) {
     var c = sheetCtx; if (!c) return;
     if (act === 'close') return closeSheet();
+    if (c.t === 'easy') return onEasySheet(act);
     if (act === 'ext' && c.t === 'locked') { var u = c.pf ? pfSiteUrl(PFR, c.pf) : naverUrl(c.chap && c.chap.u); if (u) { try { host.openUrl(u); } catch (e) { toast('링크를 열지 못했어요.', 2000); } } return; }
     if (act === 'add' && c.t === 'add') return sheetAdd(c.item);
     if (act === 'rm' && c.t === 'rm') return sheetRemove(c.m);
@@ -1824,12 +1845,14 @@
       '<div class="mg-rbody" id="mgRBody"></div>' +
       '<div class="mg-rtop" id="mgRTop"><button type="button" class="mg-ibtn" id="mgRBack" aria-label="회차 목록으로">' + BAR_ICON_BACK + '</button>' +
       '<div class="mg-rtitle"><b id="mgRT"></b><small id="mgRS"></small></div><button type="button" class="mg-chip" id="mgRMode"></button></div>' +
-      '<div class="mg-rbot" id="mgRBot"><div class="mg-rrange"><input type="range" id="mgRRange" min="1" max="1" value="1" aria-label="쪽 이동"></div>' +
+      '<div class="mg-rbot" id="mgRBot"><div class="mg-reasy" id="mgREasy" style="display:none"></div><div class="mg-rrange"><input type="range" id="mgRRange" min="1" max="1" value="1" aria-label="쪽 이동"></div>' +
       '<div class="mg-rinfo"><span id="mgRPage"></span><span id="mgRData"></span></div></div>' +
       '<div class="mg-rbadge" id="mgRBadge" aria-hidden="true"></div><div class="mg-rnote" id="mgRNote" role="status" style="display:none"></div>';
     document.body.appendChild(d);
+    d.addEventListener('pointerdown', function () { if (rd && easyOn()) { touched(); zoneHintOff(); } }, true);      // 띠를 눌러도 첫 안내는 사라지고, 만진 것으로 센다(화면 켜 두기 10분 계산)
     $('mgRBack').addEventListener('click', function () { closeReader(); });
     $('mgRMode').addEventListener('click', function () { if (rd) setMode(nextMode(rd.mode), true); });
+    $('mgREasy').addEventListener('click', onEasyRow);
     var rg = $('mgRRange');
     rg.addEventListener('input', function () { if (rd) $('mgRPage').textContent = rg.value + ' / ' + rd.total; });
     rg.addEventListener('change', function () { if (rd) goPage(Number(rg.value) - 1, { jump: true }); });
@@ -1852,7 +1875,7 @@
     var mode = store.getMode(o.mid);
     rd = { web: !!o.web, tok: Date.now() + Math.random(), mid: o.mid, mtitle: o.mtitle, cid: o.cid, cname: o.cname, key: 'c:' + o.cid, total: 0, page: o.page, start: o.page,
       mode: mode, auto: !mode, files: {}, dims: {}, blobs: {}, signing: {}, wait: {}, order: [], sentPage: -1, sentRead: false, readNow: false, ready: false,
-      timers: {}, lastReopen: 0, curIdx: 0, hint: o.page > 0, items: (chapItems && curManga && curManga.id === o.mid) ? chapItems : null };
+      timers: {}, lastReopen: 0, curIdx: 0, hint: o.page > 0, chain: o.chain | 0, carry: !!o.carryAuto, au: null, auOn: false, auIntr: false, cd: null, cdOff: false, more: false, idleAt: Date.now(), vw: global.innerWidth, vh: global.innerHeight, items: (chapItems && curManga && curManga.id === o.mid) ? chapItems : null };
     var R = $('mgReader');
     R.style.display = 'flex'; document.documentElement.classList.add('mg-rd-on'); R.classList.toggle('web', !!o.web);
     $('mgRT').textContent = o.mtitle; $('mgRS').textContent = o.cname || '';
@@ -1872,6 +1895,7 @@
       buildPages();
       api.cursor(rd.key, curPage(), rd.total).then(null, function () {});
       sync(); persist(true);
+      easyReady();
       rd.timers.bars = setTimeout(function () { if (rd && rd.tok === tok) showBars(false); }, K.BARS_MS);
       if (rd.hint && rd.page > 0) badge(rd.web ? '읽던 곳부터 이어서 읽어요' : (rd.page + 1) + '쪽부터 이어서 읽어요', 2200);
       else if (rd.auto) badge(MODE_SAY[rd.mode], 2200);
@@ -1901,7 +1925,7 @@
       if (!rd || rd.tok !== tok) return;
       var items = (rd.web ? webItems(res.chapters) : (res.chapters || [])).map(function (c) { return mergeChapter(c, store.getPos(c.id)); });
       items.sort(function (a, b) { return a.order - b.order; });
-      rd.items = items; refreshEnd();
+      rd.items = items; refreshEnd(); maybeCountdown();
     }, function () {});
   }
 
@@ -1911,6 +1935,7 @@
   function setMode(m, user) {
     if (!rd || !rd.ready) return;
     rd.mode = m; if (user) { store.setMode(rd.mid, m); rd.auto = false; }
+    if (rd.auOn) auStop(false); if (rd.cd) cdCancel(false);
     var p = rd.page;
     buildPages(); goPage(p, { silent: true, instant: true });
     badge(MODE_SAY[m], 1800);
@@ -1921,7 +1946,7 @@
   /* ---- 쪽 칸 만들기 ---- */
   function buildPages() {
     var B = $('mgRBody'), total = rd.total, i;
-    modeChip();
+    modeChip(); paintEasyRow();
     $('mgRRange').max = String(total); $('mgRRange').value = String(rd.page + 1);
     $('mgRRange').style.direction = isRtl() ? 'rtl' : 'ltr';
     var ratio = avgRatio(rd.dims), html = '';
@@ -1944,7 +1969,12 @@
       bindStage($('mgStage'));
       placeTrack(false);
     }
-    B.onclick = function (ev) { var a = ev.target.closest ? ev.target.closest('[data-end]') : null; if (a) onEnd(a.getAttribute('data-end')); };
+    B.onclick = function (ev) {
+      var a = ev.target.closest ? ev.target.closest('[data-end]') : null;
+      if (a) { onEnd(a.getAttribute('data-end')); return; }
+      if (rd && rd.more && ev.target.closest && ev.target.closest('.mg-end, .mg-vp.end, .mg-sl.end')) onEnd('more');      // 「계속 볼까요?」는 끝 카드 쪽 아무 데나 톡 해도 이어서
+    };
+    B.onpointerdown = onAnyDown;
     paintAll();
     if (isV()) { requestAnimationFrame(function () { scrollToPage(rd.page, true); }); }
   }
@@ -1954,25 +1984,39 @@
   }
   function slideInner(p) { return '<span class="mg-ph" aria-hidden="true"><i></i><b>' + (p + 1) + '</b></span>'; }
   function endCard() {
-    var nextOK = rd.items ? nextChapterIdx(rd.items, rd.cid) >= 0 : null;
-    return '<div class="mg-end">' + kfig('report') + '<b>여기까지예요. 다 읽었어요!</b><p>' + esc(rd.mtitle) + ' · ' + esc(rd.cname) + '</p><div class="mg-acts">' +
-      '<button type="button" class="mg-btn pri" data-end="next"' + (nextOK === false ? ' disabled' : '') + '>' + (nextOK === false ? '마지막 화예요' : '다음 화 보기') + '</button>' +
-      '<button type="button" class="mg-btn" data-end="list">목록으로</button></div></div>';
+    var nextOK = rd.items ? nextChapterIdx(rd.items, rd.cid) >= 0 : null, nc = nextOK ? rd.items[nextChapterIdx(rd.items, rd.cid)] : null;
+    var ez = easyOn(), cd = ez && rd.cd, more = ez && rd.more, lock = !!(nc && nc.locked), acts, head, extra = '';
+    head = more ? '<b>계속 볼까요?</b><p>' + esc(rd.mtitle) + ' · 세 화를 이어서 봤어요. 톡 하면 이어서 열어요.</p>' : '<b>여기까지예요. 다 읽었어요!</b><p>' + esc(rd.mtitle) + ' · ' + esc(rd.cname) + '</p>';
+    if (cd) {
+      extra = '<div class="mg-cd' + (motionOn() ? '' : ' nomo') + '" id="mgCd"><i></i><span id="mgCdT">' + esc(cdText()) + '</span></div>';
+      acts = '<button type="button" class="mg-btn pri" data-end="next">지금 열기</button><button type="button" class="mg-btn" data-end="cdstop">그만 보기</button><button type="button" class="mg-btn" data-end="list">목록으로</button>';
+    } else if (more) {
+      acts = '<button type="button" class="mg-btn pri" data-end="more">이어서 보기</button><button type="button" class="mg-btn" data-end="list">목록으로</button>';
+    } else {
+      if (ez && lock) extra = '<p class="mg-endnote">다음 화는 볼 수 없어요</p>';
+      acts = '<button type="button" class="mg-btn pri" data-end="next"' + (nextOK === false ? ' disabled' : '') + '>' + (nextOK === false ? '마지막 화예요' : '다음 화 보기') + '</button>' +
+        '<button type="button" class="mg-btn" data-end="list">목록으로</button>';
+    }
+    return '<div class="mg-end">' + kfig('report') + head + extra + '<div class="mg-acts">' + acts + '</div></div>';
   }
   function refreshEnd() {
     var B = $('mgRBody'); if (!B || !rd) return;
     var nodes = B.querySelectorAll('.mg-end'); for (var i = 0; i < nodes.length; i++) nodes[i].parentNode.innerHTML = endCard();
   }
-  function onEnd(a) {
+  function onEnd(a, how) {
     if (a === 'list') return closeReader();
+    if (a === 'cdstop') { cdCancel(true); return; }
+    if (a === 'more') { if (!rd) return; rd.more = false; rd.chain = 0; a = 'next'; how = 'more'; }
     if (a === 'next') {
       var items = rd.items || chapItems; if (!items) { toast('회차 목록을 가져오고 있어요. 잠깐만요.', 2000); return; }
       var i = nextChapterIdx(items, rd.cid); if (i < 0) return;
       var mid = rd.mid, mt = rd.mtitle, c = items[i], wb = rd.web;
+      var chain = (how === 'auto') ? rd.chain + 1 : 0;                                  // 저절로 열린 화만 센다(연속 3화까지)
+      var carry = !!(easyOn() && rd.auOn && !rd.auIntr && !c.locked);                    // 자동 내림 중에 넘어온 경우에만 이어 간다
       teardown(true);
       if (view === 'chap') { chapItems = items; paintChapters(); }
       if (c.locked) { closeReader(); showLockedSheet(c); return; }
-      openReader({ mid: mid, mtitle: mt, cid: c.id, cname: c.name, page: 0, web: wb });
+      openReader({ mid: mid, mtitle: mt, cid: c.id, cname: c.name, page: 0, web: wb, chain: chain, carryAuto: carry });
       rd.items = items;
     }
   }
@@ -1996,6 +2040,7 @@
       }
       if (img.getAttribute('src') !== url) img.setAttribute('src', url);
       blk.classList.add('ok');
+      if (rd.auPend && p === rd.page) { rd.auPend = false; auStart(true); }
       var ph = blk.querySelector('.mg-ph'); if (ph) ph.style.display = 'none';
     } else if (img && !near) { img.removeAttribute('src'); img.parentNode.removeChild(img); blk.classList.remove('ok'); var ph2 = blk.querySelector('.mg-ph'); if (ph2) ph2.style.display = ''; }
     else if (!url) { var ph3 = blk.querySelector('.mg-ph'); if (ph3) ph3.style.display = ''; }
@@ -2095,6 +2140,7 @@
     clearTimeout(rd.timers.sync); sync();
     evict();
     if (rd.page >= rd.total - 1) markRead();
+    if (easyOn()) { if (rd.page >= rd.total) endShown(); else if (rd.cd) cdCancel(false); }
   }
   /* 중계에 알리는 쪽 — 세로에서는 끝 카드까지 내려가도 마지막 쪽으로(끝으로 알리면 중계가 그림을 모두 지워 아직 못 받은 쪽이 빈칸으로 남는다) */
   function curPage() { return (isV() && rd.total > 0) ? Math.min(rd.page, rd.total - 1) : rd.page; }
@@ -2134,6 +2180,7 @@
     if (rd) { rd.barsOn = on; clearTimeout(rd.timers.bars); }
     R.classList.toggle('bars', !!on);
     if (on && !keep && rd) rd.timers.bars = setTimeout(function () { showBars(false); }, K.BARS_MS + 800);
+    if (rd) syncVol();
     updateInfo();
   }
   function toggleBars() { showBars(!(rd && rd.barsOn)); }
@@ -2154,6 +2201,8 @@
       var y = vs.scrollTop + vs.clientHeight * 0.35, blks = vs.children, lo = 0, hi = blks.length - 1, p = 0;
       while (lo <= hi) { var mid = (lo + hi) >> 1; if (blks[mid].offsetTop <= y) { p = mid; lo = mid + 1; } else hi = mid - 1; }
       if (vs.scrollTop + vs.clientHeight >= vs.scrollHeight - 4) p = rd.total;
+      if (!rd.frozen || Date.now() > rd.frozen) { var ab = blks[Math.min(p, blks.length - 1)]; if (ab && ab.offsetHeight) rd.anchor = { p: p, f: (vs.scrollTop - ab.offsetTop) / ab.offsetHeight }; }      // v10.32: 화면 크기가 바뀌어도 읽던 자리를 찾아가려고
+      if (easyOn()) touched();
       if (p !== rd.page) {
         rd.page = p; updateInfo(); afterMove();
         if (rd.barsOn) showBars(false);
@@ -2215,17 +2264,33 @@
   }
   function stepIdx(d) { if (!rd || !rd.ready || isV()) return; goPage(idxToPage(rd.curIdx + d, rd.total, isRtl()), {}); }
   function bindTap(el) {
-    var sx = 0, sy = 0, st = 0, id = -1;
-    el.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; st = Date.now(); id = e.pointerId; });
+    var sx = 0, sy = 0, st = 0, id = -1, pt = false;
+    el.addEventListener('pointerdown', function (e) {
+      sx = e.clientX; sy = e.clientY; st = Date.now(); id = e.pointerId; pt = false;
+      if (easyOn() && rd && rd.au && rd.au.run) { auPause('touch'); pt = true; }       // 손이 닿는 순간 저절로 내리기 멈춤
+    });
     el.addEventListener('pointerup', function (e) {
       if (e.pointerId !== id) return; id = -1;
-      if (Math.abs(e.clientX - sx) < 8 && Math.abs(e.clientY - sy) < 8 && Date.now() - st < 450) { if (e.target.closest && e.target.closest('button')) return; toggleBars(); }
+      if (Math.abs(e.clientX - sx) < 8 && Math.abs(e.clientY - sy) < 8 && Date.now() - st < 450) {
+        if (e.target.closest && e.target.closest('button')) return;
+        if (pt) return;                                                    // 방금 이 톡이 멈춘 것 — 다시 켜지 않는다
+        if (easyOn() && rd && rd.more && rd.page >= rd.total) return;      // 「계속 볼까요?」 — 클릭 쪽(B.onclick)이 이어서 열어 준다
+        if (easyOn() && rd && rd.auOn) { auToggle(); return; }              // 저절로 내리기가 켜져 있으면 어디든 톡 = 멈춤 ↔ 다시
+        if (easyOn() && rd && ez().tap) {                                   // 톡 눌러 한 화면씩: 위 20% · 가운데 30%(띠) · 아래 50%
+          var r = el.getBoundingClientRect(), y = (e.clientY - r.top) / (r.height || 1);
+          if (y < 0.2) { stepScroll(-1); return; }
+          if (y >= 0.5) { stepScroll(1); return; }
+        }
+        toggleBars();
+      }
     });
+    el.addEventListener('wheel', function () { if (easyOn() && rd && rd.au && rd.au.run) auPause('touch'); }, { passive: true });
   }
   function onKey(e) {
     if (!rd || !rd.ready || $('mgReader').style.display === 'none') return;
     var k = e.key;
     if (k === 'Escape') { closeReader(); e.preventDefault(); return; }
+    if (easyOn()) touched();
     if (isV()) return;               // 세로는 기본 스크롤(방향키·스페이스)
     if (k === 'ArrowRight') { stepIdx(1); e.preventDefault(); }
     else if (k === 'ArrowLeft') { stepIdx(-1); e.preventDefault(); }
@@ -2233,10 +2298,304 @@
     else if (k === 'PageUp') { stepIdx(isRtl() ? 1 : -1); e.preventDefault(); }
   }
 
+
+  /* =====================================================================
+   * 4-B. v10.32(O-0980) 편하게 보기 — 저절로 내리기 · 톡 눌러 한 화면씩 · 음량 버튼 · 화면 켜 두기 · 다음 화 이어 가기
+   *   스위치 MANGA_EASY(app.js)가 'off' 면 host.easy=false → 아래 모든 길이 막혀 v10.31 과 같다.
+   *   서버·PC 중계에 새 요청은 없다(읽은 위치·그림 요청은 기존 길 그대로).
+   * ===================================================================*/
+  var ezCfg = null, volOn = false, volBeat = 0, volBad = false, webLock = null;
+  function easyOn() { return host.easy !== false; }
+  function ez() { return ezCfg || (ezCfg = store ? store.getEasy() : easyNorm(null)); }
+  function saveEz() { try { if (store) store.setEasy(ezCfg); } catch (e) {} }
+  function touched() { if (!rd) return; rd.idleAt = Date.now(); if (rd.wakeIdle) { rd.wakeIdle = false; wakeSet(true); } }
+
+  /* ---- 아래 띠 한 줄 ---- */
+  function paintEasyRow() {
+    var el = $('mgREasy'); if (!el) return;
+    if (!easyOn() || !rd) { el.innerHTML = ''; el.style.display = 'none'; return; }
+    el.style.display = '';
+    if (rd.auOn && isV()) {
+      el.innerHTML = '<button type="button" class="mg-chip pri" data-ez="toggle">' + (rd.au && rd.au.run ? '❚❚ 멈춤' : '▶︎ 이어서') + '</button>' +
+        '<button type="button" class="mg-chip" data-ez="slow">느리게</button><button type="button" class="mg-chip" data-ez="fast">빠르게</button>' +
+        '<button type="button" class="mg-chip" data-ez="stop">그만 내리기</button>';
+    } else {
+      el.innerHTML = (isV() ? '<button type="button" class="mg-chip pri" data-ez="start">▶︎ 저절로 내리기</button>' : '') + '<button type="button" class="mg-chip" data-ez="set">⚙︎ 편하게 보기</button>';
+    }
+  }
+  function onEasyRow(ev) {
+    var b = ev.target.closest ? ev.target.closest('[data-ez]') : null; if (!b || !rd) return;
+    var a = b.getAttribute('data-ez'); touched();
+    if (a === 'start') auStart(false);
+    else if (a === 'toggle') auToggle();
+    else if (a === 'slow') setSpeed(ez().speed - 1);
+    else if (a === 'fast') setSpeed(ez().speed + 1);
+    else if (a === 'stop') auStop(true);
+    else if (a === 'set') openEasySheet();
+  }
+
+  /* ---- 준비·정리 ---- */
+  function easyReady() {
+    if (!easyOn() || !rd) return;
+    paintEasyRow(); wakeSet(true);
+    rd.timers.idle = setInterval(function () {
+      if (!rd || !rd.wakeHeld || (rd.au && rd.au.run)) return;
+      if (Date.now() - rd.idleAt > 600000) { wakeSet(false); rd.wakeIdle = true; }      // 10분 동안 아무 조작이 없으면 화면 켜 두기를 푼다
+    }, 30000);
+    syncVol();
+    if (isV()) {
+      zoneHint();
+      if (rd.carry && !rd.auIntr) { rd.auPend = true; rd.timers.aup = setTimeout(function () { if (rd) rd.auPend = false; }, 20000); }      // 이어서: 첫 그림이 준비되면 저절로 내리기 시작
+    }
+  }
+  function easyTeardown(r) {
+    if (!r) return;
+    try { if (r.au && r.au.raf) cancelAnimationFrame(r.au.raf); } catch (e) {}
+    if (r.wakeHeld) { r.wakeHeld = false; wakeApply(false); }
+    zoneHintOff(); syncVolNone();
+  }
+  function easyBack() { if (!rd) return; volOn = false; syncVol(); if (rd.wakeHeld) wakeApply(true); }
+  function onAnyDown(e) {
+    if (!rd || !easyOn()) return;
+    touched(); zoneHintOff();
+    var t = e && e.target && e.target.closest ? e.target : null;
+    if (rd.cd && !(t && t.closest('[data-end]'))) cdCancel(true);        // 카운트다운 중 화면을 누르면 멈춘다
+  }
+  function easyBind() {
+    if (!easyOn()) return;
+    try { global.addEventListener('resize', onResize); global.addEventListener('orientationchange', onResize); global.addEventListener('blur', function () { interrupt(); }); } catch (e) {}
+    try {
+      var kb = host.kb && host.kb();
+      if (kb && kb.addListener) { var pr = kb.addListener('volKey', onVol); if (pr && pr.catch) pr.catch(function () {}); }
+    } catch (e) {}
+    try {
+      var A = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.App;
+      if (A && A.addListener) A.addListener('appStateChange', function (st) { if (st && st.isActive) { if (rd && rd.ready) easyBack(); } else { interrupt(); syncVol(); } });
+    } catch (e) {}
+  }
+
+  /* ---- 방해되면 멈춘다: 전화·알림·앱 전환·회전·폴드 접고 펴기 — 돌아와도 저절로 다시 가지 않는다 ---- */
+  function interrupt() {
+    if (!rd || !easyOn()) return;
+    if (rd.auOn && rd.au && rd.au.run) auPause('intr'); else if (rd.auOn) rd.auIntr = true;
+    rd.auPend = false;
+    if (rd.cd) cdCancel(true);
+  }
+  function onResize() {
+    if (!rd || !rd.ready || !easyOn()) return;
+    var w = global.innerWidth, h = global.innerHeight, dw = Math.abs(w - rd.vw), dh = Math.abs(h - rd.vh);
+    if (dw < 1 && dh < rd.vh * 0.25) return;           // 주소창이 오르내리는 정도의 높이 변화는 무시(웹 브라우저)
+    rd.vw = w; rd.vh = h; rd.frozen = Date.now() + 600;
+    interrupt();
+    var a = rd.anchor, tok = rd.tok;
+    if (a && isV()) setTimeout(function () {                // 폭이 바뀌면 그림 높이도 바뀌므로 읽던 자리(쪽 안의 비율)로 다시 맞춘다
+      if (!rd || rd.tok !== tok) return;
+      var vs = $('mgVS'), blk = pageBlock(a.p); if (vs && blk) vs.scrollTop = blk.offsetTop + a.f * blk.offsetHeight;
+    }, 160);
+  }
+
+  /* ---- 톡 눌러 한 화면씩 ---- */
+  function stepScroll(dir) {
+    var vs = $('mgVS'); if (!vs || !rd) return;
+    var H = vs.clientHeight, max = Math.max(0, vs.scrollHeight - H), now = Date.now();
+    var base = (rd.stepTo != null && now < rd.stepUntil) ? rd.stepTo : vs.scrollTop;
+    var to = Math.max(0, Math.min(max, base + dir * H * 0.85));
+    rd.stepTo = to; rd.stepUntil = now + 450;
+    if (rd.barsOn) showBars(false);
+    if (motionOn()) { try { vs.scrollTo({ top: to, behavior: 'smooth' }); } catch (e) { vs.scrollTop = to; } } else vs.scrollTop = to;
+  }
+  function zoneHint() {
+    if (!ez().tap || !isV() || store.getFlag('easy_hint')) return;
+    store.setFlag('easy_hint');
+    var R = $('mgReader'); if (!R) return;
+    var z = document.createElement('div'); z.id = 'mgZH'; z.className = 'mg-zhint'; z.setAttribute('aria-hidden', 'true');
+    z.innerHTML = '<div class="z1"><span>위를 톡 → 한 화면 위로</span></div><div class="z2"><span>가운데를 톡 → 위아래 띠</span></div><div class="z3"><span>아래를 톡 → 한 화면 아래로</span></div>';
+    R.appendChild(z); rd.timers.zh = setTimeout(zoneHintOff, 3200);
+  }
+  function zoneHintOff() { var z = $('mgZH'); if (z && z.parentNode) z.parentNode.removeChild(z); }
+
+  /* ---- 저절로 내리기 ---- */
+  function auStart(silent) {
+    if (!rd || !rd.ready || !isV() || !easyOn()) return;
+    var vs = $('mgVS'); if (!vs || rd.page >= rd.total) return;
+    cdCancel(false);
+    rd.auOn = true; rd.auIntr = false; rd.au = { run: false, pos: vs.scrollTop, last: 0, wait: 0, lastW: 0, raf: 0, w: 0 };
+    if (!silent && !store.getFlag('easy_autohint')) { store.setFlag('easy_autohint'); badge('어디든 누르면 멈춰요', 2600); }
+    auRun();
+  }
+  function auRun() {
+    if (!rd || !rd.auOn || !rd.au) return;
+    var vs = $('mgVS'); if (!vs) return;
+    if (vs.scrollTop + vs.clientHeight >= vs.scrollHeight - 4) { paintEasyRow(); return; }      // 이미 맨 아래
+    var au = rd.au; au.run = true; au.pos = vs.scrollTop; au.w = Math.floor(au.pos); au.last = 0; au.wait = 0; rd.auIntr = false;
+    showBars(false); paintEasyRow(); touched();
+    if (au.raf) cancelAnimationFrame(au.raf);
+    au.raf = requestAnimationFrame(auTick);
+  }
+  function auTick(ts) {
+    if (!rd || !rd.au || !rd.au.run) return;
+    var au = rd.au, vs = $('mgVS');
+    if (!vs || !isV()) { auStop(false); return; }
+    var dt = au.last ? Math.min(80, ts - au.last) : 0; au.last = ts;
+    var H = vs.clientHeight, max = Math.max(0, vs.scrollHeight - H);
+    if (Math.abs(vs.scrollTop - au.pos) > 2.5) au.pos = vs.scrollTop;         // 그림 크기가 바뀌어 위치가 밀렸으면 실제 위치에 맞춘다
+    var need = vs.scrollTop + H * 2, missing = false, ch = vs.children;       // 화면 아래 한 화면 앞까지 그림이 와 있어야 내린다(빈칸 위를 지나가지 않게)
+    for (var i = Math.max(0, rd.page - 1); i < ch.length; i++) {
+      var b = ch[i];
+      if (b.offsetTop > need) break;
+      if (b.classList.contains('end') || b.offsetTop + b.offsetHeight < vs.scrollTop) continue;
+      if (!b.classList.contains('ok')) { missing = true; break; }
+    }
+    if (missing) {
+      au.wait += dt;
+      if (au.wait > 1500 && ts - au.lastW > 1100) { au.lastW = ts; badge('그림 받는 중…', 1300); }
+      if (au.wait > 20000) { auPause('stall'); return; }
+    } else {
+      au.wait = 0;
+      au.pos += H / EASY_SEC[ez().speed] * dt / 1000;
+      if (au.pos >= max - 0.5) { vs.scrollTop = max; au.run = false; au.raf = 0; paintEasyRow(); return; }      // 끝 카드까지 왔다 — 이어 가기는 onVScroll → endShown 이 맡는다
+      var iy = Math.floor(au.pos); if (iy !== au.w) { au.w = iy; vs.scrollTop = iy; }
+    }
+    au.raf = requestAnimationFrame(auTick);
+  }
+  function auPause(why) {
+    if (!rd || !rd.auOn || !rd.au) return;
+    rd.au.run = false; if (rd.au.raf) { cancelAnimationFrame(rd.au.raf); rd.au.raf = 0; }
+    if (why === 'intr' || why === 'stall') rd.auIntr = true;
+    paintEasyRow(); showBars(true, true);
+    if (why === 'stall') badge('그림이 오지 않아 멈췄어요. PC가 바쁜 것 같아요.', 3400);
+  }
+  function auToggle() { if (!rd || !rd.auOn) return; if (rd.au && rd.au.run) auPause('tap'); else auRun(); }
+  function auStop(show) {
+    if (!rd) return;
+    if (rd.au && rd.au.raf) cancelAnimationFrame(rd.au.raf);
+    rd.au = null; rd.auOn = false; rd.auIntr = false; rd.auPend = false;
+    paintEasyRow();
+    if (show) badge('저절로 내리기를 껐어요', 1500);
+  }
+  function setSpeed(n) {
+    if (!rd) return;
+    n = Math.max(1, Math.min(5, n | 0)); ez().speed = n; saveEz();
+    badge('속도 ' + n, 1300);
+    if (sheetIsOpen() && sheetCtx && sheetCtx.t === 'easy') $('mgSheetBox').innerHTML = easyHtml();
+  }
+
+  /* ---- 다 읽으면 다음 화로 이어서 ---- */
+  function cdText() { var s = (rd && rd.cd) ? Math.max(1, Math.ceil((rd.cd.at + rd.cd.ms - Date.now()) / 1000)) : 5; return s + '초 뒤에 열어요 · 「' + ((rd && rd.cd && rd.cd.name) || '다음 화') + '」'; }
+  function endShown() { maybeCountdown(); }
+  function maybeCountdown() {
+    if (!rd || !easyOn() || !ez().next || rd.cd || rd.cdOff || rd.more) return;
+    if (rd.page < rd.total || document.hidden) return;
+    var items = rd.items; if (!items) return;
+    var i = nextChapterIdx(items, rd.cid); if (i < 0 || items[i].locked) return;
+    if (rd.chain >= 3) { rd.more = true; refreshEnd(); return; }
+    rd.cd = { ms: 5000, at: Date.now(), name: items[i].name || '다음 화' };
+    refreshEnd();
+    var tok = rd.tok;
+    rd.timers.cd = setTimeout(function () { if (rd && rd.tok === tok && rd.cd) onEnd('next', 'auto'); }, 5000);
+    rd.timers.cdt = setInterval(function () { if (!rd || !rd.cd) return; var t = $('mgCdT'); if (t) t.textContent = cdText(); }, 500);
+  }
+  function cdCancel(stop) {
+    if (!rd) return;
+    var had = !!rd.cd; clearTimeout(rd.timers.cd); clearInterval(rd.timers.cdt); rd.cd = null;
+    if (stop) rd.cdOff = true;
+    if (had) refreshEnd();
+  }
+
+  /* ---- 음량 버튼(폰 앱 전용 — 안드로이드가 KBridge 로 알려 준다) ----
+     가로채는 것은 「읽는 중 + 띠가 안 보임 + 시트가 안 떠 있음 + 설정 켬」일 때만. 그 밖에는 원래 소리 조절.
+     폰 쪽은 켠 지 45초가 지나면 저절로 풀리므로 15초마다 다시 알린다(웹이 죽어도 음량 버튼이 먹통으로 남지 않게). */
+  function volWant() { return !!(easyOn() && rd && rd.ready && ez().vol && !rd.barsOn && !sheetIsOpen() && !document.hidden && !volBad && host.kb && host.kb()); }
+  function volApply(on, force) {
+    if (on === volOn && !force) return;
+    if (!on && !volOn) return;
+    volOn = on;
+    var kb = host.kb && host.kb(); if (!kb || !kb.setVolumeKeys) return;
+    try { var p = kb.setVolumeKeys({ on: !!on }); if (p && p.catch) p.catch(function () { volBad = true; volOn = false; }); } catch (e) { volBad = true; volOn = false; }
+  }
+  function syncVol() {
+    if (volWant()) {
+      volApply(true);
+      if (!volBeat) volBeat = setInterval(function () { if (volWant()) volApply(true, true); else syncVol(); }, 15000);
+    } else {
+      volApply(false);
+      if (volBeat) { clearInterval(volBeat); volBeat = 0; }
+    }
+  }
+  function syncVolNone() { volApply(false); if (volBeat) { clearInterval(volBeat); volBeat = 0; } }
+  function onVol(e) {
+    if (!volWant()) return;
+    touched();
+    var up = !!(e && e.dir === 'up'), rep = (e && e.repeat) | 0;
+    if (rd.auOn) { if (rd.au && rd.au.run && rep === 0) setSpeed(ez().speed + (up ? 1 : -1)); return; }      // 저절로 내리는 중: 음량↑ 빠르게 · 음량↓ 느리게
+    var dir = up ? -1 : 1;
+    if (isV()) { var now = Date.now(); if (rep > 0 && now - (rd.volAt || 0) < 250) return; rd.volAt = now; stepScroll(dir); }
+    else { if (rep > 0) return; goPage(rd.page + dir); }
+  }
+
+  /* ---- 화면 켜 두기: 폰 앱은 창 플래그(host.screen = KBridge.keepScreenOn), PC·웹은 navigator.wakeLock ---- */
+  function wakeApply(on) {
+    var handled = false; try { handled = !!(host.screen && host.screen(on)); } catch (e) {}
+    if (handled) return;
+    try {
+      if (on) { if (navigator.wakeLock && !webLock && !document.hidden) navigator.wakeLock.request('screen').then(function (l) { if (!rd || !rd.wakeHeld) { try { l.release(); } catch (e) {} return; } webLock = l; try { l.addEventListener('release', function () { if (webLock === l) webLock = null; }); } catch (e) {} }, function () {}); }
+      else if (webLock) { try { webLock.release(); } catch (e) {} webLock = null; }
+    } catch (e) {}
+  }
+  function wakeSet(on) {
+    if (!rd) return;
+    on = !!on && easyOn() && !!ez().wake;
+    if (on === !!rd.wakeHeld) return;
+    rd.wakeHeld = on; wakeApply(on);
+  }
+
+  /* ---- 「편하게 보기」 시트 ---- */
+  function easyHtml() {
+    var c = ez(), v = isV(), volOK = !!(host.kb && host.kb()) && !volBad;
+    function sw(k, name, sub, on, dis) {
+      return '<div class="mg-ez-row"><div class="mg-ez-t"><b>' + name + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>' +
+        '<button type="button" class="mg-sw' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" aria-label="' + name + '" data-sh="tg:' + k + '"' + (dis ? ' disabled' : '') + '><i></i></button></div>';
+    }
+    var sp = '', n;
+    for (n = 1; n <= 5; n++) sp += '<button type="button" class="mg-sp' + (c.speed === n ? ' on' : '') + '" data-sh="sp:' + n + '" aria-label="속도 ' + n + '">' + n + '</button>';
+    return '<div class="mg-ez"><div class="mg-ez-h"><b>편하게 보기</b><button type="button" class="mg-btn" data-sh="close">닫기</button></div>' +
+      '<div class="mg-ez-row' + (v ? '' : ' dim') + '"><div class="mg-ez-t"><b>저절로 내리기</b><small>' + (v ? '천천히 저절로 내려가요. 어디든 누르면 멈춰요' : '세로로 볼 때만 쓸 수 있어요') + '</small></div>' +
+      (v ? '<button type="button" class="mg-btn pri" data-sh="auto">▶︎ 시작</button>' : '') + '</div>' +
+      '<div class="mg-ez-sp' + (v ? '' : ' dim') + '"><span>느리게</span><div>' + sp + '</div><span>빠르게</span></div>' +
+      sw('tap', '화면을 톡 눌러 넘기기', v ? '아래를 톡 → 한 화면 아래로, 위를 톡 → 위로' : '좌우를 톡 → 이전·다음 쪽', c.tap) +
+      sw('vol', '음량 버튼으로 넘기기', volOK ? '읽는 동안엔 소리를 못 바꿔요. 가운데를 눌러 띠를 켜면 바꿀 수 있어요' : '이 폰 앱에서만 쓸 수 있어요', c.vol && volOK, !volOK) +
+      sw('wake', '읽는 동안 화면 켜 두기', '', c.wake) +
+      sw('next', '다 읽으면 다음 화로 이어서', '5초 뒤에 열려요. 화면을 누르면 멈춰요', c.next) +
+      '<div class="mg-acts"><button type="button" class="mg-btn" data-sh="reset">처음 설정으로 되돌리기</button></div></div>';
+  }
+  function openEasySheet() {
+    if (!rd || !easyOn()) return;
+    if (rd.au && rd.au.run) auPause('sheet');
+    showSheet({ t: 'easy' }, easyHtml());
+  }
+  function onEasySheet(act) {
+    if (!rd) return;
+    var c = ez(), m;
+    if (act.indexOf('tg:') === 0) {
+      var k = act.slice(3); if (!(k in c) || k === 'speed') return;
+      c[k] = c[k] ? 0 : 1; saveEz(); applyEz(k);
+      $('mgSheetBox').innerHTML = easyHtml(); return;
+    }
+    if ((m = /^sp:([1-5])$/.exec(act))) { setSpeed(Number(m[1])); return; }
+    if (act === 'auto') { closeSheet(); auStart(false); return; }
+    if (act === 'reset') { ezCfg = easyNorm(null); saveEz(); applyEz('all'); $('mgSheetBox').innerHTML = easyHtml(); badge('처음 설정으로 되돌렸어요', 1500); }
+  }
+  function applyEz(k) {
+    if (k === 'wake' || k === 'all') wakeSet(true);
+    if (k === 'next' || k === 'all') { if (!ez().next) cdCancel(false); else if (rd && rd.page >= rd.total) maybeCountdown(); }
+    syncVol();
+  }
+
   /* ---- 닫기 ---- */
   function teardown(markDone) {
     if (!rd) return;
     var r = rd; rd = null;
+    easyTeardown(r);
     Object.keys(r.timers).forEach(function (k) { clearTimeout(r.timers[k]); });
     clearTimeout(r.badgeTimer);
     // 읽은 위치를 이 기기와 PC(서버)에 한 번씩 적고, 중계에는 「화면 닫힘」을 알려 그 회차 그림을 지우게 한다
@@ -2310,13 +2669,14 @@
       fetch: function () { return global.fetch.apply(global, arguments); }
     });
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) return;
+      if (document.hidden) { interrupt(); syncVol(); return; }
       if (isShown() && !stateTimer) startStateTimer();
-      if (rd && rd.ready) sync();
+      if (rd && rd.ready) { sync(); easyBack(); }
     });
+    easyBind();
   }
   global.MangaTab = {
     init: init, open: open, back: back, leave: leave, resume: resume,
-    _test: { bl: function () { return bl; }, bs: function () { return bs; }, tab: function () { return tab; }, bcov: function () { return bcov; }, browseOn: browseOn, openPf: openPf, closePf: closePf, pf: function () { return { prefs: pfPrefs, info: pfInfoNow(), cur: curPf(), rows: PFR, gl: gl, pcov: pcov }; }, openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode }
+    _test: { bl: function () { return bl; }, bs: function () { return bs; }, tab: function () { return tab; }, bcov: function () { return bcov; }, browseOn: browseOn, openPf: openPf, closePf: closePf, pf: function () { return { prefs: pfPrefs, info: pfInfoNow(), cur: curPf(), rows: PFR, gl: gl, pcov: pcov }; }, openFind: openFind, closeSheet: closeSheet, finder: function () { return finder; }, state: function () { return { view: view, rd: rd, lib: lib, chapItems: chapItems, curManga: curManga }; }, api: function () { return api; }, store: function () { return store; }, startReading: startReading, goPage: goPage, setMode: setMode, host: host, easy: function () { return { E: ez(), rd: rd }; }, onVol: onVol, interrupt: interrupt, auStart: auStart, openEasySheet: openEasySheet, syncVol: syncVol, volState: function () { return { on: volOn, bad: volBad }; }, easyNorm: easyNorm }
   };
 })(typeof window !== 'undefined' ? window : this);
