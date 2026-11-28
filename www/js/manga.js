@@ -260,12 +260,13 @@
   /* v10.32(O-0980) 편하게 보기 — 설정 한 묶음(톡·음량·화면 켜 두기·다음 화 이어 가기·속도). 기본값은 받자마자 쓸 수 있게 모두 켬, 속도 3.
      속도 = 한 화면을 내리는 데 걸리는 초(화면 높이에 비례하므로 폰 크기와 상관없이 같은 느낌). */
   var EASY_DEF = { tap: 1, vol: 1, wake: 1, next: 1, speed: 3 };
-  var EASY_SEC = [0, 20, 12, 8, 5.5, 3.6];
+  var EASY_SEC = [0, 20, 12, 8, 5.5, 3.6, 2.5, 1.8];      // v10.33: 6·7단계(한 화면 약 2.5초·1.8초) 추가 — 최댓값은 아래 EASY_MAX 한 곳에서만 정한다
+  var EASY_MAX = EASY_SEC.length - 1;
   function easyNorm(o) {
     var r = {}, k, v; o = (o && typeof o === 'object') ? o : {};
     for (k in EASY_DEF) {
       v = o[k];
-      if (k === 'speed') { v = Math.round(Number(v)); r[k] = (v >= 1 && v <= 5) ? v : EASY_DEF.speed; }
+      if (k === 'speed') { v = Math.round(Number(v)); r[k] = (v >= 1 && v <= EASY_MAX) ? v : EASY_DEF.speed; }
       else r[k] = (v === 0 || v === false) ? 0 : ((v === 1 || v === true) ? 1 : EASY_DEF[k]);
     }
     return r;
@@ -2475,7 +2476,7 @@
   }
   function setSpeed(n) {
     if (!rd) return;
-    n = Math.max(1, Math.min(5, n | 0)); ez().speed = n; saveEz();
+    n = Math.max(1, Math.min(EASY_MAX, n | 0)); ez().speed = n; saveEz();
     badge('속도 ' + n, 1300);
     if (sheetIsOpen() && sheetCtx && sheetCtx.t === 'easy') $('mgSheetBox').innerHTML = easyHtml();
   }
@@ -2557,7 +2558,7 @@
         '<button type="button" class="mg-sw' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" aria-label="' + name + '" data-sh="tg:' + k + '"' + (dis ? ' disabled' : '') + '><i></i></button></div>';
     }
     var sp = '', n;
-    for (n = 1; n <= 5; n++) sp += '<button type="button" class="mg-sp' + (c.speed === n ? ' on' : '') + '" data-sh="sp:' + n + '" aria-label="속도 ' + n + '">' + n + '</button>';
+    for (n = 1; n <= EASY_MAX; n++) sp += '<button type="button" class="mg-sp' + (c.speed === n ? ' on' : '') + '" data-sh="sp:' + n + '" aria-label="속도 ' + n + '">' + n + '</button>';
     return '<div class="mg-ez"><div class="mg-ez-h"><b>편하게 보기</b><button type="button" class="mg-btn" data-sh="close">닫기</button></div>' +
       '<div class="mg-ez-row' + (v ? '' : ' dim') + '"><div class="mg-ez-t"><b>저절로 내리기</b><small>' + (v ? '천천히 저절로 내려가요. 어디든 누르면 멈춰요' : '세로로 볼 때만 쓸 수 있어요') + '</small></div>' +
       (v ? '<button type="button" class="mg-btn pri" data-sh="auto">▶︎ 시작</button>' : '') + '</div>' +
@@ -2581,7 +2582,7 @@
       c[k] = c[k] ? 0 : 1; saveEz(); applyEz(k);
       $('mgSheetBox').innerHTML = easyHtml(); return;
     }
-    if ((m = /^sp:([1-5])$/.exec(act))) { setSpeed(Number(m[1])); return; }
+    if ((m = /^sp:(\d)$/.exec(act)) && Number(m[1]) >= 1 && Number(m[1]) <= EASY_MAX) { setSpeed(Number(m[1])); return; }
     if (act === 'auto') { closeSheet(); auStart(false); return; }
     if (act === 'reset') { ezCfg = easyNorm(null); saveEz(); applyEz('all'); $('mgSheetBox').innerHTML = easyHtml(); badge('처음 설정으로 되돌렸어요', 1500); }
   }

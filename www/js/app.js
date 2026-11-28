@@ -3979,6 +3979,7 @@
   APP_VERSION = 'v10.30';       // v10.30(O-0961·O-0960): 「만화」 — 서재 | 웹툰 탭, 웹툰 요일별·완결 전체 목록(표지 격자 3열·크게 보기 2열에서 작가 줄, 인기·업데이트·별점), 표지를 누르면 서재에 담지 않고 바로 읽기, 회차 1화부터/최신 화부터 정렬(작품별 기억), PC 만화도 서재에서 빼기(PC 보관 폴더로 옮김). 스위치 MANGA_BROWSE, versionCode 174. 서버는 manga_* 새 요청 종류 4개뿐, 새 권한·새 네이티브 코드 없음
   APP_VERSION = 'v10.31';       // v10.31(O-0967): 「만화」 — 웹툰 탭 위에 「플랫폼」 한 줄(칩 줄 + 전체 N곳)과 전체 플랫폼 시트(그룹·이름 찾기·★ 자주 보는 곳·▲▼·숨기기). 정식 플랫폼을 전부 목록에 보이게 하고, 앱에서 읽을 수 있는 곳(지금은 네이버웹툰, 시험을 통과한 곳은 PC가 알려 주는 대로 늘어남)은 인기·최신·검색·열기·읽기·담기, 나머지는 「확인 중」 또는 「정식 사이트 열기」. 스위치 MANGA_PLATFORMS · versionCode 175
   APP_VERSION = 'v10.32';       // v10.32(O-0980): 「만화」 읽기 화면에 「편하게 보기」 — 저절로 내리기(속도 5단계) · 화면을 톡 눌러 한 화면씩 · 음량 버튼으로 넘기기 · 읽는 동안 화면 켜 두기 · 다 읽으면 다음 화로 이어서(5초·연속 3화). 스위치 MANGA_EASY. 안드로이드 쪽에 음량 키 가로채기(KBridge.setVolumeKeys)가 들어가 새 APK 설치 필요, 새 권한 없음, 서버·PC 중계 변경 없음 · versionCode 176
+  APP_VERSION = 'v10.33';       // v10.33(O-0980): 「저절로 내리기」 속도를 5단계 → 7단계로(6 = 한 화면 약 2.5초, 7 = 약 1.8초). 1~5·기본값 3·옛 저장값 그대로. 네이티브·서버·PC 중계 변경 없음 · versionCode 177
   var PC_LAYOUT = 'on';  /* O-0929 v10.24 PC 화면 맞춤 — 'off' 면 <html data-pc="off"> 를 붙여 pc-layout.css 가 통째로 빠진다. 안드로이드 앱(Capacitor) 안에서도 끈다. */
   try { if (PC_LAYOUT === 'off' || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) document.documentElement.setAttribute('data-pc', 'off'); } catch (e) {}
   // (직전) v10.10:        // v10.10: 홈 도구 칸 순서만 바꿈(게임·OTT·업무 앱 / 카메라·명함 검색·건강 / 성과·사진첩·공유함 / 규정 도우미·S-Office·회의록) — 칸 이름·기능·스위치는 그대로. 스위치 HOME_TILE_ORDER
